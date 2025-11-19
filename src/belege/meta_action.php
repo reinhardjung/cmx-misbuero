@@ -1,6 +1,4 @@
-<?php
-namespace CLOUDMEISTER\CMX\Buero;
-defined('ABSPATH') || die('Oxytocin!');
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
  * Basis-Pfad für MisBüro-Uploads
@@ -9,8 +7,6 @@ defined('ABSPATH') || die('Oxytocin!');
 if (!defined('CMX_UPLOADS_MISBUERO')) {
 	define('CMX_UPLOADS_MISBUERO', WP_CONTENT_DIR . '/uploads/misbuero/');
 }
-
-add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_add_beleg_metabox');
 
 /**
  * Meta-Box "Für Kunde..."
@@ -25,9 +21,10 @@ function cmxbu_add_beleg_metabox(): void {
 		'high'
 	);
 }
+add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_add_beleg_metabox');
 
 /**
- * Wrapper, rendert beide Buttons (Senden + Download)
+ * Wrapper, rendert beide Bereiche (Senden + Download/Copy)
  */
 function cmxbu_render_beleg_metabox(\WP_Post $post) {
 	?>
@@ -39,8 +36,15 @@ function cmxbu_render_beleg_metabox(\WP_Post $post) {
 	</style>
 	<div class="cmx-beleg-actions">
 		<?php
-		cmxbu_render_beleg_send_metabox($post);
-		cmxbu_render_beleg_download_metabox($post);
+		// Button "Senden..." (kommt aus meta_action_send.php)
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_render_beleg_send_metabox')) {
+			cmxbu_render_beleg_send_metabox($post);
+		}
+
+		// Download + Copy-Button (kommt aus meta_action_link.php)
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_render_beleg_download_metabox_with_copy')) {
+			cmxbu_render_beleg_download_metabox_with_copy($post);
+		}
 		?>
 	</div>
 	<?php
@@ -65,5 +69,7 @@ function cmx_get_beleg_type(\WP_Post $post): array {
 	return [get_post($post_id)->post_title, $beleg_type];
 }
 
+// Einzelne Teil-Module einbinden
 require_once __DIR__ . '/meta_action_send.php';
+require_once __DIR__ . '/meta_action_link.php';
 require_once __DIR__ . '/meta_action_download.php';
