@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rechnung von CLOUD Meister</title>
+<style>
+	body { margin:0; padding:0; background:#f7f8fa; font-family:Arial,Helvetica,sans-serif; color:#222; }
+	.wrapper { max-width: 540px; margin: 30px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 18px rgba(30, 50, 75, 0.08); padding: 40px 28px 32px 28px; }
+	.header { text-align: center; margin-bottom: 26px;  }
+	.header img { height:100px; }
+	h1 { font-size: 1.5em; margin: 0 0 16px 0; color: #37517e; }
+	hr { border: 0; height: 1px; background: #e6e9ef; margin: 24px 0; }
+	li { list-style-type:none; }
+	.wrapper h1 { text-align:center; }
+	.invoice-info { background: #f4f7fa; border-radius: 7px; padding: 18px 18px 12px 18px; margin-bottom: 28px; font-size: 1em; align: center; }
+	.invoice-info strong { color: #37517e; }
+	.table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+	.table th, .table td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #ececec;}
+	.table th { background: #f7f8fa; color: #5a5a5a; font-size: 1em; font-weight: 600; }
+	.table td:last-child, .table th:last-child { text-align: right; }
+	.total-row td { font-weight: bold; color: #37517e; font-size: 1.1em; background: #f7f8fa; }
+	.button { display: inline-block; margin-top: 18px; background: #38b6ff; color: #fff !important; text-decoration: none; padding: 12px 28px; border-radius: 24px; font-weight: 600; font-size: 1em; box-shadow: 0 1px 8px rgba(30,50,75,0.10); transition: background 0.2s; }
+	.button:hover { background: #256e9c; }
+	.footer { text-align: center; font-size: 0.92em; color: #777; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e6e9ef; }
+	.pdf-download { text-align: center; }
+	a { color: #37517e; font-size:small; }
+
+	@media (max-width: 600px) { .wrapper {     padding: 16px 6px 14px 6px; } .header img {     max-height: 32px; } .table th, .table td {     padding: 7px 2px; } }
+</style>
+
+</head>
+<body>
+	<div class="wrapper">
+		<div class="header">
+			<a href="<?php echo esc_url($logo_url); ?>"><img src="<?php echo esc_url($logo_url); ?>" alt="<?php echo esc_attr($alt_text); ?>"></a>
+		</div>
+		<h1>Rechnung <?php echo esc_html($getData['bestellnr']) ?></h1>
+		<p>Sali <?php echo esc_html($getData['vorname']) ?>, danke sch&ouml;n f&uuml;r Dein Vertrauen in meine Dienstleistungen.<br>Anbei die akt. Rechnung und als PDF zum donwloaden.</p>
+
+		<div class="invoice-info" style="margin: 0 auto; text-align: left; width: max-content;">
+		<table width="100%">
+			<tr>
+				<td><strong>Rechnung</strong></td>
+				<td><?php echo esc_html($getData['bestellnr']) ?></td>
+			</tr>
+			<tr>
+				<td><strong>Datum</strong></td>
+				<td><?php echo esc_html($getData['cmx_date_document']) ?></td>
+			</tr>
+			<tr>
+				<td><strong>F&auml;llig bis</strong></td>
+				<td><?php echo esc_html($getData['cmx_date_done']) ?></td>
+			</tr>
+			<tr>
+				<td><strong>Leistung f&uuml;r</strong></td>
+				<td><?php echo esc_html($getData['cmx_date_period']) ?></td>
+			</tr>
+			<tr>
+				<td><strong>Gesamtbetrag</strong></td>
+				<td><?php echo number_format( $order->get_total(), wc_get_price_decimals(), wc_get_price_decimal_separator(), wc_get_price_thousand_separator() ); ?></td>
+			</tr>
+		</table>
+		</div>
+
+		<!-- <table class="table">
+			<tr>
+				<th>Produkt</th>
+				<th>Menge</th>
+				<th>Betrag</th>
+			</tr>
+
+			<tr>
+				<td>WooCommerce Service-Paket</td>
+				<td>1</td>
+				<td>CHF 120.00</td>
+			</tr>
+
+			<tr class="total-row">
+				<td colspan="2">Gesamtsumme</td>
+				<td>CHF 120.00</td>
+			</tr>
+		</table> -->
+		<div class="pdf-download"><a href="<?php echo esc_html($getData['tracking_url']); ?>" class="button">Rechnung als PDF herunterladen</a></div>
+		<?php echo '<div style="text-align:center;"><a href="' .wc_get_page_permalink('myaccount') .'orders/' .$getData['email'] .'">zur Rechnungs&uuml;bersicht</a></div>'; ?>
+
+		<hr>
+
+		<p>Bitte &uuml;berweise den Rechnungsbetrag bis zum F&auml;lligkeitsdatum auf:</p>
+		<ul>
+			<li><strong>IBAN:</strong> <?php echo esc_html($account_details[0]['iban']); ?></li>
+			<li><strong>Bank:</strong> <?php echo esc_html($account_details[0]['bank_name']); ?></li>
+			<li><strong>Empfänger:</strong> CLOUD Meister O&Uuml;</li>
+		</ul>
+
+		<p>Der Gesamtbetrag ist bitte <strong>ohne Abzug von Skonto oder Bankspesen</strong> vollst&auml;ndig zu entrichten.<br></p>
+
+		<div class="footer">
+			Du hast Fragen zur Rechnung?<br>Dann schreib mir doch einfach an <a href="mailto:invoice@cloudmeister.ch" style="color:#37517e;">invoice@cloudmeister.ch</a>
+		</div>
+	</div>
+</body>
+</html>

@@ -1,0 +1,423 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+/* --------------------------------------------------------------------------
+ * 1) Admin-Bar (Link zeigt jetzt auf den Support-Tab der Einstellungsseite)
+ * -------------------------------------------------------------------------- */
+
+add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar', 999);
+function cmx65_adminbar($wp_admin_bar) {
+	$wp_admin_bar->remove_node('wp-logo');
+	$wp_admin_bar->remove_node('new-content');
+	$wp_admin_bar->remove_node('comments');
+
+    echo '<style>
+        #wpadminbar .cmx-nohover > .ab-item {
+            cursor: default !important;
+            pointer-events: none !important;
+            background: none !important;
+            color: #fff !important;
+        }
+        #wpadminbar .cmx-nohover > .ab-item:hover {
+            background: none !important;
+            color: yellow !important;
+        }
+    </style>';
+
+	$wp_admin_bar->add_menu([
+			'id'    => 'cmx65_name_id',
+			'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
+			'href'  => false,
+			'meta'  => [
+					'html' => true,
+					'class' => 'cmx-nohover',
+			],
+	]);
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_handbuch_id',
+		'title' => 'Online-Handbuch',
+		'href'  => 'https://misbuero.ch/handbuch/',
+		'meta'  => ['title' => __('Mein Handbuch für Dich Online','textdomain'),'target'=>'_blank'],
+	]);
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_faq_id',
+		'title' => 'FAQ',
+		'href'  => 'https://misbuero.ch/faq/',
+		'meta'  => ['title' => __('Du hast allgemeines Fragen?','textdomain'),'target'=>'_blank'],
+	]);
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_roadmap',
+		'title' => 'Roadmap',
+		'href'  => 'https://misbuero.ch/roadmap/',
+		'meta'  => ['title' => __('Wie geht es weiter mit Mis Büro?','textdomain'),'target'=>'_blank'],
+	]);
+
+	// Neu: direkt auf den Support-Tab verlinken
+	$support_url = add_query_arg(
+		['page' => CMX_SETTINGS_SLUG, 'tab' => 'support'],
+		admin_url('admin.php')
+	);
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_support_id',
+		'title' => 'Support-Ticket',
+		'href'  => esc_url($support_url),
+		'meta'  => ['title' => __('Hier kannst ein Support Ticket erstellen','textdomain')],
+	]);
+}
+
+
+/* --------------------------------------------------------------------------
+ * 2) Einstellungen mit Tabs (Support-Formular wird im Tab gerendert)
+ * -------------------------------------------------------------------------- */
+
+const CMX_SETTINGS_SLUG = 'cmx-einstellungen';
+const CMX_SETTINGS_KEY  = 'cmx_einstellungen';
+
+/* Menü */
+add_action('admin_menu', __NAMESPACE__ . '\\cmx_add_settings_menu');
+function cmx_add_settings_menu(): void {
+	add_menu_page(
+		'Einstellungen',
+		'Einstellungen',
+		'manage_options',
+		CMX_SETTINGS_SLUG,
+		__NAMESPACE__ . '\\cmx_render_settings_page',
+		'dashicons-admin-generic',
+		999
+	);
+}
+
+/* Tabs */
+function cmx_get_tabs(): array {
+	$tabs = [
+		'general'  => __('Allgemein','default'),
+		'banken'   => __('Banken','default'),
+		'kontakte' => __('Kontakte','default'),
+		'advanced' => __('Erweitert','default'),
+		'support'  => __('Support','default'), // Neu
+	];
+
+	// Beispiel-Felder (bestehend)
+	add_settings_field(
+		'beleg_logo_url',
+		__('Link zum Logo','default'),
+		__NAMESPACE__ . '\\cmx_field_url',
+		'cmx_tab_general',
+		'cmx_sec_general',
+		['key'=>'beleg_logo_url','label'=>__('f&uuml;r den Beleg','default')]
+	);
+	add_settings_field(
+		'debug_mode',
+		__('Debug-Modus','default'),
+		__NAMESPACE__ . '\\cmx_field_checkbox',
+		'cmx_tab_advanced',
+		'cmx_sec_advanced',
+		['key'=>'debug_mode','label'=>__('Protokollierung einschalten','default')]
+	);
+
+	return apply_filters('cmx_settings_tabs', $tabs);
+}
+
+/* Subtabs */
+function cmx_get_subtabs(string $tab): array {
+	$map = [
+		'banken' => [
+			'rev'=>__('Revolut','default'),
+			'zkb'=>__('ZKB','default'),
+			'ubs'=>__('UBS','default'),
+			'migros'=>__('Migros','default'),
+			'eisen'=>__('Raiffeisen','default'),
+		],
+		'kontakte' => [
+			'ms'=>__('Microsoft','default'),
+			'oo'=>__('Google','default'),
+			'ic'=>__('iCloud','default'),
+		],
+		// support ohne subtabs
+	];
+	return $map[$tab] ?? [];
+}
+
+/* Einstellungen registrieren */
+add_action('admin_init', __NAMESPACE__ . '\\cmx_register_settings');
+function cmx_register_settings(): void {
+	register_setting(
+		CMX_SETTINGS_KEY,
+		CMX_SETTINGS_KEY,
+		['type'=>'array','sanitize_callback'=>__NAMESPACE__ . '\\cmx_sanitize_settings','default'=>[]]
+	);
+}
+
+/* Core-Sektionen & Felder (General/Advanced) */
+add_action('admin_init', __NAMESPACE__ . '\\cmx_register_core_sections');
+function cmx_register_core_sections(): void {
+	add_settings_section('cmx_sec_general',  __('Allgemein','default'), '__return_false', 'cmx_tab_general');
+	add_settings_section('cmx_sec_advanced', __('Erweitert','default'), '__return_false', 'cmx_tab_advanced');
+	add_settings_section('cmx_sec_advanced', __('Erweitert','default'), '__return_false', 'cmx_tab_advanced');
+
+	// --- Banken (gekürzt: Deine bestehenden add_settings_section/field bleiben) ---
+	$page = 'cmx_tab_banken__rev';
+	function cmx_section_rev_desc(): void {
+		echo '<p class="description">' . esc_html__('Keine Schweizer QR-Code Rechung möglich - da EURO Zahlung','default') . '</p>';
+		echo '<h2 class="title" style="margin-top:8px;">' . esc_html__('Revolut im Banking','default') . '</h2>';
+	}
+	add_settings_section('cmx_sec_banken_rev','', __NAMESPACE__ . '\\cmx_section_rev_desc', $page);
+	add_settings_field('rev_enabled', __('Diese Bank als Standard','default'), __NAMESPACE__ . '\\cmx_field_checkbox', $page, 'cmx_sec_banken_rev', ['key'=>'rev_enabled','label'=>__('Ja, diese Bank nutzen','default')]);
+	add_settings_field('rev_bank_name', __('Bankname','default'), __NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev', ['key'=>'rev_bank_name','placeholder'=>'Revolut']);
+	add_settings_field('rev_recipient', __('Empfänger','default'), __NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev', ['key'=>'rev_recipient','placeholder'=>'Dein Firmenname']);
+	add_settings_field('rev_iban', __('IBAN','default'), __NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev', ['key'=>'rev_iban','placeholder'=>'LTxx xxxx xxxx xxxx xxxx x']);
+	add_settings_field('rev_api', __('API Key','default'), __NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev', ['key'=>'rev_api','placeholder'=>'cmx_live_AJ7...']);
+
+	// (ZKB/UBS/Migros/Eisen — wie in Deinem Code definiert)
+
+	// --- Support-Tab: eigene Section (Inhalt wird unten in der Render-Funktion ausgegeben) ---
+	add_settings_section('cmx_sec_support', __('Support','default'), '__return_false', 'cmx_tab_support');
+}
+
+/* Sanitizer (unverändert zu Deiner Version, ggf. gekürzt) */
+function cmx_sanitize_settings($input) {
+	if (!is_array($input)) $input = [];
+	$out = [];
+
+	$keys_text = [
+		'site_label','rev_iban','rev_recipient','rev_bank_api',
+		'zkb_iban','zkb_recipient','zkb_bank_api',
+		'ubs_iban','ubs_recipient','ubs_bank_api',
+		'migros_iban','migros_recipient','migros_bank_api',
+		'bank_rev','bank_name','iban',
+		'rev_bank_name','rev_api',
+		'zkb_bank_name','zkb_api',
+		'ubs_bank_name','ubs_api',
+		'migros_bank_name','ubs_api',
+		'eisen_bank_name','eisen_api',
+		'eisen_recipient','eisen_iban',
+		'beleg_logo_url',
+	];
+	foreach ($keys_text as $k) {
+		if (isset($input[$k])) {
+			$out[$k] = ($k === 'beleg_logo_url')
+				? esc_url_raw(trim((string)$input[$k]))
+				: sanitize_text_field($input[$k]);
+		}
+	}
+
+	$keys_bool = ['enable_feature','rev_bank_enabled','zkb_bank_enabled','ubs_bank_enabled','migros_bank_enabled','debug_mode','bank_enabled','bank_enabled_eisen','rev_enabled','zkb_enabled','ubs_enabled','migros_enabled','eisen_enabled'];
+	foreach ($keys_bool as $k) {
+		$out[$k] = !empty($input[$k]) ? 1 : 0;
+	}
+
+	$existing = get_option(CMX_SETTINGS_KEY, []);
+	if (is_array($existing)) $out = array_merge($existing, $out);
+
+	return $out;
+}
+
+/* Helpers (unverändert) */
+function cmx_get_option(string $key, $default = '') {
+	$opts = get_option(CMX_SETTINGS_KEY, []);
+	return $opts[$key] ?? $default;
+}
+function cmx_field_text(array $args): void {
+	$key = $args['key']; $val = cmx_get_option($key, ''); $ph = isset($args['placeholder']) ? esc_attr($args['placeholder']) : '';
+	printf('<input type="text" class="regular-text" name="%1$s[%2$s]" value="%3$s" placeholder="%4$s" />', esc_attr(CMX_SETTINGS_KEY), esc_attr($key), esc_attr($val), $ph);
+}
+function cmx_field_checkbox(array $args): void {
+	$key = $args['key']; $label = $args['label'] ?? ''; $val = cmx_get_option($key, 0);
+	printf('<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s> %4$s</label>', esc_attr(CMX_SETTINGS_KEY), esc_attr($key), checked(1,(int)$val,false), esc_html($label));
+}
+function cmx_field_url($args) {
+	$key = $args['key']; $label = $args['label'] ?? ''; $value = cmx_get_option($key, '');
+	echo '<input type="url" name="' . esc_attr(CMX_SETTINGS_KEY) . '[' . esc_attr($key) . ']" value="' . esc_attr($value) . '" class="regular-text" placeholder="https://example.com">';
+	if ($label) echo '<p class="description">' . esc_html($label) . '</p>';
+}
+
+/* Render der Einstellungsseite
+ * WICHTIG: Für den Support-Tab KEIN options.php-Formular,
+ * sondern unser eigenes Formular inkl. Datei-Upload und Versand.
+ */
+function cmx_render_settings_page(): void {
+	if (!current_user_can('manage_options')) wp_die(__('Nicht erlaubt.','default'));
+
+	$tabs = cmx_get_tabs();
+	$tab  = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : array_key_first($tabs);
+	if (!isset($tabs[$tab])) $tab = array_key_first($tabs);
+
+	$subtabs = cmx_get_subtabs($tab);
+	$sub     = isset($_GET['sub']) ? sanitize_key($_GET['sub']) : (array_key_first($subtabs) ?: '');
+	if ($sub && !isset($subtabs[$sub])) $sub = array_key_first($subtabs);
+
+	$page_id = $sub ? 'cmx_tab_' . $tab . '__' . $sub : 'cmx_tab_' . $tab;
+
+	// Support-Formular POST-Handling (nur wenn Tab support aktiv ist)
+	if ($tab === 'support' && isset($_POST['cmx_support_submit'])) {
+		check_admin_referer('cmx_support_nonce');
+
+		$support_mail = 'support@misbuero.ch';
+		$to       = sanitize_email($support_mail);
+		$subject  = isset($_POST['support_subjet']) ? sanitize_text_field($_POST['support_subjet']) : '';
+		$body     = isset($_POST['support_description']) ? wp_kses_post($_POST['support_description']) : '';
+		$headers  = [
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . wp_get_current_user()->user_firstname . ' <' . wp_get_current_user()->user_email . '>',
+			'Reply-To: CLOUD Meister - Support <' . $support_mail . '>',
+		];
+
+		$attachments = [];
+		if (!empty($_FILES['support_file']['name'])) {
+			$upload = wp_handle_upload($_FILES['support_file'], ['test_form' => false]);
+			if (!isset($upload['error']) && !empty($upload['file'])) {
+				$attachments[] = $upload['file'];
+			}
+		}
+
+		wp_mail($to, $subject, wpautop($body), $headers, $attachments);
+
+		if (!empty($_POST['support_cc'])) {
+			$headers_cc = [
+				'Content-Type: text/html; charset=UTF-8',
+				'From: CLOUD Meister - Support <' . $support_mail . '>',
+				'Reply-To: ' . wp_get_current_user()->user_firstname . ' <' . wp_get_current_user()->user_email . '>',
+			];
+			wp_mail(wp_get_current_user()->user_email, $subject, wpautop($body), $headers_cc, $attachments);
+		}
+
+		add_settings_error('cmx_support_msg', 'cmx_support_sent', __('Deine Anfrage wurde verschickt und wird schnellstmöglichst von mir bearbeitet.','default'), 'updated');
+	}
+
+	?>
+	<div class="wrap">
+		<h1><?php echo esc_html__('Einstellungen','default'); ?></h1>
+
+		<h2 class="nav-tab-wrapper cmx-tabs">
+			<?php foreach ($tabs as $key => $label): ?>
+				<a class="nav-tab <?php echo $key === $tab ? 'nav-tab-active' : ''; ?>"
+				   href="<?php echo esc_url(add_query_arg(['page'=>CMX_SETTINGS_SLUG,'tab'=>$key], admin_url('admin.php'))); ?>">
+					<?php echo esc_html($label); ?>
+				</a>
+			<?php endforeach; ?>
+		</h2>
+
+		<?php if (!empty($subtabs)): ?>
+			<ul class="subsubsub cmx-subtabs">
+				<?php $i=0; $n=count($subtabs); foreach ($subtabs as $slug => $label): $url=add_query_arg(['page'=>CMX_SETTINGS_SLUG,'tab'=>$tab,'sub'=>$slug], admin_url('admin.php')); ?>
+					<li><a href="<?php echo esc_url($url); ?>" class="<?php echo $slug === $sub ? 'current' : ''; ?>"><?php echo esc_html($label); ?></a><?php echo (++$i < $n) ? ' | ' : ''; ?></li>
+				<?php endforeach; ?>
+			</ul>
+			<br class="clear" />
+		<?php endif; ?>
+
+		<div class="cmx-tabpanel">
+			<?php
+			// Support-Tab: eigenes Formular (ohne options.php)
+			if ($tab === 'support') :
+				settings_errors('cmx_support_msg');
+				$support_mail = 'support@misbuero.ch';
+				?>
+				<h2 class="title"><?php echo esc_html__('Support-Ticket','default'); ?></h2>
+				<p><?php echo wp_kses_post('Hast Du Deine Fragen schon im <a href="https://misbuero.ch/handbuch/" target="_blank">Online-Handbuch</a> nachgeschaut?'); ?></p>
+
+				<form action="" method="post" enctype="multipart/form-data">
+					<?php wp_nonce_field('cmx_support_nonce'); ?>
+
+					<table class="form-table" role="presentation">
+						<tbody>
+						<tr>
+							<th><label for="support_sender">Absender</label></th>
+							<td>
+								<input name="support_sender" id="support_sender" type="text"
+									   value="<?php echo esc_attr(wp_get_current_user()->user_email); ?>"
+									   class="regular-text code" readonly required>
+								<p class="description">Wird vom System autom. ausgelesen</p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="support_recipient">Empfänger</label></th>
+							<td>
+								<input name="support_recipient" id="support_recipient" type="text"
+									   value="<?php echo esc_attr($support_mail); ?>"
+									   class="regular-text code" readonly required>
+								<p class="description">Wird vom System autom. gesetzt</p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="support_subjet">Betreff</label></th>
+							<td>
+								<input name="support_subjet" id="support_subjet" type="text" value=""
+									   class="regular-text code" style="width:700px;" required>
+								<p class="description">z.B. <code>Wie kann ich meine Artikel pflegen?</code></p>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="support_description">Ausführliche Beschreibung</label></th>
+							<td>
+								<textarea name="support_description" rows="12" cols="120" id="support_description" required></textarea>
+								<p class="description">Je genauer Deine Frage, desto schneller kann ich sie Dir beantworten.</p>
+							</td>
+						</tr>
+						<!-- <tr>
+							<th><label for="support_cc">Kopie?</label></th>
+							<td>
+								<label><input name="support_cc" id="support_cc" type="checkbox" checked> Ja, bitte Kopie an mich.</label>
+							</td>
+						</tr> -->
+						<tr>
+							<th><label for="support_file">ScreenShot?</label></th>
+							<td>
+								<input name="support_file" id="support_file" type="file" accept="application/pdf,image/jpeg,image/png">
+								<p class="description">Optional: Screenshot oder PDF anhängen.</p>
+							</td>
+						</tr>
+						</tbody>
+					</table>
+
+					<p class="submit">
+						<button type="submit" name="cmx_support_submit" class="button button-primary">…und ab die Post!</button>
+					</p>
+				</form>
+			<?php
+			// Alle anderen Tabs: klassisches Settings-Form
+			else:
+				?>
+				<form method="post" action="options.php">
+					<?php
+					settings_fields(CMX_SETTINGS_KEY);
+					do_settings_sections($page_id);
+					submit_button(__('Änderungen speichern','default'));
+					?>
+				</form>
+			<?php endif; ?>
+		</div>
+	</div>
+	<?php
+}
+
+/* Persistenz-Helfer wie gehabt */
+add_filter('pre_update_option_' . CMX_SETTINGS_KEY, __NAMESPACE__ . '\\cmx_settings_merge_all_fields', 10, 3);
+function cmx_settings_merge_all_fields($new_value, $old_value, $option) {
+	if (!current_user_can('manage_options')) return $new_value;
+
+	$text_keys = [
+		'rev_bank_name','rev_recipient','rev_iban','rev_api',
+		'zkb_bank_name','zkb_recipient','zkb_iban','zkb_api',
+		'ubs_bank_name','ubs_recipient','ubs_iban','ubs_api',
+		'migros_bank_name','migros_recipient','migros_iban','migros_api',
+		'eisen_bank_name','eisen_recipient','eisen_iban','eisen_api',
+		'site_label','bank_rev','bank_name','iban',
+		'beleg_logo_url',
+	];
+	$bool_keys = ['rev_enabled','zkb_enabled','ubs_enabled','migros_enabled','eisen_enabled','debug_mode','enable_feature','bank_enabled','bank_enabled_eisen'];
+
+	if (empty($_POST[CMX_SETTINGS_KEY]) || !is_array($_POST[CMX_SETTINGS_KEY])) return $new_value;
+
+	$post   = $_POST[CMX_SETTINGS_KEY];
+	$merged = is_array($new_value) ? $new_value : [];
+
+	foreach ($text_keys as $k) {
+		if (isset($post[$k])) {
+			$merged[$k] = ($k === 'beleg_logo_url') ? esc_url_raw(trim((string)$post[$k])) : sanitize_text_field($post[$k]);
+		}
+	}
+	foreach ($bool_keys as $k) {
+		$merged[$k] = !empty($post[$k]) ? 1 : 0;
+	}
+	return $merged;
+}

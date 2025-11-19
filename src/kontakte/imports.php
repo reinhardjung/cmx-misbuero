@@ -1,0 +1,357 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+if (!defined(__NAMESPACE__.'\\CMX_PT_KONTAKTE')) {
+	define(__NAMESPACE__.'\\CMX_PT_KONTAKTE', 'kontakte');
+}
+
+/** ===== Konstanten gemäss Export ===== */
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_VORNAME'))  define(__NAMESPACE__.'\\CMX_KONTAKTE_META_VORNAME','_cmx_kontakte_vorname');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_NACHNAME')) define(__NAMESPACE__.'\\CMX_KONTAKTE_META_NACHNAME','_cmx_kontakte_nachname');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_URL'))      define(__NAMESPACE__.'\\CMX_KONTAKTE_META_URL','_cmx_kontakte_url');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_PRIVAT'))   define(__NAMESPACE__.'\\CMX_KONTAKTE_META_PRIVAT','_cmx_kontakte_privat');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_DATUM'))    define(__NAMESPACE__.'\\CMX_KONTAKTE_META_DATUM','_cmx_kontakte_datum');
+
+if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_STRASSE')) define(__NAMESPACE__.'\\CMX_RECHNUNG_META_STRASSE','_cmx_rechnung_strasse');
+if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_ZUSATZ'))  define(__NAMESPACE__.'\\CMX_RECHNUNG_META_ZUSATZ','_cmx_rechnung_zusatz');
+if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_PLZ'))     define(__NAMESPACE__.'\\CMX_RECHNUNG_META_PLZ','_cmx_rechnung_plz');
+if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_ORT'))     define(__NAMESPACE__.'\\CMX_RECHNUNG_META_ORT','_cmx_rechnung_ort');
+if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_LAND'))    define(__NAMESPACE__.'\\CMX_RECHNUNG_META_LAND','_cmx_rechnung_land');
+
+if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_STRASSE'))   define(__NAMESPACE__.'\\CMX_LIEFER_META_STRASSE','_cmx_liefer_strasse');
+if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_ZUSATZ'))    define(__NAMESPACE__.'\\CMX_LIEFER_META_ZUSATZ','_cmx_liefer_zusatz');
+if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_PLZ'))       define(__NAMESPACE__.'\\CMX_LIEFER_META_PLZ','_cmx_liefer_plz');
+if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_ORT'))       define(__NAMESPACE__.'\\CMX_LIEFER_META_ORT','_cmx_liefer_ort');
+if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.'\\CMX_LIEFER_META_LAND','_cmx_liefer_land');
+
+
+/**
+ * 1) Import-Link oben in der Liste einfügen
+ */
+\add_filter('views_edit-' . CMX_PT_KONTAKTE, function(array $views){
+	if (!\current_user_can('edit_posts')) return $views;
+	$url = \add_query_arg(['cmx_import' => 1]);
+	$views['cmx_import_kontakte'] = '<a href="' . esc_url($url) . '">importieren</a>';
+	return $views;
+});
+
+/**
+ * 2) Inline-Formular oberhalb der Tabelle einblenden (wenn ?cmx_import=1)
+ */
+\add_action('all_admin_notices', function() {
+	global $typenow;
+	if ($typenow !== CMX_PT_KONTAKTE || empty($_GET['cmx_import'])) return;
+	if (!\current_user_can('edit_posts')) return;
+	?>
+	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
+		<h2>Kontakte Import</h2>
+		<p>Wähle Deine <code>CSV-Datei</code> aus.</p>
+		<form method="post" enctype="multipart/form-data" action="">
+			<?php \wp_nonce_field('cmx_kontakte_import'); ?>
+			<input type="hidden" name="cmx_do_import_kontakte" value="1">
+			<table class="form-table" role="presentation" style="margin-top:1em;">
+				<tbody>
+					<tr>
+						<th scope="row"><label for="cmx_csv_file">CSV-Datei</label></th>
+						<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv" required></td>
+					</tr>
+					<!-- Optional: Update-Modus
+					<tr>
+						<th scope="row"><label for="cmx_update_mode">Update-Modus</label></th>
+						<td><label><input type="checkbox" id="cmx_update_mode" name="update_mode" value="1"> Wenn <code>ID</code> vorhanden ist, bestehenden Kontakt aktualisieren</label></td>
+					</tr>
+					-->
+				</tbody>
+			</table>
+			<p class="submit">
+				<button type="submit" class="button button-primary">Import starten</button>
+				<a href="<?php echo esc_url(admin_url('edit.php?post_type=' . CMX_PT_KONTAKTE)); ?>" class="button">Abbrechen</a>
+			</p>
+		</form>
+	</div>
+	<?php
+});
+
+/** ==== Helpers ==== */
+function cmx_bool_from_csv($v): bool {
+	$v = is_string($v) ? strtolower(trim($v)) : $v;
+	return ($v===1 || $v==='1' || $v===true || $v==='true' || $v==='ja' || $v==='yes' || $v==='y');
+}
+function cmx_normalize_url(?string $url): string {
+	$url = trim((string)$url);
+	if ($url === '') return '';
+	if (!preg_match('~^https?://~i', $url)) $url = 'https://' . ltrim($url, '/');
+	return $url;
+}
+/** Werte aus CSV spaltenübergreifend robust splitten (Komma oder Pipe) */
+function cmx_split_values($val): array {
+	if ($val === null || $val === '') return [];
+	$val = (string)$val;
+	$parts = preg_split('/[|,]/', $val);
+	$parts = array_map(static fn($v)=>trim((string)$v), (array)$parts);
+	return array_values(array_filter($parts, static fn($v)=>$v!==''));
+}
+function cmx_assign_stufe(int $post_id, string $slug = '', string $name = ''): void {
+	$tax_candidates = ['kontakte_stufen','stufen','kontakte_stufe','kontakt_stufen'];
+	$tax_found = null; foreach ($tax_candidates as $tx) { if (\taxonomy_exists($tx)) { $tax_found = $tx; break; } }
+	if (!$tax_found) return;
+	if ($slug !== '') {
+		$term = \get_term_by('slug', $slug, $tax_found);
+		if ($term && !\is_wp_error($term)) { \wp_set_object_terms($post_id, [(int)$term->term_id], $tax_found, false); return; }
+	}
+	if ($name !== '') {
+		$term = \get_term_by('name', $name, $tax_found);
+		if ($term && !\is_wp_error($term)) { \wp_set_object_terms($post_id, [(int)$term->term_id], $tax_found, false); return; }
+		$created = \wp_insert_term($name, $tax_found, ['slug' => sanitize_title($name)]);
+		if (!\is_wp_error($created) && isset($created['term_id'])) \wp_set_object_terms($post_id, [(int)$created['term_id']], $tax_found, false);
+	}
+}
+
+/**
+ * Kategorien-Taxonomien für Kontakte erkennen:
+ *  - bevorzuge Taxonomien, deren Name 'kategor' enthält
+ *  - plus bekannte Kandidaten
+ */
+function cmx_detect_category_taxonomies_for_kontakte(): array {
+	$out = [];
+	$all = \get_object_taxonomies(CMX_PT_KONTAKTE, 'objects');
+	foreach ($all as $tax) {
+		$name = strtolower($tax->name);
+		if (strpos($name, 'kategor') !== false) $out[$tax->name] = $tax;
+	}
+	foreach (['kundenkategorie','kontakte_kundenkategorie','kontakt_kundenkategorie','kontakte_kategorien','kontakt_kategorien','category'] as $pref) {
+		if (\taxonomy_exists($pref)) $out[$pref] = \get_taxonomy($pref);
+	}
+	return array_values($out);
+}
+
+/**
+ * Kategorien zuweisen – akzeptiert Namen/Slugs/IDs (gemischt), legt fehlende an.
+ */
+function cmx_assign_categories(int $post_id, array $values, ?string $explicit_tax = null): void {
+	$values = array_values(array_filter(array_map('trim',$values), fn($v)=>$v!==''));
+	if (!$values) return;
+
+	$tax_list = $explicit_tax && \taxonomy_exists($explicit_tax)
+		? [\get_taxonomy($explicit_tax)]
+		: cmx_detect_category_taxonomies_for_kontakte();
+
+	if (!$tax_list) return;
+
+	foreach ($tax_list as $tax) {
+		if (!$tax) continue;
+		$term_ids = [];
+		foreach ($values as $v) {
+			$term = null;
+			if (is_numeric($v)) {
+				$term = \get_term((int)$v, $tax->name);
+			} else {
+				$term = \get_term_by('slug', $v, $tax->name);
+				if (!$term || \is_wp_error($term)) $term = \get_term_by('name', $v, $tax->name);
+			}
+			if ($term && !\is_wp_error($term)) {
+				$term_ids[] = (int)$term->term_id;
+			} else {
+				$created = \wp_insert_term($v, $tax->name, ['slug'=>sanitize_title($v)]);
+				if (!\is_wp_error($created) && isset($created['term_id'])) $term_ids[] = (int)$created['term_id'];
+			}
+		}
+		if ($term_ids) \wp_set_object_terms($post_id, $term_ids, $tax->name, false);
+	}
+}
+
+
+/**
+ * 3) Import ausführen und nach Erfolg zurückleiten
+ */
+\add_action('load-edit.php', function() {
+	global $typenow;
+	if ($typenow !== CMX_PT_KONTAKTE) return;
+	if (empty($_POST['cmx_do_import_kontakte']) || !\check_admin_referer('cmx_kontakte_import')) return;
+
+	if (empty($_FILES['csv_file']['tmp_name'])) {
+		\add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Keine Datei ausgewählt.</p></div>'; });
+		return;
+	}
+
+	$file = $_FILES['csv_file']['tmp_name'];
+	$sep  = ';';
+	$update_mode = !empty($_POST['update_mode']); // optional
+
+	$h = @\fopen($file, 'r');
+	if (!$h) { \add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Datei konnte nicht gelesen werden.</p></div>'; }); return; }
+
+	// UTF-8 BOM
+	$first = fread($h, 3);
+	if ($first !== "\xEF\xBB\xBF") fseek($h, 0);
+
+	$header = \fgetcsv($h, 0, $sep);
+	if (!$header) { \fclose($h); \add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Leere oder ungültige CSV.</p></div>'; }); return; }
+	$header = array_map('trim', $header);
+
+	$imported = 0; $updated = 0;
+
+	while (($line = \fgetcsv($h, 0, $sep)) !== false) {
+		if (!array_filter($line, static fn($v) => $v !== null && $v !== '')) continue;
+		$row = @array_combine($header, $line); if (!$row) continue;
+
+		$title = sanitize_text_field($row['Titel'] ?? ($row['post_title'] ?? ''));
+		if (!$title) continue;
+
+		$post_date = !empty($row['Erstellt_am']) ? sanitize_text_field($row['Erstellt_am']) : current_time('mysql');
+
+		$postarr = [
+			'post_type'   => CMX_PT_KONTAKTE,
+			'post_title'  => $title,
+			'post_status' => 'publish',
+			'post_date'   => $post_date,
+		];
+
+		if (!empty($row['post_name']))   $postarr['post_name'] = sanitize_title($row['post_name']);
+		if (!empty($row['post_author'])) {
+			$author = $row['post_author'];
+			if (is_numeric($author)) $postarr['post_author'] = (int)$author;
+			else { $u = \get_user_by('login', (string)$author); if ($u) $postarr['post_author'] = (int)$u->ID; }
+		}
+
+		$is_update = false;
+		if ($update_mode && !empty($row['ID'])) { $postarr['ID'] = (int)$row['ID']; $is_update = true; }
+
+		$post_id = \wp_insert_post($postarr, true);
+		if (\is_wp_error($post_id)) continue;
+
+		/* === Metas gemäss Export === */
+		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  (string)($row['vorname'] ?? ''));
+		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string)($row['nachname'] ?? ''));
+		\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT,   isset($row['privat']) && cmx_bool_from_csv($row['privat']) ? '1' : '0');
+		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      cmx_normalize_url($row['url'] ?? ''));
+		if (!empty($row['datum'])) \update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, (string)$row['datum']);
+
+		\update_post_meta($post_id, CMX_RECHNUNG_META_STRASSE, (string)($row['rechnung_strasse'] ?? ''));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_ZUSATZ,  (string)($row['rechnung_zusatz'] ?? ''));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_PLZ,     (string)($row['rechnung_plz'] ?? ''));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_ORT,     (string)($row['rechnung_ort'] ?? ''));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_LAND,    strtolower((string)($row['rechnung_land_slug'] ?? ($row['_cmx_rechnung_land'] ?? ''))));
+
+		\update_post_meta($post_id, CMX_LIEFER_META_STRASSE, (string)($row['liefer_strasse'] ?? ''));
+		\update_post_meta($post_id, CMX_LIEFER_META_ZUSATZ,  (string)($row['liefer_zusatz'] ?? ''));
+		\update_post_meta($post_id, CMX_LIEFER_META_PLZ,     (string)($row['liefer_plz'] ?? ''));
+		\update_post_meta($post_id, CMX_LIEFER_META_ORT,     (string)($row['liefer_ort'] ?? ''));
+		\update_post_meta($post_id, CMX_LIEFER_META_LAND,    strtolower((string)($row['liefer_land_slug'] ?? ($row['_cmx_liefer_land'] ?? ''))));
+
+		// Stufe
+		cmx_assign_stufe($post_id, (string)($row['stufe_slug'] ?? ''), (string)($row['stufe_name'] ?? ''));
+
+		// Kommunikation
+		for ($i=1;$i<=3;$i++){
+			if (!empty($row['telefon_'.$i])) \update_post_meta($post_id, '_cmx_telefon_'.$i, (string)$row['telefon_'.$i]);
+			if (!empty($row['email_'.$i]))   \update_post_meta($post_id, '_cmx_email_'.$i,   (string)$row['email_'.$i]);
+		}
+		$bundle = ['telefon'=>[], 'email'=>[]];
+		for ($i=1;$i<=3;$i++){
+			$bundle['telefon'][$i] = ['value'=>(string)($row['telefon_'.$i] ?? ''), 'label'=>''];
+			$bundle['email'][$i]   = ['value'=>(string)($row['email_'.$i] ?? ''),   'label'=>''];
+		}
+		$tel_tax='kontakte_telefone'; $mail_tax='kontakte_emails';
+		if (!empty($row['telefon_label_1'])) $bundle['telefon'][1]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_1'],$tel_tax);
+		if (!empty($row['telefon_label_2'])) $bundle['telefon'][2]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_2'],$tel_tax);
+		if (!empty($row['telefon_label_3'])) $bundle['telefon'][3]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_3'],$tel_tax);
+		if (!empty($row['email_label_1']))   $bundle['email'][1]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_1'],$mail_tax);
+		if (!empty($row['email_label_2']))   $bundle['email'][2]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_2'],$mail_tax);
+		if (!empty($row['email_label_3']))   $bundle['email'][3]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_3'],$mail_tax);
+		\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+
+		/* === KATEGORIEN (NEU – kompatibel zum Export) =======================
+		 * Unterstützte CSV-Spalten:
+		 *  - 'kategorien' (Namen/Slugs/IDs, Komma ODER Pipe-getrennt)
+		 *  - 'kundenkategorien', 'kundenkategorie'
+		 *  - 'kategorien_slugs' (Pipe/Komma)
+		 *  - 'kategorien_names' (Pipe/Komma)
+		 *  - 'kategorien_ids'   (Pipe/Komma)
+		 *  - 'category__{taxonomy}' (Werte Komma/Pipe)
+		 *  - zusätzlich generisch: 'tax__{taxonomy}' (bleibt erhalten)
+		 * =================================================================== */
+
+		// 1) Sammelspalten ohne explizite Taxonomie
+		$catVals = [];
+		foreach (['kategorien','kundenkategorien','kundenkategorie'] as $ck) {
+			if (!empty($row[$ck])) { $catVals = cmx_split_values($row[$ck]); break; }
+		}
+		// Falls keine, probiere die expliziten Export-Spalten
+		if (!$catVals && !empty($row['kategorien_slugs'])) $catVals = cmx_split_values($row['kategorien_slugs']);
+		if (!$catVals && !empty($row['kategorien_names'])) $catVals = cmx_split_values($row['kategorien_names']);
+		if (!$catVals && !empty($row['kategorien_ids']))   $catVals = cmx_split_values($row['kategorien_ids']);
+
+		if ($catVals) {
+			// Auto-Detect passende Kategorie-Taxonomien
+			cmx_assign_categories($post_id, $catVals, null);
+		}
+
+		// 2) category__{taxonomy}
+		foreach ($row as $col => $val) {
+			if (strpos($col, 'category__') === 0 && $val!=='') {
+				$tx = substr($col, 10);
+				if ($tx !== '') {
+					$vals = cmx_split_values($val);
+					cmx_assign_categories($post_id, $vals, $tx);
+				}
+			}
+		}
+
+		/* === Generische Spalten: tax__/meta__ (unverändert) =============== */
+		foreach ($row as $key => $val) {
+			if ($val === '' || $val === null) continue;
+
+			// Taxo: tax__taxonomy (Namen/Slugs/IDs; legt fehlende an)
+			if (strpos($key, 'tax__') === 0) {
+				$tax = substr($key, 5);
+				if ($tax) {
+					$parts = cmx_split_values($val);
+					$term_ids = [];
+					foreach ($parts as $p) {
+						if ($p === '') continue;
+						if (is_numeric($p)) {
+							$term = \get_term((int)$p, $tax);
+							if ($term && !\is_wp_error($term)) { $term_ids[] = (int)$term->term_id; continue; }
+						}
+						$term = \get_term_by('slug', $p, $tax);
+						if (!$term || \is_wp_error($term)) $term = \get_term_by('name', $p, $tax);
+						if ($term && !\is_wp_error($term)) $term_ids[] = (int)$term->term_id;
+						else {
+							$created = \wp_insert_term($p, $tax, ['slug'=>sanitize_title($p)]);
+							if (!\is_wp_error($created) && isset($created['term_id'])) $term_ids[] = (int)$created['term_id'];
+						}
+					}
+					if ($term_ids) \wp_set_object_terms($post_id, $term_ids, $tax, false);
+				}
+			}
+
+			// Meta: meta__key
+			if (strpos($key, 'meta__') === 0) {
+				$meta_key = substr($key, 6);
+				if ($meta_key !== '') \update_post_meta($post_id, $meta_key, $val);
+			}
+		}
+
+		if ($is_update) $updated++; else $imported++;
+	}
+
+	\fclose($h);
+
+	\set_transient('cmx_import_notice_kontakte', ['imported'=>$imported, 'updated'=>$updated], 30);
+
+	\wp_safe_redirect(\admin_url('edit.php?post_type=' . CMX_PT_KONTAKTE));
+	exit;
+});
+
+/**
+ * 4) Notice nach Redirect anzeigen
+ */
+\add_action('admin_notices', function() {
+	global $typenow;
+	if ($typenow !== CMX_PT_KONTAKTE) return;
+	$notice = \get_transient('cmx_import_notice_kontakte');
+	if (!$notice) return;
+	\delete_transient('cmx_import_notice_kontakte');
+	echo '<div class="notice notice-success is-dismissible"><p><strong>Import abgeschlossen:</strong> ' .
+		intval($notice['imported']) . ' neu, ' . intval($notice['updated']) . ' aktualisiert.</p></div>';
+});

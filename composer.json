@@ -1,0 +1,26 @@
+{
+  "name": "reinhardjung/cmx-misbuero",
+ 	"description": "CMX – Mis Büro",
+  "type": "wordpress-plugin",
+ 	"config": {
+		"optimize-autoloader": true
+	},
+  "autoload": {
+	"psr-4": {
+		 "CLOUDMEISTER\\CMX\\Buero\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Reinhard Jung",
+			"email": "github@reinhard.jung.name"
+		}
+	],
+  "require": {
+    "php": ">=8.1",
+    "endroid/qr-code": "^5",
+    "sabre/dav": "^4.7",
+    "sabre/uri": "^2.2",
+    "dompdf/dompdf": "^3.1"
+  }
+}
