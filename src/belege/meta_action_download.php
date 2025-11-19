@@ -97,3 +97,60 @@ function cmxbu_handle_beleg_download() {
 	exit;
 }
 add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_handle_beleg_download');
+
+
+/**
+ * 1) Cleanup-Job planen (einmalig)
+ */
+function cmxbu_schedule_token_cleanup(): void {
+	if (!wp_next_scheduled('cmxbu_cleanup_tokens')) {
+		// Start in 1 Stunde, dann täglich
+		wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'cmxbu_cleanup_tokens');
+	}
+}
+add_action('init', __NAMESPACE__ . '\\cmxbu_schedule_token_cleanup');
+
+/**
+ * 2) Callback für den täglichen Cleanup
+ *    - löscht nur Optionen cmx_token_*, deren PDF nicht mehr existiert
+ */
+function cmxbu_cleanup_tokens(): void {
+	global $wpdb;
+
+	$like = $wpdb->esc_like('cmx_token_') . '%';
+	$table = $wpdb->options;
+
+	// Alle Optionen mit Präfix cmx_token_ holen
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT option_name, option_value FROM {$table} WHERE option_name LIKE %s",
+			$like
+		)
+	);
+
+	if (empty($rows)) {
+		return;
+	}
+
+	$base_dir = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
+
+	foreach ($rows as $row) {
+		$option_name  = $row->option_name;
+		$option_value = maybe_unserialize($row->option_value);
+
+		// Ungültige oder leere Daten → Option löschen
+		if (!is_array($option_value) || empty($option_value['file'])) {
+			delete_option($option_name);
+			continue;
+		}
+
+		$file_rel  = ltrim((string) $option_value['file'], '/\\');
+		$file_path = $base_dir . $file_rel;
+
+		// Datei existiert nicht mehr → Option löschen
+		if (!is_file($file_path)) {
+			delete_option($option_name);
+		}
+	}
+}
+add_action('cmxbu_cleanup_tokens', __NAMESPACE__ . '\\cmxbu_cleanup_tokens');
