@@ -123,14 +123,13 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 	$tmp = \download_url($image_url, 8);
 	if (\is_wp_error($tmp)) return $tmp;
 
-	// verhindern, dass 404/HTML-Dateien als Bild gespeichert werden
+	// verhindern, dass 404/HTML-Dateien als PNG gespeichert werden
 	$info = @getimagesize($tmp);
 	if (!is_array($info) || empty($info['mime'])) {
 		@unlink($tmp);
 		return new \WP_Error('invalid_image', 'Ungültiges Bild oder 404 erhalten');
 	}
 
-	// Extension aus MIME-Typ bestimmen
 	$map = [
 		'image/png'  => 'png',
 		'image/webp' => 'webp',
@@ -142,39 +141,26 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 		'image/bmp'  => 'bmp',
 	];
 
-	$mime = strtolower($info['mime']);
-	$ext  = isset($map[$mime]) ? $map[$mime] : 'png';
-	$ext  = '.' . $ext;
-
-	// 🎯 Dateiname = Domain der Bild-URL
-	$host = parse_url($image_url, PHP_URL_HOST);
-	if (!$host) {
-		$host = 'logo';
-	}
-
-	// Sanitizen: nur a-z, 0-9, Punkt, Minus
-	$host = strtolower($host);
-	$host = preg_replace('~[^a-z0-9.-]+~', '', $host);
-	if ($host === '') {
-		$host = 'logo';
-	}
-
-	$file = $host . $ext;
+	$ext = $map[strtolower($info['mime'])] ?? 'png';
+	$ext = '.' . $ext;
 
 	$base_dir = cmx_local_base_path();
 	$base_url = cmx_local_base_url();
-	if (!is_dir($base_dir)) {
-		\wp_mkdir_p($base_dir);
+	if (!is_dir($base_dir)) wp_mkdir_p($base_dir);
+
+	$post  = get_post($post_id);
+	$title = $post ? get_the_title($post) : '';
+	$slug  = sanitize_title($title ?: 'kontakt');
+	$file  = $slug . '_' . $post_id . $ext;
+
+	$target = wp_normalize_path($base_dir . '/' . $file);
+
+	// vorhandene Varianten löschen
+	foreach (['jpg','jpeg','png','gif','webp','avif','ico','bmp'] as $old) {
+		$f = $base_dir . '/' . $slug . '_' . $post_id . '.' . $old;
+		if (file_exists($f)) @unlink($f);
 	}
 
-	$target = \wp_normalize_path($base_dir . '/' . $file);
-
-	// vorhandene Datei mit diesem Domain-Namen ggf. löschen (Reload-Fall)
-	if (file_exists($target)) {
-		@unlink($target);
-	}
-
-	// Datei final speichern
 	if (!@rename($tmp, $target)) {
 		@unlink($tmp);
 		return new \WP_Error('move_failed', 'Speichern fehlgeschlagen');
@@ -184,15 +170,13 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 	$ver = filemtime($target) ?: time();
 	$url = $base_url . '/' . rawurlencode($file) . '?v=' . $ver;
 
-	\update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
-	\update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url);
+	update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+	update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url);
 
-	\clean_post_cache($post_id);
+	clean_post_cache($post_id);
 
 	return ['url' => $url, 'path' => $target];
 }
-
-
 
 
 /** Domain extrahieren */

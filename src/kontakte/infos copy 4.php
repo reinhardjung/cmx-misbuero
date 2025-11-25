@@ -130,46 +130,49 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 		return new \WP_Error('invalid_image', 'Ungültiges Bild oder 404 erhalten');
 	}
 
-	// Extension aus MIME-Typ bestimmen
-	$map = [
-		'image/png'  => 'png',
-		'image/webp' => 'webp',
-		'image/avif' => 'avif',
-		'image/gif'  => 'gif',
-		'image/x-icon' => 'ico',
-		'image/vnd.microsoft.icon' => 'ico',
-		'image/jpeg' => 'jpg',
-		'image/bmp'  => 'bmp',
-	];
+	// 🎯 ORIGINALER Dateiname aus URL (ohne Query/Fragment)
+	$url_path = parse_url($image_url, PHP_URL_PATH);
+	$original_file = basename($url_path);
 
-	$mime = strtolower($info['mime']);
-	$ext  = isset($map[$mime]) ? $map[$mime] : 'png';
-	$ext  = '.' . $ext;
-
-	// 🎯 Dateiname = Domain der Bild-URL
-	$host = parse_url($image_url, PHP_URL_HOST);
-	if (!$host) {
-		$host = 'logo';
+	// Falls kein Dateiname in URL → MIME fallback
+	if ($original_file === '' || strpos($original_file, '.') === false) {
+		$map = [
+			'image/png'  => 'png',
+			'image/webp' => 'webp',
+			'image/avif' => 'avif',
+			'image/gif'  => 'gif',
+			'image/x-icon' => 'ico',
+			'image/vnd.microsoft.icon' => 'ico',
+			'image/jpeg' => 'jpg',
+			'image/bmp'  => 'bmp',
+		];
+		$ext = $map[strtolower($info['mime'])] ?? 'png';
+		$original_file = 'logo.' . $ext;
 	}
 
-	// Sanitizen: nur a-z, 0-9, Punkt, Minus
-	$host = strtolower($host);
-	$host = preg_replace('~[^a-z0-9.-]+~', '', $host);
-	if ($host === '') {
-		$host = 'logo';
+	// 🎯 Sanitizing des Dateinamens
+	// → alles ausser Buchstaben/Zahlen/.-_ entfernen
+	$original_file = strtolower($original_file);
+	$original_file = preg_replace('~[^a-z0-9._-]+~', '', $original_file);
+
+	// Sicherheit: Wenn nichts übrig bleibt
+	if ($original_file === '') {
+		$original_file = 'logo_' . $post_id . '.png';
 	}
 
-	$file = $host . $ext;
+	// 🎯 Falls mehrere Kontakte auf gleiche Domain zeigen → Post-ID anhängen
+	// → Verhindert, dass logos gegenseitig überschrieben werden
+	$ext = pathinfo($original_file, PATHINFO_EXTENSION);
+	$name = basename($original_file, '.' . $ext);
+	$final_file = $name . '_' . $post_id . '.' . $ext;
 
 	$base_dir = cmx_local_base_path();
 	$base_url = cmx_local_base_url();
-	if (!is_dir($base_dir)) {
-		\wp_mkdir_p($base_dir);
-	}
+	if (!is_dir($base_dir)) wp_mkdir_p($base_dir);
 
-	$target = \wp_normalize_path($base_dir . '/' . $file);
+	$target = wp_normalize_path($base_dir . '/' . $final_file);
 
-	// vorhandene Datei mit diesem Domain-Namen ggf. löschen (Reload-Fall)
+	// vorhandene Datei exakt mit diesem Namen löschen
 	if (file_exists($target)) {
 		@unlink($target);
 	}
@@ -182,16 +185,15 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 	@chmod($target, 0644);
 
 	$ver = filemtime($target) ?: time();
-	$url = $base_url . '/' . rawurlencode($file) . '?v=' . $ver;
+	$url = $base_url . '/' . rawurlencode($final_file) . '?v=' . $ver;
 
-	\update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
-	\update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url);
+	update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+	update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url);
 
-	\clean_post_cache($post_id);
+	clean_post_cache($post_id);
 
 	return ['url' => $url, 'path' => $target];
 }
-
 
 
 
