@@ -1,5 +1,6 @@
-<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
-
+<?php
+namespace CLOUDMEISTER\CMX\Buero;
+defined('ABSPATH') || exit('Oxytocin!');
 
 require_once 'allgemein.php';
 require_once 'banken.php';
@@ -7,21 +8,17 @@ require_once 'kontakte.php';
 require_once 'belege.php';
 require_once 'erweitert.php';
 require_once 'support.php';
-
 require_once 'adminbar.php';
 
-/* --------------------------------------------------------------------------
- * 0) Konstante & Slug
- * -------------------------------------------------------------------------- */
-
+/* ------------------------------------------------------------
+ * KONSTANTEN
+ * ------------------------------------------------------------ */
 const CMX_SETTINGS_SLUG = 'cmx-einstellungen';
-const CMX_SETTINGS_KEY  = 'cmx_einstellungen';
+const CMX_SETTINGS_KEY  = 'cmx_einstellungen'; // ALLE ANDEREN TABS benutzen dieses Array
 
-
-/* --------------------------------------------------------------------------
- * 1) Menü-Eintrag für Einstellungsseite
- * -------------------------------------------------------------------------- */
-
+/* ------------------------------------------------------------
+ * ADMIN MENU
+ * ------------------------------------------------------------ */
 add_action('admin_menu', __NAMESPACE__ . '\\cmx_add_settings_menu');
 function cmx_add_settings_menu(): void {
 	add_menu_page(
@@ -31,181 +28,84 @@ function cmx_add_settings_menu(): void {
 		CMX_SETTINGS_SLUG,
 		__NAMESPACE__ . '\\cmx_render_settings_page',
 		'dashicons-admin-generic',
-		999
+		70
 	);
 }
 
-
-/* --------------------------------------------------------------------------
- * 2) Tabs & Subtabs
- * -------------------------------------------------------------------------- */
-
+/* ------------------------------------------------------------
+ * TABS / SUBTABS
+ * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
-	$tabs = [
-		'general'  => __('Allgemein', 'default'),
-		'kontakte' => __('Kontakte', 'default'),
-		'banken'   => __('Banken', 'default'),
-		'belege'   => __('Belege', 'default'),
-		'advanced' => __('Erweitert', 'default'),
-		'support'  => __('Support', 'default'),
+	return [
+		'general'  => 'Allgemein',
+		'kontakte' => 'Kontakte',
+		'banken'   => 'Banken',
+		'belege'   => 'Belege',
+		'advanced' => 'Erweitert',
+		'support'  => 'Support',
 	];
-
-	return apply_filters('cmx_settings_tabs', $tabs);
 }
 
 function cmx_get_subtabs(string $tab): array {
-	$map = [
-		'banken' => [
-			'rev'    => __('Revolut', 'default'),
-			'zkb'    => __('ZKB', 'default'),
-			'ubs'    => __('UBS', 'default'),
-			'migros' => __('Migros', 'default'),
-			'eisen'  => __('Raiffeisen', 'default'),
-		],
-		'kontakte' => [
-			'ms' => __('Microsoft', 'default'),
-			'oo' => __('Google', 'default'),
-			'ic' => __('iCloud', 'default'),
-		],
-		'belege' => [
-			'angebot'     => __('Angebot', 'default'),
-			'gutschrift'  => __('Gutschrift', 'default'),
-			'lieferschein'=> __('Lieferschein', 'default'),
-			'rechnung'    => __('Rechnung', 'default'),
-		],
-		// support ohne Subtabs
-	];
 
-	return $map[$tab] ?? [];
+	if ($tab === 'belege') {
+		return [
+			'angebot'      => 'Angebot',
+			'gutschrift'   => 'Gutschrift',
+			'lieferschein' => 'Lieferschein',
+			'rechnung'     => 'Rechnung',
+		];
+	}
+
+	if ($tab === 'banken') {
+		return [
+			'rev'    => 'Revolut',
+			'zkb'    => 'ZKB',
+			'ubs'    => 'UBS',
+			'migros' => 'Migros',
+			'eisen'  => 'Raiffeisen',
+		];
+	}
+
+	if ($tab === 'kontakte') {
+		return [
+			'ms' => 'Microsoft',
+			'oo' => 'Google',
+			'ic' => 'iCloud',
+		];
+	}
+
+	return [];
 }
 
-
-/* --------------------------------------------------------------------------
- * 3) Setting registrieren (Array-Option)
- * -------------------------------------------------------------------------- */
-
-add_action('admin_init', __NAMESPACE__ . '\\cmx_register_settings');
-function cmx_register_settings(): void {
+/* ------------------------------------------------------------
+ * FELDER FÜR ARRAY-TABS (General, Banken, Kontakte, Advanced)
+ * ------------------------------------------------------------ */
+add_action('admin_init', function() {
 	register_setting(
 		CMX_SETTINGS_KEY,
 		CMX_SETTINGS_KEY,
 		[
 			'type'              => 'array',
-			'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_settings',
 			'default'           => [],
+			'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_settings'
 		]
 	);
-}
+});
 
-
-function cmx_field_textarea(array $args): void {
-	$key   = $args['key'];
-	$val   = cmx_get_option($key, '');
-	$rows  = isset($args['rows']) ? (int) $args['rows'] : 6;
-	$ph    = isset($args['placeholder']) ? esc_attr($args['placeholder']) : '';
-
-	printf(
-		'<textarea name="%1$s[%2$s]" rows="%3$d" class="large-text" placeholder="%4$s">%5$s</textarea>',
-		esc_attr(CMX_SETTINGS_KEY),
-		esc_attr($key),
-		$rows,
-		$ph,
-		esc_textarea($val)
-	);
-}
-
-
-/* --------------------------------------------------------------------------
- * 4) Sanitizer (unverändert, nur ausgelagert)
- * -------------------------------------------------------------------------- */
-
-function cmx_sanitize_settings($input) {
-	if (!is_array($input)) {
-		$input = [];
-	}
-
-	$out = [];
-
-	// HTML-fähige E-Mail-Texte (Textarea, HTML erlaubt)
-	$keys_textarea = [
-		'mail_angebot',
-		'mail_gutschrift',
-		'mail_lieferschein',
-		'mail_rechnung',
-	];
-
-	foreach ($keys_textarea as $k) {
-		if (isset($input[$k])) {
-			// HTML erlauben, aber durch wp_kses_post filtern
-			$out[$k] = wp_kses_post($input[$k]);
-		}
-	}
-
-	// Bestehende Text-Felder (plain text / URL)
-	$keys_text = [
-		'site_label','rev_iban','rev_recipient','rev_bank_api',
-		'zkb_iban','zkb_recipient','zkb_bank_api',
-		'ubs_iban','ubs_recipient','ubs_bank_api',
-		'migros_iban','migros_recipient','migros_bank_api',
-		'bank_rev','bank_name','iban',
-		'rev_bank_name','rev_api',
-		'zkb_bank_name','zkb_api',
-		'ubs_bank_name','ubs_api',
-		'migros_bank_name','ubs_api',
-		'eisen_bank_name','eisen_api',
-		'eisen_recipient','eisen_iban',
-		'beleg_logo_url',
-	];
-
-	foreach ($keys_text as $k) {
-		if (isset($input[$k])) {
-			$out[$k] = ($k === 'beleg_logo_url')
-				? esc_url_raw(trim((string) $input[$k]))
-				: sanitize_text_field($input[$k]);
-		}
-	}
-
-	$keys_bool = [
-		'enable_feature','rev_bank_enabled','zkb_bank_enabled','ubs_bank_enabled',
-		'migros_bank_enabled','debug_mode','bank_enabled','bank_enabled_eisen',
-		'rev_enabled','zkb_enabled','ubs_enabled','migros_enabled','eisen_enabled',
-	];
-
-	foreach ($keys_bool as $k) {
-		$out[$k] = !empty($input[$k]) ? 1 : 0;
-	}
-
-	$existing = get_option(CMX_SETTINGS_KEY, []);
-	if (is_array($existing)) {
-		$out = array_merge($existing, $out);
-	}
-
-	return $out;
-}
-
-
-
-/* --------------------------------------------------------------------------
- * 5) Helper: Option lesen & Felder rendern
- * -------------------------------------------------------------------------- */
-
+/* ------------------------------------------------------------
+ * ARRAY-Speicher-Helfer (andere TABS)
+ * ------------------------------------------------------------ */
 function cmx_get_option(string $key, $default = '') {
-	$opts = get_option(CMX_SETTINGS_KEY, []);
-	return $opts[$key] ?? $default;
+	$arr = get_option(CMX_SETTINGS_KEY, []);
+	return $arr[$key] ?? $default;
 }
 
 function cmx_field_text(array $args): void {
 	$key = $args['key'];
 	$val = cmx_get_option($key, '');
-	$ph  = isset($args['placeholder']) ? esc_attr($args['placeholder']) : '';
-
-	printf(
-		'<input type="text" class="regular-text" name="%1$s[%2$s]" value="%3$s" placeholder="%4$s" />',
-		esc_attr(CMX_SETTINGS_KEY),
-		esc_attr($key),
-		esc_attr($val),
-		$ph
-	);
+	$ph  = esc_attr($args['placeholder'] ?? '');
+	echo '<input type="text" class="regular-text" name="' . CMX_SETTINGS_KEY . '[' . esc_attr($key) . ']" value="' . esc_attr($val) . '" placeholder="' . $ph . '">';
 }
 
 function cmx_field_checkbox(array $args): void {
@@ -213,185 +113,112 @@ function cmx_field_checkbox(array $args): void {
 	$label = $args['label'] ?? '';
 	$val   = cmx_get_option($key, 0);
 
-	printf(
-		'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s> %4$s</label>',
-		esc_attr(CMX_SETTINGS_KEY),
-		esc_attr($key),
-		checked(1, (int) $val, false),
-		esc_html($label)
-	);
+	echo '<label><input type="checkbox" name="' . CMX_SETTINGS_KEY . '[' . esc_attr($key) . ']" value="1" ' . checked(1, $val, false) . '> '
+	     . esc_html($label) . '</label>';
 }
 
-function cmx_field_url(array $args): void {
+/* ------------------------------------------------------------
+ * SINGLE OPTION TEXTAREA für BELEGE
+ * ------------------------------------------------------------ */
+function cmx_field_textarea(array $args): void {
+
 	$key   = $args['key'];
-	$label = $args['label'] ?? '';
-	$value = cmx_get_option($key, '');
+	$rows  = intval($args['rows'] ?? 6);
+	$ph    = $args['placeholder'] ?? '';
 
-	echo '<input type="url" name="' . esc_attr(CMX_SETTINGS_KEY) . '[' . esc_attr($key) . ']" value="' . esc_attr($value) . '" class="regular-text" placeholder="https://example.com">';
-	if ($label) {
-		echo '<p class="description">' . esc_html($label) . '</p>';
+	$value = get_option($key, null);
+
+	// OPTION EXISTIERT NICHT → Default aus INI
+	if ($value === null) {
+		$display = $ph;
 	}
+	// OPTION IST LEER → Default aus INI
+	elseif ($value === '') {
+		$display = $ph;
+	}
+	// OPTION HAT WERT → diesen anzeigen
+	else {
+		$display = $value;
+	}
+
+	echo '<textarea name="' . esc_attr($key) . '"
+		rows="' . esc_attr($rows) . '"
+		style="width:100%;">'
+	     . esc_textarea($display)
+	     . '</textarea>';
 }
 
-
-/* --------------------------------------------------------------------------
- * 6) Render der Einstellungsseite (Tabs + Tab-Content)
- * -------------------------------------------------------------------------- */
-
+/* ------------------------------------------------------------
+ * SEITE RENDERN (TAB-SYSTEM)
+ * ------------------------------------------------------------ */
 function cmx_render_settings_page(): void {
-	if (!current_user_can('manage_options')) {
-		wp_die(__('Nicht erlaubt.', 'default'));
-	}
 
 	$tabs = cmx_get_tabs();
-	$tab  = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : array_key_first($tabs);
+	$tab  = $_GET['tab'] ?? 'general';
 
-	if (!isset($tabs[$tab])) {
-		$tab = array_key_first($tabs);
-	}
+	if (!isset($tabs[$tab])) $tab = 'general';
 
 	$subtabs = cmx_get_subtabs($tab);
-	$sub     = isset($_GET['sub']) ? sanitize_key($_GET['sub']) : (array_key_first($subtabs) ?: '');
+	$sub     = $_GET['sub'] ?? (array_key_first($subtabs) ?: '');
 
 	if ($sub && !isset($subtabs[$sub])) {
-		$sub = array_key_first($subtabs);
+		$sub = array_key_first($subtabs) ?: '';
 	}
 
-	$page_id = $sub ? 'cmx_tab_' . $tab . '__' . $sub : 'cmx_tab_' . $tab;
+	$page_id = $sub ? "cmx_tab_{$tab}__{$sub}" : "cmx_tab_{$tab}";
 
-	?>
-	<div class="wrap">
-		<h1><?php echo esc_html__('Einstellungen', 'default'); ?></h1>
+	echo '<div class="wrap"><h1>Einstellungen</h1>';
 
-		<h2 class="nav-tab-wrapper cmx-tabs">
-			<?php foreach ($tabs as $key => $label) : ?>
-				<a class="nav-tab <?php echo $key === $tab ? 'nav-tab-active' : ''; ?>"
-				   href="<?php echo esc_url(add_query_arg(['page' => CMX_SETTINGS_SLUG, 'tab' => $key], admin_url('admin.php'))); ?>">
-					<?php echo esc_html($label); ?>
-				</a>
-			<?php endforeach; ?>
-		</h2>
+	/* Tabs */
+	echo '<h2 class="nav-tab-wrapper">';
+	foreach ($tabs as $key => $label) {
+		$url = admin_url("admin.php?page=" . CMX_SETTINGS_SLUG . "&tab={$key}");
+		echo '<a href="' . $url . '" class="nav-tab ' . ($key === $tab ? 'nav-tab-active' : '') . '">' . esc_html($label) . '</a>';
+	}
+	echo '</h2>';
 
-		<?php if (!empty($subtabs)) : ?>
-			<ul class="subsubsub cmx-subtabs">
-				<?php
-				$i = 0;
-				$n = count($subtabs);
-				foreach ($subtabs as $slug => $label) :
-					$url = add_query_arg(
-						[
-							'page' => CMX_SETTINGS_SLUG,
-							'tab'  => $tab,
-							'sub'  => $slug,
-						],
-						admin_url('admin.php')
-					);
-					?>
-					<li>
-						<a href="<?php echo esc_url($url); ?>" class="<?php echo $slug === $sub ? 'current' : ''; ?>">
-							<?php echo esc_html($label); ?>
-						</a><?php echo (++$i < $n) ? ' | ' : ''; ?>
-					</li>
-				<?php endforeach; ?>
-			</ul>
-			<br class="clear" />
-		<?php endif; ?>
+	/* Subtabs */
+	if ($subtabs) {
+		echo '<ul class="subsubsub">';
+		$i = 0; $n = count($subtabs);
+		foreach ($subtabs as $key => $label) {
+			$url = admin_url("admin.php?page=" . CMX_SETTINGS_SLUG . "&tab={$tab}&sub={$key}");
+			echo '<li><a href="' . $url . '" class="' . ($key === $sub ? 'current' : '') . '">' . esc_html($label) . '</a>'
+			     . (++$i < $n ? ' | ' : '') . '</li>';
+		}
+		echo '</ul><br class="clear">';
+	}
 
-		<div class="cmx-tabpanel">
-			<?php
-			if ($tab === 'support') {
-				// Implementierung liegt in settings-tab-support.php
-				if (function_exists(__NAMESPACE__ . '\\cmx_render_support_tab')) {
-					cmx_render_support_tab();
-				}
-			} else {
-				?>
-				<form method="post" action="options.php">
-					<?php
-					settings_fields(CMX_SETTINGS_KEY);
-					do_settings_sections($page_id);
-					submit_button(__('Änderungen speichern', 'default'));
-					?>
-				</form>
-				<?php
-			}
-			?>
-		</div>
-	</div>
-	<?php
+	echo '<form method="post" action="options.php">';
+	echo '<div class="cmx-tabpanel">';
+
+	/* ARRAY-TABS */
+	if ($tab !== 'belege') {
+		settings_fields(CMX_SETTINGS_KEY);
+		do_settings_sections($page_id);
+	}
+
+	/* BELEGE SUBTABS → SINGLE OPTIONS */
+	if ($tab === 'belege') {
+
+		if ($sub === 'angebot')      settings_fields('cmx_belege_angebot');
+		if ($sub === 'gutschrift')   settings_fields('cmx_belege_gutschrift');
+		if ($sub === 'lieferschein') settings_fields('cmx_belege_lieferschein');
+		if ($sub === 'rechnung')     settings_fields('cmx_belege_rechnung');
+
+		do_settings_sections($page_id);
+	}
+
+	submit_button('Änderungen speichern');
+
+	echo '</div></form></div>';
 }
 
-
-/* --------------------------------------------------------------------------
- * 7) Persistenz-Helfer (Merge aller Felder)
- * -------------------------------------------------------------------------- */
-
-add_filter('pre_update_option_' . CMX_SETTINGS_KEY, __NAMESPACE__ . '\\cmx_settings_merge_all_fields', 10, 3);
-add_filter('pre_update_option_' . CMX_SETTINGS_KEY, __NAMESPACE__ . '\\cmx_settings_merge_all_fields', 10, 3);
-add_filter('pre_update_option_' . CMX_SETTINGS_KEY, __NAMESPACE__ . '\\cmx_settings_merge_all_fields', 10, 3);
-function cmx_settings_merge_all_fields($new_value, $old_value, $option) {
-	if (!current_user_can('manage_options')) {
-		return $new_value;
-	}
-
-	if (empty($_POST[CMX_SETTINGS_KEY]) || !is_array($_POST[CMX_SETTINGS_KEY])) {
-		return $new_value;
-	}
-
-	$post    = $_POST[CMX_SETTINGS_KEY];
-	$merged  = is_array($new_value) ? $new_value : [];
-	$defaults = cmx_get_email_defaults_from_ini();
-
-	// 1) E-Mail HTML-Texte: leere Felder mit INI-Defaults füllen
-	$textarea_keys = [
-		'mail_angebot',
-		'mail_gutschrift',
-		'mail_lieferschein',
-		'mail_rechnung',
-	];
-
-	foreach ($textarea_keys as $k) {
-		if (array_key_exists($k, $post)) {
-			$raw = (string) $post[$k];
-
-			if ($raw === '' && isset($defaults[$k]) && $defaults[$k] !== '') {
-				// Benutzer hat leer gelassen -> Default aus INI einsetzen
-				$merged[$k] = wp_kses_post($defaults[$k]);
-			} elseif (isset($new_value[$k])) {
-				// Benutzer hat etwas eingegeben -> bereits sanitizte Version übernehmen
-				$merged[$k] = $new_value[$k];
-			}
-		}
-	}
-
-	// 2) Bestehende Text-Felder weiter mergen
-	$text_keys = [
-		'rev_bank_name','rev_recipient','rev_iban','rev_api',
-		'zkb_bank_name','zkb_recipient','zkb_iban','zkb_api',
-		'ubs_bank_name','ubs_recipient','ubs_iban','ubs_api',
-		'migros_bank_name','migros_recipient','migros_iban','migros_api',
-		'eisen_bank_name','eisen_recipient','eisen_iban','eisen_api',
-		'site_label','bank_rev','bank_name','iban',
-		'beleg_logo_url',
-	];
-
-	foreach ($text_keys as $k) {
-		if (isset($new_value[$k])) {
-			$merged[$k] = $new_value[$k];
-		}
-	}
-
-	// 3) Boolean-Felder mergen
-	$bool_keys = [
-		'rev_enabled','zkb_enabled','ubs_enabled','migros_enabled','eisen_enabled',
-		'debug_mode','enable_feature','bank_enabled','bank_enabled_eisen',
-	];
-
-	foreach ($bool_keys as $k) {
-		if (isset($new_value[$k])) {
-			$merged[$k] = !empty($new_value[$k]) ? 1 : 0;
-		}
-	}
-
-	return $merged;
+/* ------------------------------------------------------------
+ * SANITIZER (für Array-Tabs)
+ * ------------------------------------------------------------ */
+function cmx_sanitize_settings($input) {
+	if (!is_array($input)) return [];
+	$existing = get_option(CMX_SETTINGS_KEY, []);
+	return array_merge($existing, $input);
 }

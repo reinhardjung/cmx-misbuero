@@ -1,179 +1,160 @@
-<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+<?php namespace CLOUDMEISTER\CMX\Buero;
+defined('ABSPATH') || exit('Oxytocin!');
 
+/* ------------------------------------------------------------
+ * INI auslesen
+ * ------------------------------------------------------------ */
+function cmx_get_ini_belege(): array {
 
-/**
- * Tab: Belege
- * Subtabs: Angebot, Gutschrift, Lieferschein, Rechnung
- * Jeweils ein Textarea-Feld für den E-Mail-Text
- */
-
-add_action('admin_init', __NAMESPACE__ . '\\cmx_register_belege_tab');
-function cmx_register_belege_tab(): void {
-
-	/* --------------------------------------------------------------
-	 * Angebot
-	 * -------------------------------------------------------------- */
-	$page_angebot = 'cmx_tab_belege__angebot';
-
-	add_settings_section(
-		'cmx_sec_belege_angebot',
-		__('Angebot', 'default'),
-		'__return_false',
-		$page_angebot
-	);
-
-	add_settings_field(
-		'mail_angebot',
-		__('E-Mail Text für Angebot', 'default'),
-		__NAMESPACE__ . '\\cmx_field_textarea',
-		$page_angebot,
-		'cmx_sec_belege_angebot',
-		[
-			'key'         => 'mail_angebot',
-			'rows'        => 8,
-			'placeholder' => __("Hallo …\n\nIm Anhang findest Du Dein Angebot.\n\nFreundliche Grüsse", 'default'),
-		]
-	);
-
-
-	/* --------------------------------------------------------------
-	 * Gutschrift
-	 * -------------------------------------------------------------- */
-	$page_gutschrift = 'cmx_tab_belege__gutschrift';
-
-	add_settings_section(
-		'cmx_sec_belege_gutschrift',
-		__('Gutschrift', 'default'),
-		'__return_false',
-		$page_gutschrift
-	);
-
-	add_settings_field(
-		'mail_gutschrift',
-		__('E-Mail Text für Gutschrift', 'default'),
-		__NAMESPACE__ . '\\cmx_field_textarea',
-		$page_gutschrift,
-		'cmx_sec_belege_gutschrift',
-		[
-			'key'         => 'mail_gutschrift',
-			'rows'        => 8,
-			'placeholder' => __("Hallo …\n\nIm Anhang findest Du Deine Gutschrift.\n\nFreundliche Grüsse", 'default'),
-		]
-	);
-
-
-	/* --------------------------------------------------------------
-	 * Lieferschein
-	 * -------------------------------------------------------------- */
-	$page_lieferschein = 'cmx_tab_belege__lieferschein';
-
-	add_settings_section(
-		'cmx_sec_belege_lieferschein',
-		__('Lieferschein', 'default'),
-		'__return_false',
-		$page_lieferschein
-	);
-
-	add_settings_field(
-		'mail_lieferschein',
-		__('E-Mail Text für Lieferschein', 'default'),
-		__NAMESPACE__ . '\\cmx_field_textarea',
-		$page_lieferschein,
-		'cmx_sec_belege_lieferschein',
-		[
-			'key'         => 'mail_lieferschein',
-			'rows'        => 8,
-			'placeholder' => __("Hallo …\n\nIm Anhang findest Du Deinen Lieferschein.\n\nFreundliche Grüsse", 'default'),
-		]
-	);
-
-
-	/* --------------------------------------------------------------
-	 * Rechnung
-	 * -------------------------------------------------------------- */
-	$page_rechnung = 'cmx_tab_belege__rechnung';
-
-	add_settings_section(
-		'cmx_sec_belege_rechnung',
-		__('Rechnung', 'default'),
-		'__return_false',
-		$page_rechnung
-	);
-
-	add_settings_field(
-		'mail_rechnung',
-		__('E-Mail Text für Rechnung', 'default'),
-		__NAMESPACE__ . '\\cmx_field_textarea',
-		$page_rechnung,
-		'cmx_sec_belege_rechnung',
-		[
-			'key'         => 'mail_rechnung',
-			'rows'        => 8,
-			'placeholder' => __("Hallo …\n\nIm Anhang findest Du Deine Rechnung.\n\nVielen Dank für Deinen Auftrag.\n\nFreundliche Grüsse", 'default'),
-		]
-	);
-}
-
-
-
-/**
- * E-Mail-Standardtexte aus INI lesen.
- * INI: [E-Mails] Angebot, Gutschrift, Lieferschein, Rechnung
- */
-function cmx_get_email_defaults_from_ini(): array {
-	static $defaults = null;
-
-	if ($defaults !== null) {
-		return $defaults;
-	}
-
-	// Grundstruktur
-	$defaults = [
-		'mail_angebot'     => '',
-		'mail_gutschrift'  => '',
-		'mail_lieferschein'=> '',
-		'mail_rechnung'    => '',
+	$out = [
+		'mail_angebot'            => '',
+		'mail_gutschrift'         => '',
+		'mail_lieferschein'       => '',
+		'mail_rechnung'           => '',
+		'belegfuss_angebot'       => '',
+		'belegfuss_gutschrift'    => '',
+		'belegfuss_lieferschein'  => '',
+		'belegfuss_rechnung'      => '',
 	];
 
-	// Pfad zur INI-Datei – ggf. anpassen
 	if (function_exists(__NAMESPACE__ . '\\cmx_plugin_path')) {
-		$ini_file = cmx_plugin_path('config/misbuero.ini');
+		$file = cmx_plugin_path('includes/globals.ini');
 	} else {
-		// Fallback: von /includes/settings/ zwei Ebenen hoch
-		$ini_file = dirname(__DIR__, 2) . '/config/misbuero.ini';
+		$file = dirname(__DIR__, 2) . '/includes/globals.ini';
 	}
 
-	if (!file_exists($ini_file)) {
-		return $defaults;
-	}
+	if (!file_exists($file)) return $out;
 
-	$ini = parse_ini_file($ini_file, true, INI_SCANNER_RAW);
-	if (!is_array($ini) || empty($ini['E-Mails']) || !is_array($ini['E-Mails'])) {
-		return $defaults;
-	}
+	$ini = parse_ini_file($file, true, INI_SCANNER_RAW);
+	if (!$ini) return $out;
 
-	$section = $ini['E-Mails'];
-
-	$map = [
-		'Angebot'     => 'mail_angebot',
-		'Gutschrift'  => 'mail_gutschrift',
-		'Lieferschein'=> 'mail_lieferschein',
-		'Rechnung'    => 'mail_rechnung',
+	$mapMail = [
+		'Angebot'      => 'mail_angebot',
+		'Gutschrift'   => 'mail_gutschrift',
+		'Lieferschein' => 'mail_lieferschein',
+		'Rechnung'     => 'mail_rechnung',
 	];
 
-	foreach ($map as $ini_key => $opt_key) {
-		if (isset($section[$ini_key]) && $section[$ini_key] !== '') {
-			$defaults[$opt_key] = (string) $section[$ini_key];
+	foreach ($mapMail as $src => $dst) {
+		if (!empty($ini['E-Mails'][$src])) {
+			$out[$dst] = str_replace(['<br>', '<br />'], "\n", $ini['E-Mails'][$src]);
 		}
 	}
 
-	return $defaults;
+	$mapBF = [
+		'Angebot'      => 'belegfuss_angebot',
+		'Gutschrift'   => 'belegfuss_gutschrift',
+		'Lieferschein' => 'belegfuss_lieferschein',
+		'Rechnung'     => 'belegfuss_rechnung',
+	];
+
+	foreach ($mapBF as $src => $dst) {
+		if (!empty($ini['Belegfuss'][$src])) {
+			$out[$dst] = str_replace(['<br>', '<br />'], "\n", $ini['Belegfuss'][$src]);
+		}
+	}
+
+	return $out;
+}
+
+/* ------------------------------------------------------------
+ * SINGLE OPTION REGISTRIERUNG
+ * ------------------------------------------------------------ */
+add_action('admin_init', function() {
+
+	register_setting('cmx_belege_angebot',      'mail_angebot');
+	register_setting('cmx_belege_angebot',      'belegfuss_angebot');
+
+	register_setting('cmx_belege_gutschrift',   'mail_gutschrift');
+	register_setting('cmx_belege_gutschrift',   'belegfuss_gutschrift');
+
+	register_setting('cmx_belege_lieferschein', 'mail_lieferschein');
+	register_setting('cmx_belege_lieferschein', 'belegfuss_lieferschein');
+
+	register_setting('cmx_belege_rechnung',     'mail_rechnung');
+	register_setting('cmx_belege_rechnung',     'belegfuss_rechnung');
+});
+
+/* ------------------------------------------------------------
+ * BELEGE-FELDER RENDER
+ * ------------------------------------------------------------ */
+add_action('admin_init', __NAMESPACE__ . '\\cmx_register_belege_tab');
+function cmx_register_belege_tab(): void {
+
+	$ph = cmx_get_ini_belege();
+
+	$add_field = function($page, $section, $label, $key, $rows) use ($ph) {
+		add_settings_field(
+			$key,
+			$label,
+			__NAMESPACE__ . '\\cmx_field_textarea',
+			$page,
+			$section,
+			[
+				'key'         => $key,
+				'rows'        => $rows,
+				'placeholder' => $ph[$key] ?? ''
+			]
+		);
+	};
+
+	// Angebot
+	$page = 'cmx_tab_belege__angebot';
+	add_settings_section('sec_angebot','Angebot','__return_false',$page);
+	$add_field($page,'sec_angebot','Belegfuss für Angebot','belegfuss_angebot',4);
+	$add_field($page,'sec_angebot','E-Mail Text für Angebot','mail_angebot',8);
+
+	// Gutschrift
+	$page = 'cmx_tab_belege__gutschrift';
+	add_settings_section('sec_gutschrift','Gutschrift','__return_false',$page);
+	$add_field($page,'sec_gutschrift','Belegfuss für Gutschrift','belegfuss_gutschrift',4);
+	$add_field($page,'sec_gutschrift','E-Mail Text für Gutschrift','mail_gutschrift',8);
+
+	// Lieferschein
+	$page = 'cmx_tab_belege__lieferschein';
+	add_settings_section('sec_lieferschein','Lieferschein','__return_false',$page);
+	$add_field($page,'sec_lieferschein','Belegfuss für Lieferschein','belegfuss_lieferschein',4);
+	$add_field($page,'sec_lieferschein','E-Mail Text für Lieferschein','mail_lieferschein',8);
+
+	// Rechnung
+	$page = 'cmx_tab_belege__rechnung';
+	add_settings_section('sec_rechnung','Rechnung','__return_false',$page);
+	$add_field($page,'sec_rechnung','Belegfuss für Rechnung','belegfuss_rechnung',4);
+	$add_field($page,'sec_rechnung','E-Mail Text für Rechnung','mail_rechnung',8);
 }
 
 
+function cmx_get_belegfuss(string $typ): string {
 
+	// gültige Typen
+	$allowed = [
+		'angebot',
+		'gutschrift',
+		'lieferschein',
+		'rechnung'
+	];
 
-// $body_html = cmx_get_option('mail_rechnung', '');
-// wp_mail($to, $subject, $body_html, ['Content-Type: text/html; charset=UTF-8'], $attachments);
+	if (!in_array($typ, $allowed, true)) {
+		return '';
+	}
 
-// cmx_get_mailtext_for_belegtyp('rechnung'); // gibt HTML zurück
+	$key = 'belegfuss_' . $typ;
+
+	// 1) gespeicherter Wert?
+	$val = get_option($key, null);
+
+	// Falls nicht vorhanden → Default aus INI
+	if ($val === null || $val === '') {
+
+		if (function_exists(__NAMESPACE__ . '\\cmx_get_ini_belege')) {
+			$ini = cmx_get_ini_belege();
+			if (!empty($ini[$key])) {
+				return $ini[$key];
+			}
+		}
+
+		return '';
+	}
+
+	return $val;
+}

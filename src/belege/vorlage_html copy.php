@@ -23,14 +23,15 @@ $font_bold    = $font_dir . 'Asap-Bold.ttf';
 	.td-narrow { width: 1%; white-space: nowrap; text-align: center; }
 	a, a:hover, a:visited, a:active, a:focus { color: grey; text-decoration: none; }
 
+	/* Ab Seite 2: mehr Kopfplatz + fixer Footerplatz */
 	@page {
-		margin-top: 100px;
+		margin-top: 100px;  /* Kopfbereich für Seite >= 2 */
 		margin-right: 30px;
 		margin-left: 50px;
-		margin-bottom: 90px;
+		margin-bottom: 90px; /* Footer-Reserve für alle Seiten */
 	}
 	@page :first {
-		margin-top: 20px;
+		margin-top: 20px;   /* Seite 1: kein Kopf */
 		margin-right: 30px;
 		margin-left: 50px;
 		margin-bottom: 80px;
@@ -99,11 +100,12 @@ $__compute_total = function(array $rows): float {
 	return $sum;
 };
 
-/* ---- Bankdaten ---- */
+/* ---- Bankdaten robust aus $tpl['bank'] holen (ohne Notices) ---- */
 $bank_arr = [];
 if (isset($tpl['bank']) && is_array($tpl['bank'])) {
 	$bank_arr = $tpl['bank'];
 } elseif (function_exists(__NAMESPACE__ . '\\cmxbu_get_preferred_bank')) {
+	// Fallback, falls Generator $tpl['bank'] nicht gesetzt hat
 	$bank_arr = cmxbu_get_preferred_bank();
 }
 $bank_arr = array_replace(['bank_name' => '', 'iban' => '', 'bic' => ''], (array)$bank_arr);
@@ -113,15 +115,6 @@ $bank_iban_safe = function_exists('esc_html') ? esc_html($bank_arr['iban'])     
 $bank_bic_safe  = function_exists('esc_html') ? esc_html($bank_arr['bic'])       : $bank_arr['bic'];
 
 
-/* ============================================================
-   NEU: Lieferschein → Spalten deaktivieren
-   ============================================================ */
-$isLieferschein = (strtolower($beleg_type ?? '') === 'lieferschein');
-
-$showUnitPrice = !$isLieferschein;
-$showDiscount  = !$isLieferschein;
-
-/* ============================================================ */
 ?>
 
 <!-- HEADER -->
@@ -135,49 +128,32 @@ $showDiscount  = !$isLieferschein;
 </tr>
 </table>
 
-
 <!-- META -->
 <table>
 	<tr>
 		<td width="65px"><br>
 			<?= htmlspecialchars($tpl['labels']['date'] ?? 'Datum', ENT_QUOTES, 'UTF-8'); ?><br>
-
 			<?php if (($tpl['document']['due'] ?? '') !== '01.01.1970'): ?>
 				<?= htmlspecialchars($tpl['labels']['due'] ?? 'Fällig bis', ENT_QUOTES, 'UTF-8'); ?><br>
 			<?php endif; ?>
-
 			<?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?>
 		</td>
-
 		<td width="80px" style="text-align:right;"><br>
 			<?= htmlspecialchars($tpl['document']['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
-
 			<?php if (($tpl['document']['due'] ?? '') !== '01.01.1970'): ?>
 				<?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
 			<?php endif; ?>
-
 			<?= htmlspecialchars($tpl['document']['period'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br><br>
 		</td>
-
 		<td width="250px"></td>
-
 		<td>
-			<span style="font-size:8px; color:grey; font-style:italic; position:relative; top:-20px;">
-				<?= htmlspecialchars($tpl['me']['company'] ?? '', ENT_QUOTES, 'UTF-8') .' • ' .
-					htmlspecialchars($tpl['me']['strasse'] ?? '', ENT_QUOTES, 'UTF-8') .' • ' .
-					htmlspecialchars($tpl['me']['plz'] ?? '', ENT_QUOTES, 'UTF-8') .' ' .
-					htmlspecialchars($tpl['me']['ort'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-			</span><br>
-
+			<span style="font-size:8px; color:grey; font-style:italic; position:relative; top:-20px;">&nbsp;&nbsp;&nbsp;&nbsp;<?= htmlspecialchars($tpl['me']['company'] ?? '', ENT_QUOTES, 'UTF-8') .' &bull; ' .htmlspecialchars($tpl['me']['strasse'] ?? '', ENT_QUOTES, 'UTF-8') .' &bull; ' . htmlspecialchars($tpl['me']['plz'] ?? '', ENT_QUOTES, 'UTF-8')   .' '.  htmlspecialchars($tpl['me']['ort'] ?? '', ENT_QUOTES, 'UTF-8') ?></span><br>
 			<span style="position:relative; top:-20px; font-size:larger;"><?= $cmx_beleg_adress ?? '' ?></span>
 		</td>
 	</tr>
 </table>
 
-
-<!-- TITLE -->
 <h1><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
-
 <?php if (!empty($tpl['document']['number'])): ?>
 	<p><i><strong><?= htmlspecialchars($tpl['document']['subject'] ?? '', ENT_QUOTES, 'UTF-8'); ?></strong></i></p>
 <?php endif; ?>
@@ -186,104 +162,70 @@ $showDiscount  = !$isLieferschein;
 	<p><?= nl2br(htmlspecialchars($tpl['document']['description'], ENT_QUOTES, 'UTF-8')); ?></p>
 <?php endif; ?>
 
-
 <?php
-/* ============================================================
-   SPALTENANZAHL BERECHNEN
-   ============================================================ */
-
+$showDiscount = !empty($tpl['any_discount']);
+if (!$showDiscount && !empty($tpl['positions'])) {
+	foreach ($tpl['positions'] as $__p) {
+		if (trim((string)($__p['discount'] ?? '')) !== '' || !empty($__p['has_discount'])) { $showDiscount = true; break; }
+	}
+}
 $showArtNr = false;
 if (!empty($tpl['positions'])) {
 	foreach ($tpl['positions'] as $__p) {
-		if (trim((string)($__p['article_number'] ?? '')) !== '') {
-			$showArtNr = true;
-			break;
-		}
+		if (trim((string)($__p['article_number'] ?? '')) !== '') { $showArtNr = true; break; }
 	}
 }
 
 $showPosNr = !empty($tpl['positions']) && count($tpl['positions']) > 1;
 
-/* Berechnung dynamisch */
 $colCount  = $showPosNr ? 1 : 0;
 $colCount += $showArtNr ? 1 : 0;
 $colCount += 1; // Artikel
 $colCount += 1; // Menge
-$colCount += $showUnitPrice ? 1 : 0; // Einzelpreis
-$colCount += $showDiscount ? 1 : 0; // Rabatt
-$colCount += $showUnitPrice ? 1 : 0; // Summe
-
+$colCount += 1; // Einzelpreis
+$colCount += $showDiscount ? 1 : 0;
+$colCount += 1; // Summe
 $preTotalColspan = max(0, $colCount - 2);
 ?>
-
 
 <!-- POSITIONEN -->
 <table>
 	<thead>
 	<tr>
-
 		<?php if ($showPosNr): ?>
 			<th class="td-narrow"></th>
 		<?php endif; ?>
-
 		<?php if ($showArtNr): ?>
-			<th class="td-narrow"><?= htmlspecialchars($tpl['labels']['artnr'] ?? 'Nr.', ENT_QUOTES, 'UTF-8'); ?></th>
+			<th class="td-narrow" style="align:left"><?= htmlspecialchars($tpl['labels']['artnr'] ?? 'Nr.', ENT_QUOTES, 'UTF-8'); ?></th>
 		<?php endif; ?>
-
 		<th><?= htmlspecialchars($tpl['labels']['item'] ?? 'Artikel', ENT_QUOTES, 'UTF-8'); ?></th>
-
-		<th class="td-narrow text-right">
-			<?= htmlspecialchars($tpl['labels']['qty'] ?? 'Menge', ENT_QUOTES, 'UTF-8'); ?>
-		</th>
-
-		<?php if ($showUnitPrice): ?>
-			<th class="td-narrow text-right">
-				<?= htmlspecialchars($tpl['labels']['unit_price'] ?? 'Einzelpreis', ENT_QUOTES, 'UTF-8'); ?>
-			</th>
-		<?php endif; ?>
-
+		<th class="td-narrow text-right"><?= htmlspecialchars($tpl['labels']['qty'] ?? 'Menge', ENT_QUOTES, 'UTF-8'); ?></th>
+		<th class="td-narrow text-right"><?= htmlspecialchars($tpl['labels']['unit_price'] ?? 'Einzelpreis', ENT_QUOTES, 'UTF-8'); ?></th>
 		<?php if ($showDiscount): ?>
-			<th class="td-narrow text-right">
-				<?= htmlspecialchars($tpl['labels']['discount'] ?? 'Rabatt', ENT_QUOTES, 'UTF-8'); ?>
-			</th>
+			<th class="td-narrow text-right"><?= htmlspecialchars($tpl['labels']['discount'] ?? 'Rabatt', ENT_QUOTES, 'UTF-8'); ?></th>
 		<?php endif; ?>
-
-		<?php if ($showUnitPrice): ?>
-			<th class="td-narrow text-right">
-				<?= htmlspecialchars($tpl['labels']['line_total'] ?? 'Summe', ENT_QUOTES, 'UTF-8'); ?>
-				<?= htmlspecialchars($tpl['document']['currency'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-			</th>
-		<?php endif; ?>
-
+		<th class="td-narrow text-right"><?= htmlspecialchars($tpl['labels']['line_total'] ?? 'Summe', ENT_QUOTES, 'UTF-8'); ?> <?= htmlspecialchars($tpl['document']['currency'] ?? '', ENT_QUOTES, 'UTF-8'); ?></th>
 	</tr>
 	</thead>
-
-
 	<tbody>
 	<?php if (!empty($tpl['positions'])): ?>
-		<?php $i = 0; foreach ($tpl['positions'] as $row): $z = ($i % 2 === 0 ? 'zebra-even' : 'zebra-odd'); ?>
-			<tr class="position <?= $z ?>">
-
+		<?php $i = 0; foreach ($tpl['positions'] as $row): $z = ($i % 2 === 0) ? 'zebra-even' : 'zebra-odd'; $posNr = $i + 1; ?>
+			<tr class="align:right; position <?= $z ?>">
 				<?php if ($showPosNr): ?>
-					<td><?= (int)($i + 1); ?></td>
+					<td><?= (int)$posNr; ?></td>
 				<?php endif; ?>
-
 				<?php if ($showArtNr): ?>
 					<td class="sku"><?= htmlspecialchars($row['article_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
 				<?php endif; ?>
-
 				<td>
 					<strong><?= htmlspecialchars($row['item'] ?? '', ENT_QUOTES, 'UTF-8'); ?></strong>
-
 					<?php if (!empty($row['article_belegtext_html'])): ?>
 						<div class="small"><?= $row['article_belegtext_html']; ?></div>
 					<?php endif; ?>
-
 					<?php if (!empty($row['desc_html'])): ?>
 						<div class="small"><?= $row['desc_html']; ?></div>
 					<?php endif; ?>
 				</td>
-
 				<td class="td-narrow text-right" style="padding-right:10px;">
 					<?php
 					$menge = (float)($row['qty'] ?? 0);
@@ -294,13 +236,7 @@ $preTotalColspan = max(0, $colCount - 2);
 					}
 					?>
 				</td>
-
-				<?php if ($showUnitPrice): ?>
-					<td class="td-narrow text-right">
-						<?= htmlspecialchars($__fmt_minus((float)($row['unit_price'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>
-					</td>
-				<?php endif; ?>
-
+				<td class="td-narrow text-right"><?= htmlspecialchars($__fmt_minus((float)($row['unit_price'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?></td>
 				<?php if ($showDiscount): ?>
 					<td class="td-narrow text-right">
 						<?php
@@ -309,56 +245,40 @@ $preTotalColspan = max(0, $colCount - 2);
 						?>
 					</td>
 				<?php endif; ?>
-
-				<?php if ($showUnitPrice): ?>
-					<td class="td-narrow text-right">
-						<?php
-							$lt = (float)($row['line_total'] ?? 0);
-							if (abs($lt) < 0.0000001) {
-								$qty   = (float)($row['qty'] ?? 0);
-								$upris = (float)($row['unit_price'] ?? 0);
-								$calc  = $qty * $upris;
-								if (abs($calc) > 0.0000001) $lt = $calc;
-							}
-							echo htmlspecialchars($__fmt_minus($lt), ENT_QUOTES, 'UTF-8');
-						?>
-					</td>
-				<?php endif; ?>
-
+				<td class="td-narrow text-right">
+					<?php
+						$lt = (float)($row['line_total'] ?? 0);
+						if (abs($lt) < 0.0000001) {
+							$qty   = (float)($row['qty'] ?? 0);
+							$upris = (float)($row['unit_price'] ?? 0);
+							$calc  = $qty * $upris;
+							if (abs($calc) > 0.0000001) $lt = $calc;
+						}
+						echo htmlspecialchars($__fmt_minus($lt), ENT_QUOTES, 'UTF-8');
+					?>
+				</td>
 			</tr>
 		<?php $i++; endforeach; ?>
-
 	<?php else: ?>
 		<tr><td colspan="<?= (int)$colCount ?>"><i>–</i></td></tr>
 	<?php endif; ?>
 
-
-	<?php
-	$total_display = !empty($tpl['positions'])
-		? $__compute_total($tpl['positions'])
-		: (float)($tpl['document']['total'] ?? 0);
-	?>
-
-	<?php if ($showUnitPrice): ?>
+	<?php $total_display = !empty($tpl['positions']) ? $__compute_total($tpl['positions']) : (float)($tpl['document']['total'] ?? 0); ?>
 	<tr>
 		<td colspan="<?= (int)$preTotalColspan ?>"></td>
-
 		<td>
-			<strong><?= htmlspecialchars($tpl['labels']['total'] ?? 'Gesamtbetrag', ENT_QUOTES, 'UTF-8'); ?></strong>
+			<strong><?= htmlspecialchars($tpl['labels']['total'] ?? 'Gesamtbetrag', ENT_QUOTES, 'UTF-8'); ?></strong><!-- <br>exkl. MwSt.-->
 		</td>
-
 		<td class="text-right">
 			<?= htmlspecialchars($__fmt_minus($total_display), ENT_QUOTES, 'UTF-8'); ?>
 		</td>
 	</tr>
-	<?php endif; ?>
-
 	</tbody>
 </table>
 
-
-
-<?php if (in_array(strtolower($beleg_type), ['angebot', 'rechnung', 'gutschrift'], true)) : ?>
+<?php
+if (in_array(strtolower($beleg_type), ['angebot', 'rechnung', 'lieferschein'], true)) {
+	?>
 	<table style="width:100%;">
 	<tr>
 		<td>Nicht mehrwertsteuerpflichtig (<a style="color:black; font-style:italic;" href="https://www.fedlex.admin.ch/eli/cc/2009/615/de">Art. 10 Abs. 2 lit. a MWSTG</a>)<br></td>
@@ -367,15 +287,9 @@ $preTotalColspan = max(0, $colCount - 2);
 		<td><br><br><br><?= cmx_get_belegfuss($beleg_type); ?></td>
 	</tr>
 	</table>
-<?php endif; ?>
-
-<?php if (in_array(strtolower($beleg_type), ['lieferschein'], true)) : ?>
-	<table style="width:100%;">
-	<tr>
-		<td><br><br><br><?= cmx_get_belegfuss($beleg_type); ?></td>
-	</tr>
-	</table>
-<?php endif; ?>
+<?php
+}
+?>
 
 
 <!-- FOOTER -->
@@ -386,9 +300,8 @@ $preTotalColspan = max(0, $colCount - 2);
 			<b><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Empfänger', ENT_QUOTES, 'UTF-8'); ?></b><br>
 			<?= htmlspecialchars($tpl['me']['company'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
 			<?= htmlspecialchars($tpl['me']['strasse'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
-			<?= htmlspecialchars(($tpl['me']['plz'] ?? '') .' '. ($tpl['me']['ort'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
+			<?= htmlspecialchars(($tpl['me']['plz'] ?? '').' '.($tpl['me']['ort'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
 		</td>
-
 		<td style="text-align:center;">
 			<b><?= htmlspecialchars($tpl['labels']['bank'] ?? 'Bank', ENT_QUOTES, 'UTF-8'); ?></b><br>
 			<?= $bank_name_safe; ?><br>
@@ -397,28 +310,17 @@ $preTotalColspan = max(0, $colCount - 2);
 				<?= $bank_bic_safe; ?><br>
 			<?php endif; ?>
 		</td>
-
 		<td style="text-align:right;">
 			<b><?= htmlspecialchars($tpl['labels']['contact'] ?? 'Kontakt', ENT_QUOTES, 'UTF-8'); ?></b><br>
-
 			<?php if (!empty($tpl['me']['phone'])): ?>
-				<a href="https://misbuero.ch/?cmx_call=<?= urlencode(str_replace(' ', '+', $tpl['me']['phone'])) ?>">
-					<?= htmlspecialchars($tpl['me']['phone'], ENT_QUOTES, 'UTF-8'); ?>
-				</a><br>
+				<a href="https://misbuero.ch/?cmx_call=<?= urlencode(str_replace(' ', '+', $tpl['me']['phone'])) ?>"><?= htmlspecialchars($tpl['me']['phone'], ENT_QUOTES, 'UTF-8') ?></a><br>
 			<?php endif; ?>
-
 			<?php if (!empty($tpl['me']['email'])): ?>
-				<a href="mailto:<?= htmlspecialchars($tpl['me']['email'], ENT_QUOTES, 'UTF-8'); ?>">
-					<?= htmlspecialchars($tpl['me']['email'], ENT_QUOTES, 'UTF-8'); ?>
-				</a><br>
+				<a href="mailto:<?= htmlspecialchars($tpl['me']['email'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($tpl['me']['email'], ENT_QUOTES, 'UTF-8'); ?></a><br>
 			<?php endif; ?>
-
 			<?php if (!empty($tpl['me']['support'])): ?>
-				<a href="mailto:<?= htmlspecialchars($tpl['me']['support'], ENT_QUOTES, 'UTF-8'); ?>">
-					<?= htmlspecialchars($tpl['me']['support'], ENT_QUOTES, 'UTF-8'); ?>
-				</a>
+				<a href="mailto:<?= htmlspecialchars($tpl['me']['support'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($tpl['me']['support'], ENT_QUOTES, 'UTF-8'); ?></a>
 			<?php endif; ?>
-
 		</td>
 	</tr>
 	</table>
