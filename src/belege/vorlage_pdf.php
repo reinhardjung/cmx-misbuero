@@ -65,10 +65,12 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_first_meta')) {
 // Hole Kontakt-Logo von Kategorie "Das bin ich"
 // Fallback bleibt das bisherige Standardlogo
 // Kontakt-Logo "Das bin ich" ermitteln
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo')) {
+
     function cmx_get_branding_logo(): string
     {
-        // Kontakt "das-bin-ich" suchen
+        // Kontakt "das-bin-ich" finden
         $q = new \WP_Query([
             'post_type'      => 'kontakte',
             'post_status'    => ['publish', 'private'],
@@ -84,21 +86,35 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo')) {
             'suppress_filters' => true,
         ]);
 
-        if ($q->have_posts()) {
-            $q->the_post();
-            $post_id = \get_the_ID();
-
-            // Featured Image (Beitragsbild) abrufen
-            $image_url = \get_the_post_thumbnail_url($post_id, 'full');
-            \wp_reset_postdata();
-
-            // Wenn ein Featured Image existiert → das verwenden
-            if (!empty($image_url)) {
-                return \esc_url($image_url);
-            }
+        if (!$q->have_posts()) {
+            return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
         }
 
-        // Fallback-Bild (Standard)
+        $q->the_post();
+        $post_id = \get_the_ID();
+        \wp_reset_postdata();
+
+        /**
+         * 1) Lokales Logo (DEIN System)
+         */
+        $local_url = (string)\get_post_meta($post_id, '_cmx_local_image_kontakte_url', true);
+        $local_path = (string)\get_post_meta($post_id, '_cmx_local_image_kontakte_path', true);
+
+        if ($local_url && $local_path && is_file($local_path)) {
+            return esc_url($local_url);
+        }
+
+        /**
+         * 2) Falls existiert: Beitragsbild
+         */
+        $thumb = \get_the_post_thumbnail_url($post_id, 'full');
+        if (!empty($thumb)) {
+            return esc_url($thumb);
+        }
+
+        /**
+         * 3) Fallback
+         */
         return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
     }
 }
@@ -504,13 +520,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 
 		// Optionen/Labels
 		$opts=(array)get_option('cmx_einstellungen',[]);
-		// $branding_logo = isset($opts['beleg_logo_url']) ? esc_url($opts['beleg_logo_url']) : 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
-		// $branding_logo = cmx_get_branding_logo();
-		// var_dump(\CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo()); exit;
-
 		$branding_logo = \CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo();
-
-
 
 		$labels = array_replace([
 			'doc_invoice'=>'Rechnung','date'=>'Datum','due'=>'Fällig bis','period'=>'Leistung für',

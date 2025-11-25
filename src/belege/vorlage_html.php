@@ -120,7 +120,7 @@ $bank_bic_safe  = function_exists('esc_html') ? esc_html($bank_arr['bic'])      
 <tr>
 	<td class="text-right">
 		<a href="<?= htmlspecialchars($tpl['me']['website'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-			<img src="<?= htmlspecialchars($tpl['branding']['logo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" width="70" alt="Logo"><br>
+			<img src="<?= htmlspecialchars($tpl['branding']['logo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" width="70" alt="Logo"><br><br>
 		</a>
 	</td>
 </tr>
