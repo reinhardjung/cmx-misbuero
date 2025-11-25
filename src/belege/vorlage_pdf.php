@@ -68,10 +68,10 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_first_meta')) {
 if (!function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo')) {
     function cmx_get_branding_logo(): string
     {
-        // 1) Kontakt mit Kategorie "das-bin-ich" holen
-        $args = [
+        // Kontakt "das-bin-ich" suchen
+        $q = new \WP_Query([
             'post_type'      => 'kontakte',
-            'post_status'    => ['publish','private'],
+            'post_status'    => ['publish', 'private'],
             'posts_per_page' => 1,
             'tax_query'      => [
                 [
@@ -82,24 +82,23 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo')) {
             ],
             'no_found_rows'    => true,
             'suppress_filters' => true,
-        ];
-
-        $q = new \WP_Query($args);
+        ]);
 
         if ($q->have_posts()) {
             $q->the_post();
             $post_id = \get_the_ID();
 
-            // 2) Logo-Metakey (deine Konstante aus Login/Medien-Feature)
-            $logo = \get_post_meta($post_id, CMX_KONTAKTE_META_URL, true);
+            // Featured Image (Beitragsbild) abrufen
+            $image_url = \get_the_post_thumbnail_url($post_id, 'full');
             \wp_reset_postdata();
 
-						if (!empty($logo)) {
-                return \esc_url($logo);
+            // Wenn ein Featured Image existiert → das verwenden
+            if (!empty($image_url)) {
+                return \esc_url($image_url);
             }
         }
 
-        // 3) Fallback – nur Standardlogo, keine Plugin-Optionen mehr
+        // Fallback-Bild (Standard)
         return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
     }
 }
@@ -156,20 +155,41 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact')) {
 	}
 }
 
-
 		// 	$opts = (array)get_option('cmx_einstellungen', []);
 		// 	$days = isset($opts['due_days']) ? (int)$opts['due_days'] : 10;
 		// 	$date_due = date('Y-m-d', strtotime($date_invoice.' +'.$days.' days'));
 		// }
 
+
+	setlocale(LC_TIME, 'de_CH.UTF-8');
+	$period_raw = cmxbu_first_meta($post_id, ['_cmx_beleg_leistungsmonat']);
+	$period_num = (int) $period_raw;
+
+	// Monat automatisch erzeugen
+	$formatter = new \IntlDateFormatter(
+			get_user_locale(),
+			\IntlDateFormatter::NONE,
+			\IntlDateFormatter::NONE,
+			null,
+			null,
+			'LLLL'   // langer Monatsname
+	);
+
+	$period = $formatter->format(mktime(0, 0, 0, $period_num, 1));
+
+
 		$period_raw = cmxbu_first_meta($post_id, ['_cmx_beleg_leistungsmonat']);
+
+		$period_num = (int) $period_raw; // ← WICHTIG
+
 		$monate = [
 				1 => 'Januar', 2 => 'Februar', 3 => 'März',
 				4 => 'April', 5 => 'Mai', 6 => 'Juni',
 				7 => 'Juli', 8 => 'August', 9 => 'September',
 				10 => 'Oktober', 11 => 'November', 12 => 'Dezember'
 		];
-		$period = isset($monate[$period_raw]) ? $monate[$period_raw] : '';
+
+		$period = $monate[$period_num] ?? '';
 
 		$waehrung = cmxbu_first_meta($post_id, ['_cmx_beleg_waehrung']);
 
@@ -489,6 +509,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// var_dump(\CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo()); exit;
 
 		$branding_logo = \CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo();
+
 
 
 		$labels = array_replace([

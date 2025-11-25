@@ -265,8 +265,7 @@ $preTotalColspan = max(0, $colCount - 2);
 	<tr>
 		<td colspan="<?= (int)$preTotalColspan ?>"></td>
 		<td>
-			<strong><?= htmlspecialchars($tpl['labels']['total'] ?? 'Gesamtbetrag', ENT_QUOTES, 'UTF-8'); ?></strong><br>
-			exkl. MwSt.
+			<strong><?= htmlspecialchars($tpl['labels']['total'] ?? 'Gesamtbetrag', ENT_QUOTES, 'UTF-8'); ?></strong><!-- <br>exkl. MwSt.-->
 		</td>
 		<td class="text-right">
 			<?= htmlspecialchars($__fmt_minus($total_display), ENT_QUOTES, 'UTF-8'); ?>
@@ -277,11 +276,10 @@ $preTotalColspan = max(0, $colCount - 2);
 
 <table style="width:100%">
 <tr>
-	<td>
-			hier die Infos.
-	</td>
+	<td>Nicht mehrwertsteuerpflichtig (<a style="color:black; font-style:italic;" href="https://www.fedlex.admin.ch/eli/cc/2009/615/de">Art. 10 Abs. 2 lit. a MWSTG</a>)</td>
 </tr>
 </table>
+
 
 <!-- FOOTER -->
 <div class="footer" style="font-size:xx-small; color:grey;">
