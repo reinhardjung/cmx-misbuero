@@ -13,15 +13,15 @@ function cmx_register_general_tab(): void {
 		'cmx_tab_general'
 	);
 
-	add_settings_field(
-		'beleg_logo_url',
-		__('Link zum Logo', 'default'),
-		__NAMESPACE__ . '\\cmx_field_url',
-		'cmx_tab_general',
-		'cmx_sec_general',
-		[
-			'key'   => 'beleg_logo_url',
-			'label' => __('f&uuml;r den Beleg', 'default'),
-		]
-	);
+	// add_settings_field(
+	// 	'beleg_logo_url',
+	// 	__('Link zum Logo', 'default'),
+	// 	__NAMESPACE__ . '\\cmx_field_url',
+	// 	'cmx_tab_general',
+	// 	'cmx_sec_general',
+	// 	[
+	// 		'key'   => 'beleg_logo_url',
+	// 		'label' => __('f&uuml;r den Beleg', 'default'),
+	// 	]
+	// );
 }
