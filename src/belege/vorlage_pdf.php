@@ -66,57 +66,66 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_first_meta')) {
 // Fallback bleibt das bisherige Standardlogo
 // Kontakt-Logo "Das bin ich" ermitteln
 
-if (!function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo')) {
 
-    function cmx_get_branding_logo(): string
-    {
-        // Kontakt "das-bin-ich" finden
-        $q = new \WP_Query([
-            'post_type'      => 'kontakte',
-            'post_status'    => ['publish', 'private'],
-            'posts_per_page' => 1,
-            'tax_query'      => [
-                [
-                    'taxonomy' => 'kontakte_kategorien',
-                    'field'    => 'slug',
-                    'terms'    => ['das-bin-ich'],
-                ]
-            ],
-            'no_found_rows'    => true,
-            'suppress_filters' => true,
-        ]);
+function cmx_get_branding_logo(): string
+{
+	// Kontakt "das-bin-ich" suchen
+	$q = new \WP_Query([
+		'post_type'      => 'kontakte',
+		'post_status'    => ['publish', 'private'],
+		'posts_per_page' => 1,
+		'tax_query'      => [
+			[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'slug',
+				'terms'    => ['das-bin-ich'],
+			]
+		],
+		'no_found_rows'    => true,
+		'suppress_filters' => true,
+	]);
 
-        if (!$q->have_posts()) {
-            return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
-        }
+	// Kein Kontakt gefunden → Fallback
+	if (!$q->have_posts()) {
+		return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
+	}
 
-        $q->the_post();
-        $post_id = \get_the_ID();
-        \wp_reset_postdata();
+	$q->the_post();
+	$post_id = \get_the_ID();
+	\wp_reset_postdata();
 
-        /**
-         * 1) Lokales Logo (DEIN System)
-         */
-        $local_url = (string)\get_post_meta($post_id, '_cmx_local_image_kontakte_url', true);
-        $local_path = (string)\get_post_meta($post_id, '_cmx_local_image_kontakte_path', true);
 
-        if ($local_url && $local_path && is_file($local_path)) {
-            return esc_url($local_url);
-        }
+	/** ---------------------------------------------
+	 * 1) Lokales Logo prüfen (Dein Download-System)
+	 * --------------------------------------------- */
+	$local_url  = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true);
+	$local_path = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_path', true);
 
-        /**
-         * 2) Falls existiert: Beitragsbild
-         */
-        $thumb = \get_the_post_thumbnail_url($post_id, 'full');
-        if (!empty($thumb)) {
-            return esc_url($thumb);
-        }
+	if ($local_url && $local_path && is_file($local_path)) {
 
-        /**
-         * 3) Fallback
-         */
-        return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
-    }
+		// prüfen, ob die Datei wirklich ein Bild ist
+		$info = @getimagesize($local_path);
+
+		if (is_array($info) && !empty($info['mime'])) {
+			return esc_url($local_url);
+		}
+	}
+
+
+	/** -----------------------------
+	 * 2) Featured Image (Fallback 2)
+	 * ----------------------------- */
+	$thumb = \get_the_post_thumbnail_url($post_id, 'full');
+
+	if (!empty($thumb)) {
+		return esc_url($thumb);
+	}
+
+
+	/** -------
+	 * 3) FINALER Fallback
+	 * ------- */
+	return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
 }
 
 
