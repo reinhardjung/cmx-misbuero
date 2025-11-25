@@ -54,3 +54,12 @@ add_action('init', function() {
 //         filemtime(CMX_PLUGIN_DIR . 'assets/style.css')
 //     );
 // });
+
+
+// Unterdatei mit der Render-Funktion einbinden
+require_once __DIR__ . '/src/artikel/katalog.php';
+
+// Shortcode-Registrierung zentral im Hauptfile
+\add_action('init', function () {
+	\add_shortcode('cmx_artikel_tabelle', __NAMESPACE__ . '\\cmx_render_artikel_tabelle');
+});

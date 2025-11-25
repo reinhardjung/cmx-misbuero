@@ -508,11 +508,8 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	if ($should_set_title) {
 		$new_title = $inv_no;
 		$GLOBALS['cmx_belege_title_updating'] = true;
-		\wp_update_post([
-			'ID'         => $post_id,
-			'post_title' => $new_title,
-			'post_name'  => \sanitize_title($new_title),
-		]);
+
+		\wp_update_post(['ID' => $post_id,'post_title' => $new_title,'post_name' => \sanitize_title($new_title),]);
 		unset($GLOBALS['cmx_belege_title_updating']);
 		\update_post_meta($post_id, '_cmx_title_auto', 1);
 	} else {

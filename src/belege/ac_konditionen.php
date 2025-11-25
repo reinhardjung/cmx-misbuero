@@ -1,11 +1,5 @@
-<?php
-/**
- * Datei: src/belege/admin-list-daten.php
- * Spalten "Datum der Rechnung", "Fällig am", "Bezahlt am" mit robuster Datums-Logik.
- */
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-namespace CLOUDMEISTER\CMX\Buero;
-defined('ABSPATH') || die('Oxytocin!');
 
 /** =========================
  * Konstanten (defensiv)

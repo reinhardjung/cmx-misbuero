@@ -19,34 +19,35 @@ function cmx_hide_permalink_edit() {
 }
 
 
-/**
- * ==========================================================
- * Permalink (Slug) immer mit dem Titel synchronisieren
- * ==========================================================
- */
-\add_action('save_post', function ($post_id, $post, $update) {
-	// Nur im Admin ausführen
-	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-	if (wp_is_post_revision($post_id)) return;
+// Wegen Elementor :-()
+// /**
+//  * ==========================================================
+//  * Permalink (Slug) immer mit dem Titel synchronisieren
+//  * ==========================================================
+//  */
+// \add_action('save_post', function ($post_id, $post, $update) {
+// 	// Nur im Admin ausführen
+// 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+// 	if (wp_is_post_revision($post_id)) return;
 
-	// Nur für bestimmte Post Types
-	$allowed_post_types = ['post', 'page', 'kontakte', 'belege'];
-	if (!in_array($post->post_type, $allowed_post_types, true)) return;
+// 	// Nur für bestimmte Post Types
+// 	$allowed_post_types = ['post', 'page', 'kontakte', 'belege'];
+// 	if (!in_array($post->post_type, $allowed_post_types, true)) return;
 
-	// Titel holen
-	$title = trim($post->post_title);
-	if (empty($title)) return;
+// 	// Titel holen
+// 	$title = trim($post->post_title);
+// 	if (empty($title)) return;
 
-	// Slug generieren
-	$new_slug = sanitize_title($title);
+// 	// Slug generieren
+// 	$new_slug = sanitize_title($title);
 
-	// Nur aktualisieren, wenn sich der Slug wirklich unterscheidet
-	if ($post->post_name !== $new_slug) {
-		\remove_action('save_post', __FUNCTION__, 10); // Rekursion verhindern
-		wp_update_post([
-			'ID'        => $post_id,
-			'post_name' => $new_slug,
-		]);
-		\add_action('save_post', __FUNCTION__, 10, 3);
-	}
-}, 10, 3);
+// 	// Nur aktualisieren, wenn sich der Slug wirklich unterscheidet
+// 	if ($post->post_name !== $new_slug) {
+// 		\remove_action('save_post', __FUNCTION__, 10); // Rekursion verhindern
+// 		wp_update_post([
+// 			'ID'        => $post_id,
+// 			'post_name' => $new_slug,
+// 		]);
+// 		\add_action('save_post', __FUNCTION__, 10, 3);
+// 	}
+// }, 10, 3);

@@ -23,14 +23,7 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post) {
 	$token = wp_generate_password(20, false, false);
 
 	// In Option statt Transient speichern (kein Timeout)
-	update_option(
-		'beleg_' . $token,
-		[
-			'post_id' => $post->ID,
-			'file'    => $pdf_rel_path,
-		],
-		false // nicht autoloaden
-	);
+	update_option('beleg_' . $token,[	'post_id' => $post->ID,	'file' => $pdf_rel_path,],false); // false = nicht autoloaden
 
 	// Download-URL über normalen WP-Request
 	$download_url = home_url('/?beleg=' . $token);
