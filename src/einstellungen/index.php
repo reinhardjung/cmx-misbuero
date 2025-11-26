@@ -1,7 +1,10 @@
 <?php
 namespace CLOUDMEISTER\CMX\Buero;
-defined('ABSPATH') || exit('Oxytocin!');
+defined('ABSPATH') || exit;
 
+/* ------------------------------------------------------------
+ * INCLUDE FILES
+ * ------------------------------------------------------------ */
 require_once 'allgemein.php';
 require_once 'banken.php';
 require_once 'kontakte.php';
@@ -14,13 +17,13 @@ require_once 'adminbar.php';
  * KONSTANTEN
  * ------------------------------------------------------------ */
 const CMX_SETTINGS_SLUG = 'cmx-einstellungen';
-const CMX_SETTINGS_KEY  = 'cmx_einstellungen'; // ALLE ANDEREN TABS benutzen dieses Array
+const CMX_SETTINGS_MAIN = 'cmx_einstellungen'; // ARRAY
+const CMX_SETTINGS_BELEGE = 'cmx_belege';       // ARRAY (NEU!)
 
 /* ------------------------------------------------------------
  * ADMIN MENU
  * ------------------------------------------------------------ */
-add_action('admin_menu', __NAMESPACE__ . '\\cmx_add_settings_menu');
-function cmx_add_settings_menu(): void {
+add_action('admin_menu', function() {
 	add_menu_page(
 		'Einstellungen',
 		'Einstellungen',
@@ -30,10 +33,10 @@ function cmx_add_settings_menu(): void {
 		'dashicons-admin-generic',
 		70
 	);
-}
+});
 
 /* ------------------------------------------------------------
- * TABS / SUBTABS
+ * HAUPTTABS
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
@@ -46,6 +49,9 @@ function cmx_get_tabs(): array {
 	];
 }
 
+/* ------------------------------------------------------------
+ * SUBTABS
+ * ------------------------------------------------------------ */
 function cmx_get_subtabs(string $tab): array {
 
 	if ($tab === 'belege') {
@@ -57,99 +63,71 @@ function cmx_get_subtabs(string $tab): array {
 		];
 	}
 
-	if ($tab === 'banken') {
-		return [
-			'rev'    => 'Revolut',
-			'zkb'    => 'ZKB',
-			'ubs'    => 'UBS',
-			'migros' => 'Migros',
-			'eisen'  => 'Raiffeisen',
-		];
-	}
-
-	if ($tab === 'kontakte') {
-		return [
-			'ms' => 'Microsoft',
-			'oo' => 'Google',
-			'ic' => 'iCloud',
-		];
-	}
-
 	return [];
 }
 
 /* ------------------------------------------------------------
- * FELDER FÜR ARRAY-TABS (General, Banken, Kontakte, Advanced)
+ * REGISTER MAIN SETTINGS (ARRAY)
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
+
 	register_setting(
-		CMX_SETTINGS_KEY,
-		CMX_SETTINGS_KEY,
+		CMX_SETTINGS_MAIN,
+		CMX_SETTINGS_MAIN,
 		[
-			'type'              => 'array',
-			'default'           => [],
-			'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_settings'
+			'type' => 'array',
+			'default' => [],
+			'sanitize_callback' => function($input) {
+				return is_array($input)
+					? array_merge(get_option(CMX_SETTINGS_MAIN, []), $input)
+					: get_option(CMX_SETTINGS_MAIN, []);
+			}
 		]
 	);
 });
 
 /* ------------------------------------------------------------
- * ARRAY-Speicher-Helfer (andere TABS)
+ * REGISTER BELEGE SETTINGS (ARRAY)
+ * ------------------------------------------------------------ */
+add_action('admin_init', function() {
+
+	register_setting(
+		CMX_SETTINGS_BELEGE,
+		CMX_SETTINGS_BELEGE,
+		[
+			'type' => 'array',
+			'default' => [],
+			'sanitize_callback' => function($input) {
+				return is_array($input)
+					? array_merge(get_option(CMX_SETTINGS_BELEGE, []), $input)
+					: get_option(CMX_SETTINGS_BELEGE, []);
+			}
+		]
+	);
+});
+
+/* ------------------------------------------------------------
+ * GENERISCHE FELDER FÜR MAIN-TABS
  * ------------------------------------------------------------ */
 function cmx_get_option(string $key, $default = '') {
-	$arr = get_option(CMX_SETTINGS_KEY, []);
+	$arr = get_option(CMX_SETTINGS_MAIN, []);
 	return $arr[$key] ?? $default;
 }
 
 function cmx_field_text(array $args): void {
+
 	$key = $args['key'];
-	$val = cmx_get_option($key, '');
-	$ph  = esc_attr($args['placeholder'] ?? '');
-	echo '<input type="text" class="regular-text" name="' . CMX_SETTINGS_KEY . '[' . esc_attr($key) . ']" value="' . esc_attr($val) . '" placeholder="' . $ph . '">';
-}
+	$value = cmx_get_option($key);
+	$ph = esc_attr($args['placeholder'] ?? '');
 
-function cmx_field_checkbox(array $args): void {
-	$key   = $args['key'];
-	$label = $args['label'] ?? '';
-	$val   = cmx_get_option($key, 0);
-
-	echo '<label><input type="checkbox" name="' . CMX_SETTINGS_KEY . '[' . esc_attr($key) . ']" value="1" ' . checked(1, $val, false) . '> '
-	     . esc_html($label) . '</label>';
+	echo '<input type="text" class="regular-text"
+		name="'.CMX_SETTINGS_MAIN.'['.$key.']"
+		value="'.esc_attr($value).'"
+		placeholder="'.$ph.'">';
 }
 
 /* ------------------------------------------------------------
- * SINGLE OPTION TEXTAREA für BELEGE
- * ------------------------------------------------------------ */
-function cmx_field_textarea(array $args): void {
-
-	$key   = $args['key'];
-	$rows  = intval($args['rows'] ?? 6);
-	$ph    = $args['placeholder'] ?? '';
-
-	$value = get_option($key, null);
-
-	// OPTION EXISTIERT NICHT → Default aus INI
-	if ($value === null) {
-		$display = $ph;
-	}
-	// OPTION IST LEER → Default aus INI
-	elseif ($value === '') {
-		$display = $ph;
-	}
-	// OPTION HAT WERT → diesen anzeigen
-	else {
-		$display = $value;
-	}
-
-	echo '<textarea name="' . esc_attr($key) . '"
-		rows="' . esc_attr($rows) . '"
-		style="width:100%;">'
-	     . esc_textarea($display)
-	     . '</textarea>';
-}
-
-/* ------------------------------------------------------------
- * SEITE RENDERN (TAB-SYSTEM)
+ * RENDER SETTINGS PAGE
  * ------------------------------------------------------------ */
 function cmx_render_settings_page(): void {
 
@@ -169,56 +147,46 @@ function cmx_render_settings_page(): void {
 
 	echo '<div class="wrap"><h1>Einstellungen</h1>';
 
-	/* Tabs */
+	/* MAIN TABS */
 	echo '<h2 class="nav-tab-wrapper">';
 	foreach ($tabs as $key => $label) {
-		$url = admin_url("admin.php?page=" . CMX_SETTINGS_SLUG . "&tab={$key}");
-		echo '<a href="' . $url . '" class="nav-tab ' . ($key === $tab ? 'nav-tab-active' : '') . '">' . esc_html($label) . '</a>';
+		echo '<a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$key.'" class="nav-tab '.($key == $tab ? 'nav-tab-active' : '').'">'.$label.'</a>';
 	}
 	echo '</h2>';
 
-	/* Subtabs */
+	/* SUBTABS */
 	if ($subtabs) {
 		echo '<ul class="subsubsub">';
-		$i = 0; $n = count($subtabs);
-		foreach ($subtabs as $key => $label) {
-			$url = admin_url("admin.php?page=" . CMX_SETTINGS_SLUG . "&tab={$tab}&sub={$key}");
-			echo '<li><a href="' . $url . '" class="' . ($key === $sub ? 'current' : '') . '">' . esc_html($label) . '</a>'
-			     . (++$i < $n ? ' | ' : '') . '</li>';
+		$i=0; $n=count($subtabs);
+		foreach ($subtabs as $key=>$label) {
+			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$key.'" class="'.($key == $sub ? 'current':'').'">'.$label.'</a>'.(++$i<$n?' | ':'').'</li>';
 		}
-		echo '</ul><br class="clear">';
+		echo '</ul><br>';
 	}
 
-	echo '<form method="post" action="options.php">';
 	echo '<div class="cmx-tabpanel">';
 
-	/* ARRAY-TABS */
+	/* ------------------------------------------- */
+	/* FORM: MAIN-TABS (nicht Belege)              */
+	/* ------------------------------------------- */
 	if ($tab !== 'belege') {
-		settings_fields(CMX_SETTINGS_KEY);
+		echo '<form method="post" action="options.php">';
+		settings_fields(CMX_SETTINGS_MAIN);
 		do_settings_sections($page_id);
+		submit_button();
+		echo '</form>';
 	}
 
-	/* BELEGE SUBTABS → SINGLE OPTIONS */
+	/* ------------------------------------------- */
+	/* FORM: BELEGE (eigenes SETTINGS-ARRAY)       */
+	/* ------------------------------------------- */
 	if ($tab === 'belege') {
-
-		if ($sub === 'angebot')      settings_fields('cmx_belege_angebot');
-		if ($sub === 'gutschrift')   settings_fields('cmx_belege_gutschrift');
-		if ($sub === 'lieferschein') settings_fields('cmx_belege_lieferschein');
-		if ($sub === 'rechnung')     settings_fields('cmx_belege_rechnung');
-
+		echo '<form method="post" action="options.php">';
+		settings_fields(CMX_SETTINGS_BELEGE);
 		do_settings_sections($page_id);
+		submit_button();
+		echo '</form>';
 	}
 
-	submit_button('Änderungen speichern');
-
-	echo '</div></form></div>';
-}
-
-/* ------------------------------------------------------------
- * SANITIZER (für Array-Tabs)
- * ------------------------------------------------------------ */
-function cmx_sanitize_settings($input) {
-	if (!is_array($input)) return [];
-	$existing = get_option(CMX_SETTINGS_KEY, []);
-	return array_merge($existing, $input);
+	echo '</div></div>';
 }
