@@ -3,97 +3,103 @@ namespace CLOUDMEISTER\CMX\Buero;
 defined('ABSPATH') || exit;
 
 /* ------------------------------------------------------------
- * INI → Placeholder
+ * HILFSFUNKTIONEN
  * ------------------------------------------------------------ */
-function cmx_ini_belege_defaults(): array {
 
-	$out = [
-		'mail_angebot'            => '',
-		'mail_gutschrift'         => '',
-		'mail_lieferschein'       => '',
-		'mail_rechnung'           => '',
-		'belegfuss_angebot'       => '',
-		'belegfuss_gutschrift'    => '',
-		'belegfuss_lieferschein'  => '',
-		'belegfuss_rechnung'      => '',
-	];
-
-	$file = dirname(__DIR__,2).'/includes/globals.ini';
-
-	if (!file_exists($file)) return $out;
-
-	$ini = parse_ini_file($file,true,INI_SCANNER_RAW);
-
-	foreach ($out as $key => $empty) {
-
-		$section = str_starts_with($key,'mail_') ? 'E-Mails' : 'Belegfuss';
-		$name    = ucfirst(str_replace(['mail_','belegfuss_'], '', $key));
-
-		if (!empty($ini[$section][$name])) {
-			$out[$key] = str_replace(['<br>','<br />'], "\n", $ini[$section][$name]);
-		}
-	}
-
-	return $out;
+/** PHP 7 kompatibles starts_with */
+function cmx_starts_with(string $haystack, string $needle): bool {
+	return substr($haystack, 0, strlen($needle)) === $needle;
 }
 
+/**
+ * Liefert den korrekten INI-Wert anhand des Keys:
+ *   mail_angebot      → (E-Mails, Angebot)
+ *   belegfuss_rechnung → (Belegfuss, Rechnung)
+ */
+function cmx_get_beleg_default(string $key): string {
+
+	if (cmx_starts_with($key, 'mail_')) {
+		$section = 'E-Mails';
+		$name    = ucfirst(substr($key, 5));
+	}
+	elseif (cmx_starts_with($key, 'belegfuss_')) {
+		$section = 'Belegfuss';
+		$name    = ucfirst(substr($key, 10));
+	}
+	else {
+		return '';
+	}
+
+	$val = cmx_ini_get_value($section, $name);
+
+	if (!is_string($val)) {
+		return '';
+	}
+
+	return str_replace(['<br>', '<br/>', '<br />'], "\n", $val);
+}
+
+
 /* ------------------------------------------------------------
- * FELD-AUSGABE – TEXTAREA
+ * TEXTAREA – MIT INI PLACEHOLDER
  * ------------------------------------------------------------ */
 function cmx_field_textarea_beleg(array $args): void {
 
 	$key  = $args['key'];
-	$rows = $args['rows'] ?? 5;
-	$ph   = $args['placeholder'] ?? '';
+	$rows = intval($args['rows'] ?? 5);
 
-	$opts = get_option('cmx_belege', []);
-	$value = $opts[$key] ?? '';
+	$options = get_option('cmx_belege', []);
+	$value   = $options[$key] ?? '';
 
-	$display = ($value === '') ? $ph : $value;
+	// Wenn leer → Placeholder aus INI
+	$default = cmx_get_beleg_default($key);
+	$display = ($value === '') ? $default : $value;
 
 	echo '<textarea
-		name="cmx_belege['.$key.']"
-		rows="'.$rows.'"
-		style="width:100%;">'.esc_textarea($display).'</textarea>';
+		name="cmx_belege[' . esc_attr($key) . ']"
+		rows="' . esc_attr($rows) . '"
+		style="width:100%;">' . esc_textarea($display) . '</textarea>';
 }
 
+
 /* ------------------------------------------------------------
- * REGISTER BELEGE-FELDER
+ * FELDER REGISTRIEREN
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
 
-	$ph = cmx_ini_belege_defaults();
-
-	$add = function($page,$section,$label,$key,$rows) use ($ph) {
-
+	$add = function($page,$section,$label,$key,$rows) {
 		add_settings_field(
 			$key,
 			$label,
-			__NAMESPACE__.'\\cmx_field_textarea_beleg',
+			__NAMESPACE__ . '\\cmx_field_textarea_beleg',
 			$page,
 			$section,
 			[
-				'key' => $key,
+				'key'  => $key,
 				'rows' => $rows,
-				'placeholder' => $ph[$key],
 			]
 		);
 	};
 
-	/* BELEG TABS */
 	$tabs = [
-		'angebot' => 'Angebot',
-		'gutschrift' => 'Gutschrift',
+		'angebot'      => 'Angebot',
+		'gutschrift'   => 'Gutschrift',
 		'lieferschein' => 'Lieferschein',
-		'rechnung' => 'Rechnung'
+		'rechnung'     => 'Rechnung'
 	];
 
 	foreach ($tabs as $sub => $label) {
 
 		$page = "cmx_tab_belege__{$sub}";
-		add_settings_section("sec_{$sub}", $label, '__return_false', $page);
 
-		$add($page,"sec_{$sub}",'Belegfuss',"belegfuss_{$sub}",4);
-		$add($page,"sec_{$sub}",'E-Mail Text',"mail_{$sub}",8);
+		add_settings_section(
+			"sec_{$sub}",
+			$label,
+			'__return_false',
+			$page
+		);
+
+		$add($page, "sec_{$sub}", 'Belegfuss',   "belegfuss_{$sub}", 4);
+		$add($page, "sec_{$sub}", 'E-Mail Text', "mail_{$sub}",      8);
 	}
 });

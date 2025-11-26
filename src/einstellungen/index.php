@@ -16,9 +16,9 @@ require_once 'adminbar.php';
 /* ------------------------------------------------------------
  * KONSTANTEN
  * ------------------------------------------------------------ */
-const CMX_SETTINGS_SLUG = 'cmx-einstellungen';
-const CMX_SETTINGS_MAIN = 'cmx_einstellungen'; // ARRAY
-const CMX_SETTINGS_BELEGE = 'cmx_belege';       // ARRAY (NEU!)
+const CMX_SETTINGS_SLUG  = 'cmx-einstellungen';
+const CMX_SETTINGS_MAIN  = 'cmx_einstellungen';   // ARRAY
+const CMX_SETTINGS_BELEG = 'cmx_belege';          // ARRAY
 
 /* ------------------------------------------------------------
  * ADMIN MENU
@@ -36,7 +36,7 @@ add_action('admin_menu', function() {
 });
 
 /* ------------------------------------------------------------
- * HAUPTTABS
+ * TAB-LISTEN
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
@@ -49,9 +49,6 @@ function cmx_get_tabs(): array {
 	];
 }
 
-/* ------------------------------------------------------------
- * SUBTABS
- * ------------------------------------------------------------ */
 function cmx_get_subtabs(string $tab): array {
 
 	if ($tab === 'belege') {
@@ -67,7 +64,7 @@ function cmx_get_subtabs(string $tab): array {
 }
 
 /* ------------------------------------------------------------
- * REGISTER MAIN SETTINGS (ARRAY)
+ * REGISTER SETTINGS (MAIN)
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
 
@@ -87,27 +84,27 @@ add_action('admin_init', function() {
 });
 
 /* ------------------------------------------------------------
- * REGISTER BELEGE SETTINGS (ARRAY)
+ * REGISTER SETTINGS (BELEGE)
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
 
 	register_setting(
-		CMX_SETTINGS_BELEGE,
-		CMX_SETTINGS_BELEGE,
+		CMX_SETTINGS_BELEG,
+		CMX_SETTINGS_BELEG,
 		[
 			'type' => 'array',
 			'default' => [],
 			'sanitize_callback' => function($input) {
 				return is_array($input)
-					? array_merge(get_option(CMX_SETTINGS_BELEGE, []), $input)
-					: get_option(CMX_SETTINGS_BELEGE, []);
+					? array_merge(get_option(CMX_SETTINGS_BELEG, []), $input)
+					: get_option(CMX_SETTINGS_BELEG, []);
 			}
 		]
 	);
 });
 
 /* ------------------------------------------------------------
- * GENERISCHE FELDER FÜR MAIN-TABS
+ * FELDER FÜR MAIN-TABS
  * ------------------------------------------------------------ */
 function cmx_get_option(string $key, $default = '') {
 	$arr = get_option(CMX_SETTINGS_MAIN, []);
@@ -115,19 +112,18 @@ function cmx_get_option(string $key, $default = '') {
 }
 
 function cmx_field_text(array $args): void {
-
 	$key = $args['key'];
-	$value = cmx_get_option($key);
-	$ph = esc_attr($args['placeholder'] ?? '');
+	$val = cmx_get_option($key);
+	$ph  = $args['placeholder'] ?? '';
 
 	echo '<input type="text" class="regular-text"
-		name="'.CMX_SETTINGS_MAIN.'['.$key.']"
-		value="'.esc_attr($value).'"
-		placeholder="'.$ph.'">';
+	name="'.CMX_SETTINGS_MAIN.'['.$key.']"
+	value="'.esc_attr($val).'"
+	placeholder="'.esc_attr($ph).'">';
 }
 
 /* ------------------------------------------------------------
- * RENDER SETTINGS PAGE
+ * SETTINGS PAGE
  * ------------------------------------------------------------ */
 function cmx_render_settings_page(): void {
 
@@ -143,14 +139,16 @@ function cmx_render_settings_page(): void {
 		$sub = array_key_first($subtabs) ?: '';
 	}
 
-	$page_id = $sub ? "cmx_tab_{$tab}__{$sub}" : "cmx_tab_{$tab}";
+	$page_id = $sub
+		? "cmx_tab_{$tab}__{$sub}"
+		: "cmx_tab_{$tab}";
 
 	echo '<div class="wrap"><h1>Einstellungen</h1>';
 
 	/* MAIN TABS */
 	echo '<h2 class="nav-tab-wrapper">';
-	foreach ($tabs as $key => $label) {
-		echo '<a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$key.'" class="nav-tab '.($key == $tab ? 'nav-tab-active' : '').'">'.$label.'</a>';
+	foreach ($tabs as $key=>$label) {
+		echo '<a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$key.'" class="nav-tab '.($tab===$key?'nav-tab-active':'').'">'.$label.'</a>';
 	}
 	echo '</h2>';
 
@@ -159,16 +157,14 @@ function cmx_render_settings_page(): void {
 		echo '<ul class="subsubsub">';
 		$i=0; $n=count($subtabs);
 		foreach ($subtabs as $key=>$label) {
-			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$key.'" class="'.($key == $sub ? 'current':'').'">'.$label.'</a>'.(++$i<$n?' | ':'').'</li>';
+			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$key.'" class="'.($key===$sub?'current':'').'">'.$label.'</a>'.(++$i<$n?' | ':'').'</li>';
 		}
 		echo '</ul><br>';
 	}
 
 	echo '<div class="cmx-tabpanel">';
 
-	/* ------------------------------------------- */
-	/* FORM: MAIN-TABS (nicht Belege)              */
-	/* ------------------------------------------- */
+	/* MAIN FORM */
 	if ($tab !== 'belege') {
 		echo '<form method="post" action="options.php">';
 		settings_fields(CMX_SETTINGS_MAIN);
@@ -177,12 +173,10 @@ function cmx_render_settings_page(): void {
 		echo '</form>';
 	}
 
-	/* ------------------------------------------- */
-	/* FORM: BELEGE (eigenes SETTINGS-ARRAY)       */
-	/* ------------------------------------------- */
+	/* BELEGE → eigenes Settings-Array */
 	if ($tab === 'belege') {
 		echo '<form method="post" action="options.php">';
-		settings_fields(CMX_SETTINGS_BELEGE);
+		settings_fields(CMX_SETTINGS_BELEG);
 		do_settings_sections($page_id);
 		submit_button();
 		echo '</form>';
