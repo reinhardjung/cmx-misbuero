@@ -4,113 +4,100 @@ defined('ABSPATH') || die('Oxytocin!');
 
 
 /**
- * ==========================================================================
- * FRONTEND: Beleg-Aufrufe tracken (Seitenaufruf)
- * ==========================================================================
+ * Echte IP ermitteln (Proxy-sicher)
  */
-function cmxbu_track_beleg_views() {
+function cmxbu_get_real_ip(): string {
 
-	if (is_admin()) {
-		return;
+	$keys = [
+		'HTTP_CF_CONNECTING_IP',
+		'HTTP_X_FORWARDED_FOR',
+		'HTTP_X_REAL_IP',
+		'HTTP_CLIENT_IP',
+		'REMOTE_ADDR'
+	];
+
+	foreach ($keys as $key) {
+		if (!empty($_SERVER[$key])) {
+			$ip = trim(explode(',', $_SERVER[$key])[0]);
+			if (filter_var($ip, FILTER_VALIDATE_IP)) {
+				return $ip;
+			}
+		}
+	}
+	return '0.0.0.0';
+}
+
+
+/**
+ * GEO-IP holen
+ */
+function cmxbu_fetch_geo_ip(string $ip): array {
+
+	if (in_array($ip, ['127.0.0.1','::1','0.0.0.0'])) {
+		return ['country'=>'Local','city'=>'Local','provider'=>'Localhost'];
 	}
 
-	// nur Einzelbeleg im Frontend
-	if (!is_singular('belege')) {
-		return;
-	}
+	$url = "https://ipapi.co/{$ip}/json/";
 
-	$post_id = get_queried_object_id();
-	if (!$post_id) {
-		return;
-	}
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, $url);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+	$res = curl_exec($ch);
+	curl_close($ch);
 
-	// 1) Counter erhöhen
-	$current = (int) get_post_meta($post_id, '_cmx_beleg_views', true);
-	update_post_meta($post_id, '_cmx_beleg_views', $current + 1);
+	$data = json_decode($res, true);
 
-	// 2) Log ergänzen
+	return [
+		'country'  => $data['country_name'] ?? 'Unknown',
+		'city'     => $data['city'] ?? 'Unknown',
+		'provider' => $data['org'] ?? 'Unknown',
+	];
+}
+
+
+/**
+ * Logging-Funktion
+ */
+function cmxbu_log_beleg_view(int $post_id): void {
+
 	$log = get_post_meta($post_id, '_cmx_beleg_views_log', true);
-	if (!is_array($log)) {
-		$log = [];
-	}
+	if (!is_array($log)) { $log = []; }
 
-	$ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+	$ip  = cmxbu_get_real_ip();
+	$geo = cmxbu_fetch_geo_ip($ip);
 
 	$log[] = [
-		'time' => current_time('mysql'),
-		'ip'   => $ip,
+		'time'     => current_time('mysql'),
+		'ip'       => $ip,
+		'country'  => $geo['country'],
+		'city'     => $geo['city'],
+		'provider' => $geo['provider'],
 	];
 
 	update_post_meta($post_id, '_cmx_beleg_views_log', $log);
+
+	$count = (int) get_post_meta($post_id, '_cmx_beleg_views', true);
+	update_post_meta($post_id, '_cmx_beleg_views', $count + 1);
+}
+
+
+/**
+ * Frontend-Tracking
+ */
+function cmxbu_track_beleg_views() {
+
+	if (is_admin()) return;
+	if (!is_singular('belege')) return;
+
+	cmxbu_log_beleg_view( get_queried_object_id() );
 }
 add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_track_beleg_views');
 
 
 
-
 /**
- * ==========================================================================
- * DOWNLOAD-Tracking über ?beleg=TOKEN
- * ==========================================================================
- */
-add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_handle_beleg_download');
-function cmxbu_handle_beleg_download() {
-	if (empty($_GET['beleg'])) {
-		return;
-	}
-
-	$token = sanitize_text_field((string) $_GET['beleg']);
-
-	// Dauerhafte Speicherung via Option
-	$data = get_option('beleg_' . $token);
-
-	if (!$data || !isset($data['post_id'], $data['file'])) {
-		wp_die('Ungültiger oder abgelaufener Download-Link.', 'Zugriff verweigert', ['response' => 403]);
-	}
-
-	$post = get_post((int) $data['post_id']);
-	if (!$post || $post->post_type !== 'belege') {
-		wp_die('Beleg nicht gefunden.', 'Fehler', ['response' => 404]);
-	}
-
-	// *** HIER: Aufruf loggen (Counter + Logfile) ***
-	if (function_exists(__NAMESPACE__ . '\\cmxbu_log_beleg_view')) {
-		cmxbu_log_beleg_view((int) $post->ID);
-	}
-
-	$base_dir  = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
-	$file_path = $base_dir . ltrim($data['file'], '/\\');
-
-	if (!is_file($file_path)) {
-		wp_die('Datei nicht vorhanden.', 'Fehler', ['response' => 404]);
-	}
-
-	// Output-Buffer leeren
-	if (function_exists('ob_get_level')) {
-		while (ob_get_level() > 0) {
-			ob_end_clean();
-		}
-	}
-
-	nocache_headers();
-	status_header(200);
-
-	header('Content-Type: application/pdf');
-	header('Content-Disposition: attachment; filename="' . basename($file_path) . '"');
-	header('Content-Length: ' . filesize($file_path));
-	header('Accept-Ranges: none');
-
-	readfile($file_path);
-	exit;
-}
-
-
-
-
-/**
- * ==========================================================================
- * ADMIN: Meta-Box registrieren
- * ==========================================================================
+ * Meta-Box
  */
 function cmxbu_register_logfile_metabox() {
 	add_meta_box(
@@ -126,45 +113,59 @@ add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_register_logfile_metabox')
 
 
 
-
 /**
- * ==========================================================================
- * ADMIN: Meta-Box Inhalt
- * ==========================================================================
+ * Meta-Box Rendering
  */
-function cmxbu_render_logfile_metabox(\WP_Post $post) {
+function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 
 	$views = (int) get_post_meta($post->ID, '_cmx_beleg_views', true);
 	$log   = get_post_meta($post->ID, '_cmx_beleg_views_log', true);
 
-	if (!is_array($log)) {
-		$log = [];
-	}
+	if (!is_array($log)) $log = [];
 
-	echo '<div style="margin:8px 0; font-size:14px; line-height:1.4;">
+	echo '<div style="margin:8px 0;">
 		<strong>Beleg-Aufrufe:</strong><br>
-		<span style="font-size:18px; font-weight:bold; color:#a42c24;">' . esc_html($views) . '</span>
-	</div>';
+		<span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span>
+	</div><hr>';
 
-	echo '<hr style="margin:10px 0;">';
-
-	echo '<strong>Details:</strong><br>';
-
-	if (empty($log)) {
-		echo '<p style="font-size:12px; color:#666;">Noch keine Logeinträge.</p>';
-		return;
-	}
-
-	echo '<div style="max-height:260px; overflow:auto; border:1px solid #ddd; padding:6px; background:#fafafa;">';
+	echo '<div style="max-height:260px;overflow:auto;padding:6px;border:1px solid #ccc;">';
 
 	foreach (array_reverse($log) as $entry) {
-		$t  = esc_html($entry['time'] ?? '');
-		$ip = esc_html($entry['ip'] ?? '');
 
-		echo '<div style="margin-bottom:6px; border-bottom:1px dashed #ccc; padding-bottom:4px;">
-				<div><strong>Zeit:</strong> ' . $t . '</div>
-				<div><strong>IP:</strong> ' . $ip . '</div>
-			</div>';
+		// FALLBACKS für alte Einträge
+		$time_raw  = $entry['time']     ?? '';
+		$ip        = $entry['ip']       ?? '';
+		$country   = $entry['country']  ?? '';
+		$city      = $entry['city']     ?? '';
+		$provider  = $entry['provider'] ?? '';
+
+		// WordPress Datum
+		$formatted = $time_raw
+			? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($time_raw))
+			: '';
+
+		// Google Maps Link
+		$gmaps = (!empty($city) && !empty($country))
+			? esc_url('https://www.google.com/maps/search/?api=1&query=' . urlencode($city . ', ' . $country))
+			: '';
+
+		echo '<div style="margin-bottom:8px;border-bottom:1px dashed #ccc;padding-bottom:6px;">';
+
+		echo '<div><strong>Zeit:</strong> ' . esc_html($formatted) . '</div>';
+		echo '<div><strong>IP:</strong> '   . esc_html($ip) . '</div>';
+
+		echo '<div><strong>Land/Stadt:</strong> '
+			 . esc_html($country) . ' / ' . esc_html($city);
+
+		if ($gmaps) {
+			echo ' &nbsp;<a href="' . $gmaps . '" target="_blank">(Map)</a>';
+		}
+
+		echo '</div>';
+
+		echo '<div><strong>Provider:</strong> ' . esc_html($provider) . '</div>';
+
+		echo '</div>';
 	}
 
 	echo '</div>';
