@@ -132,41 +132,56 @@ function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 
 	foreach (array_reverse($log) as $entry) {
 
-		// FALLBACKS für alte Einträge
-		$time_raw  = $entry['time']     ?? '';
-		$ip        = $entry['ip']       ?? '';
-		$country   = $entry['country']  ?? '';
-		$city      = $entry['city']     ?? '';
-		$provider  = $entry['provider'] ?? '';
+		// Sicherstellen, dass Keys immer existieren
+		$time_raw = $entry['time']     ?? '';
+		$ip       = $entry['ip']       ?? '';
+		$country  = $entry['country']  ?? '';
+		$city     = $entry['city']     ?? '';
+		$provider = $entry['provider'] ?? '';
 
-		// WordPress Datum
+		// WordPress-Datumsformat
 		$formatted = $time_raw
 			? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($time_raw))
 			: '';
 
-		// Google Maps Link
-		$gmaps = (!empty($city) && !empty($country))
-			? esc_url('https://www.google.com/maps/search/?api=1&query=' . urlencode($city . ', ' . $country))
-			: '';
+		// Google Maps Link (nur wenn City & Country vorhanden)
+		$gmaps = '';
+		if (!empty($city) && !empty($country) && strtolower($city) !== 'local') {
+			$gmaps = ' <a href="https://www.google.com/maps/search/?api=1&query='
+				. urlencode($city . ', ' . $country)
+				. '" target="_blank" style="color:#2271b1;">(Map)</a>';
+		}
 
 		echo '<div style="margin-bottom:8px;border-bottom:1px dashed #ccc;padding-bottom:6px;">';
-
 		echo '<div><strong>Zeit:</strong> ' . esc_html($formatted) . '</div>';
 		echo '<div><strong>IP:</strong> '   . esc_html($ip) . '</div>';
 
 		echo '<div><strong>Land/Stadt:</strong> '
-			 . esc_html($country) . ' / ' . esc_html($city);
-
-		if ($gmaps) {
-			echo ' &nbsp;<a href="' . $gmaps . '" target="_blank">(Map)</a>';
-		}
-
-		echo '</div>';
+			 . esc_html($country) . ' / ' . esc_html($city)
+			 . $gmaps
+			 . '</div>';
 
 		echo '<div><strong>Provider:</strong> ' . esc_html($provider) . '</div>';
-
 		echo '</div>';
 	}
 
 	echo '</div>';
 }
+
+
+
+add_action('admin_notices', function () {
+    if (!is_admin()) return;
+
+    $test = wp_remote_get('https://ipapi.co/31.165.222.102/json/');
+
+    echo '<div class="notice notice-info"><p><strong>GEO-API TEST:</strong><br>';
+
+    if (is_wp_error($test)) {
+        echo 'WP ERROR: ' . $test->get_error_message();
+    } else {
+        echo 'RESPONSE: ' . wp_remote_retrieve_body($test);
+    }
+
+    echo '</p></div>';
+});

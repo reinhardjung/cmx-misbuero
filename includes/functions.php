@@ -69,3 +69,20 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos): void {
 		wp_defer_term_counting(false);
 	}
 }
+
+
+// add_action('admin_notices', function () {
+//     if (!is_admin()) return;
+
+//     $test = wp_remote_get('https://ipapi.co/31.165.222.102/json/');
+
+//     echo '<div class="notice notice-info"><p><strong>GEO-API TEST:</strong><br>';
+
+//     if (is_wp_error($test)) {
+//         echo 'WP ERROR: ' . $test->get_error_message();
+//     } else {
+//         echo 'RESPONSE: ' . wp_remote_retrieve_body($test);
+//     }
+
+//     echo '</p></div>';
+// });
