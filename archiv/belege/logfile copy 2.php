@@ -3,32 +3,23 @@
 
 // GEO-Daten holen (City, Country, Provider)
 function cmxbu_fetch_geo_ip(string $ip): array {
+	var_dump($_SERVER['REMOTE_ADDR']); exit;
 
-	// Private IP-Bereiche erkennen
-	$is_private = preg_match('/^(10|127|172|192)\./', $_SERVER['REMOTE_ADDR'] ?? '');
 
-	// Wenn REMOTE_ADDR öffentlich ist → diese nehmen, sonst die übergebene $ip
-	$final_ip = $is_private ? $ip : ($_SERVER['REMOTE_ADDR'] ?? $ip);
-
-	// Geo-Daten abrufen
-	$url  = "https://ipinfo.io/{$final_ip}/json";
+	$url = "https://ipinfo.io/{$ip}/json"; // 2) ipinfo.io (No API-Key needed for basic data): $url = "https://ipinfo.io/31.165.222.102/json";
 	$data = json_decode(@file_get_contents($url), true);
 
-	if (is_array($data) && !isset($data['error'])) {
+if (is_array($data) && !isset($data['error'])) {
 		return [
-			'country'  => $data['country']  ?? 'Unknown',
-			'city'     => $data['city']     ?? 'Unknown',
-			'provider' => $data['org']      ?? ($data['hostname'] ?? 'Unknown'),
+			'country'  => $data['country'] ?? 'Unknown',
+			'city'     => $data['city'] ?? 'Unknown',
+			'provider' => $data['org'] ?? ($data['hostname'] ?? 'Unknown'),
 		];
 	}
 
-	// Fallback
-	return [
-		'country'  => '',
-		'city'     => '',
-		'provider' => ''
-	];
+	return ['country' => '','city' => '','provider' => '']; // Fallback
 }
+
 
 
 // Logging einer Beleg-Ansicht
@@ -45,6 +36,8 @@ function cmxbu_log_beleg_view(int $post_id): void {
 
 	// $geo = cmxbu_fetch_geo_ip(preg_match('/^(10\.|127\.|172\.|192\.)/', $_SERVER['SERVER_ADDR'] ?? '') ? trim(@file_get_contents('https://api.ipify.org/')) : ($_SERVER['REMOTE_ADDR'] ?? ''));  // GEO-Daten holen
 	$geo = cmxbu_fetch_geo_ip(preg_match('/^(10\.|127\.|172\.|192\.)/', $_SERVER['SERVER_ADDR'] ?? $_SERVER['REMOTE_ADDR']) ? trim(@file_get_contents('https://api.ipify.org/')) : ($_SERVER['REMOTE_ADDR'] ?? $_SERVER['REMOTE_ADDR']));  // GEO-Daten holen
+	var_dump($geo); exit;
+
 
 	$log[] = [
 		'time'     => current_time('mysql'),
@@ -72,20 +65,18 @@ add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_track_beleg_views');
 
 
 // Meta-Box registrieren
-add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_register_logfile_metabox');
 function cmxbu_register_logfile_metabox() {
-
-	// Aufrufzähler holen (Beispiel: aus Post-Meta)
-	$views = (int) get_post_meta(get_the_ID(), '_cmx_beleg_views', true);
 	add_meta_box(
 		'cmxbu_logfile_box',
-		'' . esc_html($views) . ' Aufrufe',
+		'Aufrufe',
 		__NAMESPACE__ . '\\cmxbu_render_logfile_metabox',
 		'belege',
 		'side',
 		'default'
 	);
 }
+add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_register_logfile_metabox');
+
 
 
 // Meta-Box Anzeige
@@ -96,10 +87,9 @@ function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 	if (!is_array($log)) $log = [];
 
 	// echo '<div style="margin:8px 0;"><strong>Beleg-Aufrufe:</strong><br><span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span></div><hr>';
-	// echo '<div style="text-align:center; margin:8px 0;"><span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span></div>';
+	echo '<div style="text-align:center; margin:8px 0;"><span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span></div>';
 
-	// echo '<div style="max-height:260px;overflow:auto;padding:6px;border:1px solid #ccc;">';
-	echo '<div style="max-height:260px; overflow:auto; padding:6px;">';
+	echo '<div style="max-height:260px;overflow:auto;padding:6px;border:1px solid #ccc;">';
 
 	foreach (array_reverse($log) as $entry) {
 
