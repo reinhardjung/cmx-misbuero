@@ -86,3 +86,9 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos): void {
 
 //     echo '</p></div>';
 // });
+
+
+	// $rows = $wpdb->get_results("
+	// 	SELECT option_name, option_value
+	// 	FROM {$wpdb->options}
+	// 	WHERE option_name LIKE 'beleg_%'

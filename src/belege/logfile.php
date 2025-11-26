@@ -129,7 +129,7 @@ function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 		echo '<div style="margin-bottom:8px;border-bottom:1px dashed #ccc;padding-bottom:6px;">
 				<div>'.esc_html($formatted).'</div>
 				<div>'.esc_html($ip).'</div>
-				<div>'.esc_html($country).' / '.esc_html($city).'</div>
+				<div>'.esc_html($country).'-'.esc_html($city).'</div>
 				<div>'.esc_html($provider).'</div>
 			  </div>';
 	}

@@ -1,16 +1,16 @@
-<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+<?php namespace CLOUDMEISTER\CMX\Buero;
+defined('ABSPATH') || die('Oxytocin!');
+
 
 /**
  * Download-/Copy-Bereich innerhalb der "Für Kunde..."-Metabox
  */
-function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post) {
-	[$title, $type] = cmx_get_beleg_type($post);
+function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post): void {
 
-	// Dateinamen-Schema: 20YY/YYMMDD_xxx_rechnung.pdf etc.
-	$pdf_rel_path = '20' . substr($title, 0, 2) . '/' . $title . '_' . $type . '.pdf';
+	// Stabilen Token für diesen Beleg holen (wird nur einmalig erzeugt)
+	$token = cmxbu_get_stable_token($post->ID);
 
-	$base_dir     = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
-	$pdf_abs_path = $base_dir . ltrim($pdf_rel_path, '/\\');
+	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 
 	// Wenn Datei nicht existiert → Buttons disabled
 	if (!is_file($pdf_abs_path)) {
@@ -19,17 +19,24 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post) {
 		return;
 	}
 
-	// Dauerhafter Token (läuft NICHT mehr ab)
-	$token = wp_generate_password(20, false, false);
+	// Download-URL über stabilen Token
+	$download_url = \home_url('/?beleg=' . $token);
 
-	// In Option statt Transient speichern (kein Timeout)
-	update_option('beleg_' . $token,[	'post_id' => $post->ID,	'file' => $pdf_rel_path,],false); // false = nicht autoloaden
+	// Download-Button
+	echo '<a href="' . \esc_url($download_url) . '"
+			target="_blank"
+			class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"
+			style="color:#a42c24; border:#a42c24 solid 1px;">
+			download
+		  </a>';
 
-	// Download-URL über normalen WP-Request
-	$download_url = home_url('/?beleg=' . $token);
-	echo '<a href="' . esc_url($download_url) . '" target="_blank" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download" style="color:#a42c24; border:#a42c24 solid 1px;">download</a>';
-	echo '<a href="#" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy" data-download-url="' . esc_attr($download_url) . '" style="color:darkred; border:darkred solid 1px; margin-right:10px;">Link</a>';
-
+	// Copy-Button
+	echo '<a href="#"
+			class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy"
+			data-download-url="' . \esc_attr($download_url) . '"
+			style="color:darkred; border:darkred solid 1px; margin-right:10px;">
+			Link
+		  </a>';
 
 	// JS für Copy-Funktion (kopiert den Link in die Zwischenablage)
 	echo '<script>
@@ -48,7 +55,7 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post) {
 				btn.textContent = "kopiert";
 				btn.disabled = true;
 				setTimeout(function () {
-					btn.textContent = "Link";
+					btn.textContent = oldText;
 					btn.disabled = false;
 				}, 2000);
 			}

@@ -22,7 +22,7 @@ if (is_file($__cmx_vendor)) {
 	require_once $__cmx_vendor;
 	static $cmx_pdf_autoload_logged = false;
 	if (!$cmx_pdf_autoload_logged) {
-		error_log('[CMX PDF] Composer autoload geladen.');
+		// error_log('[CMX PDF] Composer autoload geladen.');
 		$cmx_pdf_autoload_logged = true;
 	}
 }

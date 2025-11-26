@@ -37,7 +37,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_log')) {
  * Composer Autoload
  * ========================= */
 $autoload = trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'vendor/autoload.php';
-if (is_file($autoload)) { require_once $autoload; cmxbu_log('Composer autoload geladen.'); }
+if (is_file($autoload)) require_once $autoload; // cmxbu_log('Composer autoload geladen.');
 
 /** =========================
  * Helper (eindeutig: cmxbu_*)
