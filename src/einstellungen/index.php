@@ -31,7 +31,7 @@ add_action('admin_menu', function() {
 		CMX_SETTINGS_SLUG,
 		__NAMESPACE__ . '\\cmx_render_settings_page',
 		'dashicons-admin-generic',
-		70
+		100
 	);
 });
 

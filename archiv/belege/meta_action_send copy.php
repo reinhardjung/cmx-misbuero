@@ -1,161 +1,93 @@
-<?php
-namespace CLOUDMEISTER\CMX\Buero;
-defined('ABSPATH') || die('Oxytocin!');
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 
 /**
- * --------------------------------------------------------------
- * Metabox: E-Mail senden
- * --------------------------------------------------------------
+ * Metabox-Teil: "versenden"-Button
  */
 function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
 
-	$post_id   = (int) $post->ID;
-	$post_info = cmxbu_get_beleg_pdf_for_send($post_id);
-	$has_pdf   = $post_info['found'];
+	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+	$has_pdf          = is_file($pdf_abs_path);
+	$post_id          = (int) $post->ID;
 
-	$href         = $has_pdf ? esc_url(admin_url("admin-post.php?action=cmxbu_beleg_send&post_id={$post_id}")) : '#';
-	$disable_attr = $has_pdf ? '' : 'pointer-events:none; opacity:0.5;';
-
-	echo '<a href="' . $href . '"
-			class="button button-secondary alignleft ' . (!$has_pdf ? 'disabled' : '') . '"
-			style="' . $disable_attr . '">
-			versenden
-		  </a>';
+	if ($has_pdf) {
+		$href = \esc_url(\admin_url("admin-post.php?action=cmxbu_beleg_send&post_id={$post_id}"));
+		echo '<a href="' . $href . '" class="button button-secondary alignleft">versenden</a>';
+	} else {
+		echo '<a href="#" class="button button-secondary alignleft disabled" style="pointer-events:none;opacity:0.5;">versenden</a>';
+	}
 }
 
 
 /**
- * --------------------------------------------------------------
- * PDF-Info für Versand holen
- * (bereits von Dir vorgegeben)
- * --------------------------------------------------------------
+ * Handler: Beleg per E-Mail versenden
+ * URL: /wp-admin/admin-post.php?action=cmxbu_beleg_send&post_id=123
  */
-function cmxbu_get_beleg_pdf_for_send(int $post_id): array {
-	return [
-		'found'    => !is_file(get_post_meta($post_id, '_cmx_beleg_pdf_path', true)),
-		'type'     => 'local',
-		'path'     => '',
-		'filename' => '',
-	];
-}
+function cmxbu_handle_beleg_send(): void {
 
-
-/**
- * --------------------------------------------------------------
- * Admin-Action: E-Mail versenden
- * --------------------------------------------------------------
- */
-function cmxbu_handle_beleg_send() {
-
-	if (!isset($_GET['action']) || $_GET['action'] !== 'cmxbu_beleg_send') {
-		return;
+	if (empty($_GET['post_id'])) {
+		\wp_die('Beleg-ID fehlt.');
 	}
 
-	$post_id = isset($_GET['post_id']) ? (int) $_GET['post_id'] : 0;
-	if ($post_id <= 0) {
-		wp_die('Ungültiger Beleg.');
-	}
+	$post_id = (int) $_GET['post_id'];
+	$post    = \get_post($post_id);
 
-	$post = get_post($post_id);
 	if (!$post || $post->post_type !== 'belege') {
-		wp_die('Beleg nicht gefunden.');
+		\wp_die('Beleg nicht gefunden.');
 	}
 
-	/**
-	 * 1) Kontakt + erste E-Mail-Adresse laden
-	 */
-	$kontakt_id = (int) get_post_meta($post_id)['_cmx_beleg_kontakt_id'][0];
-	if (!$kontakt_id) {
-		wp_die('Kein Kontakt verknüpft.');
-	}
-// cmx_kommunikation[email_1]
-
-	$emails = (array) get_post_meta($kontakt_id, '_cmx_email_1', true);
-
-	$email  = trim($emails[0] ?? '');
-
-	if (!$email || !is_email($email)) {
-		wp_die('Keine gültige E-Mail-Adresse gefunden.');
+	// PDF-Pfade
+	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+	if (!is_file($pdf_abs_path)) {
+		\wp_die('PDF nicht gefunden.');
 	}
 
-	/**
-	 * 2) PDF laden
-	 */
-	$pdf = cmxbu_get_beleg_pdf_for_send($post_id);
-	if (!$pdf['found']) {
-		wp_die('PDF nicht gefunden.');
-	}
-	$pdf_path = $pdf['path'];
+	// Token → Download-Link
+	$token        = cmxbu_get_stable_token($post_id);
+	$download_url = \home_url('/?beleg=' . $token);
 
 
 	/**
-	 * 3) Download-Token erstellen (wie Download-Metabox)
+	 * --------------------------
+	 * K O N T A K T   I D
+	 * warningsicher
+	 * --------------------------
 	 */
-	[$title, $type] = cmx_get_beleg_type($post);
+	$kontakt_id = get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+	if (empty($kontakt_id)) {
 
-	$token = wp_generate_password(20, false, false);
+		add_action('admin_notices', function () {
+			?>
+			<div class="notice notice-error is-dismissible">
+				<p><strong>Kontakt / Adresse fehlt.</strong></p>
+			</div>
+			<?php
+		});
 
-	// relative Datei für Token-Handler eintragen
-	$rel = 'beleg_pdf_' . $token;
-	update_option(
-		'beleg_' . $token,
-		[
-			'post_id' => $post_id,
-			'file'    => str_replace(rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/', '', $pdf_path),
-		],
-		false
-	);
-
-	$download_link = home_url('/?beleg=' . $token);
-
-
-	/**
-	 * 4) E-Mail-Text aus Einstellungen lesen
-	 */
-	$type_key  = $type; // angebot / gutschrift / lieferschein / rechnung
-	$ini_email = cmx_ini_get_value('E-Mails', $type_key);
-	$text      = is_string($ini_email) ? $ini_email : '';
-
-	if (!$text) {
-		$text = "Hallo,\n\nIm Anhang findest Du Dein Dokument.";
+		\wp_safe_redirect(\get_edit_post_link($post_id, ''));
+		exit;
 	}
 
-	// Erlaubte Platzhalter ersetzen
-	$replace = [
-		'{BELEGNUMMER}' => $title,
-		'{DOWNLOAD}'    => $download_link,
-		'{DATUM}'       => get_post_meta($post_id, '_cmx_datum', true),
-	];
-	$message = str_replace(array_keys($replace), array_values($replace), $text);
-
-	$message .= "\n\nDownload-Link:\n" . $download_link;
-
 
 	/**
-	 * 5) Betreff
+	 * E-Mail-Adresse des Kontakts
 	 */
-	$subject = "Dein " . ucfirst($type) . " – " . $title;
+	$to = \get_post_meta($kontakt_id, '_cmx_email_1', true);
 
+	if (empty($to) || !\is_email($to)) {
+		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
+	}
 
-	/**
-	 * 6) E-Mail senden
-	 */
-	$headers = ['Content-Type: text/plain; charset=UTF-8'];
+	$subject = 'Dein Beleg';
+	$message = "Hallo,\n\nhier ist Dein Beleg:\n{$download_url}\n\nSonnige Grüsse\n";
 
-	wp_mail($email, $subject, $message, $headers);
+	$sent = \wp_mail($to, $subject, $message);
 
+	if (!$sent) {
+		\wp_die('E-Mail konnte nicht gesendet werden.');
+	}
 
-	/**
-	 * 7) Weiterleitung zurück zum Beleg
-	 */
-	wp_redirect(
-		add_query_arg(
-			'cmxbu_mail_sent',
-			'1',
-			admin_url('post.php?post=' . $post_id . '&action=edit')
-		)
-	);
+	\wp_safe_redirect(\get_edit_post_link($post_id, ''));
 	exit;
 }
-add_action('admin_post_cmxbu_beleg_send', __NAMESPACE__ . '\\cmxbu_handle_beleg_send');
+\add_action('admin_post_cmxbu_beleg_send', __NAMESPACE__ . '\\cmxbu_handle_beleg_send');
