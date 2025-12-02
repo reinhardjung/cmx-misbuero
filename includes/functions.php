@@ -92,3 +92,29 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos): void {
 	// 	SELECT option_name, option_value
 	// 	FROM {$wpdb->options}
 	// 	WHERE option_name LIKE 'beleg_%'
+
+
+
+
+// function cmx_get_das_binich_title(): string
+function cmx_get_das_binich_title()
+{
+	// Kontakt "das-bin-ich" suchen
+	$q = new \WP_Query([
+		'post_type'      => 'kontakte',
+		'post_status'    => ['publish', 'private'],
+		'posts_per_page' => 1,
+		'tax_query'      => [
+			[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'slug',
+				'terms'    => ['das-bin-ich'],
+			]
+		],
+		'no_found_rows'    => true,
+		'suppress_filters' => true,
+	]);
+
+}
+
+// var_dump(cmx_get_das_binich_title()); exit;

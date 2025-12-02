@@ -40,11 +40,11 @@ add_action('admin_menu', function() {
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
-		'general'  => 'Allgemein',
-		'kontakte' => 'Kontakte',
-		'banken'   => 'Banken',
+		// 'general'  => 'Allgemein',
+		// 'kontakte' => 'Kontakte',
+		// 'banken'   => 'Banken',
 		'belege'   => 'Belege',
-		'advanced' => 'Erweitert',
+		// 'advanced' => 'Erweitert',
 		'support'  => 'Support',
 	];
 }
@@ -125,7 +125,11 @@ function cmx_field_text(array $args): void {
 /* ------------------------------------------------------------
  * SETTINGS PAGE
  * ------------------------------------------------------------ */
-function cmx_render_settings_page(): void {
+function cmx_render_settings_page(): void
+{
+	if (!current_user_can('manage_options')) {
+		wp_die('Nicht erlaubt.');
+	}
 
 	$tabs = cmx_get_tabs();
 	$tab  = $_GET['tab'] ?? 'general';
@@ -145,42 +149,57 @@ function cmx_render_settings_page(): void {
 
 	echo '<div class="wrap"><h1>Einstellungen</h1>';
 
-	/* MAIN TABS */
+	/* ---------- TABS ---------- */
 	echo '<h2 class="nav-tab-wrapper">';
-	foreach ($tabs as $key=>$label) {
-		echo '<a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$key.'" class="nav-tab '.($tab===$key?'nav-tab-active':'').'">'.$label.'</a>';
+	foreach ($tabs as $key => $label) {
+		echo '<a href="?page=' . CMX_SETTINGS_SLUG . '&tab=' . $key . '" class="nav-tab ' .
+		     ($tab === $key ? 'nav-tab-active' : '') . '">' . $label . '</a>';
 	}
 	echo '</h2>';
 
-	/* SUBTABS */
+	/* ---------- SUBTABS ---------- */
 	if ($subtabs) {
 		echo '<ul class="subsubsub">';
-		$i=0; $n=count($subtabs);
-		foreach ($subtabs as $key=>$label) {
-			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$key.'" class="'.($key===$sub?'current':'').'">'.$label.'</a>'.(++$i<$n?' | ':'').'</li>';
+		$i = 0; $n = count($subtabs);
+		foreach ($subtabs as $key => $label) {
+			echo '<li><a href="?page=' . CMX_SETTINGS_SLUG . '&tab=' . $tab . '&sub=' . $key .
+			     '" class="' . ($key === $sub ? 'current' : '') . '">' . $label .
+			     '</a>' . (++$i < $n ? ' | ' : '') . '</li>';
 		}
 		echo '</ul><br>';
 	}
 
 	echo '<div class="cmx-tabpanel">';
 
-	/* MAIN FORM */
-	if ($tab !== 'belege') {
-		echo '<form method="post" action="options.php">';
-		settings_fields(CMX_SETTINGS_MAIN);
+	/* ------------------------------------------------------------
+	 * 1) SUPPORT-TAB → KEIN WP SETTINGS FORMULAR!
+	 * ------------------------------------------------------------ */
+	if ($tab === 'support') {
 		do_settings_sections($page_id);
-		submit_button();
-		echo '</form>';
+		echo '</div></div>';
+		return;
 	}
 
-	/* BELEGE → eigenes Settings-Array */
+	/* ------------------------------------------------------------
+	 * 2) BELEGE → eigenes settings array
+	 * ------------------------------------------------------------ */
 	if ($tab === 'belege') {
 		echo '<form method="post" action="options.php">';
 		settings_fields(CMX_SETTINGS_BELEG);
 		do_settings_sections($page_id);
 		submit_button();
-		echo '</form>';
+		echo '</form></div></div>';
+		return;
 	}
+
+	/* ------------------------------------------------------------
+	 * 3) ALLE ANDEREN TABS
+	 * ------------------------------------------------------------ */
+	echo '<form method="post" action="options.php">';
+	settings_fields(CMX_SETTINGS_MAIN);
+	do_settings_sections($page_id);
+	submit_button();
+	echo '</form>';
 
 	echo '</div></div>';
 }
