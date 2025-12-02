@@ -21,11 +21,13 @@ function cmx_dav_human_bytes($bytes) {
 	$pow = min(count($units), (int)floor(log($bytes, 1024)));
 	return number_format($bytes / (1024 ** $pow), 2, ',', "'") . ' ' . $units[$pow-1];
 }
+
 function cmx_dav_fmt_time($ts) {
 	if (!$ts) return '';
 	$dt = (new \DateTime('@'.$ts))->setTimezone(new \DateTimeZone('Europe/Zurich'));
 	return $dt->format('d.m.Y H:i');
 }
+
 /** Sicherheits-Helper für Pfade */
 function cmx_dav_is_subpath(string $base, string $path): bool {
 	$base = rtrim(str_replace('\\','/',$base), '/') . '/';

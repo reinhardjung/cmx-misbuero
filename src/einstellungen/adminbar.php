@@ -11,8 +11,8 @@ function cmx65_adminbar($wp_admin_bar) {
 	$wp_admin_bar->remove_node('new-content');
 	$wp_admin_bar->remove_node('comments');
 
-
-	echo '<style>
+	echo '
+		<style>
         #wpadminbar .cmx-nohover > .ab-item {
             cursor: default !important;
             pointer-events: none !important;
@@ -30,7 +30,7 @@ function cmx65_adminbar($wp_admin_bar) {
 		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
 		'href'  => false,
 		'meta'  => [
-			'html'  => true,
+			'title'  => '',
 			'class' => 'cmx-nohover',
 		],
 	]);
