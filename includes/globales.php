@@ -192,17 +192,21 @@ add_action('admin_head', function() {
 	if ($screen && $screen->post_type === 'belege') {
 		echo '<style> div#titlediv { background:#f7f7f7 !important; pointer-events:none; } </style>';
 		// echo '<script>document.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("title");if(t){t.readOnly=true;}});</script>';
-	} echo '<style>
+	}
+	if(wp_get_current_user()->user_login !== 'cloudmeister') {
+	echo '
+	<style>
 		#wp-admin-bar-view, #ehe-admin-cb, #dashboard_site_health, #dashboard_right_now, #dashboard_quick_press, #dashboard_primary, #dashboard_activity, #wpa_dashboard_widget, #wp-admin-bar-site-name,
 		#welcome-panel, #dashboard_site_health-hide, label[for="dashboard_site_health-hide"], #dashboard_right_now-hide, label[for="dashboard_right_now-hide"], #wp-admin-bar-mis-buero,
 		#dashboard_activity-hide, label[for="dashboard_activity-hide"], #dashboard_primary-hide, label[for="dashboard_primary-hide"], #wp_welcome_panel-hide, label[for="wp_welcome_panel-hide"],
 		#dashboard_quick_press-hide, label[for="dashboard_quick_press-hide"], #wpa_dashboard_widget-hide, label[for="wpa_dashboard_widget-hide"], #wp-admin-bar-updates,
 		#fluentsmtp_reports_widget, label[for="fluentsmtp_reports_widget-hide"], #e-dashboard-overview, #wp-admin-bar-wpvivid_admin_menu,
-		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .menu-icon-users, .elementor
+		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .elementor, .menu-icon-users, #toplevel_page_fluent-snippets
 		{ display:none !important; }
 	</style>';
+	}
 });
-// wp-not-current-submenu wp-menu-separator elementor
+// wp-not-current-submenu wp-menu-separator elementor: .menu-icon-users,
 // .wp-not-current-submenu,
 // 		.wp-has-submenu wp-not-current-submenu menu-top toplevel_page_wpvivid-dashboard menu-top-first, wp-not-current-submenu menu-top toplevel_page_migrateguru menu-top-last
 // 		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .wp-not-current-submenu wp-menu-separator

@@ -39,7 +39,7 @@ add_action('init', function() {
 		require_once __DIR__ . '/includes/index.php';
 	}
 
-	foreach (explode(',', 'kontakte,artikel,belege,buchhaltung,dokumente,einstellungen,cockpit,projekte') as $module) {
+	foreach (explode(',', 'kontakte,artikel,belege,buchhaltung,dokumente,cockpit,projekte,einstellungen') as $module) {
 		require_once __DIR__ .'/src/' . trim($module) . '/index.php';
 	}
 });
