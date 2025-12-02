@@ -47,7 +47,6 @@ function cmx_array_change_key_case_recursive(array $arr, int $case = CASE_LOWER)
 }
 
 
-
 /**
  * Entfernt den "Anzeigen"-Link aus den Zeilenaktionen
  * aller benutzerdefinierten Post Types im Adminbereich.
@@ -198,11 +197,16 @@ add_action('admin_head', function() {
 		#welcome-panel, #dashboard_site_health-hide, label[for="dashboard_site_health-hide"], #dashboard_right_now-hide, label[for="dashboard_right_now-hide"], #wp-admin-bar-mis-buero,
 		#dashboard_activity-hide, label[for="dashboard_activity-hide"], #dashboard_primary-hide, label[for="dashboard_primary-hide"], #wp_welcome_panel-hide, label[for="wp_welcome_panel-hide"],
 		#dashboard_quick_press-hide, label[for="dashboard_quick_press-hide"], #wpa_dashboard_widget-hide, label[for="wpa_dashboard_widget-hide"], #wp-admin-bar-updates,
-		#fluentsmtp_reports_widget, label[for="fluentsmtp_reports_widget-hide"],
+		#fluentsmtp_reports_widget, label[for="fluentsmtp_reports_widget-hide"], #e-dashboard-overview, #wp-admin-bar-wpvivid_admin_menu,
+		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .menu-icon-users, .elementor
 		{ display:none !important; }
 	</style>';
 });
-//
+// wp-not-current-submenu wp-menu-separator elementor
+// .wp-not-current-submenu,
+// 		.wp-has-submenu wp-not-current-submenu menu-top toplevel_page_wpvivid-dashboard menu-top-first, wp-not-current-submenu menu-top toplevel_page_migrateguru menu-top-last
+// 		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .wp-not-current-submenu wp-menu-separator
+
 
 add_action('admin_footer', function() {
 	if (get_current_screen()->post_type !== 'belege') return;
