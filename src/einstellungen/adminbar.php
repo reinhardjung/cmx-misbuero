@@ -11,6 +11,7 @@ function cmx65_adminbar($wp_admin_bar) {
 	$wp_admin_bar->remove_node('new-content');
 	$wp_admin_bar->remove_node('comments');
 
+
 	echo '<style>
         #wpadminbar .cmx-nohover > .ab-item {
             cursor: default !important;
