@@ -356,8 +356,6 @@ $preTotalColspan = max(0, $colCount - 2);
 	</tbody>
 </table>
 
-
-
 <?php if (in_array(strtolower($beleg_type), ['angebot', 'rechnung', 'gutschrift'], true)) : ?>
 	<table style="width:100%;">
 	<tr>

@@ -77,17 +77,10 @@ function cmxbu_handle_beleg_send(): void {
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
+
 	$subject = 'Dein Beleg';
+	$message = "Hallo,\n\nhier ist Dein Beleg:\n{$download_url}\n\nSonnige Grüsse\n";
 
-
-// 	$terms = get_the_terms($post_id, 'belege_kategorien')[0]->slug;
-
-// var_dump($terms); exit;
-
-
-	$message = cmx_get_belegmail(get_the_terms($post_id, 'belege_kategorien')[0]->slug);
-	// var_dump($message); exit;
-	// cmx_get_belegfuss($beleg_type);
 	$sent = \wp_mail($to, $subject, $message);
 
 	if (!$sent) {
@@ -98,16 +91,3 @@ function cmxbu_handle_beleg_send(): void {
 	exit;
 }
 \add_action('admin_post_cmxbu_beleg_send', __NAMESPACE__ . '\\cmxbu_handle_beleg_send');
-
-
-
-function cmx_get_belegmail(string $key): string {
-	// cmx_belege[belegfuss_rechnung], cmx_belege[mail_rechnung]
-	$key = 'mail_' . strtolower(trim($key));
-	$options = get_option('cmx_belege', []); // var_dump($options['belegfuss_rechnung']); exit;
-
-	if (isset($options[$key]) && is_string($options[$key])) {
-		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
-	}
-	return '';
-}

@@ -121,39 +121,24 @@ function cmx_get_branding_logo(): string
 		return esc_url($thumb);
 	}
 
-
 	/** -------
 	 * 3) FINALER Fallback
 	 * ------- */
 	return 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
 }
 
-/**
- * Liefert den gespeicherten Belegfuss oder – wenn leer – den Default-Wert aus der INI-Datei.
- */
-function cmx_get_belegfuss(string $beleg_type): string {
 
-	$beleg_type = strtolower(trim($beleg_type));
-	$allowed    = ['angebot','gutschrift','lieferschein','rechnung'];
 
-	if (!in_array($beleg_type, $allowed, true)) {
-		return '';
+function cmx_get_belegfuss(string $key): string {
+	$key = 'belegfuss_' . strtolower(trim($key));
+	$options = get_option('cmx_belege', []); // var_dump($options['belegfuss_rechnung']); exit;
+
+	if (isset($options[$key]) && is_string($options[$key])) {
+		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
 	}
-
-	// 1) Benutzerwert aus DB?
-	$data = get_option('cmx_belegfuss', []);
-	if (is_array($data) && !empty($data[$beleg_type])) {
-		return (string) $data[$beleg_type];
-	}
-
-	// 2) Default-Wert aus INI
-	$ini_val = cmx_ini_get_value('Belegfuss', $beleg_type);
-	if (is_string($ini_val) && $ini_val !== '') {
-		return $ini_val;
-	}
-
 	return '';
 }
+
 
 
 if (!function_exists(__NAMESPACE__.'\\cmxbu_beleg_get_dates')) {

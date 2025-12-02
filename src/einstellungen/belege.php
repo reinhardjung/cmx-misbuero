@@ -16,28 +16,44 @@ function cmx_starts_with(string $haystack, string $needle): bool {
  *   mail_angebot      → (E-Mails, Angebot)
  *   belegfuss_rechnung → (Belegfuss, Rechnung)
  */
+// var_dump(get_option('cmx_belege')['belegfuss_rechnung']); exit;
+// function cmx_get_beleg_default(string $key): string {
+// 	if (cmx_starts_with($key, 'mail_')) {
+// 		$section = 'E-Mails';
+// 		$name    = ucfirst(substr($key, 5));
+// 	}
+// 	elseif (cmx_starts_with($key, 'belegfuss_')) {
+// 		$section = 'Belegfuss';
+// 		$name    = ucfirst(substr($key, 10));
+// 	}
+// 	else {
+// 		return '';
+// 	}
+
+// 	$val = cmx_ini_get_value($section, $name);
+// 	// var_dump(cmx_ini_get_value($section, $name)); exit;
+
+
+// 	if (!is_string($val)) {
+// 		return '';
+// 	}
+
+// 	return str_replace(['<br>', '<br/>', '<br />'], "\n", $val);
+// }
+
 function cmx_get_beleg_default(string $key): string {
 
-	if (cmx_starts_with($key, 'mail_')) {
-		$section = 'E-Mails';
-		$name    = ucfirst(substr($key, 5));
-	}
-	elseif (cmx_starts_with($key, 'belegfuss_')) {
-		$section = 'Belegfuss';
-		$name    = ucfirst(substr($key, 10));
-	}
-	else {
-		return '';
+	// Nur gespeicherte Optionen nutzen – nichts anderes
+	$options = get_option('cmx_belege', []);
+
+	if (isset($options[$key]) && is_string($options[$key])) {
+		// var_dump($options[$key]); exit;
+		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
 	}
 
-	$val = cmx_ini_get_value($section, $name);
-
-	if (!is_string($val)) {
-		return '';
-	}
-
-	return str_replace(['<br>', '<br/>', '<br />'], "\n", $val);
+	return '';
 }
+
 
 
 /* ------------------------------------------------------------
