@@ -25,6 +25,8 @@ function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
  */
 function cmxbu_handle_beleg_send(): void {
 
+	$BelegID =get_post( intval($_GET['post_id'] ?? 0) )->post_title ?? '';
+
 	if (empty($_GET['post_id'])) {
 		\wp_die('Beleg-ID fehlt.');
 	}
@@ -77,7 +79,7 @@ function cmxbu_handle_beleg_send(): void {
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
-	$subject = 'Dein Beleg';
+	$subject = 'Beleg-Nr: ' . $BelegID;
 
 
 // 	$terms = get_the_terms($post_id, 'belege_kategorien')[0]->slug;

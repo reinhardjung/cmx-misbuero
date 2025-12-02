@@ -545,6 +545,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Optionen/Labels
 		$opts=(array)get_option('cmx_einstellungen',[]);
 		$branding_logo = \CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo();
+		// var_dump(cmx_get_branding_logo()); exit;
+
 
 		$labels = array_replace([
 			'doc_invoice'=>'Rechnung','date'=>'Datum','due'=>'Fällig bis','period'=>'Leistung für',
