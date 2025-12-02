@@ -201,11 +201,61 @@ add_action('admin_head', function() {
 		#dashboard_activity-hide, label[for="dashboard_activity-hide"], #dashboard_primary-hide, label[for="dashboard_primary-hide"], #wp_welcome_panel-hide, label[for="wp_welcome_panel-hide"],
 		#dashboard_quick_press-hide, label[for="dashboard_quick_press-hide"], #wpa_dashboard_widget-hide, label[for="wpa_dashboard_widget-hide"], #wp-admin-bar-updates,
 		#fluentsmtp_reports_widget, label[for="fluentsmtp_reports_widget-hide"], #e-dashboard-overview, #wp-admin-bar-wpvivid_admin_menu,
-		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .elementor, .menu-icon-users, #toplevel_page_fluent-snippets, .updated success,
+		.toplevel_page_wpvivid-dashboard, .toplevel_page_migrateguru, .toplevel_page_elementor, .menu-icon-elementor_library, .elementor, .menu-icon-users, #toplevel_page_fluent-snippets, .updated.success
 		{ display:none !important; }
 	</style>';
 	}
 });
+
+
+/**
+ * Entfernt alle Standard-Dashboard-Widgets,
+ * lässt aber bestimmte eigene Widgets stehen.
+ */
+add_action('wp_dashboard_setup', function () {
+
+	global $wp_meta_boxes;
+
+	// IDs deiner eigenen Widgets (hier ergänzen, falls mehrere)
+	if(wp_get_current_user()->user_login !== 'cloudmeister') {
+		remove_action('welcome_panel', 'wp_welcome_panel');
+
+
+		$allow = [
+			'cmx_dashboard_widget',
+		];
+
+		// Bereiche im Dashboard
+		$areas = [
+			'normal', 'side',
+		];
+
+		foreach ($areas as $area) {
+
+			if (!isset($wp_meta_boxes['dashboard'][$area])) {
+				continue;
+			}
+
+			foreach ($wp_meta_boxes['dashboard'][$area] as $priority => $widgets) {
+
+				foreach ($widgets as $widget_id => $widget) {
+
+					if (!in_array($widget_id, $allow, true)) {
+						unset($wp_meta_boxes['dashboard'][$area][$priority][$widget_id]);
+					}
+				}
+			}
+		}
+	}
+});
+
+
+
+
+
+
+
+
 // wp-not-current-submenu wp-menu-separator elementor: .menu-icon-users,
 // .wp-not-current-submenu,
 // 		.wp-has-submenu wp-not-current-submenu menu-top toplevel_page_wpvivid-dashboard menu-top-first, wp-not-current-submenu menu-top toplevel_page_migrateguru menu-top-last
