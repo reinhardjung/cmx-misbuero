@@ -166,7 +166,7 @@ function cmx_render_settings_page(): void
 			     '" class="' . ($key === $sub ? 'current' : '') . '">' . $label .
 			     '</a>' . (++$i < $n ? ' | ' : '') . '</li>';
 		}
-		echo '</ul><br>';
+		echo '</ul><br><br>';
 	}
 
 	echo '<div class="cmx-tabpanel">';
