@@ -88,7 +88,7 @@ function cmxbu_handle_beleg_send(): void {
 	$message = cmx_get_belegmail(get_the_terms($post_id, 'belege_kategorien')[0]->slug);
 	// var_dump($message); exit;
 	// cmx_get_belegfuss($beleg_type);
-	$sent = \wp_mail($to, $subject, $message);
+	$sent = \wp_mail($to, $subject, $message .$download_url);
 
 	if (!$sent) {
 		\wp_die('E-Mail konnte nicht gesendet werden.');
