@@ -40,9 +40,9 @@ add_action('admin_menu', function() {
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
-		// 'general'  => 'Allgemein',
+		'general'  => 'Allgemein',
 		// 'kontakte' => 'Kontakte',
-		// 'banken'   => 'Banken',
+		'banken'   => 'Banken',
 		'belege'   => 'Belege',
 		// 'advanced' => 'Erweitert',
 		'support'  => 'Support',

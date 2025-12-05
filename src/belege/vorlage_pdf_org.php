@@ -6,8 +6,6 @@ use Dompdf\Options;
 
 require_once CMX_PLUGIN_DIR . 'src/buchhaltung/banken.php';
 require_once trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/vorlage_schreiben.php';
-// require_once CMX_PLUGIN_DIR . 'src/belege/qr_code.php';  // <--- NEU
-
 
 
 
@@ -653,63 +651,53 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
       }
     </style>';
 
-	// DOMPDF Setup
-	$opt = new Options();
-	$opt->set('isRemoteEnabled', true);
-	$opt->set('isHtml5ParserEnabled', true);
-	$opt->set('defaultFont', 'DejaVu Sans');
+    // DOMPDF Setup
+    $opt = new Options();
+    $opt->set('isRemoteEnabled', true);
+    $opt->set('isHtml5ParserEnabled', true);
+    $opt->set('defaultFont', 'DejaVu Sans');
 
-	$dom = new Dompdf($opt);
-	$dom->setPaper('A4', 'portrait');
-	$dom->loadHtml($css . $html, 'UTF-8');
+    $dom = new Dompdf($opt);
+    $dom->setPaper('A4', 'portrait');
+    $dom->loadHtml($css . $html, 'UTF-8');
 
-	// Rendern (einmal)
-	$dom->render();
+    // Rendern (einmal)
+    $dom->render();
+		cmx_add_qr_page($dom, $tpl);
 
-	// QR-Code hinzufügen
-	cmx_add_qr_page($dom, $tpl, $post_id);
+    // Canvas/Font
+    $canvas      = $dom->getCanvas();
+    $fontMetrics = $dom->getFontMetrics();
+    $fontHeader  = $fontMetrics->getFont('DejaVu Sans', 'bold');
+    $fontFooter  = $fontMetrics->getFont('DejaVu Sans', 'normal');
 
-	// Canvas/Font
-	$canvas      = $dom->getCanvas();
-	$fontMetrics = $dom->getFontMetrics();
-	$fontHeader  = $fontMetrics->getFont('DejaVu Sans', 'bold');
-	$fontFooter  = $fontMetrics->getFont('DejaVu Sans', 'normal');
+    // Seitenanzahl
+    $page_count  = $canvas->get_page_count();
 
-	// Seitenanzahl
-	$page_count  = $canvas->get_page_count();
-
-	// Kopf ab Seite 2
-	if ($page_count > 1) {
+    // A+B: Kopf NUR ab Seite 2 zeichnen (oberhalb des Inhalts, dank margin-top)
+    if ($page_count > 1) {
 			$beleg_titel = $tpl['document']['title'] ?? 'Beleg';
 			for ($i = 2; $i <= $page_count; $i++) {
-					$canvas->text(50, 55, $beleg_titel, $fontHeader, 11, [0.1, 0.1, 0.1], $i);
+				$canvas->text(50, 55, $beleg_titel, $fontHeader, 11, [0.1, 0.1, 0.1], $i); // Titel
+				// $canvas->line(50, 70, 545, 70, [0.7, 0.7, 0.7], $i); // feine Trennlinie unter dem Kopf
 			}
-	}
+    }
 
-	// Seitenzahlen unten
-	// if ($page_count > 1) {
-	// 		$canvas->page_text(
-	// 				535, 780,
-	// 				'Seite {PAGE_NUM} von {PAGE_COUNT}',
-	// 				$fontFooter, 5,
-	// 				[0.5, 0.5, 0.5]
-	// 		);
-	// }
 
-	// Schreiben (EINZIGER finaler Save!)
-	$pdf_binary = $dom->output();
-	if ($pdf_binary === '' || $pdf_binary === false) {
-			cmxbu_log('FEHLER: Leerer PDF-Output');
-			return;
-	}
+    if ($page_count > 1) { // C: Seitenzahl – dezent über dem Footer; nur wenn >1 Seite. Ein Aufruf ohne Seitenindex → gilt für alle Seiten
+        $canvas->page_text(535, 780,'Seite {PAGE_NUM} von {PAGE_COUNT}',$fontFooter, 5,[0.5, 0.5, 0.5]);
+    }
 
-	if (!cmxbu_save_beleg_pdf($pdf_path, $pdf_binary)) {
+    // Schreiben
+		$pdf_binary = $dom->output();
+		if ($pdf_binary === '' || $pdf_binary === false) { cmxbu_log('FEHLER: Leerer PDF-Output'); return; }
+
+		if (!cmxbu_save_beleg_pdf($pdf_path, $pdf_binary)) {
 			cmxbu_log('FEHLER: PDF konnte nicht geschrieben werden', ['path' => $pdf_path]);
 			return;
-	}
+		}
 
-	cmxbu_log('PDF erstellt', ['pdf' => $pdf_path]);
-
+		cmxbu_log('PDF erstellt', ['pdf' => $pdf_path]);
 
 } catch (\Throwable $e) {
     cmxbu_log('DOMPDF EXCEPTION', ['error' => $e->getMessage()]);
