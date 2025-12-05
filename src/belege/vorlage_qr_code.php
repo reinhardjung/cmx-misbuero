@@ -147,23 +147,44 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     ];
     $qr_raw = implode("\n", $qr_data);
 
-    /** ----------------------------------------------------------------
-     * 4) QR-Bild generieren (46 mm, ohne Rand)
-     * ---------------------------------------------------------------- */
-    try {
-        $qr = new QrCode($qr_raw);
-        $qr->setSize((int) (46 * $mm)); // 46 mm Kantenlänge
-        $qr->setMargin(0);
+		/** ----------------------------------------------------------------
+		 * 4) QR-Bild generieren (grösser + Schweizer Kreuz für Endroid v4/v5)
+		 * ---------------------------------------------------------------- */
+		try {
 
-        $writer = new PngWriter();
-        $tmp    = \wp_tempnam('cmx_qr');
-        \file_put_contents($tmp, $writer->write($qr)->getString());
-    } catch (\Throwable $e) {
-        \error_log('[CMX QR] Fehler beim QR-Code: ' . $e->getMessage());
-        return;
-    }
+				// QR-Code 55 mm gross
+				$qr_size_mm = 80 * $mm;
 
-    /** ----------------------------------------------------------------
+				$qr = QrCode::create($qr_raw)
+						->setSize((int) $qr_size_mm)
+						->setMargin(0);
+
+				// Schweizer Kreuz laden (PNG-Datei MUSS existieren)
+				$logoPath = __DIR__ . '/swiss-cross.png';
+
+				$writer   = new PngWriter();
+
+				if (file_exists($logoPath)) {
+						// LOGO integration über Writer::write()
+						$logo = \Endroid\QrCode\Logo\Logo::create($logoPath)
+								->setResizeToWidth((int)(7 * $mm)); // 7 mm laut Norm
+
+						$qrResult = $writer->write($qr, logo: $logo);
+				} else {
+						// Ohne Logo
+						$qrResult = $writer->write($qr);
+				}
+
+				$tmp = \wp_tempnam('cmx_qr');
+				\file_put_contents($tmp, $qrResult->getString());
+
+		} catch (\Throwable $e) {
+				\error_log('[CMX QR] Fehler beim QR-Code: ' . $e->getMessage());
+				return;
+		}
+
+
+		/** ----------------------------------------------------------------
      * 5) Geometrie – QR-Zone am Ende der letzten Seite
      * ---------------------------------------------------------------- */
     $page_count  = $canvas->get_page_count();
@@ -187,7 +208,9 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 
     $qr_size      = 46 * $mm;
     $qr_x         = $zahlteil_x + 10 * $mm;               // etwas eingerückt
+    // $qr_x         = $zahlteil_x * $mm;               // etwas eingerückt
     $qr_y         = $zone_top + 30 * $mm;                 // ungefähr mittig in der Höhe
+    // $qr_y         = $zone_top * $mm;                 // ungefähr mittig in der Höhe
 
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere

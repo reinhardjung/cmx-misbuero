@@ -267,7 +267,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		echo '</div></p>';
 	}
 
-	echo '<p><label><strong>Betreff</strong></label><br>';
+	echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
 	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'"></p>';
 
 	echo '<p><label><strong>Beschreibung</strong></label><br>';
