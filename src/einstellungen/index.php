@@ -3,7 +3,14 @@ namespace CLOUDMEISTER\CMX\Buero;
 defined('ABSPATH') || exit;
 
 /* ------------------------------------------------------------
- * INCLUDE FILES
+ * KONSTANTEN – MÜSSEN HIER DEFINIERT SEIN
+ * ------------------------------------------------------------ */
+const CMX_SETTINGS_SLUG  = 'cmx-einstellungen';
+const CMX_SETTINGS_MAIN  = 'cmx_einstellungen';
+const CMX_SETTINGS_BELEG = 'cmx_belege';
+
+/* ------------------------------------------------------------
+ * INCLUDE FILES – jetzt korrekt, da Konstanten bereis existieren
  * ------------------------------------------------------------ */
 require_once 'allgemein.php';
 require_once 'banken.php';
@@ -12,13 +19,6 @@ require_once 'belege.php';
 require_once 'erweitert.php';
 require_once 'support.php';
 require_once 'adminbar.php';
-
-/* ------------------------------------------------------------
- * KONSTANTEN
- * ------------------------------------------------------------ */
-const CMX_SETTINGS_SLUG  = 'cmx-einstellungen';
-const CMX_SETTINGS_MAIN  = 'cmx_einstellungen';   // ARRAY
-const CMX_SETTINGS_BELEG = 'cmx_belege';          // ARRAY
 
 /* ------------------------------------------------------------
  * ADMIN MENU
@@ -40,16 +40,24 @@ add_action('admin_menu', function() {
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
-		'general'  => 'Allgemein',
-		// 'kontakte' => 'Kontakte',
-		'banken'   => 'Banken',
-		'belege'   => 'Belege',
-		// 'advanced' => 'Erweitert',
-		'support'  => 'Support',
+		'general' => 'Allgemein',
+		'banken'  => 'Banken',
+		'belege'  => 'Belege',
+		'support' => 'Support',
 	];
 }
 
 function cmx_get_subtabs(string $tab): array {
+
+	if ($tab === 'banken') {
+		return [
+			'rev'    => 'Revolut',
+			'zkb'    => 'ZKB',
+			'ubs'    => 'UBS',
+			'migros' => 'Migros Bank',
+			'eisen'  => 'Raiffeisen',
+		];
+	}
 
 	if ($tab === 'belege') {
 		return [
@@ -67,7 +75,6 @@ function cmx_get_subtabs(string $tab): array {
  * REGISTER SETTINGS (MAIN)
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
-
 	register_setting(
 		CMX_SETTINGS_MAIN,
 		CMX_SETTINGS_MAIN,
@@ -87,7 +94,6 @@ add_action('admin_init', function() {
  * REGISTER SETTINGS (BELEGE)
  * ------------------------------------------------------------ */
 add_action('admin_init', function() {
-
 	register_setting(
 		CMX_SETTINGS_BELEG,
 		CMX_SETTINGS_BELEG,
@@ -104,7 +110,7 @@ add_action('admin_init', function() {
 });
 
 /* ------------------------------------------------------------
- * FELDER FÜR MAIN-TABS
+ * FELDER
  * ------------------------------------------------------------ */
 function cmx_get_option(string $key, $default = '') {
 	$arr = get_option(CMX_SETTINGS_MAIN, []);
@@ -117,72 +123,76 @@ function cmx_field_text(array $args): void {
 	$ph  = $args['placeholder'] ?? '';
 
 	echo '<input type="text" class="regular-text"
-	name="'.CMX_SETTINGS_MAIN.'['.$key.']"
-	value="'.esc_attr($val).'"
-	placeholder="'.esc_attr($ph).'">';
+		name="'.CMX_SETTINGS_MAIN.'['.$key.']"
+		value="'.esc_attr($val).'"
+		placeholder="'.esc_attr($ph).'">';
+}
+
+function cmx_field_checkbox(array $args): void {
+
+	$key   = $args['key'];
+	$label = $args['label'] ?? '';
+
+	$options = get_option(CMX_SETTINGS_MAIN, []);
+	$val     = (!empty($options[$key]));
+
+	echo '<label>';
+	echo '<input type="hidden" name="'.CMX_SETTINGS_MAIN.'['.$key.']" value="0">';
+	echo '<input type="checkbox"
+		name="'.CMX_SETTINGS_MAIN.'['.$key.']"
+		value="1" '.checked($val, true, false).'> ';
+	echo esc_html($label);
+	echo '</label>';
 }
 
 /* ------------------------------------------------------------
- * SETTINGS PAGE
+ * SETTINGS PAGE RENDERING
  * ------------------------------------------------------------ */
-function cmx_render_settings_page(): void
-{
-	if (!current_user_can('manage_options')) {
-		wp_die('Nicht erlaubt.');
-	}
+function cmx_render_settings_page(): void {
 
 	$tabs = cmx_get_tabs();
 	$tab  = $_GET['tab'] ?? 'general';
-
 	if (!isset($tabs[$tab])) $tab = 'general';
 
 	$subtabs = cmx_get_subtabs($tab);
 	$sub     = $_GET['sub'] ?? (array_key_first($subtabs) ?: '');
+	if ($sub && !isset($subtabs[$sub])) $sub = array_key_first($subtabs) ?: '';
 
-	if ($sub && !isset($subtabs[$sub])) {
-		$sub = array_key_first($subtabs) ?: '';
-	}
-
-	$page_id = $sub
-		? "cmx_tab_{$tab}__{$sub}"
-		: "cmx_tab_{$tab}";
+	$page_id = $sub ? "cmx_tab_{$tab}__{$sub}" : "cmx_tab_{$tab}";
 
 	echo '<div class="wrap"><h1>Einstellungen</h1>';
 
-	/* ---------- TABS ---------- */
+	/* Tabs */
 	echo '<h2 class="nav-tab-wrapper">';
 	foreach ($tabs as $key => $label) {
-		echo '<a href="?page=' . CMX_SETTINGS_SLUG . '&tab=' . $key . '" class="nav-tab ' .
-		     ($tab === $key ? 'nav-tab-active' : '') . '">' . $label . '</a>';
+		echo '<a href="?page=' . CMX_SETTINGS_SLUG . '&tab=' . $key
+			.'" class="nav-tab '.($tab === $key ? 'nav-tab-active' : '').'">'
+			.$label.'</a>';
 	}
 	echo '</h2>';
 
-	/* ---------- SUBTABS ---------- */
+	/* Subtabs */
 	if ($subtabs) {
 		echo '<ul class="subsubsub">';
-		$i = 0; $n = count($subtabs);
-		foreach ($subtabs as $key => $label) {
-			echo '<li><a href="?page=' . CMX_SETTINGS_SLUG . '&tab=' . $tab . '&sub=' . $key .
-			     '" class="' . ($key === $sub ? 'current' : '') . '">' . $label .
-			     '</a>' . (++$i < $n ? ' | ' : '') . '</li>';
+		$i=0; $n=count($subtabs);
+		foreach ($subtabs as $k => $label) {
+			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$k.'"'
+			     .' class="'.($k === $sub ? 'current' : '').'">'.$label.'</a>'
+			     .(++$i < $n ? ' | ' : '').'</li>';
 		}
 		echo '</ul><br><br>';
 	}
 
 	echo '<div class="cmx-tabpanel">';
 
-	/* ------------------------------------------------------------
-	 * 1) SUPPORT-TAB → KEIN WP SETTINGS FORMULAR!
-	 * ------------------------------------------------------------ */
+	/* SUPPORT → kein Formular */
 	if ($tab === 'support') {
 		do_settings_sections($page_id);
 		echo '</div></div>';
 		return;
 	}
 
-	/* ------------------------------------------------------------
-	 * 2) BELEGE → eigenes settings array
-	 * ------------------------------------------------------------ */
+	/* BELEGE → eigenes Settings Array */
 	if ($tab === 'belege') {
 		echo '<form method="post" action="options.php">';
 		settings_fields(CMX_SETTINGS_BELEG);
@@ -192,9 +202,7 @@ function cmx_render_settings_page(): void
 		return;
 	}
 
-	/* ------------------------------------------------------------
-	 * 3) ALLE ANDEREN TABS
-	 * ------------------------------------------------------------ */
+	/* ALLE ANDEREN */
 	echo '<form method="post" action="options.php">';
 	settings_fields(CMX_SETTINGS_MAIN);
 	do_settings_sections($page_id);
@@ -203,3 +211,45 @@ function cmx_render_settings_page(): void
 
 	echo '</div></div>';
 }
+
+/* ------------------------------------------------------------
+ * SANITIZER: IMMER GENAU 1 BANK
+ * ------------------------------------------------------------ */
+add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
+
+	$bank_keys = [
+		'rev_enabled',
+		'zkb_enabled',
+		'ubs_enabled',
+		'migros_enabled',
+		'eisen_enabled',
+	];
+
+	$active = [];
+	foreach ($bank_keys as $k) {
+		if (!empty($new[$k])) {
+			$active[] = $k;
+		}
+	}
+
+	/* Keine aktiv → erste aktivieren */
+	if (count($active) === 0) {
+		$first = $bank_keys[0];
+		foreach ($bank_keys as $k) {
+			$new[$k] = ($k === $first) ? 1 : 0;
+		}
+		return $new;
+	}
+
+	/* Mehrere aktiv → nur die letzte bleibt aktiv */
+	if (count($active) > 1) {
+		$last = end($active);
+		foreach ($bank_keys as $k) {
+			$new[$k] = ($k === $last) ? 1 : 0;
+		}
+		return $new;
+	}
+
+	return $new;
+
+}, 10, 2);

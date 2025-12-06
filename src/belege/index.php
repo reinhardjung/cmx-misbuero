@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Projekte');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Projekte,MwSt');
 
 
 // Define: CONST 4 each Taxo
@@ -20,6 +20,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 \add_action('init', function () {
 	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false);
 	cmx_create_taxo(basename(__DIR__), 'Projekt', 'Projekte', false);
+	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
@@ -35,4 +36,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'kopfdaten,positionen,konditionen,admincolumns,notizen,summen,vorlage_pdf,meta_action,logfile,vorlage_qr_code');
+cmx_require_files(__DIR__,'kopfdaten,positionen,konditionen,mwst,admincolumns,notizen,summen,vorlage_pdf,meta_action,logfile,vorlage_qr_code');
