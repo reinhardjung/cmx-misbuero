@@ -89,7 +89,7 @@ if (!function_exists(__NAMESPACE__.'\\cmx_echo_date')) {
  * ========================= */
 $add_columns = function(array $columns){
 	$insert = [
-		'beleg_datum'   => __('Datum der Rechnung', 'cmx'),
+		'beleg_datum'   => __('Datum des Beleges', 'cmx'),
 		'beleg_faellig' => __('Fällig am', 'cmx'),
 		'beleg_bezahlt' => __('Bezahlt am', 'cmx'),
 	];

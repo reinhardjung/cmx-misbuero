@@ -117,7 +117,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// RNG Datum (mit klickbarem Label = heute)
 	echo '<p style="margin:8px 0 12px;">';
-	echo '<label for="cmx_beleg_rng_datum" id="cmx_rng_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Datum der Rechnung</strong> <small style="color:#666;">(heute)</small></label>';
+	echo '<label for="cmx_beleg_rng_datum" id="cmx_rng_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Datum des Beleges</strong> <small style="color:#666;">(heute)</small></label>';
 	echo '<input type="date" name="cmx_beleg_rng_datum" id="cmx_beleg_rng_datum" style="width:100%;" value="' . \esc_attr($rng) . '">';
 	echo '</p>';
 
@@ -218,11 +218,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// RNG Datum
 	$rng = isset($_POST['cmx_beleg_rng_datum']) ? \sanitize_text_field($_POST['cmx_beleg_rng_datum']) : '';
-	if ($rng && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
-		\update_post_meta($post_id, CMX_BELEG_META_RNG_DATUM, $rng);
-	} else {
-		\delete_post_meta($post_id, CMX_BELEG_META_RNG_DATUM);
+	if (!$rng || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
+		// Default: heutiges Datum
+		$rng = \gmdate('Y-m-d', \current_time('timestamp'));
 	}
+	\update_post_meta($post_id, CMX_BELEG_META_RNG_DATUM, $rng);
 
 	// Fälligkeitsdatum
 	$fae = isset($_POST['cmx_beleg_faelligkeitsdatum']) ? \sanitize_text_field($_POST['cmx_beleg_faelligkeitsdatum']) : '';
