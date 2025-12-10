@@ -63,3 +63,58 @@ require_once __DIR__ . '/src/artikel/katalog.php';
 \add_action('init', function () {
 	\add_shortcode('cmx_artikel_tabelle', __NAMESPACE__ . '\\cmx_render_artikel_tabelle');
 });
+
+
+
+
+add_action('plugins_loaded', __NAMESPACE__ . '\\cmx_check_and_create_subdomain_admin');
+function cmx_check_and_create_subdomain_admin() {
+		// 1. Domain zuverlässig auslesen
+    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+    if (!$host) {
+        return;
+    }
+
+    // www. entfernen
+    $host = preg_replace('~^www\.~', '', $host);
+
+    // 2. Domain-Teile extrahieren
+    $parts = explode('.', $host);
+
+    // Beispiel: kunde.misbuero.ch ⇒ ['kunde','misbuero','ch']
+    if (count($parts) < 3) {
+        $sub = 'checkCheck123'; // misbuero
+        // return; // keine 3rd-Level Domain
+    }
+
+    // 3. 3rd-Level bestimmen
+    $sub = $parts[0]; // "kunde"
+
+    // Falls Subdomain ungültig → abbrechen
+    if (!preg_match('~^[a-z0-9\-]+$~i', $sub)) {
+        return;
+    }
+
+    // 4. E-Mail definieren
+    $email = $sub . '@misbuero.ch';
+
+    // Prüfen, ob User existiert
+    if (username_exists($sub) || email_exists($email)) {
+        return;
+    }
+
+    // 5. Sicheres Passwort
+    $password = wp_generate_password(24, true, true);
+
+    // 6. User anlegen
+    $user_id = wp_insert_user([
+        'user_login' => $sub,
+        'user_email' => $email,
+        'user_pass'  => $password,
+        'role'       => 'administrator',
+    ]);
+
+    if (!is_wp_error($user_id)) {
+        error_log("CMX: Subdomain-Admin '$sub' wurde erstellt (ID $user_id).");
+    }
+}
