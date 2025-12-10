@@ -300,12 +300,29 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_take_first_token')) {
 
 if (!function_exists(__NAMESPACE__.'\\cmxbu_get_preferred_bank')) {
 	function cmxbu_get_preferred_bank(): array {
+		if (function_exists(__NAMESPACE__ . '\\cmx_get_active_bank')) {
+			$active = cmx_get_active_bank();
+			if (!empty($active)) {
+				return [
+					'bank_name'=>$active['name'] ?? ($active['label'] ?? ''),
+					'iban'=>$active['iban'] ?? '',
+					'qr_iban'=>$active['qr_iban'] ?? '',
+					'bic'=>$active['bic'] ?? '',
+				];
+			}
+		}
+
 		$opts = (array)get_option('cmx_einstellungen', []);
 		if (!empty($opts['bank_preferred_id'])) {
 			$pid=(int)$opts['bank_preferred_id'];
 			if ($pid>0 && ($p=get_post($pid))) {
 				$m=get_post_meta($pid);
-				return ['bank_name'=>$m['_bank_name'][0]??$p->post_title, 'iban'=>$m['_iban'][0]??'', 'bic'=>$m['_bic'][0]??''];
+				return [
+					'bank_name'=>$m['_bank_name'][0]??$p->post_title,
+					'iban'=>$m['_iban'][0]??'',
+					'qr_iban'=>$m['_qr_iban'][0]??'',
+					'bic'=>$m['_bic'][0]??'',
+				];
 			}
 		}
 		$q = get_posts([
@@ -320,9 +337,19 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_preferred_bank')) {
 			'no_found_rows'=>true,'suppress_filters'=>true,
 		]);
 		if (!empty($q)) { $p=$q[0]; $m=get_post_meta($p->ID);
-			return ['bank_name'=>$m['_bank_name'][0]??$p->post_title, 'iban'=>$m['_iban'][0]??'', 'bic'=>$m['_bic'][0]??''];
+			return [
+				'bank_name'=>$m['_bank_name'][0]??$p->post_title,
+				'iban'=>$m['_iban'][0]??'',
+				'qr_iban'=>$m['_qr_iban'][0]??'',
+				'bic'=>$m['_bic'][0]??'',
+			];
 		}
-		return ['bank_name'=>$opts['bank_name']??'Bank', 'iban'=>$opts['iban']??'', 'bic'=>$opts['bic']??''];
+		return [
+			'bank_name'=>$opts['bank_name']??'Bank',
+			'iban'=>$opts['iban']??'',
+			'qr_iban'=>$opts['qr_iban']??'',
+			'bic'=>$opts['bic']??'',
+		];
 	}
 }
 
@@ -687,6 +714,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
+		$qr_meta_enabled = get_post_meta($post_id, '_cmx_beleg_qr_enabled', true) === '1';
+		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
+		$qr_should_print = $qr_meta_enabled
+			&& $qr_iban !== ''
+			&& (strtolower($beleg_type) === 'rechnung');
 // var_dump($dates['currency']); exit;
 
 
@@ -726,6 +758,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				];
 			}, $calc['positionen']),
 			'any_discount'=> (bool)($calc['any_discount'] ?? false),
+			'qr'=>[
+				'enabled'=>$qr_meta_enabled,
+				'iban'=>$qr_iban,
+				'will_print'=>$qr_should_print,
+			],
 			'tax'=>[
 				'rate'=>$mwst['rate'],
 				'label'=>$mwst['label'],

@@ -26,6 +26,7 @@ function cmx_belege_render_mwst_metabox($post) {
     // Werte laden
     $is_brutto = get_post_meta($post->ID, '_cmx_beleg_is_brutto', true);
     $mwst_term_id = get_post_meta($post->ID, '_cmx_beleg_mwst_term', true);
+    $qr_enabled = get_post_meta($post->ID, '_cmx_beleg_qr_enabled', true);
 
     // Taxonomie-Terme laden
     $terme = get_terms([
@@ -56,6 +57,17 @@ function cmx_belege_render_mwst_metabox($post) {
                 </option>
             <?php endforeach; ?>
         </select>
+    </p>
+
+    <p>
+        <label>
+            <input type="checkbox"
+                   name="cmx_beleg_qr_enabled"
+                   value="1"
+                <?php checked($qr_enabled, '1'); ?> />
+            QR-Code auf Beleg drucken
+        </label><br>
+        <small>Nur möglich, wenn eine QR-IBAN hinterlegt ist.</small>
     </p>
 
     <script>
@@ -98,6 +110,8 @@ add_action('save_post_belege', function($post_id) {
     // Checkbox speichern
     $is_brutto = isset($_POST['cmx_beleg_is_brutto']) ? '1' : '0';
     update_post_meta($post_id, '_cmx_beleg_is_brutto', $is_brutto);
+    $qr_enabled = isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0';
+    update_post_meta($post_id, '_cmx_beleg_qr_enabled', $qr_enabled);
 
     // Select speichern
     $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';

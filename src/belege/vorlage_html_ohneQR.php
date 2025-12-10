@@ -51,7 +51,22 @@ $font_bold    = $font_dir . 'Asap-Bold.ttf';
 
 	body { font-family: 'Asap', sans-serif; font-size: 12px; color:#333; }
 	table, td, th { border: none; }
-	.footer { position: fixed; bottom: -60px; left: 0; right: 0; height:60px; text-align: center; font-size: 12px; }
+	.footer {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 10px;
+		width: 90%;
+		margin: 0 auto;
+		padding: 0;
+		box-sizing: border-box;
+		font-size: xx-small;
+		color: grey;
+	}
+	.footer table { width: 100%; table-layout: fixed; }
+	.footer td { font-size: xx-small; color: grey; vertical-align: top; }
+	.footer td:nth-child(2) { text-align: center; }
+	.footer td:nth-child(3) { text-align: right; }
 	.text-right { text-align: right !important; }
 	.small { font-size: 10px; }
 </style>
@@ -106,7 +121,7 @@ if (isset($tpl['bank']) && is_array($tpl['bank'])) {
 } elseif (function_exists(__NAMESPACE__ . '\\cmxbu_get_preferred_bank')) {
 	$bank_arr = cmxbu_get_preferred_bank();
 }
-$bank_arr = array_replace(['bank_name' => '', 'iban' => '', 'bic' => ''], (array)$bank_arr);
+$bank_arr = array_replace(['bank_name' => '', 'iban' => '', 'qr_iban' => '', 'bic' => ''], (array)$bank_arr);
 
 $bank_name_safe = function_exists('esc_html') ? esc_html($bank_arr['bank_name']) : $bank_arr['bank_name'];
 $bank_iban_safe = function_exists('esc_html') ? esc_html($bank_arr['iban'])      : $bank_arr['iban'];
@@ -376,6 +391,7 @@ $preTotalColspan = max(0, $colCount - 2);
 <?php endif; ?>
 
 
+<?php if (strtolower($beleg_type) === 'rechnung'): ?>
 <!-- FOOTER -->
 <div class="footer" style="font-size:xx-small; color:grey;">
 	<table>
@@ -421,6 +437,7 @@ $preTotalColspan = max(0, $colCount - 2);
 	</tr>
 	</table>
 </div>
+<?php endif; ?>
 
 </body>
 </html>

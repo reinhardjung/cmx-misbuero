@@ -74,23 +74,23 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     /** ----------------------------------------------------------------
      * 1) Einstellungen & QRR
      * ---------------------------------------------------------------- */
-    $opts      = (array) \get_option('cmx_einstellungen', []);
-    $mode      = strtoupper(trim($opts['qr_mode'] ?? 'NON'));
-    $qrr_input = (string) ($opts['qr_reference'] ?? '');
-    $qrr_raw   = preg_replace('~\D+~', '', $qrr_input);
+    $qr_enabled = !empty($tpl['qr']['enabled']);
+    $qr_iban    = trim((string)($tpl['qr']['iban'] ?? $tpl['bank']['qr_iban'] ?? ''));
+    $doc_type   = strtolower(trim((string)($tpl['document']['type'] ?? '')));
 
-    $is_qrr = ($mode === 'QRR' && $qrr_raw !== '' && cmx_qr_is_valid_qrr($qrr_raw));
-    if (!$is_qrr) {
-        $mode    = 'NON';
-        $qrr_raw = '';
+    if (!$qr_enabled || $qr_iban === '' || $doc_type !== 'rechnung') {
+        return;
     }
 
-    $qrr_print = $is_qrr ? cmx_qr_format_qrr_print($qrr_raw) : '';
+    // Immer NON (ohne Referenz), da kein QR-Referenzfeld mehr vorhanden
+    $mode      = 'NON';
+    $qrr_raw   = '';
+    $qrr_print = '';
 
     /** ----------------------------------------------------------------
      * 2) Beträge & Adressen
      * ---------------------------------------------------------------- */
-    $iban   = trim((string) ($tpl['bank']['iban'] ?? ''));
+    $iban   = $qr_iban !== '' ? $qr_iban : trim((string) ($tpl['bank']['iban'] ?? ''));
     if ($iban === '') {
         // Ohne IBAN kein QR-Code auf dem Beleg
         return;

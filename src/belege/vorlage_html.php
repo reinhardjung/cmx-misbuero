@@ -41,6 +41,23 @@ a, a:hover, a:visited, a:active, a:focus {
     text-decoration: none;
 }
 
+.footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    width: 90%;
+    margin: 0 auto;
+    padding: 0;
+    box-sizing: border-box;
+    font-size: xx-small;
+    color: grey;
+}
+.footer table { width: 100%; table-layout: fixed; }
+.footer td { font-size: xx-small; color: grey; vertical-align: top; }
+.footer td:nth-child(2) { text-align: center; }
+.footer td:nth-child(3) { text-align: right; }
+
 /* Seitenränder */
 @page {
     margin-top: 100px;
@@ -170,11 +187,12 @@ if (isset($tpl['bank']) && is_array($tpl['bank'])) {
 } elseif (function_exists(__NAMESPACE__ . '\\cmxbu_get_preferred_bank')) {
 	$bank_arr = cmxbu_get_preferred_bank();
 }
-$bank_arr = array_replace(['bank_name' => '', 'iban' => '', 'bic' => ''], (array)$bank_arr);
+$bank_arr = array_replace(['bank_name' => '', 'iban' => '', 'qr_iban' => '', 'bic' => ''], (array)$bank_arr);
 
 $bank_name_safe = esc_html($bank_arr['bank_name']);
 $bank_iban_safe = esc_html($bank_arr['iban']);
 $bank_bic_safe  = esc_html($bank_arr['bic']);
+$qr_will_print  = !empty($tpl['qr']['will_print']);
 
 /* ----------------------------------------------
    Lieferschein → reduzierte Spalten
@@ -468,6 +486,54 @@ $preTotalColspan = max(0, $colCount - 2);
 		<td><br><br><br><?= cmx_get_belegfuss($beleg_type); ?></td>
 	</tr>
 	</table>
+<?php endif; ?>
+
+<?php if (!$qr_will_print && strtolower($beleg_type) === 'rechnung'): ?>
+<!-- FOOTER -->
+<div class="footer" style="font-size:xx-small; color:grey;">
+	<table>
+	<tr>
+		<td style="text-align:left;">
+			<b><?= esc_html($tpl['labels']['recipient'] ?? 'Empfänger'); ?></b><br>
+			<?= esc_html($tpl['me']['company'] ?? ''); ?><br>
+			<?= esc_html($tpl['me']['strasse'] ?? ''); ?><br>
+			<?= esc_html(($tpl['me']['plz'] ?? '') .' '. ($tpl['me']['ort'] ?? '')); ?><br>
+		</td>
+
+		<td style="text-align:center;">
+			<b><?= esc_html($tpl['labels']['bank'] ?? 'Bank'); ?></b><br>
+			<?= $bank_name_safe; ?><br>
+			<?= $bank_iban_safe; ?><br>
+			<?php if ($bank_bic_safe !== ''): ?>
+				<?= $bank_bic_safe; ?><br>
+			<?php endif; ?>
+		</td>
+
+		<td style="text-align:right;">
+			<b><?= esc_html($tpl['labels']['contact'] ?? 'Kontakt'); ?></b><br>
+
+			<?php if (!empty($tpl['me']['phone'])): ?>
+				<a href="https://misbuero.ch/?cmx_call=<?= urlencode(str_replace(' ', '+', $tpl['me']['phone'])); ?>">
+					<?= esc_html($tpl['me']['phone']); ?>
+				</a><br>
+			<?php endif; ?>
+
+			<?php if (!empty($tpl['me']['email'])): ?>
+				<a href="mailto:<?= esc_attr($tpl['me']['email']); ?>">
+					<?= esc_html($tpl['me']['email']); ?>
+				</a><br>
+			<?php endif; ?>
+
+			<?php if (!empty($tpl['me']['support'])): ?>
+				<a href="mailto:<?= esc_attr($tpl['me']['support']); ?>">
+					<?= esc_html($tpl['me']['support']); ?>
+				</a>
+			<?php endif; ?>
+
+		</td>
+	</tr>
+	</table>
+</div>
 <?php endif; ?>
 
 </body>
