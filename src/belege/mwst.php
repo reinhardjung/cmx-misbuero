@@ -23,6 +23,9 @@ function cmx_belege_render_mwst_metabox($post) {
 
     wp_nonce_field('cmx_belege_mwst_save', 'cmx_belege_mwst_nonce');
 
+    $opts_general = (array) get_option('cmx_einstellungen', []);
+    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+
     // Werte laden
     $is_brutto = get_post_meta($post->ID, '_cmx_beleg_is_brutto', true);
     $mwst_term_id = get_post_meta($post->ID, '_cmx_beleg_mwst_term', true);
@@ -34,30 +37,36 @@ function cmx_belege_render_mwst_metabox($post) {
         'hide_empty' => false,
     ]);
 
+    if (!$is_mwst_pflichtig) {
+        echo '<p><em>MwSt-pflichtig ist in den Einstellungen deaktiviert. MwSt-Felder ausgeblendet.</em></p>';
+    } else {
+        ?>
+        <p>
+            <label>
+                <input type="checkbox"
+                       name="cmx_beleg_is_brutto"
+                       value="1"
+                    <?php checked($is_brutto, '1'); ?> />
+                Brutto (inkl.) / Netto (ohne MWST)
+            </label>
+        </p>
+
+        <p>
+            <label id="cmx_beleg_mwst_label" for="cmx_beleg_mwst_term" style="color:#a42c24;"><strong>MWST-Satz</strong></label><br>
+            <select name="cmx_beleg_mwst_term" id="cmx_beleg_mwst_term" style="width:100%;">
+                <option value="">— auswählen —</option>
+
+                <?php foreach ($terme as $term): ?>
+                    <option value="<?php echo esc_attr($term->term_id); ?>"
+                        <?php selected($mwst_term_id, $term->term_id); ?>>
+                        <?php echo esc_html($term->name); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <?php
+    }
     ?>
-    <p>
-        <label>
-            <input type="checkbox"
-                   name="cmx_beleg_is_brutto"
-                   value="1"
-                <?php checked($is_brutto, '1'); ?> />
-            Brutto (inkl.) / Netto (ohne MWST)
-        </label>
-    </p>
-
-    <p>
-        <label id="cmx_beleg_mwst_label" for="cmx_beleg_mwst_term" style="color:#a42c24;"><strong>MWST-Satz</strong></label><br>
-        <select name="cmx_beleg_mwst_term" id="cmx_beleg_mwst_term" style="width:100%;">
-            <option value="">— auswählen —</option>
-
-            <?php foreach ($terme as $term): ?>
-                <option value="<?php echo esc_attr($term->term_id); ?>"
-                    <?php selected($mwst_term_id, $term->term_id); ?>>
-                    <?php echo esc_html($term->name); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </p>
 
     <p>
         <label>
@@ -70,6 +79,7 @@ function cmx_belege_render_mwst_metabox($post) {
         <small>Nur möglich, wenn eine QR-IBAN hinterlegt ist.</small>
     </p>
 
+    <?php if ($is_mwst_pflichtig): ?>
     <script>
     (function() {
         const label  = document.getElementById('cmx_beleg_mwst_label');
@@ -88,8 +98,7 @@ function cmx_belege_render_mwst_metabox($post) {
         });
     })();
     </script>
-
-    <?php
+    <?php endif;
 }
 
 
@@ -107,13 +116,23 @@ add_action('save_post_belege', function($post_id) {
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
     if (!current_user_can('edit_post', $post_id)) return;
 
-    // Checkbox speichern
-    $is_brutto = isset($_POST['cmx_beleg_is_brutto']) ? '1' : '0';
-    update_post_meta($post_id, '_cmx_beleg_is_brutto', $is_brutto);
-    $qr_enabled = isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0';
-    update_post_meta($post_id, '_cmx_beleg_qr_enabled', $qr_enabled);
+    $opts_general = (array) get_option('cmx_einstellungen', []);
+    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
 
-    // Select speichern
-    $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';
-    update_post_meta($post_id, '_cmx_beleg_mwst_term', $mwst_term_id);
+    if ($is_mwst_pflichtig) {
+        // Checkbox speichern
+        $is_brutto = isset($_POST['cmx_beleg_is_brutto']) ? '1' : '0';
+        update_post_meta($post_id, '_cmx_beleg_is_brutto', $is_brutto);
+
+        $qr_enabled = isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0';
+        update_post_meta($post_id, '_cmx_beleg_qr_enabled', $qr_enabled);
+
+        // Select speichern
+        $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';
+        update_post_meta($post_id, '_cmx_beleg_mwst_term', $mwst_term_id);
+    } else {
+        update_post_meta($post_id, '_cmx_beleg_is_brutto', '0');
+        update_post_meta($post_id, '_cmx_beleg_qr_enabled', isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0');
+        update_post_meta($post_id, '_cmx_beleg_mwst_term', '');
+    }
 });

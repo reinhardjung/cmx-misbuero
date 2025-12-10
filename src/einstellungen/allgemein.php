@@ -13,6 +13,20 @@ function cmx_register_general_tab(): void {
 		'cmx_tab_general'
 	);
 
+	// MwSt-Pflicht Checkbox
+	\add_settings_field(
+		'mwst_pflichtig',
+		'MwSt-pflichtig J/N.',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'mwst_pflichtig',
+				'label' => 'Ja, MwSt wird ausgewiesen',
+			]);
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
 	// \add_settings_field(
 	// 	'qr_reference',
 	// 	'QR-Referenz (QRR)',

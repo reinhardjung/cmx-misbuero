@@ -127,6 +127,10 @@ $bank_name_safe = function_exists('esc_html') ? esc_html($bank_arr['bank_name'])
 $bank_iban_safe = function_exists('esc_html') ? esc_html($bank_arr['iban'])      : $bank_arr['iban'];
 $bank_bic_safe  = function_exists('esc_html') ? esc_html($bank_arr['bic'])       : $bank_arr['bic'];
 
+/* MwSt-Pflicht aus Einstellungen (robust) */
+$opts_general      = (array) get_option('cmx_einstellungen', []);
+$is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
+
 
 /* ============================================================
    NEU: Lieferschein → Spalten deaktivieren
@@ -371,7 +375,7 @@ $preTotalColspan = max(0, $colCount - 2);
 	</tbody>
 </table>
 
-<?php if (in_array(strtolower($beleg_type), ['angebot', 'rechnung', 'gutschrift'], true)) : ?>
+<?php if (!$is_mwst_pflichtig) : ?>
 	<table style="width:100%;">
 	<tr>
 		<td>Nicht mehrwertsteuerpflichtig (<a style="color:black; font-style:italic;" href="https://www.fedlex.admin.ch/eli/cc/2009/615/de">Art. 10 Abs. 2 lit. a MWSTG</a>)<br></td>

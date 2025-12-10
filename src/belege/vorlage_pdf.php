@@ -699,9 +699,17 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$fmt = ['currency'=>$opts['currency']??'CHF','decimals'=>2,'decimal'=>',','thousands'=>"'" ];
 
 		// Daten
+		$opts_general = (array) get_option('cmx_einstellungen', []);
+		$is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+
 		$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
 		$mwst_term_id = (int)get_post_meta($post_id, '_cmx_beleg_mwst_term', true);
 		$mwst = cmxbu_get_mwst_term_data($mwst_term_id);
+
+		if (!$is_mwst_pflichtig) {
+			$mwst['rate'] = 0.0;
+			$is_brutto = false;
+		}
 		$dates = cmxbu_beleg_get_dates($post_id);
 		$calc  = cmxbu_get_beleg_positionen_calc($post_id, [
 			'round_decimals'=>2,
@@ -775,6 +783,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'tax'=>$calc['tax_amount'],
 				'tax_rate'=>$mwst['rate'],
 				'is_brutto'=>$is_brutto,
+				'is_mwst_pflichtig'=>$is_mwst_pflichtig,
 			],
 			'me'=>$me,
 			'bank'=>$bank,

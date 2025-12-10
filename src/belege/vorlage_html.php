@@ -176,6 +176,7 @@ $totals = array_replace([
 	'tax'=>0.0,
 	'tax_rate'=>0.0,
 	'is_brutto'=>false,
+	'is_mwst_pflichtig'=>true,
 ], (array)($tpl['totals'] ?? []));
 
 /* ----------------------------------------------
@@ -193,6 +194,10 @@ $bank_name_safe = esc_html($bank_arr['bank_name']);
 $bank_iban_safe = esc_html($bank_arr['iban']);
 $bank_bic_safe  = esc_html($bank_arr['bic']);
 $qr_will_print  = !empty($tpl['qr']['will_print']);
+
+/* MwSt-Pflicht aus Einstellungen (robust auf unterschiedliche Keys) */
+$opts_general      = (array) get_option('cmx_einstellungen', []);
+$is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
 
 /* ----------------------------------------------
    Lieferschein → reduzierte Spalten
@@ -465,7 +470,7 @@ $preTotalColspan = max(0, $colCount - 2);
 	</tbody>
 </table>
 
-<?php if (in_array(strtolower($beleg_type), ['angebot', 'rechnung', 'gutschrift'], true)) : ?>
+<?php if (!$is_mwst_pflichtig) : ?>
 	<table style="width:100%;">
 	<tr>
 		<td>
@@ -488,7 +493,7 @@ $preTotalColspan = max(0, $colCount - 2);
 	</table>
 <?php endif; ?>
 
-<?php if (!$qr_will_print && strtolower($beleg_type) === 'rechnung'): ?>
+<?php if (!$qr_will_print && strtolower($beleg_type) === 'rechnung' && $totals['is_mwst_pflichtig']): ?>
 <!-- FOOTER -->
 <div class="footer" style="font-size:xx-small; color:grey;">
 	<table>
