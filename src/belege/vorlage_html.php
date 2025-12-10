@@ -153,6 +153,13 @@ $__compute_total = function(array $rows): float {
 	}
 	return $sum;
 };
+$totals = array_replace([
+	'net'=>0.0,
+	'gross'=>0.0,
+	'tax'=>0.0,
+	'tax_rate'=>0.0,
+	'is_brutto'=>false,
+], (array)($tpl['totals'] ?? []));
 
 /* ----------------------------------------------
    BANKDATEN
@@ -173,8 +180,9 @@ $bank_bic_safe  = esc_html($bank_arr['bic']);
    Lieferschein → reduzierte Spalten
    ---------------------------------------------- */
 $isLieferschein = (strtolower($beleg_type ?? '') === 'lieferschein');
+$hasDiscounts  = !empty($tpl['any_discount']);
 $showUnitPrice = !$isLieferschein;
-$showDiscount  = !$isLieferschein;
+$showDiscount  = !$isLieferschein && $hasDiscounts;
 ?>
 
 <!-- HEADER -->
@@ -378,23 +386,62 @@ $preTotalColspan = max(0, $colCount - 2);
 
 
 	<?php
-	$total_display = !empty($tpl['positions'])
-		? $__compute_total($tpl['positions'])
-		: (float)($tpl['document']['total'] ?? 0);
+	$total_display = (float)($totals['gross'] ?? 0);
+	if (abs($total_display) < 0.0000001) {
+		$total_display = !empty($tpl['positions'])
+			? $__compute_total($tpl['positions'])
+			: (float)($tpl['document']['total'] ?? 0);
+		$totals['gross'] = $total_display;
+	}
+
+	$showTaxRow      = ($totals['tax_rate'] ?? 0) > 0;
+	$tax_display     = (float)($totals['tax'] ?? 0);
+	$net_display     = (float)($totals['net'] ?? ($total_display - $tax_display));
+	$tax_rate_display = $showTaxRow
+		? rtrim(rtrim(number_format((float)$totals['tax_rate'] * 100, 2, $__fmt_dec, $__fmt_tho), '0'), $__fmt_dec)
+		: '';
 	?>
 
 	<?php if ($showUnitPrice): ?>
-	<tr>
-		<td colspan="<?= (int)$preTotalColspan ?>"></td>
+		<?php if ($showTaxRow && !$totals['is_brutto']): ?>
+		<tr>
+			<td colspan="<?= (int)$preTotalColspan ?>"></td>
 
-		<td>
-			<strong><?= esc_html($tpl['labels']['total'] ?? 'Gesamtbetrag'); ?></strong>
-		</td>
+			<td>
+				<strong>Zwischensumme</strong>
+			</td>
 
-		<td class="text-right">
-			<strong><?= esc_html($__fmt_minus($total_display)); ?></strong>
-		</td>
-	</tr>
+			<td class="text-right">
+				<strong><?= esc_html($__fmt_minus($net_display)); ?></strong>
+			</td>
+		</tr>
+		<?php endif; ?>
+
+		<?php if ($showTaxRow): ?>
+		<tr>
+			<td colspan="<?= (int)$preTotalColspan ?>"></td>
+
+			<td>
+				<strong>MwSt <?= esc_html($tax_rate_display); ?>%<?= $totals['is_brutto'] ? ' (enthalten)' : ''; ?></strong>
+			</td>
+
+			<td class="text-right">
+				<strong><?= esc_html($__fmt_minus($tax_display)); ?></strong>
+			</td>
+		</tr>
+		<?php endif; ?>
+
+		<tr>
+			<td colspan="<?= (int)$preTotalColspan ?>"></td>
+
+			<td>
+				<strong><?= esc_html($tpl['labels']['total'] ?? 'Gesamtbetrag'); ?><?= $showTaxRow ? ' inkl. MwSt' : ''; ?></strong>
+			</td>
+
+			<td class="text-right">
+				<strong><?= esc_html($__fmt_minus($total_display)); ?></strong>
+			</td>
+		</tr>
 	<?php endif; ?>
 
 	</tbody>

@@ -352,6 +352,65 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_article_belegtext')) {
 /** =========================
  * Positionen + Berechnung
  * ========================= */
+if (!function_exists(__NAMESPACE__.'\\cmxbu_parse_tax_rate')) {
+	/**
+	 * Versucht einen MwSt-Satz (z. B. "7.7%" oder "7,7") in Dezimalform (0.077) zu bringen.
+	 */
+	function cmxbu_parse_tax_rate($raw): float {
+		if ($raw === null) return 0.0;
+		$str = trim((string)$raw);
+		if ($str === '') return 0.0;
+
+		$str = str_replace(['\'', ' '], '', $str);
+		$str = str_replace(',', '.', $str);
+
+		if (preg_match('~([\\-−]?[0-9]+(?:\\.[0-9]+)?)\\s*%?~u', $str, $m)) {
+			$val = (float)$m[1];
+			return $val > 0 ? $val / 100 : 0.0;
+		}
+
+		return 0.0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__.'\\cmxbu_get_mwst_term_data')) {
+	/**
+	 * Holt Daten zum gewählten MwSt-Term (Rate in Dezimal, Label).
+	 */
+	function cmxbu_get_mwst_term_data(int $term_id): array {
+		$rate = 0.0;
+		$label = '';
+
+		if ($term_id > 0) {
+			$term = get_term($term_id, 'belege_mwst');
+			if (!is_wp_error($term) && $term instanceof \WP_Term) {
+				$label = (string)$term->name;
+
+				$sources = [
+					get_term_meta($term_id, 'mwst', true),
+					get_term_meta($term_id, 'mwst_rate', true),
+					get_term_meta($term_id, 'rate', true),
+					get_term_meta($term_id, 'steuer', true),
+					get_term_meta($term_id, 'tax_rate', true),
+					$term->description ?? '',
+					$term->slug ?? '',
+					$term->name ?? '',
+				];
+
+				foreach ($sources as $src) {
+					$rate = cmxbu_parse_tax_rate($src);
+					if ($rate > 0) break;
+				}
+			}
+		}
+
+		return [
+			'rate'  => $rate,
+			'label' => $label,
+		];
+	}
+}
+
 if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 	function cmxbu_get_beleg_positionen_calc(int $post_id, array $opts=[]): array {
 		$opts = array_replace([
@@ -359,6 +418,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			'round_lines'=>true,
 			'round_totals'=>true,
 			'currency'=>'CHF',
+			'tax_rate'=>0.0,      // Dezimal, z. B. 0.077
+			'is_brutto'=>false,   // Preise sind bereits inkl. MwSt
 		], $opts);
 
 		$raw = get_post_meta($post_id, '_cmx_beleg_positionen', true);
@@ -387,7 +448,17 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		};
 		$to_str = static function($v): string { return is_string($v) ? $v : ''; };
 
-		$out = ['positionen'=>[], 'subtotal'=>0.0, 'total'=>0.0, 'any_discount'=>false];
+		$out = [
+			'positionen'=>[],
+			'subtotal'=>0.0,
+			'total'=>0.0,
+			'any_discount'=>false,
+			'tax_rate'=>(float)$opts['tax_rate'],
+			'is_brutto'=>(bool)$opts['is_brutto'],
+			'tax_amount'=>0.0,
+			'net'=>0.0,
+			'gross'=>0.0,
+		];
 
 		foreach ($rows as $i=>$r) {
 			if (!is_array($r)) $r=['artikel_id'=>0,'menge'=>1,'preis'=>0.0,'rabatt'=>'','beschreibung'=>''];
@@ -495,7 +566,37 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		}
 
 		if (!empty($opts['round_totals'])) $out['subtotal'] = round($out['subtotal'], (int)$opts['round_decimals']);
-		$out['total'] = $out['subtotal']; // MwSt = 0
+
+		$rate     = max(0.0, (float)$opts['tax_rate']);
+		$isBrutto = !empty($opts['is_brutto']);
+
+		$net   = $out['subtotal'];
+		$gross = $out['subtotal'];
+		$tax   = 0.0;
+
+		if ($rate > 0) {
+			if ($isBrutto) {
+				$gross = $out['subtotal'];
+				$net   = $gross / (1 + $rate);
+				$tax   = $gross - $net;
+			} else {
+				$net   = $out['subtotal'];
+				$tax   = $net * $rate;
+				$gross = $net + $tax;
+			}
+
+			if (!empty($opts['round_totals'])) {
+				$net   = round($net, (int)$opts['round_decimals']);
+				$tax   = round($tax, (int)$opts['round_decimals']);
+				$gross = round($gross, (int)$opts['round_decimals']);
+			}
+		}
+
+		$out['net']        = $net;
+		$out['gross']      = $gross;
+		$out['tax_amount'] = $tax;
+		$out['subtotal']   = $net;
+		$out['total']      = $gross;
 		return $out;
 	}
 }
@@ -571,8 +672,18 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$fmt = ['currency'=>$opts['currency']??'CHF','decimals'=>2,'decimal'=>',','thousands'=>"'" ];
 
 		// Daten
+		$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
+		$mwst_term_id = (int)get_post_meta($post_id, '_cmx_beleg_mwst_term', true);
+		$mwst = cmxbu_get_mwst_term_data($mwst_term_id);
 		$dates = cmxbu_beleg_get_dates($post_id);
-		$calc  = cmxbu_get_beleg_positionen_calc($post_id, ['round_decimals'=>2,'round_lines'=>true,'round_totals'=>true,'currency'=>$fmt['currency']]);
+		$calc  = cmxbu_get_beleg_positionen_calc($post_id, [
+			'round_decimals'=>2,
+			'round_lines'=>true,
+			'round_totals'=>true,
+			'currency'=>$fmt['currency'],
+			'tax_rate'=>$mwst['rate'],
+			'is_brutto'=>$is_brutto,
+		]);
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
@@ -615,6 +726,19 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				];
 			}, $calc['positionen']),
 			'any_discount'=> (bool)($calc['any_discount'] ?? false),
+			'tax'=>[
+				'rate'=>$mwst['rate'],
+				'label'=>$mwst['label'],
+				'amount'=>$calc['tax_amount'],
+				'is_brutto'=>$is_brutto,
+			],
+			'totals'=>[
+				'net'=>$calc['net'],
+				'gross'=>$calc['gross'],
+				'tax'=>$calc['tax_amount'],
+				'tax_rate'=>$mwst['rate'],
+				'is_brutto'=>$is_brutto,
+			],
 			'me'=>$me,
 			'bank'=>$bank,
 		];
