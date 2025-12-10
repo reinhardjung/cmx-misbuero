@@ -64,7 +64,6 @@ function cmxbu_track_beleg_views() {
 	// fixme rju 2025-11-26: Evtl. wieder raus nehen?
 	// if (is_admin()) return;
 	if (!is_singular('belege')) return;
-
 	cmxbu_log_beleg_view(get_queried_object_id());
 }
 add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_track_beleg_views');
@@ -75,13 +74,17 @@ add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_track_beleg_views');
 add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_register_logfile_metabox');
 function cmxbu_register_logfile_metabox() {
 
-	// Aufrufzähler holen (Beispiel: aus Post-Meta)
-	$views = (int) get_post_meta(get_the_ID(), '_cmx_beleg_views', true);
+	$post = get_post();
+	if (!$post || $post->post_type !== 'belege') return;
+
+	$views = (int) get_post_meta($post->ID, '_cmx_beleg_views', true);
+	if ($views <= 0) return; // nur anzeigen, wenn es mindestens einen Log-Eintrag gibt
+
 	add_meta_box(
 		'cmxbu_logfile_box',
 		'' . esc_html($views) . ' Aufrufe',
 		__NAMESPACE__ . '\\cmxbu_render_logfile_metabox',
-		'belege',
+		$post->post_type,
 		'side',
 		'default'
 	);
