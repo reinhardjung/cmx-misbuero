@@ -306,3 +306,39 @@ function cmx_artikel_waehrung_label_map(): array {
 	echo '});';
 	echo '</script>';
 });
+
+// Nie direkt löschen: immer erst in den Papierkorb (gilt für alle Post Types)
+// Nie direkt löschen: immer erst in den Papierkorb (gilt für alle Post Types)
+\add_filter('pre_delete_post', function ($null, \WP_Post $post, bool $force_delete) {
+	if ($force_delete && $post->post_status !== 'trash') {
+		// Schicke in den Papierkorb statt hart zu löschen
+		\wp_trash_post($post->ID);
+		return true; // Short-circuit hard delete
+	}
+	return $null;
+}, 10, 3);
+
+// Admin-Hinweis korrigieren: "endgültig gelöscht" → "in den Papierkorb verschoben"
+\add_action('admin_init', function() {
+	if (!\is_admin()) return;
+	if (isset($_GET['deleted']) && !isset($_GET['trashed'])) {
+		// Übersetze deleted-Marker in "trashed", damit WP die richtige Meldung zeigt
+		$_GET['trashed'] = (int) $_GET['deleted'];
+		unset($_GET['deleted']);
+	}
+});
+
+// Bulk-/Listen-Meldungen überschreiben (für alle Post Types)
+\add_filter('bulk_post_updated_messages', function(array $bulk_messages, array $bulk_counts): array {
+	foreach ($bulk_messages as $post_type => $messages) {
+		if (isset($bulk_counts['deleted']) && $bulk_counts['deleted'] > 0) {
+			$bulk_messages[$post_type]['deleted'] = _n(
+				'%s Beitrag in den Papierkorb verschoben.',
+				'%s Beiträge in den Papierkorb verschoben.',
+				$bulk_counts['deleted'],
+				'default'
+			);
+		}
+	}
+	return $bulk_messages;
+}, 10, 2);
