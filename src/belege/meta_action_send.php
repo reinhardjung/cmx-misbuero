@@ -13,9 +13,10 @@ function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
 	if ($has_pdf) {
 		$href = \esc_url(\admin_url("admin-post.php?action=cmxbu_beleg_send&post_id={$post_id}"));
 		echo '<a href="' . $href . '" class="button button-secondary alignleft">versenden</a>';
-	} else {
-		echo '<a href="#" class="button button-secondary alignleft disabled" style="pointer-events:none;opacity:0.5;">versenden</a>';
 	}
+	// else {
+	// 	echo '<a href="#" class="button button-secondary alignleft disabled" style="pointer-events:none;opacity:0.5;">versenden</a>';
+	// }
 }
 
 

@@ -12,17 +12,20 @@ if (!defined('CMX_UPLOADS_MISBUERO')) {
 /**
  * Meta-Box "Für Kunde..."
  */
-add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_add_beleg_metabox');
-function cmxbu_add_beleg_metabox(): void {
-	add_meta_box(
-		'cmx_beleg_download',
-		__('F&uuml;r Kunde...', 'default'),
-		__NAMESPACE__ . '\\cmxbu_render_beleg_metabox',
-		'belege',
-		'side',
-		'high'
-	);
+if (isset($_GET['post'])) {
+	add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_add_beleg_metabox');
+	function cmxbu_add_beleg_metabox(): void {
+		add_meta_box(
+			'cmx_beleg_download',
+			__('F&uuml;r Kunde...', 'default'),
+			__NAMESPACE__ . '\\cmxbu_render_beleg_metabox',
+			'belege',
+			'side',
+			'high'
+		);
+	}
 }
+
 
 /**
  * Wrapper, rendert beide Bereiche (Senden + Download/Copy)
