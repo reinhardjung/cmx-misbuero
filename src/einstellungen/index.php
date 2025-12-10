@@ -225,6 +225,21 @@ add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 		'eisen_enabled',
 	];
 
+	// Wenn im Request genau eine Bank angehakt wurde, alle anderen deaktivieren.
+	$posted = $_POST[CMX_SETTINGS_MAIN] ?? [];
+	$requestedActive = null;
+	foreach ($bank_keys as $k) {
+		if (isset($posted[$k]) && !empty($posted[$k])) {
+			$requestedActive = $k;
+		}
+	}
+	if ($requestedActive !== null) {
+		foreach ($bank_keys as $k) {
+			$new[$k] = ($k === $requestedActive) ? 1 : 0;
+		}
+		return $new;
+	}
+
 	$active = [];
 	foreach ($bank_keys as $k) {
 		if (!empty($new[$k])) {

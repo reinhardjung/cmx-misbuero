@@ -91,6 +91,10 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * 2) Beträge & Adressen
      * ---------------------------------------------------------------- */
     $iban   = trim((string) ($tpl['bank']['iban'] ?? ''));
+    if ($iban === '') {
+        // Ohne IBAN kein QR-Code auf dem Beleg
+        return;
+    }
     $amount = (float) ($tpl['document']['total'] ?? 0);
     // EMV braucht Punkt, KEINE Tausendertrennzeichen
     $betrag_emv = number_format($amount, 2, '.', '');

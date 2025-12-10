@@ -31,6 +31,31 @@ function cmx_section_eisen_desc(): void {
 }
 
 /* ------------------------------------------------------------
+ * FELDER (Banken)
+ * ------------------------------------------------------------ */
+if (!function_exists(__NAMESPACE__ . '\\cmx_field_qr_mode')) {
+	function cmx_field_qr_mode(array $args): void {
+		$key = $args['key'];
+		$options = get_option(CMX_SETTINGS_MAIN, []);
+		$val = strtoupper((string)($options[$key] ?? 'NON'));
+		$name = CMX_SETTINGS_MAIN . '[' . $key . ']';
+
+		echo '<select name="'.esc_attr($name).'">';
+		$opts = ['NON' => 'Ohne Referenz (NON)', 'QRR' => 'QR-Referenz (QRR)'];
+		foreach ($opts as $code => $label) {
+			printf(
+				'<option value="%s"%s>%s</option>',
+				esc_attr($code),
+				selected($val, $code, false),
+				esc_html($label)
+			);
+		}
+		echo '</select>';
+		echo '<p class="description" style="margin-top:4px;">NON = keine QR-Referenz, QRR = mit Referenznummer.</p>';
+	}
+}
+
+/* ------------------------------------------------------------
  * SETTINGS-FELDER REGISTRIEREN
  * ------------------------------------------------------------ */
 add_action('admin_init', __NAMESPACE__ . '\\cmx_register_banken_tab');
@@ -59,6 +84,21 @@ function cmx_register_banken_tab(): void {
 	add_settings_field('rev_iban', 'IBAN',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev',
 		['key' => 'rev_iban', 'placeholder' => 'LTxx xxxx xxxx xxxx xxxx x']
+	);
+
+	add_settings_field('rev_bic', 'BIC / SWIFT',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev',
+		['key' => 'rev_bic', 'placeholder' => 'REVOGB21XXX']
+	);
+
+	add_settings_field('rev_qr_mode', 'QR-Modus',
+		__NAMESPACE__ . '\\cmx_field_qr_mode', $page, 'cmx_sec_banken_rev',
+		['key' => 'rev_qr_mode']
+	);
+
+	add_settings_field('rev_qr_reference', 'QR-Referenz',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev',
+		['key' => 'rev_qr_reference', 'placeholder' => 'z. B. 210000000003139471430009017']
 	);
 
 	add_settings_field('rev_api', 'API Key',
@@ -91,6 +131,21 @@ function cmx_register_banken_tab(): void {
 		['key' => 'zkb_iban', 'placeholder' => 'CHxx xxxx xxxx xxxx xxxx x']
 	);
 
+	add_settings_field('zkb_bic', 'BIC / SWIFT',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
+		['key' => 'zkb_bic', 'placeholder' => 'ZKBKCHZZ80A']
+	);
+
+	add_settings_field('zkb_qr_mode', 'QR-Modus',
+		__NAMESPACE__ . '\\cmx_field_qr_mode', $page, 'cmx_sec_banken_zkb',
+		['key' => 'zkb_qr_mode']
+	);
+
+	add_settings_field('zkb_qr_reference', 'QR-Referenz',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
+		['key' => 'zkb_qr_reference', 'placeholder' => 'z. B. 210000000003139471430009017']
+	);
+
 	add_settings_field('zkb_api', 'API Key / Referenz',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
 		['key' => 'zkb_api', 'placeholder' => 'Optionale interne Kennung']
@@ -118,6 +173,21 @@ function cmx_register_banken_tab(): void {
 	add_settings_field('ubs_iban', 'IBAN / QR-IBAN',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_ubs',
 		['key' => 'ubs_iban', 'placeholder' => 'CHxx xxxx xxxx xxxx xxxx x']
+	);
+
+	add_settings_field('ubs_bic', 'BIC / SWIFT',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_ubs',
+		['key' => 'ubs_bic', 'placeholder' => 'UBSWCHZH80A']
+	);
+
+	add_settings_field('ubs_qr_mode', 'QR-Modus',
+		__NAMESPACE__ . '\\cmx_field_qr_mode', $page, 'cmx_sec_banken_ubs',
+		['key' => 'ubs_qr_mode']
+	);
+
+	add_settings_field('ubs_qr_reference', 'QR-Referenz',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_ubs',
+		['key' => 'ubs_qr_reference', 'placeholder' => 'z. B. 210000000003139471430009017']
 	);
 
 	add_settings_field('ubs_api', 'API Key / Referenz',
@@ -149,6 +219,21 @@ function cmx_register_banken_tab(): void {
 		['key' => 'migros_iban', 'placeholder' => 'CHxx xxxx xxxx xxxx xxxx x']
 	);
 
+	add_settings_field('migros_bic', 'BIC / SWIFT',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_migros',
+		['key' => 'migros_bic', 'placeholder' => 'MIGRCHZZXXX']
+	);
+
+	add_settings_field('migros_qr_mode', 'QR-Modus',
+		__NAMESPACE__ . '\\cmx_field_qr_mode', $page, 'cmx_sec_banken_migros',
+		['key' => 'migros_qr_mode']
+	);
+
+	add_settings_field('migros_qr_reference', 'QR-Referenz',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_migros',
+		['key' => 'migros_qr_reference', 'placeholder' => 'z. B. 210000000003139471430009017']
+	);
+
 	add_settings_field('migros_api', 'API Key / Referenz',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_migros',
 		['key' => 'migros_api', 'placeholder' => 'Optionale interne Kennung']
@@ -178,6 +263,21 @@ function cmx_register_banken_tab(): void {
 		['key' => 'eisen_iban', 'placeholder' => 'CHxx xxxx xxxx xxxx xxxx x']
 	);
 
+	add_settings_field('eisen_bic', 'BIC / SWIFT',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
+		['key' => 'eisen_bic', 'placeholder' => 'RAIFCH22XXX']
+	);
+
+	add_settings_field('eisen_qr_mode', 'QR-Modus',
+		__NAMESPACE__ . '\\cmx_field_qr_mode', $page, 'cmx_sec_banken_eisen',
+		['key' => 'eisen_qr_mode']
+	);
+
+	add_settings_field('eisen_qr_reference', 'QR-Referenz',
+		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
+		['key' => 'eisen_qr_reference', 'placeholder' => 'z. B. 210000000003139471430009017']
+	);
+
 	add_settings_field('eisen_api', 'API Key / Referenz',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
 		['key' => 'eisen_api', 'placeholder' => 'Optionale interne Kennung']
@@ -195,6 +295,9 @@ function cmx_get_active_bank(): ?array {
 			'name'    => cmx_get_option('rev_bank_name'),
 			'recipient' => cmx_get_option('rev_recipient'),
 			'iban'    => cmx_get_option('rev_iban'),
+			'bic'     => cmx_get_option('rev_bic'),
+			'qr_mode'      => cmx_get_option('rev_qr_mode'),
+			'qr_reference' => cmx_get_option('rev_qr_reference'),
 			'api'     => cmx_get_option('rev_api'),
 			'label'   => 'Revolut',
 			'qr_supported' => false,
@@ -204,6 +307,9 @@ function cmx_get_active_bank(): ?array {
 			'name'    => cmx_get_option('zkb_bank_name'),
 			'recipient' => cmx_get_option('zkb_recipient'),
 			'iban'    => cmx_get_option('zkb_iban'),
+			'bic'     => cmx_get_option('zkb_bic'),
+			'qr_mode'      => cmx_get_option('zkb_qr_mode'),
+			'qr_reference' => cmx_get_option('zkb_qr_reference'),
 			'api'     => cmx_get_option('zkb_api'),
 			'label'   => 'ZKB',
 			'qr_supported' => true,
@@ -213,6 +319,9 @@ function cmx_get_active_bank(): ?array {
 			'name'    => cmx_get_option('ubs_bank_name'),
 			'recipient' => cmx_get_option('ubs_recipient'),
 			'iban'    => cmx_get_option('ubs_iban'),
+			'bic'     => cmx_get_option('ubs_bic'),
+			'qr_mode'      => cmx_get_option('ubs_qr_mode'),
+			'qr_reference' => cmx_get_option('ubs_qr_reference'),
 			'api'     => cmx_get_option('ubs_api'),
 			'label'   => 'UBS',
 			'qr_supported' => true,
@@ -222,6 +331,9 @@ function cmx_get_active_bank(): ?array {
 			'name'    => cmx_get_option('migros_bank_name'),
 			'recipient' => cmx_get_option('migros_recipient'),
 			'iban'    => cmx_get_option('migros_iban'),
+			'bic'     => cmx_get_option('migros_bic'),
+			'qr_mode'      => cmx_get_option('migros_qr_mode'),
+			'qr_reference' => cmx_get_option('migros_qr_reference'),
 			'api'     => cmx_get_option('migros_api'),
 			'label'   => 'Migros Bank',
 			'qr_supported' => true,
@@ -231,6 +343,9 @@ function cmx_get_active_bank(): ?array {
 			'name'    => cmx_get_option('eisen_bank_name'),
 			'recipient' => cmx_get_option('eisen_recipient'),
 			'iban'    => cmx_get_option('eisen_iban'),
+			'bic'     => cmx_get_option('eisen_bic'),
+			'qr_mode'      => cmx_get_option('eisen_qr_mode'),
+			'qr_reference' => cmx_get_option('eisen_qr_reference'),
 			'api'     => cmx_get_option('eisen_api'),
 			'label'   => 'Raiffeisen',
 			'qr_supported' => true,
