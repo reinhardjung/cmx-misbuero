@@ -8,6 +8,7 @@ const CMX_DOK_REL_META = [
 	'kontakte'    => 'cmx_dokumente_kunden',
 	'projekte'    => 'cmx_dokumente_projekte',
 	'buchhaltung' => 'cmx_dokumente_buchhaltung',
+	'belege'      => 'cmx_dokumente_belege',
 ];
 
 \add_action('add_meta_boxes', function() {
@@ -30,6 +31,7 @@ function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
 		'kontakte'    => ['label' => 'Kontakte',    'meta' => CMX_DOK_REL_META['kontakte']],
 		'projekte'    => ['label' => 'Projekte',    'meta' => CMX_DOK_REL_META['projekte']],
 		'buchhaltung' => ['label' => 'Buchhaltung', 'meta' => CMX_DOK_REL_META['buchhaltung']],
+		'belege'      => ['label' => 'Belege',      'meta' => CMX_DOK_REL_META['belege']],
 	];
 
 	$printed_js = false;
