@@ -79,7 +79,7 @@ function cmx_cpt_custom_title_placeholder(string $placeholder, \WP_Post $post): 
 
 function cmx_artikel_never_ask_beforeunload(): void {
 	$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
-	if (!$screen || $screen->post_type !== 'artikel') return; ?>
+	if (!$screen) return; ?>
 	<script>
 	(function(){
 		// ---------- 1) Sofort bestehende Zuweisungen neutralisieren ----------

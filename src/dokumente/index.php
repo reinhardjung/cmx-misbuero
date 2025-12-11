@@ -3,7 +3,7 @@
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 70, 'supports' => ['title', 'editor', 'thumbnail'], 'public' => true, 'menu_icon' => 'dashicons-businessman', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+	'menu_position' => 70, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-businessman', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 
@@ -34,10 +34,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHAL
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'modules,status,validity,admincolumns');
-// require_once __DIR__ . '/modules.php';
-// require_once __DIR__ . '/status.php';
-// require_once __DIR__ . '/validity.php';
+cmx_require_files(__DIR__,'modules,status,validity,admincolumns,features_image');
 
 
 /**

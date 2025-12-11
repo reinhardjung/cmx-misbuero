@@ -8,7 +8,7 @@
 		'cmx_modules'    => 'Zugeordnete Module',
 		'cmx_cats'       => 'Kategorien',
 	];
-	$preview = ['cmx_thumb' => 'Vorschau'];
+	$preview = ['cmx_thumb' => 'Anhang'];
 
 	$new = [];
 	foreach ($cols as $key => $label) {
@@ -25,9 +25,17 @@
 \add_action('manage_dokumente_posts_custom_column', function($col, $post_id) {
 	switch ($col) {
 		case 'cmx_thumb':
+			$local = get_post_meta($post_id, '_cmx_local_image_dokumente_url', true);
 			$thumb = get_the_post_thumbnail($post_id, [60,60], ['style'=>'width:60px;height:60px;object-fit:cover;']);
-			// echo $thumb ?: '&mdash;';
-			echo $thumb ?: '';
+			if ($local) {
+				// echo '<img src="'.esc_url($local).'" style="width:60px;height:60px;object-fit:cover;border:1px solid #ddd;padding:2px;background:#fff;" alt="" />';
+				echo ' <span class="dashicons dashicons-yes" title="Bild vorhanden"></span>';
+			} elseif ($thumb) {
+				echo $thumb;
+				echo ' <span class="dashicons dashicons-yes" title="Bild vorhanden"></span>';
+			} else {
+				echo '';
+			}
 			break;
 		case 'cmx_status':
 			$val = get_post_meta($post_id, CMX_DOK_STATUS_META, true);
