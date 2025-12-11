@@ -34,9 +34,11 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHAL
 
 
 // Include: @ll metaboxes
-// cmx_require_files(__DIR__,'stammdaten,kommunikation,adressen,infos,anhaenge,admincolumns,stufen,exports,sichern');
-require_once __DIR__ . '/modules.php';
-require_once __DIR__ . '/status.php';
+cmx_require_files(__DIR__,'modules,status,validity,admincolumns');
+// require_once __DIR__ . '/modules.php';
+// require_once __DIR__ . '/status.php';
+// require_once __DIR__ . '/validity.php';
+
 
 /**
  * Wenn ein Dokument ein Beitragsbild erhält und noch keinen Titel hat,
