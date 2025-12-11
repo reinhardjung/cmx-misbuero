@@ -271,7 +271,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'"></p>';
 
 	echo '<p><label><strong>Beschreibung</strong></label><br>';
-	echo '<textarea name="cmx_beleg_beschreibung" rows="5">'.\esc_textarea($beschreibung).'</textarea></p>';
+	echo '<textarea name="cmx_beleg_beschreibung" rows="6">'.\esc_textarea($beschreibung).'</textarea></p>';
 	echo '</div>';
 
 	/* --- rechte Spalte --- */
