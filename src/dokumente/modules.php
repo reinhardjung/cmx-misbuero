@@ -1,0 +1,100 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+/**
+ * Metabox: Zugehörige Datensätze (1..n) aus den Modulen auswählen.
+ */
+const CMX_DOK_REL_META = [
+	'artikel'     => 'cmx_dokumente_artikel',
+	'kontakte'    => 'cmx_dokumente_kunden',
+	'projekte'    => 'cmx_dokumente_projekte',
+	'buchhaltung' => 'cmx_dokumente_buchhaltung',
+];
+
+\add_action('add_meta_boxes', function() {
+	$cpt = basename(__DIR__);
+	\add_meta_box(
+		'cmx_dokumente_modules',
+		'Zuordnung',
+		__NAMESPACE__ . '\\cmx_render_dokumente_modules_metabox',
+		$cpt,
+		'side',
+		'default'
+	);
+});
+
+function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
+	wp_nonce_field('cmx_dokumente_modules_save', 'cmx_dokumente_modules_nonce');
+
+	$map = [
+		'artikel'     => ['label' => 'Artikel',     'meta' => CMX_DOK_REL_META['artikel']],
+		'kontakte'    => ['label' => 'Kontakte',    'meta' => CMX_DOK_REL_META['kontakte']],
+		'projekte'    => ['label' => 'Projekte',    'meta' => CMX_DOK_REL_META['projekte']],
+		'buchhaltung' => ['label' => 'Buchhaltung', 'meta' => CMX_DOK_REL_META['buchhaltung']],
+	];
+
+	foreach ($map as $cpt => $cfg) {
+		$selected = array_map('intval', (array) get_post_meta($post->ID, $cfg['meta'], true));
+		$options  = cmx_dok_fetch_related_posts($cpt);
+		?>
+		<p style="margin: 12px 0 6px;"><strong><?php echo esc_html($cfg['label']); ?></strong></p>
+		<select name="cmx_dokumente_rel[<?php echo esc_attr($cpt); ?>][]" multiple style="width:100%;height:200px;overflow:auto;">
+			<?php foreach ($options as $opt): ?>
+				<option value="<?php echo esc_attr($opt['id']); ?>" <?php selected(in_array($opt['id'], $selected, true)); ?>>
+					<?php echo esc_html($opt['title']); ?>
+				</option>
+			<?php endforeach; ?>
+		</select>
+		<?php
+	}
+}
+
+/**
+ * Liefert eine flache Optionsliste für einen CPT (begrenzte Anzahl für Performance).
+ */
+function cmx_dok_fetch_related_posts(string $cpt): array {
+	$posts = get_posts([
+		'post_type'      => $cpt,
+		'posts_per_page' => 200,
+		'post_status'    => ['publish', 'draft', 'pending', 'private'],
+		'orderby'        => 'title',
+		'order'          => 'ASC',
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+	]);
+
+	$out = [];
+	foreach ($posts as $pid) {
+		$out[] = [
+			'id'    => $pid,
+			'title' => get_the_title($pid) ?: ('#' . $pid),
+		];
+	}
+	return $out;
+}
+
+\add_action('save_post_' . basename(__DIR__), function(int $post_id) {
+	if (!isset($_POST['cmx_dokumente_modules_nonce']) || !wp_verify_nonce($_POST['cmx_dokumente_modules_nonce'], 'cmx_dokumente_modules_save')) {
+		return;
+	}
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+		return;
+	}
+	if (!current_user_can('edit_post', $post_id)) {
+		return;
+	}
+
+	$rel = isset($_POST['cmx_dokumente_rel']) && is_array($_POST['cmx_dokumente_rel'])
+		? $_POST['cmx_dokumente_rel']
+		: [];
+
+	foreach (CMX_DOK_REL_META as $cpt => $meta_key) {
+		$ids = isset($rel[$cpt]) && is_array($rel[$cpt]) ? array_map('intval', $rel[$cpt]) : [];
+		$ids = array_values(array_filter(array_unique($ids)));
+
+		if (empty($ids)) {
+			delete_post_meta($post_id, $meta_key);
+		} else {
+			update_post_meta($post_id, $meta_key, $ids);
+		}
+	}
+});

@@ -12,8 +12,9 @@ define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien');
 
 
 // Define: CONST 4 each Taxo
-cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMENTE);
-// cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), constant('CMX_TAX_'.strtoupper(basename(__DIR__))));
+cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHALTUNG);
+// cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), const('\\CMX_TAX_'.strtoupper(basename(__DIR__))));
+// var_dump(CMX_TAX_BUCHHALTUNG); exit;
 
 
 // Create: @ll Taxos
@@ -24,7 +25,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMEN
 
 // Refill: Taxo with defaults if removed
 \add_action('admin_init', function () {
-	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_DOKUMENTE);
+	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_BUCHHALTUNG);
 });
 
 
@@ -34,3 +35,44 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMEN
 
 // Include: @ll metaboxes
 // cmx_require_files(__DIR__,'stammdaten,kommunikation,adressen,infos,anhaenge,admincolumns,stufen,exports,sichern');
+require_once __DIR__ . '/modules.php';
+require_once __DIR__ . '/status.php';
+
+/**
+ * Wenn ein Dokument ein Beitragsbild erhält und noch keinen Titel hat,
+ * wird der (sanitisierte, kleingeschriebene) Dateiname des Bildes als Titel gesetzt.
+ */
+function cmx_dokumente_autofill_title(int $post_id, \WP_Post $post): void {
+	if ($post->post_type !== 'dokumente') return;
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (wp_is_post_revision($post_id)) return;
+	if (!current_user_can('edit_post', $post_id)) return;
+
+	if (trim((string) $post->post_title) !== '') return; // Titel existiert bereits
+
+	$thumb_id = (int) get_post_thumbnail_id($post_id);
+	if (!$thumb_id) return;
+
+	$filename = '';
+	$path = get_attached_file($thumb_id);
+	if ($path) {
+		$filename = pathinfo($path, PATHINFO_FILENAME);
+	}
+	if ($filename === '') {
+		$att = get_post($thumb_id);
+		$filename = $att?->post_title ?? '';
+	}
+
+	$filename = strtolower($filename);
+	$filename = str_replace(['_', '-'], ' ', $filename);
+	$filename = sanitize_text_field($filename);
+	if ($filename === '') return;
+
+	remove_action('save_post_dokumente', __NAMESPACE__ . '\\cmx_dokumente_autofill_title', 10);
+	wp_update_post([
+		'ID'         => $post_id,
+		'post_title' => $filename,
+	]);
+	add_action('save_post_dokumente', __NAMESPACE__ . '\\cmx_dokumente_autofill_title', 10, 2);
+}
+\add_action('save_post_dokumente', __NAMESPACE__ . '\\cmx_dokumente_autofill_title', 10, 2);

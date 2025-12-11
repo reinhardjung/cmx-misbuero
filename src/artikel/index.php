@@ -37,7 +37,7 @@ cmx_define_meta_constants(basename(__DIR__), 'sku,ek,vk,marge,waehrungen,verkauf
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,anhaenge,qr-code,exports,imports,notizen,infos');
+cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,qr-code,exports,imports,notizen,infos,dokumente');
 
 // CMX_TAX_BELEGE_KATEGORIEN?
 // cmx_show_consts(); exit;
