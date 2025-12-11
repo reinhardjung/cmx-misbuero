@@ -36,3 +36,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHAL
 
 // Include: @ll metaboxes
 // cmx_require_files(__DIR__,'stammdaten,kommunikation,adressen,infos,anhaenge,admincolumns,stufen,exports,sichern');
+cmx_require_files(__DIR__,'dokumente,sichern');
