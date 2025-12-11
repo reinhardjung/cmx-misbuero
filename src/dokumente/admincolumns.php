@@ -5,6 +5,7 @@
 		'cmx_status'     => 'Status',
 		'cmx_valid_from' => 'Gültig von',
 		'cmx_valid_to'   => 'Gültig bis',
+		'cmx_modules'    => 'Zugeordnete Module',
 		'cmx_cats'       => 'Kategorien',
 	];
 	$preview = ['cmx_thumb' => 'Vorschau'];
@@ -55,6 +56,16 @@
 			if (!is_wp_error($terms) && !empty($terms)) {
 				echo esc_html(implode(', ', wp_list_pluck($terms, 'name')));
 			} // else { echo '&mdash;'; }
+			break;
+		case 'cmx_modules':
+			$map = defined(__NAMESPACE__ . '\\CMX_DOK_REL_META') ? CMX_DOK_REL_META : [];
+			$total = 0;
+			foreach ($map as $meta_key) {
+				$ids = (array) get_post_meta($post_id, $meta_key, true);
+				$total += count(array_filter(array_map('intval', $ids)));
+			}
+			// echo $total ? esc_html($total) : '&mdash;';
+			echo $total ? esc_html($total) : '';
 			break;
 	}
 }, 10, 2);
