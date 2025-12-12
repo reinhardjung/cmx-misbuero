@@ -56,6 +56,16 @@ function cmx65_adminbar($wp_admin_bar) {
 	]);
 
 	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_videos_id',
+		'title' => 'YouTube',
+		'href'  => 'https://www.youtube.com/@MisBuero',
+		'meta'  => [
+			'title'  => __('Mehr über Mis Büro erfahren...', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_roadmap',
 		'title' => 'Roadmap',
 		'href'  => 'https://misbuero.ch/roadmap/',
