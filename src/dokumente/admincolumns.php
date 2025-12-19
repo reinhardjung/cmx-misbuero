@@ -40,7 +40,7 @@
 		case 'cmx_status':
 			$val = get_post_meta($post_id, CMX_DOK_STATUS_META, true);
 			$options = CMX_DOK_STATUS_OPTIONS ?? [];
-			echo $val && isset($options[$val]) ? esc_html($options[$val]) : '&mdash;';
+			echo $val && isset($options[$val]) ? esc_html($options[$val]) : '';
 			break;
 		case 'cmx_valid_from':
 			$val = get_post_meta($post_id, CMX_DOK_VALID_FROM, true);
