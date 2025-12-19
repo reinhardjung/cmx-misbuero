@@ -31,20 +31,22 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$einheiten   = cmx_get_terms_safe(TAX_ARTIKEL_EINHEITEN);
 
 	echo '<style>
-		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:nowrap}
-		.cmx-price-row .cmx-f{display:flex;flex-direction:column;min-width:140px}
-		.cmx-price-row .cmx-f--xs{min-width:100px;max-width:140px}
-		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px}
-		.cmx-price-row .cmx-f--md{min-width:220px;max-width:300px}
-		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px}
-		.cmx-price-row .cmx-f--half{min-width:130px;max-width:150px}
+		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+		.cmx-price-row .cmx-f{display:flex;flex-direction:column;min-width:140px;flex:1 1 180px;max-width:320px}
+		.cmx-price-row .cmx-f--xs{min-width:110px;max-width:160px;flex:1 1 140px}
+		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px;flex:1 1 180px}
+		.cmx-price-row .cmx-f--md{min-width:220px;max-width:320px;flex:1 1 220px}
+		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px;flex:1 1 260px}
+		.cmx-price-row .cmx-f--half{min-width:130px;max-width:180px;flex:1 1 140px}
 		.cmx-price-row .cmx-f label{font-weight:600;margin-bottom:4px}
 		.cmx-price-row .cmx-f input[type="number"],
 		.cmx-price-row .cmx-f input[type="text"],
 		.cmx-price-row .cmx-f select{width:100%}
-		.cmx-price-row .cmx-check{display:flex;align-items:center;margin-left:8px;white-space:nowrap}
+		.cmx-price-row .cmx-check{display:flex;align-items:center;margin-left:8px;white-space:nowrap;flex:1 1 160px}
 		@media (max-width: 1200px){
-			.cmx-price-row{flex-wrap:wrap}
+			.cmx-price-row{gap:10px}
+			.cmx-price-row .cmx-f{max-width:100%}
+			.cmx-price-row .cmx-check{margin-left:0;margin-top:6px}
 		}
 	</style>';
 

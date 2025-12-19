@@ -180,20 +180,57 @@ add_action('init', function () {
 
 		if ($node instanceof DAV\ICollection) {
 
-			$children = iterator_to_array($node->getChildren());
-			$base     = rtrim($server->getBaseUri(), '/');
+			$childrenRaw = iterator_to_array($node->getChildren());
+			$base        = rtrim($server->getBaseUri(), '/');
 
-			/**
-			 * NEU (A): Sortierung alphabetisch absteigend.
-			 * Ordner weiterhin vor Dateien; innerhalb beider Gruppen Z->A.
-			 */
+			// Sortier-Parameter einlesen
+			$sort = isset($q['sort']) && in_array($q['sort'], ['name','size','mtime'], true) ? $q['sort'] : 'name';
+			$dir  = isset($q['dir'])  && in_array(strtolower((string)$q['dir']), ['asc','desc'], true) ? strtolower((string)$q['dir']) : 'asc';
+			$sortParams = ($sort !== 'name' || $dir !== 'asc') ? ['sort'=>$sort, 'dir'=>$dir] : [];
+			$sortQuery  = $sortParams ? '?' . http_build_query($sortParams) : '';
 
-			// Sortierung: Ordner zuerst, dann Dateien; jeweils A->Z (aufsteigend)
-			usort($children, function($a, $b){
-				$isDirA = $a instanceof DAV\ICollection;
-				$isDirB = $b instanceof DAV\ICollection;
-				if ($isDirA !== $isDirB) return $isDirA ? -1 : 1;
-				return strnatcasecmp($a->getName(), $b->getName()); // aufsteigend
+			// Children inkl. Metadaten aufbereiten
+			$children = [];
+			foreach ($childrenRaw as $child) {
+				$isDir = $child instanceof DAV\ICollection;
+				$sizeBytes = null;
+				$mtimeTs   = null;
+
+				if (!$isDir && method_exists($child, 'getSize')) {
+					try { $sizeBytes = (int) $child->getSize(); } catch (\Throwable $e) { $sizeBytes = null; }
+				}
+				if (method_exists($child, 'getLastModified')) {
+					try { $mtimeTs = (int) $child->getLastModified(); } catch (\Throwable $e) { $mtimeTs = null; }
+				}
+
+				$children[] = [
+					'node'      => $child,
+					'isDir'     => $isDir,
+					'name'      => $child->getName(),
+					'sizeBytes' => $sizeBytes,
+					'mtimeTs'   => $mtimeTs,
+				];
+			}
+
+			usort($children, function($a, $b) use ($sort, $dir) {
+				// Ordner immer vor Dateien
+				if ($a['isDir'] !== $b['isDir']) return $a['isDir'] ? -1 : 1;
+
+				$mult = ($dir === 'desc') ? -1 : 1;
+
+				if ($sort === 'size') {
+					$sa = $a['sizeBytes'] ?? -1;
+					$sb = $b['sizeBytes'] ?? -1;
+					if ($sa !== $sb) return ($sa <=> $sb) * $mult;
+				}
+				elseif ($sort === 'mtime') {
+					$ma = $a['mtimeTs'] ?? -1;
+					$mb = $b['mtimeTs'] ?? -1;
+					if ($ma !== $mb) return ($ma <=> $mb) * $mult;
+				}
+
+				// Fallback: Name
+				return strnatcasecmp($a['name'], $b['name']) * $mult;
 			});
 
 			// Breadcrumbs
@@ -203,7 +240,7 @@ add_action('init', function () {
 			$crumbs[] = '<a href="'.cmx_dav_h($base).'">/</a>';
 			foreach ($segments as $seg) {
 				$accum = trim($accum.'/'.$seg, '/');
-				$crumbs[] = '<span class="sep">›</span><a href="'.cmx_dav_h(cmx_dav_join_uri($base, $accum)).'/">'.cmx_dav_h($seg).'</a>';
+				$crumbs[] = '<span class="sep">›</span><a href="'.cmx_dav_h(cmx_dav_join_uri($base, $accum)).'/'.cmx_dav_h($sortQuery).'">'.cmx_dav_h($seg).'</a>';
 			}
 
 			// Aktuelle Ordner-URL (ohne ?zip)
@@ -221,15 +258,31 @@ add_action('init', function () {
 			$rows = '';
 			if (!empty($segments)) {
 				$parent = array_slice($segments, 0, -1);
-				$parentHref = cmx_dav_h(cmx_dav_join_uri($base, implode('/', $parent))).'/';
+				$parentHref = cmx_dav_h(cmx_dav_join_uri($base, implode('/', $parent))).'/' . cmx_dav_h($sortQuery);
 				$rows .= '<tr class="up"><td class="sel"></td><td class="name"><a href="'.$parentHref.'">..</a></td><td class="type">Ordner</td><td class="size"></td><td class="mtime"></td><td class="action"></td></tr>';
 			}
 
+			// Anzahl der Dateien (nur aktuelle Ebene, Ordner ausgeschlossen)
+			$fileCount = count(array_filter($children, fn($c) => !($c['isDir'])));
+
+			// Helper: Sort-Links aufbauen
+			$sortLink = function(string $field) use ($base, $relPath, $sort, $dir): string {
+				$nextDir = ($sort === $field && $dir === 'asc') ? 'desc' : 'asc';
+				$params  = http_build_query(['sort'=>$field, 'dir'=>$nextDir]);
+				return cmx_dav_h(cmx_dav_join_uri($base, $relPath).'/'.'?'.$params);
+			};
+			$arrow = function(string $field) use ($sort, $dir): string {
+				if ($sort !== $field) return '';
+				return $dir === 'asc' ? ' ▲' : ' ▼';
+			};
+
 			// Tabellenzeilen aufbauen (mit Checkboxen für Dateien)
-			foreach ($children as $child) {
-				$name  = $child->getName();
-				$isDir = $child instanceof DAV\ICollection;
-				$href  = cmx_dav_join_uri($base, $relPath, rawurlencode($name)) . ($isDir ? '/' : '');
+			foreach ($children as $item) {
+				/** @var DAV\INode $child */
+				$child = $item['node'];
+				$name  = $item['name'];
+				$isDir = $item['isDir'];
+				$href  = cmx_dav_join_uri($base, $relPath, rawurlencode($name)) . ($isDir ? '/' : '') . (!$isDir && $sortQuery ? '' : $sortQuery);
 				$absHref = cmx_dav_abs_url($href);
 
 				// Metadaten
@@ -237,20 +290,11 @@ add_action('init', function () {
 				$size  = '';
 				$mtime = '';
 
-				if (method_exists($child, 'getLastModified')) {
-					$lm = $child->getLastModified();
-					$mtime = cmx_dav_fmt_time($lm);
-				}
-				if (!$isDir && method_exists($child, 'getSize')) {
-					try {
-						$size = cmx_dav_human_bytes((int)$child->getSize());
-					} catch (\Throwable $e) {
-						$size = '';
-					}
-				}
+				if ($item['mtimeTs']) $mtime = cmx_dav_fmt_time($item['mtimeTs']);
+				if (!$isDir && $item['sizeBytes'] !== null) $size = cmx_dav_human_bytes($item['sizeBytes']);
 
 			// Anzahl der Dateien (nur aktuelle Ebene, Ordner ausgeschlossen)
-			$fileCount = count(array_filter($children, fn($c) => !($c instanceof DAV\ICollection)));
+			$fileCount = count(array_filter($children, fn($c) => !($c['isDir'])));
 
 			// Checkbox nur für Dateien (gleiche Ebene)
 				$checkbox = !$isDir
@@ -346,7 +390,11 @@ add_action('init', function () {
 				.'<div class="toolbar">'.$zipButton.'<span class="breadcrumbs">'.implode('', $crumbs).'</span></div>'
 				.'<table class="table"><thead><tr>'
 				.'<th><input type="checkbox" class="cmx-master" title="Alle Dateien auswählen" /></th>'
-				.'<th>Name</th><th>Typ</th><th>Größe</th><th>Geändert</th><th>Aktion</th>'
+				.'<th><a href="'.$sortLink('name').'">Name'.$arrow('name').'</a></th>'
+				.'<th>Typ</th>'
+				.'<th><a href="'.$sortLink('size').'">Größe'.$arrow('size').'</a></th>'
+				.'<th><a href="'.$sortLink('mtime').'">Geändert'.$arrow('mtime').'</a></th>'
+				.'<th>Aktion</th>'
 				.'</tr></thead><tbody>'
 				.$rows
 				.'</tbody></table>'
