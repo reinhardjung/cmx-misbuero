@@ -203,13 +203,18 @@ function cmx_lieferanten_args(): array {
 			break;
 
 		case 'featimg':
-			$edit_link = \get_edit_post_link($post_id, '');
-			if (\has_post_thumbnail($post_id)) {
-				echo $edit_link
-					? '<a href="'.\esc_url($edit_link).'#postimagediv" title="Beitragsbild vorhanden" style="text-decoration:none;"><span class="dashicons dashicons-yes" style="font-size:18px;vertical-align:middle;"></span></a>'
-					: '<span class="dashicons dashicons-yes" title="Beitragsbild vorhanden" style="font-size:18px;vertical-align:middle;"></span>';
-			} else {
-				echo '';
+			// Zeige kleines Thumbnail: erst lokales Artikelbild, sonst Beitragsbild. Klick = Download.
+			$local_img = (string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true);
+			$fallback  = \get_the_post_thumbnail_url($post_id, 'thumbnail');
+			$src       = $local_img !== '' ? $local_img : ($fallback ?: '');
+
+			if ($src !== '') {
+				$path     = \parse_url($src, PHP_URL_PATH);
+				$filename = $path ? basename($path) : ('artikel-' . (int) $post_id . '.jpg');
+				$img_tag  = '<img class="cmx-ac-thumb" src="' . \esc_url($src) . '" alt="" />';
+				echo '<a href="' . \esc_url($src) . '" download="' . \esc_attr($filename) . '" title="Bild herunterladen" style="text-decoration:none;">' . $img_tag . '</a>';
+			// } else {
+			// 	echo '<span class="dashicons dashicons-format-image" style="opacity:0.35;" title="Kein Bild"></span>';
 			}
 			break;
 	}
@@ -229,6 +234,24 @@ function cmx_lieferanten_args(): array {
 	$cols['hersteller_url'] = 'hersteller_url';
 	$cols['featimg']        = 'featimg';
 	return $cols;
+});
+
+\add_action('admin_head-edit.php', function () {
+	if (!isset($_GET['post_type']) || $_GET['post_type'] !== 'artikel') return;
+	?>
+	<style>
+		.cmx-ac-thumb {
+			width: 50px;
+			height: 50px;
+			object-fit: contain; /* ganzes Bild zeigen wie im Katalog */
+			background: #fff;
+			border: 1px solid #e6e6e6;
+			border-radius: 6px;
+			box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+			display: inline-block;
+		}
+	</style>
+	<?php
 });
 
 

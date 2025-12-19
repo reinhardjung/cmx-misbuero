@@ -52,6 +52,9 @@ function cmx_kontakte_columns($columns) {
 	// Falls "Karte" durch das obige continue nicht gesetzt wurde, sicherstellen:
 	if (!isset($new['cmx_gmaps'])) $new['cmx_gmaps'] = 'Karte';
 
+	// Logo ans Ende anhängen
+	$new['cmx_logo'] = 'Logo';
+
 	return $new;
 }
 
@@ -197,6 +200,20 @@ function cmx_billing_address_string(int $post_id): string {
 function cmx_kontakte_custom_column($column, $post_id) {
 	if ($column === 'title') {
 		echo esc_html(\get_the_title($post_id));
+		return;
+	}
+	if ($column === 'cmx_logo') {
+		$local_img = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true);
+		$fallback  = \get_the_post_thumbnail_url($post_id, 'thumbnail');
+		$src       = $local_img !== '' ? $local_img : ($fallback ?: '');
+		if ($src !== '') {
+			$path     = \parse_url($src, PHP_URL_PATH);
+			$filename = $path ? basename($path) : ('kontakt-' . (int) $post_id . '.jpg');
+			$img_tag  = '<img class="cmx-ac-thumb" src="' . \esc_url($src) . '" alt="" />';
+			echo '<a href="' . \esc_url($src) . '" download="' . \esc_attr($filename) . '" title="Logo herunterladen" style="text-decoration:none;">' . $img_tag . '</a>';
+		// } else {
+		// 	echo '<span class="dashicons dashicons-format-image" style="opacity:0.35;" title="Kein Logo"></span>';
+		}
 		return;
 	}
 
@@ -412,6 +429,16 @@ function cmx_kontakte_apply_tax_filters($query) {
 	if (!$screen || $screen->post_type !== 'kontakte') return;
 
 	echo '<style>
+		.cmx-ac-thumb {
+			width:50px;
+			height:50px;
+			object-fit: contain;
+			background:#fff;
+			border:1px solid #e6e6e6;
+			border-radius:6px;
+			box-shadow:0 2px 6px rgba(0,0,0,0.08);
+			display:inline-block;
+		}
 		.column-cmx_gmaps { width:56px; text-align:center; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
@@ -436,10 +463,15 @@ function cmx_kontakte_apply_tax_filters($query) {
 \add_filter('manage_edit-kontakte_columns', __NAMESPACE__ . '\\cmx_kontakte_add_columns');
 function cmx_kontakte_add_columns(array $columns): array {
 	$new = [];
+	$logo_label = null;
 	$inserted_after_url = false;
 
 	foreach ($columns as $key => $label) {
 		// Original übernehmen
+		if ($key === 'cmx_logo') {
+			$logo_label = $label;
+			continue;
+		}
 		$new[$key] = $label;
 	}
 
@@ -447,6 +479,10 @@ function cmx_kontakte_add_columns(array $columns): array {
 	if (!$inserted_after_url && !isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
 		$new['cmx_datum']          = 'Datum';
+	}
+
+	if ($logo_label !== null) {
+		$new['cmx_logo'] = $logo_label; // Logo ans Ende
 	}
 
 	return $new;

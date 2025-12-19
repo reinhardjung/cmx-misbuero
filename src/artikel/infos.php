@@ -58,7 +58,9 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 		echo '<div class="cmx-li-box">';
 		if ($url) {
 			$display_url = esc_url($url);
-			echo '<div style="margin-bottom:8px;"><img src="'.$display_url.'" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></div>';
+			$path = parse_url($display_url, PHP_URL_PATH);
+			$filename = $path ? basename($path) : ('artikel-' . (int) $post->ID . '.jpg');
+			echo '<div style="margin-bottom:8px;"><a href="'.$display_url.'" download="'.esc_attr($filename).'" title="Bild herunterladen"><img src="'.$display_url.'" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></a></div>';
 			echo '<input type="file" name="cmx_li_file" accept="image/*" style="width:100%;">';
 			echo '<p style="margin-top:8px;"><label><input type="checkbox" name="cmx_li_remove" value="1"> Entfernen</label></p>';
 		} else {

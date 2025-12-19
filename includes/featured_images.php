@@ -83,7 +83,9 @@ function cmx_render_local_image_box(\WP_Post $post) {
 	// Bild-Preview + Upload
 	if ($url) {
 		$display_url = esc_url($url);
-		echo '<div style="margin-bottom:8px;"><img src="' . $display_url . '" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></div>';
+		$path = parse_url($display_url, PHP_URL_PATH);
+		$filename = $path ? basename($path) : ($pt . '-' . (int) $post->ID . '.jpg');
+		echo '<div style="margin-bottom:8px;"><a href="' . $display_url . '" download="' . esc_attr($filename) . '" title="Bild herunterladen" style="display:block;max-width:100%;"><img src="' . $display_url . '" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></a></div>';
 		echo '<input type="file" name="cmx_local_image_file" accept="image/*" style="width:100%;" />';
 		echo '<p style="margin-top:8px;"><label><input type="checkbox" name="cmx_local_image_remove" value="1"> Entfernen</label></p>';
 	} else {
