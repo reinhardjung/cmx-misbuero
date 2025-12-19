@@ -205,9 +205,25 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 		];
 	}
 
-	$new_json = wp_json_encode($clean);
-	$old_json = (string)get_post_meta($post_id, '_cmx_beleg_positionen', true);
-	if ($new_json !== $old_json) update_post_meta($post_id, '_cmx_beleg_positionen', $new_json);
+	// Altdaten angleichen (können als JSON-String oder Array vorliegen)
+	$old_raw  = get_post_meta($post_id, '_cmx_beleg_positionen', true);
+	if (is_string($old_raw) && $old_raw !== '') {
+		$tmp = json_decode($old_raw, true);
+		if (json_last_error() === JSON_ERROR_NONE) {
+			$old_data = $tmp;
+		} else {
+			$old_data = @maybe_unserialize($old_raw);
+			if (!is_array($old_data)) $old_data = [];
+		}
+	} elseif (is_array($old_raw)) {
+		$old_data = $old_raw;
+	} else {
+		$old_data = [];
+	}
+
+	if ($old_data !== $clean) {
+		update_post_meta($post_id, '_cmx_beleg_positionen', wp_json_encode($clean));
+	}
 
 }, 10, 3);
 
