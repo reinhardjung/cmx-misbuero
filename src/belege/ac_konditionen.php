@@ -118,7 +118,13 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_FAELLIG, true) );
 			break;
 		case 'beleg_bezahlt':
-			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true) );
+			$val = get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true);
+			if ($val) {
+				cmx_echo_date($val);
+			} else {
+				// Button zum Setzen auf heute
+				echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlt</a>';
+			}
 			break;
 	}
 }, 10, 2);
@@ -152,3 +158,56 @@ add_action('pre_get_posts', function(\WP_Query $q){
 			break;
 	}
 }, 10);
+
+// Admin-Footer JS nur auf der Belege-Liste
+add_action('admin_footer-edit.php', function () {
+	$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || $screen->id !== 'edit-'.CMX_PT_BELEGE) return;
+
+	$nonce = wp_create_nonce('cmx_mark_paid');
+	?>
+	<script>
+	(function($){
+		// Button "Als bezahlt markieren" per AJAX
+		$(document).on('click', '.cmx-mark-paid', function(e){
+			e.preventDefault();
+			var $btn = $(this);
+			var bid  = $btn.data('beleg');
+			if (!bid) return;
+
+			$.post(ajaxurl, {
+				action: 'cmx_mark_beleg_paid',
+				post_id: bid,
+				_wpnonce: '<?php echo esc_js($nonce); ?>'
+			}).done(function(resp){
+				if (resp && resp.success) {
+					location.reload();
+				} else {
+					alert(resp && resp.data ? resp.data : 'Fehler beim Speichern.');
+				}
+			}).fail(function(){
+				alert('Fehler beim Speichern.');
+			});
+		});
+	})(jQuery);
+	</script>
+	<?php
+});
+
+// AJAX: Beleg als bezahlt markieren (heutiges Datum)
+add_action('wp_ajax_cmx_mark_beleg_paid', function() {
+	if (!current_user_can('edit_posts')) {
+		wp_send_json_error('forbidden', 403);
+	}
+	check_ajax_referer('cmx_mark_paid');
+
+	$post_id = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+	if ($post_id <= 0 || get_post_type($post_id) !== CMX_PT_BELEGE) {
+		wp_send_json_error('invalid');
+	}
+
+	$today = gmdate('Y-m-d', current_time('timestamp'));
+	update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $today);
+
+	wp_send_json_success();
+});
