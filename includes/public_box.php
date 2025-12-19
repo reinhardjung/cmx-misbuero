@@ -47,7 +47,7 @@ add_action('add_meta_boxes', function() {
 						__('In den Papierkorb verschieben', 'default')
 					);
 					if ($dup_link !== '') {
-						echo '<a href="'.esc_url($dup_link).'" class="submitdelete duplication" style="text-decoration:none;">'.esc_html__('Duplizieren','default').'</a>';
+						echo '<a href="'.esc_url($dup_link).'" class="dashicons dashicons-controls-repeat" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
 					}
 					echo '</div>';
 				}

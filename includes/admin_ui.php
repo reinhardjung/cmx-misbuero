@@ -197,6 +197,35 @@ add_action('admin_head', function () {
 	body.post-php .editor-post-trash .components-button:focus::before {
 		color: #b42527;
 	}
+
+	/* Duplizieren-Icon im Custom-Aktions-Block */
+	body.post-php .cmx-dup-icon {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		text-indent: -9999px;
+		padding: 0;
+		border: none;
+		background: transparent;
+		box-shadow: none;
+		color: transparent !important;
+	}
+	body.post-php .cmx-dup-icon::before {
+		content: "\f316"; /* dashicons-admin-page (Duplicate) */
+		font-family: "dashicons";
+		font-size: 18px;
+		color: #2271b1; /* WP-primärblau */
+		text-indent: 0;
+		display: inline-block;
+		vertical-align: middle;
+	}
+	body.post-php .cmx-dup-icon:hover::before,
+	body.post-php .cmx-dup-icon:focus::before {
+		color: #1a5a8c;
+	}
 	</style>
 	<script>
 	document.addEventListener('DOMContentLoaded', function() {
