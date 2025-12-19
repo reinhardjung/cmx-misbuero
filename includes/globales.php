@@ -209,6 +209,7 @@ add_action('admin_head', function() {
 	</style>';
 	}
 });
+// .notice-need-update-pro :-(
 
 
 /**
@@ -305,3 +306,37 @@ add_filter('manage_posts_columns', function($columns) {
 // 	unset($columns['date']); // entfernt die Standard-Datumsspalte
 // 	return $columns;
 // });
+
+
+
+add_action('admin_init', function () {
+
+    // // Nur im Adminbereich
+    // if (!is_admin()) {
+    //     return;
+    // }
+
+    // Alle Admin Notices filtern
+    remove_all_actions('admin_notices');
+    remove_all_actions('network_admin_notices');
+
+    add_action('admin_notices', function () {
+        global $wp_filter;
+
+        if (empty($wp_filter['admin_notices']->callbacks)) {
+            return;
+        }
+
+        foreach ($wp_filter['admin_notices']->callbacks as $priority => $callbacks) {
+            foreach ($callbacks as $key => $callback) {
+                if (
+                    is_array($callback['function']) &&
+                    is_object($callback['function'][0]) &&
+                    stripos(get_class($callback['function'][0]), 'wpvivid') !== false
+                ) {
+                    remove_action('admin_notices', $callback['function'], $priority);
+                }
+            }
+        }
+    }, 999);
+});
