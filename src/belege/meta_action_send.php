@@ -81,18 +81,20 @@ function cmxbu_handle_beleg_send(): void {
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
-	$subject = 'Beleg-Nr: ' . $BelegID;
+	$terms = get_the_terms($post_id, 'belege_kategorien');
+	$beleg_slug = is_array($terms) && isset($terms[0]) ? (string) $terms[0]->slug : '';
+	$beleg_label = [
+		'rechnung'     => 'Rechnung',
+		'angebot'      => 'Angebot',
+		'lieferschein' => 'Lieferschein',
+		'gutschrift'   => 'Gutschrift',
+	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');
+	$subject = $beleg_label . ': ' . $BelegID;
 
-
-// 	$terms = get_the_terms($post_id, 'belege_kategorien')[0]->slug;
-
-// var_dump($terms); exit;
-
-
-	$message = cmx_get_belegmail(get_the_terms($post_id, 'belege_kategorien')[0]->slug);
+	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
 	// var_dump($message); exit;
 	// cmx_get_belegfuss($beleg_type);
-	$sent = \wp_mail($to, $subject, $message .$download_url);
+	$sent = \wp_mail($to, $subject, $message .' ' .$download_url);
 
 	if (!$sent) {
 		\wp_die('E-Mail konnte nicht gesendet werden.');
@@ -105,13 +107,20 @@ function cmxbu_handle_beleg_send(): void {
 
 
 
-function cmx_get_belegmail(string $key): string {
+function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
 	// cmx_belege[belegfuss_rechnung], cmx_belege[mail_rechnung]
 	$key = 'mail_' . strtolower(trim($key));
 	$options = get_option('cmx_belege', []); // var_dump($options['belegfuss_rechnung']); exit;
+	$message = '';
 
 	if (isset($options[$key]) && is_string($options[$key])) {
-		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
+		$message = str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
 	}
-	return '';
+
+	if ($kontakt_id) {
+		$anrede = trim((string) get_post_meta($kontakt_id, CMX_KONTAKTE_META_ANREDE, true));
+		$message = str_replace('{anrede}', $anrede, $message);
+	}
+
+	return $message;
 }

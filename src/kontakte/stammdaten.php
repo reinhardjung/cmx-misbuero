@@ -8,6 +8,7 @@
  */
 const CMX_KONTAKTE_META_VORNAME  = '_cmx_kontakte_vorname';
 const CMX_KONTAKTE_META_NACHNAME = '_cmx_kontakte_nachname';
+const CMX_KONTAKTE_META_ANREDE   = '_cmx_kontakte_anrede';
 const CMX_KONTAKTE_META_URL      = '_cmx_kontakte_url';
 const CMX_KONTAKTE_META_PRIVAT   = '_cmx_kontakte_privat';
 const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
@@ -20,7 +21,7 @@ const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
 \add_action('init', __NAMESPACE__ . '\\cmx_register_kontakte_stammdaten_meta');
 function cmx_register_kontakte_stammdaten_meta() {
 	// Text
-	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME] as $key) {
+	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE] as $key) {
 		\register_post_meta('kontakte', $key, [
 			'type'              => 'string',
 			'single'            => true,
@@ -91,6 +92,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 
 	$vorname  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_VORNAME, true);
 	$nachname = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_NACHNAME, true);
+	$anrede   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_ANREDE, true);
 	$privat   = (bool)   \get_post_meta($post->ID, CMX_KONTAKTE_META_PRIVAT, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
 	$datum    = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_DATUM, true);
@@ -105,17 +107,16 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .grid {
 		display: grid !important;
 		grid-template-columns:
-			minmax(260px, 1.2fr)
-			minmax(260px, 1.2fr)
-			120px
-			minmax(360px, 2fr)
-			minmax(110px, 0.6fr);
+			minmax(240px, 1fr)
+			minmax(240px, 1fr)
+			minmax(180px, 0.8fr);
 		column-gap: 16px;
 		row-gap: 16px;
 		align-items: start;
 	}
 	#cmx-stammdaten .field {margin:0; display:block !important; flex:none !important;}
 	#cmx-stammdaten .field--privat{width:120px !important}
+	#cmx-stammdaten .field--anrede{min-width:200px;}
 	#cmx-stammdaten .text,
 	#cmx-stammdaten .date {width:100% !important; max-width:100% !important}
 	#cmx-stammdaten .field--datum .date {width:100% !important; max-width:100% !important}
@@ -146,6 +147,12 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	echo '<p class="field field--privat" style="text-align:center;">
 		<label for="cmx_privat"><strong>Privat</strong></label>
 		<input id="cmx_privat" name="cmx_privat" type="checkbox" value="1" ' . \checked($privat, true, false) . '>
+	</p>';
+
+	// Anrede
+	echo '<p class="field field--anrede">
+		<label for="cmx_anrede"><strong>Anrede</strong></label><br>
+		<input id="cmx_anrede" name="cmx_anrede" type="text" class="text" placeholder="Sehr geehrte Frau B&auml;rtschi" value="' . \esc_attr($anrede) . '">
 	</p>';
 
 	// URL (Label ist Link)
@@ -209,6 +216,11 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	// Privat
 	$privat_val = isset($_POST['cmx_privat']) ? 1 : 0;
 	\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT, $privat_val);
+
+	// Anrede
+	if (isset($_POST['cmx_anrede'])) {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, \sanitize_text_field((string) $_POST['cmx_anrede']));
+	}
 
 	// URL
 	if (isset($_POST['cmx_url'])) {
