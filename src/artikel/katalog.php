@@ -125,17 +125,26 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 				background: #f0f0f0;
 			}
 			.cmx-artikel-thumb {
-				width: 60px;
-				height: 60px;
-				object-fit: cover;
-				border-radius: 4px;
+				width: 100px;
+				height: 100px;
+				object-fit: contain; /* Bild komplett anzeigen */
+				border-radius: 8px;
 				display: block;
-				box-shadow: 0 0 4px rgba(0,0,0,0.08);
+				box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+				transition: transform 0.15s ease, box-shadow 0.2s ease;
+				background: #fff;
+				border: 1px solid #e6e6e6;
+				padding: 4px;
+				box-sizing: border-box;
+			}
+			.cmx-artikel-thumb:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 			}
 			.cmx-artikel-thumb-placeholder {
-				width: 60px;
-				height: 60px;
-				border-radius: 4px;
+				width: 100px;
+				height: 100px;
+				border-radius: 8px;
 				background: #ddd;
 				display: inline-block;
 			}
@@ -328,7 +337,7 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 		echo '<tr>';
 
 		// 1: Bild
-		echo '<td>' . $thumb_html . '</td>';
+		echo '<td style="width:120px;">' . $thumb_html . '</td>';
 
 		// 2: SKU
 		echo '<td data-sort-value="' . esc_attr($artikelnummer) . '">';
