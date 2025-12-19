@@ -13,7 +13,7 @@ if (!defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_UMSATZ')) {
 
 \add_action('wp_dashboard_setup', __NAMESPACE__ . '\\cmx_register_umsatz_widget');
 function cmx_register_umsatz_widget() {
-	\wp_add_dashboard_widget('cmx_umsatz_widget','Ums&auml;tze',__NAMESPACE__ . '\\cmx_render_umsatz_widget');
+	\wp_add_dashboard_widget('cmx_umsatz_widget','Rechnungen',__NAMESPACE__ . '\\cmx_render_umsatz_widget');
 }
 
 /**
@@ -32,6 +32,14 @@ function cmx_render_umsatz_widget() {
 		'post_status'    => ['publish','private'],
 		'posts_per_page' => -1,
 		'no_found_rows'  => true,
+		'tax_query'      => [
+			[
+				'taxonomy' => 'belege_kategorien',
+				'field'    => 'slug',
+				'terms'    => ['rechnung'],
+				'operator' => 'IN',
+			],
+		],
 		'meta_query'     => [
 			[
 				'key'     => '_cmx_beleg_bezahlt_am',

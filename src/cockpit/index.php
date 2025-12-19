@@ -1,6 +1,10 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+$widgets = ['stammdaten','rechnungen','lieferantenrechungen','kontakt_daten','gutschriften','kuchen_ein_aus'];
 
-require_once 'stammdaten.php';
-require_once 'umsatz.php';
-require_once 'kontakt_daten.php';
+foreach ($widgets as $file) {
+	$path = __DIR__ . '/' . $file . '.php';
+	if (is_readable($path)) {
+		require_once $path;
+	}
+}
