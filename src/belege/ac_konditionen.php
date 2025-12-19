@@ -9,6 +9,14 @@ if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_DATUM'))  define(__NAMESPACE__.'\\C
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG'))define(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG','_cmx_beleg_faellig_am');
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT'))define(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT','_cmx_beleg_bezahlt_am');
 
+// Eigener Query-Var erlauben, damit WP ihn in der Listen-Abfrage nicht verwirft.
+add_filter('query_vars', function(array $vars){
+	if (!in_array('cmx_bezahlfilter', $vars, true)) {
+		$vars[] = 'cmx_bezahlfilter';
+	}
+	return $vars;
+});
+
 /** =========================
  * Helper: Rohwert → Timestamp
  *  - akzeptiert: int(TS), Y-m-d, d.m.Y, Ymd(ACF), DateTime-Strings
@@ -117,16 +125,29 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 		case 'beleg_faellig':
 			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_FAELLIG, true) );
 			break;
-		case 'beleg_bezahlt':
-			$val = get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true);
-			if ($val) {
-				cmx_echo_date($val);
-			} else {
-				// Button zum Setzen auf heute
+	case 'beleg_bezahlt':
+		$val = get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true);
+		if ($val) {
+			cmx_echo_date($val);
+		} else {
+			// Button zum Setzen auf heute – nur für rechnung/lieferantenrechnung/gutschrift
+			$show_btn = false;
+			$type_slug = null;
+			$terms = wp_get_post_terms($post_id, 'belege_kategorien', ['fields' => 'slugs']);
+			if (!is_wp_error($terms) && !empty($terms)) {
+				$type_slug = (string) $terms[0];
+			}
+			$allowed = ['rechnung','lieferantenrechnung','gutschrift'];
+			if ($type_slug && in_array(strtolower($type_slug), $allowed, true)) {
+				$show_btn = true;
+			}
+
+			if ($show_btn) {
 				echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlt</a>';
 			}
-			break;
-	}
+		}
+		break;
+}
 }, 10, 2);
 
 /** =========================
@@ -139,14 +160,123 @@ add_filter('manage_edit-' . CMX_PT_BELEGE . '_sortable_columns', function(array 
 	return $columns;
 }, 10);
 
+// Filter-Dropdown: bezahlt / nicht bezahlt
+add_action('restrict_manage_posts', function($post_type){
+	if ($post_type !== CMX_PT_BELEGE) return;
+	$selected = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
+	echo '<select name="cmx_bezahlfilter" id="cmx_bezahlfilter" class="postform">';
+		echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
+		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlt', 'cmx') . '</option>';
+		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offen', 'cmx') . '</option>';
+	echo '</select>';
+}, 10, 1);
+
+// Anfrage früh anpassen: Filter bezahlt/offen direkt auf query vars setzen
+add_filter('request', function(array $vars){
+	if (!is_admin()) return $vars;
+	$pt = $vars['post_type'] ?? '';
+	if ($pt !== CMX_PT_BELEGE) return $vars;
+
+	$filter = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
+	if ($filter === '') return $vars;
+
+	$vars['cmx_bezahlfilter'] = $filter; // Query-Var verfügbar machen
+
+	if ($filter === 'bezahlt') {
+		$vars['meta_query'] = [
+			[
+				'key'     => CMX_BELEG_META_BEZAHLT,
+				'value'   => '',
+				'compare' => '!=',
+			],
+		];
+		$vars['meta_key'] = CMX_BELEG_META_BEZAHLT;
+	} elseif ($filter === 'offen') {
+		$vars['meta_query'] = [
+			'relation' => 'OR',
+			[
+				'key'     => CMX_BELEG_META_BEZAHLT,
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'key'     => CMX_BELEG_META_BEZAHLT,
+				'value'   => '',
+				'compare' => '=',
+			],
+		];
+		$vars['meta_key'] = CMX_BELEG_META_BEZAHLT;
+	}
+
+	return $vars;
+}, 5);
+
 add_action('pre_get_posts', function(\WP_Query $q){
 	if (!is_admin() || !$q->is_main_query()) return;
-	if ($q->get('post_type') !== CMX_PT_BELEGE) return;
+	$pt = $q->get('post_type');
+	if ($pt !== CMX_PT_BELEGE && (!is_array($pt) || !in_array(CMX_PT_BELEGE, $pt, true))) {
+		return;
+	}
 
+	// Filter auf Meta-Ebene anwenden (klar und nur mit definiertem Key)
+	$filter = $q->get('cmx_bezahlfilter');
+	if ($filter === null || $filter === '') {
+		$filter = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
+	}
+
+	$paid_key     = CMX_BELEG_META_BEZAHLT;
+	$paid_key_alt = ltrim(CMX_BELEG_META_BEZAHLT, '_'); // Fallback ohne Unterstrich
+
+	if ($filter === 'bezahlt') {
+		$q->set('meta_query', [
+			'relation' => 'OR',
+			[
+				'key'     => $paid_key,
+				'value'   => '',
+				'compare' => '!=',
+			],
+			[
+				'key'     => $paid_key_alt,
+				'value'   => '',
+				'compare' => '!=',
+			],
+		]);
+		$q->set('meta_key', $paid_key);
+	} elseif ($filter === 'offen') {
+		$q->set('meta_query', [
+			'relation' => 'AND',
+			[
+				'relation' => 'OR',
+				[
+					'key'     => $paid_key,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $paid_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key'     => $paid_key_alt,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $paid_key_alt,
+					'value'   => '',
+					'compare' => '=',
+				],
+			],
+		]);
+		$q->set('meta_key', $paid_key);
+	}
+
+	// Sortierung
 	switch ($q->get('orderby')) {
 		case 'beleg_datum':
 			$q->set('meta_key', CMX_BELEG_META_DATUM);
-			$q->set('orderby', 'meta_value'); // bei echten Timestamps: 'meta_value_num'
+			$q->set('orderby', 'meta_value');
 			break;
 		case 'beleg_faellig':
 			$q->set('meta_key', CMX_BELEG_META_FAELLIG);
@@ -157,7 +287,7 @@ add_action('pre_get_posts', function(\WP_Query $q){
 			$q->set('orderby', 'meta_value');
 			break;
 	}
-}, 10);
+}, 50);
 
 // Admin-Footer JS nur auf der Belege-Liste
 add_action('admin_footer-edit.php', function () {
