@@ -11,7 +11,7 @@ add_action('admin_head', function () {
  * mit sichtbarem „In den Papierkorb verschieben“-Link nach dem Speichern.
  */
 add_action('add_meta_boxes', function() {
-	$allowed = ['post', 'page', 'kontakte','artikel','belege','buchhaltung','dokumente'];
+	$allowed = ['post', 'page', 'kontakte','artikel','belege','buchhaltung','dokumente','projekte'];
 	$screen = get_current_screen();
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 
@@ -30,6 +30,7 @@ add_action('add_meta_boxes', function() {
 				'belege'      => 'Beleg',
 				'buchhaltung' => 'Buchhaltung',
 				'dokumente'   => 'Dokument',
+				'projekte'    => 'Projekt',
 				'post'        => __('Beitrag', 'default'),
 				'page'        => __('Seite', 'default'),
 			];

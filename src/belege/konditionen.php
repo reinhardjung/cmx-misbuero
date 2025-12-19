@@ -102,6 +102,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$leistMon = \get_post_meta($post->ID, CMX_BELEG_META_LEISTUNGSMONAT, true);
 	$bezahlt  = \get_post_meta($post->ID, CMX_BELEG_META_BEZAHLT_AM, true);
 
+	// Fälligkeitsdatum Standard: heute + 30 Tage, falls leer
+	if ($faellig === '' || $faellig === null) {
+		$faellig = \gmdate('Y-m-d', strtotime('+30 days'));
+	}
+
 	// Aktueller Monat als Default, wenn leer
 	if (!$leistMon) {
 		$ts = \current_time('timestamp');
@@ -226,11 +231,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// Fälligkeitsdatum
 	$fae = isset($_POST['cmx_beleg_faelligkeitsdatum']) ? \sanitize_text_field($_POST['cmx_beleg_faelligkeitsdatum']) : '';
-	if ($fae && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $fae)) {
-		\update_post_meta($post_id, CMX_BELEG_META_FAELLIG, $fae);
-	} else {
-		\delete_post_meta($post_id, CMX_BELEG_META_FAELLIG);
+	if (!$fae || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $fae)) {
+		// Default: +30 Tage, wenn kein gültiges Datum geliefert
+		$fae = \gmdate('Y-m-d', strtotime('+30 days'));
 	}
+	\update_post_meta($post_id, CMX_BELEG_META_FAELLIG, $fae);
 
 	// Leistungszeitraum (Monat 01..12)
 	$lm = isset($_POST['cmx_beleg_leistungsmonat']) ? \sanitize_text_field($_POST['cmx_beleg_leistungsmonat']) : '';
