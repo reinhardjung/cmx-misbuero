@@ -112,9 +112,102 @@ function inject_styles(): void {
 		border-color: var(--mb-primary-dark);
 	}
 
+	/* Papierkorb-Icon statt Text in Listen-Aktionen (alle CPT) */
+	/* Nur im Edit-Formular (post.php) – Papierkorb-Icon statt Text im Delete-Button */
+	body.post-php #delete-action .submitdelete {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		text-indent: -9999px;
+		padding: 0;
+		border: none;
+		background: transparent;
+		box-shadow: none;
+	}
+	body.post-php #delete-action .submitdelete::before {
+		content: "\f182";
+		font-family: "dashicons";
+		font-size: 18px;
+		color: #d63638; /* klassisches WP-Rot für Papierkorb */
+		text-indent: 0;
+		display: inline-block;
+		vertical-align: middle;
+	}
+	body.post-php #delete-action .submitdelete:hover::before,
+	body.post-php #delete-action .submitdelete:focus::before {
+		color: #b42527;
+	}
+
 
 	.notice-success { border-left: 4px solid var(--mb-success); }
 	.notice-error { border-left: 4px solid var(--mb-error); }
 	</style>
+	<?php if (!is_network_admin() && isset($GLOBALS['pagenow']) && $GLOBALS['pagenow'] === 'post.php') : ?>
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		document.querySelectorAll('#delete-action .submitdelete').forEach(function(el){
+			var text = (el.textContent || '').trim();
+			if (text && !el.getAttribute('title')) {
+				el.setAttribute('title', text);
+			}
+		});
+	});
+	</script>
+	<?php endif; ?>
 	<?php
 }
+
+// Globale Fallback-Styles: Papierkorb-Icon statt Text im Edit-Modus für alle CPTs.
+add_action('admin_head', function () {
+	if (is_network_admin()) return;
+	?>
+	<style id="cmx-trash-icon-global">
+	/* Classic + Block Editor: nur im Edit-Modus (post.php) alle CPTs */
+	body.post-php .submitdelete,
+	body.post-php .editor-post-trash .components-button {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		text-indent: -9999px;
+		padding: 0;
+		border: none;
+		background: transparent;
+		box-shadow: none;
+		color: transparent !important;
+	}
+	body.post-php .submitdelete::before,
+	body.post-php .editor-post-trash .components-button::before {
+		content: "\f182";
+		font-family: "dashicons";
+		font-size: 18px;
+		color: #d63638;
+		text-indent: 0;
+		display: inline-block;
+		vertical-align: middle;
+	}
+	body.post-php .submitdelete:hover::before,
+	body.post-php .submitdelete:focus::before,
+	body.post-php .editor-post-trash .components-button:hover::before,
+	body.post-php .editor-post-trash .components-button:focus::before {
+		color: #b42527;
+	}
+	</style>
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		if (document.body && !document.body.classList.contains('post-php')) return;
+		document.querySelectorAll('#delete-action .submitdelete, .editor-post-trash .components-button, .submitdelete').forEach(function(el){
+			var text = (el.textContent || '').trim();
+			if (text && !el.getAttribute('title')) {
+				el.setAttribute('title', text);
+			}
+		});
+	});
+	</script>
+	<?php
+});
