@@ -420,8 +420,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_mwst_term_data')) {
 					get_term_meta($term_id, 'steuer', true),
 					get_term_meta($term_id, 'tax_rate', true),
 					$term->description ?? '',
+					$term->name ?? '', // bevorzugt, da der Slug bei "7,7%" zu "77" wird
 					$term->slug ?? '',
-					$term->name ?? '',
 				];
 
 				foreach ($sources as $src) {
