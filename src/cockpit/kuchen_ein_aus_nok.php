@@ -9,24 +9,26 @@ use ChartsPhp\ChartsPhp;
 
 add_action('wp_dashboard_setup', function () {
 	wp_add_dashboard_widget(
-		'cmx_kuchen_ein_aus',
-		'Einnahmen & Ausgaben',
-		__NAMESPACE__ . '\\cmx_render_kuchen_ein_aus'
+		'cmx_kuchen_ein_aus_nok',
+		'noch offen',
+		__NAMESPACE__ . '\\cmx_render_kuchen_ein_aus_nok'
 	);
 });
 
-function cmx_enqueue_chartjs(): void {
-	if (wp_script_is('cmx-chartjs', 'enqueued')) {
-		return;
+if (!function_exists(__NAMESPACE__ . '\\cmx_enqueue_chartjs')) {
+	function cmx_enqueue_chartjs(): void {
+		if (wp_script_is('cmx-chartjs', 'enqueued')) {
+			return;
+		}
+		// Lokale Vendor-Datei (mikuspetr)
+		$plugin_main = dirname(__DIR__, 2) . '/cmx-misbuero.php';
+		$local = plugins_url('vendor/mikuspetr/chartjs/chart.umd.min.js', $plugin_main);
+		wp_register_script('cmx-chartjs', $local, [], '4.4.1', true);
+		wp_enqueue_script('cmx-chartjs');
 	}
-	// Lokale Vendor-Datei (mikuspetr)
-	$plugin_main = dirname(__DIR__, 2) . '/cmx-misbuero.php';
-	$local = plugins_url('vendor/mikuspetr/chartjs/chart.umd.min.js', $plugin_main);
-	wp_register_script('cmx-chartjs', $local, [], '4.4.1', true);
-	wp_enqueue_script('cmx-chartjs');
 }
 
-function cmx_render_kuchen_ein_aus(): void {
+function cmx_render_kuchen_ein_aus_nok(): void {
 	if (!current_user_can('edit_posts')) {
 		echo '<p>' . esc_html__('Keine Berechtigung.', 'default') . '</p>';
 		return;
@@ -60,6 +62,18 @@ function cmx_render_kuchen_ein_aus(): void {
 					'field'    => 'slug',
 					'terms'    => [$slug],
 					'operator' => 'IN',
+				],
+			],
+			'meta_query' => [
+				'relation' => 'OR',
+				[
+					'key'     => '_cmx_beleg_bezahlt_am',
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => '_cmx_beleg_bezahlt_am',
+					'value'   => '',
+					'compare' => '=',
 				],
 			],
 		]);
