@@ -44,7 +44,7 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Kontakte Import</h2>
-		<p>Wähle Deine <code>CSV-Datei</code> aus.</p>
+		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus.</p>
 		<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_kontakte_import'); ?>
 			<input type="hidden" name="cmx_do_import_kontakte" value="1">
@@ -193,11 +193,12 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 	while (($line = \fgetcsv($h, 0, $sep)) !== false) {
 		if (!array_filter($line, static fn($v) => $v !== null && $v !== '')) continue;
 		$row = @array_combine($header, $line); if (!$row) continue;
+		$row_l = array_change_key_case($row, CASE_LOWER);
 
-		$title = sanitize_text_field($row['Titel'] ?? ($row['post_title'] ?? ''));
+		$title = sanitize_text_field($row['Titel'] ?? ($row['post_title'] ?? ($row_l['titel'] ?? '')));
 		if (!$title) continue;
 
-		$post_date = !empty($row['Erstellt_am']) ? sanitize_text_field($row['Erstellt_am']) : current_time('mysql');
+		$post_date = !empty($row['Erstellt_am']) ? sanitize_text_field($row['Erstellt_am']) : (!empty($row_l['erstellt_am']) ? sanitize_text_field($row_l['erstellt_am']) : current_time('mysql'));
 
 		$postarr = [
 			'post_type'   => CMX_PT_KONTAKTE,
@@ -220,23 +221,64 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 		if (\is_wp_error($post_id)) continue;
 
 		/* === Metas gemäss Export === */
-		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  (string)($row['vorname'] ?? ''));
-		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string)($row['nachname'] ?? ''));
-		\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT,   isset($row['privat']) && cmx_bool_from_csv($row['privat']) ? '1' : '0');
-		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      cmx_normalize_url($row['url'] ?? ''));
-		if (!empty($row['datum'])) \update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, (string)$row['datum']);
+		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  (string)($row['vorname'] ?? ($row_l['vorname'] ?? '')));
+		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string)($row['nachname'] ?? ($row_l['nachname'] ?? '')));
+		$priv_val = $row['privat'] ?? ($row_l['privat'] ?? '');
+		\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT,   ($priv_val !== '' && cmx_bool_from_csv($priv_val)) ? '1' : '0');
+		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      cmx_normalize_url($row['url'] ?? ($row_l['url'] ?? '')));
+		if (!empty($row['datum']) || !empty($row_l['datum'])) \update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, (string)($row['datum'] ?? ($row_l['datum'] ?? '')));
 
-		\update_post_meta($post_id, CMX_RECHNUNG_META_STRASSE, (string)($row['rechnung_strasse'] ?? ''));
-		\update_post_meta($post_id, CMX_RECHNUNG_META_ZUSATZ,  (string)($row['rechnung_zusatz'] ?? ''));
-		\update_post_meta($post_id, CMX_RECHNUNG_META_PLZ,     (string)($row['rechnung_plz'] ?? ''));
-		\update_post_meta($post_id, CMX_RECHNUNG_META_ORT,     (string)($row['rechnung_ort'] ?? ''));
-		\update_post_meta($post_id, CMX_RECHNUNG_META_LAND,    strtolower((string)($row['rechnung_land_slug'] ?? ($row['_cmx_rechnung_land'] ?? ''))));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_STRASSE, (string)($row['rechnung_strasse'] ?? ($row_l['rechnung_strasse'] ?? '')));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_ZUSATZ,  (string)($row['rechnung_zusatz'] ?? ($row_l['rechnung_zusatz'] ?? '')));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_PLZ,     (string)($row['rechnung_plz'] ?? ($row_l['rechnung_plz'] ?? '')));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_ORT,     (string)($row['rechnung_ort'] ?? ($row_l['rechnung_ort'] ?? '')));
+		\update_post_meta($post_id, CMX_RECHNUNG_META_LAND,    strtolower((string)($row['rechnung_land_slug'] ?? ($row['_cmx_rechnung_land'] ?? ($row_l['rechnung_land_slug'] ?? ($row_l['_cmx_rechnung_land'] ?? ''))))));
 
-		\update_post_meta($post_id, CMX_LIEFER_META_STRASSE, (string)($row['liefer_strasse'] ?? ''));
-		\update_post_meta($post_id, CMX_LIEFER_META_ZUSATZ,  (string)($row['liefer_zusatz'] ?? ''));
-		\update_post_meta($post_id, CMX_LIEFER_META_PLZ,     (string)($row['liefer_plz'] ?? ''));
-		\update_post_meta($post_id, CMX_LIEFER_META_ORT,     (string)($row['liefer_ort'] ?? ''));
-		\update_post_meta($post_id, CMX_LIEFER_META_LAND,    strtolower((string)($row['liefer_land_slug'] ?? ($row['_cmx_liefer_land'] ?? ''))));
+		\update_post_meta($post_id, CMX_LIEFER_META_STRASSE, (string)($row['liefer_strasse'] ?? ($row_l['liefer_strasse'] ?? '')));
+		\update_post_meta($post_id, CMX_LIEFER_META_ZUSATZ,  (string)($row['liefer_zusatz'] ?? ($row_l['liefer_zusatz'] ?? '')));
+		\update_post_meta($post_id, CMX_LIEFER_META_PLZ,     (string)($row['liefer_plz'] ?? ($row_l['liefer_plz'] ?? '')));
+		\update_post_meta($post_id, CMX_LIEFER_META_ORT,     (string)($row['liefer_ort'] ?? ($row_l['liefer_ort'] ?? '')));
+		\update_post_meta($post_id, CMX_LIEFER_META_LAND,    strtolower((string)($row['liefer_land_slug'] ?? ($row['_cmx_liefer_land'] ?? ($row_l['liefer_land_slug'] ?? ($row_l['_cmx_liefer_land'] ?? ''))))));
+
+		// Logo-Übernahme: bevorzugt URL, sonst lokaler Pfad (Header groß/klein tolerant)
+		$logo_url  = isset($row['logo_url'])  ? trim((string)$row['logo_url'])  : (isset($row_l['logo_url'])  ? trim((string)$row_l['logo_url'])  : '');
+		$logo_path = isset($row['logo_path']) ? trim((string)$row['logo_path']) : (isset($row_l['logo_path']) ? trim((string)$row_l['logo_path']) : '');
+		if ($logo_url !== '' && function_exists(__NAMESPACE__.'\\cmx_download_to_local_and_save_meta')) {
+			$res = cmx_download_to_local_and_save_meta($post_id, $logo_url);
+			if (is_wp_error($res) && $logo_path !== '' && is_readable($logo_path)) {
+				// Fallback: Kopie von lokalem Pfad
+				$base_dir = cmx_local_base_path();
+				if (!is_dir($base_dir)) { wp_mkdir_p($base_dir); }
+				$basename = 'kontakt-' . (int) $post_id . '-' . basename($logo_path);
+				$target   = wp_normalize_path(trailingslashit($base_dir) . $basename);
+				if (@copy($logo_path, $target)) {
+					@chmod($target, 0644);
+					$version = @filemtime($target) ?: time();
+					$base_url = cmx_local_base_url();
+					$url_out  = trailingslashit($base_url) . rawurlencode($basename) . '?v=' . $version;
+					update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+					update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url_out);
+				} else {
+					// Fallback: Remote-URL direkt setzen, damit wenigstens angezeigt werden kann
+					update_post_meta($post_id, '_cmx_local_image_kontakte_url', $logo_url);
+				}
+			} elseif (is_wp_error($res)) {
+				update_post_meta($post_id, '_cmx_local_image_kontakte_url', $logo_url);
+			}
+		} elseif ($logo_path !== '' && is_readable($logo_path)) {
+			$base_dir = cmx_local_base_path();
+			if (!is_dir($base_dir)) { wp_mkdir_p($base_dir); }
+			$basename = 'kontakt-' . (int) $post_id . '-' . basename($logo_path);
+			$target   = wp_normalize_path(trailingslashit($base_dir) . $basename);
+			if (@copy($logo_path, $target)) {
+				@chmod($target, 0644);
+				$version = @filemtime($target) ?: time();
+				$base_url = cmx_local_base_url();
+				$url_out  = trailingslashit($base_url) . rawurlencode($basename) . '?v=' . $version;
+				update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+				update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url_out);
+			}
+		}
 
 		// Stufe
 		cmx_assign_stufe($post_id, (string)($row['stufe_slug'] ?? ''), (string)($row['stufe_name'] ?? ''));

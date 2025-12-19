@@ -35,7 +35,7 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Artikel Import</h2>
-		<p>Wähle Deine <code>CSV-Datei</code> aus. Achte darauf das Du bereits alle zugewiesenen Lieferanten hast!</p>
+		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus. Achte darauf das Du bereits alle zugewiesenen Lieferanten hast!</p>
 
 		<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_artikel_import'); ?>

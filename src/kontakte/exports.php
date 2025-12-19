@@ -168,6 +168,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 		$headers = [
 			'ID','Titel','Status','Erstellt_am',
 			'vorname','nachname','privat','url','url_domain_core','datum',
+			'logo_url','logo_path',
 			'kontakt_laender_ids','kontakt_laender_slugs','kontakt_laender_names',
 			// NEU: Kategorien
 			'kategorien_ids','kategorien_slugs','kategorien_names',
@@ -198,6 +199,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 			$domain   = $url ? (string)(\parse_url($url, PHP_URL_HOST) ?? '') : '';
 			if ($domain) $domain = \preg_replace('~^www\.~i','',$domain);
 			$datum    = (string)\get_post_meta($pid, CMX_KONTAKTE_META_DATUM, true);
+			$logo_url = (string)\get_post_meta($pid, '_cmx_local_image_kontakte_url', true);
+			$logo_path= (string)\get_post_meta($pid, '_cmx_local_image_kontakte_path', true);
 
 			// Kontakt-Länder (Taxo)
 			$land_ids=$land_slugs=$land_names='';
@@ -282,6 +285,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 				$url,
 				$domain,
 				$datum,
+				$logo_url,
+				$logo_path,
 
 				$land_ids,
 				$land_slugs,

@@ -146,7 +146,7 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 	$ext  = isset($map[$mime]) ? $map[$mime] : 'png';
 	$ext  = '.' . $ext;
 
-	// 🎯 Dateiname = Domain der Bild-URL
+	// 🎯 Dateiname = Domain der Bild-URL + Post-ID für eindeutige Ablage
 	$host = parse_url($image_url, PHP_URL_HOST);
 	if (!$host) {
 		$host = 'logo';
@@ -159,7 +159,7 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
 		$host = 'logo';
 	}
 
-	$file = $host . $ext;
+	$file = $host . '-' . (int) $post_id . $ext;
 
 	$base_dir = cmx_local_base_path();
 	$base_url = cmx_local_base_url();

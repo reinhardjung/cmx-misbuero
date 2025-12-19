@@ -36,7 +36,7 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_PROJEKTE')) {
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Projekte Import</h2>
-		<p>Wähle Deine <code>CSV-Datei</code> aus.</p>
+		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus.</p>
 		<!-- <p>Wähle Deine <code>CSV-Datei</code> aus. Spalten-Beispiele: <code>post_title</code>, <code>post_status</code>, <code>post_date</code>, <code>meta__foo</code>, <code>tax__projekt_kategorie</code>.</p> -->
 
 		<form method="post" enctype="multipart/form-data" action="">
