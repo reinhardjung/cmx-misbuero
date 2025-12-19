@@ -36,13 +36,19 @@ add_action('add_meta_boxes', function() {
 			// Papierkorb-Link nur anzeigen, wenn Post existiert (nicht neu)
 			if ($post->ID && $post->post_status !== 'auto-draft') {
 				$delete_link = get_delete_post_link($post->ID, '', true);
+				$dup_fn = __NAMESPACE__ . '\\cmx_dup_get_action_url';
+				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
+
 				if ($delete_link) {
-					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd;">';
+					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; gap:8px;">';
 					printf(
 						'<a href="%1$s" class="submitdelete deletion" style="color:#b32d2e; text-decoration:none;">%2$s</a>',
 						esc_url($delete_link),
 						__('In den Papierkorb verschieben', 'default')
 					);
+					if ($dup_link !== '') {
+						echo '<a href="'.esc_url($dup_link).'" class="submitdelete duplication" style="text-decoration:none;">'.esc_html__('Duplizieren','default').'</a>';
+					}
 					echo '</div>';
 				}
 			}

@@ -86,6 +86,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $mode      = 'NON';
     $qrr_raw   = '';
     $qrr_print = '';
+    $is_qrr    = false;
 
     /** ----------------------------------------------------------------
      * 2) Beträge & Adressen

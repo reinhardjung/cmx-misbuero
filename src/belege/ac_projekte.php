@@ -81,6 +81,10 @@ if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_txts')) {
 		if(!form) return;
 
 		form.addEventListener('submit', function(e){
+			// Nur eingreifen, wenn unser Filter-Button (name="filter_action") ausgelöst wurde
+			var submitter = e.submitter || null;
+			if (!submitter || submitter.name !== 'filter_action') return;
+
 			// Nur wenn unser Select existiert → saubere URL bauen
 			var s = document.getElementById('cmx-projekt-select');
 			if(!s) return;

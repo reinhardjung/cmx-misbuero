@@ -17,6 +17,7 @@ function cmx_dup_get_action_url(int $post_id): string {
 		add_query_arg([
 			'action'  => 'cmx_duplicate_post',
 			'post'    => $post_id,
+			'cmx_dup_redirect' => 'edit', // optional: nach Duplikat direkt in den Edit-Screen
 		], admin_url('admin-post.php')),
 		'cmx_dup_nonce_' . $post_id
 	);
@@ -101,6 +102,18 @@ function cmx_duplicate_post_handler(): void {
 	}
 
 	$res = cmx_duplicate_do($post_id);
+	$redirect_mode = isset($_GET['cmx_dup_redirect']) ? sanitize_key($_GET['cmx_dup_redirect']) : '';
+
+	if (!is_wp_error($res) && $redirect_mode === 'edit') {
+		// Direkt in den Edit-Screen des neuen Beitrags
+		$target = add_query_arg([
+			'cmx_dup_new' => 1,
+			'message'     => 1, // WP-Standard-Meldung "Beitrag aktualisiert."
+		], admin_url('post.php?action=edit&post=' . (int) $res));
+		wp_safe_redirect($target);
+		exit;
+	}
+
 	$redirect = wp_get_referer() ?: admin_url('edit.php?post_type=' . $orig->post_type);
 	$redirect = add_query_arg(['cmx_dup_single' => is_wp_error($res) ? '0' : '1'], $redirect);
 	wp_safe_redirect($redirect);
@@ -151,7 +164,7 @@ function cmx_duplicate_do(int $post_id) {
 	if ($beleg_no) {
 		update_post_meta($new_id, '_cmx_rechnungsnummer', $beleg_no);
 	}
-
+	// Sicherstellen, dass ggf. weitere Nummern-Logik greift
 	// Taxonomien kopieren
 	$taxes = get_object_taxonomies($orig->post_type);
 	foreach ($taxes as $tax) {
@@ -175,6 +188,29 @@ function cmx_duplicate_do(int $post_id) {
 	$thumb_id = get_post_thumbnail_id($post_id);
 	if ($thumb_id) {
 		set_post_thumbnail($new_id, $thumb_id);
+	}
+
+	// Nach dem Kopieren: Nummer/Title sicherstellen + PDF generieren
+	$ensure_fn = __NAMESPACE__ . '\\cmx_ensure_rechnungsnummer';
+	if ($orig->post_type === 'belege' && is_callable($ensure_fn)) {
+		update_post_meta($new_id, '_cmx_title_auto', 1); // Titel darf auto-überschrieben werden
+		$ensure_fn($new_id);
+		$final_no = (string) get_post_meta($new_id, '_cmx_rechnungsnummer', true);
+		if ($final_no !== '') {
+			wp_update_post([
+				'ID'         => $new_id,
+				'post_title' => $final_no,
+				'post_name'  => sanitize_title($final_no),
+			]);
+		}
+
+		$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';
+		if (is_callable($gen_fn)) {
+			$post_obj = get_post($new_id);
+			if ($post_obj) {
+				$gen_fn($new_id, $post_obj, true);
+			}
+		}
 	}
 
 	do_action('cmx_duplicated_post', $new_id, $post_id, $orig);
@@ -204,6 +240,11 @@ add_action('admin_notices', function() {
 	if (isset($_GET['cmx_dup_single']) && $_GET['cmx_dup_single'] === '1') {
 		echo '<div class="notice notice-success"><p>'.
 			esc_html__('Kopie wurde veröffentlicht.', 'default').
+		'</p></div>';
+	}
+	if (isset($_GET['cmx_dup_new']) && (int)$_GET['cmx_dup_new'] === 1) {
+		echo '<div class="notice notice-success is-dismissible"><p>'.
+			esc_html__('Beleg wurde dupliziert, gespeichert und kann jetzt versendet werden.', 'default').
 		'</p></div>';
 	}
 });
