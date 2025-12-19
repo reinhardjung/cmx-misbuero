@@ -155,6 +155,23 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 		</style>
 
 		<script>
+			const cmxSortFieldMap = {1: 'sku', 2: 'title', 5: 'price'};
+
+			function cmxUpdateArtikelLinks(tbody, field, dir) {
+				if (!tbody || !field) return;
+				const dirSafe = (dir === 'desc') ? 'DESC' : 'ASC';
+				tbody.querySelectorAll('a[href]').forEach(function (a) {
+					try {
+						const url = new URL(a.getAttribute('href'), window.location.href);
+						url.searchParams.set('cmx_sort', field);
+						url.searchParams.set('cmx_dir', dirSafe);
+						a.setAttribute('href', url.toString());
+					} catch (e) {
+						// ignore invalid href
+					}
+				});
+			}
+
 			// Sortierung
 			document.addEventListener('click', function (e) {
 				const th = e.target.closest('th[data-cmx-sort]');
@@ -203,6 +220,9 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 				rows.forEach(function (row) {
 					tbody.appendChild(row);
 				});
+
+				const field = cmxSortFieldMap[index] || 'title';
+				cmxUpdateArtikelLinks(tbody, field, nextDir);
 			});
 
 			// Suche nach SKU oder Artikeltitel
