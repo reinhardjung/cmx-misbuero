@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Projekte,MwSt');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt');
 
 
 // Define: CONST 4 each Taxo
@@ -18,8 +18,8 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 // Create: @ll Taxos
 \add_action('init', function () {
-	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false);
-	cmx_create_taxo(basename(__DIR__), 'Projekt', 'Projekte', false);
+	// Kategorien: UI komplett ausblenden, Taxonomie bleibt für Abfragen bestehen
+	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => false]);
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
@@ -28,6 +28,33 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 // Refill: Taxo with defaults if removed
 \add_action('admin_init', function () {
 	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_BELEGE);
+});
+
+// Kategorien in der Admin-Navigation ausblenden (Taxonomie bleibt bestehen)
+\add_action('admin_menu', function () {
+	$parent = 'edit.php?post_type=' . basename(__DIR__);
+	foreach (['belege_kategorien', 'beleg_kategorie'] as $tax) {
+		remove_submenu_page($parent, 'edit-tags.php?taxonomy=' . $tax . '&post_type=' . basename(__DIR__));
+		remove_submenu_page($parent, 'edit-tags.php?taxonomy=' . $tax); // ggf. Variante ohne post_type
+	}
+}, 99);
+
+// Kategorien-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
+\add_action('add_meta_boxes', function() {
+	foreach (['belege_kategoriendiv', 'beleg_kategoriediv'] as $box) {
+		remove_meta_box($box, basename(__DIR__), 'side');
+	}
+}, 99);
+
+// Direkten Aufruf der Kategorien-Seite wegleiten
+\add_action('load-edit-tags.php', function () {
+	$tax  = $_GET['taxonomy']   ?? '';
+	$pt   = $_GET['post_type']  ?? '';
+	$want = ['belege_kategorien','beleg_kategorie'];
+	if ($pt === basename(__DIR__) && in_array($tax, $want, true)) {
+		wp_safe_redirect(admin_url('edit.php?post_type=' . basename(__DIR__)));
+		exit;
+	}
 });
 
 

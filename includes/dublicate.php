@@ -26,6 +26,9 @@ function cmx_dup_meta_blacklist(): array {
 	return (array) apply_filters('cmx_duplicate_meta_blacklist', [
 		'_edit_lock',
 		'_edit_last',
+		'_cmx_rechnungsnummer', // Beleg-Nr neu vergeben
+		'_cmx_beleg_views',      // Aufrufe nicht übernehmen
+		'_cmx_beleg_views_log',  // Aufrufe-Log nicht übernehmen
 	]);
 }
 
@@ -117,11 +120,23 @@ function cmx_duplicate_do(int $post_id) {
 	$orig = get_post($post_id);
 	if (!$orig) return new \WP_Error('cmx_dup_not_found', 'Original nicht gefunden.');
 
+	// Spezielle Behandlung für Belege: neue Beleg-Nr (Titel) generieren
+	$beleg_no = null;
+	if ($orig->post_type === 'belege') {
+		$fn = __NAMESPACE__ . '\\cmx_generate_rechnungsnummer';
+		if (is_callable($fn)) {
+			$beleg_no = $fn();
+		} else {
+			// Fallback: simple timestamp-basierte Nummer
+			$beleg_no = 'BELEG-' . gmdate('Ymd-His') . '-' . wp_generate_password(4, false, false);
+		}
+	}
+
 	$new_postarr = [
 		'post_type'    => $orig->post_type,
 		'post_status'  => 'publish', // ✅ Direkt veröffentlicht
 		'post_author'  => get_current_user_id(),
-		'post_title'   => cmx_dup_make_title($orig->post_title),
+		'post_title'   => $beleg_no ?: cmx_dup_make_title($orig->post_title),
 		'post_content' => $orig->post_content,
 		'post_excerpt' => $orig->post_excerpt,
 		'comment_status' => $orig->comment_status,
@@ -131,6 +146,11 @@ function cmx_duplicate_do(int $post_id) {
 
 	$new_id = wp_insert_post($new_postarr, true);
 	if (is_wp_error($new_id)) return $new_id;
+
+	// Neue Beleg-Nr auch als Meta ablegen
+	if ($beleg_no) {
+		update_post_meta($new_id, '_cmx_rechnungsnummer', $beleg_no);
+	}
 
 	// Taxonomien kopieren
 	$taxes = get_object_taxonomies($orig->post_type);
