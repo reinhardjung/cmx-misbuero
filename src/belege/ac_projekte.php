@@ -197,5 +197,5 @@ if (!function_exists(__NAMESPACE__.'\\cmx_build_project_meta_or')) {
 		$txt = trim((string)\get_post_meta($post_id, $k, true));
 		if ($txt !== '') { echo esc_html($txt); return; }
 	}
-	echo '—';
+	echo '';
 }, 10, 2);

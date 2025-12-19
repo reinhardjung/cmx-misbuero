@@ -26,36 +26,62 @@ function cmx_render_umsatz_widget() {
 		return;
 	}
 
-	// Alle Kontakte mit gesetztem Umsatz holen (nur veröffentlichte)
-	$q = new \WP_Query(['post_type' => 'kontakte','post_status' => 'publish','posts_per_page' => -1,'no_found_rows' => true,'meta_query' => [['key' => CMX_KONTAKTE_META_UMSATZ,'compare' => 'EXISTS',]],'fields' => 'ids',]);
+	// Bezahlte Belege auswerten
+	$q = new \WP_Query([
+		'post_type'      => 'belege',
+		'post_status'    => ['publish','private'],
+		'posts_per_page' => -1,
+		'no_found_rows'  => true,
+		'meta_query'     => [
+			[
+				'key'     => '_cmx_beleg_bezahlt_am',
+				'compare' => 'EXISTS',
+			],
+			[
+				'key'     => '_cmx_beleg_bezahlt_am',
+				'value'   => '',
+				'compare' => '!=',
+			],
+		],
+		'fields' => 'ids',
+	]);
 
-	$count_items = 0;
-	$sum         = 0.0;
-	if ($q->have_posts()) {
-		foreach ($q->posts as $pid) {
-			$raw = (string) \get_post_meta($pid, CMX_KONTAKTE_META_UMSATZ, true);
-			$raw = str_replace(',', '.', $raw);
-			if ($raw === '' || !is_numeric($raw)) continue;
-			$sum += (float) $raw;
-			$count_items++;
+	$count_belege   = 0;
+	$sum_total      = 0.0;
+	$kontakt_ids    = [];
+
+	if ($q->have_posts() && function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
+		foreach ($q->posts as $bid) {
+			$calc  = cmxbu_get_beleg_positionen_calc($bid);
+			$total = isset($calc['total']) ? (float)$calc['total'] : 0.0;
+			$sum_total += $total;
+			$count_belege++;
+
+			$kid = (int) \get_post_meta($bid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
+			if ($kid > 0) {
+				$kontakt_ids[$kid] = true;
+			}
 		}
 	}
-	$avg = $count_items > 0 ? ($sum / $count_items) : 0.0;
+
+	$count_kunden = count($kontakt_ids);
+	$avg_beleg    = $count_belege > 0 ? ($sum_total / $count_belege) : 0.0;
 
 	echo '<style>
 		.cmx-umsatz-table													{ width:100%; border-collapse:collapse; }
 		.cmx-umsatz-table th,.cmx-umsatz-table td	{ padding:6px 8px; text-align:left; }
 		.cmx-umsatz-table tr:last-child td				{ border-bottom:none; }
-		.cmx-umsatz-kpi														{ display:flex; gap:12px; margin:8px 0 14px; }
-		.cmx-umsatz-kpi .k												{ flex:1; padding:10px; border:1px solid #e5e5e5; border-radius:6px; background:#fafafa; }
+		.cmx-umsatz-kpi														{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; margin:8px 0 14px; }
+		.cmx-umsatz-kpi .k												{ padding:10px; border:1px solid #e5e5e5; border-radius:6px; background:#fafafa; }
 		.cmx-umsatz-kpi .k .h											{ font-size:11px; color:#555; margin-bottom:4px; text-transform:uppercase; letter-spacing:.02em; }
 		.cmx-umsatz-kpi .k .v											{ font-size:14px; font-weight:600;  }
 	</style>';
 
 	echo '<div class="cmx-umsatz-kpi">';
-	echo '  <div class="k"><div class="h">'.esc_html__('Kunden', 'default').'</div><div class="v">'.esc_html(number_format_i18n($count_items)).'</div></div>';
-	echo '  <div class="k"><div class="h">'.esc_html__('Summe', 'default').'</div><div class="v">'.esc_html(number_format_i18n($sum, 2)).'</div></div>';
-	echo '  <div class="k"><div class="h">'.esc_html__('Durchschnitt', 'default').'</div><div class="v">'.esc_html(number_format_i18n($avg, 2)).'</div></div>';
+	echo '  <div class="k"><div class="h">Belege bezahlt</div><div class="v">'.esc_html(number_format_i18n($count_belege)).'</div></div>';
+	echo '  <div class="k"><div class="h">Kunden mit Belegen</div><div class="v">'.esc_html(number_format_i18n($count_kunden)).'</div></div>';
+	echo '  <div class="k"><div class="h">Umsatz gesamt</div><div class="v">CHF '.esc_html(number_format_i18n($sum_total, 2)).'</div></div>';
+	echo '  <div class="k"><div class="h">Durchschnitt/Beleg</div><div class="v">CHF '.esc_html(number_format_i18n($avg_beleg, 2)).'</div></div>';
 	echo '</div>';
 
 	// Optional: Link zur Kontakte-Liste
