@@ -85,20 +85,24 @@ if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_txts')) {
 			var submitter = e.submitter || null;
 			if (!submitter || submitter.name !== 'filter_action') return;
 
-			// Nur wenn unser Select existiert → saubere URL bauen
-			var s = document.getElementById('cmx-projekt-select');
-			if(!s) return;
-
 			e.preventDefault(); // Standard-Submit unterbinden
-
-			// Ziel: /wp-admin/edit.php?post_type=belege&cmx_proj_id={ID?}&paged=1
 			var u = new URL(window.location.origin + "<?php echo $basePath; ?>");
-			u.searchParams.set('post_type', '<?php echo $postType; ?>');
 
-			var id = (s.value || '').trim();
-			if (id) {
-				u.searchParams.set('cmx_proj_id', id);
-			}
+			// Alle Felder des Formulars übernehmen (Filter, Suche, etc.)
+			var fd = new FormData(form);
+			fd.forEach(function(val, key){
+				if (val === null) return;
+				if (Array.isArray(val)) return; // FormData gibt Strings
+				var v = (''+val).trim();
+				if (v === '') {
+					u.searchParams.delete(key);
+					return;
+				}
+				u.searchParams.set(key, v);
+			});
+
+			// Sicherstellen: post_type & paged
+			u.searchParams.set('post_type', '<?php echo $postType; ?>');
 			u.searchParams.set('paged', '1');
 
 			window.location.assign(u.toString());

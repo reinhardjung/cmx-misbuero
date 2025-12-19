@@ -227,7 +227,12 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	$paid_key_alt = ltrim(CMX_BELEG_META_BEZAHLT, '_'); // Fallback ohne Unterstrich
 
 	if ($filter === 'bezahlt') {
-		$q->set('meta_query', [
+		$meta_query = $q->get('meta_query');
+		if (!is_array($meta_query)) $meta_query = [];
+		if (!empty($meta_query) && !isset($meta_query['relation'])) {
+			$meta_query['relation'] = 'AND';
+		}
+		$meta_query[] = [
 			'relation' => 'OR',
 			[
 				'key'     => $paid_key,
@@ -239,10 +244,16 @@ add_action('pre_get_posts', function(\WP_Query $q){
 				'value'   => '',
 				'compare' => '!=',
 			],
-		]);
-		$q->set('meta_key', $paid_key);
+		];
+		$q->set('meta_query', $meta_query);
+		$q->set('meta_key', $paid_key); // nur für Sortier-Handling unten
 	} elseif ($filter === 'offen') {
-		$q->set('meta_query', [
+		$meta_query = $q->get('meta_query');
+		if (!is_array($meta_query)) $meta_query = [];
+		if (!empty($meta_query) && !isset($meta_query['relation'])) {
+			$meta_query['relation'] = 'AND';
+		}
+		$meta_query[] = [
 			'relation' => 'AND',
 			[
 				'relation' => 'OR',
@@ -268,8 +279,9 @@ add_action('pre_get_posts', function(\WP_Query $q){
 					'compare' => '=',
 				],
 			],
-		]);
-		$q->set('meta_key', $paid_key);
+		];
+		$q->set('meta_query', $meta_query);
+		$q->set('meta_key', $paid_key); // nur für Sortier-Handling unten
 	}
 
 	// Sortierung
