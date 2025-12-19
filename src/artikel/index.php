@@ -37,7 +37,31 @@ cmx_define_meta_constants(basename(__DIR__), 'sku,ek,vk,marge,waehrungen,verkauf
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,qr-code,exports,imports,notizen,infos,dokumente');
+cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,qr-code,exports,imports,notizen,infos,dokumente,preview');
+
+
+// Halte den Slug immer synchron mit dem Titel beim Speichern.
+\add_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10, 3);
+function cmx_sync_artikel_slug(int $post_id, \WP_Post $post, bool $update): void {
+	if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+		return;
+	}
+
+	$title = trim($post->post_title);
+	if ($title === '') return;
+
+	$new_slug = sanitize_title($title);
+	if ($new_slug === '') return;
+
+	$unique_slug = wp_unique_post_slug($new_slug, $post_id, $post->post_status, $post->post_type, $post->post_parent);
+	if ($unique_slug === $post->post_name) return;
+
+
+	// Temporär abklemmen, um keine Endlosschleife auszulösen.
+	remove_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10);
+	wp_update_post(['ID' => $post_id, 'post_name' => $unique_slug]);
+	add_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10, 3);
+}
 
 // CMX_TAX_BELEGE_KATEGORIEN?
 // cmx_show_consts(); exit;

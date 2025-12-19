@@ -15,7 +15,15 @@
  */
 
 
-require_once __DIR__ . '/vendor/autoload.php';
+$cmx_autoload = __DIR__ . '/vendor/autoload.php';
+if (file_exists($cmx_autoload)) {
+	require_once $cmx_autoload;
+} else {
+	error_log('[cmx-misbuero] vendor/autoload.php fehlt – bitte "composer install" ausführen oder den /vendor-Ordner bereitstellen.');
+	add_action('admin_notices', function () {
+		echo '<div class="notice notice-error"><p><strong>CMX Mis Buero:</strong> Der Ordner <code>/vendor</code> fehlt. Bitte <code>composer install</code> ausführen oder den Ordner hochladen, damit alle Funktionen (PDF/QR etc.) verfügbar sind.</p></div>';
+	});
+}
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/webdav.php';
