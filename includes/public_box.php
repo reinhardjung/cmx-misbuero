@@ -21,7 +21,22 @@ add_action('add_meta_boxes', function() {
 			$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
 			$post_type    = $screen->post_type;
 			$pt_obj       = get_post_type_object($post_type);
-			$singular     = $pt_obj->labels->singular_name ?? ucfirst($post_type);
+			$singular     = $pt_obj->labels->singular_name ?? '';
+
+			// Fallback-Mapping, falls das Label plural ist oder fehlt
+			$singular_map = [
+				'kontakte'    => 'Kontakt',
+				'artikel'     => 'Artikel',
+				'belege'      => 'Beleg',
+				'buchhaltung' => 'Buchhaltung',
+				'dokumente'   => 'Dokument',
+				'post'        => __('Beitrag', 'default'),
+				'page'        => __('Seite', 'default'),
+			];
+			if ($singular === '' || strcasecmp($singular, $pt_obj->labels->name ?? '') === 0) {
+				$singular = $singular_map[$post_type] ?? ucfirst($post_type);
+			}
+
 			$btn_label    = sprintf('%s speichern', $singular);
 			$btn_name     = $is_new ? 'publish' : 'save';
 
