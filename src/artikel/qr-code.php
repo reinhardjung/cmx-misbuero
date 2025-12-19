@@ -21,7 +21,7 @@ function cmx_artikel_qr_render_box(\WP_Post $post): void {
 		return;
 	}
 
-	$target_url = home_url('/' . rawurlencode($sku));
+	$target_url = get_permalink($post) ?: home_url('/' . rawurlencode($post->post_name ?: $sku));
 
 	try {
 		// QR erstellen
