@@ -15,7 +15,7 @@ if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_PRIVAT')) {
 add_action('wp_dashboard_setup', function () {
 	\wp_add_dashboard_widget(
 		'cmx_kontakt_wichtige_daten',
-		'Wichtiges Datum',
+		'Erinnerungen',
 		__NAMESPACE__ . '\\cmx_render_kontakt_wichtige_daten'
 	);
 });
