@@ -90,7 +90,10 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 				border-bottom: 1px solid #e0e0e0;
 				text-align: left;
 				vertical-align: top;
+				white-space: nowrap;
 			}
+			/* Beschreibung darf umbrechen */
+			.cmx-artikel-table td.cmx-col-desc { white-space: normal; }
 			/* Unterer Rand explizit sicherstellen */
 			.cmx-artikel-table tbody tr:last-child td {
 				border-bottom: 1px solid #e0e0e0 !important;
@@ -138,11 +141,17 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 			}
 			.cmx-artikel-title a {
 				text-decoration: none;
-				color: #222;
+				color: #a42c24;
 			}
 			.cmx-artikel-title a:hover {
-				text-decoration: underline;
+				text-decoration: none;
+				color: #a42c24;
 			}
+			.cmx-artikel-table td a {
+				color: #a42c24;
+				text-decoration: none;
+			}
+			.cmx-artikel-table td a:hover { text-decoration: none; color: #a42c24; }
 		</style>
 
 		<script>
@@ -303,7 +312,13 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 
 		// 2: SKU
 		echo '<td data-sort-value="' . esc_attr($artikelnummer) . '">';
-		echo esc_html($artikelnummer_display);
+		if ($artikelnummer_display !== '') {
+			echo '<a href="' . esc_url(\get_permalink($post_id)) . '">';
+			echo esc_html($artikelnummer_display);
+			echo '</a>';
+		} else {
+			echo esc_html($artikelnummer_display);
+		}
 		echo '</td>';
 
 		// 3: Artikel
@@ -314,7 +329,7 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 		echo '</td>';
 
 		// 4: Beschreibung
-		echo '<td>';
+		echo '<td class="cmx-col-desc">';
 		echo esc_html($content_short);
 		echo '</td>';
 
