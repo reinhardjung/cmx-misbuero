@@ -10,7 +10,7 @@ use ChartsPhp\ChartsPhp;
 add_action('wp_dashboard_setup', function () {
 	wp_add_dashboard_widget(
 		'cmx_kuchen_ein_aus',
-		'Einnamen & Ausgaben',
+		'Einnahmen & Ausgaben',
 		__NAMESPACE__ . '\\cmx_render_kuchen_ein_aus'
 	);
 });
@@ -103,15 +103,15 @@ function cmx_render_kuchen_ein_aus(): void {
 	]);
 
 	echo '<style>
-		.cmx-pie-wrap{display:flex;align-items:flex-start;gap:16px;}
-		.cmx-pie-left{width:220px;height:220px;flex:none;}
-		.cmx-pie-right{flex:1;display:flex;flex-direction:column;gap:10px;}
-		.cmx-row{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.2;}
-		.cmx-row-main{display:flex;align-items:center;gap:8px;}
-		.cmx-row-label{font-weight:600;}
-		.cmx-dot{width:10px;height:10px;border-radius:50%;flex:none;}
-		.cmx-val{font-weight:700;margin-left:18px;}
-		.cmx-count{color:#666;font-size:12px;margin-left:18px;}
+		.cmx-pie-wrap  { display:flex;align-items:flex-start;gap:20px; }
+		.cmx-pie-left  { width:150px; height:150px; flex:none; margin-top:-70px; }
+		.cmx-pie-right { flex:1; display:flex; flex-direction:column; gap:8px; padding-top:4px; }
+		.cmx-row       { display:flex; flex-direction:column; gap:2px; font-size:12px; line-height:1.2; }
+		.cmx-row-main  { display:flex; align-items:center; gap:6px; }
+		.cmx-row-label { font-weight:600; }
+		.cmx-dot       { width:9px; height:9px; border-radius:50%; flex:none; }
+		.cmx-val       { font-weight:700; margin-left:15px; }
+		.cmx-count     { color:#666; font-size:11px; margin-left:15px; }
 	</style>';
 
 	echo '<div class="cmx-pie-wrap">';
