@@ -45,7 +45,7 @@ function cmx_artikel_qr_render_box(\WP_Post $post): void {
 		echo '<div id="cmx-art-qr-inline-box" style="margin-top:8px">';
 		echo '  <a href="' . esc_attr($data_uri) . '" download="' . esc_attr($filename) . '" title="QR-Code als PNG herunterladen">';
 		echo '    <img src="' . esc_attr($data_uri) . '" alt="QR-Code ' . esc_attr($sku) . '" style="width:' . (int)CMX_QR_SIZE . 'px;height:' . (int)CMX_QR_SIZE . 'px; border:1px solid #ccd0d4;border-radius:4px;background:#fff;display:block" /></a>';
-		echo '  <p title="' . esc_html($target_url) .'" style="margin-top:6px"><small>Auf den QR-Code klicken zum downloaden</small></p>';
+		echo '  <p title="' . esc_html($target_url) .'" style="margin-top:6px"><small>QR-Code klicken zum downloaden – <a href="' . esc_url($target_url) . '" target="_blank" rel="noopener noreferrer">Vorschau</a></small></p>';
 		// echo '  <p style="margin-top:6px"><small>Ziel: <code>' . esc_html($target_url) . '</code></small></p>';
 		echo '</div>';
 	} catch (\Throwable $e) {
