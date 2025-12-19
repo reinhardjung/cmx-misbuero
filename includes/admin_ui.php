@@ -199,32 +199,28 @@ add_action('admin_head', function () {
 	}
 
 	/* Duplizieren-Icon im Custom-Aktions-Block */
-	body.post-php .cmx-dup-icon {
+	body.post-php .cmx-dup-link {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		width: 36px;
 		height: 36px;
-		text-indent: -9999px;
+		text-indent: 0;
 		padding: 0;
 		border: none;
 		background: transparent;
 		box-shadow: none;
-		color: transparent !important;
+		color: #d63638;
 	}
-	body.post-php .cmx-dup-icon::before {
-		content: "\f316"; /* dashicons-admin-page (Duplicate) */
-		font-family: "dashicons";
+	body.post-php .cmx-dup-link::before {
+		content: "\f463"; /* dashicons-controls-repeat */
 		font-size: 18px;
-		color: #2271b1; /* WP-primärblau */
-		text-indent: 0;
-		display: inline-block;
-		vertical-align: middle;
+		color: #d63638; /* Rot passend zum Papierkorb */
 	}
-	body.post-php .cmx-dup-icon:hover::before,
-	body.post-php .cmx-dup-icon:focus::before {
-		color: #1a5a8c;
+	body.post-php .cmx-dup-link:hover::before,
+	body.post-php .cmx-dup-link:focus::before {
+		color: #b42527;
 	}
 	</style>
 	<script>

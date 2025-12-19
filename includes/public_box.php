@@ -41,14 +41,14 @@ add_action('add_meta_boxes', function() {
 
 				if ($delete_link) {
 					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; gap:8px;">';
+					if ($dup_link !== '') {
+						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-controls-repeat" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
+					}
 					printf(
 						'<a href="%1$s" class="submitdelete deletion" style="color:#b32d2e; text-decoration:none;">%2$s</a>',
 						esc_url($delete_link),
 						__('In den Papierkorb verschieben', 'default')
 					);
-					if ($dup_link !== '') {
-						echo '<a href="'.esc_url($dup_link).'" class="dashicons dashicons-controls-repeat" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
-					}
 					echo '</div>';
 				}
 			}
