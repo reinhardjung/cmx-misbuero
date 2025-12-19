@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "44a503a71d31c4ae6903f0e181c83baa",
+    "content-hash": "b06f3d024b7dccceedd782036d0a74f2",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -403,6 +403,46 @@
                 "source": "https://github.com/Masterminds/html5-php/tree/2.10.0"
             },
             "time": "2025-07-25T09:04:22+00:00"
+        },
+        {
+            "name": "mikuspetr/charts-php",
+            "version": "v1.0.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mikuspetr/charts-php.git",
+                "reference": "fe5dcc7d509964f34543a076bec70a408f3bd87b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mikuspetr/charts-php/zipball/fe5dcc7d509964f34543a076bec70a408f3bd87b",
+                "reference": "fe5dcc7d509964f34543a076bec70a408f3bd87b",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "ChartsPhp\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "mikuspetr",
+                    "email": "mikus.petr@gmail.com"
+                }
+            ],
+            "description": "PHP library to buid charts with Chart.js",
+            "support": {
+                "issues": "https://github.com/mikuspetr/charts-php/issues",
+                "source": "https://github.com/mikuspetr/charts-php/tree/v1.0.5"
+            },
+            "time": "2022-06-06T11:36:11+00:00"
         },
         {
             "name": "psr/log",

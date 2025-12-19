@@ -51,6 +51,7 @@ class ComposerStaticInit44a503a71d31c4ae6903f0e181c83baa
         ),
         'C' => 
         array (
+            'ChartsPhp\\' => 10,
             'CLOUDMEISTER\\CMX\\Buero\\' => 23,
         ),
         'B' => 
@@ -115,6 +116,10 @@ class ComposerStaticInit44a503a71d31c4ae6903f0e181c83baa
         'DASPRiD\\Enum\\' => 
         array (
             0 => __DIR__ . '/..' . '/dasprid/enum/src',
+        ),
+        'ChartsPhp\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/mikuspetr/charts-php/src',
         ),
         'CLOUDMEISTER\\CMX\\Buero\\' => 
         array (
@@ -189,6 +194,18 @@ class ComposerStaticInit44a503a71d31c4ae6903f0e181c83baa
         'BaconQrCode\\Renderer\\RendererStyle\\GradientType' => __DIR__ . '/..' . '/bacon/bacon-qr-code/src/Renderer/RendererStyle/GradientType.php',
         'BaconQrCode\\Renderer\\RendererStyle\\RendererStyle' => __DIR__ . '/..' . '/bacon/bacon-qr-code/src/Renderer/RendererStyle/RendererStyle.php',
         'BaconQrCode\\Writer' => __DIR__ . '/..' . '/bacon/bacon-qr-code/src/Writer.php',
+        'ChartsPhp\\ChartsPhp' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/ChartsPhp.php',
+        'ChartsPhp\\Charts\\Bar' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Bar.php',
+        'ChartsPhp\\Charts\\Bubble' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Bubble.php',
+        'ChartsPhp\\Charts\\Chart' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Chart.php',
+        'ChartsPhp\\Charts\\ChartInterface' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/ChartInterface.php',
+        'ChartsPhp\\Charts\\Doughnut' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Doughnut.php',
+        'ChartsPhp\\Charts\\Line' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Line.php',
+        'ChartsPhp\\Charts\\MulticolorDatasetChart' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/MulticolorDatasetChart.php',
+        'ChartsPhp\\Charts\\Pie' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Pie.php',
+        'ChartsPhp\\Charts\\PolarArea' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/PolarArea.php',
+        'ChartsPhp\\Charts\\Radar' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Radar.php',
+        'ChartsPhp\\Charts\\Scatter' => __DIR__ . '/..' . '/mikuspetr/charts-php/src/Charts/Scatter.php',
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'DASPRiD\\Enum\\AbstractEnum' => __DIR__ . '/..' . '/dasprid/enum/src/AbstractEnum.php',
         'DASPRiD\\Enum\\EnumMap' => __DIR__ . '/..' . '/dasprid/enum/src/EnumMap.php',

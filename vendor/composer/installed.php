@@ -1,13 +1,13 @@
 <?php return array(
     'root' => array(
         'name' => 'reinhardjung/cmx-misbuero',
-        'pretty_version' => 'dev-master',
-        'version' => 'dev-master',
-        'reference' => '2c002d59148fff3778c4fcf363274a31b1621031',
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '6c65a9d8dac757b3d15a73d12776178a3dbdfa59',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => false,
+        'dev' => true,
     ),
     'versions' => array(
         'bacon/bacon-qr-code' => array(
@@ -73,6 +73,15 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
+        'mikuspetr/charts-php' => array(
+            'pretty_version' => 'v1.0.5',
+            'version' => '1.0.5.0',
+            'reference' => 'fe5dcc7d509964f34543a076bec70a408f3bd87b',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../mikuspetr/charts-php',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
         'psr/log' => array(
             'pretty_version' => '3.0.2',
             'version' => '3.0.2.0',
@@ -83,9 +92,9 @@
             'dev_requirement' => false,
         ),
         'reinhardjung/cmx-misbuero' => array(
-            'pretty_version' => 'dev-master',
-            'version' => 'dev-master',
-            'reference' => '2c002d59148fff3778c4fcf363274a31b1621031',
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '6c65a9d8dac757b3d15a73d12776178a3dbdfa59',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

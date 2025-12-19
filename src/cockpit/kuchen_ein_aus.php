@@ -1,5 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+use ChartsPhp\ChartsPhp;
+
 /**
  * Dashboard-Widget: Kuchen Einnahmen/Ausgaben
  * Zeigt ein einfaches Kuchen-Diagramm für Rechnungen, Lieferantenrechnungen und Gutschriften.
@@ -8,7 +10,7 @@
 add_action('wp_dashboard_setup', function () {
 	wp_add_dashboard_widget(
 		'cmx_kuchen_ein_aus',
-		'Kuchen: Rechnungen / Lieferanten / Gutschriften',
+		'Einnamen & Ausgaben',
 		__NAMESPACE__ . '\\cmx_render_kuchen_ein_aus'
 	);
 });
@@ -17,9 +19,9 @@ function cmx_enqueue_chartjs(): void {
 	if (wp_script_is('cmx-chartjs', 'enqueued')) {
 		return;
 	}
-	// Versuche lokale Vendor-Datei, fallback CDN
+	// Lokale Vendor-Datei (mikuspetr)
 	$plugin_main = dirname(__DIR__, 2) . '/cmx-misbuero.php';
-	$local = plugins_url('assets/vendor/chartjs/chart.umd.min.js', $plugin_main);
+	$local = plugins_url('vendor/mikuspetr/chartjs/chart.umd.min.js', $plugin_main);
 	wp_register_script('cmx-chartjs', $local, [], '4.4.1', true);
 	wp_enqueue_script('cmx-chartjs');
 }
@@ -34,8 +36,6 @@ function cmx_render_kuchen_ein_aus(): void {
 		echo '<p><em>Summen-Berechnung nicht verfügbar.</em></p>';
 		return;
 	}
-
-	cmx_enqueue_chartjs();
 
 	$taxonomy = 'belege_kategorien';
 	$terms = [
@@ -83,53 +83,54 @@ function cmx_render_kuchen_ein_aus(): void {
 		$total_sum += $sum;
 	}
 
-	// Prozentwerte für conic-gradient
-	$start = 0;
-	$stops = [];
-	foreach ($results as $slug => $data) {
-		$share = ($total_sum > 0) ? ($data['sum'] / $total_sum) : 0;
-		$deg   = $share * 360;
-		$end   = $start + $deg;
-		$stops[] = sprintf('%s %.2fdeg %.2fdeg', $data['color'], $start, $end);
-		$start = $end;
-	}
-	$gradient = $stops ? 'conic-gradient(' . implode(',', $stops) . ')' : '#f5f5f5';
+	$labels    = array_values(array_column($results, 'label'));
+	$data_vals = array_values(array_map(fn($r) => round($r['sum'], 2), $results));
+	$colors    = array_values(array_column($results, 'color'));
+
+	// Chart mittels ChartsPhp erzeugen (Pie)
+	$chart = ChartsPhp::createChart('pie', $labels, [
+		[
+			'label'           => 'Summe',
+			'data'            => array_values($data_vals),
+			'backgroundColor' => array_values($colors),
+		]
+	], [
+		'plugins' => [
+			'legend' => ['display' => false],
+		],
+		'responsive' => true,
+		'maintainAspectRatio' => false,
+	]);
 
 	echo '<style>
-		.cmx-pie-wrap{display:flex;align-items:center;gap:16px;}
-		.cmx-pie-canvas{width:180px;height:180px;}
-		.cmx-pie-legend{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;}
-		.cmx-pie-item{display:flex;align-items:center;gap:6px;font-size:13px;}
-		.cmx-pie-dot{width:12px;height:12px;border-radius:50%;}
-		.cmx-pie-val{font-weight:600;}
+		.cmx-pie-wrap{display:flex;align-items:flex-start;gap:16px;}
+		.cmx-pie-left{width:220px;height:220px;flex:none;}
+		.cmx-pie-right{flex:1;display:flex;flex-direction:column;gap:6px;}
+		.cmx-row{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.4;}
+		.cmx-dot{width:10px;height:10px;border-radius:50%;flex:none;}
+		.cmx-val{font-weight:700;white-space:nowrap;}
+		.cmx-count{color:#666;font-size:12px;white-space:nowrap;}
+		.cmx-legend-inline{list-style:none;margin:6px 0 0;padding:0;display:flex;gap:14px;align-items:center;font-size:12px;}
+		.cmx-legend-inline li{display:flex;align-items:center;gap:6px;}
+		.cmx-legend-bar{width:30px;height:8px;border-radius:2px;}
 	</style>';
 
 	echo '<div class="cmx-pie-wrap">';
-	echo '<canvas class="cmx-pie-canvas" id="cmxPieChart" aria-label="Kuchendiagramm"></canvas>';
-	echo '<div class="cmx-pie-legend">';
+	echo '<div class="cmx-pie-left">'.$chart->renderHtml().'</div>';
+	echo '<div class="cmx-pie-right">';
 	foreach ($results as $data) {
-		echo '<div class="cmx-pie-item">';
-		echo '<span class="cmx-pie-dot" style="background:'.esc_attr($data['color']).'"></span>';
+		echo '<div class="cmx-row">';
+		echo '<span class="cmx-dot" style="background:'.esc_attr($data['color']).'"></span>';
 		echo '<span>'.esc_html($data['label']).'</span>';
-		echo '<span class="cmx-pie-val">CHF '.esc_html(number_format_i18n($data['sum'], 2)).'</span>';
-		echo '<span style="color:#777;">'.esc_html($data['count']).' Stück</span>';
+		echo '<span class="cmx-val">CHF '.esc_html(number_format_i18n($data['sum'], 2)).'</span>';
+		echo '<span class="cmx-count">'.esc_html($data['count']).' Stück</span>';
 		echo '</div>';
 	}
 	echo '</div></div>';
 
-	$labels = [];
-	$data_vals = [];
-	$colors = [];
-	foreach ($results as $data) {
-		$labels[]   = $data['label'];
-		$data_vals[] = round($data['sum'], 2);
-		$colors[]   = $data['color'];
-	}
-
-	echo '<script>';
-	echo 'document.addEventListener("DOMContentLoaded",function(){';
-	echo 'const ctx=document.getElementById("cmxPieChart"); if(!ctx||!window.Chart) return;';
-	echo 'new Chart(ctx,{type:"pie",data:{labels:'.wp_json_encode($labels).',datasets:[{data:'.wp_json_encode($data_vals).',backgroundColor:'.wp_json_encode($colors).'}]},options:{plugins:{legend:{display:false}},responsive:true,maintainAspectRatio:false}});';
-	echo '});';
-	echo '</script>';
+	// ChartJS einbinden (lokale Vendor-Datei) + ChartsPhp-Script
+	$plugin_main = dirname(__DIR__, 2) . '/cmx-misbuero.php';
+	$chartjs_url = plugins_url('vendor/mikuspetr/chartjs/chart.umd.min.js', $plugin_main);
+	echo '<script src="'.esc_url($chartjs_url).'"></script>';
+	echo $chart->renderScript();
 }

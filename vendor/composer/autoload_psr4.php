@@ -20,6 +20,7 @@ return array(
     'Endroid\\QrCode\\' => array($vendorDir . '/endroid/qr-code/src'),
     'Dompdf\\' => array($vendorDir . '/dompdf/dompdf/src'),
     'DASPRiD\\Enum\\' => array($vendorDir . '/dasprid/enum/src'),
+    'ChartsPhp\\' => array($vendorDir . '/mikuspetr/charts-php/src'),
     'CLOUDMEISTER\\CMX\\Buero\\' => array($baseDir . '/src'),
     'BaconQrCode\\' => array($vendorDir . '/bacon/bacon-qr-code/src'),
 );

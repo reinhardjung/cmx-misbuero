@@ -420,6 +420,49 @@
             "install-path": "../masterminds/html5"
         },
         {
+            "name": "mikuspetr/charts-php",
+            "version": "v1.0.5",
+            "version_normalized": "1.0.5.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mikuspetr/charts-php.git",
+                "reference": "fe5dcc7d509964f34543a076bec70a408f3bd87b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mikuspetr/charts-php/zipball/fe5dcc7d509964f34543a076bec70a408f3bd87b",
+                "reference": "fe5dcc7d509964f34543a076bec70a408f3bd87b",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.1.0"
+            },
+            "time": "2022-06-06T11:36:11+00:00",
+            "type": "library",
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "ChartsPhp\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "mikuspetr",
+                    "email": "mikus.petr@gmail.com"
+                }
+            ],
+            "description": "PHP library to buid charts with Chart.js",
+            "support": {
+                "issues": "https://github.com/mikuspetr/charts-php/issues",
+                "source": "https://github.com/mikuspetr/charts-php/tree/v1.0.5"
+            },
+            "install-path": "../mikuspetr/charts-php"
+        },
+        {
             "name": "psr/log",
             "version": "3.0.2",
             "version_normalized": "3.0.2.0",
@@ -1005,6 +1048,6 @@
             "install-path": "../sabre/xml"
         }
     ],
-    "dev": false,
+    "dev": true,
     "dev-package-names": []
 }
