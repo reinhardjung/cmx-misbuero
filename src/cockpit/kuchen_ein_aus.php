@@ -105,14 +105,13 @@ function cmx_render_kuchen_ein_aus(): void {
 	echo '<style>
 		.cmx-pie-wrap{display:flex;align-items:flex-start;gap:16px;}
 		.cmx-pie-left{width:220px;height:220px;flex:none;}
-		.cmx-pie-right{flex:1;display:flex;flex-direction:column;gap:6px;}
-		.cmx-row{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.4;}
+		.cmx-pie-right{flex:1;display:flex;flex-direction:column;gap:10px;}
+		.cmx-row{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.2;}
+		.cmx-row-main{display:flex;align-items:center;gap:8px;}
+		.cmx-row-label{font-weight:600;}
 		.cmx-dot{width:10px;height:10px;border-radius:50%;flex:none;}
-		.cmx-val{font-weight:700;white-space:nowrap;}
-		.cmx-count{color:#666;font-size:12px;white-space:nowrap;}
-		.cmx-legend-inline{list-style:none;margin:6px 0 0;padding:0;display:flex;gap:14px;align-items:center;font-size:12px;}
-		.cmx-legend-inline li{display:flex;align-items:center;gap:6px;}
-		.cmx-legend-bar{width:30px;height:8px;border-radius:2px;}
+		.cmx-val{font-weight:700;margin-left:18px;}
+		.cmx-count{color:#666;font-size:12px;margin-left:18px;}
 	</style>';
 
 	echo '<div class="cmx-pie-wrap">';
@@ -120,10 +119,12 @@ function cmx_render_kuchen_ein_aus(): void {
 	echo '<div class="cmx-pie-right">';
 	foreach ($results as $data) {
 		echo '<div class="cmx-row">';
-		echo '<span class="cmx-dot" style="background:'.esc_attr($data['color']).'"></span>';
-		echo '<span>'.esc_html($data['label']).'</span>';
-		echo '<span class="cmx-val">CHF '.esc_html(number_format_i18n($data['sum'], 2)).'</span>';
-		echo '<span class="cmx-count">'.esc_html($data['count']).' Stück</span>';
+		echo '  <div class="cmx-row-main">';
+		echo '    <span class="cmx-dot" style="background:'.esc_attr($data['color']).'"></span>';
+		echo '    <span class="cmx-row-label">'.esc_html($data['label']).'</span>';
+		echo '  </div>';
+		echo '  <div class="cmx-val">CHF '.esc_html(number_format_i18n($data['sum'], 2)).'</div>';
+		echo '  <div class="cmx-count">'.esc_html($data['count']).' Stück</div>';
 		echo '</div>';
 	}
 	echo '</div></div>';
