@@ -44,7 +44,8 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Kontakte Import</h2>
-		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus.</p>
+		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus, welche Du zuvor exportiert hast.</p>
+		<p><code>DEMO-Daten</code> <a href="https://misbuero.ch/wp-content/uploads/demo_kontakte.csv">https://misbuero.ch/wp-content/uploads/demo_kontakte.csv</a> runterladen (danach diese CSV-Datei auswählen zum importieren)</p>
 		<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_kontakte_import'); ?>
 			<input type="hidden" name="cmx_do_import_kontakte" value="1">

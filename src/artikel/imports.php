@@ -35,9 +35,10 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Artikel Import</h2>
-		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus. Achte darauf das Du bereits alle zugewiesenen Lieferanten hast!</p>
+		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus, welche Du zuvor exportiert hast. Achte darauf das Du bereits alle zugewiesenen Lieferanten hast!</p>
+		<p><code>DEMO-Daten</code> <a href="https://misbuero.ch/wp-content/uploads/demo_artikel.csv">https://misbuero.ch/wp-content/uploads/demo_artikel.csv</a> runterladen (danach diese CSV-Datei auswählen zum importieren)</p>
 
-		<form method="post" enctype="multipart/form-data" action="">
+<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_artikel_import'); ?>
 			<input type="hidden" name="cmx_do_import" value="1">
 

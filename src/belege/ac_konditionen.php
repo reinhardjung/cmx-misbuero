@@ -166,50 +166,12 @@ add_action('restrict_manage_posts', function($post_type){
 	$selected = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
 	echo '<select name="cmx_bezahlfilter" id="cmx_bezahlfilter" class="postform">';
 		echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
-		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlt', 'cmx') . '</option>';
-		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offen', 'cmx') . '</option>';
+		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlte', 'cmx') . '</option>';
+		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offene', 'cmx') . '</option>';
 	echo '</select>';
 }, 10, 1);
 
-// Anfrage früh anpassen: Filter bezahlt/offen direkt auf query vars setzen
-add_filter('request', function(array $vars){
-	if (!is_admin()) return $vars;
-	$pt = $vars['post_type'] ?? '';
-	if ($pt !== CMX_PT_BELEGE) return $vars;
-
-	$filter = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
-	if ($filter === '') return $vars;
-
-	$vars['cmx_bezahlfilter'] = $filter; // Query-Var verfügbar machen
-
-	if ($filter === 'bezahlt') {
-		$vars['meta_query'] = [
-			[
-				'key'     => CMX_BELEG_META_BEZAHLT,
-				'value'   => '',
-				'compare' => '!=',
-			],
-		];
-		$vars['meta_key'] = CMX_BELEG_META_BEZAHLT;
-	} elseif ($filter === 'offen') {
-		$vars['meta_query'] = [
-			'relation' => 'OR',
-			[
-				'key'     => CMX_BELEG_META_BEZAHLT,
-				'compare' => 'NOT EXISTS',
-			],
-			[
-				'key'     => CMX_BELEG_META_BEZAHLT,
-				'value'   => '',
-				'compare' => '=',
-			],
-		];
-		$vars['meta_key'] = CMX_BELEG_META_BEZAHLT;
-	}
-
-	return $vars;
-}, 5);
-
+// Pre_get_posts: Bezahl-Filter + Sortierung konsolidiert
 add_action('pre_get_posts', function(\WP_Query $q){
 	if (!is_admin() || !$q->is_main_query()) return;
 	$pt = $q->get('post_type');
@@ -217,72 +179,54 @@ add_action('pre_get_posts', function(\WP_Query $q){
 		return;
 	}
 
-	// Filter auf Meta-Ebene anwenden (klar und nur mit definiertem Key)
 	$filter = $q->get('cmx_bezahlfilter');
 	if ($filter === null || $filter === '') {
 		$filter = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
 	}
+	$q->set('cmx_bezahlfilter', $filter);
 
-	$paid_key     = CMX_BELEG_META_BEZAHLT;
-	$paid_key_alt = ltrim(CMX_BELEG_META_BEZAHLT, '_'); // Fallback ohne Unterstrich
+	$paid_keys = array_values(array_unique([
+		CMX_BELEG_META_BEZAHLT,              // typischer Key mit Unterstrich
+		ltrim(CMX_BELEG_META_BEZAHLT, '_'), // Fallback ohne Unterstrich
+	]));
+
+	$meta_query = $q->get('meta_query');
+	if (!is_array($meta_query)) $meta_query = [];
+	if (!isset($meta_query['relation'])) {
+		$meta_query['relation'] = 'AND';
+	}
 
 	if ($filter === 'bezahlt') {
-		$meta_query = $q->get('meta_query');
-		if (!is_array($meta_query)) $meta_query = [];
-		if (!empty($meta_query) && !isset($meta_query['relation'])) {
-			$meta_query['relation'] = 'AND';
+		$block = ['relation' => 'OR'];
+		foreach ($paid_keys as $k) {
+			$block[] = [
+				'key'     => $k,
+				'value'   => ['', '0', '0000-00-00'],
+				'compare' => 'NOT IN',
+			];
 		}
-		$meta_query[] = [
-			'relation' => 'OR',
-			[
-				'key'     => $paid_key,
-				'value'   => '',
-				'compare' => '!=',
-			],
-			[
-				'key'     => $paid_key_alt,
-				'value'   => '',
-				'compare' => '!=',
-			],
-		];
-		$q->set('meta_query', $meta_query);
-		$q->set('meta_key', $paid_key); // nur für Sortier-Handling unten
+		$meta_query[] = $block;
 	} elseif ($filter === 'offen') {
-		$meta_query = $q->get('meta_query');
-		if (!is_array($meta_query)) $meta_query = [];
-		if (!empty($meta_query) && !isset($meta_query['relation'])) {
-			$meta_query['relation'] = 'AND';
+		$block = ['relation' => 'AND'];
+		foreach ($paid_keys as $k) {
+			$block[] = [
+				'relation' => 'OR',
+				[
+					'key'     => $k,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $k,
+					'value'   => ['', '0', '0000-00-00'],
+					'compare' => 'IN',
+				],
+			];
 		}
-		$meta_query[] = [
-			'relation' => 'AND',
-			[
-				'relation' => 'OR',
-				[
-					'key'     => $paid_key,
-					'compare' => 'NOT EXISTS',
-				],
-				[
-					'key'     => $paid_key,
-					'value'   => '',
-					'compare' => '=',
-				],
-			],
-			[
-				'relation' => 'OR',
-				[
-					'key'     => $paid_key_alt,
-					'compare' => 'NOT EXISTS',
-				],
-				[
-					'key'     => $paid_key_alt,
-					'value'   => '',
-					'compare' => '=',
-				],
-			],
-		];
-		$q->set('meta_query', $meta_query);
-		$q->set('meta_key', $paid_key); // nur für Sortier-Handling unten
+		$meta_query[] = $block;
+		// kein meta_key setzen, damit offene ohne Meta nicht rausfallen
 	}
+
+	$q->set('meta_query', $meta_query);
 
 	// Sortierung
 	switch ($q->get('orderby')) {
@@ -295,11 +239,36 @@ add_action('pre_get_posts', function(\WP_Query $q){
 			$q->set('orderby', 'meta_value');
 			break;
 		case 'beleg_bezahlt':
-			$q->set('meta_key', CMX_BELEG_META_BEZAHLT);
-			$q->set('orderby', 'meta_value');
+			// Immer custom sort, damit unbezahlte (ohne Meta) nicht rausfallen
+			$q->set('orderby', 'beleg_bezahlt_custom');
 			break;
 	}
 }, 50);
+
+// Custom ORDER BY für "beleg_bezahlt" damit offene (ohne Datum) nicht rausfallen
+add_filter('posts_clauses', function($clauses, \WP_Query $q){
+	if (!is_admin() || !$q->is_main_query()) return $clauses;
+	$pt = $q->get('post_type');
+	if ($pt !== CMX_PT_BELEGE && (!is_array($pt) || !in_array(CMX_PT_BELEGE, $pt, true))) return $clauses;
+
+	if ($q->get('orderby') !== 'beleg_bezahlt_custom') return $clauses;
+
+	$order = strtoupper($q->get('order')) === 'DESC' ? 'DESC' : 'ASC';
+	global $wpdb;
+	$key1 = esc_sql(CMX_BELEG_META_BEZAHLT);
+	$key2 = esc_sql(ltrim(CMX_BELEG_META_BEZAHLT, '_'));
+
+	if (strpos($clauses['join'], 'cmx_order_paid1') === false) {
+		$clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} AS cmx_order_paid1 ON cmx_order_paid1.post_id = {$wpdb->posts}.ID AND cmx_order_paid1.meta_key = '{$key1}'";
+	}
+	if (strpos($clauses['join'], 'cmx_order_paid2') === false) {
+		$clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} AS cmx_order_paid2 ON cmx_order_paid2.post_id = {$wpdb->posts}.ID AND cmx_order_paid2.meta_key = '{$key2}'";
+	}
+
+	$clauses['orderby'] = "COALESCE(NULLIF(cmx_order_paid1.meta_value,''), NULLIF(cmx_order_paid2.meta_value,'')) {$order}, {$wpdb->posts}.post_date {$order}";
+
+	return $clauses;
+}, 20, 2);
 
 // Admin-Footer JS nur auf der Belege-Liste
 add_action('admin_footer-edit.php', function () {
