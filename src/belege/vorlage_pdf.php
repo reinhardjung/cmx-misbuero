@@ -637,6 +637,12 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) { cmxbu_log('ABBRUCH: Revision/Autosave.',compact('post_id')); return; }
 		if ((defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)) { cmxbu_log('ABBRUCH: DOING_AUTOSAVE.'); return; }
 		if (!current_user_can('edit_post',$post_id)) { cmxbu_log('ABBRUCH: Permission.'); return; }
+		if (in_array($post->post_status, ['auto-draft','draft'], true)) { cmxbu_log('ABBRUCH: draft/auto-draft.',compact('post_id')); return; }
+		$title_raw_check = (string)$post->post_title;
+		if (str_starts_with($title_raw_check, 'automatisch-gespeicherter-entwurf')) {
+			cmxbu_log('ABBRUCH: auto-draft Titel.', compact('post_id'));
+			return;
+		}
 
 		static $in_progress=[]; if (!empty($in_progress[$post_id])) { cmxbu_log('ABBRUCH: bereits in Arbeit.',compact('post_id')); return; }
 		$in_progress[$post_id]=true;
@@ -660,8 +666,14 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$up=wp_get_upload_dir();
 			if (!defined(__NAMESPACE__.'\\CMX_UPLOADS_MISBUERO')) define(__NAMESPACE__.'\\CMX_UPLOADS_MISBUERO', trailingslashit($up['basedir']).'misbuero/');
 		}
-		$base_dir=rtrim(CMX_UPLOADS_MISBUERO,'/').'/'.date('Y').'/';
+		$base_dir=rtrim(CMX_UPLOADS_MISBUERO,'/').'/'.date('Y').'/belege/';
 		if (!wp_mkdir_p($base_dir) || !is_writable($base_dir)) { cmxbu_log('FEHLER: Upload-Verzeichnis',['dir'=>$base_dir]); return; }
+
+		// Cleanup: automatisch gespeicherte Entwurf-Dateien entfernen
+		foreach (['html','pdf'] as $ext) {
+			$auto = $base_dir . 'automatisch-gespeicherter-entwurf_rechnung.' . $ext;
+			if (is_file($auto)) { @unlink($auto); }
+		}
 
 
 		// Dateinamen
