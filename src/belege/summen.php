@@ -132,8 +132,13 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		esc_html(number_format($summe, 2, ',', "'")) .
 		'</span></strong>';
 	if (!empty($anz['count'])) {
+		$anz_sum = (float)$anz['summe'];
+		$offen = $summe - $anz_sum;
 		echo '<div style="font-size:small; margin-top:6px;">Anzahlungen: <strong>' .
-			esc_html(number_format((float)$anz['summe'], 2, ',', "'")) .
+			esc_html(number_format($anz_sum, 2, ',', "'")) .
+			'</strong></div>';
+		echo '<div style="font-size:small; color:#b32d2e;">Offener Betrag: <strong>' .
+			esc_html(number_format($offen, 2, ',', "'")) .
 			'</strong></div>';
 	}
 	echo '</div>';
