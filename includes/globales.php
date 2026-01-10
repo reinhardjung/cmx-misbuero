@@ -6,6 +6,7 @@ require_once 'permalink.php';
 require_once 'excerpt.php';
 require_once 'messages.php';
 require_once 'admin_ui.php';
+require_once 'save_metabox.php';
 require_once 'login_manager.php';
 require_once 'call.php';
 require_once 'datas.php';

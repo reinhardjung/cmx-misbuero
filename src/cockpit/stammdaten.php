@@ -7,7 +7,7 @@ function cmx_register_cpt_count_widget() {
 }
 
 function cmx_render_cpt_count_widget() {
-	$cpts_to_show = ['kontakte','artikel','belege','buchhaltung','projekte','dokumente'];
+	$cpts_to_show = ['kontakte','artikel','belege','kassenbuch','projekte','dokumente'];
 
 	// CPT-Objekte laden
 	$objects = [];

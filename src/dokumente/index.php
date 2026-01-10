@@ -12,9 +12,9 @@ define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien');
 
 
 // Define: CONST 4 each Taxo
-cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHALTUNG);
+cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMENTE);
 // cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), const('\\CMX_TAX_'.strtoupper(basename(__DIR__))));
-// var_dump(CMX_TAX_BUCHHALTUNG); exit;
+// var_dump(CMX_TAX_DOKUMENTE); exit;
 
 
 // Create: @ll Taxos
@@ -25,7 +25,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUCHHAL
 
 // Refill: Taxo with defaults if removed
 \add_action('admin_init', function () {
-	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_BUCHHALTUNG);
+	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_DOKUMENTE);
 });
 
 

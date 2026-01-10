@@ -3,8 +3,8 @@
 /**
  * Setzt den Dateinamen des Beitragsbildes als Titel, falls beim Speichern kein Titel vorhanden ist.
  */
-function cmx_buchhaltung_autofill_title(int $post_id, \WP_Post $post): void {
-	if ($post->post_type !== 'buchhaltung') return;
+function cmx_kassenbuch_autofill_title(int $post_id, \WP_Post $post): void {
+	if ($post->post_type !== 'kassenbuch') return;
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (wp_is_post_revision($post_id)) return;
 	if (!current_user_can('edit_post', $post_id)) return;
@@ -29,11 +29,11 @@ function cmx_buchhaltung_autofill_title(int $post_id, \WP_Post $post): void {
 	$filename = sanitize_text_field($filename);
 	if ($filename === '') return;
 
-	remove_action('save_post_buchhaltung', __NAMESPACE__ . '\\cmx_buchhaltung_autofill_title', 10);
+	remove_action('save_post_kassenbuch', __NAMESPACE__ . '\\cmx_kassenbuch_autofill_title', 10);
 	wp_update_post([
 		'ID'         => $post_id,
 		'post_title' => $filename,
 	]);
-	add_action('save_post_buchhaltung', __NAMESPACE__ . '\\cmx_buchhaltung_autofill_title', 10, 2);
+	add_action('save_post_kassenbuch', __NAMESPACE__ . '\\cmx_kassenbuch_autofill_title', 10, 2);
 }
-\add_action('save_post_buchhaltung', __NAMESPACE__ . '\\cmx_buchhaltung_autofill_title', 10, 2);
+\add_action('save_post_kassenbuch', __NAMESPACE__ . '\\cmx_kassenbuch_autofill_title', 10, 2);

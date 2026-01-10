@@ -1,7 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
- * Metabox: Verlinkt alle zugeordneten Dokumente (CPT "dokumente") bei Buchhaltung.
+ * Metabox: Verlinkt alle zugeordneten Dokumente (CPT "dokumente") bei Kassenbuch.
  */
 \add_action('add_meta_boxes', function() {
 	$title = sprintf(
@@ -10,17 +10,20 @@
 	);
 
 	\add_meta_box(
-		'cmx_buchhaltung_dokumente',
+		'cmx_kassenbuch_dokumente',
 		$title,
-		__NAMESPACE__ . '\\cmx_render_buchhaltung_dokumente_metabox',
-		'buchhaltung',
+		__NAMESPACE__ . '\\cmx_render_kassenbuch_dokumente_metabox',
+		'kassenbuch',
 		'side',
 		'default'
 	);
 });
 
-function cmx_render_buchhaltung_dokumente_metabox(\WP_Post $post): void {
+function cmx_render_kassenbuch_dokumente_metabox(\WP_Post $post): void {
 	$meta_key = defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')
+		? (CMX_DOK_REL_META['kassenbuch'] ?? 'cmx_dokumente_kassenbuch')
+		: 'cmx_dokumente_kassenbuch';
+	$legacy_key = defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')
 		? (CMX_DOK_REL_META['buchhaltung'] ?? 'cmx_dokumente_buchhaltung')
 		: 'cmx_dokumente_buchhaltung';
 
@@ -40,6 +43,24 @@ function cmx_render_buchhaltung_dokumente_metabox(\WP_Post $post): void {
 			],
 		],
 	]);
+	if (!$docs) {
+		$docs = get_posts([
+			'post_type'      => 'dokumente',
+			'post_status'    => ['publish', 'draft', 'pending', 'private'],
+			'posts_per_page' => 200,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+			'no_found_rows'  => true,
+			'fields'         => 'ids',
+			'meta_query'     => [
+				[
+					'key'     => $legacy_key,
+					'value'   => $post->ID,
+					'compare' => 'LIKE',
+				],
+			],
+		]);
+	}
 
 	if (!$docs) {
 		echo '<p>wurden noch nicht zugeordnet.</p>';
@@ -48,8 +69,11 @@ function cmx_render_buchhaltung_dokumente_metabox(\WP_Post $post): void {
 
 	echo '<ul style="margin:0;padding-left:16px;max-height:240px;overflow:auto;">';
 	foreach ($docs as $doc_id) {
-		// Double-check: Nur wenn Zuordnung wirklich die aktuelle buchhaltung-ID enthält.
+		// Double-check: Nur wenn Zuordnung wirklich die aktuelle Kassenbuch-ID enthält.
 		$ids = (array) get_post_meta($doc_id, $meta_key, true);
+		if (empty($ids)) {
+			$ids = (array) get_post_meta($doc_id, $legacy_key, true);
+		}
 		if (!in_array((int) $post->ID, array_map('intval', $ids), true)) {
 			continue;
 		}

@@ -11,7 +11,7 @@ add_action('admin_head', function () {
  * mit sichtbarem „In den Papierkorb verschieben“-Link nach dem Speichern.
  */
 add_action('add_meta_boxes', function() {
-	$allowed = ['post', 'page', 'kontakte','artikel','belege','buchhaltung','dokumente','projekte'];
+	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte'];
 	$screen = get_current_screen();
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 
@@ -28,7 +28,7 @@ add_action('add_meta_boxes', function() {
 				'kontakte'    => 'Kontakt',
 				'artikel'     => 'Artikel',
 				'belege'      => 'Beleg',
-				'buchhaltung' => 'Buchhaltung',
+				'kassenbuch'  => 'Kassenbuch',
 				'dokumente'   => 'Dokument',
 				'projekte'    => 'Projekt',
 				'post'        => __('Beitrag', 'default'),
@@ -151,7 +151,7 @@ add_action('admin_footer', function () {
 
 // Originale "Veröffentlichen"- und "Titelform"-Metaboxen für definierte CPTs entfernen
 add_action('add_meta_boxes', function () {
-	$allowed = ['post', 'page', 'kontakte','artikel','belege','buchhaltung','dokumente','projekte'];
+	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte'];
 	$screen  = function_exists('get_current_screen') ? get_current_screen() : null;
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 

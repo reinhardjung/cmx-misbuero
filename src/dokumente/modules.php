@@ -7,7 +7,7 @@ const CMX_DOK_REL_META = [
 	'artikel'     => 'cmx_dokumente_artikel',
 	'kontakte'    => 'cmx_dokumente_kunden',
 	'projekte'    => 'cmx_dokumente_projekte',
-	'buchhaltung' => 'cmx_dokumente_buchhaltung',
+	'kassenbuch'  => 'cmx_dokumente_kassenbuch',
 	'belege'      => 'cmx_dokumente_belege',
 ];
 
@@ -30,7 +30,7 @@ function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
 		'artikel'     => ['label' => 'Artikel',     'meta' => CMX_DOK_REL_META['artikel']],
 		'kontakte'    => ['label' => 'Kontakte',    'meta' => CMX_DOK_REL_META['kontakte']],
 		'projekte'    => ['label' => 'Projekte',    'meta' => CMX_DOK_REL_META['projekte']],
-		'buchhaltung' => ['label' => 'Buchhaltung', 'meta' => CMX_DOK_REL_META['buchhaltung']],
+		'kassenbuch'  => ['label' => 'Kassenbuch',  'meta' => CMX_DOK_REL_META['kassenbuch']],
 		'belege'      => ['label' => 'Belege',      'meta' => CMX_DOK_REL_META['belege']],
 	];
 
@@ -38,6 +38,9 @@ function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
 
 	foreach ($map as $cpt => $cfg) {
 		$selected = array_map('intval', (array) get_post_meta($post->ID, $cfg['meta'], true));
+		if ($cpt === 'kassenbuch' && empty($selected)) {
+			$selected = array_map('intval', (array) get_post_meta($post->ID, 'cmx_dokumente_buchhaltung', true));
+		}
 		$options  = cmx_dok_fetch_related_posts($cpt);
 		$list_url = admin_url('edit.php?post_type=' . $cpt);
 		$select_id = 'cmx_dok_select_' . esc_attr($cpt);

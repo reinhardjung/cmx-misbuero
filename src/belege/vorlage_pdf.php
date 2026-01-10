@@ -4,7 +4,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 
-require_once CMX_PLUGIN_DIR . 'src/buchhaltung/banken.php';
+require_once CMX_PLUGIN_DIR . 'src/Kassenbuch/banken.php';
 require_once trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/vorlage_schreiben.php';
 // require_once CMX_PLUGIN_DIR . 'src/belege/qr_code.php';  // <--- NEU
 
