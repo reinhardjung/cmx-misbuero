@@ -73,9 +73,48 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_parse_rabatt')) {
 	}
 }
 
+/** ===== Anzahlungen laden und sumieren ===== */
+if (!defined(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN')) {
+	define(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN', '_cmx_beleg_anzahlungen');
+}
+function cmx_load_anzahlungen_summe(int $post_id): array {
+	$raw = get_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN, true);
+	if (empty($raw)) return ['summe' => 0.0, 'count' => 0];
+
+	$rows = $raw;
+	if (is_string($rows)) {
+		$decoded = json_decode($rows, true);
+		if (json_last_error() === JSON_ERROR_NONE) {
+			$rows = $decoded;
+		} else {
+			$maybe = @maybe_unserialize($rows);
+			$rows = is_array($maybe) ? $maybe : [];
+		}
+	}
+	if (!is_array($rows)) return ['summe' => 0.0, 'count' => 0];
+
+	$sum = 0.0;
+	$count = 0;
+	foreach ($rows as $row) {
+		if (!is_array($row)) continue;
+		$datum  = isset($row['datum']) ? trim((string)$row['datum']) : '';
+		$betrag = isset($row['betrag']) ? trim((string)$row['betrag']) : '';
+		if ($datum === '' && $betrag === '') continue;
+		$count++;
+
+		if ($betrag !== '') {
+			$txt = preg_replace('/\s*(chf|fr\.?)\s*/i', '', $betrag);
+			$sum += (float) cmx_norm_decimal($txt);
+		}
+	}
+
+	return ['summe' => $sum, 'count' => $count];
+}
+
 /** ===== Render der Metabox (mit Serversumme & JS-Target) ===== */
 function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	$positionen = cmx_load_positionen($post->ID);
+	$anz = cmx_load_anzahlungen_summe($post->ID);
 
 	$summe = 0.0;
 	foreach ($positionen as $p) {
@@ -92,6 +131,11 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	echo '<strong><span id="cmx-beleg-summe-value" data-currency="">' .
 		esc_html(number_format($summe, 2, ',', "'")) .
 		'</span></strong>';
+	if (!empty($anz['count'])) {
+		echo '<div style="font-size:small; margin-top:6px;">Anzahlungen: <strong>' .
+			esc_html(number_format((float)$anz['summe'], 2, ',', "'")) .
+			'</strong></div>';
+	}
 	echo '</div>';
 }
 
