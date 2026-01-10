@@ -26,64 +26,66 @@ if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')) {
 /**
  * Liefert eine eindeutige, sortierte Liste möglicher Währungen aus dem CPT "artikel".
  */
-function cmx_get_artikel_waehrungen(): array {
-	$waehrungen = [];
+if (!\function_exists(__NAMESPACE__ . '\\cmx_get_artikel_waehrungen')) {
+	function cmx_get_artikel_waehrungen(): array {
+		$waehrungen = [];
 
-	// 1) Taxonomie nutzen, wenn vorhanden
-	$tax = 'artikel_waehrung';
-	if (\taxonomy_exists($tax)) {
-		$terms = \get_terms(['taxonomy' => $tax, 'hide_empty' => false]);
-		if (!\is_wp_error($terms) && !empty($terms)) {
-			foreach ($terms as $t) {
-				$code = \strtoupper(\sanitize_text_field($t->slug ?: $t->name));
-				if (\preg_match('/^[A-Z]{3}$/', $code)) {
-					$waehrungen[] = $code;
+		// 1) Taxonomie nutzen, wenn vorhanden
+		$tax = 'artikel_waehrung';
+		if (\taxonomy_exists($tax)) {
+			$terms = \get_terms(['taxonomy' => $tax, 'hide_empty' => false]);
+			if (!\is_wp_error($terms) && !empty($terms)) {
+				foreach ($terms as $t) {
+					$code = \strtoupper(\sanitize_text_field($t->slug ?: $t->name));
+					if (\preg_match('/^[A-Z]{3}$/', $code)) {
+						$waehrungen[] = $code;
+					}
 				}
 			}
 		}
-	}
 
-	// 2) Distinct-Postmeta als Rückfall
-	if (empty($waehrungen)) {
-		global $wpdb;
-		$pm   = \esc_sql(CMX_ARTIKEL_META_WAEHRUNG);
-		$sql  = "
-			SELECT DISTINCT pm.meta_value
-			FROM {$wpdb->postmeta} pm
-			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-			WHERE pm.meta_key = '{$pm}'
-			  AND p.post_type = 'artikel'
-			  AND p.post_status IN ('publish','draft','pending','future','private')
-		";
-		$rows = $wpdb->get_col($sql);
-		if (!empty($rows)) {
-			foreach ($rows as $val) {
-				$code = \strtoupper(\sanitize_text_field((string)$val));
-				if (\preg_match('/^[A-Z]{3}$/', $code)) {
-					$waehrungen[] = $code;
+		// 2) Distinct-Postmeta als Rückfall
+		if (empty($waehrungen)) {
+			global $wpdb;
+			$pm   = \esc_sql(CMX_ARTIKEL_META_WAEHRUNG);
+			$sql  = "
+				SELECT DISTINCT pm.meta_value
+				FROM {$wpdb->postmeta} pm
+				INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+				WHERE pm.meta_key = '{$pm}'
+				  AND p.post_type = 'artikel'
+				  AND p.post_status IN ('publish','draft','pending','future','private')
+			";
+			$rows = $wpdb->get_col($sql);
+			if (!empty($rows)) {
+				foreach ($rows as $val) {
+					$code = \strtoupper(\sanitize_text_field((string)$val));
+					if (\preg_match('/^[A-Z]{3}$/', $code)) {
+						$waehrungen[] = $code;
+					}
 				}
 			}
 		}
+
+		// 3) Fallback
+		if (empty($waehrungen)) {
+			$waehrungen = ['CHF','EUR','USD'];
+		}
+
+		$waehrungen = \array_values(\array_unique($waehrungen));
+		\sort($waehrungen, \SORT_ASC);
+
+		return (array) \apply_filters('cmx_belege_waehrungen', $waehrungen);
 	}
-
-	// 3) Fallback
-	if (empty($waehrungen)) {
-		$waehrungen = ['CHF','EUR','USD'];
-	}
-
-	$waehrungen = \array_values(\array_unique($waehrungen));
-	\sort($waehrungen, \SORT_ASC);
-
-	return (array) \apply_filters('cmx_belege_waehrungen', $waehrungen);
 }
 
 /** ===== Metabox registrieren ===== */
 \add_action('add_meta_boxes', function () {
 	\add_meta_box(
-		'cmx_beleg_waehrung',
+		'cmx_ausgaben_waehrung',
 		__('Konditionen', 'cmx-misbuero'),
-		__NAMESPACE__ . '\\cmx_render_beleg_waehrung_box',
-		'belege',
+		__NAMESPACE__ . '\\cmx_render_ausgaben_waehrung_box',
+		'ausgaben',
 		'side',
 		'high'
 	);
@@ -93,8 +95,8 @@ function cmx_get_artikel_waehrungen(): array {
  * Render der Side-Box
  * (Neue Felder kommen VOR die bestehende Währungs-Selectbox; am Ende „Bezahlt am“)
  */
-function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
-	\wp_nonce_field('cmx_save_beleg_waehrung', 'cmx_beleg_waehrung_nonce');
+function cmx_render_ausgaben_waehrung_box(\WP_Post $post): void {
+	\wp_nonce_field('cmx_save_ausgaben_waehrung', 'cmx_ausgaben_waehrung_nonce');
 
 	/* ===== Neue Felder: RNG Datum / Fälligkeitsdatum / Leistungszeitraum ===== */
 	$rng      = \get_post_meta($post->ID, CMX_BELEG_META_RNG_DATUM, true);
@@ -215,11 +217,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
-\add_action('save_post_belege', function (int $post_id, \WP_Post $post, bool $update) {
+\add_action('save_post_ausgaben', function (int $post_id, \WP_Post $post, bool $update) {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-	if (!isset($_POST['cmx_beleg_waehrung_nonce']) || !\wp_verify_nonce($_POST['cmx_beleg_waehrung_nonce'], 'cmx_save_beleg_waehrung')) return;
+	if (!isset($_POST['cmx_ausgaben_waehrung_nonce']) || !\wp_verify_nonce($_POST['cmx_ausgaben_waehrung_nonce'], 'cmx_save_ausgaben_waehrung')) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
-	if ($post->post_type !== 'belege') return;
+	if ($post->post_type !== 'ausgaben') return;
 
 	// RNG Datum
 	$rng = isset($_POST['cmx_beleg_rng_datum']) ? \sanitize_text_field($_POST['cmx_beleg_rng_datum']) : '';
@@ -263,87 +265,3 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
 	}
 }, 10, 3);
-
-/**
- * ===== Anzeige der Option-Labels wie im Artikel-CPT (CODE – Name) =====
- */
-function cmx_artikel_waehrung_label_map(): array {
-	$map = [];
-
-	if (\taxonomy_exists('artikel_waehrung')) {
-		$terms = \get_terms(['taxonomy' => 'artikel_waehrung', 'hide_empty' => false]);
-		if (!\is_wp_error($terms) && $terms) {
-			foreach ($terms as $t) {
-				$code = \strtoupper(\sanitize_text_field($t->slug ?: $t->name));
-				$name = \sanitize_text_field($t->name);
-				if (\preg_match('/^[A-Z]{3}$/', $code)) {
-					$map[$code] = $code . ' – ' . $name;
-				}
-			}
-		}
-	}
-
-	$fallback = [
-		'CHF' => 'Schweizer Franken',
-		'EUR' => 'Euro',
-		'USD' => 'US-Dollar',
-	];
-	foreach ($fallback as $code => $label) {
-		if (!isset($map[$code])) $map[$code] = $code . ' – ' . $label;
-	}
-
-	return $map;
-}
-
-\add_action('admin_print_footer_scripts', function () {
-	$screen = \get_current_screen();
-	if (!$screen || $screen->base !== 'post' || $screen->post_type !== 'belege') return;
-
-	$map = cmx_artikel_waehrung_label_map();
-	if (empty($map)) return;
-
-	echo '<script>';
-	echo 'document.addEventListener("DOMContentLoaded",function(){';
-	echo 'const sel=document.getElementById("cmx_beleg_waehrung_select");';
-	echo 'if(!sel)return;';
-	echo 'const map=' . \wp_json_encode($map) . ';';
-	echo 'for(let i=0;i<sel.options.length;i++){const o=sel.options[i];if(map[o.value])o.text=map[o.value];}';
-	echo '});';
-	echo '</script>';
-});
-
-// Nie direkt löschen: immer erst in den Papierkorb (gilt für alle Post Types)
-// Nie direkt löschen: immer erst in den Papierkorb (gilt für alle Post Types)
-\add_filter('pre_delete_post', function ($null, \WP_Post $post, bool $force_delete) {
-	if ($force_delete && $post->post_status !== 'trash') {
-		// Schicke in den Papierkorb statt hart zu löschen
-		\wp_trash_post($post->ID);
-		return true; // Short-circuit hard delete
-	}
-	return $null;
-}, 10, 3);
-
-// Admin-Hinweis korrigieren: "endgültig gelöscht" → "in den Papierkorb verschoben"
-\add_action('admin_init', function() {
-	if (!\is_admin()) return;
-	if (isset($_GET['deleted']) && !isset($_GET['trashed'])) {
-		// Übersetze deleted-Marker in "trashed", damit WP die richtige Meldung zeigt
-		$_GET['trashed'] = (int) $_GET['deleted'];
-		unset($_GET['deleted']);
-	}
-});
-
-// Bulk-/Listen-Meldungen überschreiben (für alle Post Types)
-\add_filter('bulk_post_updated_messages', function(array $bulk_messages, array $bulk_counts): array {
-	foreach ($bulk_messages as $post_type => $messages) {
-		if (isset($bulk_counts['deleted']) && $bulk_counts['deleted'] > 0) {
-			$bulk_messages[$post_type]['deleted'] = _n(
-				'%s Beitrag in den Papierkorb verschoben.',
-				'%s Beiträge in den Papierkorb verschoben.',
-				$bulk_counts['deleted'],
-				'default'
-			);
-		}
-	}
-	return $bulk_messages;
-}, 10, 2);
