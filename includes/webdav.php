@@ -66,14 +66,14 @@ function cmx_dav_zip_dir(string $source, \ZipArchive $zip, string $base): void {
 add_action('init', function () {
 	$req  = $_SERVER['REQUEST_URI'] ?? '';
 	$path = parse_url($req, PHP_URL_PATH) ?? '/';
-	if (!preg_match('#^/dav(?:/|$)#', $path)) return;
+	if (!preg_match('#^/archiv(?:/|$)#', $path)) return;
 
 	require_once plugin_dir_path(__FILE__) . '../vendor/autoload.php';
 
 	$sharePath = WP_CONTENT_DIR . '/uploads/misbuero';
 	$root      = new DAV\FS\Directory($sharePath);
 	$server    = new DAV\Server($root);
-	$server->setBaseUri('/dav'); // bewusst ohne Slash am Ende
+	$server->setBaseUri('/archiv'); // bewusst ohne Slash am Ende
 
 	// BasicAuth mit WP-Usern
 	$authBackend = new DAV\Auth\Backend\BasicCallBack(function($u,$p){
@@ -386,7 +386,7 @@ add_action('init', function () {
 				.'<input type="hidden" name="zip" value="1" />'
 				.'</form>'
 
-				.'<h1><a href="/dav/">Mis Büro</a></h1>'
+				.'<h1><a href="/archiv/">Mis Büro - Archiv</a></h1>'
 				.'<div class="toolbar">'.$zipButton.'<span class="breadcrumbs">'.implode('', $crumbs).'</span></div>'
 				.'<table class="table"><thead><tr>'
 				.'<th><input type="checkbox" class="cmx-master" title="Alle Dateien auswählen" /></th>'
