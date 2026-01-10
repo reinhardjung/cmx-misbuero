@@ -3,7 +3,7 @@
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 70, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-media-document', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+	'menu_position' => 60, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-media-document', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 

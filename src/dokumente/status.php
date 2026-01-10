@@ -5,6 +5,7 @@ const CMX_DOK_STATUS_OPTIONS = [
 	'in_arbeit'  => 'in Arbeit',
 	'pruefen'    => 'prüfen',
 	'freigegeben'=> 'freigegeben',
+	'abgescshlossen'=> 'abgescshlossen',
 	'archiviert' => 'archiviert',
 ];
 
