@@ -1,0 +1,203 @@
+<?php
+/**
+ * Plugin Name: CMX Belege – Kopfdaten mit Projektsuche & Kontaktsuche (AJAX, Inline-Buttons, Keyboard-Navigation)
+ * Description: Metabox für CPT "belege" mit AJAX-Suche (Projekte & Kontakte), Inline-"Löschen", Keyboard-Navigation (↑/↓/Enter/Esc), Auto-Fill: Kontakt/Adresse aus Projekt, Betreff aus Projekt-URL. Titel = nur Rechnungsnummer.
+ * Author: CLOUDMEISTER
+ */
+
+namespace CLOUDMEISTER\CMX\Buero;
+defined('ABSPATH') || die('Oxytocin!');
+
+/* =========================================================
+ * Meta Key
+ * ========================================================= */
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN')) {
+	\define(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN', '_cmx_beleg_anzahlungen');
+}
+
+/* =========================================================
+ * Metabox registrieren
+ * ========================================================= */
+\add_action('add_meta_boxes', function () {
+	if (!\post_type_exists('belege')) return;
+	\add_meta_box(
+		'cmx_beleg_anzahlungen',
+		'Anzahlungen',
+		__NAMESPACE__.'\\cmx_render_beleg_anzahlungen_metabox',
+		'belege',
+		'side',
+		'default'
+	);
+});
+
+/* =========================================================
+ * Daten laden
+ * ========================================================= */
+function cmx_beleg_anzahlungen_get_rows(int $post_id): array {
+	$raw = \get_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN, true);
+
+	if (\is_string($raw) && $raw !== '') {
+		$decoded = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
+			$raw = $decoded;
+		} else {
+			$maybe = @\maybe_unserialize($raw);
+			$raw = \is_array($maybe) ? $maybe : [];
+		}
+	} elseif (!\is_array($raw)) {
+		$raw = [];
+	}
+
+	$rows = [];
+	foreach ($raw as $row) {
+		if (!\is_array($row)) continue;
+		$datum  = isset($row['datum']) ? \trim((string)$row['datum']) : '';
+		$betrag = isset($row['betrag']) ? \trim((string)$row['betrag']) : '';
+		if ($datum === '' && $betrag === '') continue;
+		$rows[] = ['datum'=>$datum, 'betrag'=>$betrag];
+	}
+	if (\count($rows) > 1) {
+		\usort($rows, function(array $a, array $b): int {
+			$ad = $a['datum'] ?? '';
+			$bd = $b['datum'] ?? '';
+			if ($ad === $bd) return 0;
+			if ($ad === '') return 1;
+			if ($bd === '') return -1;
+			$at = \strtotime($ad) ?: 0;
+			$bt = \strtotime($bd) ?: 0;
+			if ($at === $bt) return \strcmp($ad, $bd);
+			return $at <=> $bt;
+		});
+	}
+	return $rows;
+}
+
+/* =========================================================
+ * Metabox-Render
+ * ========================================================= */
+function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
+	$rows = cmx_beleg_anzahlungen_get_rows($post->ID);
+	if (!$rows) $rows = [['datum'=>'', 'betrag'=>'']];
+
+	\wp_nonce_field('cmx_save_beleg_anzahlungen', 'cmx_beleg_anzahlungen_nonce');
+
+	echo '<style>
+		.cmx-anzahlung-row{border:1px solid #e2e4e7;background:#fff;padding:6px;margin:0 0 8px}
+		.cmx-anzahlung-row label{display:block;font-size:11px;margin:0 0 2px}
+		.cmx-anzahlung-row input[type=text]{width:100%}
+		.cmx-anzahlung-row input[type=date]{width:100%}
+		.cmx-anzahlung-today{cursor:pointer;text-decoration:underline}
+		.cmx-anzahlung-betrag-row{display:flex;gap:6px;align-items:center}
+		.cmx-anzahlung-betrag-row input[type=text]{flex:1 1 auto}
+		.cmx-anzahlung-del{flex:0 0 auto;padding:0 8px;line-height:24px}
+	</style>';
+
+	echo '<div id="cmx-anzahlungen-wrap">';
+	foreach ($rows as $i => $row) {
+		$datum  = \esc_attr($row['datum'] ?? '');
+		$betrag = \esc_attr($row['betrag'] ?? '');
+		echo '<div class="cmx-anzahlung-row">';
+		echo '<label>Datum <small style="color:#666;">(<span class="cmx-anzahlung-today">heute</span>)</small></label>';
+		echo '<input type="date" class="cmx-anzahlung-date" data-name="cmx_anzahlungen[__INDEX__][datum]" name="cmx_anzahlungen['.$i.'][datum]" value="'.$datum.'">';
+		echo '<label style="margin-top:6px">Betrag</label>';
+		echo '<div class="cmx-anzahlung-betrag-row">';
+		echo '<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen['.$i.'][betrag]" value="'.$betrag.'">';
+		echo '<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>';
+		echo '</div>';
+		echo '</div>';
+	}
+	echo '</div>';
+
+	echo '<button type="button" class="button" id="cmx-anzahlung-add">hinzufuegen</button>';
+
+	echo '<script type="text/html" id="cmx-anzahlung-template">
+		<div class="cmx-anzahlung-row">
+			<label>Datum <small style="color:#666;">(<span class="cmx-anzahlung-today">heute</span>)</small></label>
+			<input type="date" class="cmx-anzahlung-date" data-name="cmx_anzahlungen[__INDEX__][datum]" name="cmx_anzahlungen[__INDEX__][datum]" value="">
+			<label style="margin-top:6px">Betrag</label>
+			<div class="cmx-anzahlung-betrag-row">
+				<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen[__INDEX__][betrag]" value="">
+				<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>
+			</div>
+		</div>
+	</script>';
+
+	echo '<script>
+	jQuery(function($){
+		const $wrap = $("#cmx-anzahlungen-wrap");
+		const tmpl = $("#cmx-anzahlung-template").html();
+
+		function reindexRows(){
+			$wrap.find(".cmx-anzahlung-row").each(function(i){
+				$(this).find("input[data-name]").each(function(){
+					const base = $(this).data("name");
+					if (base) $(this).attr("name", base.replace("__INDEX__", i));
+				});
+			});
+		}
+
+		function todayISO(){
+			const d = new Date();
+			const y = d.getFullYear();
+			const m = String(d.getMonth() + 1).padStart(2, "0");
+			const day = String(d.getDate()).padStart(2, "0");
+			return y + "-" + m + "-" + day;
+		}
+
+		$("#cmx-anzahlung-add").on("click", function(){
+			const idx = $wrap.find(".cmx-anzahlung-row").length;
+			const $row = $(tmpl.replace(/__INDEX__/g, idx));
+			$wrap.append($row);
+			$row.find("input:first").trigger("focus");
+		});
+
+		$wrap.on("click", ".cmx-anzahlung-del", function(){
+			const $rows = $wrap.find(".cmx-anzahlung-row");
+			if ($rows.length <= 1) {
+				$(this).closest(".cmx-anzahlung-row").find("input").val("");
+				return;
+			}
+			$(this).closest(".cmx-anzahlung-row").remove();
+			reindexRows();
+		});
+
+		$wrap.on("click", ".cmx-anzahlung-today", function(e){
+			e.preventDefault();
+			const $row = $(this).closest(".cmx-anzahlung-row");
+			$row.find(".cmx-anzahlung-date").val(todayISO()).trigger("change");
+		});
+	});
+	</script>';
+}
+
+/* =========================================================
+ * Save-Handler
+ * ========================================================= */
+\add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
+	if (\wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id)) return;
+	if ($post->post_type !== 'belege') return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+	if (!isset($_POST['cmx_beleg_anzahlungen_nonce']) || !\wp_verify_nonce($_POST['cmx_beleg_anzahlungen_nonce'], 'cmx_save_beleg_anzahlungen')) return;
+	if (defined('DOING_AJAX') && DOING_AJAX) return;
+
+	$rows = $_POST['cmx_anzahlungen'] ?? [];
+	if (!\is_array($rows)) return;
+
+	if (\count($rows) > 200) $rows = \array_slice($rows, 0, 200);
+
+	$clean = [];
+	foreach ($rows as $row) {
+		if (!\is_array($row)) continue;
+		$datum  = isset($row['datum']) ? \trim((string)\sanitize_text_field($row['datum'])) : '';
+		$betrag = isset($row['betrag']) ? \trim((string)\sanitize_text_field($row['betrag'])) : '';
+		if ($datum === '' && $betrag === '') continue;
+		$clean[] = ['datum'=>$datum, 'betrag'=>$betrag];
+	}
+
+	if (!$clean) {
+		\delete_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN);
+		return;
+	}
+
+	\update_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN, \wp_json_encode($clean));
+}, 10, 3);
