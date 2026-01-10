@@ -13,6 +13,8 @@ const CMX_KONTAKTE_META_URL      = '_cmx_kontakte_url';
 const CMX_KONTAKTE_META_PRIVAT   = '_cmx_kontakte_privat';
 const CMX_KONTAKTE_META_KUNDEN_NR = '_cmx_kontakte_kunden_nr';
 const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
+const CMX_KONTAKTE_META_FIRMENGRUENDUNG = '_cmx_kontakte_firmengruendung';
+const CMX_KONTAKTE_META_GEBURTSDATUM    = '_cmx_kontakte_geburtsdatum';
 
 /**
  * ------------------------------------------------------------
@@ -49,6 +51,22 @@ function cmx_register_kontakte_stammdaten_meta() {
 	]);
 	// DATUM (YYYY-MM-DD)
 	\register_post_meta('kontakte', CMX_KONTAKTE_META_DATUM, [
+		'type'              => 'string',
+		'single'            => true,
+		'show_in_rest'      => true,
+		'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_date_ymd',
+		'auth_callback'     => fn() => \current_user_can('edit_posts'),
+	]);
+	// Firmengründung (YYYY-MM-DD)
+	\register_post_meta('kontakte', CMX_KONTAKTE_META_FIRMENGRUENDUNG, [
+		'type'              => 'string',
+		'single'            => true,
+		'show_in_rest'      => true,
+		'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_date_ymd',
+		'auth_callback'     => fn() => \current_user_can('edit_posts'),
+	]);
+	// Geburtsdatum (YYYY-MM-DD)
+	\register_post_meta('kontakte', CMX_KONTAKTE_META_GEBURTSDATUM, [
 		'type'              => 'string',
 		'single'            => true,
 		'show_in_rest'      => true,
@@ -97,7 +115,14 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$privat   = (bool)   \get_post_meta($post->ID, CMX_KONTAKTE_META_PRIVAT, true);
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
-	$datum    = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_DATUM, true);
+	$datum_legacy = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_DATUM, true);
+	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
+	$geburt   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_GEBURTSDATUM, true);
+	if ($datum_legacy !== '') {
+		if ($privat && $geburt === '') $geburt = $datum_legacy;
+		if (!$privat && $firmengr === '') $firmengr = $datum_legacy;
+		if ($firmengr === '' && $geburt === '') $firmengr = $datum_legacy;
+	}
 
 	// Für das Label (nur Anzeige) https:// ergänzen
 	$url_disp = \trim($url_raw);
@@ -123,7 +148,6 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .field--anrede{min-width:200px;}
 	#cmx-stammdaten .text,
 	#cmx-stammdaten .date {width:100% !important; max-width:100% !important}
-	#cmx-stammdaten .field--datum .date {width:100% !important; max-width:100% !important}
 	#cmx-stammdaten .url-label a{text-decoration:none}
 	#cmx-stammdaten .url-label a:hover{text-decoration:underline}
 	#cmx-stammdaten input[type=checkbox]{
@@ -178,29 +202,17 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 			onblur="if(this.value && !/^https?:\\/\\//i.test(this.value)){this.value=\'https://\'+this.value.trim().replace(/^\\/+/ , \'\');}">
 	</p>';
 
-	// Datum (rechts neben URL) mit dynamischem Label
-	$label_text = $privat ? 'Geburtsdatum' : 'Firmengründung';
+	// Firmengründung + Geburtsdatum (gleiche Zeile)
 	echo '<p class="field field--datum">
-	<label for="cmx_datum"><strong id="cmx_datum_label">' . \esc_html($label_text) . '</strong></label><br>
-	<input id="cmx_datum" name="cmx_datum" type="date" class="date" value="' . \esc_attr($datum) . '">
+	<label for="cmx_firmengruendung"><strong>Firmengründung</strong></label><br>
+	<input id="cmx_firmengruendung" name="cmx_firmengruendung" type="date" class="date" value="' . \esc_attr($firmengr) . '">
+	</p>';
+	echo '<p class="field field--datum">
+	<label for="cmx_geburtsdatum"><strong>Geburtsdatum</strong></label><br>
+	<input id="cmx_geburtsdatum" name="cmx_geburtsdatum" type="date" class="date" value="' . \esc_attr($geburt) . '">
 	</p>';
 
 	echo '</div></div>';
-
-	// Inline-JS für dynamisches Label
-	echo '<script>
-	(function(){
-		const cb   = document.getElementById("cmx_privat");
-		const lab  = document.getElementById("cmx_datum_label");
-		if(!cb || !lab) return;
-		function syncLabel(){
-			lab.textContent = cb.checked ? "Geburtsdatum" : "Firmengründung";
-		}
-		cb.addEventListener("change", syncLabel, {passive:true});
-		document.addEventListener("DOMContentLoaded", syncLabel, {once:true});
-		syncLabel();
-	})();
-	</script>';
 }
 
 /**
@@ -249,16 +261,29 @@ function cmx_save_kontakte_meta(int $post_id): void {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
 	}
 
-	// Datum (YYYY-MM-DD)
-	if (isset($_POST['cmx_datum'])) {
-		$in = (string) $_POST['cmx_datum'];
-		$dt = \DateTime::createFromFormat('Y-m-d', $in);
-		$val = ($dt && $dt->format('Y-m-d') === $in) ? $in : '';
-		if ($val === '') {
-			\delete_post_meta($post_id, CMX_KONTAKTE_META_DATUM);
-		} else {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, $val);
-		}
+	// Firmengründung / Geburtsdatum (YYYY-MM-DD)
+	$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) $_POST['cmx_firmengruendung'] : '';
+	$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) $_POST['cmx_geburtsdatum'] : '';
+	$firmengruendung = cmx_sanitize_date_ymd($firmengruendung);
+	$geburtsdatum    = cmx_sanitize_date_ymd($geburtsdatum);
+
+	if ($firmengruendung === '') {
+		\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
+	} else {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
+	}
+	if ($geburtsdatum === '') {
+		\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
+	} else {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $geburtsdatum);
+	}
+
+	// Legacy-Feld für bestehende Integrationen
+	$legacy_val = $geburtsdatum !== '' ? $geburtsdatum : $firmengruendung;
+	if ($legacy_val === '') {
+		\delete_post_meta($post_id, CMX_KONTAKTE_META_DATUM);
+	} else {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, $legacy_val);
 	}
 }
 

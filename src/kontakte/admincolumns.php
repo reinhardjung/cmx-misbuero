@@ -1,5 +1,12 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+if (!\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')) {
+	\define(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG', '_cmx_kontakte_firmengruendung');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+	\define(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM', '_cmx_kontakte_geburtsdatum');
+}
+
 
 /**
  * NEU: Helper – Kundenkategorie-Taxonomie robust ermitteln
@@ -456,8 +463,8 @@ function cmx_kontakte_apply_tax_filters($query) {
 
 /**
  * ------------------------------------------------------------
- * Admin Columns: "Hersteller URL" + "Datum" hinzufügen
- * Reihenfolge: … [URL] → Hersteller URL → Datum → … (Fallback: vor "Karte"; sonst ans Ende)
+ * Admin Columns: "Hersteller URL" + Firmengründung + Geburtsdatum hinzufügen
+ * Reihenfolge: … [URL] → Hersteller URL → Firmengründung → Geburtsdatum → … (Fallback: vor "Karte"; sonst ans Ende)
  * ------------------------------------------------------------
  */
 \add_filter('manage_edit-kontakte_columns', __NAMESPACE__ . '\\cmx_kontakte_add_columns');
@@ -478,8 +485,9 @@ function cmx_kontakte_add_columns(array $columns): array {
 	// Falls weder URL noch Karte existiert: ans Ende anhängen
 	if (!$inserted_after_url && !isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
-		$new['cmx_datum']          = 'Datum';
 	}
+	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Firmengründung';
+	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburtsdatum';
 
 	if ($logo_label !== null) {
 		$new['cmx_logo'] = $logo_label; // Logo ans Ende
@@ -505,8 +513,14 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 		return;
 	}
 
-	if ($column === 'cmx_datum') {
-		$raw = (string) \get_post_meta($post_id, CMX_KONTAKTE_META_DATUM, true);
+	if ($column === 'cmx_firmengruendung' || $column === 'cmx_geburtsdatum') {
+		$meta_key = ($column === 'cmx_firmengruendung')
+			? CMX_KONTAKTE_META_FIRMENGRUENDUNG
+			: CMX_KONTAKTE_META_GEBURTSDATUM;
+		$raw = (string) \get_post_meta($post_id, $meta_key, true);
+		if ($raw === '') {
+			$raw = (string) \get_post_meta($post_id, CMX_KONTAKTE_META_DATUM, true);
+		}
 		if ($raw === '') { echo ''; return; }
 
 		$dt = \DateTime::createFromFormat('Y-m-d', $raw);
@@ -528,8 +542,12 @@ function cmx_kontakte_orderby_columns(\WP_Query $query): void {
 		$query->set('meta_key', CMX_KONTAKTE_META_URL);
 		$query->set('orderby', 'meta_value');
 	}
-	if ($orderby === 'cmx_datum') {
-		$query->set('meta_key', CMX_KONTAKTE_META_DATUM);
+	if ($orderby === 'cmx_firmengruendung') {
+		$query->set('meta_key', CMX_KONTAKTE_META_FIRMENGRUENDUNG);
+		$query->set('orderby', 'meta_value');
+	}
+	if ($orderby === 'cmx_geburtsdatum') {
+		$query->set('meta_key', CMX_KONTAKTE_META_GEBURTSDATUM);
 		$query->set('orderby', 'meta_value');
 	}
 }

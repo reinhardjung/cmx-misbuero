@@ -60,21 +60,27 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 			$url = 'https://'.ltrim($url, '/');
 		}
 
-		// NEU: Datum (YYYY-MM-DD), mit serverseitiger Validierung
-		$datum_in = isset($_POST['cmx_datum']) ? (string) \wp_unslash($_POST['cmx_datum']) : '';
+		// NEU: Firmengründung / Geburtsdatum (YYYY-MM-DD), mit serverseitiger Validierung
+		$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) \wp_unslash($_POST['cmx_firmengruendung']) : '';
+		$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) \wp_unslash($_POST['cmx_geburtsdatum']) : '';
 		if (function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
-			$datum_in = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $datum_in);
+			$firmengruendung = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $firmengruendung);
+			$geburtsdatum    = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $geburtsdatum);
 		} else {
-			// Fallback-Validierung
-			$dt = \DateTime::createFromFormat('Y-m-d', $datum_in);
-			$datum_in = ($dt && $dt->format('Y-m-d') === $datum_in) ? $datum_in : '';
+			$dt = \DateTime::createFromFormat('Y-m-d', $firmengruendung);
+			$firmengruendung = ($dt && $dt->format('Y-m-d') === $firmengruendung) ? $firmengruendung : '';
+			$dt = \DateTime::createFromFormat('Y-m-d', $geburtsdatum);
+			$geburtsdatum = ($dt && $dt->format('Y-m-d') === $geburtsdatum) ? $geburtsdatum : '';
 		}
 
 		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  $vor);
 		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, $nach);
 		\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT,   $priv);
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      esc_url_raw($url));
-		\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM,    $datum_in); // NEU
+		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
+		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM,    $geburtsdatum);
+		$legacy_val = $geburtsdatum !== '' ? $geburtsdatum : $firmengruendung;
+		\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM,    $legacy_val);
 	}
 
 	/* --- Umsatz-Metabox (optional) --- */
