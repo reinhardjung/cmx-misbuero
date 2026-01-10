@@ -35,6 +35,60 @@ function cmx65_adminbar($wp_admin_bar) {
 		],
 	]);
 
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menu1_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
+
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_katalog_id',
+		'title' => 'Katalog',
+		'href'  => '/katalog/',
+		'meta'  => [
+			'title'  => __('Dein Online Katalog', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_telefon_id',
+		'title' => 'Telefonbuch',
+		'href'  => '/telefonbuch/',
+		'meta'  => [
+			'title'  => __('Dein Telefonbuch', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_archiv_id',
+		'title' => 'Archiv',
+		'href'  => '/archiv/',
+		'meta'  => [
+			'title'  => __('Dein Archiv', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menu2_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
+
+
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_handbuch_id',
 		'title' => 'Online-Handbuch',
