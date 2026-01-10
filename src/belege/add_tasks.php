@@ -7,6 +7,7 @@
 
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_add_tasks_to_beleg', 2, 3);
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_mark_project_tasks_paid', 30, 3);
+\add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_sync_task_billing_flags', 50, 3);
 function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
@@ -91,6 +92,13 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $projekt_id);
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', wp_json_encode($import_result['imported_keys']));
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $projekt_id);
+		// Tasks im Projekt sofort als abgerechnet markieren, damit sie nicht erneut importiert werden
+		foreach ($import_result['imported_keys'] as $idx) {
+			if (isset($tasks[$idx]) && is_array($tasks[$idx])) {
+				$tasks[$idx]['abgerechnet'] = 1;
+			}
+		}
+		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
 		\error_log("[CMX] Beleg {$post_id}: ".count($import_result['positionen'])." Task-Positionen ergänzt (Projekt {$projekt_id}).");
 	} else {
 		\error_log("[CMX] Beleg {$post_id}: keine neuen Tasks importiert. Tasks gesamt={$import_result['total']}, abgerechnet={$import_result['skipped_done']}, ohne Art/Dauer={$import_result['skipped_empty']}, ohne Preis={$import_result['skipped_no_price']}.");
@@ -160,6 +168,90 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 }
 
 /**
+ * Synchronisiere abgerechnet-Status mit aktuellen Positionen.
+ * Wenn importierte Task-Positionen entfernt wurden, wird der Task wieder auf "nicht abgerechnet" gesetzt.
+ */
+function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $update): void {
+	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (\wp_is_post_revision($post_id)) return;
+	if ($post->post_status === 'auto-draft') return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+	if ($post->post_type !== 'belege') return;
+
+	$projekt_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
+	if ($projekt_imported === '') return;
+	$imported_keys_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', true);
+	$imported_keys = $imported_keys_json ? json_decode($imported_keys_json, true) : [];
+	if (!is_array($imported_keys) || empty($imported_keys)) return;
+
+	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
+	if ($projekt_id <= 0 && function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
+		foreach (cmx_meta_projekt_ids() as $key) {
+			$projekt_id = (int) \get_post_meta($post_id, $key, true);
+			if ($projekt_id > 0) break;
+		}
+	}
+	if ($projekt_id <= 0) return;
+
+	$tasks_raw = \get_post_meta($projekt_id, '_cmx_projekt_tasks', true);
+	if (is_string($tasks_raw) && $tasks_raw !== '') {
+		$tmp = json_decode($tasks_raw, true);
+		if (json_last_error() === JSON_ERROR_NONE) {
+			$tasks = $tmp;
+		} else {
+			$tmp = @maybe_unserialize($tasks_raw);
+			$tasks = is_array($tmp) ? $tmp : [];
+		}
+	} elseif (is_array($tasks_raw)) {
+		$tasks = $tasks_raw;
+	} else {
+		$tasks = [];
+	}
+	if (empty($tasks)) return;
+
+	// Aktuelle Positionen laden und task_idx sammeln
+	$positionen_raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
+	if (is_string($positionen_raw) && $positionen_raw !== '') {
+		$tmp = json_decode($positionen_raw, true);
+		if (json_last_error() === JSON_ERROR_NONE) {
+			$positionen = $tmp;
+		} else {
+			$positionen = @maybe_unserialize($positionen_raw);
+			if (!is_array($positionen)) $positionen = [];
+		}
+	} elseif (is_array($positionen_raw)) {
+		$positionen = $positionen_raw;
+	} else {
+		$positionen = [];
+	}
+
+	$present = [];
+	foreach ($positionen as $row) {
+		if (!is_array($row)) continue;
+		if (isset($row['task_idx']) && $row['task_idx'] !== '') {
+			$present[(int)$row['task_idx']] = true;
+		}
+	}
+
+	$updated = false;
+	foreach ($imported_keys as $idx) {
+		$idx = (int)$idx;
+		if (!isset($tasks[$idx]) || !is_array($tasks[$idx])) continue;
+		$should = isset($present[$idx]) ? 1 : 0;
+		$current = $tasks[$idx]['abgerechnet'] ?? 0;
+		$current = (int) (is_string($current) ? ($current === '1') : (bool)$current);
+		if ($current !== $should) {
+			$tasks[$idx]['abgerechnet'] = $should;
+			$updated = true;
+		}
+	}
+
+	if ($updated) {
+		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
+	}
+}
+
+/**
  * Sammle Positionen aus Tasks. Kann optional abgerechnete ignorieren oder erzwingen.
  */
 function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): array {
@@ -196,6 +288,7 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): arra
 			'preis'        => (string)$vk,
 			'rabatt'       => '',
 			'beschreibung' => $t['info'] ?? '',
+			'task_idx'     => $idx,
 		];
 
 		$imported_keys[] = $idx;

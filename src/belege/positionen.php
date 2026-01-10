@@ -191,6 +191,7 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 		$rabatt       = sanitize_text_field($rabatt_raw);
 
 		$beschreibung = isset($row['beschreibung']) ? wp_kses_post($row['beschreibung']) : '';
+		$task_idx     = isset($row['task_idx']) ? (int)$row['task_idx'] : null;
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -202,6 +203,7 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			'preis'        => $preis,
 			'rabatt'       => $rabatt,
 			'beschreibung' => $beschreibung,
+			'task_idx'     => $task_idx,
 		];
 	}
 
