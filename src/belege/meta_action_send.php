@@ -90,9 +90,18 @@ function cmxbu_handle_beleg_send(): void {
 	$subject = $beleg_label . ': ' . $beleg_id;
 
 	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
+	if (strpos($message, '{beleg}') !== false) {
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
+	} else {
+		$message = rtrim($message) . ' ' . $beleg_link;
+	}
+	$message = str_replace('{beleg}', esc_html($beleg_id), $message);
 	// var_dump($message); exit;
 	// cmx_get_belegfuss($beleg_type);
-	$sent = \wp_mail($to, $subject, $message .' ' .$download_url);
+	$headers = ['Content-Type: text/html; charset=UTF-8'];
+	$message = cmxbu_prepare_belegmail_html($message);
+	$sent = \wp_mail($to, $subject, $message, $headers);
 
 	if (!$sent) {
 		\wp_die('E-Mail konnte nicht gesendet werden.');
@@ -112,7 +121,7 @@ function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
 	$message = '';
 
 	if (isset($options[$key]) && is_string($options[$key])) {
-		$message = str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
+		$message = $options[$key];
 	}
 
 	if ($kontakt_id) {
@@ -120,8 +129,42 @@ function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
 			? CMX_KONTAKTE_META_ANREDE
 			: '_cmx_kontakte_anrede';
 		$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
-		$message = str_replace('{anrede}', $anrede, $message);
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede));
 	}
 
 	return $message;
+}
+
+function cmxbu_replace_placeholder_with_spacing(string $message, string $placeholder, string $replacement): string {
+	if ($placeholder === '' || strpos($message, $placeholder) === false) {
+		return $message;
+	}
+
+	$parts = explode($placeholder, $message);
+	$out = array_shift($parts);
+	foreach ($parts as $part) {
+		$before = $out !== '' ? substr($out, -1) : '';
+		$after = $part !== '' ? substr($part, 0, 1) : '';
+		if ($before !== '' && !preg_match('/\\s/', $before)) {
+			$out .= ' ';
+		}
+		$out .= $replacement;
+		if ($after !== '' && !preg_match('/\\s/', $after)) {
+			$out .= ' ';
+		}
+		$out .= $part;
+	}
+
+	return $out;
+}
+
+function cmxbu_prepare_belegmail_html(string $message): string {
+	// If message already contains HTML, leave it as-is.
+	if (preg_match('/<[^>]+>/', $message)) {
+		return $message;
+	}
+
+	// Plain text: preserve new lines.
+	$message = esc_html($message);
+	return nl2br($message);
 }

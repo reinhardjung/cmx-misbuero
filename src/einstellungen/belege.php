@@ -67,7 +67,77 @@ function cmx_field_textarea_beleg(array $args): void {
 	$options = get_option('cmx_belege', []);
 	$value   = $options[$key] ?? '';
 
-	// Wenn leer → Placeholder aus INI
+	if (cmx_starts_with($key, 'mail_')) {
+		$display = (string) $value;
+		$editor_id = 'cmx_belege_' . $key;
+		\wp_editor($display, $editor_id, [
+			'textarea_name' => 'cmx_belege[' . $key . ']',
+			'textarea_rows' => $rows,
+			'media_buttons' => false,
+			'teeny' => true,
+			'quicktags' => true,
+		]);
+		echo '<p class="description">Platzhalter: '
+			. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{anrede}">{anrede}</button>'
+			. ' · '
+			. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{beleg}">{beleg}</button>'
+			. '</p>';
+		echo '<script>
+		(function(){
+			function needsSpace(ch) {
+				return !(ch && /\\s/.test(ch));
+			}
+			function withSmartSpacing(text, beforeChar, afterChar) {
+				var out = text;
+				if (needsSpace(beforeChar)) out = " " + out;
+				if (needsSpace(afterChar)) out = out + " ";
+				return out;
+			}
+			function insertAtCursor(el, text) {
+				if (!el) return;
+				var start = el.selectionStart || 0;
+				var end = el.selectionEnd || 0;
+				var beforeChar = start > 0 ? el.value.charAt(start - 1) : "";
+				var afterChar = end < el.value.length ? el.value.charAt(end) : "";
+				text = withSmartSpacing(text, beforeChar, afterChar);
+				var val = el.value || "";
+				el.value = val.slice(0, start) + text + val.slice(end);
+				var pos = start + text.length;
+				el.selectionStart = el.selectionEnd = pos;
+				el.focus();
+			}
+			function insertPlaceholder(editorId, text) {
+				if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
+					var editor = tinyMCE.get(editorId);
+					editor.focus();
+					var beforeChar = "";
+					var afterChar = "";
+					var rng = editor.selection.getRng();
+					if (rng && rng.collapsed && rng.startContainer && rng.startContainer.nodeType === 3) {
+						var nodeText = rng.startContainer.textContent || "";
+						var offset = rng.startOffset || 0;
+						beforeChar = offset > 0 ? nodeText.charAt(offset - 1) : "";
+						afterChar = offset < nodeText.length ? nodeText.charAt(offset) : "";
+					}
+					text = withSmartSpacing(text, beforeChar, afterChar);
+					editor.selection.setContent(text);
+					return;
+				}
+				var textarea = document.getElementById(editorId);
+				insertAtCursor(textarea, text);
+			}
+			document.addEventListener("click", function(e){
+				var btn = e.target.closest ? e.target.closest(".cmx-insert-placeholder") : null;
+				if (!btn) return;
+				e.preventDefault();
+				insertPlaceholder(btn.getAttribute("data-editor"), btn.getAttribute("data-placeholder"));
+			});
+		})();
+		</script>';
+		return;
+	}
+
+	// Wenn leer -> Placeholder aus INI
 	$default = cmx_get_beleg_default($key);
 	$display = ($value === '') ? $default : $value;
 
