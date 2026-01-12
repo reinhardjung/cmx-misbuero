@@ -4,7 +4,7 @@ defined('ABSPATH') || die('Oxytocin!');
 
 return [
     'type' => 'minitable',
-    'width' => 3,
+    'width' => 2,
     'height' => 2,
     'minitable' => [
         'title' => 'Bewegungen',

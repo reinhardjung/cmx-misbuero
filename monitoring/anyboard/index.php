@@ -181,11 +181,114 @@ function cmx_anyboard_rechnungen_stats(): array
     ];
 }
 
+function cmx_anyboard_angebote_stats(): array
+{
+    if (!class_exists('\\WP_Query')) {
+        return ['paid_count' => 0, 'open_count' => 0, 'sum_total' => 0.0];
+    }
+
+    $paid_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
+        ? CMX_BELEG_META_BEZAHLT
+        : '_cmx_beleg_bezahlt_am';
+    $paid_key_alt = ltrim($paid_key, '_');
+
+    $base_args = [
+        'post_type' => 'belege',
+        'post_status' => ['publish', 'private'],
+        'posts_per_page' => -1,
+        'no_found_rows' => true,
+        'fields' => 'ids',
+        'tax_query' => [
+            [
+                'taxonomy' => 'belege_kategorien',
+                'field' => 'slug',
+                'terms' => ['angebot'],
+                'operator' => 'IN',
+            ],
+        ],
+    ];
+
+    $paid_query = new \WP_Query(array_merge($base_args, [
+        'meta_query' => [
+            'relation' => 'OR',
+            [
+                'relation' => 'AND',
+                [
+                    'key' => $paid_key,
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key' => $paid_key,
+                    'value' => '',
+                    'compare' => '!=',
+                ],
+            ],
+            [
+                'relation' => 'AND',
+                [
+                    'key' => $paid_key_alt,
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => '',
+                    'compare' => '!=',
+                ],
+            ],
+        ],
+    ]));
+
+    $open_query = new \WP_Query(array_merge($base_args, [
+        'meta_query' => [
+            'relation' => 'AND',
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $paid_key,
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key' => $paid_key,
+                    'value' => '',
+                    'compare' => '=',
+                ],
+            ],
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $paid_key_alt,
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => '',
+                    'compare' => '=',
+                ],
+            ],
+        ],
+    ]));
+
+    $sum_total = 0.0;
+    if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+        $all_ids = array_unique(array_merge($paid_query->posts, $open_query->posts));
+        foreach ($all_ids as $bid) {
+            $calc = cmxbu_get_beleg_positionen_calc($bid);
+            $sum_total += isset($calc['total']) ? (float) $calc['total'] : 0.0;
+        }
+    }
+
+    return [
+        'paid_count' => count($paid_query->posts),
+        'open_count' => count($open_query->posts),
+        'sum_total' => $sum_total,
+    ];
+}
+
 function cmx_anyboard_widget_files(): array
 {
     return [
-        __DIR__ . '/widget_cockpit.php',
-        __DIR__ . '/widget_datum_zeit.php',
+        __DIR__ . '/cockpit.php',
+        __DIR__ . '/datum_zeit.php',
         __DIR__ . '/kontakte.php',
         __DIR__ . '/artikel.php',
         __DIR__ . '/projekte.php',
@@ -294,17 +397,23 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $projekte = cmx_anyboard_count_active_projects();
     $dokumente = cmx_anyboard_count_posts('dokumente');
     $rechnungen = cmx_anyboard_rechnungen_stats();
+    $angebote = cmx_anyboard_angebote_stats();
 
-    $sum_label = function_exists('number_format_i18n')
-        ? number_format_i18n((float) ($rechnungen['sum_total'] ?? 0.0), 2)
-        : number_format((float) ($rechnungen['sum_total'] ?? 0.0), 2, '.', "'");
+    $sum_label = number_format((float) ($rechnungen['sum_total'] ?? 0.0), 2, '.', "'");
+    $sum_angebote = number_format((float) ($angebote['sum_total'] ?? 0.0), 2, '.', "'");
 
     $bewegungen = [
         [
-            'label' => 'Offene Rechnungen',
-            'green' => (string) ($rechnungen['open_count'] ?? 0),
+            'label' => 'Rechnungen',
+            'green' => (string) ($rechnungen['paid_count'] ?? 0),
             'red' => (string) ($rechnungen['open_count'] ?? 0),
             'sum' => $sum_label,
+        ],
+        [
+            'label' => 'Angebote',
+            'green' => (string) ($angebote['paid_count'] ?? 0),
+            'red' => (string) ($angebote['open_count'] ?? 0),
+            'sum' => $sum_angebote,
         ],
         ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
         ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
