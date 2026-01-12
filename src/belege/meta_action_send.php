@@ -1,5 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+require_once __DIR__ . '/vorlage_mail.php';
+
 
 /**
  * Metabox-Teil: "versenden"-Button
@@ -77,6 +79,11 @@ function cmxbu_handle_beleg_send(): void {
 	 */
 	$to = \get_post_meta($kontakt_id, '_cmx_email_1', true);
 
+	$anrede_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+		? CMX_KONTAKTE_META_ANREDE
+		: '_cmx_kontakte_anrede';
+	$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
+
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
@@ -90,6 +97,15 @@ function cmxbu_handle_beleg_send(): void {
 	$subject = $beleg_label . ': ' . $beleg_id;
 
 	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+	if (trim($message) === '') {
+		$message = cmxbu_render_belegmail_template([
+			'anrede' => $anrede,
+			'beleg_label' => $beleg_label,
+			'beleg_id' => $beleg_id,
+			'download_url' => $download_url,
+			'site_name' => \get_bloginfo('name'),
+		]);
+	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
