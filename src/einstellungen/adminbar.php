@@ -23,6 +23,9 @@ function cmx65_adminbar($wp_admin_bar) {
             background: none !important;
             color: yellow !important;
         }
+        #wpadminbar #wp-admin-bar-cmx65_monitoring_id > .ab-item {
+            cursor: copy !important;
+        }
     </style>';
 
 	$wp_admin_bar->add_menu([
@@ -46,6 +49,17 @@ function cmx65_adminbar($wp_admin_bar) {
 		],
 	]);
 
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_monitoring_id',
+		'title' => 'Monitoring',
+		'href'  => 'https://anyboard.io/',
+		'meta'  => [
+			'title'  => __('Monitoring für Apple TV', 'textdomain'),
+			'target' => '_blank',
+			'rel'    => 'noopener',
+		],
+	]);
 
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_katalog_id',
@@ -150,4 +164,69 @@ function cmx65_adminbar($wp_admin_bar) {
 			'title' => __('Hier kannst ein Support Ticket erstellen', 'textdomain'),
 		],
 	]);
+
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+}
+
+function cmx65_anyboard_copy_script(): void
+{
+	$current_user = wp_get_current_user();
+	$user = $current_user && $current_user->exists() ? $current_user->user_login : '';
+	$pw = $current_user && $current_user->exists()
+		? (string) get_user_meta($current_user->ID, 'cmx_anyboard_pw', true)
+		: '';
+
+	$args = [
+		'user' => $user,
+		'pw' => '{DeinPassword}',
+	];
+
+	$anyboard_url = add_query_arg($args, home_url('/wp-json/cmx-misbuero/v1/anyboard'));
+
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-cmx65_monitoring_id > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var url = ' . json_encode($anyboard_url) . ';
+                var openAnyboard = function () {
+                    window.open("https://anyboard.io/", "_blank", "noopener");
+                };
+                if (!url) {
+                    openAnyboard();
+                    return;
+                }
+                var done = function () {
+                    alert("URL für Anyboard wurde in die Zeischenablage kopiert.");
+                    openAnyboard();
+                };
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                        done();
+                    } catch (e) {
+                        window.prompt("URL kopieren:", url);
+                        openAnyboard();
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(done, fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
 }
