@@ -9,6 +9,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	$beleg_id = trim((string) ($data['beleg_id'] ?? ''));
 	$download_url = (string) ($data['download_url'] ?? '');
 	$site_name = trim((string) ($data['site_name'] ?? ''));
+	$catalog_url = (string) ($data['catalog_url'] ?? '');
 	if ($site_name === '') {
 		$site_name = 'MisBüro';
 	}
@@ -32,6 +33,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	$title_esc = esc_html($title);
 	$anrede_esc = esc_html($anrede);
 	$site_name_esc = esc_html($site_name);
+	$catalog_url_esc = esc_url($catalog_url);
 	$preheader_esc = esc_html($preheader);
 
 	return '<!doctype html>
@@ -84,7 +86,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 						<td style="padding:0 24px 24px 24px;">
 							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">
-								Diese E-Mail wurde von ' . $site_name_esc . ' automatisch generiert.
+								Diese E-Mail wurde von <a href="' . $catalog_url_esc . '" style="color:#8b98a5;text-decoration:underline;">' . $site_name_esc . '</a> automatisch generiert.
 							</p>
 						</td>
 					</tr>
