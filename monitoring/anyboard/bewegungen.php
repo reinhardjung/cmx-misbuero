@@ -3,9 +3,10 @@ namespace CLOUDMEISTER\CMX\Buero;
 defined('ABSPATH') || die('Oxytocin!');
 
 return [
+    'type' => 'minitable',
     'width' => 3,
     'height' => 2,
-    'table' => [
+    'minitable' => [
         'title' => 'Bewegungen',
         'columns' => [
             [
@@ -35,14 +36,21 @@ return [
                 'flex' => 2,
             ],
         ],
+        'data' => [
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+        ],
     ],
     'source' => [
         'endpoint' => 'stats',
         'mapping' => [
-            'table.data[].label' => 'data.bewegungen[].label',
-            'table.data[].green' => 'data.bewegungen[].green',
-            'table.data[].red' => 'data.bewegungen[].red',
-            'table.data[].sum' => 'data.bewegungen[].sum',
+            'data[].label' => 'data.bewegungen[].label',
+            'data[].green' => 'data.bewegungen[].green',
+            'data[].red' => 'data.bewegungen[].red',
+            'data[].sum' => 'data.bewegungen[].sum',
         ],
     ],
 ];
