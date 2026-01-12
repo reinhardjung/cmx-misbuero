@@ -49,7 +49,7 @@ add_action('init', function() {
 		require_once __DIR__ . '/includes/index.php';
 	}
 
-	foreach (explode(',', 'kontakte,artikel,belege,ausgaben,Kassenbuch,dokumente,cockpit,projekte,einstellungen,postfach') as $module) {
+	foreach (explode(',', 'kontakte,artikel,belege,ausgaben,Kassenbuch,dokumente,cockpit,projekte,einstellungen,postfach,bank') as $module) {
 		require_once __DIR__ .'/src/' . trim($module) . '/index.php';
 	}
 });

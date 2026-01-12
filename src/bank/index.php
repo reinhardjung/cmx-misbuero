@@ -1,0 +1,52 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+
+// function cmx_dir_const(string $prefix = 'CMX_TAX_'): string {
+//     $slug = basename(__DIR__);
+//     $name = $prefix . strtoupper($slug);
+
+//     defined($name) || define($name, $slug);
+
+//     return constant($name);
+// }
+
+
+// Define: Custom-Post-Type based on DIR
+register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+	'menu_position' => 50, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-building', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+]);
+
+
+// Define: CONST 4 @ll Taxos
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien');
+
+
+// Define: CONST 4 each Taxo
+cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_PROJEKTE);
+// cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__),cmx_dir_const());
+// cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__),defined('CMX_' . strtoupper(basename(__DIR__))) ? constant('CMX_' . strtoupper(basename(__DIR__))) : (define('CMX_' . strtoupper(basename(__DIR__)), basename(__DIR__)) ? constant('CMX_' . strtoupper(basename(__DIR__))) : basename(__DIR__)));
+
+// cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), define('\\CMX_TAX_',strtoupper(basename(__DIR__))));
+
+
+// Create: @ll Taxos
+\add_action('init', function () {
+	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
+	// cmx_create_taxo(basename(__DIR__), 'Type', 'Typen', false);
+	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
+}, 15);
+
+
+// Refill: Taxo with defaults if removed
+\add_action('admin_init', function () {
+	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_PROJEKTE);
+	// cmx_seed_taxo(cmx_sani_key(basename(__DIR__), 'title'),cmx_dir_const());
+});
+
+
+// Define: Const 4 @ll CPT Fields
+// cmx_define_meta_constants(basename(__DIR__), ['umsatz']);
+
+
+// Include: @ll metaboxes
+// cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, dokumente, tasks, tasks-side');

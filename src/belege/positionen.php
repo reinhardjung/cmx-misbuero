@@ -123,7 +123,7 @@ function cmx_render_position_row($i, $pos) {
 	$nr           = $artikel_id ? cmx_get_artikel_nr($artikel_id) : '';
 	$display      = esc_html( ($nr ? $nr.' – ' : '') . ($title ?: ($pos['artikel_name'] ?? '')) );
 
-	$menge        = (string)($pos['menge'] ?? 1);
+	$menge        = (string)($pos['menge'] ?? '');
 	$preis        = (string)($pos['preis'] ?? '');
 	$beschreibung = esc_textarea($pos['beschreibung'] ?? '');
 	$rabatt       = esc_attr($pos['rabatt'] ?? '');
@@ -522,7 +522,7 @@ function cmx_beleg_positionen_js() {
 				if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
 				if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
 				else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
-				else if($el.is('[name*="[menge]"]')){ $el.val('1'); }
+				else if($el.is('[name*="[menge]"]')){ $el.val(''); }
 				else if($el.is('[name*="[preis]"]')){ $el.val(''); }
 				else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
 				else if($el.is('textarea')){ $el.val(''); } else { $el.val(''); }
@@ -538,7 +538,19 @@ function cmx_beleg_positionen_js() {
 
 		// Entfernen
 		table.on('click','.cmx-del-pos',function(){
-			if(table.find('tr').length>1) $(this).closest('tr').remove();
+			const $row = $(this).closest('tr');
+			if (table.find('tr').length > 1) {
+				$row.remove();
+			} else {
+				// Letzte Zeile: Inhalte leeren, damit kein zusätzlicher Platzhalter nötig ist
+				$row.find('input, textarea').each(function(){
+					const $el = $(this);
+					if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
+					else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
+					else { $el.val(''); }
+				});
+				$row.find('.cmx-pos-total').text('0.00');
+			}
 			setTimeout(recalcAll, 0);
 		});
 
