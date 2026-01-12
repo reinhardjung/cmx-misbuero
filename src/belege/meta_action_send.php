@@ -27,8 +27,6 @@ function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
  */
 function cmxbu_handle_beleg_send(): void {
 
-	$BelegID =get_post( intval($_GET['post_id'] ?? 0) )->post_title ?? '';
-
 	if (empty($_GET['post_id'])) {
 		\wp_die('Beleg-ID fehlt.');
 	}
@@ -39,6 +37,7 @@ function cmxbu_handle_beleg_send(): void {
 	if (!$post || $post->post_type !== 'belege') {
 		\wp_die('Beleg nicht gefunden.');
 	}
+	$beleg_id = (string) ($post->post_title ?? '');
 
 	// PDF-Pfade
 	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
@@ -48,7 +47,7 @@ function cmxbu_handle_beleg_send(): void {
 
 	// Token → Download-Link
 	$token        = cmxbu_get_stable_token($post_id);
-	$download_url = \home_url('/?beleg=' . $token);
+	$download_url = \add_query_arg('beleg', $token, \home_url('/'));
 
 
 	/**
@@ -81,15 +80,14 @@ function cmxbu_handle_beleg_send(): void {
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
-	$terms = get_the_terms($post_id, 'belege_kategorien');
-	$beleg_slug = is_array($terms) && isset($terms[0]) ? (string) $terms[0]->slug : '';
+	[, $beleg_slug] = cmx_get_beleg_type($post);
 	$beleg_label = [
 		'rechnung'     => 'Rechnung',
 		'angebot'      => 'Angebot',
 		'lieferschein' => 'Lieferschein',
 		'gutschrift'   => 'Gutschrift',
 	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');
-	$subject = $beleg_label . ': ' . $BelegID;
+	$subject = $beleg_label . ': ' . $beleg_id;
 
 	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
 	// var_dump($message); exit;
@@ -118,7 +116,10 @@ function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
 	}
 
 	if ($kontakt_id) {
-		$anrede = trim((string) get_post_meta($kontakt_id, CMX_KONTAKTE_META_ANREDE, true));
+		$anrede_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+			? CMX_KONTAKTE_META_ANREDE
+			: '_cmx_kontakte_anrede';
+		$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
 		$message = str_replace('{anrede}', $anrede, $message);
 	}
 
