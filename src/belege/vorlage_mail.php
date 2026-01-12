@@ -14,7 +14,17 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	}
 
 	$title = $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
-	$preheader = $title . ' ist verfügbar.';
+	$faellig_bis = trim((string) ($data['faellig_bis'] ?? ''));
+	$betrag = trim((string) ($data['betrag'] ?? ''));
+	if ($betrag !== '' && $faellig_bis !== '') {
+		$preheader = 'Betrag ' . $betrag . ' zahlbar bis ' . $faellig_bis;
+	} elseif ($betrag !== '') {
+		$preheader = 'Betrag ' . $betrag;
+	} elseif ($faellig_bis !== '') {
+		$preheader = 'Zahlbar bis ' . $faellig_bis;
+	} else {
+		$preheader = 'Beleg ist verfügbar.';
+	}
 
 	$download_url = esc_url($download_url);
 	$beleg_label_esc = esc_html($beleg_label);
@@ -47,8 +57,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 						<td style="padding:24px 24px 8px 24px;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1f2933;">
 							<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>
 							<!--- <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg ' . $beleg_label_esc . ' ist bereit zum download: <strong>' . $beleg_id_esc . '</strong></p> -->
-							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg ist bereit zum download: ' . $beleg_label_esc . ' <strong>' . $beleg_id_esc . '</strong></p>
-							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
+							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg ist bereit zum download.</p>
 							<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;">
 								<tr>
 									<td bgcolor="#a42c24" style="border-radius:8px;">
@@ -63,10 +72,12 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 									</td>
 								</tr>
 							</table>
+							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
+							<!---
 							<p style="margin:0 0 10px 0;font-size:14px;color:#52616b;line-height:1.5;">
-								Alternativ kannst Du auch den Link kopieren:
 								<a href="' . $download_url . '" style="color:#a42c24;text-decoration:underline;">' . $download_url . '</a>
 							</p>
+							 -->
 						</td>
 					</tr>
 					<tr>

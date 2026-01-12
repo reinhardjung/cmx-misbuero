@@ -83,6 +83,8 @@ function cmxbu_handle_beleg_send(): void {
 		? CMX_KONTAKTE_META_ANREDE
 		: '_cmx_kontakte_anrede';
 	$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
+	$faellig_bis = cmxbu_get_beleg_due_date_display($post_id);
+	$betrag = cmxbu_get_beleg_amount_display($post_id);
 
 	if (empty($to) || !\is_email($to)) {
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
@@ -103,16 +105,21 @@ function cmxbu_handle_beleg_send(): void {
 			'beleg_label' => $beleg_label,
 			'beleg_id' => $beleg_id,
 			'download_url' => $download_url,
+			'faellig_bis' => $faellig_bis,
+			'betrag' => $betrag,
 			'site_name' => \get_bloginfo('name'),
 		]);
+	}
+	if ($faellig_bis !== '') {
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{faellig_bis}', esc_html($faellig_bis));
+	}
+	if ($betrag !== '') {
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{betrag}', esc_html($betrag));
 	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
-	} else {
-		$message = rtrim($message) . ' ' . $beleg_link;
 	}
-	$message = str_replace('{beleg}', esc_html($beleg_id), $message);
 	// var_dump($message); exit;
 	// cmx_get_belegfuss($beleg_type);
 	$headers = ['Content-Type: text/html; charset=UTF-8'];
@@ -183,4 +190,80 @@ function cmxbu_prepare_belegmail_html(string $message): string {
 	// Plain text: preserve new lines.
 	$message = esc_html($message);
 	return nl2br($message);
+}
+
+function cmxbu_get_beleg_due_date_display(int $post_id): string {
+	$keys = [];
+	if (defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')) {
+		$keys[] = CMX_BELEG_META_FAELLIG;
+	}
+	$keys[] = '_cmx_beleg_faelligkeitsdatum';
+	$keys[] = '_cmx_beleg_faellig_am';
+
+	$raw = null;
+	if (function_exists(__NAMESPACE__ . '\\cmxbu_first_meta')) {
+		$raw = cmxbu_first_meta($post_id, $keys);
+	} else {
+		foreach ($keys as $key) {
+			$val = get_post_meta($post_id, $key, true);
+			if ($val !== '' && $val !== null) {
+				$raw = (string) $val;
+				break;
+			}
+		}
+	}
+
+	$raw = trim((string) $raw);
+	if ($raw === '') return '';
+	if (preg_match('~^\\d{1,2}\\.\\d{1,2}\\.\\d{4}$~', $raw)) return $raw;
+
+	$ts = strtotime($raw);
+	if ($ts) return date('d.m.Y', $ts);
+
+	return $raw;
+}
+
+function cmxbu_get_beleg_amount_display(int $post_id): string {
+	if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+		return '';
+	}
+
+	$currency = '';
+	if (defined(__NAMESPACE__ . '\\CMX_BELEG_META_WAEHRUNG')) {
+		$currency = (string) get_post_meta($post_id, CMX_BELEG_META_WAEHRUNG, true);
+	}
+	if ($currency === '') {
+		$currency = (string) get_post_meta($post_id, '_cmx_beleg_waehrung', true);
+	}
+	if ($currency === '') {
+		$currency = 'CHF';
+	}
+
+	$mwst_rate = 0.0;
+	if (function_exists(__NAMESPACE__ . '\\cmxbu_get_mwst_term_data')) {
+		$mwst_term_id = (int) get_post_meta($post_id, '_cmx_beleg_mwst_term', true);
+		$mwst = cmxbu_get_mwst_term_data($mwst_term_id);
+		$mwst_rate = (float)($mwst['rate'] ?? 0.0);
+	}
+
+	$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
+	$opts_general = (array) get_option('cmx_einstellungen', []);
+	$is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig'])
+		|| !empty($opts_general['mwst_pfl'])
+		|| !empty($opts_general['mwstpflichtig']);
+	if (!$is_mwst_pflichtig) {
+		$mwst_rate = 0.0;
+		$is_brutto = false;
+	}
+
+	$calc = cmxbu_get_beleg_positionen_calc($post_id, [
+		'currency' => $currency,
+		'tax_rate' => $mwst_rate,
+		'is_brutto' => $is_brutto,
+	]);
+
+	$total = (float)($calc['total'] ?? 0.0);
+	$formatted = number_format_i18n($total, 2);
+
+	return trim($formatted . ' ' . $currency);
 }
