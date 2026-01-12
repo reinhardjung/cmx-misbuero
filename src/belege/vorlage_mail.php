@@ -52,7 +52,14 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 							<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;">
 								<tr>
 									<td bgcolor="#a42c24" style="border-radius:8px;">
-										<a href="' . $download_url . '" style="display:inline-block;padding:12px 20px;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#ffffff;text-decoration:none;font-weight:600;">PDF Beleg downloaden</a>
+										<a href="' . $download_url . '" style="display:inline-block;padding:12px 20px;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#ffffff;text-decoration:none;font-weight:600;" aria-label="PDF Beleg downloaden" title="PDF Beleg downloaden">
+											<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;display:inline-block;margin-right:8px;">
+												<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>
+												<path d="M15 2v6h6" fill="#e7e9ef"/>
+												<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="#d84a3a"/>
+												<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff">PDF</text>
+											</svg>PDF Beleg herunterladen
+										</a>
 									</td>
 								</tr>
 							</table>
