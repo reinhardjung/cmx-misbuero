@@ -284,6 +284,108 @@ function cmx_anyboard_angebote_stats(): array
     ];
 }
 
+function cmx_anyboard_ausgaben_stats(): array
+{
+    if (!class_exists('\\WP_Query')) {
+        return ['paid_sum' => 0.0, 'open_sum' => 0.0];
+    }
+
+    $paid_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
+        ? CMX_BELEG_META_BEZAHLT
+        : '_cmx_beleg_bezahlt_am';
+    $paid_key_alt = ltrim($paid_key, '_');
+    $betrag_key = defined(__NAMESPACE__ . '\\CMX_AUSGABEN_META_GESAMTBETRAG')
+        ? CMX_AUSGABEN_META_GESAMTBETRAG
+        : '_cmx_ausgaben_gesamtbetrag';
+
+    $base_args = [
+        'post_type' => 'ausgaben',
+        'post_status' => ['publish', 'private'],
+        'posts_per_page' => -1,
+        'no_found_rows' => true,
+        'fields' => 'ids',
+    ];
+
+    $paid_query = new \WP_Query(array_merge($base_args, [
+        'meta_query' => [
+            'relation' => 'OR',
+            [
+                'relation' => 'AND',
+                [
+                    'key' => $paid_key,
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key' => $paid_key,
+                    'value' => '',
+                    'compare' => '!=',
+                ],
+            ],
+            [
+                'relation' => 'AND',
+                [
+                    'key' => $paid_key_alt,
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => '',
+                    'compare' => '!=',
+                ],
+            ],
+        ],
+    ]));
+
+    $open_query = new \WP_Query(array_merge($base_args, [
+        'meta_query' => [
+            'relation' => 'AND',
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $paid_key,
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key' => $paid_key,
+                    'value' => '',
+                    'compare' => '=',
+                ],
+            ],
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $paid_key_alt,
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => '',
+                    'compare' => '=',
+                ],
+            ],
+        ],
+    ]));
+
+    $paid_sum = 0.0;
+    foreach ($paid_query->posts as $pid) {
+        $raw = (string) get_post_meta($pid, $betrag_key, true);
+        $val = (float) str_replace(',', '.', preg_replace('/[^0-9,.\-]/', '', $raw));
+        $paid_sum += $val;
+    }
+
+    $open_sum = 0.0;
+    foreach ($open_query->posts as $pid) {
+        $raw = (string) get_post_meta($pid, $betrag_key, true);
+        $val = (float) str_replace(',', '.', preg_replace('/[^0-9,.\-]/', '', $raw));
+        $open_sum += $val;
+    }
+
+    return [
+        'paid_sum' => $paid_sum,
+        'open_sum' => $open_sum,
+    ];
+}
+
 function cmx_anyboard_widget_files(): array
 {
     return [
@@ -398,9 +500,16 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $dokumente = cmx_anyboard_count_posts('dokumente');
     $rechnungen = cmx_anyboard_rechnungen_stats();
     $angebote = cmx_anyboard_angebote_stats();
+    $ausgaben = cmx_anyboard_ausgaben_stats();
 
     $sum_label = number_format((float) ($rechnungen['sum_total'] ?? 0.0), 2, '.', "'");
     $sum_angebote = number_format((float) ($angebote['sum_total'] ?? 0.0), 2, '.', "'");
+    $ausgaben_paid = (float) ($ausgaben['paid_sum'] ?? 0.0);
+    $ausgaben_open = (float) ($ausgaben['open_sum'] ?? 0.0);
+    $ausgaben_diff = $ausgaben_paid - $ausgaben_open;
+    $ausgaben_paid_label = number_format($ausgaben_paid, 2, '.', "'");
+    $ausgaben_open_label = number_format($ausgaben_open, 2, '.', "'");
+    $ausgaben_diff_label = number_format($ausgaben_diff, 2, '.', "'");
 
     $bewegungen = [
         [
@@ -415,7 +524,12 @@ function cmx_anyboard_data_response(): \WP_REST_Response
             'red' => (string) ($angebote['open_count'] ?? 0),
             'sum' => $sum_angebote,
         ],
-        ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+        [
+            'label' => 'Ausgaben',
+            'green' => $ausgaben_paid_label,
+            'red' => $ausgaben_open_label,
+            'sum' => $ausgaben_diff_label,
+        ],
         ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
         ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
         ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],

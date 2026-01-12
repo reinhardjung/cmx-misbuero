@@ -22,6 +22,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_LEISTUNGSMONAT')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')) {
 	\define(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM', '_cmx_beleg_bezahlt_am'); // YYYY-MM-DD
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_AUSGABEN_META_GESAMTBETRAG')) {
+	\define(__NAMESPACE__ . '\\CMX_AUSGABEN_META_GESAMTBETRAG', '_cmx_ausgaben_gesamtbetrag');
+}
 
 /**
  * Liefert eine eindeutige, sortierte Liste möglicher Währungen aus dem CPT "artikel".
@@ -103,6 +106,7 @@ function cmx_render_ausgaben_waehrung_box(\WP_Post $post): void {
 	$faellig  = \get_post_meta($post->ID, CMX_BELEG_META_FAELLIG, true);
 	$leistMon = \get_post_meta($post->ID, CMX_BELEG_META_LEISTUNGSMONAT, true);
 	$bezahlt  = \get_post_meta($post->ID, CMX_BELEG_META_BEZAHLT_AM, true);
+	$gesamtbetrag = \get_post_meta($post->ID, CMX_AUSGABEN_META_GESAMTBETRAG, true);
 
 	// Fälligkeitsdatum Standard: heute + 30 Tage, falls leer
 	if ($faellig === '' || $faellig === null) {
@@ -214,6 +218,12 @@ function cmx_render_ausgaben_waehrung_box(\WP_Post $post): void {
 	echo '})();</script>';
 
 	echo '</p>';
+
+	/* ===== NEU: Gesamtbetrag ===== */
+	echo '<p style="margin:8px 0 0;">';
+	echo '<label for="cmx_gesamtbetrag" style="display:block;margin-bottom:6px;"><strong>Gesamtbetrag</strong></label>';
+	echo '<input type="text" name="cmx_gesamtbetrag" id="cmx_gesamtbetrag" style="width:100%;" value="' . \esc_attr((string) $gesamtbetrag) . '" placeholder="0.00">';
+	echo '</p>';
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
@@ -264,4 +274,39 @@ function cmx_render_ausgaben_waehrung_box(\WP_Post $post): void {
 	} else {
 		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
 	}
+
+	// ===== NEU: Gesamtbetrag =====
+	$gesamtbetrag = isset($_POST['cmx_gesamtbetrag']) ? \sanitize_text_field($_POST['cmx_gesamtbetrag']) : '';
+	$gesamtbetrag = \preg_replace('/[^0-9,\\.\\-]/', '', (string) $gesamtbetrag);
+	if ($gesamtbetrag !== '') {
+		\update_post_meta($post_id, CMX_AUSGABEN_META_GESAMTBETRAG, $gesamtbetrag);
+	} else {
+		\delete_post_meta($post_id, CMX_AUSGABEN_META_GESAMTBETRAG);
+	}
 }, 10, 3);
+
+add_action('save_post_ausgaben', __NAMESPACE__ . '\\cmx_ausgaben_set_title_date', 20, 3);
+function cmx_ausgaben_set_title_date(int $post_id, \WP_Post $post, bool $update): void {
+	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (!isset($_POST['cmx_ausgaben_waehrung_nonce']) || !\wp_verify_nonce($_POST['cmx_ausgaben_waehrung_nonce'], 'cmx_save_ausgaben_waehrung')) return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+	if ($post->post_type !== 'ausgaben') return;
+
+	$title = (string) $post->post_title;
+	if ($title !== '' && $post->post_status !== 'auto-draft') {
+		return;
+	}
+
+	$title_date = \gmdate('ymd-His', \current_time('timestamp'));
+
+	remove_action('save_post_ausgaben', __NAMESPACE__ . '\\cmx_ausgaben_set_title_date', 20);
+	$args = [
+		'ID' => $post_id,
+		'post_title' => $title_date,
+	];
+	if ($post->post_status === 'auto-draft') {
+		$args['post_status'] = 'draft';
+	}
+	\wp_update_post($args);
+	add_action('save_post_ausgaben', __NAMESPACE__ . '\\cmx_ausgaben_set_title_date', 20, 3);
+}
