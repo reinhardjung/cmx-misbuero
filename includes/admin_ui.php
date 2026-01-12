@@ -214,7 +214,7 @@ add_action('admin_head', function () {
 		color: #d63638;
 	}
 	body.post-php .cmx-dup-link::before {
-		content: "\f463"; /* dashicons-controls-repeat */
+		content: "\f105"; /* dashicons-controls-repeat */
 		font-size: 18px;
 		color: #d63638; /* Rot passend zum Papierkorb */
 	}

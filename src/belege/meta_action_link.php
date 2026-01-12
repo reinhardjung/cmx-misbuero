@@ -23,12 +23,12 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post): void {
 
 	// Download-Button
 	// echo '<a href="' . \esc_url($download_url) . '" target="_blank" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;">download</a>';
-	echo '<a href="' . esc_url($download_url) . '" target="_blank" title="download als PDF" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;"> <span class="dashicons dashicons-download" style="margin-top:5px;"></span></a>';
+	echo '<a href="' . esc_url($download_url) . '" target="_blank" title="download als PDF" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;"> <span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
 
 
 	// Copy-Button
 	// echo '<a href="#" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy" data-download-url="' . \esc_attr($download_url) . '" style="color:darkred; border:darkred solid 1px; margin-right:10px;">Link</a>';
-	echo '<a href="#" title="kopiere download-Link in Zwischenablage" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy"data-download-url="' . esc_attr($download_url) . '"style="color:darkred; border:darkred solid 1px; margin-right:10px;"><span class="dashicons dashicons-admin-page" style="margin-top:4px;"></span></a>';
+	echo '<a href="#" title="kopiere download-Link in Zwischenablage" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy"data-download-url="' . esc_attr($download_url) . '"style="color:darkred; border:darkred solid 1px; margin-right:10px;"><span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span></a>';
 
 
 	// JS für Copy-Funktion (kopiert den Link in die Zwischenablage)
