@@ -28,6 +28,7 @@ require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/webdav.php';
 require_once __DIR__ . '/includes/featured_images.php';
+require_once __DIR__ . '/includes/anyboard.php';
 // Login-spezifische Hooks (z. B. Passwort-Reset) müssen auch ohne eingeloggten Nutzer verfügbar sein.
 require_once __DIR__ . '/includes/login_manager.php';
 
