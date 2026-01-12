@@ -28,7 +28,7 @@ function cmx_render_ausgaben_uploads_box(\WP_Post $post): void {
 	echo '<div id="cmx-ausgaben-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
 	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG</small>';
 	echo '</div>';
-	echo '<input type="file" id="cmx-ausgaben-file" accept=\"application/pdf,image/png,image/jpeg\" style="display:none" multiple>';
+	echo '<input type="file" id="cmx-ausgaben-file" style="display:none" multiple>';
 	echo '<div id="cmx-ausgaben-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
 	echo '</div>';
 
