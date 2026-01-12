@@ -19,45 +19,47 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post): void {
 	// }
 
 	// Download-URL über stabilen Token
-	$download_url = \home_url('/?beleg=' . $token);
+	$download_url = \add_query_arg('beleg', $token, \home_url('/'));
 
 	// Download-Button
 	// echo '<a href="' . \esc_url($download_url) . '" target="_blank" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;">download</a>';
-	echo '<a href="' . esc_url($download_url) . '" target="_blank" title="download als PDF" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;"> <span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
+	echo '<a href="' . esc_url($download_url) . '" target="_blank" rel="noopener noreferrer" title="Download als PDF" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download" style="color:#a42c24; border:#a42c24 solid 1px;" aria-label="Download als PDF"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
 
 
 	// Copy-Button
 	// echo '<a href="#" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy" data-download-url="' . \esc_attr($download_url) . '" style="color:darkred; border:darkred solid 1px; margin-right:10px;">Link</a>';
-	echo '<a href="#" title="kopiere download-Link in Zwischenablage" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy"data-download-url="' . esc_attr($download_url) . '"style="color:darkred; border:darkred solid 1px; margin-right:10px;"><span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span></a>';
+	echo '<a href="#" title="Kopiere Download-Link in Zwischenablage" class="button button-secondary alignright cmx-btn-transparent cmx-btn-copy" data-download-url="' . esc_attr($download_url) . '" style="color:darkred; border:darkred solid 1px; margin-right:10px;" aria-label="Download-Link kopieren"><span class="dashicons dashicons-clipboard" style="margin-top:4px; color:darkred;"></span><span class="cmx-copy-label" style="margin-left:6px; font-size:12px; color:darkred; display:none;">kopiert</span></a>';
 
 
 	// JS für Copy-Funktion (kopiert den Link in die Zwischenablage)
 	echo '<script>
 		document.addEventListener("click", function(event) {
 			var target = event.target;
-			if (!target.classList.contains("cmx-btn-copy")) {
+			var btn = target.closest ? target.closest(".cmx-btn-copy") : null;
+			if (!btn) {
 				return;
 			}
 			event.preventDefault();
 
-			var url = target.getAttribute("data-download-url");
+			var url = btn.getAttribute("data-download-url");
 			if (!url) { return; }
 
 			function setCopiedLabel(btn) {
-				var oldText = btn.textContent;
-				btn.textContent = "kopiert";
+				var label = btn.querySelector(".cmx-copy-label");
+				if (!label) { return; }
+				label.style.display = "inline-block";
 				btn.disabled = true;
 				setTimeout(function () {
-					btn.textContent = oldText;
+					label.style.display = "none";
 					btn.disabled = false;
 				}, 2000);
 			}
 
 			if (navigator.clipboard && navigator.clipboard.writeText) {
 				navigator.clipboard.writeText(url).then(function () {
-					setCopiedLabel(target);
+					setCopiedLabel(btn);
 				}).catch(function () {
-					setCopiedLabel(target);
+					setCopiedLabel(btn);
 				});
 			} else {
 				var textarea = document.createElement("textarea");
@@ -68,7 +70,7 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post): void {
 				textarea.select();
 				try { document.execCommand("copy"); } catch (e) {}
 				document.body.removeChild(textarea);
-				setCopiedLabel(target);
+				setCopiedLabel(btn);
 			}
 		});
 	</script>';

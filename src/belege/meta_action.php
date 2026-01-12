@@ -82,10 +82,37 @@ function cmx_get_beleg_type(\WP_Post $post): array {
 function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 	[$title, $type] = cmx_get_beleg_type($post);
 
-	// Beispiel: 251126-055729_rechnung.pdf → 2025/251126-055729_rechnung.pdf
-	$pdf_rel_path = '20' . substr($title, 0, 2) . '/' . $title . '_' . $type . '.pdf';
-	$base_dir     = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
-	$pdf_abs_path = $base_dir . ltrim($pdf_rel_path, '/\\');
+	$title_safe = ($title !== '') ? $title : (string) $post->ID;
+	$basename   = \sanitize_title($title_safe . '_' . $type);
+	$base_dir   = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
+
+	$years = [\date('Y')];
+	if (!empty($post->post_date)) {
+		$years[] = \date('Y', \strtotime($post->post_date));
+	}
+	if (!empty($post->post_modified)) {
+		$years[] = \date('Y', \strtotime($post->post_modified));
+	}
+	$years = array_values(array_unique(array_filter($years)));
+
+	foreach ($years as $year) {
+		$dir = $base_dir . $year . '/belege/';
+		$abs = $dir . $basename . '.pdf';
+		if (is_file($abs)) {
+			return [$year . '/belege/' . $basename . '.pdf', $abs];
+		}
+
+		// Fallback: bezahlte Belege können ein Datumspräfix haben
+		foreach ((array) \glob($dir . '????-??-??_' . $basename . '.pdf') as $prefixed) {
+			if (is_file($prefixed)) {
+				return [$year . '/belege/' . basename($prefixed), $prefixed];
+			}
+		}
+	}
+
+	// Fallback: Standardpfad zurückgeben, auch wenn Datei noch nicht existiert
+	$pdf_rel_path = \date('Y') . '/belege/' . $basename . '.pdf';
+	$pdf_abs_path = $base_dir . $pdf_rel_path;
 
 	return [$pdf_rel_path, $pdf_abs_path];
 }
