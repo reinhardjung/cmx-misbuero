@@ -743,8 +743,26 @@ function cmx_anyboard_response(): \WP_REST_Response
     return rest_ensure_response(cmx_anyboard_build_payload());
 }
 
+function cmx_anyboard_pie_response(): \WP_REST_Response
+{
+    $year = (int) current_time('Y');
+    $rechnungen = cmx_anyboard_rechnungen_stats($year);
+    $ausgaben = cmx_anyboard_ausgaben_stats($year);
+
+    $svg = cmx_anyboard_pie_svg(
+        (float) ($rechnungen['paid_sum'] ?? 0.0),
+        (float) ($ausgaben['paid_sum'] ?? 0.0)
+    );
+
+    $response = new \WP_REST_Response($svg, 200);
+    $response->header('Content-Type', 'image/svg+xml; charset=utf-8');
+    return $response;
+}
+
 function cmx_anyboard_data_response(): \WP_REST_Response
 {
+    $query_user = isset($_GET['user']) ? (string) $_GET['user'] : '';
+    $query_pass = isset($_GET['pw']) ? (string) $_GET['pw'] : '';
     $kontakte = cmx_anyboard_count_posts('kontakte');
     $artikel = cmx_anyboard_count_sellable_artikel();
     $projekte = cmx_anyboard_count_active_projects();
@@ -810,12 +828,7 @@ function cmx_anyboard_data_response(): \WP_REST_Response
                 'value' => round((float) ($ausgaben['paid_sum'] ?? 0.0), 2),
             ],
         ],
-        'umsatz_pie' => 'data:image/svg+xml;base64,' . base64_encode(
-            cmx_anyboard_pie_svg(
-                (float) ($rechnungen['paid_sum'] ?? 0.0),
-                (float) ($ausgaben['paid_sum'] ?? 0.0)
-            )
-        ),
+        'umsatz_pie_url' => $pie_url,
     ];
 
     $snapshot = md5(json_encode($data));
@@ -828,19 +841,50 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     ]);
 }
 
-if (function_exists('add_action')) {
-    add_action('rest_api_init', function () {
-        register_rest_route('cmx-misbuero/v1', '/anyboard', [
-            'methods' => 'GET',
-            'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
-            'callback' => __NAMESPACE__ . '\\cmx_anyboard_response',
-        ]);
-        register_rest_route('cmx-misbuero/v1', '/anyboard-data', [
-            'methods' => 'GET',
-            'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
-            'callback' => __NAMESPACE__ . '\\cmx_anyboard_data_response',
-        ]);
-    });
-} else {
-    cmx_anyboard_direct_response();
+if (!defined('CMX_ANYBOARD_SKIP_BOOT')) {
+    if (function_exists('add_action')) {
+        add_action('rest_api_init', function () {
+            register_rest_route('cmx-misbuero/v1', '/anyboard', [
+                'methods' => 'GET',
+                'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
+                'callback' => __NAMESPACE__ . '\\cmx_anyboard_response',
+            ]);
+            register_rest_route('cmx-misbuero/v1', '/anyboard-data', [
+                'methods' => 'GET',
+                'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
+                'callback' => __NAMESPACE__ . '\\cmx_anyboard_data_response',
+            ]);
+            register_rest_route('cmx-misbuero/v1', '/anyboard-pie', [
+                'methods' => 'GET',
+                'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
+                'callback' => __NAMESPACE__ . '\\cmx_anyboard_pie_response',
+            ]);
+        });
+
+        add_filter('rest_pre_serve_request', function ($served, $result, $request, $server) {
+            if ($request->get_route() !== '/cmx-misbuero/v1/anyboard-pie') {
+                return $served;
+            }
+
+            if ($result instanceof \WP_REST_Response) {
+                $data = $result->get_data();
+                if (is_string($data)) {
+                    $server->send_header('Content-Type', 'image/svg+xml; charset=utf-8');
+                    echo $data;
+                    return true;
+                }
+            }
+
+            return $served;
+        }, 10, 4);
+    } else {
+        cmx_anyboard_direct_response();
+    }
 }
+    $pie_url = home_url('/wp-content/plugins/cmx-misbuero/monitoring/anyboard/umsatz_pie.php');
+    if ($query_user !== '' || $query_pass !== '') {
+        $pie_url = add_query_arg(
+            array_filter(['user' => $query_user, 'pw' => $query_pass], 'strlen'),
+            $pie_url
+        );
+    }
