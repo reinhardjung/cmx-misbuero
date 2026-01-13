@@ -24,6 +24,7 @@ return [
                 'name' => 'Umsatz',
                 'type' => 'bar',
                 'color' => 'warning',
+                'valueLabels' => true,
             ],
         ],
     ],
@@ -32,6 +33,7 @@ return [
         'mapping' => [
             'data[].x' => 'data.umsatz[].month',
             'data[].umsatz' => 'data.umsatz[].value',
+            'data[].label' => 'data.umsatz[].label',
         ],
     ],
 ];

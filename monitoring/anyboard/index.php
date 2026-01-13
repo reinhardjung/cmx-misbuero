@@ -583,9 +583,11 @@ function cmx_anyboard_umsatz_series(int $year): array
     $labels = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
     $series = [];
     for ($i = 1; $i <= 12; $i++) {
+        $raw_value = $month_totals[$i];
         $series[] = [
             'month' => $labels[$i - 1],
-            'value' => round($month_totals[$i], 2),
+            'value' => round($raw_value, 2),
+            'label' => number_format($raw_value, 0, '.', "'"),
         ];
     }
 
