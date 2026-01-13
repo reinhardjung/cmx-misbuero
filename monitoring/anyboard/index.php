@@ -974,10 +974,3 @@ if (!defined('CMX_ANYBOARD_SKIP_BOOT')) {
         cmx_anyboard_direct_response();
     }
 }
-    $pie_url = home_url('/wp-content/plugins/cmx-misbuero/monitoring/anyboard/umsatz_pie.php');
-    if ($query_user !== '' || $query_pass !== '') {
-        $pie_url = add_query_arg(
-            array_filter(['user' => $query_user, 'pw' => $query_pass], 'strlen'),
-            $pie_url
-        );
-    }
