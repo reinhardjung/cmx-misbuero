@@ -20,7 +20,7 @@ return [
                 'align' => 'right',
                 'style' => 'bold',
                 'color' => 'success',
-                'flex' => 1.2,
+                'flex' => 1.35,
             ],
             [
                 'id' => 'red',
@@ -28,7 +28,7 @@ return [
                 'align' => 'right',
                 'style' => 'bold',
                 'color' => 'danger',
-                'flex' => 1.2,
+                'flex' => 1.40,
             ],
             [
                 'id' => 'sum',
