@@ -592,6 +592,96 @@ function cmx_anyboard_umsatz_series(int $year): array
     return $series;
 }
 
+function cmx_anyboard_erinnerungen_rows(int $limit = 5): array
+{
+    if (!class_exists('\\WP_Query')) {
+        return [];
+    }
+
+    $date_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_DATUM')
+        ? CMX_KONTAKTE_META_DATUM
+        : '_cmx_kontakte_datum';
+    $priv_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_PRIVAT')
+        ? CMX_KONTAKTE_META_PRIVAT
+        : '_cmx_kontakte_privat';
+
+    $q = new \WP_Query([
+        'post_type' => 'kontakte',
+        'post_status' => ['publish', 'private'],
+        'posts_per_page' => -1,
+        'meta_key' => $date_key,
+        'meta_type' => 'DATE',
+        'meta_query' => [
+            [
+                'key' => $date_key,
+                'value' => '',
+                'compare' => '!=',
+            ],
+        ],
+        'no_found_rows' => true,
+    ]);
+
+    $rows = [];
+    if ($q->have_posts()) {
+        while ($q->have_posts()) {
+            $q->the_post();
+            $pid = get_the_ID();
+            $title = get_the_title($pid);
+            $date = (string) get_post_meta($pid, $date_key, true);
+            $display = $date;
+            $month = 0;
+            $day = 0;
+            if ($date !== '') {
+                $tz = wp_timezone();
+                $dt = \DateTime::createFromFormat('Y-m-d', $date, $tz);
+                if ($dt) {
+                    $display = wp_date('d.m.Y', $dt->getTimestamp(), $tz);
+                    $month = (int) $dt->format('m');
+                    $day = (int) $dt->format('d');
+                }
+            }
+
+            $privat = (bool) get_post_meta($pid, $priv_key, true);
+            if (!$privat) {
+                $privat = (bool) get_post_meta($pid, '_cmx_privat', true);
+            }
+            $type_label = $privat ? 'Geburtsdatum' : 'Firmengründung';
+
+            $rows[] = [
+                'name' => $title,
+                'date' => $display,
+                'type' => $type_label,
+                '_m' => $month,
+                '_d' => $day,
+            ];
+        }
+        wp_reset_postdata();
+    }
+
+    usort($rows, function (array $a, array $b): int {
+        if ($a['_m'] !== $b['_m']) {
+            return $a['_m'] <=> $b['_m'];
+        }
+        if ($a['_d'] !== $b['_d']) {
+            return $a['_d'] <=> $b['_d'];
+        }
+        return strcmp($a['name'], $b['name']);
+    });
+
+    $rows = array_slice($rows, 0, $limit);
+
+    foreach ($rows as &$row) {
+        unset($row['_m'], $row['_d']);
+    }
+    unset($row);
+
+    while (count($rows) < $limit) {
+        $rows[] = ['name' => '', 'date' => '', 'type' => ''];
+    }
+
+    return $rows;
+}
+
 function cmx_anyboard_pie_svg(float $rechnungen, float $ausgaben): string
 {
     $total = $rechnungen + $ausgaben;
@@ -645,6 +735,7 @@ function cmx_anyboard_widget_files(): array
         __DIR__ . '/dokumente.php',
         __DIR__ . '/chart_umsatz.php',
         __DIR__ . '/bewegungen.php',
+        __DIR__ . '/erinnerungen.php',
         __DIR__ . '/umsatz_chart.php',
     ];
 }
@@ -772,6 +863,7 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $angebote = cmx_anyboard_angebote_stats($year);
     $ausgaben = cmx_anyboard_ausgaben_stats($year);
     $umsatz = cmx_anyboard_umsatz_series($year);
+    $erinnerungen = cmx_anyboard_erinnerungen_rows(5);
 
     $sum_label = number_format((float) ($rechnungen['sum_total'] ?? 0.0), 2, '.', "'");
     $sum_angebote = number_format((float) ($angebote['sum_total'] ?? 0.0), 2, '.', "'");
@@ -818,6 +910,7 @@ function cmx_anyboard_data_response(): \WP_REST_Response
         'bewegungen' => $bewegungen,
         'umsatz' => $umsatz,
         'umsatz_year' => $year,
+        'erinnerungen' => $erinnerungen,
         'umsatz_breakdown' => [
             [
                 'label' => 'Rechnungen',
