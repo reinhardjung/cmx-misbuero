@@ -78,16 +78,23 @@ function cmx_anyboard_count_sellable_artikel(): int
     return (int) $query->found_posts;
 }
 
-function cmx_anyboard_rechnungen_stats(): array
+function cmx_anyboard_rechnungen_stats(int $year): array
 {
     if (!class_exists('\\WP_Query')) {
-        return ['paid_count' => 0, 'open_count' => 0, 'sum_total' => 0.0];
+        return ['paid_sum' => 0.0, 'open_sum' => 0.0, 'sum_total' => 0.0];
     }
 
     $paid_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
         ? CMX_BELEG_META_BEZAHLT
         : '_cmx_beleg_bezahlt_am';
     $paid_key_alt = ltrim($paid_key, '_');
+    $rng_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+        ? CMX_BELEG_META_RNG_DATUM
+        : '_cmx_beleg_rng_datum';
+    $rng_key_alt = ltrim($rng_key, '_');
+
+    $range_start = $year . '-01-01';
+    $range_end = $year . '-12-31';
 
     $base_args = [
         'post_type' => 'belege',
@@ -119,6 +126,12 @@ function cmx_anyboard_rechnungen_stats(): array
                     'value' => '',
                     'compare' => '!=',
                 ],
+                [
+                    'key' => $paid_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
             ],
             [
                 'relation' => 'AND',
@@ -130,6 +143,12 @@ function cmx_anyboard_rechnungen_stats(): array
                     'key' => $paid_key_alt,
                     'value' => '',
                     'compare' => '!=',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
                 ],
             ],
         ],
@@ -162,35 +181,66 @@ function cmx_anyboard_rechnungen_stats(): array
                     'compare' => '=',
                 ],
             ],
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $rng_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
+                [
+                    'key' => $rng_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
+            ],
         ],
     ]));
 
     $sum_total = 0.0;
+    $paid_sum = 0.0;
+    $open_sum = 0.0;
     if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-        $all_ids = array_unique(array_merge($paid_query->posts, $open_query->posts));
-        foreach ($all_ids as $bid) {
+        foreach ($paid_query->posts as $bid) {
             $calc = cmxbu_get_beleg_positionen_calc($bid);
-            $sum_total += isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $total = isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $paid_sum += $total;
+            $sum_total += $total;
+        }
+        foreach ($open_query->posts as $bid) {
+            $calc = cmxbu_get_beleg_positionen_calc($bid);
+            $total = isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $open_sum += $total;
+            $sum_total += $total;
         }
     }
 
     return [
-        'paid_count' => count($paid_query->posts),
-        'open_count' => count($open_query->posts),
+        'paid_sum' => $paid_sum,
+        'open_sum' => $open_sum,
         'sum_total' => $sum_total,
     ];
 }
 
-function cmx_anyboard_angebote_stats(): array
+function cmx_anyboard_angebote_stats(int $year): array
 {
     if (!class_exists('\\WP_Query')) {
-        return ['paid_count' => 0, 'open_count' => 0, 'sum_total' => 0.0];
+        return ['paid_sum' => 0.0, 'open_sum' => 0.0, 'sum_total' => 0.0];
     }
 
     $paid_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
         ? CMX_BELEG_META_BEZAHLT
         : '_cmx_beleg_bezahlt_am';
     $paid_key_alt = ltrim($paid_key, '_');
+    $rng_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+        ? CMX_BELEG_META_RNG_DATUM
+        : '_cmx_beleg_rng_datum';
+    $rng_key_alt = ltrim($rng_key, '_');
+
+    $range_start = $year . '-01-01';
+    $range_end = $year . '-12-31';
 
     $base_args = [
         'post_type' => 'belege',
@@ -222,6 +272,12 @@ function cmx_anyboard_angebote_stats(): array
                     'value' => '',
                     'compare' => '!=',
                 ],
+                [
+                    'key' => $paid_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
             ],
             [
                 'relation' => 'AND',
@@ -233,6 +289,12 @@ function cmx_anyboard_angebote_stats(): array
                     'key' => $paid_key_alt,
                     'value' => '',
                     'compare' => '!=',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
                 ],
             ],
         ],
@@ -265,26 +327,50 @@ function cmx_anyboard_angebote_stats(): array
                     'compare' => '=',
                 ],
             ],
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $rng_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
+                [
+                    'key' => $rng_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
+            ],
         ],
     ]));
 
     $sum_total = 0.0;
+    $paid_sum = 0.0;
+    $open_sum = 0.0;
     if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-        $all_ids = array_unique(array_merge($paid_query->posts, $open_query->posts));
-        foreach ($all_ids as $bid) {
+        foreach ($paid_query->posts as $bid) {
             $calc = cmxbu_get_beleg_positionen_calc($bid);
-            $sum_total += isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $total = isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $paid_sum += $total;
+            $sum_total += $total;
+        }
+        foreach ($open_query->posts as $bid) {
+            $calc = cmxbu_get_beleg_positionen_calc($bid);
+            $total = isset($calc['total']) ? (float) $calc['total'] : 0.0;
+            $open_sum += $total;
+            $sum_total += $total;
         }
     }
 
     return [
-        'paid_count' => count($paid_query->posts),
-        'open_count' => count($open_query->posts),
+        'paid_sum' => $paid_sum,
+        'open_sum' => $open_sum,
         'sum_total' => $sum_total,
     ];
 }
 
-function cmx_anyboard_ausgaben_stats(): array
+function cmx_anyboard_ausgaben_stats(int $year): array
 {
     if (!class_exists('\\WP_Query')) {
         return ['paid_sum' => 0.0, 'open_sum' => 0.0];
@@ -297,6 +383,13 @@ function cmx_anyboard_ausgaben_stats(): array
     $betrag_key = defined(__NAMESPACE__ . '\\CMX_AUSGABEN_META_GESAMTBETRAG')
         ? CMX_AUSGABEN_META_GESAMTBETRAG
         : '_cmx_ausgaben_gesamtbetrag';
+    $rng_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+        ? CMX_BELEG_META_RNG_DATUM
+        : '_cmx_beleg_rng_datum';
+    $rng_key_alt = ltrim($rng_key, '_');
+
+    $range_start = $year . '-01-01';
+    $range_end = $year . '-12-31';
 
     $base_args = [
         'post_type' => 'ausgaben',
@@ -320,6 +413,12 @@ function cmx_anyboard_ausgaben_stats(): array
                     'value' => '',
                     'compare' => '!=',
                 ],
+                [
+                    'key' => $paid_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
             ],
             [
                 'relation' => 'AND',
@@ -331,6 +430,12 @@ function cmx_anyboard_ausgaben_stats(): array
                     'key' => $paid_key_alt,
                     'value' => '',
                     'compare' => '!=',
+                ],
+                [
+                    'key' => $paid_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
                 ],
             ],
         ],
@@ -361,6 +466,21 @@ function cmx_anyboard_ausgaben_stats(): array
                     'key' => $paid_key_alt,
                     'value' => '',
                     'compare' => '=',
+                ],
+            ],
+            [
+                'relation' => 'OR',
+                [
+                    'key' => $rng_key,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
+                ],
+                [
+                    'key' => $rng_key_alt,
+                    'value' => [$range_start, $range_end],
+                    'compare' => 'BETWEEN',
+                    'type' => 'DATE',
                 ],
             ],
         ],
@@ -483,6 +603,7 @@ function cmx_anyboard_widget_files(): array
         __DIR__ . '/dokumente.php',
         __DIR__ . '/chart_umsatz.php',
         __DIR__ . '/bewegungen.php',
+        __DIR__ . '/umsatz_chart.php',
     ];
 }
 
@@ -585,14 +706,18 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $artikel = cmx_anyboard_count_sellable_artikel();
     $projekte = cmx_anyboard_count_active_projects();
     $dokumente = cmx_anyboard_count_posts('dokumente');
-    $rechnungen = cmx_anyboard_rechnungen_stats();
-    $angebote = cmx_anyboard_angebote_stats();
-    $ausgaben = cmx_anyboard_ausgaben_stats();
     $year = (int) current_time('Y');
+    $rechnungen = cmx_anyboard_rechnungen_stats($year);
+    $angebote = cmx_anyboard_angebote_stats($year);
+    $ausgaben = cmx_anyboard_ausgaben_stats($year);
     $umsatz = cmx_anyboard_umsatz_series($year);
 
     $sum_label = number_format((float) ($rechnungen['sum_total'] ?? 0.0), 2, '.', "'");
     $sum_angebote = number_format((float) ($angebote['sum_total'] ?? 0.0), 2, '.', "'");
+    $rechnungen_paid_label = number_format((float) ($rechnungen['paid_sum'] ?? 0.0), 2, '.', "'");
+    $rechnungen_open_label = number_format((float) ($rechnungen['open_sum'] ?? 0.0), 2, '.', "'");
+    $angebote_paid_label = number_format((float) ($angebote['paid_sum'] ?? 0.0), 2, '.', "'");
+    $angebote_open_label = number_format((float) ($angebote['open_sum'] ?? 0.0), 2, '.', "'");
     $ausgaben_paid = (float) ($ausgaben['paid_sum'] ?? 0.0);
     $ausgaben_open = (float) ($ausgaben['open_sum'] ?? 0.0);
     $ausgaben_diff = $ausgaben_paid - $ausgaben_open;
@@ -603,14 +728,14 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $bewegungen = [
         [
             'label' => 'Rechnungen',
-            'green' => (string) ($rechnungen['paid_count'] ?? 0),
-            'red' => (string) ($rechnungen['open_count'] ?? 0),
+            'green' => $rechnungen_paid_label,
+            'red' => $rechnungen_open_label,
             'sum' => $sum_label,
         ],
         [
             'label' => 'Angebote',
-            'green' => (string) ($angebote['paid_count'] ?? 0),
-            'red' => (string) ($angebote['open_count'] ?? 0),
+            'green' => $angebote_paid_label,
+            'red' => $angebote_open_label,
             'sum' => $sum_angebote,
         ],
         [
@@ -632,6 +757,16 @@ function cmx_anyboard_data_response(): \WP_REST_Response
         'bewegungen' => $bewegungen,
         'umsatz' => $umsatz,
         'umsatz_year' => $year,
+        'umsatz_breakdown' => [
+            [
+                'label' => 'Rechnungen',
+                'value' => round((float) ($rechnungen['paid_sum'] ?? 0.0), 2),
+            ],
+            [
+                'label' => 'Ausgaben',
+                'value' => round((float) ($ausgaben['paid_sum'] ?? 0.0), 2),
+            ],
+        ],
     ];
 
     $snapshot = md5(json_encode($data));
