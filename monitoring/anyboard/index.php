@@ -592,6 +592,48 @@ function cmx_anyboard_umsatz_series(int $year): array
     return $series;
 }
 
+function cmx_anyboard_pie_svg(float $rechnungen, float $ausgaben): string
+{
+    $total = $rechnungen + $ausgaben;
+    $size = 240;
+    $cx = $size / 2;
+    $cy = $size / 2;
+    $r = 100;
+
+    if ($total <= 0) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '" viewBox="0 0 ' . $size . ' ' . $size . '">'
+            . '<circle cx="' . $cx . '" cy="' . $cy . '" r="' . $r . '" fill="#7a7a7a"/>'
+            . '</svg>';
+    }
+
+    $angle_a = ($rechnungen / $total) * 360.0;
+    $angle_b = 360.0 - $angle_a;
+
+    $path_a = cmx_anyboard_pie_slice_path($cx, $cy, $r, 0.0, $angle_a);
+    $path_b = cmx_anyboard_pie_slice_path($cx, $cy, $r, $angle_a, $angle_b);
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '" viewBox="0 0 ' . $size . ' ' . $size . '">'
+        . '<path d="' . $path_a . '" fill="#2ecc71"/>'
+        . '<path d="' . $path_b . '" fill="#e74c3c"/>'
+        . '<circle cx="' . $cx . '" cy="' . $cy . '" r="50" fill="#1f2430"/>'
+        . '</svg>';
+}
+
+function cmx_anyboard_pie_slice_path(float $cx, float $cy, float $r, float $start, float $sweep): string
+{
+    $start_rad = deg2rad($start - 90.0);
+    $end_rad = deg2rad($start + $sweep - 90.0);
+
+    $x1 = $cx + $r * cos($start_rad);
+    $y1 = $cy + $r * sin($start_rad);
+    $x2 = $cx + $r * cos($end_rad);
+    $y2 = $cy + $r * sin($end_rad);
+
+    $large_arc = $sweep > 180.0 ? 1 : 0;
+
+    return 'M ' . $cx . ' ' . $cy . ' L ' . $x1 . ' ' . $y1 . ' A ' . $r . ' ' . $r . ' 0 ' . $large_arc . ' 1 ' . $x2 . ' ' . $y2 . ' Z';
+}
+
 function cmx_anyboard_widget_files(): array
 {
     return [
@@ -610,6 +652,7 @@ function cmx_anyboard_widget_files(): array
 function cmx_anyboard_load_widgets(): array
 {
     $widgets = [];
+    $GLOBALS['cmx_anyboard_widget_context'] = true;
     foreach (cmx_anyboard_widget_files() as $file) {
         if (!is_file($file)) {
             continue;
@@ -767,6 +810,12 @@ function cmx_anyboard_data_response(): \WP_REST_Response
                 'value' => round((float) ($ausgaben['paid_sum'] ?? 0.0), 2),
             ],
         ],
+        'umsatz_pie' => 'data:image/svg+xml;base64,' . base64_encode(
+            cmx_anyboard_pie_svg(
+                (float) ($rechnungen['paid_sum'] ?? 0.0),
+                (float) ($ausgaben['paid_sum'] ?? 0.0)
+            )
+        ),
     ];
 
     $snapshot = md5(json_encode($data));

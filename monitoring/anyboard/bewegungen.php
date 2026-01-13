@@ -7,7 +7,7 @@ return [
     'width' => 3,
     'height' => 2,
     'minitable' => [
-        'title' => 'Bewegungen',
+        'title' => 'Bewegungen (akt. Jahr)',
         'columns' => [
             [
                 'id' => 'label',
@@ -28,7 +28,7 @@ return [
                 'align' => 'right',
                 'style' => 'bold',
                 'color' => 'danger',
-                'flex' => 1.40,
+                'flex' => 1.60,
             ],
             [
                 'id' => 'sum',
