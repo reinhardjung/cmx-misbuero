@@ -133,9 +133,10 @@ $recipient_html = $recipient_has_br
 	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
-	.footer { margin-top: 60px; font-size: 11px; }
+	.footer { position: fixed; left: 0; right: 0; bottom: 20px; font-size: 11px; }
 	.clear { clear: both; }
 	.text-right { text-align: right; }
+	.logo-link { text-decoration: none; }
 	.qr-block { margin-top: 40px; }
 	.qr-placeholder {
 		border: 1px dashed #999;
@@ -155,7 +156,22 @@ $recipient_html = $recipient_has_br
 		<div class="address">
 			<div class="sender-wrap">
 				<?php if (!empty($tpl['branding']['logo'])): ?>
-					<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+					<?php
+					$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
+					if ($brand_url === '') {
+						$brand_url = trim((string)($tpl['me']['website'] ?? ''));
+					}
+					if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
+						$brand_url = 'https://' . $brand_url;
+					}
+					?>
+					<?php if ($brand_url !== ''): ?>
+						<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
+							<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+						</a>
+					<?php else: ?>
+						<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+					<?php endif; ?>
 				<?php endif; ?>
 				<div><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></div>
 			</div>
@@ -262,7 +278,21 @@ $recipient_html = $recipient_has_br
 		<?php if ($show_discount && $discount_sum > 0.0): ?>
 			<tr>
 				<td colspan="<?= $col_count; ?>" class="text-right">
-					<strong>Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
+					Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?>
+				</td>
+			</tr>
+		<?php endif; ?>
+		<?php
+		$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+		$mwst_amount = (float)($tpl['totals']['tax'] ?? 0);
+		$mwst_rate_pct = $mwst_rate * 100;
+		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, ',', ''), '0'), ',');
+		?>
+		<?php if ($mwst_rate > 0): ?>
+			<tr>
+				<td colspan="<?= $col_count; ?>" class="text-right">
+					<?= !empty($tpl['totals']['is_brutto']) ? 'inkl.' : 'zuzügl.'; ?>
+					<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
 				</td>
 			</tr>
 		<?php endif; ?>
@@ -288,6 +318,26 @@ $recipient_html = $recipient_has_br
 	<div class="footer">
 		Zahlung via QR-Rechnung.<br>
 		<?= $footer_html; ?>
+		<?php
+		$bank_name = trim((string)($tpl['bank']['bank_name'] ?? ''));
+		$iban = trim((string)($tpl['bank']['iban'] ?? ''));
+		$qr_iban = trim((string)($tpl['bank']['qr_iban'] ?? ''));
+		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
+		$bank_iban = $iban !== '' ? $iban : $qr_iban;
+		?>
+		<?php if ($bank_name !== '' || $bank_iban !== '' || $bic !== ''): ?>
+			<div style="margin-top:8px;">
+				<?php if ($bank_name !== ''): ?>
+					<div><?= htmlspecialchars($bank_name, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+				<?php if ($bank_iban !== ''): ?>
+					<div>IBAN: <?= htmlspecialchars($bank_iban, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+				<?php if ($bic !== ''): ?>
+					<div>BIC: <?= htmlspecialchars($bic, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+			</div>
+		<?php endif; ?>
 	</div>
 </div>
 </body>
