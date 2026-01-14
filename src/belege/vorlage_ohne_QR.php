@@ -273,6 +273,26 @@ $recipient_html = $recipient_has_br
 
 	<div class="footer">
 		<?= $footer_html; ?>
+		<?php
+		$bank_name = trim((string)($tpl['bank']['bank_name'] ?? ''));
+		$iban = trim((string)($tpl['bank']['iban'] ?? ''));
+		$qr_iban = trim((string)($tpl['bank']['qr_iban'] ?? ''));
+		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
+		$bank_iban = $iban !== '' ? $iban : $qr_iban;
+		?>
+		<?php if ($bank_name !== '' || $bank_iban !== '' || $bic !== ''): ?>
+			<div style="margin-top:8px;">
+				<?php if ($bank_name !== ''): ?>
+					<div><?= htmlspecialchars($bank_name, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+				<?php if ($bank_iban !== ''): ?>
+					<div>IBAN: <?= htmlspecialchars($bank_iban, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+				<?php if ($bic !== ''): ?>
+					<div>BIC: <?= htmlspecialchars($bic, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+			</div>
+		<?php endif; ?>
 	</div>
 </div>
 </body>
