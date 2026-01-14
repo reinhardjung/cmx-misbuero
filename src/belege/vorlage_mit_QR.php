@@ -16,6 +16,29 @@ $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): strin
 
 $positions = (array)($tpl['positions'] ?? []);
 $show_position_index = count($positions) > 1;
+$show_sku = false;
+$show_discount = false;
+$discount_sum = 0.0;
+foreach ($positions as $row) {
+	$sku_val = trim((string)($row['article_number'] ?? ''));
+	if ($sku_val !== '') $show_sku = true;
+	$qty = (float)($row['qty'] ?? 0);
+	$unit_price = (float)($row['unit_price'] ?? 0);
+	$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+	$line_subtotal = $qty * $unit_price;
+	$line_discount = $line_subtotal - $line_total;
+	if ($line_discount > 0.0001) {
+		$show_discount = true;
+		$discount_sum += $line_discount;
+	}
+}
+$col_count = ($show_position_index ? 1 : 0)
+	+ ($show_sku ? 1 : 0)
+	+ 1
+	+ 1
+	+ 1
+	+ ($show_discount ? 1 : 0)
+	+ 1;
 
 $totals = array_replace([
 	'subtotal' => 0.0,
@@ -101,7 +124,6 @@ $recipient_html = $recipient_has_br
 	.totals-table,
 	.totals-table tr,
 	.totals-table td { border: 0 !important; }
-	.totals-label { padding-right: 2px; }
 	.th-right { text-align: right; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
@@ -160,18 +182,22 @@ $recipient_html = $recipient_has_br
 				<?php if ($show_position_index): ?>
 					<th>Pos.</th>
 				<?php endif; ?>
-				<th>SKU</th>
+				<?php if ($show_sku): ?>
+					<th>SKU</th>
+				<?php endif; ?>
 				<th>Artikel</th>
 				<th class="th-right">Menge</th>
 				<th class="th-right">Einzelpreis</th>
-				<th class="th-right">Rabatt</th>
+				<?php if ($show_discount): ?>
+					<th class="th-right">Rabatt</th>
+				<?php endif; ?>
 				<th class="th-right">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
 			</tr>
 		</thead>
 		<tbody>
 		<?php if (empty($positions)): ?>
 			<tr>
-				<td colspan="<?= $show_position_index ? 7 : 6; ?>">—</td>
+				<td colspan="<?= $col_count; ?>">—</td>
 			</tr>
 		<?php else: ?>
 			<?php foreach ($positions as $i => $row): ?>
@@ -191,7 +217,9 @@ $recipient_html = $recipient_has_br
 					<?php if ($show_position_index): ?>
 						<td><?= htmlspecialchars((string)($i + 1), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
-					<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php if ($show_sku): ?>
+						<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php endif; ?>
 					<td>
 						<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
 						<?php if ($desc_html !== ''): ?>
@@ -202,7 +230,9 @@ $recipient_html = $recipient_has_br
 					</td>
 					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php if ($show_discount): ?>
+						<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php endif; ?>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
 				</tr>
 			<?php endforeach; ?>
@@ -211,8 +241,15 @@ $recipient_html = $recipient_has_br
 	</table>
 
 	<table class="totals-table" border="0">
+		<?php if ($show_discount && $discount_sum > 0.0): ?>
+			<tr>
+				<td colspan="<?= $col_count; ?>" class="text-right">
+					<strong>Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
+				</td>
+			</tr>
+		<?php endif; ?>
 		<tr>
-			<td colspan="<?= $show_position_index ? 6 : 5; ?>" class="text-right">
+			<td colspan="<?= $col_count; ?>" class="text-right">
 				<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
 			</td>
 		</tr>
