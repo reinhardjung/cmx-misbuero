@@ -84,6 +84,11 @@ $recipient_html = $recipient_has_br
 	tbody tr:last-child { border-bottom: 1px solid #777; }
 	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
 	.positions-table tbody td { vertical-align: top; }
+	.totals-table,
+	.totals-table tr,
+	.totals-table td { border: 0 !important; }
+	.totals-label { padding-right: 4px; }
+	.th-right { text-align: right; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { margin-top: 60px; font-size: 11px; }
 	.clear { clear: both; }
@@ -146,10 +151,10 @@ $recipient_html = $recipient_has_br
 			<tr>
 				<th>SKU</th>
 				<th>Artikel</th>
-				<th>Menge</th>
-				<th>Einzelpreis</th>
-				<th>Rabatt</th>
-				<th>Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+				<th class="th-right">Menge</th>
+				<th class="th-right">Einzelpreis</th>
+				<th class="th-right">Rabatt</th>
+				<th class="th-right">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
 			</tr>
 		</thead>
 		<tbody>
@@ -180,7 +185,7 @@ $recipient_html = $recipient_has_br
 							<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
 						<?php endif; ?>
 					</td>
-					<td><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($discount !== '' ? $discount : '—', ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
@@ -190,10 +195,10 @@ $recipient_html = $recipient_has_br
 		</tbody>
 	</table>
 
-	<table>
+	<table class="totals-table">
 		<tr>
 			<td colspan="4"></td>
-			<td><strong>Gesamtbetrag</strong></td>
+			<td class="text-right totals-label"><strong>Gesamtbetrag</strong></td>
 			<td class="text-right"><strong><?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong></td>
 		</tr>
 	</table>
