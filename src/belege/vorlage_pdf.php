@@ -736,6 +736,22 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			'tax_rate'=>$mwst['rate'],
 			'is_brutto'=>$is_brutto,
 		]);
+		$anzahlungen_raw = get_post_meta($post_id, defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN') ? CMX_BELEG_META_ANZAHLUNGEN : '_cmx_beleg_anzahlungen', true);
+		if (is_string($anzahlungen_raw) && $anzahlungen_raw !== '') {
+			$tmp = json_decode($anzahlungen_raw, true);
+			$anzahlungen = (json_last_error() === JSON_ERROR_NONE && is_array($tmp)) ? $tmp : [];
+		} elseif (is_array($anzahlungen_raw)) {
+			$anzahlungen = $anzahlungen_raw;
+		} else {
+			$anzahlungen = [];
+		}
+		$anzahlungen = array_values(array_filter(array_map(static function($row) {
+			if (!is_array($row)) return null;
+			$datum = trim((string)($row['datum'] ?? ''));
+			$betrag = trim((string)($row['betrag'] ?? ''));
+			if ($datum === '' || $betrag === '') return null;
+			return ['datum' => $datum, 'betrag' => $betrag];
+		}, $anzahlungen)));
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
@@ -802,6 +818,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'is_brutto'=>$is_brutto,
 				'is_mwst_pflichtig'=>$is_mwst_pflichtig,
 			],
+			'anzahlungen'=>$anzahlungen,
 			'me'=>$me,
 			'bank'=>$bank,
 		];
@@ -876,6 +893,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					$canvas->text(50, 55, $beleg_titel, $fontHeader, 11, [0.1, 0.1, 0.1], $i);
 			}
 	}
+
+	// Seitenzahlen im Kopfbereich (nur wenn mehr als 1 Seite)
+	// (deaktiviert auf Wunsch)
 
 	// Seitenzahlen unten
 	// if ($page_count > 1) {

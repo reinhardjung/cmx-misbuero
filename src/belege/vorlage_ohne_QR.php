@@ -126,9 +126,9 @@ $recipient_html = $recipient_has_br
 	h1 { margin-top: 32px; font-size: 20px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
-	thead th { border-bottom: 1px solid #000; text-align: left; }
-	tbody tr { border-bottom: 1px solid #777; }
-	tbody tr:last-child { border-bottom: 1px solid #777; }
+	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
+	.positions-table tbody tr { border-bottom: 1px solid #777; }
+	.positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
 	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
 	.positions-table tbody td { vertical-align: top; }
 	.totals-table,
@@ -232,7 +232,7 @@ $recipient_html = $recipient_has_br
 		<div><?= $recipient_html; ?></div>
 	</div>
 
-	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+	<h1 class="text-right" style="margin-top: 48px;"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
 	<?php if ($beleg_subject !== ''): ?>
 		<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
 	<?php endif; ?>
@@ -333,6 +333,19 @@ $recipient_html = $recipient_has_br
 			</td>
 		</tr>
 	</table>
+	<?php if (!empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+		<div style="margin-top:8px;">
+			<strong>Teilzahlungen</strong>
+			<?php foreach ($tpl['anzahlungen'] as $row): ?>
+				<?php
+				$anz_date = trim((string)($row['datum'] ?? ''));
+				$anz_amount = (float)($row['betrag'] ?? 0);
+				if ($anz_date === '') continue;
+				?>
+				<div><?= htmlspecialchars($anz_date, ENT_QUOTES, 'UTF-8'); ?> - <?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></div>
+			<?php endforeach; ?>
+		</div>
+	<?php endif; ?>
 	<?php if (!$is_mwst_pflichtig): ?>
 		<div class="mwst-note">
 			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
