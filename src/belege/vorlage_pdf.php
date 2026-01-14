@@ -257,7 +257,12 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_sanitize_note_html')) {
 	function cmxbu_sanitize_note_html($val): array {
 		if (is_array($val)) $val = implode("\n", array_map('strval', $val));
 		$raw  = is_string($val) ? wp_unslash($val) : '';
+		$raw  = str_replace(["\r\n", "\r"], "\n", $raw);
+		$has_tags = $raw !== '' && $raw !== wp_strip_all_tags($raw);
 		$html = $raw !== '' ? wp_kses($raw, cmxbu_kses_allow()) : '';
+		if (!$has_tags && strpos($raw, "\n") !== false) {
+			$html = nl2br(esc_html($raw));
+		}
 		$text = trim(wp_strip_all_tags($html !== '' ? $html : $raw));
 		if ($html === '' && $text !== '') $html = nl2br(esc_html($text));
 		return ['html'=>$html, 'text'=>$text, 'raw'=>$raw];

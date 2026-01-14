@@ -1,5 +1,10 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+function cmx_is_cloud_meister_user(): bool {
+	$user = wp_get_current_user();
+	return $user && $user->exists() && $user->display_name === 'CLOUD Meister';
+}
+
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
@@ -19,7 +24,8 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 // Create: @ll Taxos
 \add_action('init', function () {
 	// Kategorien: UI komplett ausblenden, Taxonomie bleibt für Abfragen bestehen
-	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => false]);
+	$show_ui = cmx_is_cloud_meister_user();
+	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => $show_ui]);
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
@@ -32,6 +38,9 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 // Kategorien in der Admin-Navigation ausblenden (Taxonomie bleibt bestehen)
 \add_action('admin_menu', function () {
+	if (cmx_is_cloud_meister_user()) {
+		return;
+	}
 	$parent = 'edit.php?post_type=' . basename(__DIR__);
 	foreach (['belege_kategorien', 'beleg_kategorie'] as $tax) {
 		remove_submenu_page($parent, 'edit-tags.php?taxonomy=' . $tax . '&post_type=' . basename(__DIR__));
@@ -41,6 +50,9 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 // Kategorien-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
 \add_action('add_meta_boxes', function() {
+	if (cmx_is_cloud_meister_user()) {
+		return;
+	}
 	foreach (['belege_kategoriendiv', 'beleg_kategoriediv'] as $box) {
 		remove_meta_box($box, basename(__DIR__), 'side');
 	}
@@ -48,6 +60,9 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 // Direkten Aufruf der Kategorien-Seite wegleiten
 \add_action('load-edit-tags.php', function () {
+	if (cmx_is_cloud_meister_user()) {
+		return;
+	}
 	$tax  = $_GET['taxonomy']   ?? '';
 	$pt   = $_GET['post_type']  ?? '';
 	$want = ['belege_kategorien','beleg_kategorie'];

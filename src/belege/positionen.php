@@ -84,7 +84,12 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 	wp_nonce_field('cmx_save_beleg_positionen', 'cmx_beleg_positionen_nonce');
 
 	$positionen = get_post_meta($post->ID, '_cmx_beleg_positionen', true);
-	$positionen = $positionen ? json_decode($positionen, true) : [];
+	if (is_string($positionen) && $positionen !== '') {
+		$tmp = json_decode($positionen, true);
+		$positionen = (json_last_error() === JSON_ERROR_NONE && is_array($tmp)) ? $tmp : [];
+	} elseif (!is_array($positionen)) {
+		$positionen = [];
+	}
 
 	echo '<div id="cmx-positionen-wrap">';
 	echo '<table class="widefat striped" id="cmx-positionen-table">
@@ -190,7 +195,10 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 		$rabatt_raw   = isset($row['rabatt']) ? (string)$row['rabatt'] : '';
 		$rabatt       = sanitize_text_field($rabatt_raw);
 
-		$beschreibung = isset($row['beschreibung']) ? wp_kses_post($row['beschreibung']) : '';
+		$beschreibung_raw = isset($row['beschreibung']) ? (string)$row['beschreibung'] : '';
+		$beschreibung_raw = wp_unslash($beschreibung_raw);
+		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
+		$beschreibung = trim($beschreibung_raw);
 		$task_idx     = isset($row['task_idx']) ? (int)$row['task_idx'] : null;
 
 		// negative Mengen zulassen; nur 0 verwerfen
@@ -224,7 +232,7 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 	}
 
 	if ($old_data !== $clean) {
-		update_post_meta($post_id, '_cmx_beleg_positionen', wp_json_encode($clean));
+		update_post_meta($post_id, '_cmx_beleg_positionen', $clean);
 	}
 
 }, 10, 3);
@@ -600,7 +608,10 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$rabatt_raw   = isset($r['rabatt']) ? (string)$r['rabatt'] : '';
 		$rabatt       = sanitize_text_field($rabatt_raw);
 
-		$beschreibung = isset($r['beschreibung']) ? wp_kses_post($r['beschreibung']) : '';
+		$beschreibung_raw = isset($r['beschreibung']) ? (string)$r['beschreibung'] : '';
+		$beschreibung_raw = wp_unslash($beschreibung_raw);
+		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
+		$beschreibung = trim($beschreibung_raw);
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -615,9 +626,8 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		];
 	}
 
-	$new_json = wp_json_encode($clean);
-	$old_json = (string)get_post_meta($post_id, '_cmx_beleg_positionen', true);
-	if ($new_json !== $old_json) update_post_meta($post_id, '_cmx_beleg_positionen', $new_json);
+	$old = get_post_meta($post_id, '_cmx_beleg_positionen', true);
+	if ($old !== $clean) update_post_meta($post_id, '_cmx_beleg_positionen', $clean);
 
 	wp_send_json_success(['saved'=>count($clean)]);
 });

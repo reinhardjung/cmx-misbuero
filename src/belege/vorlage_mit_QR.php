@@ -36,11 +36,15 @@ if ($totals['total'] == 0.0 && !empty($positions)) {
 $opts_general      = (array) get_option('cmx_einstellungen', []);
 $is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
 
+$sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
+if ($sender_country_code === '') $sender_country_code = 'CH';
+$sender_plz = trim((string)($tpl['me']['plz'] ?? ''));
+$sender_ort = trim((string)($tpl['me']['ort'] ?? ''));
+$sender_city_line = trim($sender_country_code . '-' . $sender_plz . ' ' . $sender_ort);
 $sender_block = trim(
 	($tpl['me']['company'] ?? '') . "\n" .
 	($tpl['me']['strasse'] ?? '') . "\n" .
-	(trim(($tpl['me']['plz'] ?? '') . ' ' . ($tpl['me']['ort'] ?? ''))) . "\n" .
-	(($tpl['me']['land'] ?? 'Schweiz'))
+	$sender_city_line
 );
 
 $recipient_block = trim((string)($cmx_beleg_adress ?? ''));
@@ -51,6 +55,7 @@ if ($recipient_block === '') {
 		(trim(($tpl['recipient']['zip'] ?? '') . ' ' . ($tpl['recipient']['city'] ?? '')))
 	);
 }
+$recipient_lines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $recipient_block))));
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -62,11 +67,19 @@ if ($recipient_block === '') {
 	.container { width: 100%; }
 	.header { margin-bottom: 24px; }
 	.address { width: 50%; float: left; }
-	.invoice-meta { width: 50%; float: right; text-align: right; }
+	.invoice-meta { width: 200px; float: right; text-align: right; }
+	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
+	.invoice-meta td,
+	.invoice-meta tr { border: 0 !important; }
+	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
 	h1 { margin-top: 32px; font-size: 20px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-	th, td { border: 1px solid #ccc; padding: 8px; }
-	th { background: #f5f5f5; }
+	th, td { border: none; padding: 6px 8px; }
+	thead th { border-bottom: 1px solid #000; text-align: left; }
+	tbody tr { border-bottom: 1px solid #777; }
+	tbody tr:last-child { border-bottom: 1px solid #777; }
+	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
+	.positions-table tbody td { vertical-align: top; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { margin-top: 60px; font-size: 11px; }
 	.clear { clear: both; }
@@ -95,22 +108,40 @@ if ($recipient_block === '') {
 		</div>
 
 		<div class="invoice-meta">
-			<?= htmlspecialchars(($tpl['labels']['number'] ?? 'Rechnungsnummer') . ': ' . ($tpl['document']['number'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
-			<?= htmlspecialchars(($tpl['labels']['date'] ?? 'Rechnungsdatum') . ': ' . ($tpl['document']['date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
-			<?= htmlspecialchars(($tpl['labels']['period'] ?? 'Leistungszeitraum') . ': ' . ($tpl['document']['period'] ?? ''), ENT_QUOTES, 'UTF-8'); ?><br>
-			<?= htmlspecialchars(($tpl['labels']['due'] ?? 'Fällig bis') . ': ' . ($tpl['document']['due'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+			<table style="width:100%; border-collapse:collapse; border:0;">
+				<tr>
+					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['number'] ?? 'Rechnungsnummer', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['number'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+				</tr>
+				<tr>
+					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+				</tr>
+				<tr>
+					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['due'] ?? 'Fällig bis', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+				</tr>
+				<tr>
+					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['period'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+				</tr>
+			</table>
 		</div>
 		<div class="clear"></div>
 	</div>
 
 	<div class="address">
-		<strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong><br>
-		<?= nl2br(htmlspecialchars($recipient_block, ENT_QUOTES, 'UTF-8')); ?>
+		<strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong>
+		<div>
+			<?php foreach ($recipient_lines as $line): ?>
+				<div><?= htmlspecialchars($line, ENT_QUOTES, 'UTF-8'); ?></div>
+			<?php endforeach; ?>
+		</div>
 	</div>
 
-	<h1><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
 
-	<table>
+	<table class="positions-table">
 		<thead>
 			<tr>
 				<th>SKU</th>
@@ -135,6 +166,7 @@ if ($recipient_block === '') {
 				$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
 				$item = (string)($row['item'] ?? '');
 				$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+				$desc_html = (string)($row['desc_html'] ?? '');
 				$sku = (string)($row['article_number'] ?? '');
 				$discount = (string)($row['discount'] ?? '');
 				?>
@@ -142,7 +174,11 @@ if ($recipient_block === '') {
 					<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 					<td>
 						<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
-						<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+						<?php if ($desc_html !== ''): ?>
+							<?= $desc_html; ?>
+						<?php else: ?>
+							<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+						<?php endif; ?>
 					</td>
 					<td><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
@@ -154,13 +190,13 @@ if ($recipient_block === '') {
 		</tbody>
 	</table>
 
-	<div class="totals">
-		<?= htmlspecialchars(($tpl['labels']['subtotal'] ?? 'Zwischensumme') . ': ' . $__fmt_cur . ' ' . $__fmt_num((float)$totals['subtotal']), ENT_QUOTES, 'UTF-8'); ?><br>
-		<?php if ($is_mwst_pflichtig && (float)$totals['tax_rate'] > 0): ?>
-			<?= htmlspecialchars('MWST ' . rtrim(rtrim((string)$totals['tax_rate'], '0'), '.') . ' %: ' . $__fmt_cur . ' ' . $__fmt_num((float)$totals['tax_amount']), ENT_QUOTES, 'UTF-8'); ?><br>
-		<?php endif; ?>
-		<strong><?= htmlspecialchars(($tpl['labels']['total'] ?? 'Total') . ': ' . $__fmt_cur . ' ' . $__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
-	</div>
+	<table>
+		<tr>
+			<td colspan="4"></td>
+			<td><strong>Gesamtbetrag</strong></td>
+			<td class="text-right"><strong><?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong></td>
+		</tr>
+	</table>
 
 	<div class="clear"></div>
 
