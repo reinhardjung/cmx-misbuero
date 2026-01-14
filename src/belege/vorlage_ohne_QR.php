@@ -137,6 +137,7 @@ $recipient_html = $recipient_has_br
 	.totals-table td { border: 0 !important; }
 	.totals-table tr { line-height: 1.1; }
 	.totals-table td { padding: 2px 8px; }
+	.totals-table .total-row td { padding-top: 8px; }
 	.beleg-subject { margin-top: 6px; font-size: 13px; }
 	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
@@ -328,7 +329,7 @@ $recipient_html = $recipient_has_br
 				</td>
 			</tr>
 		<?php endif; ?>
-		<tr>
+		<tr class="total-row">
 			<td colspan="<?= $col_count; ?>" class="text-right">
 				<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
 			</td>
@@ -343,7 +344,7 @@ $recipient_html = $recipient_has_br
 		}
 		$offen_betrag = (float)($totals['total'] ?? 0) - $anzahlungen_sum;
 		?>
-		<div style="margin-top:8px;text-align:right;">
+		<div style="margin-top:16px;text-align:right;">
 			<em>Bereits erhaltene Zahlungen</em>
 			<table style="width:200px; border-collapse:collapse; margin-top:4px; margin-left:auto;">
 				<?php foreach ($tpl['anzahlungen'] as $row): ?>
