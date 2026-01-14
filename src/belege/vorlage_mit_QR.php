@@ -140,21 +140,11 @@ $recipient_html = $recipient_has_br
 	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
-	.footer { position: fixed; left: 0; right: 0; bottom: 20px; font-size: 11px; }
+	.footer { margin-top: 20px; font-size: 11px; }
 	.clear { clear: both; }
 	.text-right { text-align: right; }
 	.logo-link { text-decoration: none; }
-	.qr-block { margin-top: 40px; }
-	.qr-placeholder {
-		border: 1px dashed #999;
-		height: 140px;
-		width: 240px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 11px;
-		color: #666;
-	}
+	.qr-reserve { height: 105mm; }
 </style>
 </head>
 <body>
@@ -381,35 +371,11 @@ $recipient_html = $recipient_has_br
 
 	<div class="clear"></div>
 
-	<div class="qr-block">
-		<strong>QR-Rechnung</strong><br>
-		<div class="qr-placeholder">QR-Code</div>
+	<div class="footer">
+		<?= $footer_html; ?>
 	</div>
 
-	<div class="footer">
-		Zahlung via QR-Rechnung.<br>
-		<?= $footer_html; ?>
-		<?php
-		$bank_name = trim((string)($tpl['bank']['bank_name'] ?? ''));
-		$iban = trim((string)($tpl['bank']['iban'] ?? ''));
-		$qr_iban = trim((string)($tpl['bank']['qr_iban'] ?? ''));
-		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
-		$bank_iban = $iban !== '' ? $iban : $qr_iban;
-		?>
-		<?php if ($bank_name !== '' || $bank_iban !== '' || $bic !== ''): ?>
-			<div style="margin-top:8px;">
-				<?php if ($bank_name !== ''): ?>
-					<div><?= htmlspecialchars($bank_name, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-				<?php if ($bank_iban !== ''): ?>
-					<div>IBAN: <?= htmlspecialchars($bank_iban, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-				<?php if ($bic !== ''): ?>
-					<div>BIC: <?= htmlspecialchars($bic, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-			</div>
-		<?php endif; ?>
-	</div>
+	<div class="qr-reserve"></div>
 </div>
 </body>
 </html>

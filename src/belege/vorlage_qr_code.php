@@ -82,16 +82,51 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         return;
     }
 
-    // Immer NON (ohne Referenz), da kein QR-Referenzfeld mehr vorhanden
-    $mode      = 'NON';
-    $qrr_raw   = '';
-    $qrr_print = '';
-    $is_qrr    = false;
+    $opts_general = \get_option('cmx_einstellungen', []);
+    $ref_mode = strtoupper(trim((string)($opts_general['qr_mode'] ?? 'NON')));
+    $ref_raw = trim((string)($opts_general['qr_reference'] ?? ''));
+
+    $is_qrr = false;
+    $is_scor = false;
+    $ref_value = '';
+    $ref_print = '';
+
+    if ($ref_raw !== '') {
+        $qrr_digits = preg_replace('~\D+~', '', $ref_raw);
+        if (strlen($qrr_digits) === 27 && cmx_qr_is_valid_qrr($qrr_digits)) {
+            $is_qrr = true;
+            $ref_value = $qrr_digits;
+            $ref_print = cmx_qr_format_qrr_print($qrr_digits);
+        } elseif (preg_match('/^RF[0-9A-Z]{2,}$/i', str_replace(' ', '', $ref_raw))) {
+            $is_scor = true;
+            $ref_value = strtoupper(str_replace(' ', '', $ref_raw));
+            $ref_print = trim(chunk_split($ref_value, 4, ' '));
+        }
+    }
+
+    if (!$is_qrr && !$is_scor) {
+        $ref_mode = 'NON';
+    } elseif ($is_qrr) {
+        $ref_mode = 'QRR';
+    } elseif ($is_scor) {
+        $ref_mode = 'SCOR';
+    }
 
     /** ----------------------------------------------------------------
      * 2) Beträge & Adressen
      * ---------------------------------------------------------------- */
-    $iban   = $qr_iban !== '' ? $qr_iban : trim((string) ($tpl['bank']['iban'] ?? ''));
+    $bank_iban = trim((string) ($tpl['bank']['iban'] ?? ''));
+    $iban = ($ref_mode === 'QRR') ? $qr_iban : $bank_iban;
+    if ($iban === '') {
+        $iban = $qr_iban;
+    }
+
+    if ($ref_mode === 'QRR' && $qr_iban === '') {
+        $ref_mode = 'NON';
+        $ref_value = '';
+        $ref_print = '';
+    }
+
     if ($iban === '') {
         // Ohne IBAN kein QR-Code auf dem Beleg
         return;
@@ -117,10 +152,32 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $db_1    = $deb[0] ?? '';
     $db_2    = $deb[1] ?? '';
     $db_3    = $deb[2] ?? '';
+    $db_plz  = '';
+    $db_ort  = '';
+    $db_country = 'CH';
+
+    if ($db_3 !== '' && preg_match('/^(?:[A-Z]{2}-)?(\d{4,5})\s+(.+)$/', $db_3, $m)) {
+        $db_plz = $m[1];
+        $db_ort = $m[2];
+    } else {
+        $db_ort = $db_3;
+    }
+
+    $additional_info = trim((string)($tpl['document']['subject'] ?? ''));
+    if ($additional_info === '') {
+        $additional_info = trim((string)($tpl['document']['description'] ?? ''));
+    }
+    $additional_info = trim(preg_replace('/\s+/', ' ', $additional_info));
+    if ($additional_info !== '') {
+        $additional_info = mb_substr($additional_info, 0, 140);
+    }
 
     /** ----------------------------------------------------------------
      * 3) EMV-QR-Payload bauen
      * ---------------------------------------------------------------- */
+    $ref_type = $ref_mode;
+    $ref_value = ($ref_mode === 'NON') ? '' : $ref_value;
+
     $qr_data = [
         'SPC',                  // QR-Typ
         '0200',                 // Version
@@ -133,22 +190,28 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $cr_plz,
         $cr_ort,
         'CH',
-        ($is_qrr ? 'QRR' : 'NON'),  // Referenz-Typ
+        '',                     // Ult. Creditor Address Type
+        '',                     // Ult. Creditor Name
+        '',                     // Ult. Creditor Street
+        '',                     // Ult. Creditor Building No
+        '',                     // Ult. Creditor Postal Code
+        '',                     // Ult. Creditor Town
+        '',                     // Ult. Creditor Country
+        $betrag_emv,            // Betrag
+        $w,
+        'S',                    // Debtor Address Type
         $db_1,
         $db_2,
         '',
+        $db_plz,
+        $db_ort,
+        $db_country,
+        $ref_type,
+        $ref_value,
+        $additional_info,
+        'EPD',
         '',
-        $db_3,
-        'CH',
-        $betrag_emv,           // Betrag
-        $w,
-        ($is_qrr ? 'QRR' : 'NON'),
-        ($is_qrr ? $qrr_raw : ''),
-        '',
-        '',
-        '',
-        '',
-        'EPD'
+        ''
     ];
     $qr_raw = implode("\n", $qr_data);
 
@@ -157,15 +220,15 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 		 * ---------------------------------------------------------------- */
 		try {
 
-				// QR-Code 55 mm gross
-				$qr_size_mm = 80 * $mm;
+				// QR-Code 46 mm gross (Schweizer Norm)
+				$qr_size_mm = 46 * $mm;
 
 				$qr = QrCode::create($qr_raw)
 						->setSize((int) $qr_size_mm)
 						->setMargin(0);
 
 				// Schweizer Kreuz laden (PNG-Datei MUSS existieren)
-				$logoPath = __DIR__ . '/swiss-cross.png';
+				$logoPath = (defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : \plugin_dir_path(__FILE__)) . 'assets/swiss-cross.png';
 
 				$writer   = new PngWriter();
 
@@ -212,9 +275,9 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $zahlteil_x   = $cut_x + $gap;                        // Start des Zahlteils
 
     $qr_size      = 46 * $mm;
-    $qr_x         = $zahlteil_x + 10 * $mm;               // etwas eingerückt
+    $qr_x         = $zahlteil_x + 5 * $mm;
     // $qr_x         = $zahlteil_x * $mm;               // etwas eingerückt
-    $qr_y         = $zone_top + 30 * $mm;                 // ungefähr mittig in der Höhe
+    $qr_y         = $zone_top + 20 * $mm;
     // $qr_y         = $zone_top * $mm;                 // ungefähr mittig in der Höhe
 
     /** ----------------------------------------------------------------
@@ -258,11 +321,11 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         }
     }
 
-    if ($is_qrr && $qrr_print !== '') {
+    if ($ref_mode !== 'NON' && $ref_print !== '') {
         $y += 4 * $mm;
         $canvas->text($x, $y, 'Referenz', $fontBold, 8.5, [0, 0, 0], $page);
         $y += 4 * $mm;
-        $canvas->text($x, $y, $qrr_print, $font, 8.5, [0, 0, 0], $page);
+        $canvas->text($x, $y, $ref_print, $font, 8.5, [0, 0, 0], $page);
     }
 
     $y += 6 * $mm;
@@ -318,11 +381,11 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         }
     }
 
-    if ($is_qrr && $qrr_print !== '') {
+    if ($ref_mode !== 'NON' && $ref_print !== '') {
         $acc_y += 4 * $mm;
         $canvas->text($acc_x, $acc_y, 'Referenz', $fontBold, 8.5, [0, 0, 0], $page);
         $acc_y += 4 * $mm;
-        $canvas->text($acc_x, $acc_y, $qrr_print, $font, 8.5, [0, 0, 0], $page);
+        $canvas->text($acc_x, $acc_y, $ref_print, $font, 8.5, [0, 0, 0], $page);
     }
 
     // OPTIONAL: Zusätzliche Infos (hier Betreff)
