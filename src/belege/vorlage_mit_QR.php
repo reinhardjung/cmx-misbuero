@@ -126,13 +126,13 @@ $recipient_html = $recipient_has_br
 	th, td { border: none; padding: 6px 8px; }
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
-	.positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
-	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
-	.positions-table tbody td { vertical-align: top; }
+.positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
+.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
+.positions-table tbody td { vertical-align: top; }
+.positions-table th.col-num { text-align: right; padding-right: 8px; }
 	.totals-table,
 	.totals-table tr,
 	.totals-table td { border: 0 !important; }
-	.th-right { text-align: right; }
 	.beleg-subject { margin-top: 6px; font-size: 13px; }
 	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
@@ -259,12 +259,12 @@ $recipient_html = $recipient_has_br
 					<th>SKU</th>
 				<?php endif; ?>
 				<th>Artikel</th>
-				<th class="th-right">Menge</th>
-				<th class="th-right">Einzelpreis</th>
+				<th class="col-num">Menge</th>
+				<th class="col-num">Einzelpreis</th>
 				<?php if ($show_discount): ?>
-					<th class="th-right">Rabatt</th>
+					<th class="col-num">Rabatt</th>
 				<?php endif; ?>
-				<th class="th-right">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+				<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
 			</tr>
 		</thead>
 		<tbody>
