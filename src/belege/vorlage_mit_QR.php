@@ -112,6 +112,10 @@ $recipient_html = $recipient_has_br
 	.address { width: 50%; float: left; }
 	.sender-wrap { display: flex; align-items: flex-start; gap: 10px; }
 	.sender-logo { width: 150px; height: auto; max-width: 100%; display: block; margin-bottom: 6px; }
+	.sender-table { width: 100%; border-collapse: collapse; }
+	.sender-table td { border: 0; padding: 0; vertical-align: top; }
+	.sender-contact { font-size: 11px; text-align: right; white-space: nowrap; padding-left: 8px; }
+	.sender-contact a { color: inherit; text-decoration: none; }
 	.invoice-meta { width: 200px; float: right; text-align: right; }
 	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
 	.invoice-meta td,
@@ -154,27 +158,57 @@ $recipient_html = $recipient_has_br
 <div class="container">
 	<div class="header">
 		<div class="address">
-			<div class="sender-wrap">
-				<?php if (!empty($tpl['branding']['logo'])): ?>
-					<?php
-					$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
-					if ($brand_url === '') {
-						$brand_url = trim((string)($tpl['me']['website'] ?? ''));
-					}
-					if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
-						$brand_url = 'https://' . $brand_url;
-					}
-					?>
-					<?php if ($brand_url !== ''): ?>
-						<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
-							<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
-						</a>
-					<?php else: ?>
-						<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+			<?php
+			$me_phone = trim((string)($tpl['me']['phone'] ?? ''));
+			$me_email = trim((string)($tpl['me']['email'] ?? ''));
+			$me_web = trim((string)($tpl['me']['website'] ?? ''));
+			$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
+			$me_phone_href = preg_replace('/[^0-9+]/', '', $me_phone);
+			$me_web_href = $me_web;
+			if ($me_web_href !== '' && !preg_match('~^https?://~i', $me_web_href)) {
+				$me_web_href = 'https://' . $me_web_href;
+			}
+			?>
+			<table class="sender-table">
+				<tr>
+					<td>
+						<div class="sender-wrap">
+							<?php if (!empty($tpl['branding']['logo'])): ?>
+								<?php
+								$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
+								if ($brand_url === '') {
+									$brand_url = trim((string)($tpl['me']['website'] ?? ''));
+								}
+								if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
+									$brand_url = 'https://' . $brand_url;
+								}
+								?>
+								<?php if ($brand_url !== ''): ?>
+									<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
+										<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+									</a>
+								<?php else: ?>
+									<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+								<?php endif; ?>
+							<?php endif; ?>
+							<div><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></div>
+						</div>
+					</td>
+					<?php if ($has_contact): ?>
+						<td class="sender-contact">
+							<?php if ($me_phone !== ''): ?>
+								<div><a href="tel:<?= htmlspecialchars($me_phone_href, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($me_phone, ENT_QUOTES, 'UTF-8'); ?></a></div>
+							<?php endif; ?>
+							<?php if ($me_email !== ''): ?>
+								<div><?= htmlspecialchars($me_email, ENT_QUOTES, 'UTF-8'); ?></div>
+							<?php endif; ?>
+							<?php if ($me_web !== ''): ?>
+								<div><a href="<?= htmlspecialchars($me_web_href, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($me_web, ENT_QUOTES, 'UTF-8'); ?></a></div>
+							<?php endif; ?>
+						</td>
 					<?php endif; ?>
-				<?php endif; ?>
-				<div><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></div>
-			</div>
+				</tr>
+			</table>
 		</div>
 
 		<div class="invoice-meta">
