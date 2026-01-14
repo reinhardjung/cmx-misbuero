@@ -343,16 +343,32 @@ $recipient_html = $recipient_has_br
 		</tr>
 	</table>
 	<?php if (!empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
-		<div style="margin-top:8px;">
-			<strong>Teilzahlungen</strong>
-			<?php foreach ($tpl['anzahlungen'] as $row): ?>
-				<?php
-				$anz_date = trim((string)($row['datum'] ?? ''));
-				$anz_amount = (float)($row['betrag'] ?? 0);
-				if ($anz_date === '') continue;
-				?>
-				<div><?= htmlspecialchars($anz_date, ENT_QUOTES, 'UTF-8'); ?> - <?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></div>
-			<?php endforeach; ?>
+		<?php
+		$anzahlungen_sum = 0.0;
+		foreach ($tpl['anzahlungen'] as $row) {
+			$anz_amount = (float)($row['betrag'] ?? 0);
+			$anzahlungen_sum += $anz_amount;
+		}
+		$offen_betrag = (float)($totals['total'] ?? 0) - $anzahlungen_sum;
+		?>
+		<div style="margin-top:8px;text-align:right;">
+			<em>Bereits erhaltene Zahlungen</em>
+			<table style="width:200px; border-collapse:collapse; margin-top:4px; margin-left:auto;">
+				<?php foreach ($tpl['anzahlungen'] as $row): ?>
+					<?php
+					$anz_date = trim((string)($row['datum'] ?? ''));
+					$anz_amount = (float)($row['betrag'] ?? 0);
+					if ($anz_date === '') continue;
+					$anz_date_fmt = date('d.m.Y', strtotime($anz_date));
+					?>
+					<tr>
+						<td style="padding:0 0 2px 0; text-align:right;"><?= htmlspecialchars($anz_date_fmt, ENT_QUOTES, 'UTF-8'); ?></td>
+						<td style="padding:0 0 2px 12px; text-align:right;"><?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</table>
+			<div><?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
+			<div style="margin-top:4px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
 		</div>
 	<?php endif; ?>
 	<?php if (!$is_mwst_pflichtig): ?>
