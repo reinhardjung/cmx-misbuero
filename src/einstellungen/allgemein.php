@@ -29,12 +29,12 @@ function cmx_register_general_tab(): void {
 
 	\add_settings_field(
 		'qr_reference',
-		'QR-Referenz (QRR/SCOR)',
+		'QR-Referenz (QRR)',
 		function () {
 			$opts = get_option('cmx_einstellungen', []);
 			$val  = esc_attr($opts['qr_reference'] ?? '');
-			echo '<input type="text" name="cmx_einstellungen[qr_reference]" value="'.$val.'" class="regular-text" placeholder="21 00000 00000 00000 00000 00000 oder RFxx...">';
-			echo '<p class="description">QRR: 27-stellige Referenz, SCOR: RF-Referenz. Das System wählt automatisch den passenden Typ.</p>';
+			echo '<input type="text" name="cmx_einstellungen[qr_reference]" value="'.$val.'" class="regular-text" placeholder="21 00000 00000 00000 00000 00000">';
+			echo '<p class="description">QRR: 27-stellige Referenz. SCOR (RF...) wird ebenfalls akzeptiert.</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'

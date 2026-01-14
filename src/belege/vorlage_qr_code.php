@@ -227,21 +227,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 						->setSize((int) $qr_size_mm)
 						->setMargin(0);
 
-				// Schweizer Kreuz laden (PNG-Datei MUSS existieren)
-				$logoPath = (defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : \plugin_dir_path(__FILE__)) . 'assets/swiss-cross.png';
-
 				$writer   = new PngWriter();
-
-				if (file_exists($logoPath)) {
-						// LOGO integration über Writer::write()
-						$logo = \Endroid\QrCode\Logo\Logo::create($logoPath)
-								->setResizeToWidth((int)(7 * $mm)); // 7 mm laut Norm
-
-						$qrResult = $writer->write($qr, logo: $logo);
-				} else {
-						// Ohne Logo
-						$qrResult = $writer->write($qr);
-				}
+				$qrResult = $writer->write($qr);
 
 				$tmp = \wp_tempnam('cmx_qr');
 				\file_put_contents($tmp, $qrResult->getString());
@@ -267,18 +254,17 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $zone_height = 105 * $mm;                // gesamter QR-Block (Empfangsschein + Zahlteil)
     $zone_top    = $page_height - $zone_height;
 
-    $margin_left   = 5 * $mm;
     $receipt_width = 62 * $mm;               // Empfangsscheinbreite
-    $gap           = 3 * $mm;
+    $payment_width = 148 * $mm;              // Zahlteilbreite
+    $cut_x         = $receipt_width;         // Schnittlinie exakt bei 62 mm
+    $zahlteil_x    = $cut_x;                 // Start des Zahlteils
 
-    $cut_x        = $margin_left + $receipt_width + $gap; // vertikale Trennlinie
-    $zahlteil_x   = $cut_x + $gap;                        // Start des Zahlteils
+    $receipt_text_x = 5 * $mm;
+    $payment_text_x = $zahlteil_x + 5 * $mm;
 
-    $qr_size      = 46 * $mm;
-    $qr_x         = $zahlteil_x + 5 * $mm;
-    // $qr_x         = $zahlteil_x * $mm;               // etwas eingerückt
-    $qr_y         = $zone_top + 20 * $mm;
-    // $qr_y         = $zone_top * $mm;                 // ungefähr mittig in der Höhe
+    $qr_size      = 46 * $mm;                // QR-Code gemäss Norm
+    $qr_x         = $payment_text_x;
+    $qr_y         = $zone_top + 20 * $mm;    // Abstand unter dem Titel
 
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere
@@ -305,7 +291,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     /** ----------------------------------------------------------------
      * 7) EMPFANGSSCHEIN (linke Seite)
      * ---------------------------------------------------------------- */
-    $x = $margin_left;
+    $x = $receipt_text_x;
     $y = $zone_top + 10 * $mm;
 
     $canvas->text($x, $y, 'Empfangsschein', $fontBold, 11, [0, 0, 0], $page);
@@ -362,13 +348,13 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * 8) ZAHLTEIL (rechte Seite)
      * ---------------------------------------------------------------- */
     // Titel links im Zahlteil
-    $x = $zahlteil_x;
+    $x = $payment_text_x;
     $y = $zone_top + 10 * $mm;
 
     $canvas->text($x, $y, 'Zahlteil', $fontBold, 11, [0, 0, 0], $page);
 
     // Konto-Block rechts neben dem QR-Code
-    $acc_x = $qr_x + $qr_size + 8 * $mm;
+    $acc_x = $qr_x + $qr_size + 5 * $mm;
     $acc_y = $zone_top + 10 * $mm;
 
     $canvas->text($acc_x, $acc_y, 'Konto / Zahlbar an', $fontBold, 8.5, [0, 0, 0], $page);
@@ -424,6 +410,21 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * 9) QR-Code platzieren
      * ---------------------------------------------------------------- */
     $canvas->image($tmp, $qr_x, $qr_y, $qr_size, $qr_size, $page);
+
+    // Schweizer Kreuz (schwarz/weiss) in der Mitte des QR-Codes
+    $cross_size = 7 * $mm;
+    $cross_x = $qr_x + ($qr_size - $cross_size) / 2;
+    $cross_y = $qr_y + ($qr_size - $cross_size) / 2;
+
+    $prev_page = $canvas->get_page_number();
+    $canvas->set_page_number($page);
+    $canvas->filled_rectangle($cross_x, $cross_y, $cross_size, $cross_size, [0, 0, 0]);
+
+    $bar = $cross_size * 0.2;
+    $arm = $cross_size * 0.7;
+    $canvas->filled_rectangle($cross_x + ($cross_size - $bar) / 2, $cross_y + ($cross_size - $arm) / 2, $bar, $arm, [1, 1, 1]);
+    $canvas->filled_rectangle($cross_x + ($cross_size - $arm) / 2, $cross_y + ($cross_size - $bar) / 2, $arm, $bar, [1, 1, 1]);
+    $canvas->set_page_number($prev_page);
 
     // Temporäre Datei löschen
     @\unlink($tmp);
