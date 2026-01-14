@@ -55,7 +55,11 @@ if ($recipient_block === '') {
 		(trim(($tpl['recipient']['zip'] ?? '') . ' ' . ($tpl['recipient']['city'] ?? '')))
 	);
 }
-$recipient_lines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $recipient_block))));
+$recipient_block = str_replace(["\r\n", "\r"], "\n", $recipient_block);
+$recipient_has_br = (stripos($recipient_block, '<br') !== false);
+$recipient_html = $recipient_has_br
+	? wp_kses($recipient_block, ['br' => []])
+	: nl2br(esc_html($recipient_block));
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -121,11 +125,7 @@ $recipient_lines = array_values(array_filter(array_map('trim', preg_split('/\r\n
 
 	<div class="address">
 		<strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong>
-		<div>
-			<?php foreach ($recipient_lines as $line): ?>
-				<div><?= htmlspecialchars($line, ENT_QUOTES, 'UTF-8'); ?></div>
-			<?php endforeach; ?>
-		</div>
+		<div><?= $recipient_html; ?></div>
 	</div>
 
 	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
