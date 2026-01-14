@@ -59,6 +59,8 @@ if ($totals['total'] == 0.0 && !empty($positions)) {
 
 $opts_general      = (array) get_option('cmx_einstellungen', []);
 $is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
+$beleg_subject = trim((string)($tpl['document']['subject'] ?? ''));
+$beleg_description = trim((string)($tpl['document']['description'] ?? ''));
 $opts_belege = (array) get_option('cmx_belege', []);
 $beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
 $footer_key = 'belegfuss_' . $beleg_type;
@@ -125,6 +127,8 @@ $recipient_html = $recipient_has_br
 	.totals-table tr,
 	.totals-table td { border: 0 !important; }
 	.th-right { text-align: right; }
+	.beleg-subject { margin-top: 6px; font-size: 13px; }
+	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { margin-top: 60px; font-size: 11px; }
@@ -175,6 +179,12 @@ $recipient_html = $recipient_has_br
 	</div>
 
 	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+	<?php if ($beleg_subject !== ''): ?>
+		<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+	<?php endif; ?>
+	<?php if ($beleg_description !== ''): ?>
+		<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
+	<?php endif; ?>
 
 	<table class="positions-table">
 		<thead>
@@ -206,12 +216,13 @@ $recipient_html = $recipient_has_br
 				$unit = (string)($row['unit'] ?? '');
 				$unit_price = (float)($row['unit_price'] ?? 0);
 				$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+				$line_subtotal = $qty * $unit_price;
+				$line_discount = $line_subtotal - $line_total;
 				$item = (string)($row['item'] ?? '');
 				$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
 				$desc_html = (string)($row['desc_html'] ?? '');
 				$sku = (string)($row['article_number'] ?? '');
-				$discount = (string)($row['discount'] ?? '');
-				$discount_display = $discount !== '' ? $discount : '';
+				$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
 				?>
 				<tr>
 					<?php if ($show_position_index): ?>
