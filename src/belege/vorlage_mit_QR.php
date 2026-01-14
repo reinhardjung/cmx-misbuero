@@ -110,6 +110,8 @@ $recipient_html = $recipient_has_br
 	.container { width: 100%; }
 	.header { margin-bottom: 24px; }
 	.address { width: 50%; float: left; }
+	.sender-wrap { display: flex; align-items: flex-start; gap: 10px; }
+	.sender-logo { width: 150px; height: auto; max-width: 100%; display: block; margin-bottom: 6px; }
 	.invoice-meta { width: 200px; float: right; text-align: right; }
 	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
 	.invoice-meta td,
@@ -151,7 +153,12 @@ $recipient_html = $recipient_has_br
 <div class="container">
 	<div class="header">
 		<div class="address">
-			<strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong><br>
+			<div class="sender-wrap">
+				<?php if (!empty($tpl['branding']['logo'])): ?>
+					<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+				<?php endif; ?>
+				<div><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></div>
+			</div>
 		</div>
 
 		<div class="invoice-meta">
