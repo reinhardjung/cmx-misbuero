@@ -804,7 +804,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Vorlage laden & rendern
 		$tpl_dir  = trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/';
 		// error_log($tpl_dir);
-		$tpl_path = $tpl_dir . 'vorlage_html.php'; // ein gemeinsames Template (gilt auch für Angebot/Lfr.-Rechnung etc.)
+		if ($qr_should_print) {
+			$tpl_path = $tpl_dir . 'vorlage_mit_QR.php';
+		} else {
+			$tpl_path = $tpl_dir . 'vorlage_ohne_QR.php';
+		}
 		if (!is_file($tpl_path)) { cmxbu_log('FEHLER: Vorlage fehlt.',['path'=>$tpl_path]); return; }
 
 		ob_start(); include $tpl_path; $html=trim((string)ob_get_clean());

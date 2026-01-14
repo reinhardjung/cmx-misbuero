@@ -22,7 +22,7 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN')) {
 	if (!\post_type_exists('belege')) return;
 	\add_meta_box(
 		'cmx_beleg_anzahlungen',
-		'Anzahlungen',
+		'Teilzahlungen',
 		__NAMESPACE__.'\\cmx_render_beleg_anzahlungen_metabox',
 		'belege',
 		'side',
