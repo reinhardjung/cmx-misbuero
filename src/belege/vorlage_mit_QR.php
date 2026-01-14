@@ -165,6 +165,12 @@ $recipient_html = $recipient_has_br
 			$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
 			$me_phone_href = preg_replace('/[^0-9+]/', '', $me_phone);
 			$me_web_href = $me_web;
+			$me_web_label = $me_web;
+			if ($me_web_label !== '') {
+				$me_web_label = preg_replace('~^https?://~i', '', $me_web_label);
+				$me_web_label = preg_replace('~^www\\.~i', '', $me_web_label);
+				$me_web_label = 'www.' . $me_web_label;
+			}
 			if ($me_web_href !== '' && !preg_match('~^https?://~i', $me_web_href)) {
 				$me_web_href = 'https://' . $me_web_href;
 			}
@@ -203,7 +209,7 @@ $recipient_html = $recipient_has_br
 								<div><?= htmlspecialchars($me_email, ENT_QUOTES, 'UTF-8'); ?></div>
 							<?php endif; ?>
 							<?php if ($me_web !== ''): ?>
-								<div><a href="<?= htmlspecialchars($me_web_href, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($me_web, ENT_QUOTES, 'UTF-8'); ?></a></div>
+								<div><a href="<?= htmlspecialchars($me_web_href, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($me_web_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
 							<?php endif; ?>
 						</td>
 					<?php endif; ?>
