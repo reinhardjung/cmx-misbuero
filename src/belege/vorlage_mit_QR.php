@@ -133,6 +133,8 @@ $recipient_html = $recipient_has_br
 	.totals-table,
 	.totals-table tr,
 	.totals-table td { border: 0 !important; }
+	.totals-table tr { line-height: 1.1; }
+	.totals-table td { padding: 2px 8px; }
 	.beleg-subject { margin-top: 6px; font-size: 13px; }
 	.beleg-desc { margin-top: 2px; }
 	.mwst-note { margin-top: 8px; font-size: 11px; }
@@ -241,7 +243,7 @@ $recipient_html = $recipient_has_br
 		<div><?= $recipient_html; ?></div>
 	</div>
 
-	<h1 class="text-right" style="margin-top: 48px;"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+	<h1 class="text-right" style="margin-top: 64px;"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
 	<?php if ($beleg_subject !== ''): ?>
 		<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
 	<?php endif; ?>
@@ -321,8 +323,7 @@ $recipient_html = $recipient_has_br
 					Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?>
 				</td>
 			</tr>
-		<?php endif; ?>
-		<?php
+		<?php endif;
 		$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
 		$mwst_amount = (float)($tpl['totals']['tax'] ?? 0);
 		$mwst_rate_pct = $mwst_rate * 100;
@@ -367,8 +368,8 @@ $recipient_html = $recipient_has_br
 					</tr>
 				<?php endforeach; ?>
 			</table>
-			<div><?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
-			<div style="margin-top:4px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<div>- <?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
+			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
 		</div>
 	<?php endif; ?>
 	<?php if (!$is_mwst_pflichtig): ?>
