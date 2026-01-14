@@ -15,6 +15,7 @@ $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): strin
 };
 
 $positions = (array)($tpl['positions'] ?? []);
+$show_position_index = count($positions) > 1;
 
 $totals = array_replace([
 	'subtotal' => 0.0,
@@ -35,6 +36,19 @@ if ($totals['total'] == 0.0 && !empty($positions)) {
 
 $opts_general      = (array) get_option('cmx_einstellungen', []);
 $is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
+$opts_belege = (array) get_option('cmx_belege', []);
+$beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
+$footer_key = 'belegfuss_' . $beleg_type;
+$footer_block = (string)($opts_belege[$footer_key] ?? '');
+$footer_block = str_replace(["\r\n", "\r"], "\n", $footer_block);
+$footer_has_br = stripos($footer_block, '<br') !== false;
+$footer_has_tags = $footer_block !== wp_strip_all_tags($footer_block);
+$footer_html = '';
+if ($footer_block !== '') {
+	$footer_html = $footer_has_tags
+		? wp_kses($footer_block, ['br' => [], 'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []], 'strong' => [], 'em' => [], 'b' => [], 'i' => []])
+		: nl2br(esc_html($footer_block));
+}
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
 if ($sender_country_code === '') $sender_country_code = 'CH';
@@ -87,8 +101,9 @@ $recipient_html = $recipient_has_br
 	.totals-table,
 	.totals-table tr,
 	.totals-table td { border: 0 !important; }
-	.totals-label { padding-right: 4px; }
+	.totals-label { padding-right: 2px; }
 	.th-right { text-align: right; }
+	.mwst-note { margin-top: 8px; font-size: 11px; }
 	.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { margin-top: 60px; font-size: 11px; }
 	.clear { clear: both; }
@@ -110,18 +125,11 @@ $recipient_html = $recipient_has_br
 <div class="container">
 	<div class="header">
 		<div class="address">
-			<strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong><br><br>
-			<?php if (!$is_mwst_pflichtig): ?>
-				Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG
-			<?php endif; ?>
+			<strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong><br>
 		</div>
 
 		<div class="invoice-meta">
 			<table style="width:100%; border-collapse:collapse; border:0;">
-				<tr>
-					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['number'] ?? 'Rechnungsnummer', ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['number'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
-				</tr>
 				<tr>
 					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
@@ -149,6 +157,9 @@ $recipient_html = $recipient_has_br
 	<table class="positions-table">
 		<thead>
 			<tr>
+				<?php if ($show_position_index): ?>
+					<th>Pos.</th>
+				<?php endif; ?>
 				<th>SKU</th>
 				<th>Artikel</th>
 				<th class="th-right">Menge</th>
@@ -160,7 +171,7 @@ $recipient_html = $recipient_has_br
 		<tbody>
 		<?php if (empty($positions)): ?>
 			<tr>
-				<td colspan="6">—</td>
+				<td colspan="<?= $show_position_index ? 7 : 6; ?>">—</td>
 			</tr>
 		<?php else: ?>
 			<?php foreach ($positions as $i => $row): ?>
@@ -174,8 +185,12 @@ $recipient_html = $recipient_has_br
 				$desc_html = (string)($row['desc_html'] ?? '');
 				$sku = (string)($row['article_number'] ?? '');
 				$discount = (string)($row['discount'] ?? '');
+				$discount_display = $discount !== '' ? $discount : '';
 				?>
 				<tr>
+					<?php if ($show_position_index): ?>
+						<td><?= htmlspecialchars((string)($i + 1), ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php endif; ?>
 					<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 					<td>
 						<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
@@ -187,7 +202,7 @@ $recipient_html = $recipient_has_br
 					</td>
 					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right"><?= htmlspecialchars($discount !== '' ? $discount : '—', ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
 				</tr>
 			<?php endforeach; ?>
@@ -195,13 +210,18 @@ $recipient_html = $recipient_has_br
 		</tbody>
 	</table>
 
-	<table class="totals-table">
+	<table class="totals-table" border="0">
 		<tr>
-			<td colspan="4"></td>
-			<td class="text-right totals-label"><strong>Gesamtbetrag</strong></td>
-			<td class="text-right"><strong><?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong></td>
+			<td colspan="<?= $show_position_index ? 6 : 5; ?>" class="text-right">
+				<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
+			</td>
 		</tr>
 	</table>
+	<?php if (!$is_mwst_pflichtig): ?>
+		<div class="mwst-note">
+			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
+		</div>
+	<?php endif; ?>
 
 	<div class="clear"></div>
 
@@ -212,7 +232,7 @@ $recipient_html = $recipient_has_br
 
 	<div class="footer">
 		Zahlung via QR-Rechnung.<br>
-		Vielen Dank für Deinen Auftrag.
+		<?= $footer_html; ?>
 	</div>
 </div>
 </body>
