@@ -143,7 +143,7 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			}
 
 			if ($show_btn) {
-				echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlt</a>';
+				echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlen</a>';
 			}
 		}
 		break;

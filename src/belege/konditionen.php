@@ -30,8 +30,10 @@ function cmx_get_artikel_waehrungen(): array {
 	$waehrungen = [];
 
 	// 1) Taxonomie nutzen, wenn vorhanden
-	$tax = 'artikel_waehrung';
-	if (\taxonomy_exists($tax)) {
+	foreach (['belege_waehrungen', 'artikel_waehrung'] as $tax) {
+		if (!\taxonomy_exists($tax)) {
+			continue;
+		}
 		$terms = \get_terms(['taxonomy' => $tax, 'hide_empty' => false]);
 		if (!\is_wp_error($terms) && !empty($terms)) {
 			foreach ($terms as $t) {
@@ -40,6 +42,9 @@ function cmx_get_artikel_waehrungen(): array {
 					$waehrungen[] = $code;
 				}
 			}
+		}
+		if (!empty($waehrungen)) {
+			break;
 		}
 	}
 

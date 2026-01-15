@@ -13,6 +13,15 @@ add_action('add_meta_boxes', function() {
         'side',
         'default'
     );
+
+    add_meta_box(
+        'cmx_belege_qr_box',
+        'QR-Rechnung',
+        __NAMESPACE__ . '\\cmx_belege_render_qr_metabox',
+        'belege',
+        'side',
+        'low'
+    );
 });
 
 
@@ -29,8 +38,6 @@ function cmx_belege_render_mwst_metabox($post) {
     // Werte laden
     $is_brutto = get_post_meta($post->ID, '_cmx_beleg_is_brutto', true);
     $mwst_term_id = get_post_meta($post->ID, '_cmx_beleg_mwst_term', true);
-    $qr_enabled = get_post_meta($post->ID, '_cmx_beleg_qr_enabled', true);
-
     // Taxonomie-Terme laden
     $terme = get_terms([
         'taxonomy'   => 'belege_mwst',
@@ -68,17 +75,6 @@ function cmx_belege_render_mwst_metabox($post) {
     }
     ?>
 
-    <p>
-        <label>
-            <input type="checkbox"
-                   name="cmx_beleg_qr_enabled"
-                   value="1"
-                <?php checked($qr_enabled, '1'); ?> />
-            QR-Code auf Beleg drucken
-        </label><br>
-        <small>Nur möglich, wenn eine QR-IBAN hinterlegt ist.</small>
-    </p>
-
     <?php if ($is_mwst_pflichtig): ?>
     <script>
     (function() {
@@ -101,15 +97,39 @@ function cmx_belege_render_mwst_metabox($post) {
     <?php endif;
 }
 
+/**
+ * QR-Metabox-Inhalt
+ */
+function cmx_belege_render_qr_metabox($post) {
+    wp_nonce_field('cmx_belege_qr_save', 'cmx_belege_qr_nonce');
+    $qr_enabled = get_post_meta($post->ID, '_cmx_beleg_qr_enabled', true);
+    ?>
+    <p>
+        <label>
+            <input type="checkbox"
+                   name="cmx_beleg_qr_enabled"
+                   value="1"
+                <?php checked($qr_enabled, '1'); ?> />
+            QR-Code auf Beleg drucken
+        </label><br>
+        <!-- <small>Nur möglich, wenn eine QR-IBAN hinterlegt ist.</small> -->
+    </p>
+    <?php
+}
+
 
 /**
  * Speichern
  */
 add_action('save_post_belege', function($post_id) {
 
+    $mwst_nonce_ok = isset($_POST['cmx_belege_mwst_nonce'])
+        && wp_verify_nonce($_POST['cmx_belege_mwst_nonce'], 'cmx_belege_mwst_save');
+    $qr_nonce_ok = isset($_POST['cmx_belege_qr_nonce'])
+        && wp_verify_nonce($_POST['cmx_belege_qr_nonce'], 'cmx_belege_qr_save');
+
     // Sicherheitsprüfung
-    if (!isset($_POST['cmx_belege_mwst_nonce']) ||
-        !wp_verify_nonce($_POST['cmx_belege_mwst_nonce'], 'cmx_belege_mwst_save')) {
+    if (!$mwst_nonce_ok && !$qr_nonce_ok) {
         return;
     }
 
@@ -119,20 +139,21 @@ add_action('save_post_belege', function($post_id) {
     $opts_general = (array) get_option('cmx_einstellungen', []);
     $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
 
-    if ($is_mwst_pflichtig) {
-        // Checkbox speichern
-        $is_brutto = isset($_POST['cmx_beleg_is_brutto']) ? '1' : '0';
-        update_post_meta($post_id, '_cmx_beleg_is_brutto', $is_brutto);
+    if ($mwst_nonce_ok) {
+        if ($is_mwst_pflichtig) {
+            $is_brutto = isset($_POST['cmx_beleg_is_brutto']) ? '1' : '0';
+            update_post_meta($post_id, '_cmx_beleg_is_brutto', $is_brutto);
 
+            $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';
+            update_post_meta($post_id, '_cmx_beleg_mwst_term', $mwst_term_id);
+        } else {
+            update_post_meta($post_id, '_cmx_beleg_is_brutto', '0');
+            update_post_meta($post_id, '_cmx_beleg_mwst_term', '');
+        }
+    }
+
+    if ($qr_nonce_ok || $mwst_nonce_ok) {
         $qr_enabled = isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0';
         update_post_meta($post_id, '_cmx_beleg_qr_enabled', $qr_enabled);
-
-        // Select speichern
-        $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';
-        update_post_meta($post_id, '_cmx_beleg_mwst_term', $mwst_term_id);
-    } else {
-        update_post_meta($post_id, '_cmx_beleg_is_brutto', '0');
-        update_post_meta($post_id, '_cmx_beleg_qr_enabled', isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0');
-        update_post_meta($post_id, '_cmx_beleg_mwst_term', '');
     }
 });

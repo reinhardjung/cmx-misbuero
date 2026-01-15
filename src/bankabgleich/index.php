@@ -25,6 +25,7 @@ class CM_Bankabgleich {
 		add_action('admin_post_cm_bankabgleich_save_allocations', [ $this, 'handle_save_allocations' ]);
 		add_action('admin_post_cm_bankabgleich_undo', [ $this, 'handle_undo' ]);
 		add_action('admin_post_cm_bankabgleich_unassign_payment', [ $this, 'handle_unassign_payment' ]);
+		add_action('admin_post_cm_bankabgleich_add_opening', [ $this, 'handle_add_opening' ]);
 	}
 
 	/* ------------------------------------------------------------
@@ -33,11 +34,27 @@ class CM_Bankabgleich {
 	public function maybe_install() {
 		if ( ! current_user_can(self::CAPABILITY) ) return;
 
+		$this->maybe_upgrade_tables();
+
 		$installed = get_option('cm_bankabgleich_installed');
 		if ( $installed === '1' ) return;
 
 		$this->install_tables();
 		update_option('cm_bankabgleich_installed', '1', false);
+	}
+
+	private function maybe_upgrade_tables() {
+		global $wpdb;
+		$tx_table = $wpdb->prefix . self::TX_TABLE;
+
+		$has_category = $wpdb->get_var($wpdb->prepare(
+			"SHOW COLUMNS FROM {$tx_table} LIKE %s",
+			'category'
+		));
+
+		if (!$has_category) {
+			$wpdb->query("ALTER TABLE {$tx_table} ADD COLUMN category VARCHAR(50) NULL");
+		}
 	}
 
 	private function install_tables() {
@@ -61,6 +78,7 @@ class CM_Bankabgleich {
 			text TEXT NULL,
 			reference VARCHAR(191) NULL,
 			iban VARCHAR(64) NULL,
+			category VARCHAR(50) NULL,
 			raw_xml LONGTEXT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'open', /* open|partial|assigned */
 			created_at DATETIME NOT NULL,
@@ -210,7 +228,44 @@ class CM_Bankabgleich {
 	}
 
 	private function render_transactions(array $transactions, string $status, $selected_tx, array $existing_allocations) {
+		$categories = $this->get_tx_categories();
 		?>
+		<h2>Anfangsbestand erfassen</h2>
+		<?php $opening_options = $this->get_opening_options(); ?>
+		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:16px;">
+			<input type="hidden" name="action" value="cm_bankabgleich_add_opening">
+			<?php wp_nonce_field('cm_bankabgleich_add_opening'); ?>
+			<label>
+				<select name="opening_type">
+					<?php foreach ($opening_options as $key => $label) : ?>
+						<option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</label>
+			<label style="margin-left:8px;">
+				<input type="date" name="opening_date" value="<?php echo esc_attr(date('Y-m-d')); ?>" required>
+			</label>
+			<label style="margin-left:8px;">
+				<input type="text" name="opening_amount" placeholder="0.00" required style="width:120px;" class="cmx-select-on-focus">
+			</label>
+			<label style="margin-left:8px;">
+				<select name="opening_currency">
+					<option value="CHF">CHF</option>
+					<option value="EUR">EUR</option>
+				</select>
+			</label>
+			<button class="button button-secondary" style="margin-left:8px;">Anlegen</button>
+		</form>
+		<script>
+		(function() {
+			const input = document.querySelector('input.cmx-select-on-focus');
+			if (!input) return;
+			const selectAll = () => input.select();
+			input.addEventListener('focus', selectAll);
+			input.addEventListener('click', selectAll);
+		})();
+		</script>
+
 		<h2>CAMT-Datei importieren</h2>
 		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" style="margin-bottom:16px;">
 			<input type="hidden" name="action" value="cm_bankabgleich_import_camt">
@@ -237,18 +292,20 @@ class CM_Bankabgleich {
 					<th style="width:110px;">Datum</th>
 					<th style="width:140px;">Betrag</th>
 					<th>Text</th>
+					<th style="width:160px;">Kategorie</th>
 					<th style="width:220px;">Referenz</th>
 					<th style="width:120px;"></th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php if ( empty($transactions) ) : ?>
-					<tr><td colspan="5">Keine Einträge.</td></tr>
+					<tr><td colspan="6">Keine Einträge.</td></tr>
 				<?php else : foreach ( $transactions as $tx ) : ?>
 					<tr>
 						<td><?php echo esc_html($tx->booking_date); ?></td>
 						<td><strong><?php echo esc_html($this->fmt_money($tx->amount, $tx->currency)); ?></strong></td>
 						<td><?php echo esc_html($tx->text); ?></td>
+						<td><?php echo esc_html($categories[$tx->category] ?? '–'); ?></td>
 						<td><?php echo esc_html($tx->reference ?: '–'); ?></td>
 						<td>
 							<a class="button <?php echo $tx->status==='open'?'button-primary':''; ?>"
@@ -270,6 +327,7 @@ class CM_Bankabgleich {
 	private function render_allocation_panel($tx, array $existing_allocations) {
 		$tx_amount = (float) $tx->amount;
 		$allocated_sum = 0.0;
+		$categories = $this->get_tx_categories();
 
 		foreach ( $existing_allocations as $a ) {
 			$allocated_sum += (float) $a->amount;
@@ -336,6 +394,17 @@ class CM_Bankabgleich {
 				<?php endforeach; endif; ?>
 				</tbody>
 			</table>
+
+			<h3 style="margin-top:16px;">Kategorie</h3>
+			<p class="description">Die Kategorie wird an dieser Bankbuchung gespeichert.</p>
+			<select name="tx_category" style="min-width:220px;">
+				<option value="">— auswählen —</option>
+				<?php foreach ($categories as $key => $label) : ?>
+					<option value="<?php echo esc_attr($key); ?>" <?php selected((string)$tx->category, (string)$key); ?>>
+						<?php echo esc_html($label); ?>
+					</option>
+				<?php endforeach; ?>
+			</select>
 
 			<h3 style="margin-top:16px;">Bestehende Zuordnungen</h3>
 			<table class="widefat striped">
@@ -463,6 +532,17 @@ class CM_Bankabgleich {
 		if ( ! $tx ) wp_die('Bankbuchung nicht gefunden.');
 
 		$user_id = get_current_user_id();
+
+		$categories = $this->get_tx_categories();
+		$tx_category = isset($_POST['tx_category']) ? sanitize_text_field($_POST['tx_category']) : '';
+		if ($tx_category !== '' && !isset($categories[$tx_category])) {
+			$tx_category = '';
+		}
+		$wpdb->update(
+			$tx_table,
+			[ 'category' => $tx_category ],
+			[ 'id' => $tx_id ]
+		);
 
 		// Undo Snapshot (für 30s): Status + alle Payment-Records dieser tx
 		$snapshot = [
@@ -618,6 +698,53 @@ class CM_Bankabgleich {
 		]);
 
 		wp_safe_redirect( admin_url('admin.php?page='.self::MENU_SLUG.'&tab=transactions&status=open&notice=saved') );
+		exit;
+	}
+
+	public function handle_add_opening() {
+		if ( ! current_user_can(self::CAPABILITY) ) wp_die('Keine Berechtigung.');
+		check_admin_referer('cm_bankabgleich_add_opening');
+
+		global $wpdb;
+		$tx_table = $wpdb->prefix . self::TX_TABLE;
+
+		$type = isset($_POST['opening_type']) ? sanitize_text_field($_POST['opening_type']) : '';
+		$date = isset($_POST['opening_date']) ? sanitize_text_field($_POST['opening_date']) : '';
+		$amount = isset($_POST['opening_amount']) ? $this->parse_amount($_POST['opening_amount']) : 0.0;
+		$currency = isset($_POST['opening_currency']) ? strtoupper(sanitize_text_field($_POST['opening_currency'])) : 'CHF';
+
+		$categories = $this->get_tx_categories();
+		if (!isset($categories[$type])) {
+			$type = array_key_first($categories) ?: '';
+		}
+
+		$amount = max(0.0, $amount);
+		if ($date === '') {
+			$date = date('Y-m-d');
+		}
+
+		$text = $categories[$type] ?? 'Anfangsbestand';
+
+		$wpdb->insert(
+			$tx_table,
+			[
+				'source' => 'manual',
+				'source_uid' => null,
+				'booking_date' => $date,
+				'amount' => $amount,
+				'currency' => $currency,
+				'text' => $text,
+				'reference' => null,
+				'iban' => null,
+				'category' => $type,
+				'raw_xml' => null,
+				'status' => 'open',
+				'created_at' => current_time('mysql'),
+				'updated_at' => current_time('mysql'),
+			]
+		);
+
+		wp_safe_redirect( admin_url('admin.php?page='.self::MENU_SLUG.'&tab=transactions&status=open') );
 		exit;
 	}
 
@@ -1092,6 +1219,36 @@ class CM_Bankabgleich {
 		// Schweizer Schreibweise: Apostroph für Tausender
 		$formatted = number_format($amount, 2, '.', "'");
 		return $currency . ' ' . $formatted;
+	}
+
+	private function get_tx_categories(): array {
+		$base = [
+			'gutschrift' => 'Gutschrift',
+			'lieferantenrechnung' => 'Lieferantenrechnung',
+			'rechnung' => 'Rechnung',
+		];
+
+		return $this->get_opening_options() + $base;
+	}
+
+	private function get_opening_options(): array {
+		$accounts = function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+			? cmx_ini_get_value('Bankabgleich', 'Konten')
+			: null;
+		$accounts = is_array($accounts) ? $accounts : (array) $accounts;
+		$accounts = array_values(array_filter(array_map('trim', $accounts)));
+
+		if (empty($accounts)) {
+			$accounts = ['Bank', 'Kasse'];
+		}
+
+		$options = [];
+		foreach ($accounts as $name) {
+			$key = 'anfangsbestand_' . sanitize_title($name);
+			$options[$key] = 'Anfangsbestand ' . $name;
+		}
+
+		return $options;
 	}
 
 	private function num($amount) {

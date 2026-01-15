@@ -2,8 +2,8 @@
 
 
 // Define: Custom-Post-Type based on DIR
-register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 50, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-money', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+register_post_type('Aufwände', ['labels' => ['name' => 'Aufwände', 'singular_name' => 'Aufwand', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+	'menu_position' => 50, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-list-view', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 
@@ -18,7 +18,7 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 // Create: @ll Taxos
 \add_action('init', function () {
-	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
+	// XXXXXX cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
 	// cmx_create_taxo(basename(__DIR__), 'Type', 'Typen');
 	// cmx_create_taxo(basename(__DIR__), 'Marke', 'Marken');
 	// cmx_create_taxo(basename(__DIR__), 'Farbe', 'Farben');
@@ -37,4 +37,4 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'konditionen,uploads');
+// XXXX cmx_require_files(__DIR__,'konditionen,uploads');

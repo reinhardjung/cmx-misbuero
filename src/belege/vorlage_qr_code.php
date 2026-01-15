@@ -82,34 +82,18 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         return;
     }
 
-    $opts_general = \get_option('cmx_einstellungen', []);
-    $ref_mode = strtoupper(trim((string)($opts_general['qr_mode'] ?? 'NON')));
-    $ref_raw = trim((string)($opts_general['qr_reference'] ?? ''));
-
-    $is_qrr = false;
-    $is_scor = false;
+    $ref_raw = trim((string)($tpl['bank']['qr_reference'] ?? ''));
+    $ref_mode = 'NON';
     $ref_value = '';
     $ref_print = '';
 
     if ($ref_raw !== '') {
         $qrr_digits = preg_replace('~\D+~', '', $ref_raw);
         if (strlen($qrr_digits) === 27 && cmx_qr_is_valid_qrr($qrr_digits)) {
-            $is_qrr = true;
+            $ref_mode = 'QRR';
             $ref_value = $qrr_digits;
             $ref_print = cmx_qr_format_qrr_print($qrr_digits);
-        } elseif (preg_match('/^RF[0-9A-Z]{2,}$/i', str_replace(' ', '', $ref_raw))) {
-            $is_scor = true;
-            $ref_value = strtoupper(str_replace(' ', '', $ref_raw));
-            $ref_print = trim(chunk_split($ref_value, 4, ' '));
         }
-    }
-
-    if (!$is_qrr && !$is_scor) {
-        $ref_mode = 'NON';
-    } elseif ($is_qrr) {
-        $ref_mode = 'QRR';
-    } elseif ($is_scor) {
-        $ref_mode = 'SCOR';
     }
 
     /** ----------------------------------------------------------------
@@ -125,6 +109,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $ref_mode = 'NON';
         $ref_value = '';
         $ref_print = '';
+        $iban = $bank_iban !== '' ? $bank_iban : $qr_iban;
     }
 
     if ($iban === '') {
@@ -220,8 +205,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 		 * ---------------------------------------------------------------- */
 		try {
 
-				// QR-Code 46 mm gross (Schweizer Norm)
-				$qr_size_mm = 46 * $mm;
+				// QR-Code 60 mm gross
+				$qr_size_mm = 60 * $mm;
 
 				$qr = QrCode::create($qr_raw)
 						->setSize((int) $qr_size_mm)
@@ -262,9 +247,9 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $receipt_text_x = 5 * $mm;
     $payment_text_x = $zahlteil_x + 5 * $mm;
 
-    $qr_size      = 46 * $mm;                // QR-Code gemäss Norm
+    $qr_size      = 60 * $mm;
     $qr_x         = $payment_text_x;
-    $qr_y         = $zone_top + 20 * $mm;    // Abstand unter dem Titel
+    $qr_y         = $zone_top + 16 * $mm;    // Abstand unter dem Titel
 
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere

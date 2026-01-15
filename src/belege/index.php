@@ -13,7 +13,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt,Waehrungen');
 
 
 // Define: CONST 4 each Taxo
@@ -27,6 +27,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	$show_ui = cmx_is_cloud_meister_user();
 	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => $show_ui]);
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
+	cmx_create_taxo(basename(__DIR__), 'Währung', 'Währungen', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
@@ -71,6 +72,8 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 		exit;
 	}
 });
+
+// Hinweis: Reihenfolge wird über "Save box position" gespeichert.
 
 
 // Define: Const 4 @ll CPT Fields

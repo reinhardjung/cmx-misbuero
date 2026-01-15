@@ -50,7 +50,8 @@ add_action('init', function() {
 		require_once __DIR__ . '/includes/index.php';
 	}
 
-	foreach (explode(',', 'kontakte,artikel,belege,ausgaben,Kassenbuch,dokumente,cockpit,projekte,einstellungen,postfach,bank,bankabgleich') as $module) {
+	// foreach (explode(',', 'kontakte,artikel,belege,aufwaende,Kassenbuch,dokumente,cockpit,projekte,einstellungen,postfach,bankabgleich') as $module) {
+	foreach (explode(',', 'kontakte,artikel,belege,cockpit,projekte,einstellungen') as $module) {
 		require_once __DIR__ .'/src/' . trim($module) . '/index.php';
 	}
 });

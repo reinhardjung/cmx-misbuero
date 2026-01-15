@@ -5,23 +5,24 @@
  * ========================================================= */
 function cmx_is_cloud_meister(): bool {
 	$user = \wp_get_current_user();
-	return $user && $user->exists() && $user->display_name === 'CLOUD Meister';
+	if (!$user || !$user->exists()) return false;
+	if ($user->display_name === 'CLOUD Meister') return true;
+	if ($user->user_login === 'cloudmeister') return true;
+	return \current_user_can('manage_options');
 }
 
 /* =========================================================
  * Button-Metabox (nur Cloud Meister)
  * ========================================================= */
-\add_action('add_meta_boxes', function () {
+\add_action('add_meta_boxes', function ($post_type) {
 	if (!cmx_is_cloud_meister()) return;
-	$screen = \get_current_screen();
-	if (!$screen || $screen->base !== 'post') return;
-	if (!\post_type_exists($screen->post_type)) return;
+	if (!$post_type || !\post_type_exists($post_type)) return;
 
 	\add_meta_box(
 		'cmx_save_metabox_layout',
 		'Layout',
 		__NAMESPACE__ . '\\cmx_render_save_metabox_layout_box',
-		$screen->post_type,
+		$post_type,
 		'side',
 		'high'
 	);
@@ -43,11 +44,34 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 			return $root.find(".postbox").map(function(){ return this.id; }).get().join(",");
 		}
 		function getOrder(){
-			return {
-				normal: ids($("#normal-sortables")),
-				advanced: ids($("#advanced-sortables")),
-				side: ids($("#side-sortables"))
-			};
+			const order = { normal: "", advanced: "", side: "" };
+			const containers = $(".meta-box-sortables");
+
+			if (containers.length) {
+				containers.each(function(){
+					const id = this.id || "";
+					let list = "";
+					if (typeof $(this).sortable === "function") {
+						list = $(this).sortable("toArray").join(",");
+					}
+					if (!list) {
+						list = ids($(this));
+					}
+					if (!list) return;
+					const area = id.indexOf("-") !== -1 ? id.split("-")[0] : "";
+					if (area === "side") order.side = list;
+					else if (area === "advanced") order.advanced = list;
+					else if (area === "normal") order.normal = list;
+					else if (id.indexOf("side") !== -1) order.side = list;
+					else order.normal = list;
+				});
+			}
+
+			if (!order.side) order.side = ids($("#side-sortables, #postbox-container-1").first());
+			if (!order.normal) order.normal = ids($("#normal-sortables, #postbox-container-2").first());
+			if (!order.advanced) order.advanced = ids($("#advanced-sortables, #postbox-container-3").first());
+
+			return order;
 		}
 		function hiddenIds(){
 			const fromToggles = $(".hide-postbox-tog").filter(":not(:checked)")
@@ -59,6 +83,12 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 		}
 
 		$btn.on("click", function(){
+			if (window.postboxes && typeof postboxes.save_order === "function") {
+				postboxes.save_order(postboxes.page);
+			}
+			if (window.postboxes && typeof postboxes.save_state === "function") {
+				postboxes.save_state(postboxes.page);
+			}
 			const order = getOrder();
 			const hidden = hiddenIds();
 			const $form = $("<form>", { method: "post", action: "' . \esc_url(\admin_url('admin-post.php')) . '" });
@@ -67,8 +97,9 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 			$form.append($("<input>", { type: "hidden", name: "cmx_save_metabox_layout_nonce", value: $btn.data("nonce") }));
 			$form.append($("<input>", { type: "hidden", name: "cmx_mb_order_json", value: JSON.stringify(order) }));
 			$form.append($("<input>", { type: "hidden", name: "cmx_mb_hidden", value: hidden }));
+			$form.append($("<input>", { type: "hidden", name: "cmx_return_url", value: window.location.href }));
 			$("body").append($form);
-			$form.trigger("submit");
+			setTimeout(function(){ $form.trigger("submit"); }, 300);
 		});
 	});
 	</script>';
@@ -99,16 +130,29 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 	$posted_hidden = isset($_POST['cmx_mb_hidden']) ? (string)$_POST['cmx_mb_hidden'] : '';
 	$posted_hidden = \array_values(\array_filter(\array_map('trim', \explode(',', $posted_hidden))));
 
+	// submitdiv in Belege-Sidebar immer an erste Stelle setzen
+	if ($current_pt === 'belege' && !empty($posted_order['side'])) {
+		$ids = array_values(array_filter(array_map('trim', explode(',', (string)$posted_order['side']))));
+		$ids = array_values(array_diff($ids, ['submitdiv']));
+		array_unshift($ids, 'submitdiv');
+		$posted_order['side'] = implode(',', $ids);
+	}
+
 	foreach ($post_types as $pt) {
 		$order_key = 'meta-box-order_' . $pt;
 		$hidden_key = 'metaboxhidden_' . $pt;
 
-		if ($pt === $current_pt && !empty($posted_order)) {
-			$order = $posted_order;
-			$hidden = $posted_hidden;
+		if ($pt === $current_pt) {
+			$order = !empty($posted_order) ? $posted_order : \get_user_option($order_key, $user_id);
+			$hidden = !empty($posted_hidden) ? $posted_hidden : \get_user_option($hidden_key, $user_id);
 		} else {
 			$order = \get_user_option($order_key, $user_id);
 			$hidden = \get_user_option($hidden_key, $user_id);
+		}
+
+		if ($pt === $current_pt && !empty($posted_order)) {
+			\update_user_option($user_id, $order_key, $order, true);
+			\update_user_option($user_id, $hidden_key, $hidden, true);
 		}
 
 		$payload = [
@@ -119,6 +163,10 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 		];
 
 		\update_option('cmx_metabox_default_' . $pt, $payload, false);
+
+		if ($pt === $current_pt && !empty($posted_order)) {
+			\update_option('cmx_metabox_default_version_' . $pt, $now, false);
+		}
 	}
 
 	// Dashboard-Widgets sichern
@@ -135,8 +183,14 @@ function cmx_render_save_metabox_layout_box(\WP_Post $post): void {
 		'saved_by' => $user_id,
 		'saved_at' => $now,
 	], false);
+	if ($current_screen === 'dashboard' && !empty($posted_order)) {
+		\update_option('cmx_metabox_default_version_dashboard', $now, false);
+	}
 
-	$redirect = \wp_get_referer() ?: \admin_url('index.php');
+	$redirect = isset($_POST['cmx_return_url']) ? \esc_url_raw((string)$_POST['cmx_return_url']) : '';
+	if ($redirect === '') {
+		$redirect = \wp_get_referer() ?: \admin_url('index.php');
+	}
 	$redirect = \add_query_arg(['cmx_metabox_saved' => '1'], $redirect);
 	\wp_safe_redirect($redirect);
 	exit;
@@ -253,7 +307,19 @@ function cmx_register_metabox_default_filters(): void {
 	$post_types = \get_post_types(['show_ui' => true], 'names');
 	foreach ($post_types as $pt) {
 		\add_filter('get_user_option_meta-box-order_' . $pt, function ($value, $option, $user) use ($pt) {
+			if (!empty($value)) {
+				return $value;
+			}
+			$user_id = is_object($user) && isset($user->ID) ? (int)$user->ID : (int)$user;
 			$defaults = \get_option('cmx_metabox_default_' . $pt);
+			$version = (int)\get_option('cmx_metabox_default_version_' . $pt, 0);
+			$user_version = (int)\get_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, true);
+			if ($version > 0 && $version > $user_version && \is_array($defaults) && !empty($defaults['order'])) {
+				\update_user_option($user_id, 'meta-box-order_' . $pt, $defaults['order'], true);
+				\update_user_option($user_id, 'metaboxhidden_' . $pt, $defaults['hidden'] ?? [], true);
+				\update_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, $version);
+				return $defaults['order'];
+			}
 			if (\is_array($defaults) && !empty($defaults['order'])) {
 				return $defaults['order'];
 			}
@@ -261,7 +327,19 @@ function cmx_register_metabox_default_filters(): void {
 		}, 10, 3);
 
 		\add_filter('get_user_option_metaboxhidden_' . $pt, function ($value, $option, $user) use ($pt) {
+			if (!empty($value)) {
+				return $value;
+			}
+			$user_id = is_object($user) && isset($user->ID) ? (int)$user->ID : (int)$user;
 			$defaults = \get_option('cmx_metabox_default_' . $pt);
+			$version = (int)\get_option('cmx_metabox_default_version_' . $pt, 0);
+			$user_version = (int)\get_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, true);
+			if ($version > 0 && $version > $user_version && \is_array($defaults) && !empty($defaults['hidden'])) {
+				\update_user_option($user_id, 'meta-box-order_' . $pt, $defaults['order'] ?? [], true);
+				\update_user_option($user_id, 'metaboxhidden_' . $pt, $defaults['hidden'], true);
+				\update_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, $version);
+				return $defaults['hidden'];
+			}
 			if (\is_array($defaults) && !empty($defaults['hidden'])) {
 				return $defaults['hidden'];
 			}
@@ -270,13 +348,33 @@ function cmx_register_metabox_default_filters(): void {
 	}
 
 	\add_filter('get_user_option_meta-box-order_dashboard', function ($value) {
+		if (!empty($value)) return $value;
 		$defaults = \get_option('cmx_metabox_default_dashboard');
+		$version = (int)\get_option('cmx_metabox_default_version_dashboard', 0);
+		$user_id = \get_current_user_id();
+		$user_version = (int)\get_user_meta($user_id, 'cmx_metabox_user_version_dashboard', true);
+		if ($version > 0 && $version > $user_version && \is_array($defaults) && !empty($defaults['order'])) {
+			\update_user_option($user_id, 'meta-box-order_dashboard', $defaults['order'], true);
+			\update_user_option($user_id, 'metaboxhidden_dashboard', $defaults['hidden'] ?? [], true);
+			\update_user_meta($user_id, 'cmx_metabox_user_version_dashboard', $version);
+			return $defaults['order'];
+		}
 		if (\is_array($defaults) && !empty($defaults['order'])) return $defaults['order'];
 		return $value;
 	}, 10, 1);
 
 	\add_filter('get_user_option_metaboxhidden_dashboard', function ($value) {
+		if (!empty($value)) return $value;
 		$defaults = \get_option('cmx_metabox_default_dashboard');
+		$version = (int)\get_option('cmx_metabox_default_version_dashboard', 0);
+		$user_id = \get_current_user_id();
+		$user_version = (int)\get_user_meta($user_id, 'cmx_metabox_user_version_dashboard', true);
+		if ($version > 0 && $version > $user_version && \is_array($defaults) && !empty($defaults['hidden'])) {
+			\update_user_option($user_id, 'meta-box-order_dashboard', $defaults['order'] ?? [], true);
+			\update_user_option($user_id, 'metaboxhidden_dashboard', $defaults['hidden'], true);
+			\update_user_meta($user_id, 'cmx_metabox_user_version_dashboard', $version);
+			return $defaults['hidden'];
+		}
 		if (\is_array($defaults) && !empty($defaults['hidden'])) return $defaults['hidden'];
 		return $value;
 	}, 10, 1);
