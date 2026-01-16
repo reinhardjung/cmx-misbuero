@@ -262,7 +262,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
 		echo '<p><strong>Kategorie</strong><br><div class="cmx-radio-inline">';
 		foreach ($terms as $term) {
-			echo '<label><input type="radio" name="cmx_beleg_kategorie" value="'.\esc_attr($term->term_id).'" '.\checked($current_id,$term->term_id,false).'> '.\esc_html($term->name).'</label>';
+			echo '<label><input type="radio" name="cmx_beleg_kategorie" data-slug="'.\esc_attr($term->slug).'" value="'.\esc_attr($term->term_id).'" '.\checked($current_id,$term->term_id,false).'> '.\esc_html($term->name).'</label>';
 		}
 		echo '</div></p>';
 	}

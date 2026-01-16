@@ -34,6 +34,20 @@ function cmx_load_positionen($post_id): array {
 	return is_array($pos) ? $pos : [];
 }
 
+function cmx_has_positionen_data(array $positionen): bool {
+	foreach ($positionen as $pos) {
+		if (!is_array($pos)) continue;
+		if (!empty($pos['artikel_id']) && (int)$pos['artikel_id'] > 0) return true;
+		$name = trim((string)($pos['artikel_name'] ?? $pos['item'] ?? $pos['title'] ?? ''));
+		if ($name !== '') return true;
+		$menge = trim((string)($pos['menge'] ?? ''));
+		$preis = trim((string)($pos['preis'] ?? ''));
+		$rabatt = trim((string)($pos['rabatt'] ?? ''));
+		if ($menge !== '' || $preis !== '' || $rabatt !== '') return true;
+	}
+	return false;
+}
+
 /** ===== Helper (nur definieren, wenn nicht vorhanden) ===== */
 if (!function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
 	function cmx_norm_decimal(string $val): string {
@@ -115,6 +129,14 @@ function cmx_load_anzahlungen_summe(int $post_id): array {
 function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	$positionen = cmx_load_positionen($post->ID);
 	$anz = cmx_load_anzahlungen_summe($post->ID);
+	$beleg_type = '';
+	if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+		[, $beleg_type] = cmx_get_beleg_type($post);
+	}
+	$beleg_type = strtolower((string)$beleg_type);
+	$is_lieferschein = ($beleg_type === 'lieferschein');
+	$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
+	$manual_total_raw = (string) get_post_meta($post->ID, '_cmx_beleg_summe_override', true);
 
 	$summe = 0.0;
 	foreach ($positionen as $p) {
@@ -126,11 +148,21 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		$summe   += cmx_round_5rp($subtotal - $rabatt);
 	}
 
+	wp_nonce_field('cmx_beleg_summe_save', 'cmx_beleg_summe_nonce');
+
 	// Anzeige im CH-Format (1'234,56)
-	echo '<div id="cmx-beleg-summe-wrap" style="font-size:x-large; line-height:1.6; padding:6px 4px; text-align:center;">';
-	echo '<strong><span id="cmx-beleg-summe-value" data-currency="">' .
-		esc_html(number_format($summe, 2, ',', "'")) .
-		'</span></strong>';
+	echo '<div id="cmx-beleg-summe-wrap" data-beleg-type="'.esc_attr($beleg_type).'" style="font-size:x-large; line-height:1.6; padding:6px 4px; text-align:center;">';
+	echo '<strong>';
+	if ($is_lieferantenrechnung) {
+		$display = $manual_total_raw !== '' ? $manual_total_raw : number_format($summe, 2, ',', "'");
+		$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
+		echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;"'.$manual_attr.'>';
+	} else {
+		echo '<span id="cmx-beleg-summe-value" data-currency="">' .
+			esc_html(number_format($summe, 2, ',', "'")) .
+			'</span>';
+	}
+	echo '</strong>';
 	if (!empty($anz['count'])) {
 		$anz_sum = (float)$anz['summe'];
 		$offen = $summe - $anz_sum;
@@ -151,6 +183,10 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	?>
 	<script>
 	(function(){
+		const sumWrap = document.getElementById('cmx-beleg-summe-wrap');
+		const sumInput = document.getElementById('cmx-beleg-summe-input');
+		const isLieferantenrechnung = sumWrap && sumWrap.getAttribute('data-beleg-type') === 'lieferantenrechnung';
+
 		function toNumber(v){
 			if (typeof v !== 'string') v = (v ?? '').toString();
 			let s = v.replace(/\s+/g,'').replace(/'/g,'');
@@ -244,6 +280,24 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			}
 			return null;
 		}
+		function hasPositions(){
+			const root = findPositionenRoot();
+			if (!root) return false;
+			const rows = findRows(root);
+			for (const row of rows){
+				const artikel = row.querySelector('.cmx-artikel-autocomplete');
+				const artikelId = row.querySelector('.cmx-artikel-id');
+				if (artikelId && artikelId.value && parseInt(artikelId.value,10) > 0) return true;
+				if (artikel && artikel.value.trim() !== '') return true;
+				const m = pickField(row, ['menge','qty','anzahl']);
+				const p = pickField(row, ['einzelpreis','preis','price','betrag']);
+				const r = pickField(row, ['rabatt','discount']);
+				if (m && m.value.trim() !== '') return true;
+				if (p && p.value.trim() !== '') return true;
+				if (r && r.value.trim() !== '') return true;
+			}
+			return false;
+		}
 
 		function calcRow(row){
 			const menge  = pickField(row, ['menge','qty','anzahl']);
@@ -259,7 +313,13 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		}
 		function sumAll(){
 			const out = document.getElementById('cmx-beleg-summe-value');
-			if (!out) return 0;
+			if (!out && !sumInput) return 0;
+			if (isLieferantenrechnung && sumInput) {
+				const manual = sumInput.dataset.manual === '1';
+				if (manual) {
+					return toNumber(sumInput.value || '0');
+				}
+			}
 			const root = findPositionenRoot();
 			if (!root) return 0;
 
@@ -286,7 +346,10 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 				}
 			}
 
-			out.textContent = formatCH(total);
+			if (out) out.textContent = formatCH(total);
+			if (sumInput && !sumInput.dataset.manual) {
+				sumInput.value = formatCH(total);
+			}
 			return total;
 		}
 
@@ -300,6 +363,11 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			};
 			root.addEventListener('input', handler, true);
 			root.addEventListener('change', handler, true);
+			if (sumInput) {
+				sumInput.addEventListener('input', function(){
+					sumInput.dataset.manual = '1';
+				});
+			}
 
 			const mo = new MutationObserver(function(){ sumAll(); });
 			mo.observe(root, { childList:true, subtree:true, attributes:true, characterData:false });
@@ -313,4 +381,31 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	})();
 	</script>
 	<?php
+});
+
+add_action('save_post_belege', function ($post_id) {
+	if (!isset($_POST['cmx_beleg_summe_nonce']) || !\wp_verify_nonce($_POST['cmx_beleg_summe_nonce'], 'cmx_beleg_summe_save')) {
+		return;
+	}
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (!current_user_can('edit_post', $post_id)) return;
+
+	$beleg_type = '';
+	if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+		[, $beleg_type] = cmx_get_beleg_type(get_post($post_id));
+	}
+	$beleg_type = strtolower((string)$beleg_type);
+
+	if ($beleg_type === 'lieferantenrechnung') {
+		$raw = isset($_POST['cmx_beleg_summe_override']) ? (string)\wp_unslash($_POST['cmx_beleg_summe_override']) : '';
+		$raw = trim($raw);
+		if ($raw === '') {
+			delete_post_meta($post_id, '_cmx_beleg_summe_override');
+			return;
+		}
+		$val = (float) cmx_norm_decimal($raw);
+		update_post_meta($post_id, '_cmx_beleg_summe_override', number_format($val, 2, '.', ''));
+	} else {
+		delete_post_meta($post_id, '_cmx_beleg_summe_override');
+	}
 });

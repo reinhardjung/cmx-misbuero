@@ -628,6 +628,21 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		$out['tax_amount'] = $tax;
 		$out['subtotal']   = $net;
 		$out['total']      = $gross;
+
+		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+			[, $beleg_type] = cmx_get_beleg_type(get_post($post_id));
+			if (strtolower((string)$beleg_type) === 'lieferantenrechnung') {
+				$override = (string) get_post_meta($post_id, '_cmx_beleg_summe_override', true);
+				if ($override !== '') {
+					$ov = $to_float($override);
+					$out['subtotal'] = $ov;
+					$out['total'] = $ov;
+					$out['net'] = $ov;
+					$out['gross'] = $ov;
+					$out['tax_amount'] = 0.0;
+				}
+			}
+		}
 		return $out;
 	}
 }

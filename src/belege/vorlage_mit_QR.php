@@ -32,13 +32,27 @@ foreach ($positions as $row) {
 		$discount_sum += $line_discount;
 	}
 }
+$opts_general      = (array) get_option('cmx_einstellungen', []);
+$is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
+$beleg_subject = trim((string)($tpl['document']['subject'] ?? ''));
+$beleg_description = trim((string)($tpl['document']['description'] ?? ''));
+$opts_belege = (array) get_option('cmx_belege', []);
+$beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
+$is_lieferschein = ($beleg_type === 'lieferschein');
+
+if ($is_lieferschein) {
+	$show_discount = false;
+}
+$show_unit_price = !$is_lieferschein;
+$show_line_total = !$is_lieferschein;
+
 $col_count = ($show_position_index ? 1 : 0)
 	+ ($show_sku ? 1 : 0)
 	+ 1
 	+ 1
-	+ 1
+	+ ($show_unit_price ? 1 : 0)
 	+ ($show_discount ? 1 : 0)
-	+ 1;
+	+ ($show_line_total ? 1 : 0);
 
 $totals = array_replace([
 	'subtotal' => 0.0,
@@ -57,12 +71,6 @@ if ($totals['total'] == 0.0 && !empty($positions)) {
 	$totals['total'] = $totals['subtotal'] + (float)$totals['tax_amount'];
 }
 
-$opts_general      = (array) get_option('cmx_einstellungen', []);
-$is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
-$beleg_subject = trim((string)($tpl['document']['subject'] ?? ''));
-$beleg_description = trim((string)($tpl['document']['description'] ?? ''));
-$opts_belege = (array) get_option('cmx_belege', []);
-$beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
 $footer_key = 'belegfuss_' . $beleg_type;
 $footer_block = (string)($opts_belege[$footer_key] ?? '');
 $footer_block = str_replace(["\r\n", "\r"], "\n", $footer_block);
@@ -253,11 +261,15 @@ $recipient_html = $recipient_has_br
 				<?php endif; ?>
 				<th>Artikel</th>
 				<th class="col-num">Menge</th>
-				<th class="col-num">Einzelpreis</th>
+				<?php if ($show_unit_price): ?>
+					<th class="col-num">Einzelpreis</th>
+				<?php endif; ?>
 				<?php if ($show_discount): ?>
 					<th class="col-num">Rabatt</th>
 				<?php endif; ?>
-				<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+				<?php if ($show_line_total): ?>
+					<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+				<?php endif; ?>
 			</tr>
 		</thead>
 		<tbody>
@@ -296,17 +308,22 @@ $recipient_html = $recipient_has_br
 						<?php endif; ?>
 					</td>
 					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php if ($show_unit_price): ?>
+						<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php endif; ?>
 					<?php if ($show_discount): ?>
 						<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
-					<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php if ($show_line_total): ?>
+						<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+					<?php endif; ?>
 				</tr>
 			<?php endforeach; ?>
 		<?php endif; ?>
 		</tbody>
 	</table>
 
+	<?php if (!$is_lieferschein): ?>
 	<table class="totals-table" border="0">
 		<?php if ($show_discount && $discount_sum > 0.0): ?>
 			<tr>
@@ -372,6 +389,7 @@ $recipient_html = $recipient_has_br
 		<div class="mwst-note">
 			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
 		</div>
+	<?php endif; ?>
 	<?php endif; ?>
 
 	<div class="clear"></div>

@@ -133,15 +133,15 @@ function cmx65_adminbar($wp_admin_bar) {
 		],
 	]);
 
-	$wp_admin_bar->add_menu([
-		'id'    => 'cmx65_roadmap',
-		'title' => 'Roadmap',
-		'href'  => 'https://misbuero.ch/roadmap/',
-		'meta'  => [
-			'title'  => __('Wie geht es weiter mit Mis Büro?', 'textdomain'),
-			'target' => '_blank',
-		],
-	]);
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_roadmap',
+	// 	'title' => 'Roadmap',
+	// 	'href'  => 'https://misbuero.ch/roadmap/',
+	// 	'meta'  => [
+	// 		'title'  => __('Wie geht es weiter mit Mis Büro?', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
 
 	// Support-URL: wenn Konstante vorhanden, nutze sie, sonst Fallback
 	if (defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')) {
