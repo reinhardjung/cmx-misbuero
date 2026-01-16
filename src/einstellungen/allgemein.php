@@ -22,6 +22,23 @@ function cmx_register_general_tab(): void {
 				'key'   => 'mwst_pflichtig',
 				'label' => 'Ja, MwSt wird ausgewiesen',
 			]);
+			$opts = \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$val = $opts['mwst_nummer'] ?? '';
+			$checked = !empty($opts['mwst_pflichtig']) || !empty($opts['mwstpflichtig']) || !empty($opts['mwst_pfl']);
+			echo '<div id="cmx-mwst-num-wrap" style="margin-top:8px;'.($checked ? '' : 'display:none;').'">';
+			echo '<label for="cmx-mwst-nummer" style="display:block;margin-bottom:4px;">MWST‑Nr</label>';
+			echo '<input type="text" id="cmx-mwst-nummer" class="regular-text" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_nummer]" value="'.\esc_attr($val).'" placeholder="CHE-123.456.789 MWST">';
+			echo '</div>';
+			echo '<script>
+			(function(){
+				const cb = document.querySelector("input[type=checkbox][name=\''.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_pflichtig]\']");
+				const wrap = document.getElementById("cmx-mwst-num-wrap");
+				if (!cb || !wrap) return;
+				function sync(){ wrap.style.display = cb.checked ? "" : "none"; }
+				cb.addEventListener("change", sync);
+				sync();
+			})();
+			</script>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'

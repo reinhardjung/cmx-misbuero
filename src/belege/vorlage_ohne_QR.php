@@ -364,7 +364,12 @@ $recipient_html = $recipient_has_br
 			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
 		</div>
 	<?php endif; ?>
-	<?php if (!$is_mwst_pflichtig || $mwst_rate <= 0): ?>
+	<?php if ($is_mwst_pflichtig): ?>
+		<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
+		<?php if ($mwst_nr !== ''): ?>
+			<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
+		<?php endif; ?>
+	<?php else: ?>
 		<div class="mwst-note">
 			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
 		</div>
