@@ -52,7 +52,7 @@ add_action('admin_footer', function () {
 	#cmx-help-modal .cmx-help-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 	#cmx-help-modal .cmx-help-title{font-weight:600}
 	#cmx-help-modal .cmx-help-close{cursor:pointer;border:0;background:transparent;font-size:18px;line-height:1}
-	#cmx-help-modal textarea{width:100%;min-height:160px;resize:vertical}
+	#cmx-help-modal textarea{width:100%;min-height:160px;max-height:60vh;overflow:auto;resize:vertical}
 	#cmx-help-modal .cmx-help-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}
 	#cmx-help-modal .cmx-help-actions .cmx-help-reload{margin-right:auto;text-decoration:underline}
 	</style>
@@ -126,30 +126,45 @@ add_action('admin_footer', function () {
 		}
 		function getFieldKey(el){
 			if (!el) return '';
+			const context = getContextPrefix();
 			const custom = el.getAttribute && el.getAttribute('data-cmx-help-key');
-			if (custom) return custom;
+			if (custom) return context + custom;
 			if (el.classList && el.classList.contains('postbox')) {
 				const id = el.getAttribute('id');
-				if (id) return 'metabox_' + id;
+				if (id) return context + 'metabox_' + id;
 				const title = el.querySelector('.hndle, h2, h3');
-				if (title && title.textContent) return 'metabox_' + title.textContent.trim();
+				if (title && title.textContent) return context + 'metabox_' + title.textContent.trim();
 			}
 			if (el.tagName && el.tagName.toLowerCase() === 'table') {
 				const id = el.getAttribute('id');
-				if (id) return 'table_' + id;
+				if (id) return context + 'table_' + id;
 				const caption = el.querySelector('caption');
-				if (caption && caption.textContent) return 'table_' + caption.textContent.trim();
+				if (caption && caption.textContent) return context + 'table_' + caption.textContent.trim();
 			}
 			if (el.tagName && el.tagName.toLowerCase() === 'label') {
 				const f = el.getAttribute('for');
-				if (f) return f;
+				if (f) return context + f;
 			}
 			const name = el.getAttribute && el.getAttribute('name');
-			if (name) return name;
+			if (name) return context + name;
 			const id = el.getAttribute && el.getAttribute('id');
-			if (id) return id;
+			if (id) return context + id;
 			const label = el.closest && el.closest('label');
-			if (label && label.textContent) return label.textContent.trim();
+			if (label && label.textContent) return context + label.textContent.trim();
+			return '';
+		}
+		function getContextPrefix(){
+			const body = document.body;
+			if (body && body.className) {
+				const match = body.className.match(/\bpost-type-([a-z0-9_-]+)\b/i);
+				if (match && match[1]) return match[1] + '__';
+			}
+			const pt = document.getElementById('post_type');
+			if (pt && pt.value) return pt.value + '__';
+			const params = new URLSearchParams(window.location.search);
+			const page = params.get('page');
+			const tab = params.get('tab');
+			if (page) return page + (tab ? '__' + tab : '') + '__';
 			return '';
 		}
 		function getFieldLabel(el){
@@ -299,6 +314,14 @@ add_action('admin_footer', function () {
 							closeModal();
 						}
 					});
+			});
+		}
+		if (textarea) {
+			textarea.addEventListener('keydown', function(e){
+				if (!(e.key === 'Enter' && (e.metaKey || e.ctrlKey))) return;
+				if (!canEdit) return;
+				e.preventDefault();
+				if (saveBtn) saveBtn.click();
 			});
 		}
 	})();

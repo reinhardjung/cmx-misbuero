@@ -35,6 +35,10 @@ function cmx_register_general_tab(): void {
 				echo '<em>Nur für Admin (CLOUD Meister)</em>';
 				return;
 			}
+			$host = (string) \wp_parse_url(\home_url(), PHP_URL_HOST);
+			if ($host === 'vorlage.misbuero.ch') {
+				return;
+			}
 			$nonce  = \wp_create_nonce('cmx_help_sync');
 			echo '<button type="button" class="button" id="cmx-help-sync-btn">Neue Hilfetexte laden</button>';
 			echo '<span class="spinner" id="cmx-help-sync-spinner" style="float:none;margin-left:8px;"></span>';
