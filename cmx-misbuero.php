@@ -31,6 +31,7 @@ require_once __DIR__ . '/includes/featured_images.php';
 require_once __DIR__ . '/monitoring/anyboard/index.php';
 // Login-spezifische Hooks (z. B. Passwort-Reset) müssen auch ohne eingeloggten Nutzer verfügbar sein.
 require_once __DIR__ . '/includes/login_manager.php';
+require_once __DIR__ . '/includes/help_screens.php';
 
 
 define('CMX_PLUGIN_DIR', plugin_dir_path(__FILE__));
