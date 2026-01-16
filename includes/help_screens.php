@@ -16,6 +16,10 @@ function cmx_help_option_key(string $raw): string {
 	return 'cmx_help_field_' . $key;
 }
 
+function cmx_help_export_allowed(?string $token): bool {
+	return true;
+}
+
 add_action('wp_ajax_cmx_help_get', function () {
 	if (!\is_admin()) {
 		\wp_send_json_error(['message' => 'forbidden'], 403);
@@ -31,8 +35,8 @@ add_action('wp_ajax_cmx_help_save', function () {
 		\wp_send_json_error(['message' => 'forbidden'], 403);
 	}
 	\check_ajax_referer('cmx_help_save', 'nonce');
-	$key = isset($_POST['field']) ? (string)$_POST['field'] : '';
-	$text = isset($_POST['text']) ? (string)$_POST['text'] : '';
+	$key = isset($_POST['field']) ? (string)\wp_unslash($_POST['field']) : '';
+	$text = isset($_POST['text']) ? (string)\wp_unslash($_POST['text']) : '';
 	$opt_key = cmx_help_option_key($key);
 	\update_option($opt_key, $text, false);
 	\wp_send_json_success(['saved' => true]);
@@ -49,7 +53,8 @@ add_action('admin_footer', function () {
 	#cmx-help-modal .cmx-help-title{font-weight:600}
 	#cmx-help-modal .cmx-help-close{cursor:pointer;border:0;background:transparent;font-size:18px;line-height:1}
 	#cmx-help-modal textarea{width:100%;min-height:160px;resize:vertical}
-	#cmx-help-modal .cmx-help-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+	#cmx-help-modal .cmx-help-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}
+	#cmx-help-modal .cmx-help-actions .cmx-help-reload{margin-right:auto;text-decoration:underline}
 	</style>
 
 	<div id="cmx-help-modal" aria-hidden="true">
@@ -60,7 +65,7 @@ add_action('admin_footer', function () {
 			</div>
 			<textarea id="cmx-help-text" readonly></textarea>
 			<?php if ($can_edit): ?>
-				<div class="cmx-help-actions">
+				<div class="cmx-help-actions" id="cmx-help-actions">
 					<button type="button" class="button button-primary" id="cmx-help-save">Speichern</button>
 				</div>
 			<?php endif; ?>
@@ -74,6 +79,7 @@ add_action('admin_footer', function () {
 		const titleEl = document.getElementById('cmx-help-title');
 		const closeBtn = modal ? modal.querySelector('.cmx-help-close') : null;
 		const saveBtn = document.getElementById('cmx-help-save');
+		const actions = document.getElementById('cmx-help-actions');
 		let currentField = '';
 		let currentLabel = '';
 		let currentKind = '';
@@ -89,7 +95,20 @@ add_action('admin_footer', function () {
 		function openModal() {
 			if (!modal) return;
 			if (titleEl) {
-				titleEl.textContent = currentLabel || 'Feldhilfe';
+				titleEl.textContent = currentLabel || currentField || 'Feldhilfe';
+			}
+			const empty = (textarea.value || '').trim() === '';
+			const reloadLink = '<?php echo \esc_js(\admin_url('admin.php?page=cmx-einstellungen&tab=general')); ?>';
+			if (actions) {
+				let link = actions.querySelector('.cmx-help-reload');
+				if (!link) {
+					link = document.createElement('a');
+					link.href = reloadLink;
+					link.className = 'cmx-help-reload';
+					link.textContent = 'Hilfetexte neu laden';
+					link.style.marginRight = 'auto';
+					actions.prepend(link);
+				}
 			}
 			modal.style.display = 'block';
 			textarea.focus();
@@ -260,6 +279,9 @@ add_action('admin_footer', function () {
 		});
 
 		if (closeBtn) closeBtn.addEventListener('click', closeModal);
+		modal.addEventListener('click', function(e){
+			if (e.target === modal) closeModal();
+		});
 		document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
 
 		if (saveBtn) {
@@ -282,4 +304,68 @@ add_action('admin_footer', function () {
 	})();
 	</script>
 	<?php
+});
+
+// REST Export für Vorlage
+\add_action('rest_api_init', function () {
+	\register_rest_route('cmx-misbuero/v1', '/help-texts', [
+		'methods'  => 'GET',
+		'callback' => function (\WP_REST_Request $request) {
+			$token = $request->get_param('token');
+			if (!cmx_help_export_allowed($token)) {
+				return new \WP_REST_Response(['message' => 'forbidden'], 403);
+			}
+			global $wpdb;
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
+					'cmx_help_field_%'
+				),
+				ARRAY_A
+			);
+			$out = [];
+			foreach ($rows as $row) {
+				$out[$row['option_name']] = (string)$row['option_value'];
+			}
+			return new \WP_REST_Response([
+				'exported_at' => \current_time('mysql'),
+				'options' => $out,
+			], 200);
+		},
+		'permission_callback' => '__return_true',
+	]);
+});
+
+// Admin Sync (AJAX)
+\add_action('wp_ajax_cmx_help_sync', function () {
+	if (!cmx_help_is_cloud_meister()) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	if (!isset($_POST['nonce']) || !\wp_verify_nonce((string)$_POST['nonce'], 'cmx_help_sync')) {
+		\wp_send_json_error(['message' => 'invalid_nonce'], 400);
+	}
+	$source_url = 'https://vorlage.misbuero.ch/wp-json/cmx-misbuero/v1/help-texts';
+	$response = \wp_remote_get($source_url, [
+		'timeout' => 12,
+		'redirection' => 3,
+	]);
+	if (\is_wp_error($response)) {
+		\wp_send_json_error(['message' => 'request_failed'], 500);
+	}
+	$code = (int)\wp_remote_retrieve_response_code($response);
+	$body = (string)\wp_remote_retrieve_body($response);
+	if ($code !== 200 || $body === '') {
+		\wp_send_json_error(['message' => 'bad_response'], 500);
+	}
+	$data = \json_decode($body, true);
+	if (!\is_array($data) || empty($data['options']) || !\is_array($data['options'])) {
+		\wp_send_json_error(['message' => 'invalid_payload'], 500);
+	}
+	$keys = [];
+	foreach ($data['options'] as $name => $value) {
+		if (\strpos((string)$name, 'cmx_help_field_') !== 0) continue;
+		\update_option((string)$name, (string)$value, false);
+		$keys[] = (string)$name;
+	}
+	\wp_send_json_success(['keys' => $keys]);
 });

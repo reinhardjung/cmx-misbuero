@@ -76,11 +76,6 @@ function cmx_register_banken_tab(): void {
 		['key' => 'rev_bic', 'placeholder' => 'REVOGB21XXX']
 	);
 
-	add_settings_field('rev_api', 'API Key',
-		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev',
-		['key' => 'rev_api', 'placeholder' => 'cmx_live_AJ7...']
-	);
-
 	/* ========== ZKB ========== */
 	$page = 'cmx_tab_banken__zkb';
 
@@ -119,11 +114,6 @@ function cmx_register_banken_tab(): void {
 	add_settings_field('zkb_bic', 'BIC / SWIFT',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
 		['key' => 'zkb_bic', 'placeholder' => 'ZKBKCHZZ80A']
-	);
-
-	add_settings_field('zkb_api', 'API Key / Referenz',
-		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
-		['key' => 'zkb_api', 'placeholder' => 'Optionale interne Kennung']
 	);
 
 	/* ========== UBS ========== */
@@ -165,11 +155,6 @@ function cmx_register_banken_tab(): void {
 		['key' => 'ubs_bic', 'placeholder' => 'UBSWCHZH80A']
 	);
 
-	add_settings_field('ubs_api', 'API Key / Referenz',
-		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_ubs',
-		['key' => 'ubs_api', 'placeholder' => 'Optionale interne Kennung']
-	);
-
 	/* ========== MIGROS ========== */
 	$page = 'cmx_tab_banken__migros';
 	add_settings_section('cmx_sec_banken_migros', '', __NAMESPACE__ . '\\cmx_section_migros_desc', $page);
@@ -209,11 +194,6 @@ function cmx_register_banken_tab(): void {
 		['key' => 'migros_bic', 'placeholder' => 'MIGRCHZZXXX']
 	);
 
-	add_settings_field('migros_api', 'API Key / Referenz',
-		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_migros',
-		['key' => 'migros_api', 'placeholder' => 'Optionale interne Kennung']
-	);
-
 	/* ========== RAIFFEISEN ========== */
 	$page = 'cmx_tab_banken__eisen';
 	add_settings_section('cmx_sec_banken_eisen', '', __NAMESPACE__ . '\\cmx_section_eisen_desc', $page);
@@ -251,11 +231,6 @@ function cmx_register_banken_tab(): void {
 	add_settings_field('eisen_bic', 'BIC / SWIFT',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
 		['key' => 'eisen_bic', 'placeholder' => 'RAIFCH22XXX']
-	);
-
-	add_settings_field('eisen_api', 'API Key / Referenz',
-		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
-		['key' => 'eisen_api', 'placeholder' => 'Optionale interne Kennung']
 	);
 }
 
