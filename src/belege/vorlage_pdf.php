@@ -4,7 +4,6 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 
-require_once CMX_PLUGIN_DIR . 'src/Kassenbuch/banken.php';
 require_once trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/vorlage_schreiben.php';
 // require_once CMX_PLUGIN_DIR . 'src/belege/qr_code.php';  // <--- NEU
 
@@ -917,66 +916,6 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 	if (!cmxbu_save_beleg_pdf($pdf_path, $pdf_binary)) {
 			cmxbu_log('FEHLER: PDF konnte nicht geschrieben werden', ['path' => $pdf_path]);
 			return;
-	}
-
-	// CSV für Treuhänder
-	$csv_type = in_array(strtolower($beleg_type), ['rechnung', 'gutschrift', 'angebot'], true) ? strtolower($beleg_type) : 'rechnung';
-	$csv_path = $base_dir . $basename . '.' . $csv_type . '.csv';
-	$csv_fmt_money = static function($v): string {
-		return number_format((float)$v, 2, ',', '');
-	};
-	$csv_fmt_rate = static function($v): string {
-		$val = rtrim(rtrim(number_format((float)$v, 3, ',', ''), '0'), ',');
-		return $val === '' ? '0' : $val;
-	};
-	$csv_date = static function(?string $raw): string {
-		$parsed = cmxbu_parse_date_ymd($raw);
-		return $parsed ?: '';
-	};
-	$kunde_label = (string) get_post_meta($post_id, '_cmx_beleg_kontakt_label', true);
-	if ($kunde_label === '') {
-		$kontakt_id = (int) get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
-		if ($kontakt_id > 0) {
-			$kunde_label = (string) get_the_title($kontakt_id);
-		}
-	}
-	if ($kunde_label === '') {
-		$kunde_label = trim((string) get_post_meta($post_id, '_cmx_beleg_kontakt_addr', true));
-		$kunde_label = $kunde_label !== '' ? strtok($kunde_label, "\n") : '';
-	}
-	$csv_header = [
-		'Belegnummer',
-		'Belegtyp',
-		'Belegdatum',
-		'Faelligkeitsdatum',
-		'Betreff',
-		'Kunde',
-		'Total_Netto',
-		'MWST_Satz',
-		'MWST_Betrag',
-		'Total_Brutto',
-		'Waehrung',
-	];
-	$csv_row = [
-		(string)$title_safe,
-		$csv_type,
-		$csv_date((string)($dates['date_invoice'] ?? '')),
-		$csv_date((string)($dates['date_due'] ?? '')),
-		(string)($tpl['document']['subject'] ?? ''),
-		(string)$kunde_label,
-		$csv_fmt_money((float)($tpl['totals']['net'] ?? 0)),
-		$csv_fmt_rate((float)($tpl['totals']['tax_rate'] ?? 0)),
-		$csv_fmt_money((float)($tpl['totals']['tax'] ?? 0)),
-		$csv_fmt_money((float)($tpl['totals']['gross'] ?? 0)),
-		(string)($fmt['currency'] ?? 'CHF'),
-	];
-	$csv_handle = @fopen($csv_path, 'w');
-	if ($csv_handle) {
-		fputcsv($csv_handle, $csv_header, ';');
-		fputcsv($csv_handle, $csv_row, ';');
-		fclose($csv_handle);
-	} else {
-		cmxbu_log('FEHLER: CSV konnte nicht geschrieben werden', ['path' => $csv_path]);
 	}
 
 	cmxbu_log('PDF erstellt', ['pdf' => $pdf_path]);

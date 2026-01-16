@@ -307,9 +307,6 @@ function cmx_register_metabox_default_filters(): void {
 	$post_types = \get_post_types(['show_ui' => true], 'names');
 	foreach ($post_types as $pt) {
 		\add_filter('get_user_option_meta-box-order_' . $pt, function ($value, $option, $user) use ($pt) {
-			if (!empty($value)) {
-				return $value;
-			}
 			$user_id = is_object($user) && isset($user->ID) ? (int)$user->ID : (int)$user;
 			$defaults = \get_option('cmx_metabox_default_' . $pt);
 			$version = (int)\get_option('cmx_metabox_default_version_' . $pt, 0);
@@ -320,6 +317,9 @@ function cmx_register_metabox_default_filters(): void {
 				\update_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, $version);
 				return $defaults['order'];
 			}
+			if (!empty($value)) {
+				return $value;
+			}
 			if (\is_array($defaults) && !empty($defaults['order'])) {
 				return $defaults['order'];
 			}
@@ -327,9 +327,6 @@ function cmx_register_metabox_default_filters(): void {
 		}, 10, 3);
 
 		\add_filter('get_user_option_metaboxhidden_' . $pt, function ($value, $option, $user) use ($pt) {
-			if (!empty($value)) {
-				return $value;
-			}
 			$user_id = is_object($user) && isset($user->ID) ? (int)$user->ID : (int)$user;
 			$defaults = \get_option('cmx_metabox_default_' . $pt);
 			$version = (int)\get_option('cmx_metabox_default_version_' . $pt, 0);
@@ -340,6 +337,9 @@ function cmx_register_metabox_default_filters(): void {
 				\update_user_meta($user_id, 'cmx_metabox_user_version_' . $pt, $version);
 				return $defaults['hidden'];
 			}
+			if (!empty($value)) {
+				return $value;
+			}
 			if (\is_array($defaults) && !empty($defaults['hidden'])) {
 				return $defaults['hidden'];
 			}
@@ -348,7 +348,6 @@ function cmx_register_metabox_default_filters(): void {
 	}
 
 	\add_filter('get_user_option_meta-box-order_dashboard', function ($value) {
-		if (!empty($value)) return $value;
 		$defaults = \get_option('cmx_metabox_default_dashboard');
 		$version = (int)\get_option('cmx_metabox_default_version_dashboard', 0);
 		$user_id = \get_current_user_id();
@@ -359,12 +358,12 @@ function cmx_register_metabox_default_filters(): void {
 			\update_user_meta($user_id, 'cmx_metabox_user_version_dashboard', $version);
 			return $defaults['order'];
 		}
+		if (!empty($value)) return $value;
 		if (\is_array($defaults) && !empty($defaults['order'])) return $defaults['order'];
 		return $value;
 	}, 10, 1);
 
 	\add_filter('get_user_option_metaboxhidden_dashboard', function ($value) {
-		if (!empty($value)) return $value;
 		$defaults = \get_option('cmx_metabox_default_dashboard');
 		$version = (int)\get_option('cmx_metabox_default_version_dashboard', 0);
 		$user_id = \get_current_user_id();
@@ -375,6 +374,7 @@ function cmx_register_metabox_default_filters(): void {
 			\update_user_meta($user_id, 'cmx_metabox_user_version_dashboard', $version);
 			return $defaults['hidden'];
 		}
+		if (!empty($value)) return $value;
 		if (\is_array($defaults) && !empty($defaults['hidden'])) return $defaults['hidden'];
 		return $value;
 	}, 10, 1);

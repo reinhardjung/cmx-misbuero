@@ -55,7 +55,7 @@ add_action('admin_footer', function () {
 	<div id="cmx-help-modal" aria-hidden="true">
 		<div class="cmx-help-dialog" role="dialog" aria-modal="true">
 			<div class="cmx-help-header">
-				<div class="cmx-help-title">Feldhilfe</div>
+				<div class="cmx-help-title" id="cmx-help-title">Feldhilfe</div>
 				<button type="button" class="cmx-help-close" aria-label="Schliessen">×</button>
 			</div>
 			<textarea id="cmx-help-text" readonly></textarea>
@@ -71,9 +71,14 @@ add_action('admin_footer', function () {
 	(function(){
 		const modal = document.getElementById('cmx-help-modal');
 		const textarea = document.getElementById('cmx-help-text');
+		const titleEl = document.getElementById('cmx-help-title');
 		const closeBtn = modal ? modal.querySelector('.cmx-help-close') : null;
 		const saveBtn = document.getElementById('cmx-help-save');
 		let currentField = '';
+		let currentLabel = '';
+		let currentKind = '';
+		let currentTag = '';
+		let currentType = '';
 		let timer = null;
 
 		const canEdit = <?php echo $can_edit ? 'true' : 'false'; ?>;
@@ -83,6 +88,9 @@ add_action('admin_footer', function () {
 
 		function openModal() {
 			if (!modal) return;
+			if (titleEl) {
+				titleEl.textContent = currentLabel || 'Feldhilfe';
+			}
 			modal.style.display = 'block';
 			textarea.focus();
 		}
@@ -90,10 +98,29 @@ add_action('admin_footer', function () {
 			if (!modal) return;
 			modal.style.display = 'none';
 			textarea.value = '';
+			if (titleEl) titleEl.textContent = 'Feldhilfe';
 			currentField = '';
+			currentLabel = '';
+			currentKind = '';
+			currentTag = '';
+			currentType = '';
 		}
 		function getFieldKey(el){
 			if (!el) return '';
+			const custom = el.getAttribute && el.getAttribute('data-cmx-help-key');
+			if (custom) return custom;
+			if (el.classList && el.classList.contains('postbox')) {
+				const id = el.getAttribute('id');
+				if (id) return 'metabox_' + id;
+				const title = el.querySelector('.hndle, h2, h3');
+				if (title && title.textContent) return 'metabox_' + title.textContent.trim();
+			}
+			if (el.tagName && el.tagName.toLowerCase() === 'table') {
+				const id = el.getAttribute('id');
+				if (id) return 'table_' + id;
+				const caption = el.querySelector('caption');
+				if (caption && caption.textContent) return 'table_' + caption.textContent.trim();
+			}
 			if (el.tagName && el.tagName.toLowerCase() === 'label') {
 				const f = el.getAttribute('for');
 				if (f) return f;
@@ -106,12 +133,66 @@ add_action('admin_footer', function () {
 			if (label && label.textContent) return label.textContent.trim();
 			return '';
 		}
+		function getFieldLabel(el){
+			if (!el) return '';
+			if (el.classList && el.classList.contains('postbox')) {
+				const title = el.querySelector('.hndle, h2, h3');
+				return title && title.textContent ? title.textContent.trim() : '';
+			}
+			if (el.tagName && el.tagName.toLowerCase() === 'table') {
+				const caption = el.querySelector('caption');
+				if (caption && caption.textContent) return caption.textContent.trim();
+			}
+			if (el.tagName && el.tagName.toLowerCase() === 'button') {
+				return el.textContent ? el.textContent.trim() : '';
+			}
+			if (el.getAttribute) {
+				const aria = el.getAttribute('aria-label');
+				if (aria) return aria.trim();
+				const placeholder = el.getAttribute('placeholder');
+				if (placeholder) return placeholder.trim();
+			}
+			if (el.tagName && el.tagName.toLowerCase() === 'label') {
+				return el.textContent ? el.textContent.trim() : '';
+			}
+			const id = el.getAttribute && el.getAttribute('id');
+			if (id) {
+				const lbl = document.querySelector('label[for="' + id + '"]');
+				if (lbl && lbl.textContent) return lbl.textContent.trim();
+			}
+			return '';
+		}
+		function getFieldKind(el){
+			if (!el) return '';
+			if (el.classList && el.classList.contains('postbox')) return 'metabox';
+			if (el.tagName && el.tagName.toLowerCase() === 'table') return 'table';
+			if (el.tagName && el.tagName.toLowerCase() === 'button') return 'button';
+			if (el.matches && (el.matches('a.button') || el.matches('.button'))) return 'button';
+			return 'field';
+		}
+		function resolveTarget(el){
+			if (!el) return null;
+			const modal = el.closest && el.closest('#cmx-help-modal');
+			if (modal) return null;
+			if (el.matches && el.matches('input,select,textarea,label')) return el;
+			const btn = el.closest && el.closest('button, a.button, .button');
+			if (btn) return btn;
+			const postbox = el.closest && el.closest('.postbox');
+			if (postbox) return postbox;
+			const table = el.closest && el.closest('table');
+			if (table) return table;
+			return el;
+		}
 		function loadHelp(key){
 			if (!key) return;
 			currentField = key;
 			const form = new URLSearchParams();
 			form.append('action','cmx_help_get');
 			form.append('field', key);
+			form.append('label', currentLabel || '');
+			form.append('kind', currentKind || '');
+			form.append('tag', currentTag || '');
+			form.append('type', currentType || '');
 			fetch(ajaxurl, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:form.toString()})
 				.then(r => r.json())
 				.then(data => {
@@ -119,26 +200,64 @@ add_action('admin_footer', function () {
 					openModal();
 				});
 		}
-		function startTimer(e){
-			const el = e.target;
+		function triggerHelp(el){
+			if (!el) return;
 			const key = getFieldKey(el);
 			if (!key) return;
+			currentLabel = getFieldLabel(el);
+			currentKind = getFieldKind(el);
+			currentTag = el.tagName ? el.tagName.toLowerCase() : '';
+			currentType = el.getAttribute ? (el.getAttribute('type') || '') : '';
+			loadHelp(key);
+		}
+		function startTimer(e){
+			if (timer) return;
+			if (typeof e.button !== 'undefined' && e.button !== 0) return;
+			const el = resolveTarget(e.target);
+			if (!el) return;
+			const key = getFieldKey(el);
+			if (!key) return;
+			currentLabel = getFieldLabel(el);
+			currentKind = getFieldKind(el);
+			currentTag = el.tagName ? el.tagName.toLowerCase() : '';
+			currentType = el.getAttribute ? (el.getAttribute('type') || '') : '';
 			timer = setTimeout(function(){ loadHelp(key); }, 2000);
 		}
 		function clearTimer(){
 			if (timer) { clearTimeout(timer); timer = null; }
 		}
 
+		document.addEventListener('pointerdown', function(e){
+			if (e.target.closest && e.target.closest('#cmx-help-modal')) return;
+			startTimer(e);
+		}, {passive:true});
+		document.addEventListener('pointerup', clearTimer);
+		document.addEventListener('pointercancel', clearTimer);
 		document.addEventListener('mousedown', function(e){
 			if (e.target.closest && e.target.closest('#cmx-help-modal')) return;
-			if (e.target.matches('input,select,textarea,label')) startTimer(e);
+			startTimer(e);
 		});
 		document.addEventListener('mouseup', clearTimer);
-		document.addEventListener('mouseleave', clearTimer);
 		document.addEventListener('touchstart', function(e){
-			if (e.target.matches('input,select,textarea,label')) startTimer(e);
+			if (e.target.closest && e.target.closest('#cmx-help-modal')) return;
+			startTimer(e);
 		}, {passive:true});
 		document.addEventListener('touchend', clearTimer);
+		document.addEventListener('touchcancel', clearTimer);
+		document.addEventListener('contextmenu', function(e){
+			const active = document.activeElement;
+			if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+				const start = typeof active.selectionStart === 'number' ? active.selectionStart : 0;
+				const end = typeof active.selectionEnd === 'number' ? active.selectionEnd : 0;
+				if (end > start) return;
+			}
+			const sel = window.getSelection ? window.getSelection() : null;
+			if (sel && sel.toString && sel.toString().trim() !== '') return;
+			const el = resolveTarget(e.target);
+			if (!el) return;
+			e.preventDefault();
+			triggerHelp(el);
+		});
 
 		if (closeBtn) closeBtn.addEventListener('click', closeModal);
 		document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
