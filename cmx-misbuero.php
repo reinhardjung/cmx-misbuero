@@ -52,7 +52,7 @@ add_action('init', function() {
 	}
 
 	// foreach (explode(',', 'kontakte,artikel,belege,aufwaende,Kassenbuch,dokumente,cockpit,projekte,einstellungen,postfach,bankabgleich') as $module) {
-	foreach (explode(',', 'kontakte,artikel,belege,cockpit,projekte,einstellungen') as $module) {
+	foreach (explode(',', 'kontakte,artikel,belege,ausgaben,cockpit,dokumente,projekte,einstellungen') as $module) {
 		require_once __DIR__ .'/src/' . trim($module) . '/index.php';
 	}
 });
