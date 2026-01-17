@@ -350,9 +350,10 @@ add_action('init', function () {
 					  </a>'
 					: '';
 
+				$link_target = $isDir ? '' : ' target="_blank" rel="noopener noreferrer"';
 				$rows .= '<tr>'
 					. '<td class="sel">'.($checkbox).'</td>'
-					. '<td class="name"><a href="'.cmx_dav_h($href).'">'.cmx_dav_h($name).($isDir?'/':'').'</a></td>'
+					. '<td class="name"><a href="'.cmx_dav_h($href).'"'.$link_target.'>'.cmx_dav_h($name).($isDir?'/':'').'</a></td>'
 					. '<td class="type">'.cmx_dav_h($type).'</td>'
 					. '<td class="size">'.cmx_dav_h($size).'</td>'
 					. '<td class="mtime">'.cmx_dav_h($mtime).'</td>'
