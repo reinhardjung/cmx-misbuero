@@ -28,6 +28,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => $show_ui]);
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	cmx_create_taxo(basename(__DIR__), 'Währung', 'Währungen', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
+	cmx_create_taxo(basename(__DIR__), 'Konto', 'Konten', false, false, ['show_ui' => true, 'meta_box_cb' => true]);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
