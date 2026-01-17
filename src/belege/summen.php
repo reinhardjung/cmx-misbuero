@@ -377,6 +377,12 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 				sumInput.addEventListener('input', function(){
 					sumInput.dataset.manual = '1';
 				});
+				const selectIfEditable = function(){
+					if (sumInput.readOnly) return;
+					sumInput.select();
+				};
+				sumInput.addEventListener('focus', selectIfEditable);
+				sumInput.addEventListener('click', selectIfEditable);
 			}
 
 			const mo = new MutationObserver(function(){ sumAll(); });
