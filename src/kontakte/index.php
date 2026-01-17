@@ -37,4 +37,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_KONTAKT
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,kommunikation,adressen,infos,dokumente,admincolumns,stufen,exports,imports,sichern,notizen,vcards');
+cmx_require_files(__DIR__,'stammdaten,kommunikation,adressen,infos,admincolumns,stufen,exports,imports,sichern,notizen,vcards');
