@@ -15,6 +15,17 @@ $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): strin
 };
 
 $positions = (array)($tpl['positions'] ?? []);
+$has_positions = false;
+foreach ($positions as $row) {
+	$item = trim((string)($row['item'] ?? ''));
+	$qty = (float)($row['qty'] ?? 0);
+	$unit_price = (float)($row['unit_price'] ?? 0);
+	$line_total = (float)($row['line_total'] ?? 0);
+	if ($item !== '' || $qty > 0 || $unit_price > 0 || $line_total > 0) {
+		$has_positions = true;
+		break;
+	}
+}
 $show_position_index = count($positions) > 1;
 $show_sku = false;
 $show_discount = false;
@@ -39,6 +50,7 @@ $beleg_description = trim((string)($tpl['document']['description'] ?? ''));
 $opts_belege = (array) get_option('cmx_belege', []);
 $beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
 $is_lieferschein = ($beleg_type === 'lieferschein');
+$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -251,80 +263,89 @@ $recipient_html = $recipient_has_br
 		<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
 	<?php endif; ?>
 
-	<table class="positions-table">
-		<thead>
-			<tr>
-				<?php if ($show_position_index): ?>
-					<th>Pos.</th>
-				<?php endif; ?>
-				<?php if ($show_sku): ?>
-					<th>SKU</th>
-				<?php endif; ?>
-				<th>Artikel</th>
-				<th class="col-num">Menge</th>
-				<?php if ($show_unit_price): ?>
-					<th class="col-num">Einzelpreis</th>
-				<?php endif; ?>
-				<?php if ($show_discount): ?>
-					<th class="col-num">Rabatt</th>
-				<?php endif; ?>
-				<?php if ($show_line_total): ?>
-					<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
-				<?php endif; ?>
-			</tr>
-		</thead>
-		<tbody>
-		<?php if (empty($positions)): ?>
-			<tr>
-				<td colspan="<?= $col_count; ?>">—</td>
-			</tr>
-		<?php else: ?>
-			<?php foreach ($positions as $i => $row): ?>
-				<?php
-				$qty = (float)($row['qty'] ?? 0);
-				$unit = (string)($row['unit'] ?? '');
-				$unit_price = (float)($row['unit_price'] ?? 0);
-				$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
-				$line_subtotal = $qty * $unit_price;
-				$line_discount = $line_subtotal - $line_total;
-				$item = (string)($row['item'] ?? '');
-				$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
-				$desc_html = (string)($row['desc_html'] ?? '');
-				$sku = (string)($row['article_number'] ?? '');
-				$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
-				?>
+	<?php if (!$is_lieferantenrechnung || $has_positions): ?>
+		<table class="positions-table">
+			<thead>
 				<tr>
 					<?php if ($show_position_index): ?>
-						<td><?= htmlspecialchars((string)($i + 1), ENT_QUOTES, 'UTF-8'); ?></td>
+						<th>Pos.</th>
 					<?php endif; ?>
 					<?php if ($show_sku): ?>
-						<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+						<th>SKU</th>
 					<?php endif; ?>
-					<td>
-						<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
-						<?php if ($desc_html !== ''): ?>
-							<?= $desc_html; ?>
-						<?php else: ?>
-							<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
-						<?php endif; ?>
-					</td>
-					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
+					<th>Artikel</th>
+					<th class="col-num">Menge</th>
 					<?php if ($show_unit_price): ?>
-						<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+						<th class="col-num">Einzelpreis</th>
 					<?php endif; ?>
 					<?php if ($show_discount): ?>
-						<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+						<th class="col-num">Rabatt</th>
 					<?php endif; ?>
 					<?php if ($show_line_total): ?>
-						<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+						<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
 					<?php endif; ?>
 				</tr>
-			<?php endforeach; ?>
-		<?php endif; ?>
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+			<?php if (empty($positions)): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>">—</td>
+				</tr>
+			<?php else: ?>
+				<?php foreach ($positions as $i => $row): ?>
+					<?php
+					$qty = (float)($row['qty'] ?? 0);
+					$unit = (string)($row['unit'] ?? '');
+					$unit_price = (float)($row['unit_price'] ?? 0);
+					$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+					$line_subtotal = $qty * $unit_price;
+					$line_discount = $line_subtotal - $line_total;
+					$item = (string)($row['item'] ?? '');
+					$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+					$desc_html = (string)($row['desc_html'] ?? '');
+					$sku = (string)($row['article_number'] ?? '');
+					$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
+					?>
+					<tr>
+						<?php if ($show_position_index): ?>
+							<td><?= htmlspecialchars((string)($i + 1), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_sku): ?>
+							<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<td>
+							<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
+							<?php if ($desc_html !== ''): ?>
+								<?= $desc_html; ?>
+							<?php else: ?>
+								<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+							<?php endif; ?>
+						</td>
+						<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php if ($show_unit_price): ?>
+							<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_discount): ?>
+							<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_line_total): ?>
+							<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+					</tr>
+				<?php endforeach; ?>
+			<?php endif; ?>
+			</tbody>
+		</table>
+	<?php endif; ?>
 
-	<?php if (!$is_lieferschein): ?>
+	<?php if ($is_lieferantenrechnung && !$has_positions): ?>
+		<?php $manual_total = (float)($tpl['document']['manual_total'] ?? $totals['total']); ?>
+		<div style="margin-top:16px;text-align:right;">
+			<strong>Total <?= htmlspecialchars($__fmt_num($manual_total), ENT_QUOTES, 'UTF-8'); ?></strong>
+		</div>
+	<?php endif; ?>
+
+	<?php if (!$is_lieferschein && !($is_lieferantenrechnung && !$has_positions)): ?>
 	<table class="totals-table" border="0">
 		<?php if ($show_discount && $discount_sum > 0.0): ?>
 			<tr>
@@ -338,7 +359,7 @@ $recipient_html = $recipient_has_br
 		$mwst_rate_pct = $mwst_rate * 100;
 		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, ',', ''), '0'), ',');
 		?>
-		<?php if ($mwst_rate > 0): ?>
+		<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
 			<tr>
 				<td colspan="<?= $col_count; ?>" class="text-right">
 					<?= !empty($tpl['totals']['is_brutto']) ? 'inkl.' : 'zuzügl.'; ?>
@@ -352,14 +373,32 @@ $recipient_html = $recipient_has_br
 			</td>
 		</tr>
 	</table>
-	<?php if (!empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+	<?php if ($is_mwst_pflichtig && !$is_lieferantenrechnung): ?>
+		<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
+		<?php if ($mwst_nr !== ''): ?>
+			<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
+		<?php endif; ?>
+	<?php elseif (!$is_lieferantenrechnung): ?>
+		<div class="mwst-note">
+			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
+		</div>
+	<?php endif; ?>
+
+	<?php endif; ?>
+
+	<?php if (!$is_lieferschein && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
+		$anz_base_total = (float)($totals['total'] ?? 0);
+		if ($is_lieferantenrechnung && !$has_positions) {
+			$anz_base_total = (float)($tpl['document']['manual_total'] ?? $anz_base_total);
+		}
 		$anzahlungen_sum = 0.0;
 		foreach ($tpl['anzahlungen'] as $row) {
-			$anz_amount = (float)($row['betrag'] ?? 0);
+			$anz_amount_raw = (string)($row['betrag'] ?? 0);
+			$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
 			$anzahlungen_sum += $anz_amount;
 		}
-		$offen_betrag = (float)($totals['total'] ?? 0) - $anzahlungen_sum;
+		$offen_betrag = $anz_base_total - $anzahlungen_sum;
 		?>
 		<div style="margin-top:16px;text-align:right;">
 			<em>Bereits erhaltene Zahlungen</em>
@@ -367,7 +406,8 @@ $recipient_html = $recipient_has_br
 				<?php foreach ($tpl['anzahlungen'] as $row): ?>
 					<?php
 					$anz_date = trim((string)($row['datum'] ?? ''));
-					$anz_amount = (float)($row['betrag'] ?? 0);
+					$anz_amount_raw = (string)($row['betrag'] ?? 0);
+					$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
 					if ($anz_date === '') continue;
 					$anz_date_fmt = date('d.m.Y', strtotime($anz_date));
 					?>
@@ -381,17 +421,6 @@ $recipient_html = $recipient_has_br
 			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
 		</div>
 	<?php endif; ?>
-	<?php if ($is_mwst_pflichtig): ?>
-		<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
-		<?php if ($mwst_nr !== ''): ?>
-			<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
-		<?php endif; ?>
-	<?php else: ?>
-		<div class="mwst-note">
-			Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>
-		</div>
-	<?php endif; ?>
-	<?php endif; ?>
 
 	<div class="clear"></div>
 
@@ -403,7 +432,7 @@ $recipient_html = $recipient_has_br
 		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
 		$bank_iban = $iban;
 		?>
-		<?php if (!$is_lieferschein && ($bank_name !== '' || $bank_iban !== '' || $bic !== '')): ?>
+		<?php if (!$is_lieferschein && !$is_lieferantenrechnung && ($bank_name !== '' || $bank_iban !== '' || $bic !== '')): ?>
 			<div style="margin-top:8px;">
 				<div><strong>Zahlungsinformationen</strong></div>
 				<?php if ($bank_name !== ''): ?>

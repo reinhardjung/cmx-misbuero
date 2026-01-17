@@ -632,8 +632,20 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
 			[, $beleg_type] = cmx_get_beleg_type(get_post($post_id));
 			if (strtolower((string)$beleg_type) === 'lieferantenrechnung') {
+				$has_positions = false;
+				foreach ($rows as $row) {
+					if (!is_array($row)) continue;
+					$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
+					$qty = $to_float($row['menge'] ?? $row['qty'] ?? 0);
+					$price = $to_float($row['preis'] ?? $row['unit_price'] ?? 0);
+					$total = $to_float($row['line_total'] ?? 0);
+					if ($item !== '' || $qty > 0 || $price > 0 || $total > 0) {
+						$has_positions = true;
+						break;
+					}
+				}
 				$override = (string) get_post_meta($post_id, '_cmx_beleg_summe_override', true);
-				if ($override !== '') {
+				if (!$has_positions && $override !== '') {
 					$ov = $to_float($override);
 					$out['subtotal'] = $ov;
 					$out['total'] = $ov;
@@ -750,6 +762,39 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			'tax_rate'=>$mwst['rate'],
 			'is_brutto'=>$is_brutto,
 		]);
+		$has_positions = false;
+		if (!empty($calc['positionen']) && is_array($calc['positionen'])) {
+			foreach ($calc['positionen'] as $row) {
+				if (!is_array($row)) continue;
+				$item = trim((string)($row['title'] ?? ''));
+				$qty = (float)($row['qty'] ?? 0);
+				$unit_price = (float)($row['unit_price'] ?? 0);
+				$line_total = (float)($row['line_total'] ?? 0);
+				if ($item !== '' || $qty > 0 || $unit_price > 0 || $line_total > 0) {
+					$has_positions = true;
+					break;
+				}
+			}
+		}
+		$manual_total_value = null;
+		if ($beleg_type === 'lieferantenrechnung' && !$has_positions) {
+			$override = '';
+			if (isset($_POST['cmx_beleg_summe_override'])) {
+				$override = (string) cmxbu_deep_unslash($_POST['cmx_beleg_summe_override']);
+			}
+			if ($override === '') {
+				$override = (string) get_post_meta($post_id, '_cmx_beleg_summe_override', true);
+			}
+			if ($override !== '') {
+				$ov = (float) cmx_norm_decimal($override);
+				$manual_total_value = $ov;
+				$calc['subtotal'] = $ov;
+				$calc['total'] = $ov;
+				$calc['net'] = $ov;
+				$calc['gross'] = $ov;
+				$calc['tax_amount'] = 0.0;
+			}
+		}
 		$anzahlungen_raw = get_post_meta($post_id, defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN') ? CMX_BELEG_META_ANZAHLUNGEN : '_cmx_beleg_anzahlungen', true);
 		if (is_string($anzahlungen_raw) && $anzahlungen_raw !== '') {
 			$tmp = json_decode($anzahlungen_raw, true);
@@ -794,6 +839,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'period'=>$dates['period'],
 				'subtotal'=>$calc['subtotal'],
 				'total'=>$calc['total'],
+				'manual_total'=>$manual_total_value,
 				'subject'=> (string)get_post_meta($post_id,'_cmx_beleg_betreff',true),
 				'description'=>(string)get_post_meta($post_id,'_cmx_beleg_beschreibung',true), // <- A (wird im Template direkt unter Betreff ausgegeben)
 			],

@@ -136,6 +136,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	$beleg_type = strtolower((string)$beleg_type);
 	$is_lieferschein = ($beleg_type === 'lieferschein');
 	$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
+	$has_positions = cmx_has_positionen_data($positionen);
 	$manual_total_raw = (string) get_post_meta($post->ID, '_cmx_beleg_summe_override', true);
 
 	$summe = 0.0;
@@ -156,7 +157,8 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	if ($is_lieferantenrechnung) {
 		$display = $manual_total_raw !== '' ? $manual_total_raw : number_format($summe, 2, ',', "'");
 		$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
-		echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;"'.$manual_attr.'>';
+		$readonly = $has_positions ? ' readonly' : '';
+		echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;"'.$manual_attr.$readonly.'>';
 	} else {
 		echo '<span id="cmx-beleg-summe-value" data-currency="">' .
 			esc_html(number_format($summe, 2, ',', "'")) .
@@ -316,6 +318,12 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			if (!out && !sumInput) return 0;
 			if (isLieferantenrechnung && sumInput) {
 				const manual = sumInput.dataset.manual === '1';
+				const hasPos = hasPositions();
+				sumInput.readOnly = hasPos;
+				sumInput.style.opacity = hasPos ? '0.6' : '1';
+				if (hasPos) {
+					sumInput.dataset.manual = '';
+				}
 				if (manual) {
 					return toNumber(sumInput.value || '0');
 				}
