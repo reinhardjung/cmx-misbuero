@@ -1,5 +1,6 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+// fixme rju 2026-01-17: Braucht es das noch?
 function cmx_is_cloud_meister_user(): bool {
 	$user = wp_get_current_user();
 	return $user && $user->exists() && $user->display_name === 'CLOUD Meister';
@@ -13,7 +14,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt,Waehrungen');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt,Waehrungen,Buchungsarten,Ausgabenarten,Zahlungsarten');
 
 
 // Define: CONST 4 each Taxo
@@ -28,7 +29,9 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien', false, true, ['show_ui' => $show_ui]);
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	cmx_create_taxo(basename(__DIR__), 'Währung', 'Währungen', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
-	cmx_create_taxo(basename(__DIR__), 'Konto', 'Konten', false, false, ['show_ui' => true, 'meta_box_cb' => true]);
+	cmx_create_taxo(basename(__DIR__), 'Buchungsart', 'Buchungsarten');
+	cmx_create_taxo(basename(__DIR__), 'Ausgabenart', 'Ausgabenarten');
+	cmx_create_taxo(basename(__DIR__), 'Zahlungsart', 'Zahlungsarten');
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
