@@ -14,8 +14,8 @@ add_action('add_meta_boxes', function() {
         'default'
     );
 
-    $ausgaben_link = esc_url(admin_url('edit-tags.php?taxonomy=ausgaben_kategorien&post_type=ausgaben'));
-    $ausgaben_title = '<a href="'.$ausgaben_link.'" target="_blank" rel="noopener noreferrer"><strong style="font-size:larger;">Ausgaben</strong></a>';
+    $ausgaben_link = esc_url(admin_url('edit-tags.php?taxonomy=michbuechli_kategorien&post_type=michbuechli'));
+    $ausgaben_title = '<a href="'.$ausgaben_link.'" target="_blank" rel="noopener noreferrer"><strong style="font-size:larger;">Michbuechli</strong></a>';
     add_meta_box(
         'cmx_belege_ausgaben_box',
         $ausgaben_title,
@@ -114,27 +114,27 @@ function cmx_belege_render_mwst_metabox($post) {
 function cmx_belege_render_ausgaben_metabox($post) {
     wp_nonce_field('cmx_belege_ausgaben_save', 'cmx_belege_ausgaben_nonce');
 
-    $tax = function_exists(__NAMESPACE__ . '\\cmx_tax_key') ? cmx_tax_key('ausgaben', 'Kategorien') : 'ausgaben_kategorien';
+    $tax = function_exists(__NAMESPACE__ . '\\cmx_tax_key') ? cmx_tax_key('michbuechli', 'Kategorien') : 'michbuechli_kategorien';
     if (!taxonomy_exists($tax)) {
-        echo '<em>Ausgaben-Kategorien nicht gefunden.</em>';
+        echo '<em>Michbuechli-Kategorien nicht gefunden.</em>';
         return;
     }
 
-    $current = get_post_meta($post->ID, '_cmx_beleg_ausgaben_kategorien', true);
+    $current = get_post_meta($post->ID, '_cmx_beleg_michbuechli_kategorien', true);
     if (!is_array($current)) {
         $current = $current !== '' ? [(int)$current] : [];
     }
     $terms = get_terms(['taxonomy' => $tax, 'hide_empty' => false]);
 
     if (is_wp_error($terms) || empty($terms)) {
-        echo '<em>Keine Ausgaben-Kategorien vorhanden.</em>';
+        echo '<em>Keine Michbuechli-Kategorien vorhanden.</em>';
         return;
     }
 
     // echo '<p><strong>Ausgaben-Kategorie</strong></p>';
     foreach ($terms as $term) {
         echo '<label style="display:block;margin-bottom:4px;">';
-        echo '<input type="checkbox" name="cmx_beleg_ausgaben_kategorien[]" value="'.esc_attr($term->term_id).'" '.checked(in_array((int)$term->term_id, $current, true), true, false).'> ';
+        echo '<input type="checkbox" name="cmx_beleg_michbuechli_kategorien[]" value="'.esc_attr($term->term_id).'" '.checked(in_array((int)$term->term_id, $current, true), true, false).'> ';
         echo esc_html($term->name);
         echo '</label>';
     }
@@ -238,11 +238,11 @@ add_action('save_post_belege', function($post_id) {
     }
 
     if ($ausgaben_nonce_ok) {
-        $terms = isset($_POST['cmx_beleg_ausgaben_kategorien']) && is_array($_POST['cmx_beleg_ausgaben_kategorien'])
-            ? array_map('intval', (array) $_POST['cmx_beleg_ausgaben_kategorien'])
+        $terms = isset($_POST['cmx_beleg_michbuechli_kategorien']) && is_array($_POST['cmx_beleg_michbuechli_kategorien'])
+            ? array_map('intval', (array) $_POST['cmx_beleg_michbuechli_kategorien'])
             : [];
         $terms = array_values(array_filter(array_unique($terms), fn($v) => $v > 0));
-        update_post_meta($post_id, '_cmx_beleg_ausgaben_kategorien', $terms);
+        update_post_meta($post_id, '_cmx_beleg_michbuechli_kategorien', $terms);
     }
 
     if ($qr_nonce_ok || $mwst_nonce_ok) {
