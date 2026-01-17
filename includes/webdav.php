@@ -90,6 +90,34 @@ add_action('init', function () {
 		}
 	});
 
+	// PDFs/Images inline anzeigen statt Download
+	$server->on('afterMethod:GET', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($sharePath) {
+		$path = $request->getPath();
+		$q = [];
+		parse_str((string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY), $q);
+		if (!empty($q['zip'])) return;
+
+		$relPath = ltrim($path, '/');
+		$absPath = rtrim($sharePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath);
+		$real = realpath($absPath);
+		if (!$real || !is_file($real) || !cmx_dav_is_subpath($sharePath, $real)) {
+			return;
+		}
+
+		$ext = strtolower(pathinfo($real, PATHINFO_EXTENSION));
+		$mime_map = [
+			'pdf'  => 'application/pdf',
+			'png'  => 'image/png',
+			'jpg'  => 'image/jpeg',
+			'jpeg' => 'image/jpeg',
+		];
+		if (!isset($mime_map[$ext])) return;
+
+		$filename = basename($real);
+		$response->setHeader('Content-Type', $mime_map[$ext]);
+		$response->setHeader('Content-Disposition', 'inline; filename="'.cmx_dav_h($filename).'"');
+	});
+
 	// Hübsche HTML-Indexseite für Collections + ZIP-Download
 	$server->on('method:GET', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath) {
 		$relPath = trim($request->getPath(), '/'); // relativ zur BaseUri
@@ -457,6 +485,7 @@ add_action('init', function () {
 						});
 						// Standard: wenn keine Auswahl -> Formular nur mit zip=1 absenden (kompletter Ordner)
 					});
+
 				})();
 				</script>'
 				.'</div></body></html>';
