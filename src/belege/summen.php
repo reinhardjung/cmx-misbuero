@@ -136,6 +136,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	$beleg_type = strtolower((string)$beleg_type);
 	$is_lieferschein = ($beleg_type === 'lieferschein');
 	$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
+	$is_gutschrift = ($beleg_type === 'gutschrift');
 	$has_positions = cmx_has_positionen_data($positionen);
 	$manual_total_raw = (string) get_post_meta($post->ID, '_cmx_beleg_summe_override', true);
 
@@ -154,7 +155,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	// Anzeige im CH-Format (1'234,56)
 	echo '<div id="cmx-beleg-summe-wrap" data-beleg-type="'.esc_attr($beleg_type).'" style="font-size:x-large; line-height:1.6; padding:6px 4px; text-align:center;">';
 	echo '<strong>';
-	if ($is_lieferantenrechnung) {
+	if ($is_lieferantenrechnung || $is_gutschrift) {
 		$display = $manual_total_raw !== '' ? $manual_total_raw : number_format($summe, 2, ',', "'");
 		$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
 		$readonly = $has_positions ? ' readonly' : '';
@@ -187,7 +188,8 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	(function(){
 		const sumWrap = document.getElementById('cmx-beleg-summe-wrap');
 		const sumInput = document.getElementById('cmx-beleg-summe-input');
-		const isLieferantenrechnung = sumWrap && sumWrap.getAttribute('data-beleg-type') === 'lieferantenrechnung';
+		const sumType = sumWrap ? sumWrap.getAttribute('data-beleg-type') : '';
+		const isManualType = sumType === 'lieferantenrechnung' || sumType === 'gutschrift';
 
 		function toNumber(v){
 			if (typeof v !== 'string') v = (v ?? '').toString();
@@ -316,7 +318,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		function sumAll(){
 			const out = document.getElementById('cmx-beleg-summe-value');
 			if (!out && !sumInput) return 0;
-			if (isLieferantenrechnung && sumInput) {
+			if (isManualType && sumInput) {
 				const manual = sumInput.dataset.manual === '1';
 				const hasPos = hasPositions();
 				sumInput.readOnly = hasPos;
@@ -404,7 +406,13 @@ add_action('save_post_belege', function ($post_id) {
 	}
 	$beleg_type = strtolower((string)$beleg_type);
 
-	if ($beleg_type === 'lieferantenrechnung') {
+	if (in_array($beleg_type, ['lieferantenrechnung', 'gutschrift'], true)) {
+		$positionen = cmx_load_positionen($post_id);
+		$has_positions = cmx_has_positionen_data($positionen);
+		if ($has_positions) {
+			delete_post_meta($post_id, '_cmx_beleg_summe_override');
+			return;
+		}
 		$raw = isset($_POST['cmx_beleg_summe_override']) ? (string)\wp_unslash($_POST['cmx_beleg_summe_override']) : '';
 		$raw = trim($raw);
 		if ($raw === '') {

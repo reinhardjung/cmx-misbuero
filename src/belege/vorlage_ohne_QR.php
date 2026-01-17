@@ -51,6 +51,7 @@ $opts_belege = (array) get_option('cmx_belege', []);
 $beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
+$is_gutschrift = ($beleg_type === 'gutschrift');
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -263,7 +264,7 @@ $recipient_html = $recipient_has_br
 		<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
 	<?php endif; ?>
 
-	<?php if (!$is_lieferantenrechnung || $has_positions): ?>
+<?php if ((!$is_lieferantenrechnung && !$is_gutschrift) || $has_positions): ?>
 		<table class="positions-table">
 			<thead>
 				<tr>
@@ -338,14 +339,14 @@ $recipient_html = $recipient_has_br
 		</table>
 	<?php endif; ?>
 
-	<?php if ($is_lieferantenrechnung && !$has_positions): ?>
+<?php if (($is_lieferantenrechnung || $is_gutschrift) && !$has_positions): ?>
 		<?php $manual_total = (float)($tpl['document']['manual_total'] ?? $totals['total']); ?>
 		<div style="margin-top:16px;text-align:right;">
 			<strong>Total <?= htmlspecialchars($__fmt_num($manual_total), ENT_QUOTES, 'UTF-8'); ?></strong>
 		</div>
 	<?php endif; ?>
 
-	<?php if (!$is_lieferschein && !($is_lieferantenrechnung && !$has_positions)): ?>
+<?php if (!$is_lieferschein && !($is_lieferantenrechnung && !$has_positions) && !($is_gutschrift && !$has_positions)): ?>
 	<table class="totals-table" border="0">
 		<?php if ($show_discount && $discount_sum > 0.0): ?>
 			<tr>
@@ -389,7 +390,7 @@ $recipient_html = $recipient_has_br
 	<?php if (!$is_lieferschein && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
 		$anz_base_total = (float)($totals['total'] ?? 0);
-		if ($is_lieferantenrechnung && !$has_positions) {
+		if (($is_lieferantenrechnung || $is_gutschrift) && !$has_positions) {
 			$anz_base_total = (float)($tpl['document']['manual_total'] ?? $anz_base_total);
 		}
 		$anzahlungen_sum = 0.0;

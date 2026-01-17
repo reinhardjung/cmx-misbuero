@@ -777,7 +777,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			}
 		}
 		$manual_total_value = null;
-		if ($beleg_type === 'lieferantenrechnung' && !$has_positions) {
+		if (in_array($beleg_type, ['lieferantenrechnung', 'gutschrift'], true) && !$has_positions) {
 			$override = '';
 			if (isset($_POST['cmx_beleg_summe_override'])) {
 				$override = (string) cmxbu_deep_unslash($_POST['cmx_beleg_summe_override']);
