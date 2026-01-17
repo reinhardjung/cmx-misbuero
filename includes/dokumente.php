@@ -53,7 +53,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	echo '</div>';
 
 	if ($docs) {
-		echo '<ul id="cmx-dokumente-existing" style="margin:6px 0 0 18px;max-height:160px;overflow:auto;width:100%;">';
+		echo '<ul id="cmx-dokumente-existing" style="margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;">';
 		foreach ($docs as $doc_id) {
 			$att_id = $is_dokumente ? (int)$doc_id : (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
 			$url = $att_id ? \wp_get_attachment_url($att_id) : '';
@@ -61,7 +61,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			$file_base = $file_rel ? basename($file_rel) : '';
 			$label = $file_base ?: (\get_the_title($doc_id) ?: ('#' . $doc_id));
 			$edit_url = $is_dokumente ? \get_edit_post_link((int)$post->ID, 'raw') : \get_edit_post_link((int)$doc_id, 'raw');
-			echo '<li data-doc-id="' . (int)$doc_id . '" style="display:grid;grid-template-columns:20px 1fr 16px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
+			echo '<li data-doc-id="' . (int)$doc_id . '" style="display:grid;grid-template-columns:18px 1fr 14px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
 			if ($edit_url) {
 				echo '<a href="' . \esc_url($edit_url) . '" target="_blank" rel="noopener noreferrer" title="Dokument bearbeiten" style="text-decoration:none;justify-self:start;">';
 				echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;">D</span>';
@@ -74,7 +74,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			} else {
 				echo '<span title="' . \esc_attr($label) . '" style="min-width:0;text-align:center;justify-self:stretch;overflow:hidden;text-overflow:ellipsis;">' . \esc_html($label) . '</span>';
 			}
-			echo ' <button type="button" class="button-link cmx-dok-remove" style="color:#b32d2e;justify-self:end;padding:0;">X</button>';
+			echo ' <button type="button" class="button-link cmx-dok-remove" style="color:#b32d2e;justify-self:end;padding:0;line-height:1;">X</button>';
 			echo '</li>';
 		}
 		echo '</ul>';

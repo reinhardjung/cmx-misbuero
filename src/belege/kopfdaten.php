@@ -286,7 +286,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	$proj_edit_link = $projekt_id ? \get_edit_post_link($projekt_id, '') : '';
 	$proj_list_link = \admin_url('edit.php?post_type=projekte');
 
-	echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'" data-list="'.\esc_attr($proj_list_link).'" style="cursor:pointer" title="Zum Projekt-Modul springen oder Eintrag editieren"><strong>Projekt</strong></label><br>';
+echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'" data-list="'.\esc_attr($proj_list_link).'" style="cursor:pointer;color:#2271b1;text-decoration:none; position:relative; top:10px;" title="Zum Projekt-Modul springen oder Eintrag editieren"><strong>Projekt</strong></label><br>';
 	echo '<div class="cmx-suggest">';
 	echo '  <div class="cmx-input-row">';
 	echo '    <input type="text" id="cmx_projekt_search" name="cmx_projekt_search" autocomplete="off" value="'.\esc_attr($display_proj).'" placeholder="Projekt suchen...">';
@@ -305,7 +305,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	$kontakt_edit_link = $kontakt_id ? \get_edit_post_link($kontakt_id, '') : '';
 	$kontakt_list_link = \admin_url('edit.php?post_type='.$cpt);
 
-	echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link).'" data-list="'.\esc_attr($kontakt_list_link).'" style="cursor:pointer" title="Zum Kontakte-Modul springen oder Eintrag editieren"><strong>Kontakt</strong></label><br>';
+echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link).'" data-list="'.\esc_attr($kontakt_list_link).'" style="cursor:pointer;color:#2271b1;text-decoration:none; position:relative; top:10px;" title="Zum Kontakte-Modul springen oder Eintrag editieren"><strong>Kontakt</strong></label><br>';
 	echo '<div class="cmx-suggest">';
 	echo '  <div class="cmx-input-row">';
 	echo '    <input type="text" id="cmx_kontakt_search" name="cmx_kontakt_search" autocomplete="off" value="'.\esc_attr($display_kontakt).'" placeholder="Kontakt suchen...">';
