@@ -86,6 +86,8 @@ add_action('admin_footer', function () {
 		let currentTag = '';
 		let currentType = '';
 		let timer = null;
+		let pressStart = 0;
+		let pressTarget = null;
 
 		const canEdit = <?php echo $can_edit ? 'true' : 'false'; ?>;
 		if (textarea && canEdit) {
@@ -255,10 +257,14 @@ add_action('admin_footer', function () {
 			currentKind = getFieldKind(el);
 			currentTag = el.tagName ? el.tagName.toLowerCase() : '';
 			currentType = el.getAttribute ? (el.getAttribute('type') || '') : '';
+			pressStart = Date.now();
+			pressTarget = { el: el, key: key };
 			timer = setTimeout(function(){ loadHelp(key); }, 2000);
 		}
 		function clearTimer(){
 			if (timer) { clearTimeout(timer); timer = null; }
+			pressStart = 0;
+			pressTarget = null;
 		}
 
 		document.addEventListener('pointerdown', function(e){
@@ -267,30 +273,11 @@ add_action('admin_footer', function () {
 		}, {passive:true});
 		document.addEventListener('pointerup', clearTimer);
 		document.addEventListener('pointercancel', clearTimer);
-		document.addEventListener('mousedown', function(e){
-			if (e.target.closest && e.target.closest('#cmx-help-modal')) return;
-			startTimer(e);
-		});
-		document.addEventListener('mouseup', clearTimer);
-		document.addEventListener('touchstart', function(e){
-			if (e.target.closest && e.target.closest('#cmx-help-modal')) return;
-			startTimer(e);
-		}, {passive:true});
-		document.addEventListener('touchend', clearTimer);
-		document.addEventListener('touchcancel', clearTimer);
 		document.addEventListener('contextmenu', function(e){
-			const active = document.activeElement;
-			if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-				const start = typeof active.selectionStart === 'number' ? active.selectionStart : 0;
-				const end = typeof active.selectionEnd === 'number' ? active.selectionEnd : 0;
-				if (end > start) return;
-			}
-			const sel = window.getSelection ? window.getSelection() : null;
-			if (sel && sel.toString && sel.toString().trim() !== '') return;
-			const el = resolveTarget(e.target);
-			if (!el) return;
+			if (!timer || !pressTarget) return;
 			e.preventDefault();
-			triggerHelp(el);
+			clearTimer();
+			triggerHelp(pressTarget.el);
 		});
 
 		if (closeBtn) closeBtn.addEventListener('click', closeModal);

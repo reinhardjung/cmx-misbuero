@@ -2,13 +2,13 @@
 
 
 // Define: Custom-Post-Type based on DIR
-register_post_type('Aufwände', ['labels' => ['name' => 'Aufwände', 'singular_name' => 'Aufwand', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 50, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-list-view', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+register_post_type(basename(__DIR__), ['labels' => ['name' => 'Milchbüchli', 'singular_name' => 'Milchbüchli', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+	'menu_position' => 40, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-backup', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien');
 
 
 // Define: CONST 4 each Taxo
@@ -18,11 +18,7 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 // Create: @ll Taxos
 \add_action('init', function () {
-	// XXXXXX cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
-	// cmx_create_taxo(basename(__DIR__), 'Type', 'Typen');
-	// cmx_create_taxo(basename(__DIR__), 'Marke', 'Marken');
-	// cmx_create_taxo(basename(__DIR__), 'Farbe', 'Farben');
-	// cmx_create_taxo(basename(__DIR__), 'Einheit', 'Einheiten');
+	cmx_create_taxo('michbuechli', 'Kategorie', 'Kategorien');
 }, 15);
 
 
@@ -37,4 +33,4 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 
 // Include: @ll metaboxes
-// XXXX cmx_require_files(__DIR__,'konditionen,uploads');
+// cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,qr-code,exports,imports,notizen,infos,dokumente,preview');
