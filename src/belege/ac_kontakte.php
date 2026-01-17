@@ -43,7 +43,7 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 
 	$kontakt_id = (int) \get_post_meta($post_id, CMX_BELEG_META_KONTAKT, true);
 	if ($kontakt_id <= 0) {
-		echo '<span style="color:#777">—</span>';
+		echo '<span style="color:#777"></span>';
 		return;
 	}
 
