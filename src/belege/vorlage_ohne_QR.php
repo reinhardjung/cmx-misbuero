@@ -178,6 +178,21 @@ $recipient_html = $recipient_has_br
 			$me_email = trim((string)($tpl['me']['email'] ?? ''));
 			$me_web = trim((string)($tpl['me']['website'] ?? ''));
 			$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
+			$format_ch_phone = static function(string $raw): string {
+				$digits = preg_replace('/\D+/', '', $raw);
+				if (strpos($digits, '0041') === 0) {
+					$digits = '41' . substr($digits, 4);
+				}
+				if (strpos($digits, '41') === 0 && strlen($digits) === 11) {
+					$rest = substr($digits, 2);
+					return '+41 ' . substr($rest, 0, 2) . ' ' . substr($rest, 2, 3) . ' ' . substr($rest, 5, 2) . ' ' . substr($rest, 7, 2);
+				}
+				if (strlen($digits) === 10 && $digits[0] === '0') {
+					return substr($digits, 0, 3) . ' ' . substr($digits, 3, 3) . ' ' . substr($digits, 6, 2) . ' ' . substr($digits, 8, 2);
+				}
+				return $raw;
+			};
+			$me_phone_label = $me_phone !== '' ? $format_ch_phone($me_phone) : '';
 			$me_phone_href = preg_replace('/[^0-9+]/', '', $me_phone);
 			$me_web_href = $me_web;
 			$me_web_label = $me_web;
@@ -218,7 +233,7 @@ $recipient_html = $recipient_has_br
 					<?php if ($has_contact): ?>
 						<td class="sender-contact">
 							<?php if ($me_phone !== ''): ?>
-								<div><a href="tel:<?= htmlspecialchars($me_phone_href, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($me_phone, ENT_QUOTES, 'UTF-8'); ?></a></div>
+								<div><a href="tel:<?= htmlspecialchars($me_phone_href, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($me_phone_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
 							<?php endif; ?>
 							<?php if ($me_email !== ''): ?>
 								<div><?= htmlspecialchars($me_email, ENT_QUOTES, 'UTF-8'); ?></div>
