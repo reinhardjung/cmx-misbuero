@@ -70,7 +70,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_ensure_rechnungsnummer')) {
  * ========================================================= */
 \add_action('add_meta_boxes', function () {
 	if (!\post_type_exists('belege')) return;
-	\add_meta_box('cmx_beleg_details', 'Kopfdaten', __NAMESPACE__.'\\cmx_render_beleg_metabox', 'belege', 'normal', 'high');
+	\add_meta_box('cmx_beleg_details', 'Beleg', __NAMESPACE__.'\\cmx_render_beleg_metabox', 'belege', 'normal', 'high');
 });
 
 /* =========================================================
@@ -260,18 +260,20 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		$current_terms = \wp_get_post_terms($post->ID, $tax, ['fields'=>'ids']);
 		$current_id = $current_terms[0] ?? 0;
 		$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
-		echo '<p><strong>Kategorie</strong><br><div class="cmx-radio-inline">';
+		// echo '<p><strong>Kategorie</strong><br><div class="cmx-radio-inline">';
+		echo '<div class="cmx-radio-inline">';
 		foreach ($terms as $term) {
 			echo '<label><input type="radio" name="cmx_beleg_kategorie" data-slug="'.\esc_attr($term->slug).'" value="'.\esc_attr($term->term_id).'" '.\checked($current_id,$term->term_id,false).'> '.\esc_html($term->name).'</label>';
 		}
 		echo '</div></p>';
 	}
 
-	echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
+	// echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
+	echo '<p><label><strong>Betreff</strong></label><br>';
 	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'"></p>';
 
 	echo '<p><label><strong>Beschreibung</strong></label><br>';
-	echo '<textarea name="cmx_beleg_beschreibung" rows="6">'.\esc_textarea($beschreibung).'</textarea></p>';
+	echo '<textarea name="cmx_beleg_beschreibung" rows="8">'.\esc_textarea($beschreibung).'</textarea></p>';
 	echo '</div>';
 
 	/* --- rechte Spalte --- */
