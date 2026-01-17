@@ -386,7 +386,7 @@ $recipient_html = $recipient_has_br
 
 	<?php endif; ?>
 
-	<?php if (!$is_lieferschein && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+	<?php if (!$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
 		$anz_base_total = (float)($totals['total'] ?? 0);
 		if (($is_lieferantenrechnung || $is_gutschrift) && !$has_positions) {

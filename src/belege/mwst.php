@@ -163,10 +163,10 @@ add_action('admin_footer', function () {
                 ausgabenBox.style.display = (slug === 'lieferantenrechnung') ? '' : 'none';
             }
             if (qrBox) {
-                qrBox.style.display = (slug === 'lieferantenrechnung' || slug === 'lieferschein') ? 'none' : '';
+                qrBox.style.display = (slug === 'lieferantenrechnung' || slug === 'lieferschein' || slug === 'gutschrift') ? 'none' : '';
             }
             if (anzahlungenBox) {
-                anzahlungenBox.style.display = (slug === 'lieferschein') ? 'none' : '';
+                anzahlungenBox.style.display = (slug === 'lieferschein' || slug === 'gutschrift') ? 'none' : '';
             }
         }
         document.addEventListener('change', function(e){
