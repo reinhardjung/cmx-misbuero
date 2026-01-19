@@ -106,25 +106,27 @@ function cmx_remove_published_link(array $views): array {
 
 
 /**
- * Erzwingt Status "publish" fuer alle CPT-Saves (ausgenommen Trash/Auto-Draft/Revisionen).
+ * Beim ersten manuellen Speichern eines "belege" den Status auf "publish" erzwingen.
  */
-add_filter('wp_insert_post_data', __NAMESPACE__ . '\\cmx_force_cpt_publish_status', 99, 2);
-function cmx_force_cpt_publish_status(array $data, array $postarr): array {
+add_filter('wp_insert_post_data', __NAMESPACE__ . '\\cmx_force_belege_publish_on_first_save', 99, 2);
+function cmx_force_belege_publish_on_first_save(array $data, array $postarr): array {
 	$post_type = $data['post_type'] ?? '';
-	if ($post_type === '') {
-		return $data;
-	}
-
-	static $cpt_list = null;
-	if ($cpt_list === null) {
-		$cpt_list = get_post_types(['_builtin' => false], 'names');
-	}
-	if (!in_array($post_type, $cpt_list, true)) {
+	if ($post_type !== 'belege') {
 		return $data;
 	}
 
 	$status = $data['post_status'] ?? '';
 	if (in_array($status, ['trash', 'inherit'], true)) {
+		return $data;
+	}
+
+	$post_id = isset($postarr['ID']) ? (int) $postarr['ID'] : 0;
+	if ($post_id <= 0) {
+		return $data;
+	}
+
+	$prev = get_post($post_id);
+	if (!$prev || $prev->post_status !== 'auto-draft') {
 		return $data;
 	}
 
