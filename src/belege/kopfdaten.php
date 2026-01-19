@@ -18,6 +18,8 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR'))   \define(__NAMESP
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL'))  \define(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL', '_cmx_beleg_projekt_label');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL'))  \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL', '_cmx_beleg_kontakt_label');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID'))     \define(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID', '_cmx_beleg_projekt_id');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG'))       \define(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG', '_cmx_beleg_richtung');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_STATUS'))         \define(__NAMESPACE__.'\\CMX_BELEG_META_STATUS', '_cmx_beleg_status');
 
 /* =========================================================
  * Helpers
@@ -28,6 +30,32 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_belege_tax')) {
 			if (\taxonomy_exists($tax)) return $tax;
 		}
 		return null;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kategorie_allowed_slugs')) {
+	function cmx_beleg_kategorie_allowed_slugs(): array {
+		return ['rechnung', 'gutschrift', 'sonstiges'];
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
+	function cmx_beleg_richtung_options(): array {
+		return [
+			'ausgang' => 'Ausgang (für den Kunden)',
+			'eingang' => 'Eingang (vom Lieferanten)',
+		];
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_status_options')) {
+	function cmx_beleg_status_options(): array {
+		return [
+			'offen'          => 'Offen',
+			'bezahlt'        => 'Bezahlt',
+			'unbezahlt'      => 'Unbezahlt',
+			'teilbezahlt'    => 'Teilbezahlt',
+			'verrechnet'     => 'Verrechnet',
+			'teilverrechnet' => 'Teilverrechnet',
+			'entwurf'        => 'Entwurf',
+		];
 	}
 }
 if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
@@ -71,6 +99,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_ensure_rechnungsnummer')) {
 \add_action('add_meta_boxes', function () {
 	if (!\post_type_exists('belege')) return;
 	\add_meta_box('cmx_beleg_details', 'Beleg', __NAMESPACE__.'\\cmx_render_beleg_metabox', 'belege', 'normal', 'high');
+	\add_meta_box('cmx_beleg_status', 'Status', __NAMESPACE__.'\\cmx_render_beleg_status_metabox', 'belege', 'side', 'high');
 });
 
 /* =========================================================
@@ -220,6 +249,26 @@ function cmx_ajax_search_kontakte(): void {
 }
 
 /* =========================================================
+ * Metabox: Status (SIDE)
+ * ========================================================= */
+function cmx_render_beleg_status_metabox(\WP_Post $post): void {
+	$status = (string)\get_post_meta($post->ID, CMX_BELEG_META_STATUS, true);
+	$status_opts = cmx_beleg_status_options();
+	if (!isset($status_opts[$status])) {
+		$status = array_key_first($status_opts);
+	}
+
+	\wp_nonce_field('cmx_beleg_status_save', 'cmx_beleg_status_nonce');
+
+	echo '<p><label><strong>Status</strong></label><br>';
+	echo '<select name="cmx_beleg_status" style="width:100%;">';
+	foreach ($status_opts as $val => $label) {
+		echo '<option value="'.\esc_attr($val).'" '.\selected($status,$val,false).'>'.\esc_html($label).'</option>';
+	}
+	echo '</select></p>';
+}
+
+/* =========================================================
  * Render-Funktion Metabox
  * ========================================================= */
 function cmx_render_beleg_metabox(\WP_Post $post): void {
@@ -231,6 +280,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	$projekt_label  = (string)\get_post_meta($post->ID, CMX_BELEG_META_PROJEKT_LABEL, true);
 	$kontakt_label  = (string)\get_post_meta($post->ID, CMX_BELEG_META_KONTAKT_LABEL, true);
 	$projekt_id     = (int)\get_post_meta($post->ID, CMX_BELEG_META_PROJEKT_ID, true);
+	$richtung       = (string)\get_post_meta($post->ID, CMX_BELEG_META_RICHTUNG, true);
 
 	\wp_nonce_field('cmx_beleg_details_save', 'cmx_beleg_details_nonce');
 
@@ -260,6 +310,21 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		$current_terms = \wp_get_post_terms($post->ID, $tax, ['fields'=>'ids']);
 		$current_id = $current_terms[0] ?? 0;
 		$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
+		$allowed_slugs = cmx_beleg_kategorie_allowed_slugs();
+		$terms = array_values(array_filter($terms, function($term) use ($allowed_slugs) {
+			return in_array($term->slug, $allowed_slugs, true);
+		}));
+		$allowed_ids = array_map(function($term) { return (int) $term->term_id; }, $terms);
+		if (!in_array($current_id, $allowed_ids, true)) {
+			$default_term = null;
+			foreach ($terms as $term) {
+				if ($term->slug === 'sonstiges') { $default_term = $term; break; }
+			}
+			if ($default_term === null) {
+				$default_term = $terms[0] ?? null;
+			}
+			$current_id = $default_term ? (int) $default_term->term_id : 0;
+		}
 		// echo '<p><strong>Kategorie</strong><br><div class="cmx-radio-inline">';
 		echo '<div class="cmx-radio-inline">';
 		foreach ($terms as $term) {
@@ -268,12 +333,23 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		echo '</div></p>';
 	}
 
+	$richtung_opts = cmx_beleg_richtung_options();
+	if (!isset($richtung_opts[$richtung])) {
+		$richtung = array_key_first($richtung_opts);
+	}
+	// echo '<p><strong>Richtung</strong><br><div class="cmx-radio-inline">';
+	echo '<div class="cmx-radio-inline">';
+	foreach ($richtung_opts as $val => $label) {
+		echo '<label><input type="radio" name="cmx_beleg_richtung" value="'.\esc_attr($val).'" '.\checked($richtung,$val,false).'> '.\esc_html($label).'</label>';
+	}
+	echo '</div></p>';
+
 	// echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
 	echo '<p><label><strong>Betreff</strong></label><br>';
 	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'"></p>';
 
 	echo '<p><label><strong>Beschreibung</strong></label><br>';
-	echo '<textarea name="cmx_beleg_beschreibung" rows="8">'.\esc_textarea($beschreibung).'</textarea></p>';
+	echo '<textarea name="cmx_beleg_beschreibung" rows="7">'.\esc_textarea($beschreibung).'</textarea></p>';
 	echo '</div>';
 
 	/* --- rechte Spalte --- */
@@ -463,12 +539,32 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	$inv_no = cmx_ensure_rechnungsnummer($post_id);
 
 	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
+	$has_status_nonce = isset($_POST['cmx_beleg_status_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_status_nonce'], 'cmx_beleg_status_save');
 
 	if ($has_nonce) {
 		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
 		if ($tax && isset($_POST['cmx_beleg_kategorie'])) {
 			$term_id = (int) $_POST['cmx_beleg_kategorie'];
-			\wp_set_post_terms($post_id, $term_id > 0 ? [$term_id] : [], $tax, false);
+			$allowed_ids = [];
+			$allowed_slugs = cmx_beleg_kategorie_allowed_slugs();
+			$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
+			foreach ($terms as $term) {
+				if (in_array($term->slug, $allowed_slugs, true)) {
+					$allowed_ids[] = (int) $term->term_id;
+				}
+			}
+			if ($term_id > 0 && in_array($term_id, $allowed_ids, true)) {
+				\wp_set_post_terms($post_id, [$term_id], $tax, false);
+			}
+		}
+
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG') && isset($_POST['cmx_beleg_richtung'])) {
+			$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_richtung']));
+			$opts = cmx_beleg_richtung_options();
+			if (!isset($opts[$val])) {
+				$val = array_key_first($opts);
+			}
+			\update_post_meta($post_id, CMX_BELEG_META_RICHTUNG, $val);
 		}
 
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && isset($_POST['cmx_beleg_betreff'])) {
@@ -502,6 +598,15 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			if ($proj_label !== '') \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL, $proj_label);
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
 		}
+	}
+
+	if ($has_status_nonce && \defined(__NAMESPACE__.'\\CMX_BELEG_META_STATUS') && isset($_POST['cmx_beleg_status'])) {
+		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_status']));
+		$opts = cmx_beleg_status_options();
+		if (!isset($opts[$val])) {
+			$val = array_key_first($opts);
+		}
+		\update_post_meta($post_id, CMX_BELEG_META_STATUS, $val);
 	}
 
 	$current = \get_post($post_id);

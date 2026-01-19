@@ -6,6 +6,13 @@ function cmx_is_cloud_meister_user(): bool {
 	return $user && $user->exists() && $user->display_name === 'CLOUD Meister';
 }
 
+function cmx_belege_kategorie_taxonomy(): ?string {
+	foreach (['belege_kategorien','belege_kategorie','beleg_kategorien','beleg_kategorie','belege_categories','belege_typ','belege_themen'] as $tax) {
+		if (taxonomy_exists($tax)) return $tax;
+	}
+	return null;
+}
+
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
@@ -39,6 +46,23 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 // Refill: Taxo with defaults if removed
 \add_action('admin_init', function () {
 	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_BELEGE);
+});
+
+// Beleg-Kategorien sicherstellen (Rechnung, Gutschrift, Sonstiges)
+\add_action('admin_init', function () {
+	$tax = cmx_belege_kategorie_taxonomy();
+	if (!$tax) return;
+
+	$required = [
+		'rechnung'  => 'Rechnung',
+		'gutschrift'=> 'Gutschrift',
+		'sonstiges' => 'Sonstiges',
+	];
+	foreach ($required as $slug => $label) {
+		if (!term_exists($slug, $tax) && !term_exists($label, $tax)) {
+			wp_insert_term($label, $tax, ['slug' => $slug]);
+		}
+	}
 });
 
 // Kategorien in der Admin-Navigation ausblenden (Taxonomie bleibt bestehen)
