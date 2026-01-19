@@ -17,7 +17,7 @@ use Dompdf\Options;
 	$base_args = $args;
 	$base_args['action'] = 'cmx_export_belege_list';
 	$url  = \wp_nonce_url(\add_query_arg($base_args, \admin_url('admin-post.php')), 'cmx_export_belege_list');
-	$link = '<a href="' . esc_url($url) . '">export</a>';
+	$link = '<a href="' . esc_url($url) . '">exportieren</a>';
 
 	$pdf_args = $args;
 	$pdf_args['action'] = 'cmx_export_belege_list_pdf';

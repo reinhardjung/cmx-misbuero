@@ -68,7 +68,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 												<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>
 												<path d="M15 2v6h6" fill="#e7e9ef"/>
 												<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="#d84a3a"/>
-												<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff">PDF</text>
+												<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>
 											</svg>PDF Beleg herunterladen
 										</a>
 									</td>
