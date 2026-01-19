@@ -540,6 +540,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 
 	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
 	$has_status_nonce = isset($_POST['cmx_beleg_status_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_status_nonce'], 'cmx_beleg_status_save');
+	$has_save_as_nonce = isset($_POST['cmx_beleg_save_as_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_save_as_nonce'], 'cmx_beleg_save_as');
 
 	if ($has_nonce) {
 		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
@@ -607,6 +608,15 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			$val = array_key_first($opts);
 		}
 		\update_post_meta($post_id, CMX_BELEG_META_STATUS, $val);
+	}
+
+	if ($has_save_as_nonce && isset($_POST['cmx_beleg_save_as'])) {
+		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_save_as']));
+		$allowed = ['rechnung', 'angebot', 'lieferschein'];
+		if (!in_array($val, $allowed, true)) {
+			$val = 'rechnung';
+		}
+		\update_post_meta($post_id, '_cmx_beleg_pdf_type', $val);
 	}
 
 	$current = \get_post($post_id);

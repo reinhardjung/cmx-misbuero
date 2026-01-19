@@ -24,15 +24,6 @@ add_action('add_meta_boxes', function() {
         'side',
         'default'
     );
-
-    add_meta_box(
-        'cmx_belege_qr_box',
-        'QR-Rechnung',
-        __NAMESPACE__ . '\\cmx_belege_render_qr_metabox',
-        'belege',
-        'side',
-        'low'
-    );
 });
 
 
@@ -148,7 +139,6 @@ add_action('admin_footer', function () {
     (function(){
         const box = document.getElementById('cmx_belege_mwst_box');
         const ausgabenBox = document.getElementById('cmx_belege_ausgaben_box');
-        const qrBox = document.getElementById('cmx_belege_qr_box');
         const anzahlungenBox = document.getElementById('cmx_beleg_anzahlungen');
         function getSelectedSlug(){
             const selected = document.querySelector('input[name="cmx_beleg_kategorie"]:checked');
@@ -161,9 +151,6 @@ add_action('admin_footer', function () {
             }
             if (ausgabenBox) {
                 ausgabenBox.style.display = (slug === 'lieferantenrechnung') ? '' : 'none';
-            }
-            if (qrBox) {
-                qrBox.style.display = (slug === 'lieferantenrechnung' || slug === 'lieferschein' || slug === 'gutschrift') ? 'none' : '';
             }
             if (anzahlungenBox) {
                 anzahlungenBox.style.display = (slug === 'lieferschein' || slug === 'gutschrift') ? 'none' : '';
@@ -181,27 +168,6 @@ add_action('admin_footer', function () {
 });
 
 /**
- * QR-Metabox-Inhalt
- */
-function cmx_belege_render_qr_metabox($post) {
-    wp_nonce_field('cmx_belege_qr_save', 'cmx_belege_qr_nonce');
-    $qr_enabled = get_post_meta($post->ID, '_cmx_beleg_qr_enabled', true);
-    ?>
-    <p>
-        <label>
-            <input type="checkbox"
-                   name="cmx_beleg_qr_enabled"
-                   value="1"
-                <?php checked($qr_enabled, '1'); ?> />
-            QR-Code auf Beleg drucken
-        </label><br>
-        <!-- <small>Nur möglich, wenn eine QR-IBAN hinterlegt ist.</small> -->
-    </p>
-    <?php
-}
-
-
-/**
  * Speichern
  */
 add_action('save_post_belege', function($post_id) {
@@ -210,11 +176,8 @@ add_action('save_post_belege', function($post_id) {
         && wp_verify_nonce($_POST['cmx_belege_mwst_nonce'], 'cmx_belege_mwst_save');
     $ausgaben_nonce_ok = isset($_POST['cmx_belege_ausgaben_nonce'])
         && wp_verify_nonce($_POST['cmx_belege_ausgaben_nonce'], 'cmx_belege_ausgaben_save');
-    $qr_nonce_ok = isset($_POST['cmx_belege_qr_nonce'])
-        && wp_verify_nonce($_POST['cmx_belege_qr_nonce'], 'cmx_belege_qr_save');
-
     // Sicherheitsprüfung
-    if (!$mwst_nonce_ok && !$qr_nonce_ok && !$ausgaben_nonce_ok) {
+    if (!$mwst_nonce_ok && !$ausgaben_nonce_ok) {
         return;
     }
 
@@ -245,8 +208,7 @@ add_action('save_post_belege', function($post_id) {
         update_post_meta($post_id, '_cmx_beleg_michbuechli_kategorien', $terms);
     }
 
-    if ($qr_nonce_ok || $mwst_nonce_ok) {
-        $qr_enabled = isset($_POST['cmx_beleg_qr_enabled']) ? '1' : '0';
-        update_post_meta($post_id, '_cmx_beleg_qr_enabled', $qr_enabled);
+    if ($mwst_nonce_ok) {
+        // keine QR-Checkbox mehr: QR wird automatisch je nach Bank-QR-IBAN genutzt
     }
 });

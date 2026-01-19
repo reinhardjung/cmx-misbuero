@@ -691,6 +691,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$slugs=wp_get_post_terms($post_id,$tax,['fields'=>'slugs']);
 			if (!is_wp_error($slugs) && !empty($slugs)) { $beleg_type=(string)$slugs[0]; break; }
 		}
+		$override_type = (string) get_post_meta($post_id, '_cmx_beleg_pdf_type', true);
+		if ($override_type !== '' && in_array($override_type, ['rechnung', 'angebot', 'lieferschein'], true) && $beleg_type !== 'gutschrift') {
+			$beleg_type = $override_type;
+		}
+		$beleg_type = apply_filters('cmx_beleg_pdf_type', $beleg_type, $post_id);
 
 		// Upload-Ziel
 		if (!defined('CMX_UPLOADS_MISBUERO') || !CMX_UPLOADS_MISBUERO) {
@@ -814,10 +819,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
-		$qr_meta_enabled = get_post_meta($post_id, '_cmx_beleg_qr_enabled', true) === '1';
 		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
+		$qr_meta_enabled = ($qr_iban !== '');
 		$qr_should_print = $qr_meta_enabled
-			&& $qr_iban !== ''
 			&& (strtolower($beleg_type) === 'rechnung');
 // var_dump($dates['currency']); exit;
 

@@ -40,11 +40,6 @@ function cmxbu_render_beleg_metabox(\WP_Post $post): void {
 	</style>
 	<div class="cmx-beleg-actions">
 		<?php
-		// Button "Senden..."
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_render_beleg_send_metabox')) {
-			cmxbu_render_beleg_send_metabox($post);
-		}
-
 		// Download + Copy-Button
 		if (function_exists(__NAMESPACE__ . '\\cmxbu_render_beleg_download_metabox_with_copy')) {
 			cmxbu_render_beleg_download_metabox_with_copy($post);
@@ -75,12 +70,21 @@ function cmx_get_beleg_type(\WP_Post $post): array {
 	return [$title, $beleg_type];
 }
 
+function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): string {
+	$override = (string) \get_post_meta($post_id, '_cmx_beleg_pdf_type', true);
+	if ($override !== '' && in_array($override, ['rechnung', 'angebot', 'lieferschein'], true) && $default_type !== 'gutschrift') {
+		return $override;
+	}
+	return $default_type;
+}
+
 /**
  * Liefert relativen und absoluten PDF-Pfad zum Beleg
  * Rückgabe: [relativer Pfad, absoluter Pfad]
  */
 function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 	[$title, $type] = cmx_get_beleg_type($post);
+	$type = cmxbu_get_beleg_pdf_type_override((int) $post->ID, $type);
 
 	$title_safe = ($title !== '') ? $title : (string) $post->ID;
 	$basename   = \sanitize_title($title_safe . '_' . $type);

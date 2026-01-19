@@ -17,17 +17,17 @@ use Dompdf\Options;
 	$base_args = $args;
 	$base_args['action'] = 'cmx_export_belege_list';
 	$url  = \wp_nonce_url(\add_query_arg($base_args, \admin_url('admin-post.php')), 'cmx_export_belege_list');
-	$link = '<a href="' . esc_url($url) . '">exportieren</a>';
+	$link = '<a href="' . esc_url($url) . '">exportieren (zip)</a>';
 
 	$pdf_args = $args;
 	$pdf_args['action'] = 'cmx_export_belege_list_pdf';
 	$pdf_url = \wp_nonce_url(\add_query_arg($pdf_args, \admin_url('admin-post.php')), 'cmx_export_belege_list_pdf');
-	$pdf_link = '<a href="' . esc_url($pdf_url) . '">PDF</a>';
+	$pdf_link = '<a href="' . esc_url($pdf_url) . '">(pdf)</a>';
 
 	$csv_args = $args;
 	$csv_args['action'] = 'cmx_export_belege_list_csv';
 	$csv_url = \wp_nonce_url(\add_query_arg($csv_args, \admin_url('admin-post.php')), 'cmx_export_belege_list_csv');
-	$csv_link = '<a href="' . esc_url($csv_url) . '">CSV</a>';
+	$csv_link = '<a href="' . esc_url($csv_url) . '">(csv)</a>';
 
 	$links = $link . ' ' . $pdf_link . ' ' . $csv_link;
 
