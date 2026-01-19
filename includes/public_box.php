@@ -15,11 +15,16 @@ add_action('add_meta_boxes', function() {
 	$screen = get_current_screen();
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 
-	add_meta_box('cmx_savebox',__('Aktion', 'default'),
+	$box_title = ($screen->post_type === 'belege')
+		? __('Beleg speichern ...', 'default')
+		: __('Aktion', 'default');
+
+	add_meta_box('cmx_savebox', $box_title,
 		function($post) use ($screen) {
 
 			$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
 			$post_type    = $screen->post_type;
+			$is_belege    = ($post_type === 'belege');
 			$pt_obj       = get_post_type_object($post_type);
 			$singular     = $pt_obj->labels->singular_name ?? '';
 
@@ -41,16 +46,16 @@ add_action('add_meta_boxes', function() {
 			$btn_label    = sprintf('%s speichern', $singular);
 			$btn_name     = $is_new ? 'publish' : 'save';
 			$save_as_opts = [
-				'rechnung'    => 'Als Rechnung',
-				'angebot'     => 'Als Angebot',
-				'lieferschein'=> 'Als Lieferschein',
+				'rechnung'    => 'als Rechnung',
+				'angebot'     => 'als Angebot',
+				'lieferschein'=> 'als Lieferschein',
 			];
 			$save_as_val = (string) get_post_meta($post->ID, '_cmx_beleg_pdf_type', true);
 			if (!isset($save_as_opts[$save_as_val])) {
 				$save_as_val = 'rechnung';
 			}
 			$send_href = '';
-			if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
+			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
 				[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 				if (is_file($pdf_abs_path)) {
 					$send_href = esc_url(admin_url('admin-post.php?action=cmxbu_beleg_send&post_id='.(int)$post->ID));
@@ -58,40 +63,40 @@ add_action('add_meta_boxes', function() {
 			}
 
 			echo '<div style="padding:12px 0;">';
-			wp_nonce_field('cmx_beleg_save_as', 'cmx_beleg_save_as_nonce');
-			echo '<select name="cmx_beleg_save_as" style="width:100%; margin-bottom:8px;">';
-			foreach ($save_as_opts as $val => $label) {
-				echo '<option value="'.esc_attr($val).'" '.selected($save_as_val, $val, false).'>'.esc_html($label).'</option>';
+			if ($is_belege) {
+				wp_nonce_field('cmx_beleg_save_as', 'cmx_beleg_save_as_nonce');
+				echo '<select name="cmx_beleg_save_as" style="width:100%; margin-bottom:8px;">';
+				foreach ($save_as_opts as $val => $label) {
+					echo '<option value="'.esc_attr($val).'" '.selected($save_as_val, $val, false).'>'.esc_html($label).'</option>';
+				}
+				echo '</select>';
 			}
-			echo '</select>';
 			echo '<div style="display:flex; align-items:center; gap:8px;">';
 			printf(
 				'<input type="submit" name="%1$s" id="publish" class="button button-primary button-large button-full" value="%2$s" />',
 				esc_attr($btn_name),
 				esc_attr($btn_label)
 			);
-			if ($send_href !== '') {
+			if ($is_belege && $send_href !== '') {
 				echo '<a href="'.$send_href.'" title="PDF-Link per Mail versenden" class="button button-secondary" style="height:36px; display:inline-flex; align-items:center; justify-content:center;"><span class="dashicons dashicons-email" style="margin-top:2px;"></span></a>';
 			}
 			echo '</div>';
 			echo '</div>';
 
-			// Papierkorb-Link nur anzeigen, wenn Post existiert (nicht neu)
+			// Icons: Duplizieren + Papierkorb (ohne Text)
 			if ($post->ID && $post->post_status !== 'auto-draft') {
 				$delete_link = get_delete_post_link($post->ID, '', true);
 				$dup_fn = __NAMESPACE__ . '\\cmx_dup_get_action_url';
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
-				if ($delete_link) {
+				if ($delete_link || $dup_link !== '') {
 					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; gap:8px;">';
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
 					}
-					printf(
-						'<a href="%1$s" class="submitdelete deletion" style="color:#b32d2e; text-decoration:none;">%2$s</a>',
-						esc_url($delete_link),
-						__('In den Papierkorb verschieben', 'default')
-					);
+					if ($delete_link) {
+						echo '<a href="'.esc_url($delete_link).'" class="submitdelete deletion dashicons dashicons-trash" style="color:#b32d2e; text-decoration:none;" title="'.esc_attr__('In den Papierkorb verschieben', 'default').'"><span class="screen-reader-text">'.esc_html__('In den Papierkorb verschieben', 'default').'</span></a>';
+					}
 					echo '</div>';
 				}
 			}
