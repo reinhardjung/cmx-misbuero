@@ -45,19 +45,6 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
 		];
 	}
 }
-if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_status_options')) {
-	function cmx_beleg_status_options(): array {
-		return [
-			'offen'          => 'Offen',
-			'bezahlt'        => 'Bezahlt',
-			'unbezahlt'      => 'Unbezahlt',
-			'teilbezahlt'    => 'Teilbezahlt',
-			'verrechnet'     => 'Verrechnet',
-			'teilverrechnet' => 'Teilverrechnet',
-			'entwurf'        => 'Entwurf',
-		];
-	}
-}
 if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
 	function cmx_kontakte_cpt(): string {
 		if (\post_type_exists('kontakte')) return 'kontakte';
@@ -99,7 +86,6 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_ensure_rechnungsnummer')) {
 \add_action('add_meta_boxes', function () {
 	if (!\post_type_exists('belege')) return;
 	\add_meta_box('cmx_beleg_details', 'Beleg', __NAMESPACE__.'\\cmx_render_beleg_metabox', 'belege', 'normal', 'high');
-	\add_meta_box('cmx_beleg_status', 'Status', __NAMESPACE__.'\\cmx_render_beleg_status_metabox', 'belege', 'side', 'high');
 });
 
 /* =========================================================
@@ -251,22 +237,6 @@ function cmx_ajax_search_kontakte(): void {
 /* =========================================================
  * Metabox: Status (SIDE)
  * ========================================================= */
-function cmx_render_beleg_status_metabox(\WP_Post $post): void {
-	$status = (string)\get_post_meta($post->ID, CMX_BELEG_META_STATUS, true);
-	$status_opts = cmx_beleg_status_options();
-	if (!isset($status_opts[$status])) {
-		$status = array_key_first($status_opts);
-	}
-
-	\wp_nonce_field('cmx_beleg_status_save', 'cmx_beleg_status_nonce');
-
-	echo '<p><label><strong>Status</strong></label><br>';
-	echo '<select name="cmx_beleg_status" style="width:100%;">';
-	foreach ($status_opts as $val => $label) {
-		echo '<option value="'.\esc_attr($val).'" '.\selected($status,$val,false).'>'.\esc_html($label).'</option>';
-	}
-	echo '</select></p>';
-}
 
 /* =========================================================
  * Render-Funktion Metabox
@@ -539,7 +509,6 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	$inv_no = cmx_ensure_rechnungsnummer($post_id);
 
 	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
-	$has_status_nonce = isset($_POST['cmx_beleg_status_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_status_nonce'], 'cmx_beleg_status_save');
 	$has_save_as_nonce = isset($_POST['cmx_beleg_save_as_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_save_as_nonce'], 'cmx_beleg_save_as');
 
 	if ($has_nonce) {
@@ -599,15 +568,6 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			if ($proj_label !== '') \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL, $proj_label);
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
 		}
-	}
-
-	if ($has_status_nonce && \defined(__NAMESPACE__.'\\CMX_BELEG_META_STATUS') && isset($_POST['cmx_beleg_status'])) {
-		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_status']));
-		$opts = cmx_beleg_status_options();
-		if (!isset($opts[$val])) {
-			$val = array_key_first($opts);
-		}
-		\update_post_meta($post_id, CMX_BELEG_META_STATUS, $val);
 	}
 
 	if ($has_save_as_nonce && isset($_POST['cmx_beleg_save_as'])) {

@@ -25,6 +25,7 @@ add_action('add_meta_boxes', function() {
 			$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
 			$post_type    = $screen->post_type;
 			$is_belege    = ($post_type === 'belege');
+			$is_add_screen = (($screen->action ?? '') === 'add');
 			$pt_obj       = get_post_type_object($post_type);
 			$singular     = $pt_obj->labels->singular_name ?? '';
 
@@ -55,10 +56,17 @@ add_action('add_meta_boxes', function() {
 				$save_as_val = 'rechnung';
 			}
 			$send_href = '';
+			$download_url = '';
+			$has_pdf = false;
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
 				[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
-				if (is_file($pdf_abs_path)) {
+				$has_pdf = is_file($pdf_abs_path);
+				if ($has_pdf) {
 					$send_href = esc_url(admin_url('admin-post.php?action=cmxbu_beleg_send&post_id='.(int)$post->ID));
+					if (function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token')) {
+						$token = cmxbu_get_stable_token($post->ID);
+						$download_url = esc_url(add_query_arg('beleg', $token, home_url('/')));
+					}
 				}
 			}
 
@@ -84,20 +92,72 @@ add_action('add_meta_boxes', function() {
 			echo '</div>';
 
 			// Icons: Duplizieren + Papierkorb (ohne Text)
-			if ($post->ID && $post->post_status !== 'auto-draft') {
-				$delete_link = get_delete_post_link($post->ID, '', true);
+			$show_actions = ($post->ID && $post->post_status !== 'auto-draft' && ($is_belege || !$is_add_screen));
+			if ($show_actions) {
+				$delete_link = get_delete_post_link($post->ID);
 				$dup_fn = __NAMESPACE__ . '\\cmx_dup_get_action_url';
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
-				if ($delete_link || $dup_link !== '') {
-					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:space-between; align-items:center; gap:8px;">';
+				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
+				if ($delete_link || $dup_link !== '' || $show_pdf_icons) {
+					$justify = $is_belege ? 'space-between' : 'flex-start';
+					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
 					}
+					if ($show_pdf_icons) {
+						echo '<a href="#" title="Kopiere Download-Link in Zwischenablage" class="cmx-btn-copy" data-download-url="' . esc_attr($download_url) . '" style="text-decoration:none;"><span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span><span class="cmx-copy-label" style="margin-left:6px; font-size:12px; display:none;">kopiert</span></a>';
+						echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Download als PDF" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
+					}
 					if ($delete_link) {
-						echo '<a href="'.esc_url($delete_link).'" class="submitdelete deletion dashicons dashicons-trash" style="color:#b32d2e; text-decoration:none;" title="'.esc_attr__('In den Papierkorb verschieben', 'default').'"><span class="screen-reader-text">'.esc_html__('In den Papierkorb verschieben', 'default').'</span></a>';
+						$delete_style = $is_belege
+							? 'color:#b32d2e; text-decoration:none;'
+							: 'color:#b32d2e; text-decoration:none; margin-left:auto;';
+						echo '<a href="'.esc_url($delete_link).'" class="submitdelete deletion dashicons dashicons-trash" style="'.$delete_style.'" title="'.esc_attr__('In den Papierkorb verschieben', 'default').'"><span class="screen-reader-text">'.esc_html__('In den Papierkorb verschieben', 'default').'</span></a>';
 					}
 					echo '</div>';
+					if ($show_pdf_icons) {
+						echo '<script>
+							document.addEventListener("click", function(event) {
+								var target = event.target;
+								var btn = target.closest ? target.closest(".cmx-btn-copy") : null;
+								if (!btn) { return; }
+								event.preventDefault();
+
+								var url = btn.getAttribute("data-download-url");
+								if (!url) { return; }
+
+								function setCopiedLabel(btn) {
+									var label = btn.querySelector(".cmx-copy-label");
+									if (!label) { return; }
+									label.style.display = "inline-block";
+									btn.disabled = true;
+									setTimeout(function () {
+										label.style.display = "none";
+										btn.disabled = false;
+									}, 2000);
+								}
+
+								if (navigator.clipboard && navigator.clipboard.writeText) {
+									navigator.clipboard.writeText(url).then(function () {
+										setCopiedLabel(btn);
+									}).catch(function () {
+										setCopiedLabel(btn);
+									});
+								} else {
+									var textarea = document.createElement("textarea");
+									textarea.value = url;
+									textarea.style.position = "fixed";
+									textarea.style.opacity = "0";
+									document.body.appendChild(textarea);
+									textarea.select();
+									try { document.execCommand("copy"); } catch (e) {}
+									document.body.removeChild(textarea);
+									setCopiedLabel(btn);
+								}
+							});
+						</script>';
+					}
 				}
 			}
 		},

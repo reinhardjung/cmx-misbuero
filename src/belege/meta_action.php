@@ -10,46 +10,6 @@ if (!defined('CMX_UPLOADS_MISBUERO')) {
 }
 
 /**
- * Meta-Box "Für Kunde..."
- */
-if (isset($_GET['post'])) {
-	add_action('add_meta_boxes', __NAMESPACE__ . '\\cmxbu_add_beleg_metabox');
-	function cmxbu_add_beleg_metabox(): void {
-		add_meta_box(
-			'cmx_beleg_download',
-			__('F&uuml;r Kunde...', 'default'),
-			__NAMESPACE__ . '\\cmxbu_render_beleg_metabox',
-			'belege',
-			'side',
-			'high'
-		);
-	}
-}
-
-
-/**
- * Wrapper, rendert beide Bereiche (Senden + Download/Copy)
- */
-function cmxbu_render_beleg_metabox(\WP_Post $post): void {
-	?>
-	<style>
-		.cmx-beleg-actions { overflow:hidden; padding-top:8px; }
-		.cmx-beleg-actions form { margin: 0; }
-		.cmx-beleg-actions .alignleft { float: left; }
-		.cmx-beleg-actions .alignright { float: right; }
-	</style>
-	<div class="cmx-beleg-actions">
-		<?php
-		// Download + Copy-Button
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_render_beleg_download_metabox_with_copy')) {
-			cmxbu_render_beleg_download_metabox_with_copy($post);
-		}
-		?>
-	</div>
-	<?php
-}
-
-/**
  * Ermittelt Beleg-Typ anhand Taxonomie
  * Rückgabe: [Titel, typ-slug]
  */

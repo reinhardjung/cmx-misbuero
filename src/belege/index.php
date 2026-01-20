@@ -21,7 +21,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt,Waehrungen,Buchungsarten,Ausgabenarten,Zahlungsarten');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,MwSt,Waehrungen,Buchungsarten,Zahlungsgrund,Zahlungsarten');
 
 
 // Define: CONST 4 each Taxo
@@ -37,8 +37,8 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	cmx_create_taxo(basename(__DIR__), 'MwSt', 'MwSt', false);
 	cmx_create_taxo(basename(__DIR__), 'Währung', 'Währungen', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
 	// cmx_create_taxo(basename(__DIR__), 'Buchungsart', 'Buchungsarten');
-	cmx_create_taxo(basename(__DIR__), 'Ausgabenart', 'Ausgabenarten');
-	cmx_create_taxo(basename(__DIR__), 'Zahlungsart', 'Zahlungsarten');
+	cmx_create_taxo(basename(__DIR__), 'Zahlungsgrund', 'Zahlungsgrund');
+	cmx_create_taxo(basename(__DIR__), 'Zahlungsart', 'Zahlungsarten', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
@@ -71,18 +71,18 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 		return;
 	}
 	$parent = 'edit.php?post_type=' . basename(__DIR__);
-	foreach (['belege_kategorien', 'beleg_kategorie'] as $tax) {
+	foreach (['belege_kategorien', 'beleg_kategorie', 'belege_zahlungsarten', 'belege_zahlungsart'] as $tax) {
 		remove_submenu_page($parent, 'edit-tags.php?taxonomy=' . $tax . '&post_type=' . basename(__DIR__));
 		remove_submenu_page($parent, 'edit-tags.php?taxonomy=' . $tax); // ggf. Variante ohne post_type
 	}
 }, 99);
 
-// Kategorien-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
+// Kategorien- und Zahlungsarten-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
 \add_action('add_meta_boxes', function() {
 	if (cmx_is_cloud_meister_user()) {
 		return;
 	}
-	foreach (['belege_kategoriendiv', 'beleg_kategoriediv'] as $box) {
+	foreach (['belege_kategoriendiv', 'beleg_kategoriediv', 'belege_zahlungsartdiv', 'belege_zahlungsartendiv'] as $box) {
 		remove_meta_box($box, basename(__DIR__), 'side');
 	}
 }, 99);

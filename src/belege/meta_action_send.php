@@ -39,11 +39,17 @@ function cmxbu_handle_beleg_send(): void {
 	if (!$post || $post->post_type !== 'belege') {
 		\wp_die('Beleg nicht gefunden.');
 	}
+	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+		cmxbu_log('MAIL: start', ['post_id' => $post_id]);
+	}
 	$beleg_id = (string) ($post->post_title ?? '');
 
 	// PDF-Pfade
 	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 	if (!is_file($pdf_abs_path)) {
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: pdf not found', ['post_id' => $post_id, 'pdf' => $pdf_abs_path]);
+		}
 		\wp_die('PDF nicht gefunden.');
 	}
 
@@ -60,6 +66,9 @@ function cmxbu_handle_beleg_send(): void {
 	 */
 	$kontakt_id = get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
 	if (empty($kontakt_id)) {
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: missing kontakt_id', ['post_id' => $post_id]);
+		}
 
 		add_action('admin_notices', function () {
 			?>
@@ -87,6 +96,9 @@ function cmxbu_handle_beleg_send(): void {
 	$betrag = cmxbu_get_beleg_amount_display($post_id);
 
 	if (empty($to) || !\is_email($to)) {
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: invalid email', ['post_id' => $post_id, 'email' => (string) $to]);
+		}
 		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
 	}
 	[, $beleg_slug] = cmx_get_beleg_type($post);
@@ -126,6 +138,10 @@ function cmxbu_handle_beleg_send(): void {
 	$headers = ['Content-Type: text/html; charset=UTF-8'];
 	$message = cmxbu_prepare_belegmail_html($message);
 	$sent = \wp_mail($to, $subject, $message, $headers);
+
+	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+		cmxbu_log('MAIL: result', ['post_id' => $post_id, 'sent' => (bool) $sent, 'to' => (string) $to, 'subject' => (string) $subject]);
+	}
 
 	if (!$sent) {
 		\wp_die('E-Mail konnte nicht gesendet werden.');

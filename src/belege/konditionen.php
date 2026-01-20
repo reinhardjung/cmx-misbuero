@@ -22,6 +22,30 @@ if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_LEISTUNGSMONAT')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')) {
 	\define(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM', '_cmx_beleg_bezahlt_am'); // YYYY-MM-DD
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')) {
+	\define(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS', '_cmx_beleg_status');
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_status_options')) {
+function cmx_beleg_status_options(): array {
+		return [
+			'offen'          => 'Offen',
+			'bezahlt'        => 'Bezahlt',
+			'unbezahlt'      => 'Unbezahlt',
+			'teilbezahlt'    => 'Teilbezahlt',
+			'verrechnet'     => 'Verrechnet',
+			'teilverrechnet' => 'Teilverrechnet',
+			'entwurf'        => 'Entwurf',
+		];
+	}
+}
+
+function cmx_beleg_zahlungsart_tax(): ?string {
+	foreach (['belege_zahlungsarten', 'belege_zahlungsart'] as $tax) {
+		if (\taxonomy_exists($tax)) return $tax;
+	}
+	return null;
+}
 
 /**
  * Liefert eine eindeutige, sortierte Liste möglicher Währungen aus dem CPT "artikel".
@@ -106,6 +130,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$faellig  = \get_post_meta($post->ID, CMX_BELEG_META_FAELLIG, true);
 	$leistMon = \get_post_meta($post->ID, CMX_BELEG_META_LEISTUNGSMONAT, true);
 	$bezahlt  = \get_post_meta($post->ID, CMX_BELEG_META_BEZAHLT_AM, true);
+	$bez_valid = ($bezahlt && \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $bezahlt));
 
 	// Fälligkeitsdatum Standard: heute + 30 Tage, falls leer
 	if ($faellig === '' || $faellig === null) {
@@ -210,13 +235,52 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'if(lend&&inpF){lend.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=monthEnd();});}';
 
 	// Bezahlt am -> heute
-	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){e.preventDefault();inpB.value=today();});}';
+	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 
 	// Leistungszeitraum -> nächster Monat
 	echo 'if(lblL&&selL){lblL.addEventListener("click",function(e){e.preventDefault();selL.value=nextMonthVal();});}';
 	echo '})();</script>';
 
 	echo '</p>';
+
+	/* ===== NEU: Status (als letztes Feld) ===== */
+	$status = \get_post_meta($post->ID, CMX_BELEG_META_STATUS, true);
+	$status_opts = cmx_beleg_status_options();
+	if (!isset($status_opts[$status])) {
+		$status = array_key_first($status_opts);
+	}
+	echo '<p style="margin:8px 0 0;">';
+	echo '<label for="cmx_beleg_status" style="display:block;margin-bottom:6px;"><strong>Status</strong></label>';
+	echo '<select name="cmx_beleg_status" id="cmx_beleg_status" style="width:100%;">';
+	foreach ($status_opts as $val => $label) {
+		echo '<option value="' . \esc_attr($val) . '"' . \selected($status, $val, false) . '>' . \esc_html($label) . '</option>';
+	}
+	echo '</select>';
+	echo '</p>';
+
+	/* ===== NEU: Zahlungsart (nur wenn Bezahlt am gültig) ===== */
+	$pay_tax = cmx_beleg_zahlungsart_tax();
+	if ($pay_tax) {
+		$pay_terms = \get_terms(['taxonomy' => $pay_tax, 'hide_empty' => false]);
+		$current_terms = \wp_get_post_terms($post->ID, $pay_tax, ['fields' => 'ids']);
+		$current_id = $current_terms[0] ?? 0;
+
+		$current_id = $bez_valid ? $current_id : 0;
+		$wrap_style = $bez_valid ? 'block' : 'none';
+		echo '<p id="cmx_beleg_zahlungsart_wrap" style="margin:8px 0 0; display:' . $wrap_style . ';">';
+		echo '<label for="cmx_beleg_zahlungsart" style="display:block;margin-bottom:6px;"><strong>Zahlungsart</strong></label>';
+		echo '<select name="cmx_beleg_zahlungsart" id="cmx_beleg_zahlungsart" style="width:100%;">';
+		echo '<option value="">— auswählen —</option>';
+		if (!\is_wp_error($pay_terms)) {
+			foreach ($pay_terms as $term) {
+				echo '<option value="' . \esc_attr($term->term_id) . '"' . \selected($current_id, $term->term_id, false) . '>' . \esc_html($term->name) . '</option>';
+			}
+		}
+		echo '</select>';
+		echo '</p>';
+	}
+
+	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");if(!inpB||!selS)return;function hasValidDate(){return /^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(hasValidDate()){selS.value="bezahlt";}}function syncPay(){if(!payWrap)return;var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});syncStatus();syncPay();})();</script>';
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
@@ -262,10 +326,33 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// ===== NEU: Bezahlt am =====
 	$bez = isset($_POST['cmx_beleg_bezahlt_am']) ? \sanitize_text_field($_POST['cmx_beleg_bezahlt_am']) : '';
-	if ($bez && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $bez)) {
+	$bez_valid = ($bez && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $bez));
+	if ($bez_valid) {
 		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM, $bez);
 	} else {
 		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
+	}
+
+	// ===== NEU: Status =====
+	$val = isset($_POST['cmx_beleg_status']) ? \sanitize_key($_POST['cmx_beleg_status']) : '';
+	$opts = cmx_beleg_status_options();
+	if (!isset($opts[$val])) {
+		$val = array_key_first($opts);
+	}
+	if ($bez_valid) {
+		$val = 'bezahlt';
+	}
+	\update_post_meta($post_id, CMX_BELEG_META_STATUS, $val);
+
+	// ===== NEU: Zahlungsart =====
+	$pay_tax = cmx_beleg_zahlungsart_tax();
+	if ($pay_tax) {
+		$term_id = isset($_POST['cmx_beleg_zahlungsart']) ? (int) $_POST['cmx_beleg_zahlungsart'] : 0;
+		if ($bez_valid && $term_id > 0) {
+			\wp_set_post_terms($post_id, [$term_id], $pay_tax, false);
+		} else {
+			\wp_set_post_terms($post_id, [], $pay_tax, false);
+		}
 	}
 }, 10, 3);
 
