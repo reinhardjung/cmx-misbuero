@@ -38,6 +38,10 @@ function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): 
 	return $default_type;
 }
 
+function cmxbu_beleg_type_filename_slug(string $type): string {
+	return ($type === 'angebot') ? 'offerte' : $type;
+}
+
 /**
  * Liefert relativen und absoluten PDF-Pfad zum Beleg
  * Rückgabe: [relativer Pfad, absoluter Pfad]
@@ -45,9 +49,10 @@ function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): 
 function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 	[$title, $type] = cmx_get_beleg_type($post);
 	$type = cmxbu_get_beleg_pdf_type_override((int) $post->ID, $type);
+	$file_type = cmxbu_beleg_type_filename_slug($type);
 
 	$title_safe = ($title !== '') ? $title : (string) $post->ID;
-	$basename   = \sanitize_title($title_safe . '_' . $type);
+	$basename   = \sanitize_title($title_safe . '_' . $file_type);
 	$base_dir   = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
 
 	$years = [\date('Y')];
@@ -70,6 +75,18 @@ function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 		foreach ((array) \glob($dir . '????-??-??_' . $basename . '.pdf') as $prefixed) {
 			if (is_file($prefixed)) {
 				return [$year . '/belege/' . basename($prefixed), $prefixed];
+			}
+		}
+		if ($file_type !== $type) {
+			$old_base = \sanitize_title($title_safe . '_' . $type);
+			$old_abs = $dir . $old_base . '.pdf';
+			if (is_file($old_abs)) {
+				return [$year . '/belege/' . $old_base . '.pdf', $old_abs];
+			}
+			foreach ((array) \glob($dir . '????-??-??_' . $old_base . '.pdf') as $prefixed) {
+				if (is_file($prefixed)) {
+					return [$year . '/belege/' . basename($prefixed), $prefixed];
+				}
 			}
 		}
 	}

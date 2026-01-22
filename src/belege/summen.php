@@ -135,8 +135,6 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	}
 	$beleg_type = strtolower((string)$beleg_type);
 	$is_lieferschein = ($beleg_type === 'lieferschein');
-	$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
-	$is_gutschrift = ($beleg_type === 'gutschrift');
 	$has_positions = cmx_has_positionen_data($positionen);
 	$manual_total_raw = (string) get_post_meta($post->ID, '_cmx_beleg_summe_override', true);
 
@@ -155,16 +153,16 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	// Anzeige im CH-Format (1'234,56)
 	echo '<div id="cmx-beleg-summe-wrap" data-beleg-type="'.esc_attr($beleg_type).'" style="font-size:x-large; line-height:1.6; padding:6px 4px; text-align:center;">';
 	echo '<strong>';
-	if ($is_lieferantenrechnung || $is_gutschrift) {
-		$display = $manual_total_raw !== '' ? $manual_total_raw : number_format($summe, 2, ',', "'");
-		$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
-		$readonly = $has_positions ? ' readonly' : '';
-		echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;"'.$manual_attr.$readonly.'>';
-	} else {
-		echo '<span id="cmx-beleg-summe-value" data-currency="">' .
-			esc_html(number_format($summe, 2, ',', "'")) .
-			'</span>';
-	}
+	$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
+	$display = $manual_total_raw !== ''
+		? number_format((float) cmx_norm_decimal($manual_total_raw), 2, ',', "'")
+		: number_format($summe, 2, ',', "'");
+	$input_style = $has_positions ? 'display:none;' : '';
+	$span_style = $has_positions ? '' : 'display:none;';
+	echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;'.$input_style.'"'.$manual_attr.'>';
+	echo '<span id="cmx-beleg-summe-value" data-currency="" style="'.$span_style.'">' .
+		esc_html(number_format($summe, 2, ',', "'")) .
+		'</span>';
 	echo '</strong>';
 	if (!empty($anz['count'])) {
 		$anz_sum = (float)$anz['summe'];
@@ -188,8 +186,6 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	(function(){
 		const sumWrap = document.getElementById('cmx-beleg-summe-wrap');
 		const sumInput = document.getElementById('cmx-beleg-summe-input');
-		const sumType = sumWrap ? sumWrap.getAttribute('data-beleg-type') : '';
-		const isManualType = sumType === 'lieferantenrechnung' || sumType === 'gutschrift';
 
 		function toNumber(v){
 			if (typeof v !== 'string') v = (v ?? '').toString();
@@ -318,15 +314,15 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		function sumAll(){
 			const out = document.getElementById('cmx-beleg-summe-value');
 			if (!out && !sumInput) return 0;
-			if (isManualType && sumInput) {
-				const manual = sumInput.dataset.manual === '1';
-				const hasPos = hasPositions();
+			const hasPos = hasPositions();
+			if (sumInput) {
 				sumInput.readOnly = hasPos;
 				sumInput.style.opacity = hasPos ? '0.6' : '1';
+				sumInput.style.display = hasPos ? 'none' : '';
+				if (out) out.style.display = hasPos ? '' : 'none';
 				if (hasPos) {
 					sumInput.dataset.manual = '';
-				}
-				if (manual) {
+				} else if (sumInput.dataset.manual === '1') {
 					return toNumber(sumInput.value || '0');
 				}
 			}
@@ -357,7 +353,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			}
 
 			if (out) out.textContent = formatCH(total);
-			if (sumInput && !sumInput.dataset.manual) {
+			if (sumInput && !sumInput.dataset.manual && hasPos) {
 				sumInput.value = formatCH(total);
 			}
 			return total;
@@ -376,6 +372,11 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			if (sumInput) {
 				sumInput.addEventListener('input', function(){
 					sumInput.dataset.manual = '1';
+				});
+				sumInput.addEventListener('blur', function(){
+					if (sumInput.dataset.manual === '1' && !sumInput.readOnly) {
+						sumInput.value = formatCH(toNumber(sumInput.value || '0'));
+					}
 				});
 				const selectIfEditable = function(){
 					if (sumInput.readOnly) return;
@@ -411,23 +412,19 @@ add_action('save_post_belege', function ($post_id) {
 		[, $beleg_type] = cmx_get_beleg_type(get_post($post_id));
 	}
 	$beleg_type = strtolower((string)$beleg_type);
+	$positionen = cmx_load_positionen($post_id);
+	$has_positions = cmx_has_positionen_data($positionen);
 
-	if (in_array($beleg_type, ['lieferantenrechnung', 'gutschrift'], true)) {
-		$positionen = cmx_load_positionen($post_id);
-		$has_positions = cmx_has_positionen_data($positionen);
-		if ($has_positions) {
-			delete_post_meta($post_id, '_cmx_beleg_summe_override');
-			return;
-		}
-		$raw = isset($_POST['cmx_beleg_summe_override']) ? (string)\wp_unslash($_POST['cmx_beleg_summe_override']) : '';
-		$raw = trim($raw);
-		if ($raw === '') {
-			delete_post_meta($post_id, '_cmx_beleg_summe_override');
-			return;
-		}
-		$val = (float) cmx_norm_decimal($raw);
-		update_post_meta($post_id, '_cmx_beleg_summe_override', number_format($val, 2, '.', ''));
-	} else {
+	if ($has_positions) {
 		delete_post_meta($post_id, '_cmx_beleg_summe_override');
+		return;
 	}
+	$raw = isset($_POST['cmx_beleg_summe_override']) ? (string)\wp_unslash($_POST['cmx_beleg_summe_override']) : '';
+	$raw = trim($raw);
+	if ($raw === '') {
+		delete_post_meta($post_id, '_cmx_beleg_summe_override');
+		return;
+	}
+	$val = (float) cmx_norm_decimal($raw);
+	update_post_meta($post_id, '_cmx_beleg_summe_override', number_format($val, 2, '.', ''));
 });

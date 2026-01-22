@@ -48,7 +48,7 @@ add_action('add_meta_boxes', function() {
 			$btn_name     = $is_new ? 'publish' : 'save';
 			$save_as_opts = [
 				'rechnung'    => 'als Rechnung',
-				'angebot'     => 'als Angebot',
+				'angebot'     => 'als Offerte',
 				'lieferschein'=> 'als Lieferschein',
 			];
 			$save_as_val = (string) get_post_meta($post->ID, '_cmx_beleg_pdf_type', true);
@@ -72,12 +72,25 @@ add_action('add_meta_boxes', function() {
 
 			echo '<div style="padding:12px 0;">';
 			if ($is_belege) {
+				$hide_save_as = false;
+				if (function_exists(__NAMESPACE__ . '\\cmx_belege_tax')) {
+					$tax = cmx_belege_tax();
+					if ($tax) {
+						$slugs = wp_get_post_terms($post->ID, $tax, ['fields' => 'slugs']);
+						if (!is_wp_error($slugs) && in_array('gutschrift', $slugs, true)) {
+							$hide_save_as = true;
+						}
+					}
+				}
 				wp_nonce_field('cmx_beleg_save_as', 'cmx_beleg_save_as_nonce');
-				echo '<select name="cmx_beleg_save_as" style="width:100%; margin-bottom:8px;">';
+				echo '<div id="cmx_beleg_save_as_wrap" style="margin-bottom:8px;' . ($hide_save_as ? 'display:none;' : '') . '">';
+				echo '<select name="cmx_beleg_save_as" id="cmx_beleg_save_as" style="width:100%;">';
 				foreach ($save_as_opts as $val => $label) {
 					echo '<option value="'.esc_attr($val).'" '.selected($save_as_val, $val, false).'>'.esc_html($label).'</option>';
 				}
 				echo '</select>';
+				echo '</div>';
+				echo '<script>(function(){var wrap=document.getElementById("cmx_beleg_save_as_wrap");if(!wrap)return;function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function sync(){var slug=getSlug();wrap.style.display=(slug==="gutschrift")?"none":"";}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",function(){sync();setTimeout(sync,200);});setTimeout(sync,0);})();</script>';
 			}
 			echo '<div style="display:flex; align-items:center; gap:8px;">';
 			printf(

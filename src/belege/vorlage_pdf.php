@@ -685,7 +685,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 
 		// var_dump($cmx_beleg_adress); exit;
 
-		// Belegtyp (z. B. rechnung, angebot, lieferantenrechnung, gutschrift, ...)
+		// Belegtyp (z. B. rechnung, offerte, lieferantenrechnung, gutschrift, ...)
 		$beleg_type='rechnung';
 		foreach (['belege_kategorien','beleg_kategorie'] as $tax) {
 			$slugs=wp_get_post_terms($post_id,$tax,['fields'=>'slugs']);
@@ -715,7 +715,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Dateinamen
 		$title_raw=(string)get_the_title($post_id);
 		$title_safe = ($title_raw !== '') ? $title_raw : (string)$post_id;
-		$basename=sanitize_title($title_safe.'_'.$beleg_type);
+		$file_type = ($beleg_type === 'angebot') ? 'offerte' : $beleg_type;
+		$basename=sanitize_title($title_safe.'_'.$file_type);
 		$html_path=$base_dir.$basename.'.html';  // wird am Ende gelöscht
 		$pdf_path =$base_dir.$basename.'.pdf';
 
@@ -736,7 +737,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Titel je nach Belegtyp ** Meine Helper Funktion nutzen
 		$type_map = [
 			'rechnung'             => 'Rechnung',
-			'angebot'              => 'Angebot',
+			'angebot'              => 'Offerte',
 			'lieferantenrechnung'  => 'Lieferantenrechnung',
 			'gutschrift'           => 'Gutschrift',
 			'mahnung'              => 'Mahnung',
@@ -782,7 +783,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			}
 		}
 		$manual_total_value = null;
-		if (in_array($beleg_type, ['lieferantenrechnung', 'gutschrift'], true) && !$has_positions) {
+		if (!$has_positions) {
 			$override = '';
 			if (isset($_POST['cmx_beleg_summe_override'])) {
 				$override = (string) cmxbu_deep_unslash($_POST['cmx_beleg_summe_override']);
@@ -834,6 +835,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			'format'=>$fmt,
 			'document'=>[
 				'type'=>$beleg_type,
+				'richtung'=>(string) get_post_meta($post_id, '_cmx_beleg_richtung', true),
 				'number'=>$title_safe,
 				'title'=>$doc_label.' '.$title_safe,              // <- C
 				'date'=> date('d.m.Y', strtotime($dates['date_invoice'])),

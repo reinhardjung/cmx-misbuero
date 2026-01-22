@@ -13,7 +13,7 @@ function cmx_starts_with(string $haystack, string $needle): bool {
 
 /**
  * Liefert den korrekten INI-Wert anhand des Keys:
- *   mail_angebot      → (E-Mails, Angebot)
+ *   mail_angebot      → (E-Mails, Offerte)
  *   belegfuss_rechnung → (Belegfuss, Rechnung)
  */
 // var_dump(get_option('cmx_belege')['belegfuss_rechnung']); exit;
@@ -168,7 +168,7 @@ add_action('admin_init', function() {
 	};
 
 	$tabs = [
-		'angebot'      => 'Angebot',
+		'angebot'      => 'Offerte',
 		'gutschrift'   => 'Gutschrift',
 		'lieferschein' => 'Lieferschein',
 		'rechnung'     => 'Rechnung'

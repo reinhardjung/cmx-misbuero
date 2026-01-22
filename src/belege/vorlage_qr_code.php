@@ -77,8 +77,9 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $qr_enabled = !empty($tpl['qr']['enabled']);
     $qr_iban    = trim((string)($tpl['qr']['iban'] ?? $tpl['bank']['qr_iban'] ?? ''));
     $doc_type   = strtolower(trim((string)($tpl['document']['type'] ?? '')));
+    $richtung   = strtolower(trim((string)($tpl['document']['richtung'] ?? '')));
 
-    if (!$qr_enabled || $qr_iban === '' || $doc_type !== 'rechnung') {
+    if (!$qr_enabled || $qr_iban === '' || $doc_type !== 'rechnung' || $richtung !== 'ausgang') {
         return;
     }
 

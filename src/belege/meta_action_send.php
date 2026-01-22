@@ -104,7 +104,7 @@ function cmxbu_handle_beleg_send(): void {
 	[, $beleg_slug] = cmx_get_beleg_type($post);
 	$beleg_label = [
 		'rechnung'     => 'Rechnung',
-		'angebot'      => 'Angebot',
+		'angebot'      => 'Offerte',
 		'lieferschein' => 'Lieferschein',
 		'gutschrift'   => 'Gutschrift',
 	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');

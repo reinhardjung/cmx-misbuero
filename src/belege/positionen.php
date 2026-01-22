@@ -90,7 +90,6 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 	} elseif (!is_array($positionen)) {
 		$positionen = [];
 	}
-
 	echo '<div id="cmx-positionen-wrap">';
 	echo '<table class="widefat striped" id="cmx-positionen-table">
 			<thead><tr>
