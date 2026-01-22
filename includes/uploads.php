@@ -3,7 +3,7 @@
 
 final class MIS_BUERO_BELEG_UPLOAD {
 
-	const CPT          = 'beleg';
+	const CPT          = 'belege';
 	const OPTION_TOKEN = 'mis_buero_upload_token';
 	const OPTION_AIKEY = 'mis_buero_openai_key';
 
@@ -12,6 +12,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		add_action( 'init', [ __CLASS__, 'maybe_flush_rewrite' ] );
 		add_action( 'init', [ __CLASS__, 'rewrite' ] );
 		add_action( 'template_redirect', [ __CLASS__, 'frontend' ] );
+		add_filter( 'upload_size_limit', [ __CLASS__, 'limit_upload_size' ] );
 	}
 
 	/* ================================
@@ -66,6 +67,11 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		flush_rewrite_rules( false );
 	}
 
+	public static function limit_upload_size( $size ) : int {
+		$limit = 20 * 1024 * 1024;
+		return (int) min( $size, $limit );
+	}
+
 	/* ================================
 	 * FRONTEND
 	 * ================================ */
@@ -91,6 +97,35 @@ final class MIS_BUERO_BELEG_UPLOAD {
 	 * FORM
 	 * ================================ */
 	private static function render_form() : void {
+		$max_mb = 20;
+		$zahlungsart_tax = function_exists( __NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax' )
+			? cmx_beleg_zahlungsart_tax()
+			: null;
+		$zahlungsart_terms = $zahlungsart_tax
+			? get_terms( [ 'taxonomy' => $zahlungsart_tax, 'hide_empty' => false ] )
+			: [];
+		if ( is_wp_error( $zahlungsart_terms ) ) {
+			$zahlungsart_terms = [];
+		}
+
+		$zahlungsgrund_tax = defined( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
+			? constant( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
+			: null;
+		if ( ! $zahlungsgrund_tax || ! taxonomy_exists( $zahlungsgrund_tax ) ) {
+			foreach ( [ 'belege_zahlungsgrund', 'belege_zahlungsgruende' ] as $candidate ) {
+				if ( taxonomy_exists( $candidate ) ) {
+					$zahlungsgrund_tax = $candidate;
+					break;
+				}
+			}
+		}
+		$zahlungsgrund_terms = $zahlungsgrund_tax
+			? get_terms( [ 'taxonomy' => $zahlungsgrund_tax, 'hide_empty' => false ] )
+			: [];
+		if ( is_wp_error( $zahlungsgrund_terms ) ) {
+			$zahlungsgrund_terms = [];
+		}
+
 		?>
 		<!doctype html>
 		<html>
@@ -127,9 +162,33 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				h2 {
 					margin: 0 0 16px;
 					font-size: 20px;
+					text-align: center;
+				}
+				.logo {
+					display: block;
+					max-width: 80px;
+					height: auto;
+					margin: 0 auto 12px;
 				}
 				.field {
 					margin-top: 16px;
+					width: 100%;
+				}
+				.row {
+					display: flex;
+					gap: 12px;
+					flex-wrap: wrap;
+					margin-top: 16px;
+				}
+				.row .field {
+					margin-top: 0;
+					flex: 1 1 220px;
+					min-width: 0;
+				}
+				*,
+				*::before,
+				*::after {
+					box-sizing: border-box;
 				}
 				label {
 					display: block;
@@ -139,13 +198,21 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				input[type="text"],
 				input[type="date"],
 				input[type="number"],
-				textarea {
+				textarea,
+				select {
 					width: 100%;
-					padding: 8px 10px;
+					max-width: 100%;
+					min-width: 0;
+					padding: 10px 10px;
 					border: 1px solid var(--wp-border);
 					border-radius: 4px;
 					font-size: 14px;
 					background: #fff;
+				}
+				input[type="date"] {
+					appearance: none;
+					-webkit-appearance: none;
+					min-height: 42px;
 				}
 				textarea {
 					resize: vertical;
@@ -154,6 +221,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					display: flex;
 					align-items: center;
 					justify-content: center;
+					gap: 8px;
 					border: 1px dashed var(--wp-border);
 					background: var(--wp-gray-200);
 					color: var(--wp-gray-700);
@@ -169,6 +237,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					margin-top: 6px;
 					font-size: 12px;
 					color: #646970;
+					text-align: center;
 				}
 				button {
 					margin-top: 20px;
@@ -192,37 +261,56 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 		<div class="wrap">
 			<div class="card">
-				<h2>Beleg hochladen</h2>
+				<img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero Logo">
+				<!-- <h2>Beleg hochladen</h2> -->
 
 				<form method="post" enctype="multipart/form-data">
 					<div class="field">
-						<label class="camera">
-							📷 Foto oder Datei wählen
-							<input type="file" name="beleg_datei"
-							       accept="image/*,application/pdf"
-							       capture="environment" required>
-						</label>
-						<div class="hint">Erlaubt: Foto oder PDF.</div>
+						<label class="camera">Beleg hochladen<input type="file" name="beleg_datei" accept="image/*,application/pdf" required></label>
+						<div class="hint">Foto, PNG, JPG oder PDF mit max. <?php echo (int) $max_mb; ?> MB</div>
 					</div>
 
-					<div class="field">
-						<label for="beleg_datum">Belegdatum</label>
-						<input id="beleg_datum" type="date" name="beleg_datum">
+					<div class="row">
+						<div class="field">
+							<label for="beleg_datum">Belegdatum</label>
+							<input id="beleg_datum" type="date" name="beleg_datum">
+						</div>
+
+						<div class="field">
+							<label for="betrag">Betrag (Brutto, CHF)</label>
+							<input id="betrag" type="number" step="0.01" name="betrag">
+						</div>
 					</div>
 
-					<div class="field">
-						<label for="betrag">Betrag (Brutto, CHF)</label>
-						<input id="betrag" type="number" step="0.01" name="betrag">
-					</div>
+					<div class="row">
+						<div class="field">
+							<label for="zahlungsart">Zahlungsart</label>
+							<select id="zahlungsart" name="zahlungsart">
+								<option value="">Bitte wählen</option>
+								<?php foreach ( $zahlungsart_terms as $term ) : ?>
+									<option value="<?php echo (int) $term->term_id; ?>">
+										<?php echo esc_html( $term->name ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
 
-					<div class="field">
-						<label for="mwst">MwSt-Betrag (CHF, optional)</label>
-						<input id="mwst" type="number" step="0.01" name="mwst">
+						<div class="field">
+							<label for="zahlungsgrund">Zahlungsgrund</label>
+							<select id="zahlungsgrund" name="zahlungsgrund">
+								<option value="">Bitte wählen</option>
+								<?php foreach ( $zahlungsgrund_terms as $term ) : ?>
+									<option value="<?php echo (int) $term->term_id; ?>">
+										<?php echo esc_html( $term->name ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
 					</div>
 
 					<div class="field">
 						<label for="info">Kurze Info</label>
-						<textarea id="info" name="info" rows="3" required></textarea>
+						<textarea id="info" name="info" rows="2"></textarea>
 					</div>
 
 					<button type="submit">Beleg speichern</button>
@@ -255,20 +343,132 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 		$ocr = self::ocr_extract( $upload['file'] );
 
-		update_post_meta( $post_id, 'beleg_datum',
-			$_POST['beleg_datum'] ?: ( $ocr['datum'] ?? '' )
-		);
-		update_post_meta( $post_id, 'betrag',
-			$_POST['betrag'] ?: ( $ocr['betrag'] ?? '' )
-		);
-		update_post_meta( $post_id, 'mwst',
-			$_POST['mwst'] ?: ( $ocr['mwst'] ?? '' )
-		);
-		update_post_meta( $post_id, 'info', sanitize_textarea_field( $_POST['info'] ) );
+		$beleg_datum = sanitize_text_field( $_POST['beleg_datum'] ?? '' );
+		$betrag = sanitize_text_field( $_POST['betrag'] ?? '' );
+		$info = sanitize_textarea_field( $_POST['info'] ?? '' );
+
+		update_post_meta( $post_id, 'beleg_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
+		update_post_meta( $post_id, 'betrag', $betrag ?: ( $ocr['betrag'] ?? '' ) );
+		update_post_meta( $post_id, 'info', $info );
 		update_post_meta( $post_id, 'datei_url', esc_url_raw( $upload['url'] ) );
 
-		echo '<p>Beleg gespeichert.</p>';
+		update_post_meta( $post_id, '_cmx_beleg_rng_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
+		if ( $betrag !== '' ) {
+			update_post_meta( $post_id, '_cmx_beleg_summe_override', $betrag );
+		}
+
+		if ( function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
+			$tax = cmx_belege_kategorie_taxonomy();
+			if ( $tax ) {
+				wp_set_post_terms( $post_id, [ 'sonstiges' ], $tax, false );
+			}
+		}
+
+		$zahlungsart = (int) ( $_POST['zahlungsart'] ?? 0 );
+		if ( $zahlungsart ) {
+			$zahlungsart_tax = function_exists( __NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax' )
+				? cmx_beleg_zahlungsart_tax()
+				: null;
+			if ( $zahlungsart_tax ) {
+				wp_set_post_terms( $post_id, [ $zahlungsart ], $zahlungsart_tax, false );
+			}
+		}
+
+		$zahlungsgrund = (int) ( $_POST['zahlungsgrund'] ?? 0 );
+		if ( $zahlungsgrund ) {
+			$zahlungsgrund_tax = defined( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
+				? constant( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
+				: null;
+			if ( $zahlungsgrund_tax && taxonomy_exists( $zahlungsgrund_tax ) ) {
+				wp_set_post_terms( $post_id, [ $zahlungsgrund ], $zahlungsgrund_tax, false );
+			}
+		}
+
+		self::render_success();
 		exit;
+	}
+
+	private static function render_success() : void {
+		$token = get_option( self::OPTION_TOKEN );
+		$upload_url = $token ? home_url( '/mis-upload/?token=' . $token ) : home_url( '/mis-upload/' );
+		?>
+		<!doctype html>
+		<html>
+		<head>
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>Beleg gespeichert</title>
+			<style>
+				:root {
+					--wp-blue: #2271b1;
+					--wp-gray-100: #f6f7f7;
+					--wp-gray-700: #3c434a;
+					--wp-border: #c3c4c7;
+				}
+				*,
+				*::before,
+				*::after {
+					box-sizing: border-box;
+				}
+				body {
+					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+					background: var(--wp-gray-100);
+					color: var(--wp-gray-700);
+					margin: 0;
+					padding: 32px 16px;
+				}
+				.wrap {
+					max-width: 560px;
+					margin: 0 auto;
+				}
+				.card {
+					background: #fff;
+					border: 1px solid var(--wp-border);
+					border-radius: 8px;
+					padding: 24px;
+					box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+					text-align: center;
+				}
+				.logo {
+					display: block;
+					max-width: 200px;
+					height: auto;
+					margin: 0 auto 16px;
+				}
+				.check {
+					font-size: 16px;
+					margin: 8px 0 0;
+				}
+				.note {
+					margin-top: 8px;
+					color: #646970;
+					font-size: 13px;
+				}
+				.back-link {
+					display: inline-block;
+					margin-top: 12px;
+					padding: 8px 14px;
+					border-radius: 4px;
+					border: 1px solid var(--wp-blue);
+					background: var(--wp-blue);
+					color: #fff;
+					text-decoration: none;
+					font-weight: 600;
+					font-size: 13px;
+				}
+		</style>
+		</head>
+		<body>
+		<div class="wrap">
+			<div class="card">
+				<img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero">
+				<div class="check"><strong>Beleg wurde gespeichert.</strong></div>
+				<div class="note">Du kannst das Fenster jetzt schliessen oder</div>
+				<a class="back-link" href="<?php echo esc_url( $upload_url ); ?>">Neuen Beleg hochladen</a>
+			</div>
+		</div>
+		</body>
+		</html>
+		<?php
 	}
 
 	/* ================================
