@@ -41,6 +41,12 @@ define('CMX_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CMX_DOMAIN', explode('.', parse_url(home_url(), PHP_URL_HOST))[0]);
 define('CMX_UPLOADS_MISBUERO', wp_get_upload_dir()['basedir'] . '/misbuero/');
 
+register_activation_hook( __FILE__, __NAMESPACE__ . '\\cmx_misbuero_activate' );
+function cmx_misbuero_activate(): void {
+	MIS_BUERO_BELEG_UPLOAD::rewrite();
+	flush_rewrite_rules( false );
+}
+
 
 
 add_action('init', function() {

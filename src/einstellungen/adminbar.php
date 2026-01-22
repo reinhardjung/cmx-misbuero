@@ -41,7 +41,7 @@ function cmx65_adminbar($wp_admin_bar) {
 
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_menu1_id',
-		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">–</span>',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
 		'href'  => false,
 		'meta'  => [
 			'title'  => '',
@@ -94,7 +94,7 @@ function cmx65_adminbar($wp_admin_bar) {
 
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_menu2_id',
-		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">–</span>',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
 		'href'  => false,
 		'meta'  => [
 			'title'  => '',
@@ -102,6 +102,35 @@ function cmx65_adminbar($wp_admin_bar) {
 		],
 	]);
 
+	if ( current_user_can( 'manage_options' ) ) {
+		$token = get_option( MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN );
+		if ( empty( $token ) ) {
+			$token = wp_generate_uuid4();
+			update_option( MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false );
+		}
+
+		$url = home_url( '/mis-upload/?token=' . $token );
+
+		$wp_admin_bar->add_menu( [
+			'id'    => 'mis-buero-upload',
+			'title' => 'Beleg-Upload-Link',
+			'href'  => esc_url( $url ),
+			'meta'  => [
+				'class'    => 'mis-buero-upload-link',
+			],
+		] );
+	}
+
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menu23_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
 
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_handbuch_id',
@@ -143,6 +172,16 @@ function cmx65_adminbar($wp_admin_bar) {
 	// 	],
 	// ]);
 
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menux_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
+
 	// Support-URL: wenn Konstante vorhanden, nutze sie, sonst Fallback
 	if (defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')) {
 		$support_url = add_query_arg(
@@ -167,6 +206,8 @@ function cmx65_adminbar($wp_admin_bar) {
 
 	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
 	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
 }
 
 function cmx65_anyboard_copy_script(): void
@@ -217,6 +258,48 @@ function cmx65_anyboard_copy_script(): void
                     } catch (e) {
                         window.prompt("URL kopieren:", url);
                         openAnyboard();
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(done, fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
+}
+
+function cmx65_upload_copy_script(): void
+{
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-mis-buero-upload > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+            var url = link.getAttribute("href");
+            if (!url) return;
+                var done = function () {
+                    alert("Upload-Link wurde in die Zwischenablage kopiert");
+                    window.open("https://www.youtube.com/shorts/ScpGtbqrpkY", "_blank", "noopener");
+                };
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                        done();
+                    } catch (e) {
+                        window.prompt("Upload-Link kopieren:", url);
                     } finally {
                         document.body.removeChild(textarea);
                     }
