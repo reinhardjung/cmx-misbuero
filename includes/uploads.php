@@ -277,7 +277,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 						</div>
 
 						<div class="field">
-							<label for="betrag">Betrag (Brutto, CHF)</label>
+							<label for="betrag">Betrag</label>
 							<input id="betrag" type="number" step="0.01" name="betrag">
 						</div>
 					</div>
