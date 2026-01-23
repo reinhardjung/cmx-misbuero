@@ -298,7 +298,7 @@ function cmx_dokumente_upload_file(): void {
 	$base_dir = dirname($uploaded['file']);
 	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
 	if ($post_type !== 'dokumente') {
-		$new_base = \sanitize_file_name(\wp_date('ymd-His') . '_' . $source_title . '.' . $ext);
+		$new_base = \sanitize_file_name($doc_title . '_' . $source_title . '.' . $ext);
 	}
 	$new_base = \wp_unique_filename($base_dir, $new_base);
 	$new_path = $base_dir . '/' . $new_base;
@@ -335,6 +335,12 @@ function cmx_dokumente_upload_file(): void {
 		}
 		\update_post_meta($doc_id, $rel_key, [(int)$post_id]);
 		\update_post_meta($doc_id, '_cmx_dokumente_attachment_id', (int)$att_id);
+
+		$self_files = (array) \get_post_meta($doc_id, CMX_DOK_SELF_META, true);
+		$self_files = array_values(array_filter(array_map('intval', $self_files)));
+		$self_files[] = (int)$att_id;
+		$self_files = array_values(array_unique($self_files));
+		\update_post_meta($doc_id, CMX_DOK_SELF_META, $self_files);
 
 		$existing = (array) \get_post_meta($post_id, CMX_DOK_UPLOADS_META, true);
 		$existing = array_values(array_filter(array_map('intval', $existing)));
