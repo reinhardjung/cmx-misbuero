@@ -429,11 +429,7 @@ function cmx_dokumente_remove_file(): void {
 	\wp_send_json_success(['removed' => $doc_id ?: $path]);
 }
 
-\add_action('before_delete_post', function(int $post_id) {
-	$post = \get_post($post_id);
-	if (!$post || $post->post_type !== 'dokumente') {
-		return;
-	}
+function cmx_dokumente_delete_files(int $post_id): void {
 	$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
 	$files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
 	$files = array_values(array_filter($files, function($v){ return $v !== '' && $v !== null; }));
@@ -447,4 +443,20 @@ function cmx_dokumente_remove_file(): void {
 			@unlink($abs);
 		}
 	}
+}
+
+\add_action('before_delete_post', function(int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'dokumente') {
+		return;
+	}
+	cmx_dokumente_delete_files($post_id);
+}, 10, 1);
+
+\add_action('trashed_post', function(int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'dokumente') {
+		return;
+	}
+	cmx_dokumente_delete_files($post_id);
 }, 10, 1);
