@@ -129,6 +129,32 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		if ( is_wp_error( $zahlungsgrund_terms ) ) {
 			$zahlungsgrund_terms = [];
 		}
+		$last_beleg_id = 0;
+		$last_beleg = get_posts( [
+			'post_type'      => 'belege',
+			'posts_per_page' => 1,
+			'post_status'    => [ 'publish', 'private', 'draft' ],
+			'orderby'        => 'date',
+			'order'          => 'DESC',
+			'fields'         => 'ids',
+		] );
+		if ( ! empty( $last_beleg ) ) {
+			$last_beleg_id = (int) $last_beleg[0];
+		}
+		$last_zahlungsart_id = 0;
+		if ( $last_beleg_id && $zahlungsart_tax ) {
+			$terms = wp_get_post_terms( $last_beleg_id, $zahlungsart_tax, [ 'fields' => 'ids' ] );
+			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+				$last_zahlungsart_id = (int) $terms[0];
+			}
+		}
+		$last_zahlungsgrund_id = 0;
+		if ( $last_beleg_id && $zahlungsgrund_tax ) {
+			$terms = wp_get_post_terms( $last_beleg_id, $zahlungsgrund_tax, [ 'fields' => 'ids' ] );
+			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+				$last_zahlungsgrund_id = (int) $terms[0];
+			}
+		}
 
 		$status_opts = function_exists( __NAMESPACE__ . '\\cmx_beleg_status_options' )
 			? cmx_beleg_status_options()
@@ -194,6 +220,8 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<link rel="icon" href="https://misbuero.ch/wp-content/uploads/youtube.png" type="image/png">
+			<link rel="shortcut icon" href="https://misbuero.ch/wp-content/uploads/youtube.png" type="image/png">
+			<link rel="apple-touch-icon" href="https://misbuero.ch/wp-content/uploads/youtube.png">
 			<title>Beleg Upload</title>
 			<style>
 				:root {
@@ -302,6 +330,23 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					color: #646970;
 					text-align: center;
 				}
+				.preview {
+					margin-top: 8px;
+					padding: 8px;
+					border: 1px dashed var(--wp-border);
+					border-radius: 4px;
+					background: #fff;
+					font-size: 12px;
+					color: #646970;
+					text-align: center;
+				}
+				.preview img {
+					max-width: 100%;
+					height: auto;
+					display: block;
+					margin: 6px auto 0;
+					border-radius: 4px;
+				}
 				button {
 					margin-top: 20px;
 					width: 100%;
@@ -331,6 +376,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					<div class="field">
 						<label class="camera">Beleg hochladen<input type="file" name="beleg_datei" accept="image/*,application/pdf" required></label>
 						<div class="hint">Foto, PNG, JPG oder PDF mit max. <?php echo (int) $max_mb; ?> MB</div>
+						<div class="preview" id="file_preview">Keine Datei ausgewählt.</div>
 					</div>
 
 					<div class="row">
@@ -363,7 +409,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 					<div class="row">
 						<div class="field">
-							<label for="zahlungsart">Zahlungsart</label>
+							<label for="zahlungsart" class="js-select-last" data-target="zahlungsart" data-last="<?php echo (int) $last_zahlungsart_id; ?>">Zahlungsart</label>
 							<select id="zahlungsart" name="zahlungsart">
 								<option value="">Bitte wählen</option>
 								<?php foreach ( $zahlungsart_terms as $term ) : ?>
@@ -388,7 +434,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 						</div>
 
 						<div class="field">
-							<label for="zahlungsgrund">Zahlungsgrund</label>
+							<label for="zahlungsgrund" class="js-select-last" data-target="zahlungsgrund" data-last="<?php echo (int) $last_zahlungsgrund_id; ?>">Zahlungsgrund</label>
 							<select id="zahlungsgrund" name="zahlungsgrund">
 								<option value="">Bitte wählen</option>
 								<?php foreach ( $zahlungsgrund_terms as $term ) : ?>
@@ -473,18 +519,48 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					}
 				});
 			});
+			document.querySelectorAll(".js-select-last").forEach(function(label){
+				label.addEventListener("click", function(e){
+					e.preventDefault();
+					var target = document.getElementById(label.dataset.target || "");
+					var last = label.dataset.last || "";
+					if (target && last) {
+						target.value = last;
+						target.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+				});
+			});
 
 			var hasAi = <?php echo $has_ai_key ? 'true' : 'false'; ?>;
 			var token = <?php echo wp_json_encode( $upload_token ); ?>;
 			var ajaxUrl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 			var fileInput = document.querySelector('input[name="beleg_datei"]');
-			if (hasAi && fileInput) {
+			var preview = document.getElementById("file_preview");
+			if (fileInput) {
 				fileInput.addEventListener("change", function(){
 					if (!fileInput.files || !fileInput.files.length) return;
+					var file = fileInput.files[0];
+					if (preview) {
+						preview.textContent = "Datei geladen: " + file.name;
+					}
+					if (file && file.type && file.type.indexOf("image/") === 0) {
+						var reader = new FileReader();
+						reader.onload = function(e){
+							if (!preview) return;
+							preview.innerHTML = "Vorschau:";
+							var img = document.createElement("img");
+							img.src = e.target.result;
+							preview.appendChild(img);
+						};
+						reader.readAsDataURL(file);
+					}
+					if (!hasAi) {
+						return;
+					}
 					var fd = new FormData();
 					fd.append("action", "mis_buero_ocr");
 					fd.append("token", token);
-					fd.append("file", fileInput.files[0]);
+					fd.append("file", file);
 					fetch(ajaxUrl, { method: "POST", body: fd })
 						.then(function(r){ return r.json(); })
 						.then(function(res){

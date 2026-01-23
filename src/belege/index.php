@@ -77,12 +77,12 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	}
 }, 99);
 
-// Kategorien- und Zahlungsarten-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
+// Kategorien-Metabox auf dem Beleg-Edit-Screen ausblenden (nicht editierbar)
 \add_action('add_meta_boxes', function() {
 	if (cmx_is_cloud_meister_user()) {
 		return;
 	}
-	foreach (['belege_kategoriendiv', 'beleg_kategoriediv', 'belege_zahlungsartdiv', 'belege_zahlungsartendiv'] as $box) {
+	foreach (['belege_kategoriendiv', 'beleg_kategoriediv'] as $box) {
 		remove_meta_box($box, basename(__DIR__), 'side');
 	}
 }, 99);
