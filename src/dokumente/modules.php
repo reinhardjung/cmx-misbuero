@@ -135,6 +135,16 @@ function cmx_dok_fetch_related_posts(string $cpt): array {
 		? $_POST['cmx_dokumente_rel']
 		: [];
 
+	$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+		? \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+		: '_cmx_dokumente_uploads';
+
+	$prev_map = [];
+	foreach (CMX_DOK_REL_META as $cpt => $meta_key) {
+		$prev_ids = (array) get_post_meta($post_id, $meta_key, true);
+		$prev_map[$cpt] = array_values(array_filter(array_map('intval', $prev_ids)));
+	}
+
 	foreach (CMX_DOK_REL_META as $cpt => $meta_key) {
 		$ids = isset($rel[$cpt]) && is_array($rel[$cpt]) ? array_map('intval', $rel[$cpt]) : [];
 		$ids = array_values(array_filter(array_unique($ids)));
@@ -143,6 +153,35 @@ function cmx_dok_fetch_related_posts(string $cpt): array {
 			delete_post_meta($post_id, $meta_key);
 		} else {
 			update_post_meta($post_id, $meta_key, $ids);
+		}
+
+		$prev_ids = $prev_map[$cpt] ?? [];
+		$added = array_values(array_diff($ids, $prev_ids));
+		$removed = array_values(array_diff($prev_ids, $ids));
+
+		foreach ($added as $target_id) {
+			if ($target_id <= 0) {
+				continue;
+			}
+			$existing = (array) get_post_meta($target_id, $uploads_meta_key, true);
+			$existing = array_values(array_filter(array_map('intval', $existing)));
+			$existing[] = $post_id;
+			$existing = array_values(array_unique($existing));
+			update_post_meta($target_id, $uploads_meta_key, $existing);
+		}
+
+		foreach ($removed as $target_id) {
+			if ($target_id <= 0) {
+				continue;
+			}
+			$existing = (array) get_post_meta($target_id, $uploads_meta_key, true);
+			$existing = array_values(array_filter(array_map('intval', $existing)));
+			$existing = array_values(array_diff($existing, [$post_id]));
+			if (empty($existing)) {
+				delete_post_meta($target_id, $uploads_meta_key);
+			} else {
+				update_post_meta($target_id, $uploads_meta_key, $existing);
+			}
 		}
 	}
 });

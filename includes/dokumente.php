@@ -407,9 +407,8 @@ function cmx_dokumente_remove_file(): void {
 		if (is_file($abs)) {
 			@unlink($abs);
 		}
-		if (empty($files)) {
-			\delete_post_meta($post_id, '_cmx_dokumente_file_path');
-		}
+		\delete_post_meta($post_id, '_cmx_dokumente_file_path');
+		\wp_delete_post($post_id, true);
 	} else {
 		if ($doc_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 		$docs = (array) \get_post_meta($post_id, CMX_DOK_UPLOADS_META, true);
@@ -429,3 +428,23 @@ function cmx_dokumente_remove_file(): void {
 
 	\wp_send_json_success(['removed' => $doc_id ?: $path]);
 }
+
+\add_action('before_delete_post', function(int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'dokumente') {
+		return;
+	}
+	$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
+	$files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
+	$files = array_values(array_filter($files, function($v){ return $v !== '' && $v !== null; }));
+	if ($file_rel !== '') {
+		$files[] = $file_rel;
+	}
+	$files = array_values(array_unique($files));
+	foreach ($files as $rel) {
+		$abs = WP_CONTENT_DIR . '/uploads/' . ltrim((string) $rel, '/');
+		if (is_file($abs)) {
+			@unlink($abs);
+		}
+	}
+}, 10, 1);
