@@ -13,6 +13,8 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		add_action( 'init', [ __CLASS__, 'rewrite' ] );
 		add_action( 'template_redirect', [ __CLASS__, 'frontend' ] );
 		add_filter( 'upload_size_limit', [ __CLASS__, 'limit_upload_size' ] );
+		add_action( 'wp_ajax_mis_buero_ocr', [ __CLASS__, 'handle_ocr' ] );
+		add_action( 'wp_ajax_nopriv_mis_buero_ocr', [ __CLASS__, 'handle_ocr' ] );
 	}
 
 	/* ================================
@@ -98,6 +100,8 @@ final class MIS_BUERO_BELEG_UPLOAD {
 	 * ================================ */
 	private static function render_form() : void {
 		$max_mb = 20;
+		$has_ai_key = (bool) get_option( self::OPTION_AIKEY );
+		$upload_token = (string) get_option( self::OPTION_TOKEN );
 		$zahlungsart_tax = function_exists( __NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax' )
 			? cmx_beleg_zahlungsart_tax()
 			: null;
@@ -171,12 +175,25 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			}
 			$active_projects[] = $p;
 		}
+		$last_project_id = 0;
+		$last_project = get_posts( [
+			'post_type'      => 'projekte',
+			'posts_per_page' => 1,
+			'post_status'    => [ 'publish', 'private', 'draft' ],
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'fields'         => 'ids',
+		] );
+		if ( ! empty( $last_project ) ) {
+			$last_project_id = (int) $last_project[0];
+		}
 
 		?>
 		<!doctype html>
 		<html>
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<link rel="icon" href="https://misbuero.ch/wp-content/uploads/youtube.png" type="image/png">
 			<title>Beleg Upload</title>
 			<style>
 				:root {
@@ -350,7 +367,20 @@ final class MIS_BUERO_BELEG_UPLOAD {
 							<select id="zahlungsart" name="zahlungsart">
 								<option value="">Bitte wählen</option>
 								<?php foreach ( $zahlungsart_terms as $term ) : ?>
-									<option value="<?php echo (int) $term->term_id; ?>">
+									<?php
+									$term_name = strtolower( $term->name );
+									$term_key = '';
+									if ( strpos( $term_name, 'twint' ) !== false ) {
+										$term_key = 'twint';
+									} elseif ( strpos( $term_name, 'bar' ) !== false ) {
+										$term_key = 'bar';
+									} elseif ( strpos( $term_name, 'karte' ) !== false || strpos( $term_name, 'kredit' ) !== false ) {
+										$term_key = 'karte';
+									} elseif ( strpos( $term_name, 'überweisung' ) !== false || strpos( $term_name, 'ueberweisung' ) !== false || strpos( $term_name, 'bank' ) !== false ) {
+										$term_key = 'ueberweisung';
+									}
+									?>
+									<option value="<?php echo (int) $term->term_id; ?>" data-key="<?php echo esc_attr( $term_key ); ?>">
 										<?php echo esc_html( $term->name ); ?>
 									</option>
 								<?php endforeach; ?>
@@ -371,7 +401,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					</div>
 
 					<div class="field">
-						<label for="projekt_id">Projekt</label>
+						<label for="projekt_id" class="js-project-label" data-target="projekt_id" data-last="<?php echo (int) $last_project_id; ?>">Projekt</label>
 						<select id="projekt_id" name="projekt_id">
 							<option value="">Bitte wählen</option>
 							<?php foreach ( $active_projects as $project ) : ?>
@@ -401,6 +431,16 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				var day = String(d.getDate()).padStart(2, "0");
 				return y + "-" + m + "-" + day;
 			}
+			function setSelectByKey(selectId, key){
+				if (!key) return;
+				var select = document.getElementById(selectId);
+				if (!select) return;
+				var opt = select.querySelector('option[data-key="' + key + '"]');
+				if (opt) {
+					select.value = opt.value;
+					select.dispatchEvent(new Event("change", { bubbles: true }));
+				}
+			}
 			document.querySelectorAll(".js-today-label").forEach(function(label){
 				label.addEventListener("click", function(e){
 					e.preventDefault();
@@ -422,6 +462,52 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					}
 				});
 			});
+			document.querySelectorAll(".js-project-label").forEach(function(label){
+				label.addEventListener("click", function(e){
+					e.preventDefault();
+					var target = document.getElementById(label.dataset.target || "");
+					var last = label.dataset.last || "";
+					if (target && last) {
+						target.value = last;
+						target.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+				});
+			});
+
+			var hasAi = <?php echo $has_ai_key ? 'true' : 'false'; ?>;
+			var token = <?php echo wp_json_encode( $upload_token ); ?>;
+			var ajaxUrl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+			var fileInput = document.querySelector('input[name="beleg_datei"]');
+			if (hasAi && fileInput) {
+				fileInput.addEventListener("change", function(){
+					if (!fileInput.files || !fileInput.files.length) return;
+					var fd = new FormData();
+					fd.append("action", "mis_buero_ocr");
+					fd.append("token", token);
+					fd.append("file", fileInput.files[0]);
+					fetch(ajaxUrl, { method: "POST", body: fd })
+						.then(function(r){ return r.json(); })
+						.then(function(res){
+							if (!res || !res.success || !res.data) return;
+							if (res.data.datum) {
+								var d = document.getElementById("beleg_datum");
+								if (d && !d.value) d.value = res.data.datum;
+							}
+							if (res.data.betrag) {
+								var b = document.getElementById("betrag");
+								if (b && !b.value) b.value = res.data.betrag;
+							}
+							if (res.data.bezahlt_am) {
+								var z = document.getElementById("bezahlt_am");
+								if (z && !z.value) z.value = res.data.bezahlt_am;
+							}
+							if (res.data.zahlungsart) {
+								setSelectByKey("zahlungsart", res.data.zahlungsart);
+							}
+						})
+						.catch(function(){});
+				});
+			}
 		})();
 		</script>
 
@@ -659,6 +745,48 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		<?php
 	}
 
+	private static function handle_ocr() : void {
+		$key = get_option( self::OPTION_AIKEY );
+		if ( empty( $key ) ) {
+			wp_send_json_error( [ 'message' => 'missing_key' ], 400 );
+		}
+		$token = sanitize_text_field( $_POST['token'] ?? '' );
+		if ( $token === '' || $token !== get_option( self::OPTION_TOKEN ) ) {
+			wp_send_json_error( [ 'message' => 'bad_token' ], 403 );
+		}
+		if ( empty( $_FILES['file'] ) || ! is_uploaded_file( $_FILES['file']['tmp_name'] ) ) {
+			wp_send_json_error( [ 'message' => 'no_file' ], 400 );
+		}
+		$data = self::ocr_extract( $_FILES['file']['tmp_name'] );
+		$out = [
+			'datum'       => $data['datum'] ?? '',
+			'betrag'      => $data['betrag'] ?? '',
+			'bezahlt_am'  => $data['bezahlt_am'] ?? '',
+			'zahlungsart' => self::normalize_zahlungsart( $data['zahlungsart'] ?? '' ),
+		];
+		wp_send_json_success( $out );
+	}
+
+	private static function normalize_zahlungsart( string $value ) : string {
+		$val = strtolower( trim( $value ) );
+		if ( $val === '' ) {
+			return '';
+		}
+		if ( strpos( $val, 'twint' ) !== false ) {
+			return 'twint';
+		}
+		if ( strpos( $val, 'bar' ) !== false ) {
+			return 'bar';
+		}
+		if ( strpos( $val, 'karte' ) !== false || strpos( $val, 'kredit' ) !== false ) {
+			return 'karte';
+		}
+		if ( strpos( $val, 'überweisung' ) !== false || strpos( $val, 'ueberweisung' ) !== false || strpos( $val, 'bank' ) !== false ) {
+			return 'ueberweisung';
+		}
+		return '';
+	}
+
 	/* ================================
 	 * OCR – CH PRODUKTIONS-PROMPT
 	 * ================================ */
@@ -678,7 +806,9 @@ Extrahiere, wenn eindeutig vorhanden:
 
 1. datum – Zahlungs- oder Belegdatum (YYYY-MM-DD)
 2. betrag – Bruttobetrag inkl. MwSt (Zahl mit Punkt)
-3. mwst – explizit ausgewiesener MwSt-Betrag (Zahl mit Punkt)
+3. bezahlt_am – Zahlungsdatum (YYYY-MM-DD), falls klar erkennbar
+4. zahlungsart – nur einer dieser Werte: bar, twint, karte, ueberweisung
+5. mwst – explizit ausgewiesener MwSt-Betrag (Zahl mit Punkt)
 
 Regeln:
 - MwSt nur ausgeben, wenn sie explizit ausgewiesen ist
@@ -689,6 +819,8 @@ Regeln:
 {
   "datum": "",
   "betrag": "",
+  "bezahlt_am": "",
+  "zahlungsart": "",
   "mwst": ""
 }
 PROMPT;
