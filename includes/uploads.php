@@ -1,541 +1,343 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+require_once __DIR__ . '/upload_form.php';
 
-final class MIS_BUERO_BELEG_UPLOAD {
-
-	const CPT          = 'belege';
-	const OPTION_TOKEN = 'mis_buero_upload_token';
-	const OPTION_AIKEY = 'mis_buero_openai_key';
-
-	public static function init() : void {
-		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
-		add_action( 'init', [ __CLASS__, 'maybe_flush_rewrite' ] );
-		add_action( 'init', [ __CLASS__, 'rewrite' ] );
-		add_action( 'template_redirect', [ __CLASS__, 'frontend' ] );
-		add_filter( 'upload_size_limit', [ __CLASS__, 'limit_upload_size' ] );
-	}
-
-	/* ================================
-	 * SETTINGS – ALLGEMEIN
-	 * ================================ */
-	public static function register_settings() : void {
-
-		register_setting(
-			'general',
-			self::OPTION_AIKEY,
-			[
-				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
-			]
-		);
-
-		add_settings_field(
-			self::OPTION_AIKEY,
-			'OpenAI API Key',
-			[ __CLASS__, 'render_openai_field' ],
-			'general'
-		);
-	}
-
-	public static function render_openai_field() : void {
-		?>
-		<input type="text"
-		       name="<?php echo esc_attr( self::OPTION_AIKEY ); ?>"
-		       value="<?php echo esc_attr( get_option( self::OPTION_AIKEY ) ); ?>"
-		       class="regular-text">
-		<p class="description">
-			Wird für OCR (Belegdatum, Bruttobetrag, MwSt) verwendet.
-		</p>
-		<?php
-	}
-
-	/* ================================
-	 * ROUTING
-	 * ================================ */
-	public static function rewrite() : void {
-		add_rewrite_rule( '^mis-upload/?', 'index.php?mis-upload=1', 'top' );
-		add_rewrite_tag( '%mis-upload%', '1' );
-	}
-
-	public static function maybe_flush_rewrite() : void {
-		$rules = get_option( 'rewrite_rules' );
-		if ( isset( $rules['^mis-upload/?$'] ) ) {
-			return;
-		}
-
-		self::rewrite();
-		flush_rewrite_rules( false );
-	}
-
-	public static function limit_upload_size( $size ) : int {
-		$limit = 20 * 1024 * 1024;
-		return (int) min( $size, $limit );
-	}
-
-	/* ================================
-	 * FRONTEND
-	 * ================================ */
-	public static function frontend() : void {
-
-		if ( get_query_var( 'mis-upload' ) != 1 ) {
-			return;
-		}
-
-		if ( sanitize_text_field( $_GET['token'] ?? '' ) !== get_option( self::OPTION_TOKEN ) ) {
-			wp_die( 'Ungültiger Upload-Link.' );
-		}
-
-		if ( $_SERVER['REQUEST_METHOD'] === 'POST' ) {
-			self::handle_upload();
-		}
-
-		self::render_form();
-		exit;
-	}
-
-	/* ================================
-	 * FORM
-	 * ================================ */
-	private static function render_form() : void {
-		$max_mb = 20;
-		$zahlungsart_tax = function_exists( __NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax' )
-			? cmx_beleg_zahlungsart_tax()
-			: null;
-		$zahlungsart_terms = $zahlungsart_tax
-			? get_terms( [ 'taxonomy' => $zahlungsart_tax, 'hide_empty' => false ] )
-			: [];
-		if ( is_wp_error( $zahlungsart_terms ) ) {
-			$zahlungsart_terms = [];
-		}
-
-		$zahlungsgrund_tax = defined( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
-			? constant( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
-			: null;
-		if ( ! $zahlungsgrund_tax || ! taxonomy_exists( $zahlungsgrund_tax ) ) {
-			foreach ( [ 'belege_zahlungsgrund', 'belege_zahlungsgruende' ] as $candidate ) {
-				if ( taxonomy_exists( $candidate ) ) {
-					$zahlungsgrund_tax = $candidate;
-					break;
-				}
-			}
-		}
-		$zahlungsgrund_terms = $zahlungsgrund_tax
-			? get_terms( [ 'taxonomy' => $zahlungsgrund_tax, 'hide_empty' => false ] )
-			: [];
-		if ( is_wp_error( $zahlungsgrund_terms ) ) {
-			$zahlungsgrund_terms = [];
-		}
-
-		?>
-		<!doctype html>
-		<html>
-		<head>
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<title>Beleg Upload</title>
-			<style>
-				:root {
-					--wp-blue: #2271b1;
-					--wp-blue-dark: #135e96;
-					--wp-gray-100: #f6f7f7;
-					--wp-gray-200: #f0f0f1;
-					--wp-gray-700: #3c434a;
-					--wp-border: #c3c4c7;
-				}
-				body {
-					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-					background: var(--wp-gray-100);
-					color: var(--wp-gray-700);
-					margin: 0;
-					padding: 32px 16px;
-				}
-				.wrap {
-					max-width: 560px;
-					margin: 0 auto;
-				}
-				.card {
-					background: #fff;
-					border: 1px solid var(--wp-border);
-					border-radius: 8px;
-					padding: 24px;
-					box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
-				}
-				h2 {
-					margin: 0 0 16px;
-					font-size: 20px;
-					text-align: center;
-				}
-				.logo {
-					display: block;
-					max-width: 80px;
-					height: auto;
-					margin: 0 auto 12px;
-				}
-				.field {
-					margin-top: 16px;
-					width: 100%;
-				}
-				.row {
-					display: flex;
-					gap: 12px;
-					flex-wrap: wrap;
-					margin-top: 16px;
-				}
-				.row .field {
-					margin-top: 0;
-					flex: 1 1 220px;
-					min-width: 0;
-				}
-				*,
-				*::before,
-				*::after {
-					box-sizing: border-box;
-				}
-				label {
-					display: block;
-					font-weight: 600;
-					margin-bottom: 6px;
-				}
-				input[type="text"],
-				input[type="date"],
-				input[type="number"],
-				textarea,
-				select {
-					width: 100%;
-					max-width: 100%;
-					min-width: 0;
-					padding: 10px 10px;
-					border: 1px solid var(--wp-border);
-					border-radius: 4px;
-					font-size: 14px;
-					background: #fff;
-				}
-				input[type="date"] {
-					appearance: none;
-					-webkit-appearance: none;
-					min-height: 42px;
-				}
-				textarea {
-					resize: vertical;
-				}
-				.camera {
-					display: flex;
-					align-items: center;
-					justify-content: center;
-					gap: 8px;
-					border: 1px dashed var(--wp-border);
-					background: var(--wp-gray-200);
-					color: var(--wp-gray-700);
-					padding: 18px;
-					border-radius: 6px;
-					cursor: pointer;
-					font-weight: 600;
-				}
-				.camera input {
-					display: none;
-				}
-				.hint {
-					margin-top: 6px;
-					font-size: 12px;
-					color: #646970;
-					text-align: center;
-				}
-				button {
-					margin-top: 20px;
-					width: 100%;
-					padding: 10px 14px;
-					font-size: 14px;
-					font-weight: 600;
-					border-radius: 4px;
-					border: 1px solid var(--wp-blue);
-					background: var(--wp-blue);
-					color: #fff;
-					cursor: pointer;
-				}
-				button:hover {
-					background: var(--wp-blue-dark);
-					border-color: var(--wp-blue-dark);
-				}
-			</style>
-		</head>
-		<body>
-
-		<div class="wrap">
-			<div class="card">
-				<img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero Logo">
-				<!-- <h2>Beleg hochladen</h2> -->
-
-				<form method="post" enctype="multipart/form-data">
-					<div class="field">
-						<label class="camera">Beleg hochladen<input type="file" name="beleg_datei" accept="image/*,application/pdf" required></label>
-						<div class="hint">Foto, PNG, JPG oder PDF mit max. <?php echo (int) $max_mb; ?> MB</div>
-					</div>
-
-					<div class="row">
-						<div class="field">
-							<label for="beleg_datum">Belegdatum</label>
-							<input id="beleg_datum" type="date" name="beleg_datum">
-						</div>
-
-						<div class="field">
-							<label for="betrag">Betrag</label>
-							<input id="betrag" type="number" step="0.01" name="betrag">
-						</div>
-					</div>
-
-					<div class="row">
-						<div class="field">
-							<label for="zahlungsart">Zahlungsart</label>
-							<select id="zahlungsart" name="zahlungsart">
-								<option value="">Bitte wählen</option>
-								<?php foreach ( $zahlungsart_terms as $term ) : ?>
-									<option value="<?php echo (int) $term->term_id; ?>">
-										<?php echo esc_html( $term->name ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-						</div>
-
-						<div class="field">
-							<label for="zahlungsgrund">Zahlungsgrund</label>
-							<select id="zahlungsgrund" name="zahlungsgrund">
-								<option value="">Bitte wählen</option>
-								<?php foreach ( $zahlungsgrund_terms as $term ) : ?>
-									<option value="<?php echo (int) $term->term_id; ?>">
-										<?php echo esc_html( $term->name ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-						</div>
-					</div>
-
-					<div class="field">
-						<label for="info">Kurze Info</label>
-						<textarea id="info" name="info" rows="2"></textarea>
-					</div>
-
-					<button type="submit">Beleg speichern</button>
-				</form>
-			</div>
-		</div>
-
-		</body>
-		</html>
-		<?php
-	}
-
-	/* ================================
-	 * HANDLE UPLOAD
-	 * ================================ */
-	private static function handle_upload() : void {
-
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-
-		$upload = wp_handle_upload( $_FILES['beleg_datei'], [ 'test_form' => false ] );
-		if ( isset( $upload['error'] ) ) {
-			wp_die( $upload['error'] );
-		}
-
-		$post_id = wp_insert_post( [
-			'post_type'   => self::CPT,
-			'post_status' => 'publish',
-			'post_title'  => 'Sonstiger Beleg ' . current_time( 'Y-m-d H:i' ),
-		] );
-
-		$ocr = self::ocr_extract( $upload['file'] );
-
-		$beleg_datum = sanitize_text_field( $_POST['beleg_datum'] ?? '' );
-		$betrag = sanitize_text_field( $_POST['betrag'] ?? '' );
-		$info = sanitize_textarea_field( $_POST['info'] ?? '' );
-
-		update_post_meta( $post_id, 'beleg_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
-		update_post_meta( $post_id, 'betrag', $betrag ?: ( $ocr['betrag'] ?? '' ) );
-		update_post_meta( $post_id, 'info', $info );
-		update_post_meta( $post_id, 'datei_url', esc_url_raw( $upload['url'] ) );
-
-		update_post_meta( $post_id, '_cmx_beleg_rng_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
-		if ( $betrag !== '' ) {
-			update_post_meta( $post_id, '_cmx_beleg_summe_override', $betrag );
-		}
-
-		if ( function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
-			$tax = cmx_belege_kategorie_taxonomy();
-			if ( $tax ) {
-				wp_set_post_terms( $post_id, [ 'sonstiges' ], $tax, false );
-			}
-		}
-
-		$zahlungsart = (int) ( $_POST['zahlungsart'] ?? 0 );
-		if ( $zahlungsart ) {
-			$zahlungsart_tax = function_exists( __NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax' )
-				? cmx_beleg_zahlungsart_tax()
-				: null;
-			if ( $zahlungsart_tax ) {
-				wp_set_post_terms( $post_id, [ $zahlungsart ], $zahlungsart_tax, false );
-			}
-		}
-
-		$zahlungsgrund = (int) ( $_POST['zahlungsgrund'] ?? 0 );
-		if ( $zahlungsgrund ) {
-			$zahlungsgrund_tax = defined( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
-				? constant( __NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND' )
-				: null;
-			if ( $zahlungsgrund_tax && taxonomy_exists( $zahlungsgrund_tax ) ) {
-				wp_set_post_terms( $post_id, [ $zahlungsgrund ], $zahlungsgrund_tax, false );
-			}
-		}
-
-		self::render_success();
-		exit;
-	}
-
-	private static function render_success() : void {
-		$token = get_option( self::OPTION_TOKEN );
-		$upload_url = $token ? home_url( '/mis-upload/?token=' . $token ) : home_url( '/mis-upload/' );
-		?>
-		<!doctype html>
-		<html>
-		<head>
-			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<title>Beleg gespeichert</title>
-			<style>
-				:root {
-					--wp-blue: #2271b1;
-					--wp-gray-100: #f6f7f7;
-					--wp-gray-700: #3c434a;
-					--wp-border: #c3c4c7;
-				}
-				*,
-				*::before,
-				*::after {
-					box-sizing: border-box;
-				}
-				body {
-					font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-					background: var(--wp-gray-100);
-					color: var(--wp-gray-700);
-					margin: 0;
-					padding: 32px 16px;
-				}
-				.wrap {
-					max-width: 560px;
-					margin: 0 auto;
-				}
-				.card {
-					background: #fff;
-					border: 1px solid var(--wp-border);
-					border-radius: 8px;
-					padding: 24px;
-					box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
-					text-align: center;
-				}
-				.logo {
-					display: block;
-					max-width: 200px;
-					height: auto;
-					margin: 0 auto 16px;
-				}
-				.check {
-					font-size: 16px;
-					margin: 8px 0 0;
-				}
-				.note {
-					margin-top: 8px;
-					color: #646970;
-					font-size: 13px;
-				}
-				.back-link {
-					display: inline-block;
-					margin-top: 12px;
-					padding: 8px 14px;
-					border-radius: 4px;
-					border: 1px solid var(--wp-blue);
-					background: var(--wp-blue);
-					color: #fff;
-					text-decoration: none;
-					font-weight: 600;
-					font-size: 13px;
-				}
-		</style>
-		</head>
-		<body>
-		<div class="wrap">
-			<div class="card">
-				<img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero">
-				<div class="check"><strong>Beleg wurde gespeichert.</strong></div>
-				<div class="note">Du kannst das Fenster jetzt schliessen oder</div>
-				<a class="back-link" href="<?php echo esc_url( $upload_url ); ?>">Neuen Beleg hochladen</a>
-			</div>
-		</div>
-		</body>
-		</html>
-		<?php
-	}
-
-	/* ================================
-	 * OCR – CH PRODUKTIONS-PROMPT
-	 * ================================ */
-	private static function ocr_extract( string $file_path ) : array {
-
-		$key = get_option( self::OPTION_AIKEY );
-		if ( empty( $key ) ) {
-			return [];
-		}
-
-		$image = 'data:' . mime_content_type( $file_path ) . ';base64,' . base64_encode( file_get_contents( $file_path ) );
-
-		$prompt = <<<PROMPT
-Du siehst einen Beleg aus der Schweiz.
-
-Extrahiere, wenn eindeutig vorhanden:
-
-1. datum – Zahlungs- oder Belegdatum (YYYY-MM-DD)
-2. betrag – Bruttobetrag inkl. MwSt (Zahl mit Punkt)
-3. mwst – explizit ausgewiesener MwSt-Betrag (Zahl mit Punkt)
-
-Regeln:
-- MwSt nur ausgeben, wenn sie explizit ausgewiesen ist
-- Keine Berechnung, kein Schätzen
-- Wenn unklar → leer lassen
-- Antworte ausschließlich als JSON
-
-{
-  "datum": "",
-  "betrag": "",
-  "mwst": ""
-}
-PROMPT;
-
-		$response = wp_remote_post(
-			'https://api.openai.com/v1/chat/completions',
-			[
-				'headers' => [
-					'Authorization' => 'Bearer ' . $key,
-					'Content-Type'  => 'application/json',
-				],
-				'body' => wp_json_encode( [
-					'model' => 'gpt-4.1-mini',
-					'messages' => [
-						[
-							'role' => 'user',
-							'content' => [
-								[ 'type' => 'text', 'text' => $prompt ],
-								[ 'type' => 'image_url', 'image_url' => [ 'url' => $image ] ],
-							],
-						],
-					],
-					'temperature' => 0,
-				] ),
-				'timeout' => 30,
-			]
-		);
-
-		$data = json_decode(
-			$body = wp_remote_retrieve_body( $response ),
-			true
-		);
-
-		return json_decode( $data['choices'][0]['message']['content'] ?? '', true ) ?: [];
-	}
+if (!defined(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')) {
+	define(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META', '_cmx_belege_uploads');
 }
 
-MIS_BUERO_BELEG_UPLOAD::init();
+function cmx_is_beleg_upload_request(): bool {
+	return isset($_FILES['beleg_datei']);
+}
+
+function cmx_get_beleg_upload_stamp(): string {
+	static $stamp = '';
+	if ($stamp === '') {
+		$stamp = date('ymd-His', current_time('timestamp'));
+	}
+	return $stamp;
+}
+
+\add_filter('upload_dir', function(array $dirs): array {
+	if (!cmx_is_beleg_upload_request()) {
+		return $dirs;
+	}
+
+	$year = date('Y', current_time('timestamp'));
+	$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
+	$url  = content_url('/uploads/misbuero/' . $year . '/belege');
+	if (!is_dir($base)) {
+		wp_mkdir_p($base);
+	}
+	$dirs['path']    = $base;
+	$dirs['basedir'] = $base;
+	$dirs['url']     = $url;
+	$dirs['baseurl'] = $url;
+	$dirs['subdir']  = '';
+	return $dirs;
+}, 5);
+
+\add_filter('wp_handle_upload_prefilter', function(array $file): array {
+	if (!cmx_is_beleg_upload_request()) {
+		return $file;
+	}
+
+	$stamp = cmx_get_beleg_upload_stamp();
+	$ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+	$file['name'] = $stamp . '_upload' . ($ext ? '.' . $ext : '');
+	return $file;
+});
+
+\add_filter('wp_insert_post_data', function(array $data, array $postarr): array {
+	if (!cmx_is_beleg_upload_request()) {
+		return $data;
+	}
+	if (($data['post_type'] ?? '') !== 'belege') {
+		return $data;
+	}
+	$stamp = cmx_get_beleg_upload_stamp();
+	if ($stamp !== '') {
+		$data['post_title'] = $stamp;
+	}
+	return $data;
+}, 10, 2);
+
+\add_action('add_meta_boxes', function($post_type) {
+	if ((string)$post_type !== 'belege') {
+		return;
+	}
+	\add_meta_box(
+		'cmx_uploads_box',
+		'Uploads',
+		__NAMESPACE__ . '\\cmx_render_uploads_box',
+		$post_type,
+		'side',
+		'high'
+	);
+}, 10, 1);
+
+function cmx_render_uploads_box(\WP_Post $post): void {
+	$nonce = wp_create_nonce('cmx_belege_upload');
+	$docs = (array) get_post_meta($post->ID, CMX_BELEG_UPLOADS_META, true);
+	$docs = array_values(array_filter(array_map('intval', $docs)));
+	$post_slug = sanitize_title((string) get_the_title($post->ID));
+	$expected_prefix = $post_slug !== '' ? $post_slug . '_upload' : '';
+	$clean_docs = [];
+
+	echo '<div id="cmx-belege-upload-box">';
+	echo '<div id="cmx-belege-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
+	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG</small>';
+	echo '</div>';
+	echo '<input type="file" id="cmx-belege-file" style="display:none" accept=".pdf,.png,.jpg,.jpeg">';
+	echo '<div id="cmx-belege-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
+	echo '</div>';
+
+	if ($docs) {
+		echo '<ul id="cmx-belege-existing" style="margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;">';
+		foreach ($docs as $att_id) {
+			$file_abs = get_attached_file($att_id);
+			if (!$file_abs || !is_file($file_abs)) {
+				continue;
+			}
+			$norm = str_replace('\\', '/', $file_abs);
+			if (strpos($norm, '/uploads/misbuero/') === false || strpos($norm, '/belege/') === false) {
+				continue;
+			}
+			$url = wp_get_attachment_url($att_id);
+			$file_rel = (string) get_post_meta($att_id, '_wp_attached_file', true);
+			$file_base = $file_rel ? basename($file_rel) : '';
+			if ($expected_prefix !== '' && $file_base !== '' && strpos($file_base, $expected_prefix) !== 0) {
+				continue;
+			}
+			$clean_docs[] = (int) $att_id;
+			$label = $file_base ?: (get_the_title($att_id) ?: ('#' . $att_id));
+			echo '<li data-att-id="' . (int) $att_id . '" style="display:grid;grid-template-columns:1fr 14px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
+			if ($url) {
+				echo '<a href="' . esc_url($url) . '" target="_blank" rel="noopener noreferrer" title="' . esc_attr($label) . '" style="min-width:0;text-align:center;justify-self:stretch;overflow:hidden;text-overflow:ellipsis;">' . esc_html($label) . '</a>';
+			} else {
+				echo '<span title="' . esc_attr($label) . '" style="min-width:0;text-align:center;justify-self:stretch;overflow:hidden;text-overflow:ellipsis;">' . esc_html($label) . '</span>';
+			}
+			echo ' <button type="button" class="button-link cmx-belege-remove" style="color:#b32d2e;justify-self:end;padding:0;line-height:1;">X</button>';
+			echo '</li>';
+		}
+		echo '</ul>';
+	}
+	if ($clean_docs !== $docs) {
+		update_post_meta($post->ID, CMX_BELEG_UPLOADS_META, $clean_docs);
+	}
+
+	echo '<script>
+	jQuery(function($){
+		var $drop = $("#cmx-belege-drop");
+		var $file = $("#cmx-belege-file");
+		var $list = $("#cmx-belege-list");
+		var postId = ' . (int) $post->ID . ';
+		var nonce = ' . wp_json_encode($nonce) . ';
+		var ajaxurl = ' . wp_json_encode(admin_url('admin-ajax.php')) . ';
+
+		function uploadFile(file){
+			var fd = new FormData();
+			fd.append("action", "cmx_belege_upload_file");
+			fd.append("post_id", postId);
+			fd.append("nonce", nonce);
+			fd.append("file", file);
+
+			var $row = $("<div>").text("Upload: " + file.name);
+			$list.append($row);
+
+			$.ajax({
+				url: ajaxurl,
+				type: "POST",
+				data: fd,
+				processData: false,
+				contentType: false,
+				success: function(resp){
+					if (resp && resp.success && resp.data) {
+						var label = resp.data.label || file.name;
+						if (resp.data.url) {
+							$row.html("<a target=\\"_blank\\" rel=\\"noopener noreferrer\\"></a>");
+							$row.find("a").attr("href", resp.data.url).text(label);
+						} else {
+							$row.text(label);
+						}
+					} else {
+						$row.text("Fehler beim Upload: " + file.name);
+					}
+				},
+				error: function(){
+					$row.text("Fehler beim Upload: " + file.name);
+				}
+			});
+		}
+
+		$drop.on("click", function(){ $file.trigger("click"); });
+		$drop.on("dragover", function(e){ e.preventDefault(); e.stopPropagation(); $drop.css("background","#f0f6fc"); });
+		$drop.on("dragleave", function(e){ e.preventDefault(); e.stopPropagation(); $drop.css("background","#fafafa"); });
+		$drop.on("drop", function(e){
+			e.preventDefault(); e.stopPropagation(); $drop.css("background","#fafafa");
+			var files = e.originalEvent.dataTransfer.files;
+			if (!files || !files.length) return;
+			for (var i=0; i<files.length; i++) uploadFile(files[i]);
+		});
+
+		$file.on("change", function(){
+			var files = this.files || [];
+			for (var i=0; i<files.length; i++) uploadFile(files[i]);
+			$(this).val("");
+		});
+
+		$("#cmx-belege-existing").on("click", ".cmx-belege-remove", function(){
+			var $li = $(this).closest("li");
+			var attId = $li.data("att-id");
+			if (!attId) return;
+			if (!confirm("Datei entfernen?")) return;
+			$.post(ajaxurl, { action:"cmx_belege_remove_file", post_id: postId, att_id: attId, nonce: nonce }, function(resp){
+				if (resp && resp.success) {
+					$li.remove();
+				}
+			});
+		});
+	});
+	</script>';
+}
+
+add_action('wp_ajax_cmx_belege_upload_file', __NAMESPACE__ . '\\cmx_belege_upload_file');
+function cmx_belege_upload_file(): void {
+	if (!current_user_can('upload_files')) {
+		wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	$nonce = isset($_POST['nonce']) ? (string) $_POST['nonce'] : '';
+	if (!wp_verify_nonce($nonce, 'cmx_belege_upload')) {
+		wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+	$post_id = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+	if ($post_id <= 0 || get_post_type($post_id) !== 'belege') {
+		wp_send_json_error(['message' => 'bad_post'], 400);
+	}
+	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
+		wp_send_json_error(['message' => 'no_file'], 400);
+	}
+
+	$allowed = ['pdf','png','jpg','jpeg'];
+	$ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+	if (!in_array($ext, $allowed, true)) {
+		wp_send_json_error(['message' => 'bad_type'], 400);
+	}
+
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	require_once ABSPATH . 'wp-admin/includes/media.php';
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+
+	$ts = current_time('timestamp');
+	$year = date('Y', $ts);
+	$post_title = get_the_title($post_id);
+	$post_title = $post_title !== '' ? $post_title : date('ymd-His', $ts);
+	$post_slug = sanitize_title($post_title);
+
+	$upload_filter = function($dirs) use ($year) {
+		$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
+		$url  = content_url('/uploads/misbuero/' . $year . '/belege');
+		if (!file_exists($base)) { wp_mkdir_p($base); }
+		$dirs['path']   = $base;
+		$dirs['basedir']= $base;
+		$dirs['url']    = $url;
+		$dirs['baseurl']= $url;
+		$dirs['subdir'] = '';
+		return $dirs;
+	};
+
+	$no_sizes_filter = function($sizes) { return []; };
+	$no_meta_sizes_filter = function($metadata, $attachment_id) {
+		if (isset($metadata['sizes'])) $metadata['sizes'] = [];
+		return $metadata;
+	};
+	$no_big_image = function() { return false; };
+
+	add_filter('upload_dir', $upload_filter);
+	add_filter('intermediate_image_sizes', $no_sizes_filter);
+	add_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
+	add_filter('big_image_size_threshold', $no_big_image, 10, 0);
+	$uploaded = wp_handle_upload($_FILES['file'], [
+		'test_form' => false,
+		'unique_filename_callback' => function($dir, $name, $ext) use ($post_slug) {
+			$base = $post_slug . '_upload';
+			$filename = $base . $ext;
+			$counter = 1;
+			while (file_exists($dir . '/' . $filename)) {
+				$filename = $base . '-' . $counter . $ext;
+				$counter++;
+			}
+			return $filename;
+		},
+	]);
+
+	if (!isset($uploaded['file'])) {
+		remove_filter('big_image_size_threshold', $no_big_image, 10);
+		remove_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
+		remove_filter('intermediate_image_sizes', $no_sizes_filter);
+		remove_filter('upload_dir', $upload_filter);
+		wp_send_json_error(['message' => 'upload_failed'], 500);
+	}
+
+	add_filter('wp_generate_attachment_metadata', $no_meta_sizes_filter, 10, 2);
+
+	$attachment = [
+		'post_mime_type' => $uploaded['type'] ?? '',
+		'post_title'     => sanitize_text_field($post_title),
+		'post_content'   => '',
+		'post_status'    => 'inherit',
+		'post_parent'    => (int) $post_id,
+	];
+	$att_id = wp_insert_attachment($attachment, $uploaded['file'], $post_id);
+	if ($att_id) {
+		$meta = wp_generate_attachment_metadata($att_id, $uploaded['file']);
+		if (is_array($meta)) {
+			if (isset($meta['sizes'])) {
+				$meta['sizes'] = [];
+			}
+			wp_update_attachment_metadata($att_id, $meta);
+		}
+	}
+	remove_filter('wp_generate_attachment_metadata', $no_meta_sizes_filter, 10);
+	remove_filter('big_image_size_threshold', $no_big_image, 10);
+	remove_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
+	remove_filter('intermediate_image_sizes', $no_sizes_filter);
+	remove_filter('upload_dir', $upload_filter);
+
+	$existing = (array) get_post_meta($post_id, CMX_BELEG_UPLOADS_META, true);
+	$existing = array_values(array_filter(array_map('intval', $existing)));
+	$existing[] = (int) $att_id;
+	$existing = array_values(array_unique($existing));
+	update_post_meta($post_id, CMX_BELEG_UPLOADS_META, $existing);
+
+	$label = $post_slug !== '' ? $post_slug . '_upload.' . $ext : $post_title . '_upload.' . $ext;
+	wp_send_json_success([
+		'id'    => $att_id,
+		'url'   => $att_id ? wp_get_attachment_url($att_id) : '',
+		'label' => $label,
+	]);
+}
+
+add_action('wp_ajax_cmx_belege_remove_file', __NAMESPACE__ . '\\cmx_belege_remove_file');
+function cmx_belege_remove_file(): void {
+	if (!current_user_can('delete_posts')) {
+		wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	$nonce = isset($_POST['nonce']) ? (string) $_POST['nonce'] : '';
+	if (!wp_verify_nonce($nonce, 'cmx_belege_upload')) {
+		wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+	$post_id = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
+	$att_id = isset($_POST['att_id']) ? (int) $_POST['att_id'] : 0;
+	if ($post_id <= 0 || $att_id <= 0 || get_post_type($post_id) !== 'belege') {
+		wp_send_json_error(['message' => 'bad_params'], 400);
+	}
+
+	$existing = (array) get_post_meta($post_id, CMX_BELEG_UPLOADS_META, true);
+	$existing = array_values(array_filter(array_map('intval', $existing)));
+	$existing = array_values(array_diff($existing, [$att_id]));
+	update_post_meta($post_id, CMX_BELEG_UPLOADS_META, $existing);
+	wp_delete_attachment($att_id, true);
+
+	wp_send_json_success(['ok' => true]);
+}

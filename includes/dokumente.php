@@ -56,6 +56,10 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 		echo '<ul id="cmx-dokumente-existing" style="margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;">';
 		foreach ($docs as $doc_id) {
 			$att_id = $is_dokumente ? (int)$doc_id : (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
+			$file_abs = $att_id ? \get_attached_file($att_id) : '';
+			if (!$file_abs || !is_file($file_abs)) {
+				continue;
+			}
 			$url = $att_id ? \wp_get_attachment_url($att_id) : '';
 			$file_rel = $att_id ? (string) \get_post_meta($att_id, '_wp_attached_file', true) : '';
 			$file_base = $file_rel ? basename($file_rel) : '';
@@ -282,9 +286,15 @@ function cmx_dokumente_upload_file(): void {
 	\remove_filter('intermediate_image_sizes', $no_sizes_filter_simple);
 	\remove_filter('upload_dir', $upload_filter);
 
-	// Datei umbenennen: YYMMDD-HHMMSS_cpt.ext
+	// Datei umbenennen: YYMMDD-HHMMSS_XY.ext (nur fuer CPT belege)
 	$base_dir = dirname($uploaded['file']);
+	$orig_base = pathinfo($_FILES['file']['name'], PATHINFO_FILENAME);
+	$short = substr(\sanitize_title($orig_base), 0, 8);
+	$short = $short !== '' ? $short : 'upload';
 	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
+	if ($post_type === 'belege') {
+		$new_base = \sanitize_file_name(\date('ymd-His', $ts) . '_' . $short . '.' . $ext);
+	}
 	$new_base = \wp_unique_filename($base_dir, $new_base);
 	$new_path = $base_dir . '/' . $new_base;
 	if ($new_path !== $uploaded['file']) {
