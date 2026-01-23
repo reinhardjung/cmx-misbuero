@@ -35,4 +35,5 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_PROJEKT
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, dokumente, tasks, tasks-side');
+// cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, dokumente, tasks, tasks-side');
+cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, tasks, tasks-side');

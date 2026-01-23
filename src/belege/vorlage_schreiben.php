@@ -67,6 +67,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_save_beleg_pdf')) {
 		foreach ($patterns as $pattern) {
 			foreach ((array)\glob($pattern) as $old) {
 				if (\is_file($old) && \dirname($old) === $dir && $old !== $pdf_path) {
+					if (\strpos(\basename($old), '_upload_') !== false) {
+						continue;
+					}
 					@\unlink($old);
 					error_log('[CMX] Alte Datei gelöscht: ' . $old);
 				}
