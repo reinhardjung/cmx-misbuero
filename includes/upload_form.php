@@ -126,6 +126,52 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			$zahlungsgrund_terms = [];
 		}
 
+		$status_opts = function_exists( __NAMESPACE__ . '\\cmx_beleg_status_options' )
+			? cmx_beleg_status_options()
+			: [
+				'offen'    => 'Offen',
+				'bezahlt'  => 'Bezahlt',
+				'teil'     => 'Teilbezahlt',
+				'storniert'=> 'Storniert',
+			];
+
+		$proj_beg_key = defined( __NAMESPACE__ . '\\CMX_PROJ_BEG_META' )
+			? constant( __NAMESPACE__ . '\\CMX_PROJ_BEG_META' )
+			: '_cmx_projekt_beginn';
+		$proj_end_key = defined( __NAMESPACE__ . '\\CMX_PROJ_END_META' )
+			? constant( __NAMESPACE__ . '\\CMX_PROJ_END_META' )
+			: '_cmx_projekt_ende';
+		$today = wp_date( 'Y-m-d' );
+		$project_posts = get_posts( [
+			'post_type'      => 'projekte',
+			'posts_per_page' => 300,
+			'post_status'    => [ 'publish', 'private', 'draft' ],
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+			'meta_query'     => [
+				[
+					'key'     => $proj_beg_key,
+					'value'   => '',
+					'compare' => '!=',
+				],
+			],
+		] );
+		$active_projects = [];
+		foreach ( $project_posts as $p ) {
+			$beg = get_post_meta( $p->ID, $proj_beg_key, true );
+			$end = get_post_meta( $p->ID, $proj_end_key, true );
+			$beg_ts = $beg ? strtotime( $beg ) : 0;
+			$end_ts = $end ? strtotime( $end ) : 0;
+			$today_ts = strtotime( $today );
+			if ( ! $beg_ts ) {
+				continue;
+			}
+			if ( $end_ts && $today_ts > $end_ts ) {
+				continue;
+			}
+			$active_projects[] = $p;
+		}
+
 		?>
 		<!doctype html>
 		<html>
@@ -272,7 +318,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 					<div class="row">
 						<div class="field">
-							<label for="beleg_datum">Belegdatum</label>
+							<label for="beleg_datum" class="js-today-label" data-target="beleg_datum">Belegdatum</label>
 							<input id="beleg_datum" type="date" name="beleg_datum">
 						</div>
 
@@ -280,6 +326,22 @@ final class MIS_BUERO_BELEG_UPLOAD {
 							<label for="betrag">Betrag</label>
 							<input id="betrag" type="number" step="0.01" name="betrag">
 						</div>
+					</div>
+
+					<div class="field">
+						<label for="status" class="js-status-label" data-target="status" data-value="bezahlt">Status</label>
+						<select id="status" name="status">
+							<?php foreach ( $status_opts as $val => $label ) : ?>
+								<option value="<?php echo esc_attr( $val ); ?>">
+									<?php echo esc_html( $label ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+
+					<div class="field">
+						<label for="bezahlt_am" class="js-today-label" data-target="bezahlt_am">Bezahlt am</label>
+						<input id="bezahlt_am" type="date" name="bezahlt_am">
 					</div>
 
 					<div class="row">
@@ -309,6 +371,18 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					</div>
 
 					<div class="field">
+						<label for="projekt_id">Projekt</label>
+						<select id="projekt_id" name="projekt_id">
+							<option value="">Bitte wählen</option>
+							<?php foreach ( $active_projects as $project ) : ?>
+								<option value="<?php echo (int) $project->ID; ?>">
+									<?php echo esc_html( get_the_title( $project->ID ) ?: ( '#' . $project->ID ) ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+
+					<div class="field">
 						<label for="info">Kurze Info</label>
 						<textarea id="info" name="info" rows="2"></textarea>
 					</div>
@@ -317,6 +391,39 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				</form>
 			</div>
 		</div>
+
+		<script>
+		(function(){
+			function isoToday(){
+				var d = new Date();
+				var y = d.getFullYear();
+				var m = String(d.getMonth() + 1).padStart(2, "0");
+				var day = String(d.getDate()).padStart(2, "0");
+				return y + "-" + m + "-" + day;
+			}
+			document.querySelectorAll(".js-today-label").forEach(function(label){
+				label.addEventListener("click", function(e){
+					e.preventDefault();
+					var target = document.getElementById(label.dataset.target || "");
+					if (target) {
+						target.value = isoToday();
+						target.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+				});
+			});
+			document.querySelectorAll(".js-status-label").forEach(function(label){
+				label.addEventListener("click", function(e){
+					e.preventDefault();
+					var target = document.getElementById(label.dataset.target || "");
+					var value = label.dataset.value || "";
+					if (target && value) {
+						target.value = value;
+						target.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+				});
+			});
+		})();
+		</script>
 
 		</body>
 		</html>
@@ -331,7 +438,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 
 		$ts = current_time( 'timestamp' );
-		$stamp = date( 'ymd-His', $ts );
+		$stamp = wp_date( 'ymd-His' );
 		$post_title = $stamp;
 		$year = date( 'Y', $ts );
 		$upload_filter = function( array $dirs ) use ( $year ) : array {
@@ -375,21 +482,67 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			'post_status' => 'publish',
 			'post_title'  => $post_title,
 		] );
+		$upload_rel = ltrim( str_replace( trailingslashit( WP_CONTENT_DIR . '/uploads' ), '', $upload['file'] ), '/' );
+		$uploads_meta_key = defined( __NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META' )
+			? constant( __NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META' )
+			: '_cmx_belege_uploads';
+		$existing_uploads = (array) get_post_meta( $post_id, $uploads_meta_key, true );
+		$existing_uploads = array_values( array_filter( $existing_uploads, function( $v ) { return $v !== '' && $v !== null; } ) );
+		if ( $upload_rel !== '' ) {
+			$existing_uploads[] = $upload_rel;
+			$existing_uploads = array_values( array_unique( $existing_uploads ) );
+			update_post_meta( $post_id, $uploads_meta_key, $existing_uploads );
+		}
+		update_post_meta( $post_id, '_cmx_beleg_upload_prefix', sanitize_title( $post_title ) );
 
 		$ocr = self::ocr_extract( $upload['file'] );
 
 		$beleg_datum = sanitize_text_field( $_POST['beleg_datum'] ?? '' );
 		$betrag = sanitize_text_field( $_POST['betrag'] ?? '' );
 		$info = sanitize_textarea_field( $_POST['info'] ?? '' );
+		$status = sanitize_key( $_POST['status'] ?? '' );
+		$bezahlt_am = sanitize_text_field( $_POST['bezahlt_am'] ?? '' );
+		$projekt_id = (int) ( $_POST['projekt_id'] ?? 0 );
 
 		update_post_meta( $post_id, 'beleg_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
 		update_post_meta( $post_id, 'betrag', $betrag ?: ( $ocr['betrag'] ?? '' ) );
 		update_post_meta( $post_id, 'info', $info );
+		if ( $info !== '' ) {
+			update_post_meta( $post_id, '_cmx_beleg_intern_notizen', $info );
+		}
 		update_post_meta( $post_id, 'datei_url', esc_url_raw( $upload['url'] ) );
 
 		update_post_meta( $post_id, '_cmx_beleg_rng_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
 		if ( $betrag !== '' ) {
 			update_post_meta( $post_id, '_cmx_beleg_summe_override', $betrag );
+		}
+
+		$richtung_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
+			? constant( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
+			: '_cmx_beleg_richtung';
+		update_post_meta( $post_id, $richtung_key, 'eingang' );
+
+		if ( $status !== '' ) {
+			$status_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_STATUS' )
+				? constant( __NAMESPACE__ . '\\CMX_BELEG_META_STATUS' )
+				: '_cmx_beleg_status';
+			update_post_meta( $post_id, $status_key, $status );
+		}
+		if ( $bezahlt_am !== '' ) {
+			$bez_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM' )
+				? constant( __NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM' )
+				: '_cmx_beleg_bezahlt_am';
+			update_post_meta( $post_id, $bez_key, $bezahlt_am );
+		}
+		if ( $projekt_id > 0 ) {
+			$proj_id_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_ID' )
+				? constant( __NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_ID' )
+				: '_cmx_beleg_projekt_id';
+			$proj_label_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_LABEL' )
+				? constant( __NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_LABEL' )
+				: '_cmx_beleg_projekt_label';
+			update_post_meta( $post_id, $proj_id_key, $projekt_id );
+			update_post_meta( $post_id, $proj_label_key, get_the_title( $projekt_id ) ?: (string) $projekt_id );
 		}
 
 		if ( function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
