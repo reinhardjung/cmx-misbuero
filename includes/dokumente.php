@@ -38,7 +38,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	$docs = [];
 	if ($is_dokumente) {
 		$docs = (array) \get_post_meta($post->ID, CMX_DOK_SELF_META, true);
-		$docs = array_values(array_filter(array_map('intval', $docs)));
+		$docs = array_values(array_filter($docs, function($v){ return $v !== '' && $v !== null; }));
 	} else {
 		$docs = (array) \get_post_meta($post->ID, CMX_DOK_UPLOADS_META, true);
 		$docs = array_values(array_filter(array_map('intval', $docs)));
@@ -54,18 +54,38 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 
 	if ($docs) {
 		echo '<ul id="cmx-dokumente-existing" style="margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;">';
-		foreach ($docs as $doc_id) {
-			$att_id = $is_dokumente ? (int)$doc_id : (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
-			$file_abs = $att_id ? \get_attached_file($att_id) : '';
-			if (!$file_abs || !is_file($file_abs)) {
+		foreach ($docs as $doc_entry) {
+			$doc_id = $is_dokumente ? 0 : (int) $doc_entry;
+			$file_rel = '';
+			$edit_url = $is_dokumente ? \get_edit_post_link((int)$post->ID, 'raw') : \get_edit_post_link((int)$doc_id, 'raw');
+			if ($is_dokumente) {
+				if (is_numeric($doc_entry)) {
+					$att_id = (int) $doc_entry;
+					$file_rel = (string) \get_post_meta($att_id, '_wp_attached_file', true);
+				} else {
+					$file_rel = ltrim((string) $doc_entry, '/');
+				}
+			} else {
+				$file_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
+				if ($file_rel === '') {
+					$att_id = (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
+					if ($att_id) {
+						$file_rel = (string) \get_post_meta($att_id, '_wp_attached_file', true);
+					}
+				}
+			}
+			if ($file_rel === '') {
 				continue;
 			}
-			$url = $att_id ? \wp_get_attachment_url($att_id) : '';
-			$file_rel = $att_id ? (string) \get_post_meta($att_id, '_wp_attached_file', true) : '';
-			$file_base = $file_rel ? basename($file_rel) : '';
-			$label = $file_base ?: (\get_the_title($doc_id) ?: ('#' . $doc_id));
-			$edit_url = $is_dokumente ? \get_edit_post_link((int)$post->ID, 'raw') : \get_edit_post_link((int)$doc_id, 'raw');
-			echo '<li data-doc-id="' . (int)$doc_id . '" style="display:grid;grid-template-columns:18px 1fr 14px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
+			$file_abs = WP_CONTENT_DIR . '/uploads/' . $file_rel;
+			if (!is_file($file_abs)) {
+				continue;
+			}
+			$url = content_url('/uploads/' . $file_rel);
+			$file_base = basename($file_rel);
+			$label = $file_base ?: ($doc_id ? (\get_the_title($doc_id) ?: ('#' . $doc_id)) : $file_rel);
+			$data_attr = $is_dokumente ? 'data-path="' . \esc_attr($file_rel) . '"' : 'data-doc-id="' . (int)$doc_id . '"';
+			echo '<li ' . $data_attr . ' style="display:grid;grid-template-columns:18px 1fr 14px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
 			if ($edit_url) {
 				echo '<a href="' . \esc_url($edit_url) . '" target="_blank" rel="noopener noreferrer" title="Dokument bearbeiten" style="text-decoration:none;justify-self:start;">';
 				echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;">D</span>';
@@ -155,9 +175,10 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 		$("#cmx-dokumente-existing").on("click", ".cmx-dok-remove", function(){
 			var $li = $(this).closest("li");
 			var docId = $li.data("doc-id");
-			if (!docId) return;
+			var path = $li.data("path");
+			if (!docId && !path) return;
 			if (!confirm("Dokument entfernen?")) return;
-			$.post(ajaxurl, { action:"cmx_dokumente_remove_file", post_id: postId, doc_id: docId, nonce: nonce }, function(resp){
+			$.post(ajaxurl, { action:"cmx_dokumente_remove_file", post_id: postId, doc_id: docId, path: path, nonce: nonce }, function(resp){
 				if (resp && resp.success) {
 					$li.remove();
 					var $pub = $("#publish");
@@ -207,6 +228,7 @@ function cmx_dokumente_upload_file(): void {
 
 	$ts = \current_time('timestamp');
 	$year = \date('Y', $ts);
+	$post_obj = $post_id > 0 ? \get_post($post_id) : null;
 	$source_title = $post_id > 0 ? \get_the_title($post_id) : '';
 	if (!\is_string($source_title)) {
 		$source_title = '';
@@ -216,6 +238,29 @@ function cmx_dokumente_upload_file(): void {
 		$source_title = \wp_date('ymd-His') . '_' . \sanitize_key($post_type);
 	}
 	$doc_title = $is_dokumente ? (string) $source_title : \wp_date('ymd-His');
+	if ($is_dokumente) {
+		$needs_title = false;
+		if ($source_title === '') {
+			$needs_title = true;
+		} else {
+			$normalized_title = \strtolower($source_title);
+			$normalized_title = \str_replace(['_', ' '], '-', $normalized_title);
+			if (\stripos($normalized_title, 'automatisch-gespeicherter-entwurf') !== false) {
+				$needs_title = true;
+			}
+		}
+		if (!$needs_title && $post_obj && (string) $post_obj->post_status === 'auto-draft') {
+			$needs_title = true;
+		}
+		if ($needs_title) {
+			$doc_title = \wp_date('ymd-His');
+			\wp_update_post([
+				'ID' => $post_id,
+				'post_title' => $doc_title,
+				'post_name' => \sanitize_title($doc_title),
+			]);
+		}
+	}
 
 	$doc_id = $post_id;
 	if (!$is_dokumente) {
@@ -243,10 +288,6 @@ function cmx_dokumente_upload_file(): void {
 
 	$no_sizes_filter = function($sizes) { return []; };
 	$no_sizes_filter_simple = function($sizes) { return []; };
-	$no_meta_sizes_filter = function($metadata, $attachment_id) {
-		if (isset($metadata['sizes'])) $metadata['sizes'] = [];
-		return $metadata;
-	};
 	$no_big_image = function() { return false; };
 
 	\add_filter('upload_dir', $upload_filter);
@@ -271,24 +312,6 @@ function cmx_dokumente_upload_file(): void {
 		\wp_send_json_error(['message'=>'upload_failed'], 500);
 	}
 
-	$attachment = [
-		'post_mime_type' => $uploaded['type'] ?? '',
-		'post_title'     => sanitize_text_field($doc_title),
-		'post_content'   => '',
-		'post_status'    => 'inherit',
-		'post_parent'    => (int)$doc_id,
-	];
-	$att_id = \wp_insert_attachment($attachment, $uploaded['file'], $doc_id);
-	if ($att_id) {
-		\add_filter('wp_generate_attachment_metadata', $no_meta_sizes_filter, 10, 2);
-		$meta = \wp_generate_attachment_metadata($att_id, $uploaded['file']);
-		\remove_filter('wp_generate_attachment_metadata', $no_meta_sizes_filter, 10);
-		if (is_array($meta)) {
-			if (isset($meta['sizes'])) $meta['sizes'] = [];
-			\wp_update_attachment_metadata($att_id, $meta);
-		}
-	}
-
 	\remove_filter('big_image_size_threshold', $no_big_image, 10);
 	\remove_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
 	\remove_filter('intermediate_image_sizes', $no_sizes_filter_simple);
@@ -305,26 +328,21 @@ function cmx_dokumente_upload_file(): void {
 	if ($new_path !== $uploaded['file']) {
 		$renamed = @rename($uploaded['file'], $new_path);
 		if ($renamed) {
-			$uploads_root = WP_CONTENT_DIR . '/uploads/';
-			$rel = ltrim(str_replace($uploads_root, '', $new_path), '/');
-			\update_attached_file($att_id, $new_path);
-			\update_post_meta($att_id, '_wp_attached_file', $rel);
-			\wp_update_post([
-				'ID'   => $att_id,
-				'guid' => \content_url('/uploads/' . $rel),
-			]);
 			$uploaded['file'] = $new_path;
 		}
 	}
+	$uploads_root = WP_CONTENT_DIR . '/uploads/';
+	$rel = ltrim(str_replace($uploads_root, '', $uploaded['file']), '/');
+	$file_url = \content_url('/uploads/' . $rel);
 
 	// Beziehung speichern
 	if ($is_dokumente) {
 		$existing = (array) \get_post_meta($doc_id, CMX_DOK_SELF_META, true);
-		$existing = array_values(array_filter(array_map('intval', $existing)));
-		$existing[] = (int)$att_id;
+		$existing = array_values(array_filter($existing, function($v){ return $v !== '' && $v !== null; }));
+		$existing[] = $rel;
 		$existing = array_values(array_unique($existing));
 		\update_post_meta($doc_id, CMX_DOK_SELF_META, $existing);
-		\update_post_meta($doc_id, '_cmx_dokumente_attachment_id', (int)$att_id);
+		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
 	} else {
 		$rel_key = 'cmx_dokumente_rel_' . \sanitize_key($post_type);
 		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
@@ -334,11 +352,11 @@ function cmx_dokumente_upload_file(): void {
 			}
 		}
 		\update_post_meta($doc_id, $rel_key, [(int)$post_id]);
-		\update_post_meta($doc_id, '_cmx_dokumente_attachment_id', (int)$att_id);
+		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
 
 		$self_files = (array) \get_post_meta($doc_id, CMX_DOK_SELF_META, true);
-		$self_files = array_values(array_filter(array_map('intval', $self_files)));
-		$self_files[] = (int)$att_id;
+		$self_files = array_values(array_filter($self_files, function($v){ return $v !== '' && $v !== null; }));
+		$self_files[] = $rel;
 		$self_files = array_values(array_unique($self_files));
 		\update_post_meta($doc_id, CMX_DOK_SELF_META, $self_files);
 
@@ -351,8 +369,8 @@ function cmx_dokumente_upload_file(): void {
 
 	\wp_send_json_success([
 		'id'    => $doc_id,
-		'url'   => $att_id ? \wp_get_attachment_url($att_id) : '',
-		'label' => $doc_title,
+		'url'   => $file_url,
+		'label' => basename($rel) ?: $doc_title,
 	]);
 }
 
@@ -364,28 +382,40 @@ function cmx_dokumente_remove_file(): void {
 
 	$post_id = isset($_POST['post_id']) ? (int)$_POST['post_id'] : 0;
 	$doc_id = isset($_POST['doc_id']) ? (int)$_POST['doc_id'] : 0;
-	if ($post_id <= 0 || $doc_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
+	$path = isset($_POST['path']) ? (string)$_POST['path'] : '';
+	if ($post_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 	$post_type = (string) \get_post_type($post_id);
 	$is_dokumente = ($post_type === 'dokumente');
 
 	if ($is_dokumente) {
+		if ($path === '') \wp_send_json_error(['message'=>'bad_params'], 400);
 		$files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
-		$files = array_values(array_filter(array_map('intval', $files)));
-		$files = array_values(array_diff($files, [$doc_id]));
+		$files = array_values(array_filter($files, function($v){ return $v !== '' && $v !== null; }));
+		$files = array_values(array_diff($files, [$path]));
 		\update_post_meta($post_id, CMX_DOK_SELF_META, $files);
-		\wp_delete_attachment($doc_id, true);
+		$abs = WP_CONTENT_DIR . '/uploads/' . ltrim($path, '/');
+		if (is_file($abs)) {
+			@unlink($abs);
+		}
+		if (empty($files)) {
+			\delete_post_meta($post_id, '_cmx_dokumente_file_path');
+		}
 	} else {
+		if ($doc_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 		$docs = (array) \get_post_meta($post_id, CMX_DOK_UPLOADS_META, true);
 		$docs = array_values(array_filter(array_map('intval', $docs)));
 		$docs = array_values(array_diff($docs, [$doc_id]));
 		\update_post_meta($post_id, CMX_DOK_UPLOADS_META, $docs);
 
-		$att_id = (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
-		if ($att_id) {
-			\wp_delete_attachment($att_id, true);
+		$file_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
+		if ($file_rel !== '') {
+			$abs = WP_CONTENT_DIR . '/uploads/' . ltrim($file_rel, '/');
+			if (is_file($abs)) {
+				@unlink($abs);
+			}
 		}
 		\wp_delete_post($doc_id, true);
 	}
 
-	\wp_send_json_success(['removed' => $doc_id]);
+	\wp_send_json_success(['removed' => $doc_id ?: $path]);
 }
