@@ -289,7 +289,18 @@ function cmx_dokumente_upload_file(): void {
 	// Datei umbenennen: YYMMDD-HHMMSS_XY.ext (nur fuer CPT belege)
 	$base_dir = dirname($uploaded['file']);
 	$orig_base = pathinfo($_FILES['file']['name'], PATHINFO_FILENAME);
-	$short = substr(\sanitize_title($orig_base), 0, 8);
+	$umlaut_map = [
+		'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss',
+		'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue',
+	];
+	$normalized = strtr($orig_base, $umlaut_map);
+	$only_letters = preg_replace('/[^a-z]/i', '', $normalized);
+	$only_digits = preg_replace('/[^0-9]/', '', $normalized);
+	$short = substr($only_letters, 0, 8);
+	if (strlen($short) < 8) {
+		$need = 8 - strlen($short);
+		$short .= substr($only_digits, 0, $need);
+	}
 	$short = $short !== '' ? $short : 'upload';
 	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
 	if ($post_type === 'belege') {

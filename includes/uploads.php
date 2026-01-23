@@ -89,7 +89,6 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG</small>';
 	echo '</div>';
 	echo '<input type="file" id="cmx-belege-file" style="display:none" accept=".pdf,.png,.jpg,.jpeg">';
-	echo '<div id="cmx-belege-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
 	echo '</div>';
 
 	if ($docs) {
@@ -130,7 +129,6 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 	jQuery(function($){
 		var $drop = $("#cmx-belege-drop");
 		var $file = $("#cmx-belege-file");
-		var $list = $("#cmx-belege-list");
 		var postId = ' . (int) $post->ID . ';
 		var nonce = ' . wp_json_encode($nonce) . ';
 		var ajaxurl = ' . wp_json_encode(admin_url('admin-ajax.php')) . ';
@@ -142,9 +140,6 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 			fd.append("nonce", nonce);
 			fd.append("file", file);
 
-			var $row = $("<div>").text("Upload: " + file.name);
-			$list.append($row);
-
 			$.ajax({
 				url: ajaxurl,
 				type: "POST",
@@ -153,19 +148,72 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 				contentType: false,
 				success: function(resp){
 					if (resp && resp.success && resp.data) {
+						if (resp.data.title) {
+							$("#title").val(resp.data.title);
+							$("#title-prompt-text").addClass("screen-reader-text");
+						}
+						if (resp.data.notice) {
+							var $notice = $("#cmx-belege-upload-notice");
+							if (!$notice.length) {
+								$notice = $("<div id=\"cmx-belege-upload-notice\" class=\"notice notice-success is-dismissible\" style=\"margin:8px 0;\"><p></p></div>");
+								$("#poststuff").before($notice);
+							}
+							$notice.find("p").text(resp.data.notice);
+						}
 						var label = resp.data.label || file.name;
-						if (resp.data.url) {
-							$row.html("<a target=\\"_blank\\" rel=\\"noopener noreferrer\\"></a>");
-							$row.find("a").attr("href", resp.data.url).text(label);
+						var url = resp.data.url || "";
+						var attId = resp.data.id || "";
+						var $li = $("<li>").attr("data-att-id", attId).css({
+							display: "grid",
+							gridTemplateColumns: "1fr 14px",
+							alignItems: "center",
+							gap: "4px",
+							width: "100%",
+							whiteSpace: "nowrap"
+						});
+						var $link = $("<a>").attr({
+							href: url || "#",
+							target: "_blank",
+							rel: "noopener noreferrer",
+							title: label
+						}).css({
+							minWidth: 0,
+							textAlign: "center",
+							justifySelf: "stretch",
+							overflow: "hidden",
+							textOverflow: "ellipsis"
+						}).text(label);
+						var $btn = $("<button>").addClass("button-link cmx-belege-remove").css({
+							color: "#b32d2e",
+							justifySelf: "end",
+							padding: 0,
+							lineHeight: 1
+						}).text("X");
+						$li.append($link).append($btn);
+						var $existing = $("#cmx-belege-existing");
+						if ($existing.length) {
+							$existing.append($li);
 						} else {
-							$row.text(label);
+							$existing = $("<ul id=\"cmx-belege-existing\" style=\"margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;\"></ul>");
+							$existing.append($li);
+							$("#cmx-belege-upload-box").append($existing);
 						}
 					} else {
-						$row.text("Fehler beim Upload: " + file.name);
+						var $notice = $("#cmx-belege-upload-notice");
+						if (!$notice.length) {
+							$notice = $("<div id=\"cmx-belege-upload-notice\" class=\"notice notice-error is-dismissible\" style=\"margin:8px 0;\"><p></p></div>");
+							$("#poststuff").before($notice);
+						}
+						$notice.find("p").text("Fehler beim Upload: " + file.name);
 					}
 				},
 				error: function(){
-					$row.text("Fehler beim Upload: " + file.name);
+					var $notice = $("#cmx-belege-upload-notice");
+					if (!$notice.length) {
+						$notice = $("<div id=\"cmx-belege-upload-notice\" class=\"notice notice-error is-dismissible\" style=\"margin:8px 0;\"><p></p></div>");
+						$("#poststuff").before($notice);
+					}
+					$notice.find("p").text("Fehler beim Upload: " + file.name);
 				}
 			});
 		}
@@ -230,8 +278,19 @@ function cmx_belege_upload_file(): void {
 
 	$ts = current_time('timestamp');
 	$year = date('Y', $ts);
-	$post_title = get_the_title($post_id);
-	$post_title = $post_title !== '' ? $post_title : date('ymd-His', $ts);
+	$post = get_post($post_id);
+	if (!$post) {
+		wp_send_json_error(['message' => 'bad_post'], 400);
+	}
+	$post_title = $post->post_title;
+	if ($post_title === '' || $post->post_status === 'auto-draft') {
+		$post_title = date('ymd-His', $ts);
+	}
+	wp_update_post([
+		'ID' => $post_id,
+		'post_title' => $post_title,
+		'post_status' => 'publish',
+	]);
 	$post_slug = sanitize_title($post_title);
 
 	$upload_filter = function($dirs) use ($year) {
@@ -257,10 +316,27 @@ function cmx_belege_upload_file(): void {
 	add_filter('intermediate_image_sizes', $no_sizes_filter);
 	add_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
 	add_filter('big_image_size_threshold', $no_big_image, 10, 0);
+	$existing = (array) get_post_meta($post_id, CMX_BELEG_UPLOADS_META, true);
+	$existing = array_values(array_filter(array_map('intval', $existing)));
+	$max_suffix = 0;
+	if ($post_slug !== '') {
+		foreach ($existing as $att_id) {
+			$file_abs = get_attached_file($att_id);
+			if (!$file_abs || !is_file($file_abs)) {
+				continue;
+			}
+			$file_base = basename($file_abs);
+			if (preg_match('/^' . preg_quote($post_slug, '/') . '_upload_(\\d{3})\\./', $file_base, $m)) {
+				$max_suffix = max($max_suffix, (int) $m[1]);
+			}
+		}
+	}
+	$suffix = '_' . str_pad((string) ($max_suffix + 1), 3, '0', STR_PAD_LEFT);
+
 	$uploaded = wp_handle_upload($_FILES['file'], [
 		'test_form' => false,
-		'unique_filename_callback' => function($dir, $name, $ext) use ($post_slug) {
-			$base = $post_slug . '_upload';
+		'unique_filename_callback' => function($dir, $name, $ext) use ($post_slug, $suffix) {
+			$base = $post_slug . '_upload' . $suffix;
 			$filename = $base . $ext;
 			$counter = 1;
 			while (file_exists($dir . '/' . $filename)) {
@@ -304,17 +380,17 @@ function cmx_belege_upload_file(): void {
 	remove_filter('intermediate_image_sizes', $no_sizes_filter);
 	remove_filter('upload_dir', $upload_filter);
 
-	$existing = (array) get_post_meta($post_id, CMX_BELEG_UPLOADS_META, true);
-	$existing = array_values(array_filter(array_map('intval', $existing)));
 	$existing[] = (int) $att_id;
 	$existing = array_values(array_unique($existing));
 	update_post_meta($post_id, CMX_BELEG_UPLOADS_META, $existing);
 
-	$label = $post_slug !== '' ? $post_slug . '_upload.' . $ext : $post_title . '_upload.' . $ext;
+	$label = $post_slug !== '' ? $post_slug . '_upload' . $suffix . '.' . $ext : $post_title . '_upload' . $suffix . '.' . $ext;
 	wp_send_json_success([
 		'id'    => $att_id,
 		'url'   => $att_id ? wp_get_attachment_url($att_id) : '',
 		'label' => $label,
+		'title' => $post_title,
+		'notice' => 'Beleg wurde gespeichert.',
 	]);
 }
 
