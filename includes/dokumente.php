@@ -237,6 +237,13 @@ function cmx_dokumente_upload_file(): void {
 		$source_title = '';
 	}
 	$source_title = \trim($source_title);
+	if (!$is_dokumente) {
+		$normalized_title = \strtolower($source_title);
+		$normalized_title = \str_replace(['_', ' '], '-', $normalized_title);
+		if ($source_title === '' || \stripos($normalized_title, 'automatisch-gespeicherter-entwurf') !== false) {
+			$source_title = \sanitize_key($post_type);
+		}
+	}
 	if ($source_title === '') {
 		$source_title = \wp_date('ymd-His') . '_' . \sanitize_key($post_type);
 	}
