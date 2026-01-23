@@ -85,13 +85,16 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			$file_base = basename($file_rel);
 			$label = $file_base ?: ($doc_id ? (\get_the_title($doc_id) ?: ('#' . $doc_id)) : $file_rel);
 			$data_attr = $is_dokumente ? 'data-path="' . \esc_attr($file_rel) . '"' : 'data-doc-id="' . (int)$doc_id . '"';
-			echo '<li ' . $data_attr . ' style="display:grid;grid-template-columns:18px 1fr 14px;align-items:center;gap:4px;width:100%;white-space:nowrap;">';
-			if ($edit_url) {
-				echo '<a href="' . \esc_url($edit_url) . '" target="_blank" rel="noopener noreferrer" title="Dokument bearbeiten" style="text-decoration:none;justify-self:start;">';
-				echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;">D</span>';
-				echo '</a>';
-			} else {
-				echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;justify-self:start;">D</span>';
+			$grid_cols = $is_dokumente ? '1fr 14px' : '18px 1fr 14px';
+			echo '<li ' . $data_attr . ' style="display:grid;grid-template-columns:' . $grid_cols . ';align-items:center;gap:4px;width:100%;white-space:nowrap;">';
+			if (!$is_dokumente) {
+				if ($edit_url) {
+					echo '<a href="' . \esc_url($edit_url) . '" target="_blank" rel="noopener noreferrer" title="Dokument bearbeiten" style="text-decoration:none;justify-self:start;">';
+					echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;">D</span>';
+					echo '</a>';
+				} else {
+					echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;justify-self:start;">D</span>';
+				}
 			}
 			if ($url) {
 				echo '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($label) . '" style="min-width:0;text-align:center;justify-self:stretch;overflow:hidden;text-overflow:ellipsis;">' . \esc_html($label) . '</a>';
