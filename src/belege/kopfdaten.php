@@ -63,8 +63,8 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_iso2_from_land')) {
 /** Rechnungsnummer (Format aus INI, externe Helperfunktion vorausgesetzt) */
 if (!\function_exists(__NAMESPACE__ . '\\cmx_generate_rechnungsnummer')) {
 	function cmx_generate_rechnungsnummer(): string {
-		$dt = new \DateTime('now', new \DateTimeZone('Europe/Zurich'));
-		return $dt->format(cmx_ini_get_value('Belege','Format'));
+		$format = cmx_ini_get_value('Belege','Format');
+		return \wp_date($format);
 	}
 }
 

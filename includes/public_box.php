@@ -105,7 +105,13 @@ add_action('add_meta_boxes', function() {
 			echo '</div>';
 
 			// Icons: Duplizieren + Papierkorb (ohne Text)
-			$show_actions = ($post->ID && $post->post_status !== 'auto-draft' && ($is_belege || !$is_add_screen));
+			$has_uploads = false;
+			if ($is_belege && $post->ID) {
+				$meta = (array) get_post_meta($post->ID, '_cmx_belege_uploads', true);
+				$meta = array_values(array_filter($meta, function($v){ return $v !== '' && $v !== null; }));
+				$has_uploads = !empty($meta);
+			}
+			$show_actions = ($post->ID && ($post->post_status !== 'auto-draft' || $has_uploads) && ($is_belege || !$is_add_screen));
 			if ($show_actions) {
 				$delete_link = get_delete_post_link($post->ID);
 				$dup_fn = __NAMESPACE__ . '\\cmx_dup_get_action_url';

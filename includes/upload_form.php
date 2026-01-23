@@ -557,6 +557,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					if (!hasAi) {
 						return;
 					}
+					if (preview) {
+						preview.textContent = "OCR läuft...";
+					}
 					var fd = new FormData();
 					fd.append("action", "mis_buero_ocr");
 					fd.append("token", token);
@@ -564,7 +567,16 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					fetch(ajaxUrl, { method: "POST", body: fd })
 						.then(function(r){ return r.json(); })
 						.then(function(res){
-							if (!res || !res.success || !res.data) return;
+							if (!res || !res.success || !res.data) {
+								if (preview) {
+									var msg = res && res.data && res.data.message ? res.data.message : "OCR fehlgeschlagen.";
+									preview.textContent = msg;
+								}
+								return;
+							}
+							if (preview) {
+								preview.textContent = "OCR abgeschlossen.";
+							}
 							if (res.data.datum) {
 								var d = document.getElementById("beleg_datum");
 								if (d && !d.value) d.value = res.data.datum;
@@ -581,7 +593,11 @@ final class MIS_BUERO_BELEG_UPLOAD {
 								setSelectByKey("zahlungsart", res.data.zahlungsart);
 							}
 						})
-						.catch(function(){});
+						.catch(function(err){
+							if (preview) {
+								preview.textContent = "OCR Fehler: " + (err && err.message ? err.message : "unbekannt");
+							}
+						});
 				});
 			}
 		})();
@@ -600,9 +616,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 
 		$ts = current_time( 'timestamp' );
-		$stamp = wp_date( 'ymd-His' );
+		$stamp = wp_date( 'ymd-His', $ts );
 		$post_title = $stamp;
-		$year = date( 'Y', $ts );
+		$year = wp_date( 'Y', $ts );
 		$upload_filter = function( array $dirs ) use ( $year ) : array {
 			$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
 			$url  = content_url( '/uploads/misbuero/' . $year . '/belege' );
@@ -833,7 +849,20 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		if ( empty( $_FILES['file'] ) || ! is_uploaded_file( $_FILES['file']['tmp_name'] ) ) {
 			wp_send_json_error( [ 'message' => 'no_file' ], 400 );
 		}
-		$data = self::ocr_extract( $_FILES['file']['tmp_name'] );
+		$tmp_path = $_FILES['file']['tmp_name'];
+		$data = self::ocr_extract( $tmp_path );
+		if ( empty( $data ) || ! empty( $data['_error'] ) ) {
+			$code = (string) ( $data['_error_code'] ?? '' );
+			if ( $code === 'data_url_pattern' ) {
+				wp_send_json_error( [
+					'message' => 'OpenAI erwartet eine öffentliche URL. Bitte Datei öffentlich erreichbar machen oder Serverzugriff erlauben.',
+				], 400 );
+			}
+		}
+		if ( empty( $data ) || ! empty( $data['_error'] ) ) {
+			$message = ! empty( $data['_error'] ) ? (string) $data['_error'] : 'ocr_failed';
+			wp_send_json_error( [ 'message' => $message ], 400 );
+		}
 		$out = [
 			'datum'       => $data['datum'] ?? '',
 			'betrag'      => $data['betrag'] ?? '',
@@ -873,33 +902,59 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			return [];
 		}
 
-		$image = 'data:' . mime_content_type( $file_path ) . ';base64,' . base64_encode( file_get_contents( $file_path ) );
+		$mime = mime_content_type( $file_path );
+		if ( ! is_string( $mime ) ) {
+			return [ '_error' => 'Unbekannter Dateityp.' ];
+		}
+		$mime = preg_replace( '/;.*$/', '', $mime );
 
-		$prompt = <<<PROMPT
-Du siehst einen Beleg aus der Schweiz.
+		if ( $mime === 'application/pdf' ) {
+			if ( ! class_exists( 'Imagick' ) ) {
+				return [ '_error' => 'PDF-OCR benötigt Imagick (PHP-Extension).' ];
+			}
+			try {
+				$imagick = new \Imagick();
+				$imagick->setResolution( 200, 200 );
+				$imagick->readImage( $file_path . '[0]' );
+				$imagick->setImageFormat( 'png' );
+				$image_blob = $imagick->getImageBlob();
+				$imagick->clear();
+				$imagick->destroy();
+				if ( ! $image_blob ) {
+					return [ '_error' => 'PDF-OCR: Konnte keine Bilddaten erzeugen.' ];
+				}
+				$image = 'data:image/png;base64,' . base64_encode( $image_blob );
+			} catch ( \Exception $e ) {
+				return [ '_error' => 'PDF-OCR fehlgeschlagen: ' . $e->getMessage() ];
+			}
+		} elseif ( strpos( $mime, 'image/' ) === 0 ) {
+			$allowed_mimes = [
+				'image/png',
+				'image/jpeg',
+				'image/jpg',
+				'image/gif',
+				'image/webp',
+			];
+			if ( ! in_array( $mime, $allowed_mimes, true ) ) {
+				return [ '_error' => 'Bildformat nicht unterstützt (bitte JPG/PNG/WebP/GIF).' ];
+			}
+			$norm_mime = $mime;
+			if ( $mime === 'image/jpg' ) {
+				$norm_mime = 'image/jpeg';
+			}
+			if ( $mime === 'image/x-png' ) {
+				$norm_mime = 'image/png';
+			}
+			$blob = file_get_contents( $file_path );
+			if ( $blob === false || $blob === '' ) {
+				return [ '_error' => 'Bild konnte nicht gelesen werden.' ];
+			}
+			$image = 'data:' . $norm_mime . ';base64,' . rtrim( base64_encode( $blob ) );
+		} else {
+			return [ '_error' => 'OCR nur für Bilder oder PDF möglich.' ];
+		}
 
-Extrahiere, wenn eindeutig vorhanden:
-
-1. datum – Zahlungs- oder Belegdatum (YYYY-MM-DD)
-2. betrag – Bruttobetrag inkl. MwSt (Zahl mit Punkt)
-3. bezahlt_am – Zahlungsdatum (YYYY-MM-DD), falls klar erkennbar
-4. zahlungsart – nur einer dieser Werte: bar, twint, karte, ueberweisung
-5. mwst – explizit ausgewiesener MwSt-Betrag (Zahl mit Punkt)
-
-Regeln:
-- MwSt nur ausgeben, wenn sie explizit ausgewiesen ist
-- Keine Berechnung, kein Schätzen
-- Wenn unklar → leer lassen
-- Antworte ausschließlich als JSON
-
-{
-  "datum": "",
-  "betrag": "",
-  "bezahlt_am": "",
-  "zahlungsart": "",
-  "mwst": ""
-}
-PROMPT;
+		$prompt = self::ocr_prompt();
 
 		$response = wp_remote_post(
 			'https://api.openai.com/v1/chat/completions',
@@ -925,12 +980,48 @@ PROMPT;
 			]
 		);
 
-		$data = json_decode(
-			$body = wp_remote_retrieve_body( $response ),
-			true
-		);
-
+		if ( is_wp_error( $response ) ) {
+			return [ '_error' => $response->get_error_message() ];
+		}
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		if ( $status < 200 || $status >= 300 ) {
+			$err = json_decode( $body, true );
+			$msg = is_array( $err ) && isset( $err['error']['message'] ) ? $err['error']['message'] : 'ocr_failed';
+			$code = stripos( $msg, 'expected pattern' ) !== false ? 'data_url_pattern' : '';
+			return [ '_error' => $msg, '_error_code' => $code ];
+		}
+		$data = json_decode( $body, true );
 		return json_decode( $data['choices'][0]['message']['content'] ?? '', true ) ?: [];
+	}
+
+
+	private static function ocr_prompt() : string {
+		return <<<PROMPT
+Du siehst einen Beleg aus der Schweiz.
+
+Extrahiere, wenn eindeutig vorhanden:
+
+1. datum – Zahlungs- oder Belegdatum (YYYY-MM-DD)
+2. betrag – Bruttobetrag inkl. MwSt (Zahl mit Punkt)
+3. bezahlt_am – Zahlungsdatum (YYYY-MM-DD), falls klar erkennbar
+4. zahlungsart – nur einer dieser Werte: bar, twint, karte, ueberweisung
+5. mwst – explizit ausgewiesener MwSt-Betrag (Zahl mit Punkt)
+
+Regeln:
+- MwSt nur ausgeben, wenn sie explizit ausgewiesen ist
+- Keine Berechnung, kein Schätzen
+- Wenn unklar → leer lassen
+- Antworte ausschließlich als JSON
+
+{
+  "datum": "",
+  "betrag": "",
+  "bezahlt_am": "",
+  "zahlungsart": "",
+  "mwst": ""
+}
+PROMPT;
 	}
 }
 

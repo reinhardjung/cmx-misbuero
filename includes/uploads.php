@@ -13,7 +13,7 @@ function cmx_is_beleg_upload_request(): bool {
 function cmx_get_beleg_upload_stamp(): string {
 	static $stamp = '';
 	if ($stamp === '') {
-		$stamp = date('ymd-His', current_time('timestamp'));
+		$stamp = wp_date('ymd-His');
 	}
 	return $stamp;
 }
@@ -49,7 +49,7 @@ function cmx_belege_next_suffix(string $dir, string $prefix): int {
 		return $dirs;
 	}
 
-	$year = date('Y', current_time('timestamp'));
+	$year = wp_date('Y');
 	[$base, $url] = cmx_belege_upload_dir((int) $year);
 	$dirs['path']    = $base;
 	$dirs['basedir'] = $base;
@@ -113,7 +113,7 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 		if ($post_slug !== '' && $post_slug !== $prefix) {
 			$prefixes[] = $post_slug;
 		}
-		$year = date('Y', current_time('timestamp'));
+	$year = wp_date('Y');
 		[$dir_base] = cmx_belege_upload_dir((int) $year);
 		foreach ($prefixes as $scan_prefix) {
 			$found = [];
@@ -351,24 +351,26 @@ function cmx_belege_upload_file(): void {
 	require_once ABSPATH . 'wp-admin/includes/media.php';
 	require_once ABSPATH . 'wp-admin/includes/image.php';
 
-	$ts = current_time('timestamp');
-	$year = date('Y', $ts);
+	$year = wp_date('Y');
 	$post = get_post($post_id);
 	if (!$post) {
 		wp_send_json_error(['message' => 'bad_post'], 400);
 	}
 	$post_title = $post->post_title;
 	if ($post_title === '' || $post->post_status === 'auto-draft') {
-		$post_title = date('ymd-His', $ts);
+		$post_title = wp_date('ymd-His');
 	}
 	wp_update_post([
 		'ID' => $post_id,
 		'post_title' => $post_title,
 		'post_status' => 'publish',
+		'post_date' => current_time('mysql'),
+		'post_date_gmt' => get_gmt_from_date(current_time('mysql')),
+		'edit_date' => true,
 	]);
 	$post_slug = sanitize_title($post_title);
 	if ($post_slug === '') {
-		$post_slug = date('ymd-His', $ts);
+		$post_slug = wp_date('ymd-His');
 	}
 	update_post_meta($post_id, '_cmx_beleg_upload_prefix', $post_slug);
 
