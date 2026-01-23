@@ -38,7 +38,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	cmx_create_taxo(basename(__DIR__), 'Währung', 'Währungen', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
 	// cmx_create_taxo(basename(__DIR__), 'Buchungsart', 'Buchungsarten');
 	cmx_create_taxo(basename(__DIR__), 'Zahlungsgrund', 'Zahlungsgrund');
-	cmx_create_taxo(basename(__DIR__), 'Zahlungsart', 'Zahlungsarten', false, false, ['show_ui' => true, 'meta_box_cb' => false]);
+	cmx_create_taxo(basename(__DIR__), 'Zahlungsart', 'Zahlungsarten');
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
 
