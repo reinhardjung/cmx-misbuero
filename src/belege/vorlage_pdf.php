@@ -668,7 +668,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) { cmxbu_log('ABBRUCH: Revision/Autosave.',compact('post_id')); return; }
 		if ((defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)) { cmxbu_log('ABBRUCH: DOING_AUTOSAVE.'); return; }
 		if (!current_user_can('edit_post',$post_id)) { cmxbu_log('ABBRUCH: Permission.'); return; }
-		if (in_array($post->post_status, ['auto-draft','draft'], true)) { cmxbu_log('ABBRUCH: draft/auto-draft.',compact('post_id')); return; }
+		if (in_array($post->post_status, ['auto-draft','draft','trash'], true)) { cmxbu_log('ABBRUCH: draft/auto-draft/trash.',compact('post_id')); return; }
 		$title_raw_check = (string)$post->post_title;
 		if (str_starts_with($title_raw_check, 'automatisch-gespeicherter-entwurf')) {
 			cmxbu_log('ABBRUCH: auto-draft Titel.', compact('post_id'));

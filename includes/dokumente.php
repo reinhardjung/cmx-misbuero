@@ -207,7 +207,15 @@ function cmx_dokumente_upload_file(): void {
 
 	$ts = \current_time('timestamp');
 	$year = \date('Y', $ts);
-	$doc_title = \date('ymd-His', $ts) . '_' . \sanitize_key($post_type);
+	$source_title = $post_id > 0 ? \get_the_title($post_id) : '';
+	if (!\is_string($source_title)) {
+		$source_title = '';
+	}
+	$source_title = \trim($source_title);
+	if ($source_title === '') {
+		$source_title = \wp_date('ymd-His') . '_' . \sanitize_key($post_type);
+	}
+	$doc_title = $is_dokumente ? (string) $source_title : \wp_date('ymd-His');
 
 	$doc_id = $post_id;
 	if (!$is_dokumente) {
@@ -286,25 +294,11 @@ function cmx_dokumente_upload_file(): void {
 	\remove_filter('intermediate_image_sizes', $no_sizes_filter_simple);
 	\remove_filter('upload_dir', $upload_filter);
 
-	// Datei umbenennen: YYMMDD-HHMMSS_XY.ext (nur fuer CPT belege)
+	// Datei umbenennen: YYMMDD-HHMMSS_{PostTitelDesCPT}.ext (bei Upload aus anderem CPT)
 	$base_dir = dirname($uploaded['file']);
-	$orig_base = pathinfo($_FILES['file']['name'], PATHINFO_FILENAME);
-	$umlaut_map = [
-		'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss',
-		'Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue',
-	];
-	$normalized = strtr($orig_base, $umlaut_map);
-	$only_letters = preg_replace('/[^a-z]/i', '', $normalized);
-	$only_digits = preg_replace('/[^0-9]/', '', $normalized);
-	$short = substr($only_letters, 0, 8);
-	if (strlen($short) < 8) {
-		$need = 8 - strlen($short);
-		$short .= substr($only_digits, 0, $need);
-	}
-	$short = $short !== '' ? $short : 'upload';
 	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
-	if ($post_type === 'belege') {
-		$new_base = \sanitize_file_name(\date('ymd-His', $ts) . '_' . $short . '.' . $ext);
+	if ($post_type !== 'dokumente') {
+		$new_base = \sanitize_file_name(\wp_date('ymd-His') . '_' . $source_title . '.' . $ext);
 	}
 	$new_base = \wp_unique_filename($base_dir, $new_base);
 	$new_path = $base_dir . '/' . $new_base;
