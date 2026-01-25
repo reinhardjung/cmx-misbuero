@@ -135,6 +135,8 @@ function cmx_render_position_row($i, $pos) {
 	echo '<tr class="cmx-pos-row">';
 
 	echo '<td style="min-width:260px">';
+	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
+	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" title="Artikel bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
 	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" placeholder="Artikel suchen …" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
 	echo '</td>';
@@ -488,6 +490,14 @@ function cmx_beleg_positionen_js() {
 					const $row = $input.closest('tr');
 					$row.find('.cmx-artikel-id').val(it.id||0);
 					$input.val((it.nr?it.nr+' – ':'') + (it.title||''));
+					const $edit = $row.find('.cmx-artikel-edit');
+					if (it.id) {
+						$edit.attr('href', <?php echo wp_json_encode(admin_url('post.php?post=')); ?> + it.id + '&action=edit');
+						$edit.css({ 'pointer-events':'auto', 'opacity':'1' });
+					} else {
+						$edit.removeAttr('href');
+						$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
+					}
 					if(it.id){
 						$.post(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_get_artikel_vk', artikel_id: it.id }, function(resp){
 							if(resp && resp.success && resp.data && resp.data.vk!==undefined){
@@ -495,6 +505,9 @@ function cmx_beleg_positionen_js() {
 							}
 						}, 'json');
 					}
+					setTimeout(function(){
+						$row.find('input[name*="[menge]"]').first().focus().select();
+					}, 0);
 				}
 				function doSearch(q){ fetchArtikel(q, (rows)=>{ nav.render(rows); }); }
 
@@ -574,9 +587,26 @@ function cmx_beleg_positionen_js() {
 		.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 		#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
+		#cmx-positionen-table th:first-child,
+		#cmx-positionen-table td:first-child{ padding-right:20px; }
 		#cmx-positionen-table td textarea { resize: vertical; }
-		.cmx-pos-row td:first-child{ position:relative; }
+		.cmx-pos-row td:first-child{ position:relative; padding-right:8px; }
 		.cmx-pos-total{ font-weight:600; text-align:right; }
+		.cmx-artikel-edit{
+			position:absolute;
+			left:6px;
+			top:50%;
+			transform:translateY(-50%);
+			text-decoration:none;
+			font-size:12px;
+			color:#2271b1;
+			padding-right:6px;
+		}
+		.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
+			padding-left:8px;
+			margin-left:22px;
+			width: calc(100% - 22px);
+		}
 	</style>
 	<?php
 }
