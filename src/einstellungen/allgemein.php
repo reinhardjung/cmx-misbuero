@@ -59,7 +59,7 @@ function cmx_register_general_tab(): void {
 		function () {
 			$val = \get_option( 'mis_buero_openai_key', '' );
 			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr( $val ) . '">';
-			echo '<p class="description">Wird für OCR (Belegdatum, Betrag, Zahlungsart) verwendet.</p>';
+			echo '<p class="description">Wird für OCR und Texte verwendet</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
