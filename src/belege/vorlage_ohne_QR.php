@@ -440,7 +440,13 @@ if (!$has_positions && !empty($tpl['document']['manual_total'])) {
 				<?php endforeach; ?>
 			</table>
 			<div>- <?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
-			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($__fmt_num($offen_betrag), ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<?php
+				$offen_fmt = $__fmt_num($offen_betrag);
+				if (str_starts_with($offen_fmt, '-')) {
+					$offen_fmt = '- ' . ltrim($offen_fmt, '-');
+				}
+			?>
+			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($offen_fmt, ENT_QUOTES, 'UTF-8'); ?></strong></div>
 		</div>
 	<?php endif; ?>
 

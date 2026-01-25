@@ -818,6 +818,19 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			if ($datum === '' || $betrag === '') return null;
 			return ['datum' => $datum, 'betrag' => $betrag];
 		}, $anzahlungen)));
+		if (!empty($anzahlungen)) {
+			usort($anzahlungen, static function (array $a, array $b): int {
+				$ad = $a['datum'] ?? '';
+				$bd = $b['datum'] ?? '';
+				if ($ad === $bd) return 0;
+				if ($ad === '') return 1;
+				if ($bd === '') return -1;
+				$at = strtotime($ad) ?: 0;
+				$bt = strtotime($bd) ?: 0;
+				if ($at === $bt) return strcmp($ad, $bd);
+				return $at <=> $bt;
+			});
+		}
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
