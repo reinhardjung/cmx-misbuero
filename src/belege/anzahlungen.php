@@ -221,6 +221,12 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	if (!isset($_POST['cmx_beleg_anzahlungen_nonce']) || !\wp_verify_nonce($_POST['cmx_beleg_anzahlungen_nonce'], 'cmx_save_beleg_anzahlungen')) return;
 	if (defined('DOING_AJAX') && DOING_AJAX) return;
 
+	$incoming_status = isset($_POST['cmx_beleg_status']) ? \sanitize_key($_POST['cmx_beleg_status']) : '';
+	if ($incoming_status !== 'teilbezahlt') {
+		\delete_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN);
+		return;
+	}
+
 	$rows = $_POST['cmx_anzahlungen'] ?? [];
 	if (!\is_array($rows)) return;
 
