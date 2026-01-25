@@ -210,6 +210,8 @@ add_action('admin_footer', function () {
 			if (!el) return null;
 			const modal = el.closest && el.closest('#cmx-help-modal');
 			if (modal) return null;
+			const custom = el.closest && el.closest('[data-cmx-help-key]');
+			if (custom) return custom;
 			if (el.matches && el.matches('input,select,textarea,label')) return el;
 			const btn = el.closest && el.closest('button, a.button, .button');
 			if (btn) return btn;

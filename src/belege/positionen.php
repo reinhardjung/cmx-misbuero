@@ -136,9 +136,9 @@ function cmx_render_position_row($i, $pos) {
 
 	echo '<td style="min-width:260px">';
 	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
-	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" title="Artikel bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
+	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
-	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" placeholder="Artikel suchen …" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
+	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
 	echo '</td>';
 
 	// negative Mengen zulassen (Komma/Punkt erlaubt)
