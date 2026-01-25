@@ -47,14 +47,12 @@ add_action('add_meta_boxes', function() {
 			$btn_label    = sprintf('%s speichern', $singular);
 			$btn_name     = $is_new ? 'publish' : 'save';
 			$save_as_opts = [
-				'rechnung'    => 'als Rechnung',
-				'angebot'     => 'als Offerte',
-				'lieferschein'=> 'als Lieferschein',
+				'rechnung'     => 'als Rechnung speichern',
+				'offerte'      => 'als Offerte speichern',
+				'lieferschein' => 'als Lieferschein duplizieren',
+				'rechnung_kopie' => 'als Rechnung duplizieren',
 			];
-			$save_as_val = (string) get_post_meta($post->ID, '_cmx_beleg_pdf_type', true);
-			if (!isset($save_as_opts[$save_as_val])) {
-				$save_as_val = 'rechnung';
-			}
+			$save_as_val = 'rechnung';
 			$send_href = '';
 			$download_url = '';
 			$has_pdf = false;
@@ -73,14 +71,20 @@ add_action('add_meta_boxes', function() {
 			echo '<div style="padding:12px 0;">';
 			if ($is_belege) {
 				$hide_save_as = false;
+				$active_slug = '';
 				if (function_exists(__NAMESPACE__ . '\\cmx_belege_tax')) {
 					$tax = cmx_belege_tax();
 					if ($tax) {
 						$slugs = wp_get_post_terms($post->ID, $tax, ['fields' => 'slugs']);
-						if (!is_wp_error($slugs) && in_array('gutschrift', $slugs, true)) {
-							$hide_save_as = true;
+						if (!is_wp_error($slugs) && !empty($slugs)) {
+							$active_slug = (string) $slugs[0];
 						}
 					}
+				}
+				if ($active_slug === 'offerte') {
+					$save_as_val = 'offerte';
+				} else {
+					$save_as_val = 'rechnung';
 				}
 				wp_nonce_field('cmx_beleg_save_as', 'cmx_beleg_save_as_nonce');
 				echo '<div id="cmx_beleg_save_as_wrap" style="margin-bottom:8px;' . ($hide_save_as ? 'display:none;' : '') . '">';
@@ -90,7 +94,7 @@ add_action('add_meta_boxes', function() {
 				}
 				echo '</select>';
 				echo '</div>';
-				echo '<script>(function(){var wrap=document.getElementById("cmx_beleg_save_as_wrap");if(!wrap)return;function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function sync(){var slug=getSlug();wrap.style.display=(slug==="gutschrift")?"none":"";}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",function(){sync();setTimeout(sync,200);});setTimeout(sync,0);})();</script>';
+				echo '<script>(function(){var wrap=document.getElementById("cmx_beleg_save_as_wrap");var sel=document.getElementById("cmx_beleg_save_as");if(!wrap||!sel)return;var optRech=sel.querySelector("option[value=rechnung]");var optOff=sel.querySelector("option[value=offerte]");var optLief=sel.querySelector("option[value=lieferschein]");var optRechCopy=sel.querySelector("option[value=rechnung_kopie]");function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function getRichtung(){var el=document.querySelector("input[name=cmx_beleg_richtung]:checked");return el?el.value:"";}function setOpt(opt, show){if(!opt)return;opt.disabled=!show;opt.hidden=!show;}function sync(){var slug=getSlug();var richtung=getRichtung();if((slug==="rechnung"||slug==="offerte")&&richtung==="ausgang"){wrap.style.display="";if(slug==="rechnung"){setOpt(optRech,true);setOpt(optLief,true);setOpt(optOff,false);setOpt(optRechCopy,false);sel.value="rechnung";}else{setOpt(optOff,true);setOpt(optRechCopy,true);setOpt(optRech,false);setOpt(optLief,false);sel.value="offerte";}}else{wrap.style.display="none";}}document.addEventListener("change",function(e){if(e.target&&(e.target.name==="cmx_beleg_kategorie"||e.target.name==="cmx_beleg_richtung")){sync();}});document.addEventListener("DOMContentLoaded",function(){sync();setTimeout(sync,200);});setTimeout(sync,0);})();</script>';
 			}
 			echo '<div style="display:flex; align-items:center; gap:8px;">';
 			printf(

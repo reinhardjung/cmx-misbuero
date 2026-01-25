@@ -665,6 +665,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save', 999, 3);
 	function cmxbu_generate_document_on_save(int $post_id, \WP_Post $post, bool $update): void {
 		if ($post->post_type !== 'belege') return;
+		if (!empty($GLOBALS['cmx_skip_beleg_pdf_generation'])) { cmxbu_log('ABBRUCH: PDF-Generation per Flag.', compact('post_id')); return; }
 		if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) { cmxbu_log('ABBRUCH: Revision/Autosave.',compact('post_id')); return; }
 		if ((defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)) { cmxbu_log('ABBRUCH: DOING_AUTOSAVE.'); return; }
 		if (!current_user_can('edit_post',$post_id)) { cmxbu_log('ABBRUCH: Permission.'); return; }

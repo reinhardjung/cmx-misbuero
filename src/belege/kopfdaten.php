@@ -578,11 +578,15 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	if (\wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
 	if (!empty($GLOBALS['cmx_belege_title_updating'])) return;
+	if (!isset($GLOBALS['cmx_belege_dup_guard'])) {
+		$GLOBALS['cmx_belege_dup_guard'] = [];
+	}
 
 	$inv_no = cmx_ensure_rechnungsnummer($post_id);
 
 	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
 	$has_save_as_nonce = isset($_POST['cmx_beleg_save_as_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_save_as_nonce'], 'cmx_beleg_save_as');
+	$current_kategorie_slug = '';
 
 	if ($has_nonce) {
 		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
@@ -598,6 +602,10 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			}
 			if ($term_id > 0 && in_array($term_id, $allowed_ids, true)) {
 				\wp_set_post_terms($post_id, [$term_id], $tax, false);
+				$term_obj = \get_term($term_id, $tax);
+				if ($term_obj && !\is_wp_error($term_obj)) {
+					$current_kategorie_slug = (string) $term_obj->slug;
+				}
 			}
 		}
 
@@ -643,13 +651,66 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 		}
 	}
 
+	if ($current_kategorie_slug === '') {
+		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if ($tax) {
+			$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($slugs) && !empty($slugs)) {
+				$current_kategorie_slug = (string) $slugs[0];
+			}
+		}
+	}
+
 	if ($has_save_as_nonce && isset($_POST['cmx_beleg_save_as'])) {
 		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_save_as']));
-		$allowed = ['rechnung', 'angebot', 'lieferschein'];
-		if (!in_array($val, $allowed, true)) {
-			$val = 'rechnung';
+		$copy_map = [
+			'rechnung' => 'lieferschein',
+			'offerte'  => 'rechnung',
+		];
+		$normalized_val = $val;
+		if ($val === 'rechnung_kopie') {
+			$normalized_val = 'rechnung';
 		}
-		\update_post_meta($post_id, '_cmx_beleg_pdf_type', $val);
+		if (!empty($GLOBALS['cmx_belege_duplication_in_progress'])) {
+			return;
+		}
+		if (!empty($GLOBALS['cmx_belege_dup_guard'][$post_id])) {
+			return;
+		}
+		if (isset($copy_map[$current_kategorie_slug]) && $copy_map[$current_kategorie_slug] === $normalized_val) {
+			$GLOBALS['cmx_belege_dup_guard'][$post_id] = true;
+			$GLOBALS['cmx_belege_duplication_in_progress'] = true;
+			$dup_fn = __NAMESPACE__ . '\\cmx_duplicate_do';
+			if (\is_callable($dup_fn)) {
+				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
+				$new_id = $dup_fn($post_id);
+				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
+				if (!\is_wp_error($new_id)) {
+					$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
+					if ($tax) {
+						$term = \get_term_by('slug', $normalized_val, $tax);
+						if (!$term) {
+							$term = \get_term_by('name', ucfirst($normalized_val), $tax);
+						}
+						if ($term && !\is_wp_error($term)) {
+							\wp_set_post_terms($new_id, [(int) $term->term_id], $tax, false);
+						}
+					}
+					\delete_post_meta($new_id, '_cmx_beleg_pdf_type');
+					\update_post_meta($new_id, '_cmx_beleg_copied_from', (int) $post_id);
+					$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';
+					if (\is_callable($gen_fn)) {
+						$new_post = \get_post($new_id);
+						if ($new_post) {
+							$gen_fn($new_id, $new_post, true);
+						}
+					}
+					$GLOBALS['cmx_belege_dup_redirect_id'] = (int) $new_id;
+				}
+			}
+			unset($GLOBALS['cmx_belege_duplication_in_progress']);
+			unset($GLOBALS['cmx_belege_dup_guard'][$post_id]);
+		}
 	}
 
 	$current = \get_post($post_id);
@@ -666,3 +727,16 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 		\delete_post_meta($post_id, '_cmx_title_auto');
 	}
 }, 10, 3);
+
+add_filter('redirect_post_location', function (string $location, int $post_id): string {
+	if (!isset($GLOBALS['cmx_belege_dup_redirect_id'])) {
+		return $location;
+	}
+	$new_id = (int) $GLOBALS['cmx_belege_dup_redirect_id'];
+	unset($GLOBALS['cmx_belege_dup_redirect_id']);
+	if ($new_id <= 0) {
+		return $location;
+	}
+	$edit_link = \get_edit_post_link($new_id, '');
+	return $edit_link ? $edit_link : $location;
+}, 10, 2);
