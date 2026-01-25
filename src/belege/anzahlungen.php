@@ -78,6 +78,8 @@ function cmx_beleg_anzahlungen_get_rows(int $post_id): array {
 function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	$rows = cmx_beleg_anzahlungen_get_rows($post->ID);
 	if (!$rows) $rows = [['datum'=>'', 'betrag'=>'']];
+	$pay_tax = function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax') ? cmx_beleg_zahlungsart_tax() : null;
+	$pay_terms = $pay_tax ? \get_terms(['taxonomy' => $pay_tax, 'hide_empty' => false]) : [];
 
 	\wp_nonce_field('cmx_save_beleg_anzahlungen', 'cmx_beleg_anzahlungen_nonce');
 
@@ -96,6 +98,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	foreach ($rows as $i => $row) {
 		$datum  = \esc_attr($row['datum'] ?? '');
 		$betrag = \esc_attr($row['betrag'] ?? '');
+		$zahlungsart = isset($row['zahlungsart']) ? (string) $row['zahlungsart'] : '';
 		echo '<div class="cmx-anzahlung-row">';
 		echo '<label>Datum <small style="color:#666;">(<span class="cmx-anzahlung-today">heute</span>)</small></label>';
 		echo '<input type="date" class="cmx-anzahlung-date" data-name="cmx_anzahlungen[__INDEX__][datum]" name="cmx_anzahlungen['.$i.'][datum]" value="'.$datum.'">';
@@ -104,6 +107,15 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		echo '<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen['.$i.'][betrag]" value="'.$betrag.'">';
 		echo '<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>';
 		echo '</div>';
+		echo '<label style="margin-top:6px">Zahlungsart</label>';
+		echo '<select class="cmx-anzahlung-zahlungsart" data-name="cmx_anzahlungen[__INDEX__][zahlungsart]" name="cmx_anzahlungen['.$i.'][zahlungsart]" style="width:100%;">';
+		echo '<option value="">— auswählen —</option>';
+		if ($pay_tax && !\is_wp_error($pay_terms)) {
+			foreach ($pay_terms as $term) {
+				echo '<option value="' . \esc_attr($term->term_id) . '"' . \selected($zahlungsart, (string) $term->term_id, false) . '>' . \esc_html($term->name) . '</option>';
+			}
+		}
+		echo '</select>';
 		echo '</div>';
 	}
 	echo '</div>';
@@ -119,6 +131,18 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 				<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen[__INDEX__][betrag]" value="">
 				<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>
 			</div>
+			<label style="margin-top:6px">Zahlungsart</label>
+			<select class="cmx-anzahlung-zahlungsart" data-name="cmx_anzahlungen[__INDEX__][zahlungsart]" name="cmx_anzahlungen[__INDEX__][zahlungsart]" style="width:100%;">
+				<option value="">— auswählen —</option>
+				'.(function() use ($pay_tax, $pay_terms){
+					if (!$pay_tax || is_wp_error($pay_terms)) return '';
+					$out = '';
+					foreach ($pay_terms as $term) {
+						$out .= '<option value="' . esc_attr($term->term_id) . '">' . esc_html($term->name) . '</option>';
+					}
+					return $out;
+				})().'
+			</select>
 		</div>
 	</script>';
 
@@ -129,7 +153,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 
 		function reindexRows(){
 			$wrap.find(".cmx-anzahlung-row").each(function(i){
-				$(this).find("input[data-name]").each(function(){
+				$(this).find("input[data-name], select[data-name]").each(function(){
 					const base = $(this).data("name");
 					if (base) $(this).attr("name", base.replace("__INDEX__", i));
 				});
@@ -154,7 +178,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		$wrap.on("click", ".cmx-anzahlung-del", function(){
 			const $rows = $wrap.find(".cmx-anzahlung-row");
 			if ($rows.length <= 1) {
-				$(this).closest(".cmx-anzahlung-row").find("input").val("");
+				$(this).closest(".cmx-anzahlung-row").find("input, select").val("");
 				return;
 			}
 			$(this).closest(".cmx-anzahlung-row").remove();
@@ -190,8 +214,9 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		if (!\is_array($row)) continue;
 		$datum  = isset($row['datum']) ? \trim((string)\sanitize_text_field($row['datum'])) : '';
 		$betrag = isset($row['betrag']) ? \trim((string)\sanitize_text_field($row['betrag'])) : '';
+		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)\sanitize_text_field($row['zahlungsart'])) : '';
 		if ($datum === '' && $betrag === '') continue;
-		$clean[] = ['datum'=>$datum, 'betrag'=>$betrag];
+		$clean[] = ['datum'=>$datum, 'betrag'=>$betrag, 'zahlungsart'=>$zahlungsart];
 	}
 
 	if (!$clean) {
