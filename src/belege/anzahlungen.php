@@ -53,8 +53,9 @@ function cmx_beleg_anzahlungen_get_rows(int $post_id): array {
 		if (!\is_array($row)) continue;
 		$datum  = isset($row['datum']) ? \trim((string)$row['datum']) : '';
 		$betrag = isset($row['betrag']) ? \trim((string)$row['betrag']) : '';
-		if ($datum === '' && $betrag === '') continue;
-		$rows[] = ['datum'=>$datum, 'betrag'=>$betrag];
+		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)$row['zahlungsart']) : '';
+		if ($datum === '' && $betrag === '' && $zahlungsart === '') continue;
+		$rows[] = ['datum'=>$datum, 'betrag'=>$betrag, 'zahlungsart'=>$zahlungsart];
 	}
 	if (\count($rows) > 1) {
 		\usort($rows, function(array $a, array $b): int {
