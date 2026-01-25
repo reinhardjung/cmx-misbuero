@@ -54,6 +54,7 @@ $is_ausgang = ($richtung === 'ausgang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 $is_gutschrift = ($beleg_type === 'gutschrift');
+$is_offerte = in_array($beleg_type, ['offerte', 'angebot'], true);
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -453,7 +454,7 @@ if (!$has_positions && !empty($tpl['document']['manual_total'])) {
 		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
 		$bank_iban = $iban;
 		?>
-		<?php if ($is_ausgang && !$is_lieferschein && !$is_lieferantenrechnung && ($bank_name !== '' || $bank_iban !== '' || $bic !== '')): ?>
+		<?php if ($is_ausgang && !$is_lieferschein && !$is_lieferantenrechnung && !$is_offerte && ($bank_name !== '' || $bank_iban !== '' || $bic !== '')): ?>
 			<div style="margin-top:8px;">
 				<div><strong>Zahlungsinformationen</strong></div>
 				<?php if ($bank_name !== ''): ?>
