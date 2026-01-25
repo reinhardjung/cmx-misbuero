@@ -45,6 +45,67 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
 		];
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
+	function cmx_sync_beleg_duplicate(int $source_id, int $target_id): void {
+		$orig = \get_post($source_id);
+		$target = \get_post($target_id);
+		if (!$orig || !$target) return;
+		if ($orig->post_type !== 'belege' || $target->post_type !== 'belege') return;
+
+		\wp_update_post([
+			'ID'             => $target_id,
+			'post_content'   => $orig->post_content,
+			'post_excerpt'   => $orig->post_excerpt,
+			'comment_status' => $orig->comment_status,
+			'ping_status'    => $orig->ping_status,
+			'menu_order'     => $orig->menu_order,
+		]);
+
+		$taxes = \get_object_taxonomies('belege');
+		foreach ($taxes as $tax) {
+			$terms = \wp_get_object_terms($source_id, $tax, ['fields' => 'ids']);
+			if (!\is_wp_error($terms) && !empty($terms)) {
+				\wp_set_object_terms($target_id, $terms, $tax, false);
+			}
+		}
+
+		$blacklist = \function_exists(__NAMESPACE__ . '\\cmx_dup_meta_blacklist')
+			? cmx_dup_meta_blacklist()
+			: [];
+		$blacklist[] = '_cmx_beleg_copied_from';
+		$blacklist[] = '_cmx_beleg_copied_to';
+		$blacklist[] = '_cmx_beleg_pdf_type';
+		$blacklist[] = '_cmx_title_auto';
+		$blacklist = array_unique($blacklist);
+
+		$all_meta = \get_post_meta($source_id);
+		foreach ($all_meta as $key => $values) {
+			if (\in_array($key, $blacklist, true)) continue;
+			\delete_post_meta($target_id, $key);
+			foreach ((array) $values as $val) {
+				\add_post_meta($target_id, $key, \maybe_unserialize($val));
+			}
+		}
+
+		$thumb_id = \get_post_thumbnail_id($source_id);
+		if ($thumb_id) {
+			\set_post_thumbnail($target_id, $thumb_id);
+		}
+
+		$ensure_fn = __NAMESPACE__ . '\\cmx_ensure_rechnungsnummer';
+		if (\is_callable($ensure_fn)) {
+			$no = $ensure_fn($target_id);
+			if ($no !== '') {
+				\update_post_meta($target_id, '_cmx_title_auto', 1);
+				\wp_update_post([
+					'ID'         => $target_id,
+					'post_title' => $no,
+					'post_name'  => \sanitize_title($no),
+				]);
+			}
+		}
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
 	function cmx_kontakte_cpt(): string {
 		if (\post_type_exists('kontakte')) return 'kontakte';
@@ -682,8 +743,15 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			$GLOBALS['cmx_belege_duplication_in_progress'] = true;
 			$dup_fn = __NAMESPACE__ . '\\cmx_duplicate_do';
 			$existing_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
-			if ($existing_id > 0 && \get_post_type($existing_id) === 'belege') {
+			if ($existing_id > 0) {
+				$existing_post = \get_post($existing_id);
+				if (!$existing_post || $existing_post->post_type !== 'belege' || $existing_post->post_status === 'trash') {
+					$existing_id = 0;
+				}
+			}
+			if ($existing_id > 0) {
 				$new_id = $existing_id;
+				cmx_sync_beleg_duplicate($post_id, $new_id);
 			} elseif (\is_callable($dup_fn)) {
 				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 				$new_id = $dup_fn($post_id);
@@ -746,3 +814,37 @@ add_filter('redirect_post_location', function (string $location, int $post_id): 
 	$edit_link = \get_edit_post_link($new_id, '');
 	return $edit_link ? $edit_link : $location;
 }, 10, 2);
+
+add_action('before_delete_post', function (int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+
+	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+	if ($from_id > 0) {
+		\delete_post_meta($from_id, '_cmx_beleg_copied_to');
+	}
+
+	$to_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+	if ($to_id > 0) {
+		\delete_post_meta($to_id, '_cmx_beleg_copied_from');
+	}
+});
+
+add_action('trashed_post', function (int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+
+	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+	if ($from_id > 0) {
+		\delete_post_meta($from_id, '_cmx_beleg_copied_to');
+	}
+
+	$to_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+	if ($to_id > 0) {
+		\delete_post_meta($to_id, '_cmx_beleg_copied_from');
+	}
+});

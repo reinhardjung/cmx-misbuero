@@ -140,7 +140,7 @@ $recipient_html = $recipient_has_br
 	.sender-table td { border: 0; padding: 0; vertical-align: top; }
 	.sender-contact { font-size: 11px; text-align: right; white-space: nowrap; padding-left: 8px; }
 	.sender-contact a { color: inherit; text-decoration: none; }
-	.invoice-meta { width: 160px; float: right; text-align: right; }
+	.invoice-meta { width: 140px; float: right; text-align: right; }
 	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
 	.invoice-meta td,
 	.invoice-meta tr { border: 0 !important; }
