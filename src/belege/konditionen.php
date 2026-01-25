@@ -157,11 +157,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo '<label for="cmx_beleg_faelligkeitsdatum" id="cmx_faellig_label" style="display:block;margin-bottom:6px;cursor:pointer;">';
 	echo '<strong>Fällig am</strong> ';
 	echo '<small style="color:#666;">('
-		. '<span id="cmx_f_today" style="text-decoration:underline; cursor:pointer;">heute</span> '
-		. '<span id="cmx_f_10" style="text-decoration:underline; cursor:pointer;">&nbsp;10&nbsp;</span> '
-		. '<span id="cmx_f_14" style="text-decoration:underline; cursor:pointer;">&nbsp;14&nbsp;</span> '
-		. '<span id="cmx_f_30" style="text-decoration:underline; cursor:pointer;">&nbsp;30&nbsp;</span> '
-		. '<span id="cmx_f_end" style="text-decoration:underline; cursor:pointer;">Monatsende</span>'
+		. '<span id="cmx_f_today" style="text-decoration:none; cursor:pointer;">heute</span> '
+		. '<span id="cmx_f_10" style="text-decoration:none; cursor:pointer;">&nbsp;10&nbsp;</span> '
+		. '<span id="cmx_f_14" style="text-decoration:none; cursor:pointer;">&nbsp;14&nbsp;</span> '
+		. '<span id="cmx_f_30" style="text-decoration:none; cursor:pointer;">&nbsp;30&nbsp;</span> '
+		. '<span id="cmx_f_end" style="text-decoration:none; cursor:pointer;">Monatsende</span>'
 		. ')</small>';
 	echo '</label>';
 	echo '<input type="date" name="cmx_beleg_faelligkeitsdatum" id="cmx_beleg_faelligkeitsdatum" style="width:100%;" value="' . \esc_attr($faellig) . '">';
@@ -201,7 +201,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	/* ===== NEU: Bezahlt am (am Ende der Metabox) ===== */
 	echo '<p style="margin:8px 0 0;">';
-	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(heute)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:12px; font-weight:normal;">unbezahlt</a></label>';
+	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(heute)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">unbezahlt</a></label>';
 	echo '<input type="date" name="cmx_beleg_bezahlt_am" id="cmx_beleg_bezahlt_am" style="width:100%;" value="' . \esc_attr($bezahlt) . '">';
 
 	// Inline-JS: sauberes Event-Handling inkl. "heute" vor 10/14/30/Monatsende
@@ -232,7 +232,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// Bezahlt am -> heute
 	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){if(e.target&&e.target.id==="cmx_bezahlt_clear"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
-	echo 'if(btnBClear&&inpB){btnBClear.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value="";var sel=document.getElementById("cmx_beleg_status");if(sel){sel.value="offen";}inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(btnBClear&&inpB){btnBClear.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value="";var sel=document.getElementById("cmx_beleg_status");if(sel){sel.value="offen";sel.dispatchEvent(new Event("change",{bubbles:true}));}inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 
 	// Leistungszeitraum -> nächster Monat
 	echo 'if(lblL&&selL){lblL.addEventListener("click",function(e){e.preventDefault();selL.value=nextMonthVal();});}';
@@ -277,7 +277,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		echo '</p>';
 	}
 
-	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");if(!inpB||!selS)return;function hasValidDate(){return /^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(hasValidDate()){selS.value="bezahlt";}}function syncPay(){if(!payWrap)return;var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function onStatusChange(){if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);} }inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);syncStatus();syncPay();})();</script>';
+	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");if(!inpB||!selS)return;function hasValidDate(){return /^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(hasValidDate()){if(selS.value!=="bezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}}function syncPay(){if(!payWrap)return;var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function onStatusChange(){if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);syncStatus();syncPay();})();</script>';
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
