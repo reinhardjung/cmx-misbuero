@@ -514,7 +514,7 @@ function cmx_beleg_positionen_js() {
 				$input.on('input', function(){
 					if(t) clearTimeout(t);
 					const q = $input.val().trim();
-					if(q.length<1){ $ul.hide().empty(); nav.reset(); return; }
+					if(q.length<1){ doSearch(''); return; }
 					t = setTimeout(()=>doSearch(q), 120);
 				});
 				$input.on('focus click', function(){ doSearch($input.val()); });
