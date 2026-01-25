@@ -46,7 +46,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		       value="<?php echo esc_attr( get_option( self::OPTION_AIKEY ) ); ?>"
 		       class="regular-text">
 		<p class="description">
-			Wird für OCR und Texte verwendet
+			Wird für OCR und Produkttexte verwendet
 		</p>
 		<?php
 	}

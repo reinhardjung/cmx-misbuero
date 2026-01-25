@@ -315,8 +315,12 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		echo '<label><input type="radio" name="cmx_beleg_richtung" value="'.\esc_attr($val).'" '.\checked($richtung,$val,false).'> <span class="cmx-richtung-label" data-value="'.\esc_attr($val).'">'.\esc_html($label).'</span></label>';
 	}
 	echo '</div></p>';
-	$richtung_label_map = [
+	$known_map = [
 		'rechnung' => [
+			'ausgang' => 'Einnahme (an Kunden)',
+			'eingang' => 'Ausgabe (von Lieferanten)',
+		],
+		'rechnungen' => [
 			'ausgang' => 'Einnahme (an Kunden)',
 			'eingang' => 'Ausgabe (von Lieferanten)',
 		],
@@ -324,7 +328,15 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 			'ausgang' => 'Ausgabe (an Kunden)',
 			'eingang' => 'Einnahme (von Lieferanten)',
 		],
+		'gutschriften' => [
+			'ausgang' => 'Ausgabe (an Kunden)',
+			'eingang' => 'Einnahme (von Lieferanten)',
+		],
 		'quittung' => [
+			'ausgang' => 'Einnahme (an Kunden)',
+			'eingang' => 'Ausgabe (von Lieferanten)',
+		],
+		'quittungen' => [
 			'ausgang' => 'Einnahme (an Kunden)',
 			'eingang' => 'Ausgabe (von Lieferanten)',
 		],
@@ -332,11 +344,47 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 			'ausgang' => 'Ausgang (an Kunden)',
 			'eingang' => 'Eingang (von Lieferanten)',
 		],
+		'offerten' => [
+			'ausgang' => 'Ausgang (an Kunden)',
+			'eingang' => 'Eingang (von Lieferanten)',
+		],
 		'lieferschein' => [
 			'ausgang' => 'Ausgang (an Kunden)',
 			'eingang' => 'Eingang (von Lieferanten)',
 		],
+		'lieferscheine' => [
+			'ausgang' => 'Ausgang (an Kunden)',
+			'eingang' => 'Eingang (von Lieferanten)',
+		],
 	];
+	$ini_kategorien = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? (array) cmx_ini_get_value('Belege', 'Kategorien')
+		: [];
+	$richtung_label_map = [];
+	foreach ($ini_kategorien as $cat_name) {
+		$slug = \sanitize_title((string) $cat_name);
+		$ini_labels = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+			? cmx_ini_get_value('BelegeRichtungLabels', (string) $cat_name)
+			: null;
+		if ($ini_labels === null || $ini_labels === '') {
+			$ini_labels = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+				? cmx_ini_get_value('BelegeRichtungLabels', (string) $slug)
+				: null;
+		}
+		if (\is_array($ini_labels) && \count($ini_labels) >= 2) {
+			$richtung_label_map[$slug] = [
+				'ausgang' => (string) $ini_labels[0],
+				'eingang' => (string) $ini_labels[1],
+			];
+			continue;
+		}
+		if (isset($known_map[$slug])) {
+			$richtung_label_map[$slug] = $known_map[$slug];
+		}
+	}
+	if (empty($richtung_label_map)) {
+		$richtung_label_map = $known_map;
+	}
 	echo '<script>(function(){var map='.\wp_json_encode($richtung_label_map).';var defaults='.\wp_json_encode($richtung_opts).';function slug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function sync(){var s=slug();var labels=(s&&map[s])?map[s]:defaults;document.querySelectorAll(".cmx-richtung-label").forEach(function(node){var val=node.getAttribute("data-value");if(labels&&labels[val]){node.textContent=labels[val];}});}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",sync);setTimeout(sync,0);})();</script>';
 
 	// echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';

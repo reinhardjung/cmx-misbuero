@@ -59,7 +59,29 @@ function cmx_register_general_tab(): void {
 		function () {
 			$val = \get_option( 'mis_buero_openai_key', '' );
 			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr( $val ) . '">';
-			echo '<p class="description">Wird für OCR und Texte verwendet</p>';
+			echo '<p class="description">Wird für OCR und Produkttexte verwendet</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\register_setting(
+		'cmx_einstellungen',
+		'cmx_katalog_online',
+		[
+			'type'              => 'boolean',
+			'sanitize_callback' => function ( $val ) {
+				return $val ? '1' : '0';
+			},
+		]
+	);
+
+	\add_settings_field(
+		'cmx_katalog_online',
+		'Katalog Online?',
+		function () {
+			$val = \get_option( 'cmx_katalog_online', '0' );
+			echo '<label><input type="checkbox" name="cmx_katalog_online" value="1" ' . checked( $val, '1', false ) . '> Katalog öffentlich sichtbar</label>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'

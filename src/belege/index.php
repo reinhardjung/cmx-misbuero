@@ -65,6 +65,24 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	}
 });
 
+// Beleg-Kategorien aus INI ergänzen (fehlende Terms hinzufügen)
+\add_action('admin_init', function () {
+	$tax = cmx_belege_kategorie_taxonomy();
+	if (!$tax) return;
+
+	$ini_terms = function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? (array) cmx_ini_get_value('Belege', 'Kategorien')
+		: [];
+	$ini_terms = array_values(array_filter(array_map('trim', $ini_terms), fn($v) => $v !== ''));
+	if (empty($ini_terms)) return;
+
+	foreach ($ini_terms as $name) {
+		if (!term_exists($name, $tax)) {
+			wp_insert_term($name, $tax);
+		}
+	}
+});
+
 // Kategorien in der Admin-Navigation ausblenden (Taxonomie bleibt bestehen)
 \add_action('admin_menu', function () {
 	if (cmx_is_cloud_meister_user()) {

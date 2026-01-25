@@ -120,7 +120,9 @@ function cmxbu_handle_beleg_send(): void {
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,
 			'site_name' => \get_bloginfo('name'),
-			'catalog_url' => \home_url('/katalog/'),
+			'catalog_url' => \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && \cmx_katalog_online()
+				? \home_url('/katalog/')
+				: '',
 		]);
 	}
 	if ($faellig_bis !== '') {
