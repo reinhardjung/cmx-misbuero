@@ -26,6 +26,7 @@ if (file_exists($cmx_autoload)) {
 }
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/katalog_access.php';
 require_once __DIR__ . '/includes/webdav.php';
 require_once __DIR__ . '/includes/featured_images.php';
 require_once __DIR__ . '/includes/dokumente.php';
