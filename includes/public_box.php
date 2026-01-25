@@ -108,6 +108,19 @@ add_action('add_meta_boxes', function() {
 			echo '</div>';
 			echo '</div>';
 
+			if ($is_belege && $post->ID) {
+				$from_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_from', true);
+				if ($from_id > 0) {
+					$from_title = get_the_title($from_id);
+					$from_link = get_edit_post_link($from_id, '');
+					if ($from_title !== '' && $from_link) {
+						echo '<div style="margin-top:8px; font-size:12px;">';
+						echo 'von: <a href="' . esc_url($from_link) . '">' . esc_html($from_title) . '</a>';
+						echo '</div>';
+					}
+				}
+			}
+
 			// Icons: Duplizieren + Papierkorb (ohne Text)
 			$has_uploads = false;
 			if ($is_belege && $post->ID) {
