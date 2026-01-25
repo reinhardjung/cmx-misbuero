@@ -109,13 +109,36 @@ add_action('add_meta_boxes', function() {
 			echo '</div>';
 
 			if ($is_belege && $post->ID) {
+				$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
 				$from_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_from', true);
+				$to_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_to', true);
+
 				if ($from_id > 0) {
-					$from_title = get_the_title($from_id);
 					$from_link = get_edit_post_link($from_id, '');
-					if ($from_title !== '' && $from_link) {
-						echo '<div style="margin-top:8px; font-size:12px;">';
-						echo 'von: <a href="' . esc_url($from_link) . '">' . esc_html($from_title) . '</a>';
+					$from_cat = '';
+					if ($tax) {
+						$from_terms = wp_get_post_terms($from_id, $tax, ['fields' => 'names']);
+						if (!is_wp_error($from_terms) && !empty($from_terms)) {
+							$from_cat = (string) $from_terms[0];
+						}
+					}
+					if ($from_link && $from_cat !== '') {
+						echo '<div style="margin-top:0px; font-size:12px;">';
+						echo 'von ' . esc_html($from_cat) . ': <a href="' . esc_url($from_link) . '">' . esc_html(get_the_title($from_id)) . '</a>';
+						echo '</div>';
+					}
+				} elseif ($to_id > 0) {
+					$to_link = get_edit_post_link($to_id, '');
+					$to_cat = '';
+					if ($tax) {
+						$to_terms = wp_get_post_terms($to_id, $tax, ['fields' => 'names']);
+						if (!is_wp_error($to_terms) && !empty($to_terms)) {
+							$to_cat = (string) $to_terms[0];
+						}
+					}
+					if ($to_link && $to_cat !== '') {
+						echo '<div style="margin-top:0px; font-size:12px;">';
+						echo 'zu ' . esc_html($to_cat) . ': <a href="' . esc_url($to_link) . '">' . esc_html(get_the_title($to_id)) . '</a>';
 						echo '</div>';
 					}
 				}

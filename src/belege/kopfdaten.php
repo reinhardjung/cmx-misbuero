@@ -681,11 +681,17 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			$GLOBALS['cmx_belege_dup_guard'][$post_id] = true;
 			$GLOBALS['cmx_belege_duplication_in_progress'] = true;
 			$dup_fn = __NAMESPACE__ . '\\cmx_duplicate_do';
-			if (\is_callable($dup_fn)) {
+			$existing_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+			if ($existing_id > 0 && \get_post_type($existing_id) === 'belege') {
+				$new_id = $existing_id;
+			} elseif (\is_callable($dup_fn)) {
 				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 				$new_id = $dup_fn($post_id);
 				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
-				if (!\is_wp_error($new_id)) {
+			} else {
+				$new_id = 0;
+			}
+			if (!\is_wp_error($new_id) && $new_id > 0) {
 					$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
 					if ($tax) {
 						$term = \get_term_by('slug', $normalized_val, $tax);
@@ -698,6 +704,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 					}
 					\delete_post_meta($new_id, '_cmx_beleg_pdf_type');
 					\update_post_meta($new_id, '_cmx_beleg_copied_from', (int) $post_id);
+					\update_post_meta($post_id, '_cmx_beleg_copied_to', (int) $new_id);
 					$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';
 					if (\is_callable($gen_fn)) {
 						$new_post = \get_post($new_id);
@@ -706,7 +713,6 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 						}
 					}
 					$GLOBALS['cmx_belege_dup_redirect_id'] = (int) $new_id;
-				}
 			}
 			unset($GLOBALS['cmx_belege_duplication_in_progress']);
 			unset($GLOBALS['cmx_belege_dup_guard'][$post_id]);
