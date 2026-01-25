@@ -40,7 +40,8 @@ function remove_new_from_admin_bar(\WP_Admin_Bar $wp_admin_bar) : void {
 	$wp_admin_bar->remove_node('new-content');
 	$wp_admin_bar->remove_node('comments');
 
-	$wp_admin_bar->add_node(['id' => 'mis-buero','title' => 'Mis Büro - Dein Schweizer Online Büro','href' => admin_url(),'meta' => ['title' => 'Zur Übersicht von Mis Büro',],]);
+	// $wp_admin_bar->add_node(['id' => 'mis-buero','title' => 'Mis Büro - Dein Schweizer Online Büro','href' => admin_url(),'meta' => ['title' => 'Zur Übersicht von Mis Büro',],]);
+	// $wp_admin_bar->add_node(['id' => 'mis-buero','title' => 'Mis Büro','href' => admin_url(),'meta' => ['title' => 'Zur Übersicht von Mis Büro',],]);
 }
 
 

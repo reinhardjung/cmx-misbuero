@@ -92,15 +92,15 @@ function cmx65_adminbar($wp_admin_bar) {
 	]);
 
 
-	$wp_admin_bar->add_menu([
-		'id'    => 'cmx65_menu2_id',
-		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
-		'href'  => false,
-		'meta'  => [
-			'title'  => '',
-			'class' => 'cmx-nohover',
-		],
-	]);
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_menu2_id',
+	// 	'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+	// 	'href'  => false,
+	// 	'meta'  => [
+	// 		'title'  => '',
+	// 		'class' => 'cmx-nohover',
+	// 	],
+	// ]);
 
 	if ( current_user_can( 'manage_options' ) ) {
 		$token = get_option( MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN );
@@ -113,7 +113,7 @@ function cmx65_adminbar($wp_admin_bar) {
 
 		$wp_admin_bar->add_menu( [
 			'id'    => 'mis-buero-upload',
-			'title' => 'Beleg-Upload-Link',
+			'title' => 'Upload-Link',
 			'href'  => esc_url( $url ),
 			'meta'  => [
 				'class'    => 'mis-buero-upload-link',
@@ -133,21 +133,21 @@ function cmx65_adminbar($wp_admin_bar) {
 	]);
 
 	$wp_admin_bar->add_menu([
-		'id'    => 'cmx65_handbuch_id',
-		'title' => 'Online-Handbuch',
-		'href'  => 'https://misbuero.ch/handbuch/',
-		'meta'  => [
-			'title'  => __('Mein Handbuch für Dich Online', 'textdomain'),
-			'target' => '_blank',
-		],
-	]);
-
-	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_faq_id',
 		'title' => 'FAQ',
 		'href'  => 'https://misbuero.ch/faq/',
 		'meta'  => [
 			'title'  => __('Du hast allgemeines Fragen?', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_aktuelles_id',
+		'title' => 'Aktuelles',
+		'href'  => 'https://misbuero.ch/aktuelles/',
+		'meta'  => [
+			'title'  => __('Aktuelles für Dich Online', 'textdomain'),
 			'target' => '_blank',
 		],
 	]);

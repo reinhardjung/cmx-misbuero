@@ -66,9 +66,11 @@ function cmx_render_support_tab(): void {
 	<h3 class="title">Support-Ticket erstellen</h3>
 
 	<p>
-		Hast Du Deine Fragen schon im
-		<a href="https://misbuero.ch/handbuch/" target="_blank">Online-Handbuch</a>
+		Hast Du
+		<br>A: Deine Fragen schon
+		<a href="https://www.youtube.com/@MisBuero" target="_blank">auf YoutTube </a>
 		nachgeschaut?
+		<br>B: Beim drücken und halten Deines Mauszeigers (3 Sekunden) auf ein Eingabefeld zeigt Dir eine konkrete Hilfe an. <a href="/wp-admin/admin.php?page=cmx-einstellungen&tab=general" target="_blank">Hilfetexte neu laden kannst Du hier.</a>
 	</p>
 
 	<form action="" method="post" enctype="multipart/form-data">
