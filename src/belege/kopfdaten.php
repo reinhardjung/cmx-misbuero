@@ -374,7 +374,8 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	// echo '<p><strong>Richtung</strong><br><div class="cmx-radio-inline">';
 	echo '<div class="cmx-radio-inline">';
 	foreach ($richtung_opts as $val => $label) {
-		echo '<label><input type="radio" name="cmx_beleg_richtung" value="'.\esc_attr($val).'" '.\checked($richtung,$val,false).'> <span class="cmx-richtung-label" data-value="'.\esc_attr($val).'">'.\esc_html($label).'</span></label>';
+		$help_key = $val === 'ausgang' ? 'beleg_richtung_ausgang' : 'beleg_richtung_eingang';
+		echo '<label data-cmx-help-key="'.\esc_attr($help_key).'"><input type="radio" name="cmx_beleg_richtung" data-cmx-help-key="'.\esc_attr($help_key).'" value="'.\esc_attr($val).'" '.\checked($richtung,$val,false).'> <span class="cmx-richtung-label" data-cmx-help-key="'.\esc_attr($help_key).'" data-value="'.\esc_attr($val).'">'.\esc_html($label).'</span></label>';
 	}
 	echo '</div></p>';
 	$known_map = [
