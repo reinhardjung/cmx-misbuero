@@ -86,6 +86,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
 				\add_post_meta($target_id, $key, \maybe_unserialize($val));
 			}
 		}
+		\delete_post_meta($target_id, '_cmx_beleg_pdf_type');
 
 		$thumb_id = \get_post_thumbnail_id($source_id);
 		if ($thumb_id) {
@@ -751,7 +752,9 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			}
 			if ($existing_id > 0) {
 				$new_id = $existing_id;
+				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 				cmx_sync_beleg_duplicate($post_id, $new_id);
+				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
 			} elseif (\is_callable($dup_fn)) {
 				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 				$new_id = $dup_fn($post_id);
