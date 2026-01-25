@@ -81,6 +81,8 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	if (!$rows) $rows = [['datum'=>'', 'betrag'=>'']];
 	$pay_tax = function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax') ? cmx_beleg_zahlungsart_tax() : null;
 	$pay_terms = $pay_tax ? \get_terms(['taxonomy' => $pay_tax, 'hide_empty' => false]) : [];
+	$status = \get_post_meta($post->ID, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status', true);
+	$wrap_style = ($status === 'teilbezahlt') ? '' : 'display:none;';
 
 	\wp_nonce_field('cmx_save_beleg_anzahlungen', 'cmx_beleg_anzahlungen_nonce');
 
@@ -95,7 +97,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		.cmx-anzahlung-del{flex:0 0 auto;padding:0 8px;line-height:24px}
 	</style>';
 
-	echo '<div id="cmx-anzahlungen-wrap">';
+	echo '<div id="cmx-anzahlungen-wrap" style="' . $wrap_style . '">';
 	foreach ($rows as $i => $row) {
 		$datum  = \esc_attr($row['datum'] ?? '');
 		$betrag = \esc_attr($row['betrag'] ?? '');
@@ -151,6 +153,8 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	jQuery(function($){
 		const $wrap = $("#cmx-anzahlungen-wrap");
 		const tmpl = $("#cmx-anzahlung-template").html();
+		const $status = $("#cmx_beleg_status");
+		const $box = $("#cmx_beleg_anzahlungen").closest(".postbox");
 
 		function reindexRows(){
 			$wrap.find(".cmx-anzahlung-row").each(function(i){
@@ -191,6 +195,18 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			const $row = $(this).closest(".cmx-anzahlung-row");
 			$row.find(".cmx-anzahlung-date").val(todayISO()).trigger("change");
 		});
+
+		if ($status.length) {
+			const syncWrap = () => {
+				const show = $status.val() === "teilbezahlt";
+				$wrap.toggle(show);
+				if ($box.length) {
+					$box.toggle(show);
+				}
+			};
+			$status.on("change", syncWrap);
+			syncWrap();
+		}
 	});
 	</script>';
 }
