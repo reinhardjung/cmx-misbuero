@@ -43,15 +43,8 @@ function cmxbu_log_beleg_view(int $post_id): void {
 	$log = get_post_meta($post_id, '_cmx_beleg_views_log', true);
 	if (!is_array($log)) $log = [];
 
-	// $geo = cmxbu_fetch_geo_ip(preg_match('/^(10\.|127\.|172\.|192\.)/', $_SERVER['SERVER_ADDR'] ?? '') ? trim(@file_get_contents('https://api.ipify.org/')) : ($_SERVER['REMOTE_ADDR'] ?? ''));  // GEO-Daten holen
-	$geo = cmxbu_fetch_geo_ip(preg_match('/^(10\.|127\.|172\.|192\.)/', $_SERVER['SERVER_ADDR'] ?? $_SERVER['REMOTE_ADDR']) ? trim(@file_get_contents('https://api.ipify.org/')) : ($_SERVER['REMOTE_ADDR'] ?? $_SERVER['REMOTE_ADDR']));  // GEO-Daten holen
-
 	$log[] = [
 		'time'     => current_time('mysql'),
-		'ip'       => file_get_contents('https://api.ipify.org/'),
-		'country'  => $geo['country'],
-		'city'     => $geo['city'],
-		'provider' => $geo['provider'],
 	];
 
 	update_post_meta($post_id, '_cmx_beleg_views_log', $log);
@@ -101,20 +94,19 @@ function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 	// echo '<div style="margin:8px 0;"><strong>Beleg-Aufrufe:</strong><br><span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span></div><hr>';
 	// echo '<div style="text-align:center; margin:8px 0;"><span style="font-size:18px;color:#a42c24;font-weight:bold;">' . esc_html($views) . '</span></div>';
 
-	// echo '<div style="max-height:260px;overflow:auto;padding:6px;border:1px solid #ccc;">';
 	echo '<div style="max-height:260px; overflow:auto; padding:6px;">';
+	echo '<table style="width:100%; border-collapse:collapse;">';
+	echo '<thead><tr>';
+	echo '<th style="text-align:left; padding:4px 0 6px 30px; border-bottom:1px solid #e0e0e0;">Datum</th>';
+	echo '<th style="text-align:left; padding:4px 6px; border-bottom:1px solid #e0e0e0;">Uhrzeit</th>';
+	echo '</tr></thead><tbody>';
 
 	foreach (array_reverse($log) as $entry) {
 
 		$time     = $entry['time']     ?? '';
-		$ip       = $entry['ip']       ?? '';
-		$country  = $entry['country']  ?? '';
-		$city     = $entry['city']     ?? '';
-		$provider = $entry['provider'] ?? '';
-
-		$formatted = $time
-			? date_i18n(get_option('date_format') . ' - ' . get_option('time_format'), strtotime($time))
-			: '';
+		$ts = $time ? strtotime($time) : 0;
+		$date = $ts ? date_i18n(get_option('date_format'), $ts) : '';
+		$clock = $ts ? date_i18n('H:i', $ts) : '';
 
 		// $gmaps = (!empty($city) && !empty($country) && strtolower($city) !== 'unknown')
 		// 	? ' <a href="https://www.google.com/maps/search/?api=1&query='
@@ -129,12 +121,15 @@ function cmxbu_render_logfile_metabox(\WP_Post $post): void {
 	// 			<div><strong>Provider:</strong> '.esc_html($provider).'</div>
 	// 		  </div>';
 	// }
-		echo '<div style="margin-bottom:8px;border-bottom:1px dashed #ccc;padding-bottom:6px;">
-				<div>'.esc_html($formatted).' - '. esc_html($ip).'</div>
-				<div>'.esc_html($country).'-'.esc_html($city).'</div>
-				<div>'.esc_html($provider).'</div>
-			  </div>';
+		if (!$ts) {
+			continue;
+		}
+		echo '<tr>';
+		echo '<td style="padding:4px 6px; border-bottom:1px dashed #e6e6e6;">' . esc_html($date) . '</td>';
+		echo '<td style="padding:4px 0 6px 10px; border-bottom:1px dashed #e6e6e6;">' . esc_html($clock) . '</td>';
+		echo '</tr>';
 	}
 
+	echo '</tbody></table>';
 	echo '</div>';
 }
