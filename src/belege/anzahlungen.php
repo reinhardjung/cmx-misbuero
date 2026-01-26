@@ -197,14 +197,21 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		});
 
 		if ($status.length) {
+			const getSlug = () => {
+				const el = document.querySelector("input[name=cmx_beleg_kategorie]:checked");
+				return el ? (el.getAttribute("data-slug") || "") : "";
+			};
 			const syncWrap = () => {
-				const show = $status.val() === "teilbezahlt";
+				const slug = getSlug();
+				const hideByCat = slug === "offerte" || slug === "lieferschein";
+				const show = $status.val() === "teilbezahlt" && !hideByCat;
 				$wrap.toggle(show);
 				if ($box.length) {
 					$box.toggle(show);
 				}
 			};
 			$status.on("change", syncWrap);
+			$(document).on("change", "input[name=cmx_beleg_kategorie]", syncWrap);
 			syncWrap();
 		}
 	});

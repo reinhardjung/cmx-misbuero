@@ -199,6 +199,18 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo '</select>';
 	echo '</p>';
 
+	$hide_pay_fields = false;
+	if (function_exists(__NAMESPACE__ . '\\cmx_belege_tax')) {
+		$tax = cmx_belege_tax();
+		if ($tax) {
+			$slugs = \wp_get_post_terms($post->ID, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($slugs) && array_intersect(['offerte', 'lieferschein'], $slugs)) {
+				$hide_pay_fields = true;
+			}
+		}
+	}
+	echo '<div id="cmx_beleg_payment_fields" style="' . ($hide_pay_fields ? 'display:none;' : '') . '">';
+
 	/* ===== NEU: Bezahlt am (am Ende der Metabox) ===== */
 	echo '<p style="margin:8px 0 0;">';
 	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(heute)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">unbezahlt</a></label>';
@@ -277,7 +289,9 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		echo '</p>';
 	}
 
-	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");if(!inpB||!selS)return;function hasValidDate(){return /^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(hasValidDate()){if(selS.value!=="bezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}}function syncPay(){if(!payWrap)return;var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function onStatusChange(){if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="teilbezahlt"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);syncStatus();syncPay();})();</script>';
+	echo '</div>';
+
+	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");var payFields=document.getElementById("cmx_beleg_payment_fields");var grundBox=document.querySelector(".postbox[id*=\\"zahlungsgrund\\"], #tagsdiv-belege_zahlungsgrund, #belege_zahlungsgrunddiv");if(!inpB||!selS)return;function hasValidDate(){return /^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(hasValidDate()){if(selS.value!=="bezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}}function syncPay(){if(!payWrap)return;var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function syncKategorieFields(){var slug=getSlug();var hide=slug==="offerte"||slug==="lieferschein";if(payFields){payFields.style.display=hide?"none":"";}if(grundBox){grundBox.style.display=hide?"none":"";}if(hide){inpB.value="";selS.value="offen";syncPay();}}function onStatusChange(){if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="teilbezahlt"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){syncKategorieFields();}});document.addEventListener("DOMContentLoaded",syncKategorieFields);setTimeout(syncKategorieFields,0);syncStatus();syncPay();})();</script>';
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
