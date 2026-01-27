@@ -30,12 +30,14 @@ $show_position_index = count($positions) > 1;
 $show_sku = false;
 $show_discount = false;
 $discount_sum = 0.0;
+$positions_sum = 0.0;
 foreach ($positions as $row) {
 	$sku_val = trim((string)($row['article_number'] ?? ''));
 	if ($sku_val !== '') $show_sku = true;
 	$qty = (float)($row['qty'] ?? 0);
 	$unit_price = (float)($row['unit_price'] ?? 0);
 	$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+	$positions_sum += $line_total;
 	$line_subtotal = $qty * $unit_price;
 	$line_discount = $line_subtotal - $line_total;
 	if ($line_discount > 0.0001) {
@@ -69,12 +71,22 @@ $col_count = ($show_position_index ? 1 : 0)
 	+ ($show_discount ? 1 : 0)
 	+ ($show_line_total ? 1 : 0);
 
+$tpl_totals = (array)($tpl['totals'] ?? []);
+if (!array_key_exists('subtotal', $tpl_totals) && array_key_exists('net', $tpl_totals)) {
+	$tpl_totals['subtotal'] = $tpl_totals['net'];
+}
+if (!array_key_exists('tax_amount', $tpl_totals) && array_key_exists('tax', $tpl_totals)) {
+	$tpl_totals['tax_amount'] = $tpl_totals['tax'];
+}
+if (!array_key_exists('total', $tpl_totals) && array_key_exists('gross', $tpl_totals)) {
+	$tpl_totals['total'] = $tpl_totals['gross'];
+}
 $totals = array_replace([
 	'subtotal' => 0.0,
 	'tax_rate' => 0.0,
 	'tax_amount' => 0.0,
 	'total' => 0.0,
-], (array)($tpl['totals'] ?? []));
+], $tpl_totals);
 
 if ($totals['total'] == 0.0 && !empty($positions)) {
 	foreach ($positions as $row) {
@@ -365,6 +377,13 @@ $recipient_html = $recipient_has_br
 
 <?php if (!$is_lieferschein && !(!$has_positions && !empty($tpl['document']['manual_total']))): ?>
 	<table class="totals-table" border="0">
+		<?php if ($has_positions): ?>
+			<tr>
+				<td colspan="<?= $col_count; ?>" class="text-right">
+					<strong><?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
+				</td>
+			</tr>
+		<?php endif; ?>
 		<?php if ($show_discount && $discount_sum > 0.0): ?>
 			<tr>
 				<td colspan="<?= $col_count; ?>" class="text-right">
@@ -373,14 +392,15 @@ $recipient_html = $recipient_has_br
 			</tr>
 		<?php endif;
 		$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-		$mwst_amount = (float)($tpl['totals']['tax'] ?? 0);
+		$mwst_amount = (float)($totals['tax_amount'] ?? 0);
 		$mwst_rate_pct = $mwst_rate * 100;
 		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, ',', ''), '0'), ',');
 		?>
 		<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
 			<tr>
 				<td colspan="<?= $col_count; ?>" class="text-right">
-					<?= !empty($tpl['totals']['is_brutto']) ? 'inkl.' : 'zuzügl.'; ?>
+					<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
+					<?= $mwst_label; ?>
 					<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
 				</td>
 			</tr>

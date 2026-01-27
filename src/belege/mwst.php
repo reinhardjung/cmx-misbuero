@@ -26,6 +26,19 @@ add_action('add_meta_boxes', function() {
     );
 });
 
+// Ensure MWST metabox isn't hidden via screen options/user meta.
+add_filter('get_user_option_metaboxhidden_belege', function ($hidden) {
+    $hidden = is_array($hidden) ? $hidden : (array) $hidden;
+    return array_values(array_diff($hidden, ['cmx_belege_mwst_box']));
+});
+add_filter('hidden_meta_boxes', function ($hidden, $screen) {
+    if ($screen && $screen->post_type === 'belege') {
+        $hidden = is_array($hidden) ? $hidden : (array) $hidden;
+        $hidden = array_values(array_diff($hidden, ['cmx_belege_mwst_box']));
+    }
+    return $hidden;
+}, 10, 2);
+
 
 /**
  * Metabox-Inhalt
@@ -134,12 +147,21 @@ function cmx_belege_render_ausgaben_metabox($post) {
 add_action('admin_footer', function () {
     $screen = function_exists('get_current_screen') ? get_current_screen() : null;
     if (!$screen || $screen->post_type !== 'belege') return;
+    $opts_general = (array) get_option('cmx_einstellungen', []);
+    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
     ?>
     <script>
     (function(){
         const box = document.getElementById('cmx_belege_mwst_box');
         const ausgabenBox = document.getElementById('cmx_belege_ausgaben_box');
         const anzahlungenBox = document.getElementById('cmx_beleg_anzahlungen');
+        const isMwstPflichtig = <?php echo wp_json_encode((bool) $is_mwst_pflichtig); ?>;
+        const mwstSlugs = new Set([
+            'rechnung','rechnungen',
+            'offerte','offerten',
+            'gutschrift','gutschriften',
+            'quittung','quittungen',
+        ]);
         function getSelectedSlug(){
             const selected = document.querySelector('input[name="cmx_beleg_kategorie"]:checked');
             return selected ? (selected.getAttribute('data-slug') || '') : '';
@@ -147,7 +169,8 @@ add_action('admin_footer', function () {
         function sync(){
             const slug = getSelectedSlug();
             if (box) {
-                box.style.display = (slug === 'lieferantenrechnung') ? 'none' : '';
+                const showMwst = isMwstPflichtig && (slug === '' || mwstSlugs.has(slug));
+                box.style.display = showMwst ? '' : 'none';
             }
             if (ausgabenBox) {
                 ausgabenBox.style.display = (slug === 'lieferantenrechnung') ? '' : 'none';
