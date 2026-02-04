@@ -95,6 +95,7 @@ function cmx_register_general_tab(): void {
 				'key'   => 'support_user_switch',
 				'label' => 'Benutzerwechsel erlauben',
 			]);
+			echo '<p class="description">Bei aktivierter Funktion darf der Support temporär in Deine Benutzerrollen wechseln, um Probleme zu analysieren.</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
