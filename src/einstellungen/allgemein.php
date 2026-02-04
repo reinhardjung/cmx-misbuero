@@ -78,10 +78,23 @@ function cmx_register_general_tab(): void {
 
 	\add_settings_field(
 		'cmx_katalog_online',
-		'Katalog Online?',
+		'Katalog Online',
 		function () {
 			$val = \get_option( 'cmx_katalog_online', '0' );
 			echo '<label><input type="checkbox" name="cmx_katalog_online" value="1" ' . checked( $val, '1', false ) . '> Katalog öffentlich sichtbar</label>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'support_user_switch',
+		'Support',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'support_user_switch',
+				'label' => 'Benutzerwechsel erlauben',
+			]);
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
