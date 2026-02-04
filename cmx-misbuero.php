@@ -35,6 +35,7 @@ require_once __DIR__ . '/includes/upload_form.php';
 require_once __DIR__ . '/monitoring/anyboard/index.php';
 // Login-spezifische Hooks (z. B. Passwort-Reset) müssen auch ohne eingeloggten Nutzer verfügbar sein.
 require_once __DIR__ . '/includes/login_manager.php';
+require_once __DIR__ . '/includes/login_ui.php';
 require_once __DIR__ . '/includes/help_screens.php';
 
 
