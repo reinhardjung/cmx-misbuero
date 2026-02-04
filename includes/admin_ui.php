@@ -14,6 +14,32 @@ function register_scheme(): void {
 	wp_admin_css_color($slug,'Mis Büro',false,['#C9362C', '#A42C24', '#3D3D3D', '#F7F7F7']);
 }
 
+add_filter('admin_footer_text', __NAMESPACE__ . '\\cmx_admin_footer_text');
+function cmx_admin_footer_text(string $text): string {
+	return 'Managend by <a href="https://misbuero.ch/" target="_blank" rel="noopener noreferrer">Mis Büro</a>';
+}
+
+add_filter('update_footer', __NAMESPACE__ . '\\cmx_admin_footer_version', 11);
+function cmx_admin_footer_version(string $text): string {
+	$plugin_file = __DIR__ . '/../cmx-misbuero.php';
+	if (!is_readable($plugin_file)) {
+		return $text;
+	}
+	$data = get_file_data($plugin_file, ['Version' => 'Version'], 'plugin');
+	$version = isset($data['Version']) ? trim((string) $data['Version']) : '';
+	if ($version === '') {
+		return $text;
+	}
+	$version = preg_replace('/([0-9])/', '$1&#8203;', $version);
+	return '<span class="cmx-admin-version" translate="no">Version ' . $version . '</span>';
+}
+
+add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
+function cmx_admin_footer_no_tel(): void {
+	echo '<meta name="format-detection" content="telephone=no">' . "\n";
+	echo '<style>#footer-upgrade a[x-apple-data-detectors], .cmx-admin-version a[x-apple-data-detectors]{color:inherit;text-decoration:none;pointer-events:none;}</style>' . "\n";
+}
+
 
 add_action('admin_head', __NAMESPACE__ . '\\inject_styles');
 function inject_styles(): void {
