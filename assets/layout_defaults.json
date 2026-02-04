@@ -1,0 +1,96 @@
+{
+    "format": 1,
+    "exported_at": "2026-02-04T09:45:48+00:00",
+    "site_url": "https://misbuero.local/",
+    "blog_id": 1,
+    "blog_prefix": "wp_",
+    "user": {
+        "id": 1,
+        "login": "cloudmeister",
+        "display_name": "CLOUD Meister"
+    },
+    "layout": {
+        "closedpostboxes_artikel": [],
+        "closedpostboxes_ausgaben": [],
+        "closedpostboxes_belege": [],
+        "closedpostboxes_dashboard": [],
+        "closedpostboxes_dokumente": [],
+        "closedpostboxes_kontakte": [],
+        "closedpostboxes_projekte": [],
+        "meta-box-order_artikel": {
+            "side": "cmx_savebox,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_farbe_side,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_dokumente_box",
+            "normal": "cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_artikel_belegtext,cmx_artikel_internenotizen",
+            "advanced": ""
+        },
+        "meta-box-order_attachment": [
+            false
+        ],
+        "meta-box-order_ausgaben": {
+            "side": "cmx_savebox,cmx_save_metabox_layout,ausgaben_kategoriendiv,cmx_dokumente_box",
+            "normal": "",
+            "advanced": ""
+        },
+        "meta-box-order_bank": [
+            false
+        ],
+        "meta-box-order_belege": {
+            "side": "cmx_savebox,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_belege_ausgaben_box,belege_zahlungsgrunddiv,cmx_uploads_box,cmx_dokumente_box",
+            "normal": "cmx_beleg_details,cmx_beleg_positionen,cmx_belege_internenotizen",
+            "advanced": ""
+        },
+        "meta-box-order_dashboard": {
+            "normal": "dashboard_site_health,dashboard_right_now,dashboard_activity,cmx_save_dashboard_layout,cmx_cpt_counts_widget",
+            "side": "dashboard_quick_press,dashboard_primary,cmx_umsatz_widget,cmx_lieferanten_widget,cmx_gutschriften_widget",
+            "column3": "cmx_kontakt_wichtige_daten",
+            "column4": "cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok"
+        },
+        "meta-box-order_dokumente": {
+            "side": "cmx_dokumente_box,cmx_savebox,dokumente_kategoriendiv,cmx_dokumente_validity,cmx_dokumente_status,cmx_dokumente_modules",
+            "normal": "",
+            "advanced": ""
+        },
+        "meta-box-order_kassenbuch": [
+            false
+        ],
+        "meta-box-order_kontakte": {
+            "side": "cmx_savebox,cmx_save_metabox_layout,kontakte_kategoriendiv,cmx_kontakte_stufe_side,cmx_local_image_box_kontakte,cmx_dokumente_box",
+            "normal": "cmx_kontakte_stammdaten,cmx_kommunikation_box,cmx_adressen_metabox,cmx_kontakte_internenotizen",
+            "advanced": ""
+        },
+        "meta-box-order_projekte": {
+            "side": "cmx_savebox,cmx_save_metabox_layout,cmx_projekt_stammdaten,projekte_kategoriendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz,cmx_dokumente_box",
+            "normal": "cmx_projekt_tasks",
+            "advanced": ""
+        },
+        "metaboxhidden_artikel": [],
+        "metaboxhidden_attachment": [
+            false
+        ],
+        "metaboxhidden_ausgaben": [],
+        "metaboxhidden_bank": [
+            false
+        ],
+        "metaboxhidden_belege": [
+            "cmx_belege_mwst_box"
+        ],
+        "metaboxhidden_dashboard": [
+            "dashboard_site_health",
+            "dashboard_right_now",
+            "dashboard_activity",
+            "dashboard_quick_press",
+            "dashboard_primary"
+        ],
+        "metaboxhidden_dokumente": [],
+        "metaboxhidden_kassenbuch": [
+            false
+        ],
+        "metaboxhidden_kontakte": [],
+        "metaboxhidden_projekte": [],
+        "screen_layout_artikel": "2",
+        "screen_layout_ausgaben": "2",
+        "screen_layout_belege": "2",
+        "screen_layout_dokumente": "2",
+        "screen_layout_kontakte": "2",
+        "screen_layout_projekte": "2"
+    }
+}

@@ -39,6 +39,8 @@ require_once __DIR__ . '/monitoring/anyboard/index.php';
 require_once __DIR__ . '/includes/login_manager.php';
 require_once __DIR__ . '/includes/login_ui.php';
 require_once __DIR__ . '/includes/help_screens.php';
+require_once __DIR__ . '/includes/layout_export.php';
+require_once __DIR__ . '/includes/layout_defaults.php';
 
 
 define('CMX_PLUGIN_DIR', plugin_dir_path(__FILE__));

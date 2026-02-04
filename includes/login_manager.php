@@ -59,8 +59,28 @@ function cmx_copy_layout_from_cloudmeister(string $user_login, $user): void {
 	}
 
 	$flag_key = 'cmx_layout_copied_' . $blog_id;
-	if (get_user_meta($user->ID, $flag_key, true)) {
-		return;
+	$flag_val = (string) get_user_meta($user->ID, $flag_key, true);
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_layout_defaults_apply_to_user')) {
+		$defaults_version = \CLOUDMEISTER\CMX\Buero\cmx_layout_defaults_version();
+		$user_version = (string) get_user_meta($user->ID, 'cmx_layout_defaults_version', true);
+		$has_layout = \CLOUDMEISTER\CMX\Buero\cmx_layout_defaults_user_has_layout($user->ID);
+		if ($has_layout) {
+			return;
+		}
+		if ($user_version !== $defaults_version) {
+			$applied = \CLOUDMEISTER\CMX\Buero\cmx_layout_defaults_apply_to_user($user->ID);
+			if ($applied) {
+				update_user_meta($user->ID, $flag_key, $defaults_version);
+				return;
+			}
+		} elseif ($flag_val === $defaults_version) {
+			return;
+		}
+	} else {
+		if ($flag_val !== '') {
+			return;
+		}
 	}
 
 	$source = get_user_by('login', 'cloudmeister');
@@ -131,7 +151,7 @@ function cmx_copy_layout_from_cloudmeister(string $user_login, $user): void {
 	}
 
 	if ($copied_any) {
-		update_user_meta($user->ID, $flag_key, 1);
+		update_user_meta($user->ID, $flag_key, 'legacy');
 	}
 }
 
