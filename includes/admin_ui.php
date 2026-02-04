@@ -30,14 +30,74 @@ function cmx_admin_footer_version(string $text): string {
 	if ($version === '') {
 		return $text;
 	}
-	$version = preg_replace('/([0-9])/', '$1&#8203;', $version);
-	return '<span class="cmx-admin-version" translate="no">Version ' . $version . '</span>';
+	return '<span class="cmx-admin-version" translate="no">Version ' . esc_html($version) . '</span>';
+}
+
+add_filter('plugin_row_meta', __NAMESPACE__ . '\\cmx_plugin_row_meta_version', 10, 4);
+function cmx_plugin_row_meta_version(array $plugin_meta, string $plugin_file, array $plugin_data, string $status): array {
+	if (strpos($plugin_file, 'cmx-misbuero.php') === false) {
+		return $plugin_meta;
+	}
+	$version = isset($plugin_data['Version']) ? trim((string) $plugin_data['Version']) : '';
+	if ($version === '') {
+		return $plugin_meta;
+	}
+
+	$replacement = '<span class="cmx-plugin-version" translate="no">Version ' . esc_html($version) . '</span>';
+	$replaced = false;
+	foreach ($plugin_meta as $index => $meta) {
+		if (!is_string($meta)) {
+			continue;
+		}
+		if (stripos($meta, 'Version ') === 0 || stripos($meta, 'Version&nbsp;') === 0) {
+			$plugin_meta[$index] = $replacement;
+			$replaced = true;
+			break;
+		}
+	}
+	if (!$replaced) {
+		array_unshift($plugin_meta, $replacement);
+	}
+
+	return $plugin_meta;
 }
 
 add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
 function cmx_admin_footer_no_tel(): void {
 	echo '<meta name="format-detection" content="telephone=no">' . "\n";
-	echo '<style>#footer-upgrade a[x-apple-data-detectors], .cmx-admin-version a[x-apple-data-detectors]{color:inherit;text-decoration:none;pointer-events:none;}</style>' . "\n";
+	echo '<style>
+	a[x-apple-data-detectors],
+	a[href^="tel"],
+	a[href^="tel:"] {
+		color: inherit !important;
+		text-decoration: none !important;
+		pointer-events: none !important;
+		cursor: default !important;
+	}
+	</style>' . "\n";
+}
+
+add_action('admin_footer', __NAMESPACE__ . '\\cmx_admin_unlink_tel_numbers');
+function cmx_admin_unlink_tel_numbers(): void {
+	if (!function_exists('get_current_screen')) {
+		return;
+	}
+	$screen = get_current_screen();
+	if (!$screen || $screen->id !== 'plugins') {
+		return;
+	}
+	?>
+	<script>
+	document.addEventListener('DOMContentLoaded', function() {
+		document.querySelectorAll('#the-list a[href^="tel:"], #the-list a[href^="tel"]').forEach(function(link) {
+			var span = document.createElement('span');
+			span.textContent = link.textContent || '';
+			span.className = link.className;
+			link.replaceWith(span);
+		});
+	});
+	</script>
+	<?php
 }
 
 

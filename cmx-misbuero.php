@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://cloudmeister.ch/cmx-misbuero/
  * Description: Mis Büro by CLOUD Meister.
-60204.073244
+ * Version: 260204
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -14,68 +14,7 @@
  * Requires at least: 6.7.1
  */
 
-function cmx_misbuero_is_local_env(): bool {
-	$env = '';
-	if (\function_exists('\\wp_get_environment_type')) {
-		$env = \wp_get_environment_type();
-	} elseif (\defined('WP_ENVIRONMENT_TYPE')) {
-		$env = WP_ENVIRONMENT_TYPE;
-	} elseif (\defined('WP_ENV')) {
-		$env = WP_ENV;
-	}
-
-	return \is_string($env) && \strtolower($env) === 'local';
-}
-
-function cmx_misbuero_maybe_bump_local_version(): void {
-	if (!cmx_misbuero_is_local_env()) {
-		return;
-	}
-
-	$plugin_file = __FILE__;
-	if (!\is_readable($plugin_file) || !\is_writable($plugin_file)) {
-		return;
-	}
-
-	$contents = \file_get_contents($plugin_file);
-	if ($contents === false) {
-		return;
-	}
-
-	$version = \function_exists('\\wp_date') ? \wp_date('ymd.His') : \date('ymd.His');
-
-	if (!\preg_match('/^\\s*\\*\\s*Version:\\s*([^\\r\\n]+)/m', $contents, $match)) {
-		return;
-	}
-
-	$current = \trim((string) $match[1]);
-	if ($current === $version) {
-		return;
-	}
-
-	$updated = \preg_replace('/^(\\s*\\*\\s*Version:\\s*)([^\\r\\n]+)/m', '$1' . $version, $contents, 1);
-	if ($updated === null || $updated === $contents) {
-		return;
-	}
-
-	$tmp = $plugin_file . '.tmp';
-	$bytes = \file_put_contents($tmp, $updated, LOCK_EX);
-	if ($bytes === false) {
-		@\unlink($tmp);
-		return;
-	}
-
-	$perms = @\fileperms($plugin_file);
-	if ($perms) {
-		@\chmod($tmp, $perms & 0777);
-	}
-
-	if (!@\rename($tmp, $plugin_file)) {
-		@\unlink($tmp);
-	}
-}
-
-cmx_misbuero_maybe_bump_local_version();
+require_once __DIR__ . '/includes/cmx_version.php';
 
 
 $cmx_autoload = __DIR__ . '/vendor/autoload.php';
