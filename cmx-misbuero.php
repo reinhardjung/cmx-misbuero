@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 2.9.807
+ * Version: 2.9.816
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -34,6 +34,7 @@ require_once __DIR__ . '/includes/featured_images.php';
 require_once __DIR__ . '/includes/dokumente.php';
 require_once __DIR__ . '/includes/uploads.php';
 require_once __DIR__ . '/includes/upload_form.php';
+require_once __DIR__ . '/includes/startseite_fix.php';
 require_once __DIR__ . '/monitoring/anyboard/index.php';
 require_once __DIR__ . '/includes/passwort-mails.php';
 // Login-spezifische Hooks (z. B. Passwort-Reset) müssen auch ohne eingeloggten Nutzer verfügbar sein.
