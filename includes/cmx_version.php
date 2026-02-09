@@ -55,12 +55,11 @@ function cmx_misbuero_format_version(int $timestamp): string {
 
 	$dt = (new \DateTimeImmutable('@' . $timestamp))->setTimezone($tz);
 
-	return \sprintf(
-		'%02d%02d%02d',
-		(int) $dt->format('y'),
-		(int) $dt->format('m'),
-		(int) $dt->format('d')
-	);
+	$month = (int) $dt->format('n');
+	$day = (int) $dt->format('j');
+	$time = (int) $dt->format('Gi'); // hour+minute without leading zeros
+
+	return $month . '.' . $day . '.' . $time;
 }
 
 function cmx_misbuero_maybe_bump_local_version(): void {
@@ -93,7 +92,7 @@ function cmx_misbuero_maybe_bump_local_version(): void {
 
 	$header = $header_match[0][0];
 	$header_offset = $header_match[0][1];
-	$header_updated = \preg_replace('/^\\s*\\d{6,8}(?:\\.[0-9]{6})?\\s*(\\r\\n|\\r|\\n)/m', '', $header, 1);
+	$header_updated = \preg_replace('/^\\s*v?\\d+(?:\\.[0-9]+){0,3}\\s*(\\r\\n|\\r|\\n)/mi', '', $header, 1);
 	if ($header_updated === null) {
 		return;
 	}
