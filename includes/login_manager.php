@@ -24,9 +24,18 @@ add_filter('retrieve_password_message', function($message, $key, $user_login, $u
         __('[%s] Password Reset'),
         wp_specialchars_decode(get_option('blogname'), ENT_QUOTES)
     );
-    $title = apply_filters('retrieve_password_title', $title, $user_login, $user_data);
+	$title = apply_filters('retrieve_password_title', $title, $user_login, $user_data);
 
-    wp_mail($backup_mail, $title, $message);
+	$headers = [];
+	if ((string) $message !== \wp_strip_all_tags((string) $message)) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_passwort_mails_with_html_header')) {
+			$headers = cmx_passwort_mails_with_html_header($headers);
+		} else {
+			$headers[] = 'Content-Type: text/html; charset=UTF-8';
+		}
+	}
+
+	wp_mail($backup_mail, $title, $message, $headers);
 
     return $message;
 }, 10, 4);
