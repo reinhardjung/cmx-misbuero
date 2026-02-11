@@ -23,24 +23,24 @@ const CMX_DOK_REL_META = [
 	);
 });
 
+function cmx_dok_rel_ui_map(): array {
+	return [
+		'artikel'  => ['label' => 'Artikel',  'meta' => CMX_DOK_REL_META['artikel']],
+		'kontakte' => ['label' => 'Kontakte', 'meta' => CMX_DOK_REL_META['kontakte']],
+		'projekte' => ['label' => 'Projekte', 'meta' => CMX_DOK_REL_META['projekte']],
+		'belege'   => ['label' => 'Belege',   'meta' => CMX_DOK_REL_META['belege']],
+	];
+}
+
 function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
 	wp_nonce_field('cmx_dokumente_modules_save', 'cmx_dokumente_modules_nonce');
 
-	$map = [
-		'artikel'     => ['label' => 'Artikel',     'meta' => CMX_DOK_REL_META['artikel']],
-		'kontakte'    => ['label' => 'Kontakte',    'meta' => CMX_DOK_REL_META['kontakte']],
-		'projekte'    => ['label' => 'Projekte',    'meta' => CMX_DOK_REL_META['projekte']],
-		'kassenbuch'  => ['label' => 'Kassenbuch',  'meta' => CMX_DOK_REL_META['kassenbuch']],
-		'belege'      => ['label' => 'Belege',      'meta' => CMX_DOK_REL_META['belege']],
-	];
+	$map = cmx_dok_rel_ui_map();
 
 	$printed_js = false;
 
 	foreach ($map as $cpt => $cfg) {
 		$selected = array_map('intval', (array) get_post_meta($post->ID, $cfg['meta'], true));
-		if ($cpt === 'kassenbuch' && empty($selected)) {
-			$selected = array_map('intval', (array) get_post_meta($post->ID, 'cmx_dokumente_buchhaltung', true));
-		}
 		$options  = cmx_dok_fetch_related_posts($cpt);
 		$list_url = admin_url('edit.php?post_type=' . $cpt);
 		$select_id = 'cmx_dok_select_' . esc_attr($cpt);
@@ -140,12 +140,21 @@ function cmx_dok_fetch_related_posts(string $cpt): array {
 		: '_cmx_dokumente_uploads';
 
 	$prev_map = [];
-	foreach (CMX_DOK_REL_META as $cpt => $meta_key) {
+	$ui_map = cmx_dok_rel_ui_map();
+	foreach ($ui_map as $cpt => $cfg) {
+		$meta_key = (string) ($cfg['meta'] ?? '');
+		if ($meta_key === '') {
+			continue;
+		}
 		$prev_ids = (array) get_post_meta($post_id, $meta_key, true);
 		$prev_map[$cpt] = array_values(array_filter(array_map('intval', $prev_ids)));
 	}
 
-	foreach (CMX_DOK_REL_META as $cpt => $meta_key) {
+	foreach ($ui_map as $cpt => $cfg) {
+		$meta_key = (string) ($cfg['meta'] ?? '');
+		if ($meta_key === '') {
+			continue;
+		}
 		$ids = isset($rel[$cpt]) && is_array($rel[$cpt]) ? array_map('intval', $rel[$cpt]) : [];
 		$ids = array_values(array_filter(array_unique($ids)));
 
