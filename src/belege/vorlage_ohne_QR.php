@@ -5,7 +5,7 @@
  * Erwartet $tpl und ggf. $cmx_beleg_adress.
  */
 
-$__fmt_dec  = (string)($tpl['format']['decimal']   ?? ',');
+$__fmt_dec  = (string)($tpl['format']['decimal']   ?? '.');
 $__fmt_tho  = (string)($tpl['format']['thousands'] ?? "'");
 $__fmt_prec = (int)   ($tpl['format']['decimals']  ?? 2);
 $__fmt_cur  = (string)($tpl['format']['currency']  ?? 'CHF');
@@ -384,7 +384,7 @@ $recipient_html = $recipient_has_br
 		<?php if ($has_positions): ?>
 			<tr>
 				<td colspan="<?= $col_count; ?>" class="text-right">
-					<strong><?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
+					<strong>Zwischensumme <?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
 				</td>
 			</tr>
 		<?php endif; ?>
@@ -398,7 +398,7 @@ $recipient_html = $recipient_has_br
 		$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
 		$mwst_amount = (float)($totals['tax_amount'] ?? 0);
 		$mwst_rate_pct = $mwst_rate * 100;
-		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, ',', ''), '0'), ',');
+		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
 		?>
 		<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
 			<tr>

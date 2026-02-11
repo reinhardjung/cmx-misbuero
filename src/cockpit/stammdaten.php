@@ -104,7 +104,7 @@ function cmx_render_cpt_count_widget() {
 
 		echo '<tr>';
 		echo '<td><a href="' . esc_url($list_url) . '">' . esc_html($label) . '</a></td>';
-		echo '<td class="summe" style="padding-right:15px;">' . esc_html(number_format_i18n($count)) . '</td>';
+		echo '<td class="summe" style="padding-right:15px;">' . esc_html(cmx_format_swiss_number($count, 0)) . '</td>';
 
 		echo '<td class="add">';
 		$svg_plus = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

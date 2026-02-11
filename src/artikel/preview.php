@@ -44,7 +44,7 @@
 	if ($value <= 0) return '';
 
 	$currency = trim((string) $atts['currency']);
-	$number   = number_format($value, 2, ',', "'");
+	$number   = cmx_format_swiss_number($value, 2);
 
 	return esc_html(trim($number . ' ' . $currency));
 });

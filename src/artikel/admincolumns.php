@@ -188,17 +188,17 @@ function cmx_lieferanten_args(): array {
 
 		case 'vk':
 			$vk = (float)\get_post_meta($post_id, CMX_ARTIKEL_META_VK, true);
-			echo \esc_html(\number_format($vk, 2));
+			echo \esc_html(cmx_format_swiss_number($vk, 2));
 			break;
 
 		case 'ek':
 			$ek = (float)\get_post_meta($post_id, CMX_ARTIKEL_META_EK, true);
-			echo \esc_html(\number_format($ek, 2));
+			echo \esc_html(cmx_format_swiss_number($ek, 2));
 			break;
 
 		case 'marge':
 			$m = (float)\get_post_meta($post_id, CMX_ARTIKEL_META_MARGE, true);
-			echo \esc_html(\number_format($m, 2));
+			echo \esc_html(cmx_format_swiss_number($m, 2));
 			break;
 
 		case 'hersteller_url':

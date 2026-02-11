@@ -558,7 +558,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 					$pct = abs($to_float($m[1]));
 					if ($pct>0) {
 						$disc_amount = abs($line_subtotal) * ($pct/100);
-						$disc_display = rtrim(rtrim(number_format($pct,2,'.',''), '0'), '.').'%';
+						$disc_display = rtrim(rtrim(cmx_format_swiss_number($pct, 2), '0'), '.').'%';
 						$has_discount = true;
 					}
 				} else {
@@ -566,7 +566,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 					$val = abs($to_float($clean));
 					if ($val>0) {
 						$disc_amount = min($val, abs($line_subtotal));
-						$disc_display= number_format($val,2,'.',"'").' '.$opts['currency'];
+						$disc_display = cmx_format_swiss_number($val, 2) . ' ' . $opts['currency'];
 						$has_discount= true;
 					}
 				}
@@ -746,7 +746,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$doc_label = $type_map[strtolower($beleg_type)] ?? ucfirst($beleg_type);
 
 		// Schweizer Format
-		$fmt = ['currency'=>$opts['currency']??'CHF','decimals'=>2,'decimal'=>',','thousands'=>"'" ];
+		$fmt = ['currency'=>$opts['currency']??'CHF','decimals'=>2,'decimal'=>'.','thousands'=>"'" ];
 
 		// Daten
 		$opts_general = (array) get_option('cmx_einstellungen', []);

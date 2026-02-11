@@ -150,28 +150,28 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 
 	wp_nonce_field('cmx_beleg_summe_save', 'cmx_beleg_summe_nonce');
 
-	// Anzeige im CH-Format (1'234,56)
+	// Anzeige im CH-Format (1'234.56)
 	echo '<div id="cmx-beleg-summe-wrap" data-beleg-type="'.esc_attr($beleg_type).'" style="font-size:x-large; line-height:1.6; padding:6px 4px; text-align:center;">';
 	echo '<strong>';
 	$manual_attr = $manual_total_raw !== '' ? ' data-manual="1"' : '';
 	$display = $manual_total_raw !== ''
-		? number_format((float) cmx_norm_decimal($manual_total_raw), 2, ',', "'")
-		: number_format($summe, 2, ',', "'");
+		? cmx_format_swiss_number((float) cmx_norm_decimal($manual_total_raw), 2)
+		: cmx_format_swiss_number($summe, 2);
 	$input_style = $has_positions ? 'display:none;' : '';
 	$span_style = $has_positions ? '' : 'display:none;';
 	echo '<input type="text" id="cmx-beleg-summe-input" name="cmx_beleg_summe_override" value="'.esc_attr($display).'" style="width:140px;text-align:center;font-weight:600;'.$input_style.'"'.$manual_attr.'>';
 	echo '<span id="cmx-beleg-summe-value" data-currency="" style="'.$span_style.'">' .
-		esc_html(number_format($summe, 2, ',', "'")) .
+		esc_html(cmx_format_swiss_number($summe, 2)) .
 		'</span>';
 	echo '</strong>';
 	if (!empty($anz['count'])) {
 		$anz_sum = (float)$anz['summe'];
 		$offen = $summe - $anz_sum;
 		echo '<div style="font-size:small; margin-top:6px;">Anzahlungen: <strong>' .
-			esc_html(number_format($anz_sum, 2, ',', "'")) .
+			esc_html(cmx_format_swiss_number($anz_sum, 2)) .
 			'</strong></div>';
 		echo '<div style="font-size:small; color:#b32d2e;">Offener Betrag: <strong>' .
-			esc_html(number_format($offen, 2, ',', "'")) .
+			esc_html(cmx_format_swiss_number($offen, 2)) .
 			'</strong></div>';
 	}
 	echo '</div>';
@@ -207,7 +207,7 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			const parts = (Number(n)||0).toFixed(2).split('.');
 			let i = parts[0], r = '';
 			while (i.length > 3) { r = "'" + i.slice(-3) + r; i = i.slice(0, -3); }
-			return i + r + ',' + parts[1];
+			return i + r + '.' + parts[1];
 		}
 		function round5(n){ return Math.round((Number(n)||0) * 20) / 20; }
 		function parseRabatt(subtotal, raw){

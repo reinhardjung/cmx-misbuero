@@ -130,7 +130,20 @@ function cmx_render_position_row($i, $pos) {
 	$menge        = (string)($pos['menge'] ?? '');
 	$preis        = (string)($pos['preis'] ?? '');
 	$beschreibung = esc_textarea($pos['beschreibung'] ?? '');
-	$rabatt       = esc_attr($pos['rabatt'] ?? '');
+	$rabatt_raw   = trim((string)($pos['rabatt'] ?? ''));
+
+	$menge_display = $menge !== '' ? cmx_format_swiss_number(cmx_norm_decimal($menge), 2) : '';
+	$preis_display = $preis !== '' ? cmx_format_swiss_number(cmx_norm_decimal($preis), 2) : '';
+	$rabatt_display = $rabatt_raw;
+	if ($rabatt_raw !== '') {
+		$is_percent = str_ends_with($rabatt_raw, '%');
+		$raw = $is_percent ? substr($rabatt_raw, 0, -1) : $rabatt_raw;
+		$raw = trim((string) preg_replace('/\s*(chf|fr\.?)\s*/i', '', $raw));
+		if ($raw !== '' && is_numeric(cmx_norm_decimal($raw))) {
+			$rabatt_display = cmx_format_swiss_number(cmx_norm_decimal($raw), 2) . ($is_percent ? '%' : '');
+		}
+	}
+	$rabatt = esc_attr($rabatt_display);
 
 	echo '<tr class="cmx-pos-row">';
 
@@ -142,10 +155,10 @@ function cmx_render_position_row($i, $pos) {
 	echo '</td>';
 
 	// negative Mengen zulassen (Komma/Punkt erlaubt)
-	echo '<td><input type="text" name="cmx_positionen['.$i.'][menge]" value="'.esc_attr($menge).'" style="width:90px"></td>';
+	echo '<td><input type="text" name="cmx_positionen['.$i.'][menge]" value="'.esc_attr($menge_display).'" style="width:90px"></td>';
 
 	// Preis als Text (Komma/Punkt erlaubt)
-	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.esc_attr($preis).'" style="width:100px"></td>';
+	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.esc_attr($preis_display).'" style="width:100px"></td>';
 
 	echo '<td class="cmx-pos-rabatt-td" style="width:100px;">';
 	echo '<input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" placeholder="" style="width:100px">';
@@ -156,7 +169,7 @@ function cmx_render_position_row($i, $pos) {
 	$preis_f = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($preis);
 	$total_init = $menge_f * $preis_f;
 
-	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.number_format($total_init, 2, '.', '').'</td>';
+	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
 
 	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
 	echo '<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
@@ -377,6 +390,25 @@ function cmx_beleg_positionen_js() {
 		}
 
 		function roundTo5Rp(amount){ return Math.round((amount + Number.EPSILON) * 20) / 20; }
+		function formatSwiss(n){
+			const parts = (Number(n) || 0).toFixed(2).split('.');
+			let left = parts[0];
+			let out = '';
+			while (left.length > 3) {
+				out = "'" + left.slice(-3) + out;
+				left = left.slice(0, -3);
+			}
+			return left + out + '.' + parts[1];
+		}
+		function formatRabattValue(raw){
+			let txt = (raw ?? '').toString().trim();
+			if (!txt) return '';
+			const isPercent = txt.endsWith('%');
+			if (isPercent) txt = txt.slice(0, -1);
+			txt = txt.replace(/chf|fr\.?/gi, '').trim();
+			if (txt === '') return '';
+			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
+		}
 
 		function recalcRowTotal($row){
 			const menge=parseNumberFlexible($row.find('input[name*="[menge]"]').val());
@@ -392,7 +424,7 @@ function cmx_beleg_positionen_js() {
 			const signedRabatt = Math.sign(subtotal) * rabatt;
 			const total = roundTo5Rp(subtotal - signedRabatt);
 
-			$row.find('.cmx-pos-total').text(total.toFixed(2)); // Ausgabe mit Punkt
+			$row.find('.cmx-pos-total').text(formatSwiss(total));
 			return total;
 		}
 
@@ -400,7 +432,7 @@ function cmx_beleg_positionen_js() {
 			let sum=0;
 			table.find('tr').each(function(){ sum += recalcRowTotal($(this)); });
 			// Optional: Boxen im UI aktualisieren
-			$('#cmx-gesamtsumme, .cmx-gesamtbox .sum').text(sum.toFixed(2));
+			$('#cmx-gesamtsumme, .cmx-gesamtbox .sum').text(formatSwiss(sum));
 			$(document).trigger('cmx_total_updated', [sum]);
 		}
 
@@ -501,7 +533,7 @@ function cmx_beleg_positionen_js() {
 					if(it.id){
 						$.post(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_get_artikel_vk', artikel_id: it.id }, function(resp){
 							if(resp && resp.success && resp.data && resp.data.vk!==undefined){
-								$row.find('input[name*="[preis]"]').val(resp.data.vk).trigger('input');
+								$row.find('input[name*="[preis]"]').val(formatSwiss(parseNumberFlexible(resp.data.vk))).trigger('input');
 							}
 						}, 'json');
 					}
@@ -531,6 +563,19 @@ function cmx_beleg_positionen_js() {
 		initArtikelSuggest(table);
 
 		table.on('input change', selectorMRP, function(){ recalcAll(); });
+		table.on('blur', 'input[name*="[menge]"], input[name*="[preis]"]', function(){
+			const raw = ($(this).val() ?? '').toString().trim();
+			if (raw === '') return;
+			const num = parseNumberFlexible(raw);
+			$(this).val(formatSwiss(num));
+			recalcAll();
+		});
+		table.on('blur', 'input[name*="[rabatt]"]', function(){
+			const raw = ($(this).val() ?? '').toString().trim();
+			if (raw === '') return;
+			$(this).val(formatRabattValue(raw));
+			recalcAll();
+		});
 
 		// Neue Zeile
 		$('#cmx-add-pos').on('click', function(){
@@ -547,7 +592,7 @@ function cmx_beleg_positionen_js() {
 				else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
 				else if($el.is('textarea')){ $el.val(''); } else { $el.val(''); }
 			});
-			newRow.find('.cmx-pos-total').text('0.00');
+			newRow.find('.cmx-pos-total').text('0,00');
 
 			table.append(newRow);
 			initArtikelSuggest(newRow);
@@ -569,7 +614,7 @@ function cmx_beleg_positionen_js() {
 					else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
 					else { $el.val(''); }
 				});
-				$row.find('.cmx-pos-total').text('0.00');
+				$row.find('.cmx-pos-total').text('0,00');
 			}
 			setTimeout(recalcAll, 0);
 		});

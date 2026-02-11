@@ -318,7 +318,7 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 		// VK
 		$vk_raw   = \get_post_meta($post_id, $vk_meta_key, true);
 		$vk_value = (float) str_replace(',', '.', (string) $vk_raw);
-		$vk_display = $vk_value > 0 ? number_format($vk_value, 2, ',', "'") . '' : '';
+		$vk_display = $vk_value > 0 ? cmx_format_swiss_number($vk_value, 2) . '' : '';
 
 		// Text
 		$content_full     = \get_post_field('post_content', $post_id);

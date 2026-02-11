@@ -173,10 +173,22 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
  * ========================================================================== */
 function cmx_render_beleg_position_row_unified($i, $pos): void {
 	$artikel_id   = esc_attr($pos['artikel_id'] ?? '');
-	$menge        = esc_attr($pos['menge'] ?? 1);
-	$preis        = esc_attr($pos['preis'] ?? '');
+	$menge_raw    = (string)($pos['menge'] ?? 1);
+	$preis_raw    = (string)($pos['preis'] ?? '');
 	$beschreibung = esc_textarea($pos['beschreibung'] ?? '');
-	$rabatt       = esc_attr($pos['rabatt'] ?? '');
+	$rabatt_raw   = trim((string)($pos['rabatt'] ?? ''));
+	$menge        = esc_attr(cmx_format_swiss_number($menge_raw, 2));
+	$preis        = esc_attr($preis_raw === '' ? '' : cmx_format_swiss_number($preis_raw, 2));
+	$rabatt_display = $rabatt_raw;
+	if ($rabatt_raw !== '') {
+		$is_percent = str_ends_with($rabatt_raw, '%');
+		$raw = $is_percent ? substr($rabatt_raw, 0, -1) : $rabatt_raw;
+		$raw = trim((string) preg_replace('/\s*(chf|fr\.?)\s*/i', '', $raw));
+		if ($raw !== '' && preg_match('/\d/', $raw)) {
+			$rabatt_display = cmx_format_swiss_number($raw, 2) . ($is_percent ? '%' : '');
+		}
+	}
+	$rabatt = esc_attr($rabatt_display);
 
 	$artikel_list_url = admin_url('edit.php?post_type=artikel');
 	$artikel_edit_url = (!empty($artikel_id) && (int)$artikel_id > 0 && get_post_status((int)$artikel_id)) ? get_edit_post_link((int)$artikel_id, '') : '';
@@ -201,10 +213,10 @@ function cmx_render_beleg_position_row_unified($i, $pos): void {
 	echo '</select>';
 	echo '</td>';
 
-	echo '<td><input type="number" name="cmx_positionen['.$i.'][menge]" value="'.$menge.'" min="0" step="0.01" style="width:70px"></td>';
+	echo '<td><input type="text" inputmode="decimal" name="cmx_positionen['.$i.'][menge]" value="'.$menge.'" style="width:70px"></td>';
 	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.$preis.'" style="width:100px"></td>';
 	echo '<td class="cmx-pos-rabatt-td" style="width:100px;"><input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" style="width:100px"></td>';
-	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.number_format((float)$preis * (float)$menge, 2).'</td>';
+	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number(cmx_parse_number($preis_raw) * cmx_parse_number($menge_raw), 2)).'</td>';
 	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
 	echo '<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
 
@@ -243,9 +255,25 @@ function cmx_beleg_positionen_js_unified(): void {
 
 		function parseNumberFlexible(val){
 			if (typeof val!=='string') val=(val??'').toString();
-			val = val.replace(/'/g,'').replace(/\s+/g,'').replace(',', '.');
-			const n = parseFloat(val);
+			let s = val.replace(/\s+/g,'').replace(/'/g,'');
+			const hasComma = s.indexOf(',')>-1, hasDot = s.indexOf('.')>-1;
+			if (hasComma && hasDot){
+				if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+					s = s.replace(/\./g,'').replace(/,/g,'.');
+				} else {
+					s = s.replace(/,/g,'');
+				}
+			} else {
+				s = s.replace(/,/g,'.');
+			}
+			const n = parseFloat(s);
 			return isNaN(n) ? 0 : n;
+		}
+		function formatSwiss(n){
+			const parts = (Number(n)||0).toFixed(2).split('.');
+			let left = parts[0], out = '';
+			while (left.length > 3) { out = "'" + left.slice(-3) + out; left = left.slice(0, -3); }
+			return left + out + '.' + parts[1];
 		}
 		function parseRabattOnSubtotal(subtotal, rabattRaw){
 			if (!rabattRaw) return 0;
@@ -268,7 +296,7 @@ function cmx_beleg_positionen_js_unified(): void {
 			let rabatt=subtotal>0 ? parseRabattOnSubtotal(subtotal, rabattRaw) : 0;
 			if (rabatt>subtotal) rabatt=subtotal;
 			let totalRounded=roundTo5Rp(subtotal-rabatt);
-			$row.find('.cmx-pos-total').text(totalRounded.toFixed(2)+'');
+			$row.find('.cmx-pos-total').text(formatSwiss(totalRounded));
 		}
 		function recalcAll(){ table.find('tr').each(function(){ recalcRowTotal($(this)); }); }
 
@@ -283,9 +311,19 @@ function cmx_beleg_positionen_js_unified(): void {
 			if(!artikelID) return;
 			$.post(<?php echo wp_json_encode($ajax_url); ?>,{action:'cmx_get_artikel_vk', artikel_id: artikelID}, function(resp){
 				if (resp && resp.success && resp.data.vk){
-					row.find('input[name*="[preis]"]').val(resp.data.vk).trigger('input');
+					row.find('input[name*="[preis]"]').val(formatSwiss(parseNumberFlexible(resp.data.vk))).trigger('input');
 				}
 			}, 'json');
+		});
+		table.on('blur','input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]', function(){
+			const raw = ($(this).val() ?? '').toString().trim();
+			if (raw === '') return;
+			if ($(this).is('input[name*="[rabatt]"]') && raw.endsWith('%')) {
+				$(this).val(formatSwiss(parseNumberFlexible(raw.slice(0, -1))) + '%');
+			} else {
+				$(this).val(formatSwiss(parseNumberFlexible(raw)));
+			}
+			recalcRowTotal($(this).closest('tr'));
 		});
 
 		$('#cmx-add-pos').on('click', function(){
@@ -306,7 +344,7 @@ function cmx_beleg_positionen_js_unified(): void {
 			});
 
 			// Label-Link bleibt, nur href/text wird später via updateArtikelLink gesetzt
-			newRow.find('.cmx-pos-total').text('0.00');
+			newRow.find('.cmx-pos-total').text('0,00');
 			table.append(newRow);
 			updateArtikelLink(newRow);
 		});

@@ -137,7 +137,7 @@ function cmx_render_kuchen_ein_aus_nok(): void {
 		echo '    <span class="cmx-dot" style="background:'.esc_attr($data['color']).'"></span>';
 		echo '    <span class="cmx-row-label">'.esc_html($data['label']).'</span>';
 		echo '  </div>';
-		echo '  <div class="cmx-val">CHF '.esc_html(number_format_i18n($data['sum'], 2)).'</div>';
+		echo '  <div class="cmx-val">CHF '.esc_html(cmx_format_swiss_number($data['sum'], 2)).'</div>';
 		echo '  <div class="cmx-count">'.esc_html($data['count']).' Stück</div>';
 		echo '</div>';
 	}

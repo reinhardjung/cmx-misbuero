@@ -108,13 +108,13 @@ function cmx_render_gutschriften_widget(): void {
 	echo '<div class="cmx-lr-grid">';
 	echo '  <div class="cmx-lr-box">';
 	echo '    <div class="cmx-lr-title">Ausbezahlte</div>';
-	echo '    <div class="cmx-lr-val">'.esc_html(number_format_i18n($paid_count)).'</div>';
-	echo '    <div class="cmx-lr-sub">CHF '.esc_html(number_format_i18n($paid_sum, 2)).'</div>';
+	echo '    <div class="cmx-lr-val">'.esc_html(cmx_format_swiss_number($paid_count, 0)).'</div>';
+	echo '    <div class="cmx-lr-sub">CHF '.esc_html(cmx_format_swiss_number($paid_sum, 2)).'</div>';
 	echo '  </div>';
 	echo '  <div class="cmx-lr-box">';
 	echo '    <div class="cmx-lr-title">Offene</div>';
-	echo '    <div class="cmx-lr-val">'.esc_html(number_format_i18n($open_count)).'</div>';
-	echo '    <div class="cmx-lr-sub">CHF '.esc_html(number_format_i18n($open_sum, 2)).'</div>';
+	echo '    <div class="cmx-lr-val">'.esc_html(cmx_format_swiss_number($open_count, 0)).'</div>';
+	echo '    <div class="cmx-lr-sub">CHF '.esc_html(cmx_format_swiss_number($open_sum, 2)).'</div>';
 	echo '  </div>';
 	echo '</div>';
 }

@@ -52,7 +52,8 @@ function cmx_beleg_anzahlungen_get_rows(int $post_id): array {
 	foreach ($raw as $row) {
 		if (!\is_array($row)) continue;
 		$datum  = isset($row['datum']) ? \trim((string)$row['datum']) : '';
-		$betrag = isset($row['betrag']) ? \trim((string)$row['betrag']) : '';
+		$betrag_raw = isset($row['betrag']) ? \trim((string)$row['betrag']) : '';
+		$betrag = $betrag_raw !== '' ? cmx_format_swiss_number($betrag_raw, 2) : '';
 		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)$row['zahlungsart']) : '';
 		if ($datum === '' && $betrag === '' && $zahlungsart === '') continue;
 		$rows[] = ['datum'=>$datum, 'betrag'=>$betrag, 'zahlungsart'=>$zahlungsart];
@@ -156,6 +157,35 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		const $status = $("#cmx_beleg_status");
 		const $box = $("#cmx_beleg_anzahlungen").closest(".postbox");
 
+		function toNumber(v){
+			let s = (v ?? "").toString().trim();
+			if (s === "") return 0;
+			s = s.replace(/\s+/g, "").replace(/\'/g, "");
+			const hasComma = s.indexOf(",") > -1;
+			const hasDot = s.indexOf(".") > -1;
+			if (hasComma && hasDot) {
+				if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+					s = s.replace(/\./g, "").replace(/,/g, ".");
+				} else {
+					s = s.replace(/,/g, "");
+				}
+			} else {
+				s = s.replace(/,/g, ".");
+			}
+			const n = parseFloat(s);
+			return isNaN(n) ? 0 : n;
+		}
+		function formatCH(n){
+			const parts = (Number(n) || 0).toFixed(2).split(".");
+			let left = parts[0];
+			let out = "";
+			while (left.length > 3) {
+				out = "\'" + left.slice(-3) + out;
+				left = left.slice(0, -3);
+			}
+			return left + out + "." + parts[1];
+		}
+
 		function reindexRows(){
 			$wrap.find(".cmx-anzahlung-row").each(function(i){
 				$(this).find("input[data-name], select[data-name]").each(function(){
@@ -194,6 +224,11 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			e.preventDefault();
 			const $row = $(this).closest(".cmx-anzahlung-row");
 			$row.find(".cmx-anzahlung-date").val(todayISO()).trigger("change");
+		});
+		$wrap.on("blur", "input[name*=\"[betrag]\"]", function(){
+			const raw = ($(this).val() ?? "").toString().trim();
+			if (raw === "") return;
+			$(this).val(formatCH(toNumber(raw)));
 		});
 
 		if ($status.length) {
@@ -243,7 +278,11 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	foreach ($rows as $row) {
 		if (!\is_array($row)) continue;
 		$datum  = isset($row['datum']) ? \trim((string)\sanitize_text_field($row['datum'])) : '';
-		$betrag = isset($row['betrag']) ? \trim((string)\sanitize_text_field($row['betrag'])) : '';
+		$betrag_raw = isset($row['betrag']) ? \trim((string)\sanitize_text_field($row['betrag'])) : '';
+		$betrag = '';
+		if ($betrag_raw !== '' && preg_match('/\d/', $betrag_raw)) {
+			$betrag = number_format(cmx_parse_number($betrag_raw), 2, '.', '');
+		}
 		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)\sanitize_text_field($row['zahlungsart'])) : '';
 		if ($datum === '' && $betrag === '') continue;
 		$clean[] = ['datum'=>$datum, 'betrag'=>$betrag, 'zahlungsart'=>$zahlungsart];

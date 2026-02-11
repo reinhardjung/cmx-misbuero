@@ -26,6 +26,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
 	$marge       = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MARGE, '');
 	$verkaufbar  = (bool) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, false);
+	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
+	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
+	$mehrwert_display = ($mehrwert === '' || $mehrwert === null) ? '' : cmx_format_swiss_number($mehrwert, 2);
+	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
+	$marge_display    = ($marge === '' || $marge === null) ? '' : cmx_format_swiss_number($marge, 2);
 
 	$sel_einheit = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_EINHEITEN);
 	$einheiten   = cmx_get_terms_safe(TAX_ARTIKEL_EINHEITEN);
@@ -81,31 +86,31 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	// Einkaufspreis
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_ek">Einkaufspreis</label>
-		<input type="number" step="0.01" min="0" id="cmx_artikel_ek" name="cmx_artikel_ek" value="' . esc_attr($ek) . '">
+		<input type="text" inputmode="decimal" id="cmx_artikel_ek" name="cmx_artikel_ek" value="' . esc_attr($ek_display) . '">
 	</div>';
 
 	// Aufwand
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_aufwand">Aufwand</label>
-		<input type="number" step="0.01" min="0" id="cmx_artikel_aufwand" name="cmx_artikel_aufwand" value="' . esc_attr($aufwand) . '">
+		<input type="text" inputmode="decimal" id="cmx_artikel_aufwand" name="cmx_artikel_aufwand" value="' . esc_attr($aufwand_display) . '">
 	</div>';
 
 	// Mehrwert
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_mehrwert">Mehrwert</label>
-		<input type="number" step="0.01" min="0" id="cmx_artikel_mehrwert" name="cmx_artikel_mehrwert" value="' . esc_attr($mehrwert) . '">
+		<input type="text" inputmode="decimal" id="cmx_artikel_mehrwert" name="cmx_artikel_mehrwert" value="' . esc_attr($mehrwert_display) . '">
 	</div>';
 
 	// Verkaufspreis
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_vk">Verkaufspreis</label>
-		<input type="number" step="0.01" min="0" id="cmx_artikel_vk" name="cmx_artikel_vk" value="' . esc_attr($vk) . '">
+		<input type="text" inputmode="decimal" id="cmx_artikel_vk" name="cmx_artikel_vk" value="' . esc_attr($vk_display) . '">
 	</div>';
 
 	// Marge
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_marge">Marge (VK − EK)</label>
-		<input type="number" step="0.01" id="cmx_artikel_marge" name="cmx_artikel_marge" value="' . esc_attr($marge) . '" readonly>
+		<input type="text" inputmode="decimal" id="cmx_artikel_marge" name="cmx_artikel_marge" value="' . esc_attr($marge_display) . '" readonly>
 	</div>';
 
 	echo '<div class="cmx-check">
@@ -125,20 +130,46 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 		let vkLocked = false; // true, sobald VK manuell verändert wurde
 
-		function num(v){ const n = parseFloat((v ?? "0").toString().replace(",", ".")); return isFinite(n) ? n : 0; }
-		function clamp2(x){ return (x < 0 ? 0 : x).toFixed(2); }
+		function num(v){
+			let s = (v ?? "0").toString().trim();
+			if (s === "") return 0;
+			s = s.replace(/\s+/g, "").replace(/\'/g, "");
+			const hasComma = s.indexOf(",") > -1;
+			const hasDot = s.indexOf(".") > -1;
+			if (hasComma && hasDot) {
+				if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+					s = s.replace(/\./g, "").replace(/,/g, ".");
+				} else {
+					s = s.replace(/,/g, "");
+				}
+			} else {
+				s = s.replace(/,/g, ".");
+			}
+			const n = parseFloat(s);
+			return isFinite(n) ? n : 0;
+		}
+		function formatCH(v){
+			const parts = (Number(v) || 0).toFixed(2).split(".");
+			let left = parts[0];
+			let out = "";
+			while (left.length > 3) {
+				out = "\'" + left.slice(-3) + out;
+				left = left.slice(0, -3);
+			}
+			return left + out + "." + parts[1];
+		}
 
 		function recalcVK(){
 			if (vkLocked) { recalcMargin(); return; }
 			const v = num(ek?.value) + num(aw?.value) + num(mw?.value);
-			if (vk) vk.value = v.toFixed(2);
+			if (vk) vk.value = formatCH(v);
 			recalcMargin();
 		}
 
 		function recalcMargin(){
 			if (!mg) return;
 			const margin = num(vk?.value) - num(ek?.value);
-			mg.value = margin.toFixed(2);
+			mg.value = formatCH(margin);
 		}
 
 		function enableAutoSelect(el) {
@@ -153,7 +184,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 				vkLocked = true;
 				if (mw) {
 					const newMw = num(vk.value) - num(ek?.value) - num(aw?.value);
-					mw.value = clamp2(newMw);
+					mw.value = formatCH(newMw < 0 ? 0 : newMw);
 				}
 				recalcMargin();
 			}, {passive:true});
@@ -168,6 +199,23 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 		// Alle numerischen Felder automatisch selektieren bei Fokus
 		[ek, aw, mw, vk, mg].forEach(enableAutoSelect);
+		[ek, aw, mw, vk, mg].forEach(el => {
+			if (!el) return;
+			if (el.value !== "") el.value = formatCH(num(el.value));
+		});
+		[ek, aw, mw, vk].forEach(el => {
+			if (!el) return;
+			el.addEventListener("blur", function(){
+				const raw = (this.value ?? "").toString().trim();
+				if (raw === "") return;
+				this.value = formatCH(num(raw));
+				if (this === vk) {
+					recalcMargin();
+					return;
+				}
+				recalcVK();
+			});
+		});
 
 		recalcVK(); // Initial
 	});
@@ -185,7 +233,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	if (!isset($_POST['cmx_artikel_nonce']) || !\wp_verify_nonce($_POST['cmx_artikel_nonce'], 'cmx_artikel_save')) return;
 
 	$in        = static fn($k, $d = '') => $_POST[$k] ?? $d;
-	$norm      = static fn($v) => (float) \str_replace(',', '.', (string) $v);
+	$norm      = static fn($v) => cmx_parse_number((string) $v);
 	$is_valid  = static fn($v) => \is_finite($v) && $v >= 0;
 
 	// --- SKU & Währung speichern ---

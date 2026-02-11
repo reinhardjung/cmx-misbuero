@@ -239,3 +239,45 @@ function cmx_ini_cast_value(mixed $v): string|array|null {
 	if (\is_scalar($v)) return (string) $v;
 	return null;
 }
+
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_parse_number')) {
+	/**
+	 * Parse number strings with comma or dot decimals and optional apostrophe thousand separators.
+	 */
+	function cmx_parse_number(mixed $value): float {
+		if (is_int($value) || is_float($value)) return (float) $value;
+		if (!is_scalar($value)) return 0.0;
+
+		$s = trim((string) $value);
+		if ($s === '') return 0.0;
+
+		$s = str_replace(["\xc2\xa0", ' ', "'"], '', $s);
+		$has_comma = strpos($s, ',') !== false;
+		$has_dot = strpos($s, '.') !== false;
+
+		if ($has_comma && $has_dot) {
+			if (strrpos($s, ',') > strrpos($s, '.')) {
+				$s = str_replace('.', '', $s);
+				$s = str_replace(',', '.', $s);
+			} else {
+				$s = str_replace(',', '', $s);
+			}
+		} else {
+			$s = str_replace(',', '.', $s);
+		}
+
+		return is_numeric($s) ? (float) $s : 0.0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')) {
+	/**
+	 * Swiss number formatting using core PHP number_format.
+	 * Example: 1234.5 => 1'234,50
+	 */
+	function cmx_format_swiss_number(mixed $value, int $decimals = 2): string {
+		$decimals = max(0, $decimals);
+		return number_format(cmx_parse_number($value), $decimals, '.', "'");
+	}
+}

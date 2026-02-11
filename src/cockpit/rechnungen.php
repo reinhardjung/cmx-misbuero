@@ -86,10 +86,10 @@ function cmx_render_umsatz_widget() {
 	</style>';
 
 	echo '<div class="cmx-umsatz-kpi">';
-	echo '  <div class="k"><div class="h">Belege bezahlt</div><div class="v">'.esc_html(number_format_i18n($count_belege)).'</div></div>';
-	echo '  <div class="k"><div class="h">Kunden mit Belegen</div><div class="v">'.esc_html(number_format_i18n($count_kunden)).'</div></div>';
-	echo '  <div class="k"><div class="h">Umsatz gesamt</div><div class="v">CHF '.esc_html(number_format_i18n($sum_total, 2)).'</div></div>';
-	echo '  <div class="k"><div class="h">Durchschnitt/Beleg</div><div class="v">CHF '.esc_html(number_format_i18n($avg_beleg, 2)).'</div></div>';
+	echo '  <div class="k"><div class="h">Belege bezahlt</div><div class="v">'.esc_html(cmx_format_swiss_number($count_belege, 0)).'</div></div>';
+	echo '  <div class="k"><div class="h">Kunden mit Belegen</div><div class="v">'.esc_html(cmx_format_swiss_number($count_kunden, 0)).'</div></div>';
+	echo '  <div class="k"><div class="h">Umsatz gesamt</div><div class="v">CHF '.esc_html(cmx_format_swiss_number($sum_total, 2)).'</div></div>';
+	echo '  <div class="k"><div class="h">Durchschnitt/Beleg</div><div class="v">CHF '.esc_html(cmx_format_swiss_number($avg_beleg, 2)).'</div></div>';
 	echo '</div>';
 
 	// Optional: Link zur Kontakte-Liste

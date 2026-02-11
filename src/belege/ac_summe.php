@@ -53,5 +53,24 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 
 	$calc = cmxbu_get_beleg_positionen_calc($post_id);
 	$total = isset($calc['total']) ? (float)$calc['total'] : 0.0;
-	echo esc_html(number_format_i18n($total, 2));
+	echo '<span class="cmx-beleg-summe-val">' . esc_html(cmx_format_swiss_number($total, 2)) . '</span>';
 }, 10, 2);
+
+// Summe-Spalte in der Belege-Liste rechtsbuendig darstellen
+add_action('admin_head-edit.php', function (): void {
+	if (!isset($_GET['post_type']) || $_GET['post_type'] !== CMX_PT_BELEGE) return;
+	echo '<style>
+		.wp-list-table th.column-beleg_summe {
+			text-align: right;
+		}
+		.wp-list-table td.column-beleg_summe {
+			text-align: left !important;
+			white-space: nowrap;
+		}
+		.wp-list-table td.column-beleg_summe .cmx-beleg-summe-val {
+			display: inline-block;
+			min-width: 72px;
+			text-align: right;
+		}
+	</style>';
+});

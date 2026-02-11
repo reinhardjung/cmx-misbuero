@@ -282,7 +282,7 @@ function cmxbu_get_beleg_amount_display(int $post_id): string {
 	]);
 
 	$total = (float)($calc['total'] ?? 0.0);
-	$formatted = number_format_i18n($total, 2);
+	$formatted = cmx_format_swiss_number($total, 2);
 
 	return trim($formatted . ' ' . $currency);
 }
