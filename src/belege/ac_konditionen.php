@@ -277,24 +277,55 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			}
 		}
 		break;
-		case 'beleg_zahlungsgrund':
-			$tax = cmx_beleg_zahlungsgrund_taxonomy();
-			if ($tax === '') {
-				echo '';
+			case 'beleg_zahlungsgrund':
+				$tax = cmx_beleg_zahlungsgrund_taxonomy();
+				if ($tax === '') {
+					echo '';
+					break;
+				}
+				$terms = \wp_get_post_terms($post_id, $tax, ['orderby' => 'name', 'order' => 'ASC']);
+				if (\is_wp_error($terms) || empty($terms)) {
+					echo '';
+					break;
+				}
+				$links = [];
+				foreach ($terms as $term) {
+					if (!($term instanceof \WP_Term)) {
+						continue;
+					}
+					$url = \add_query_arg(
+						[
+							'post_type' => CMX_PT_BELEGE,
+							'cmx_zahlungsgrundfilter' => (string) $term->slug,
+						],
+						\admin_url('edit.php')
+					);
+					$links[] = '<a href="' . \esc_url($url) . '">' . \esc_html((string) $term->name) . '</a>';
+				}
+				echo \implode(', ', $links);
 				break;
-			}
-			$names = \wp_get_post_terms($post_id, $tax, ['fields' => 'names']);
-			if (\is_wp_error($names) || empty($names)) {
-				echo '';
+			case 'beleg_richtung':
+				$short = cmx_beleg_admin_richtung_short_label($post_id);
+				if ($short === '') {
+					echo '';
+					break;
+				}
+				$richtung = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
+				if ($richtung !== 'ausgang' && $richtung !== 'eingang') {
+					echo \esc_html($short);
+					break;
+				}
+				$url = \add_query_arg(
+					[
+						'post_type' => CMX_PT_BELEGE,
+						'cmx_richtungfilter' => $richtung,
+					],
+					\admin_url('edit.php')
+				);
+				echo '<a href="' . \esc_url($url) . '">' . \esc_html($short) . '</a>';
 				break;
-			}
-			echo \esc_html(\implode(', ', \array_filter(\array_map('strval', $names))));
-			break;
-		case 'beleg_richtung':
-			echo \esc_html(cmx_beleg_admin_richtung_short_label($post_id));
-			break;
-	}
-}, 10, 2);
+		}
+	}, 10, 2);
 
 /** =========================
  * Sortierbar + Query-Anpassung
