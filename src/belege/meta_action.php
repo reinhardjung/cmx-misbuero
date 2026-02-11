@@ -125,6 +125,136 @@ function cmxbu_get_stable_token(int $post_id): string {
 	return $token;
 }
 
+function cmxbu_beleg_uploads_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+		: '_cmx_belege_uploads';
+}
+
+function cmxbu_beleg_rel_upload_to_abs(string $rel_path): string {
+	$rel_path = \ltrim($rel_path, "/\\");
+	if ($rel_path === '') {
+		return '';
+	}
+	return \rtrim((string) \WP_CONTENT_DIR, '/\\') . '/uploads/' . $rel_path;
+}
+
+function cmxbu_is_beleg_archive_abs_path(string $abs_path): bool {
+	if ($abs_path === '') {
+		return false;
+	}
+	$normalized = \wp_normalize_path($abs_path);
+	$uploads_base = \trailingslashit(\wp_normalize_path((string) \WP_CONTENT_DIR . '/uploads/misbuero'));
+	if (\strpos($normalized, $uploads_base) !== 0) {
+		return false;
+	}
+	return \strpos($normalized, '/belege/') !== false;
+}
+
+function cmxbu_collect_beleg_upload_attachment_ids(int $post_id): array {
+	$uploads = (array) \get_post_meta($post_id, cmxbu_beleg_uploads_meta_key(), true);
+	$ids = [];
+	foreach ($uploads as $entry) {
+		if (!\is_numeric($entry)) {
+			continue;
+		}
+		$id = (int) $entry;
+		if ($id > 0) {
+			$ids[] = $id;
+		}
+	}
+	return \array_values(\array_unique($ids));
+}
+
+function cmxbu_collect_beleg_archive_paths(int $post_id, \WP_Post $post): array {
+	$paths = [];
+
+	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+	if (\is_string($pdf_abs_path) && $pdf_abs_path !== '') {
+		$paths[] = $pdf_abs_path;
+	}
+
+	$uploads = (array) \get_post_meta($post_id, cmxbu_beleg_uploads_meta_key(), true);
+	foreach ($uploads as $entry) {
+		if (\is_numeric($entry)) {
+			$attached = (string) \get_attached_file((int) $entry);
+			if ($attached !== '') {
+				$paths[] = $attached;
+			}
+			continue;
+		}
+		$rel = \ltrim((string) $entry, "/\\");
+		if ($rel !== '') {
+			$paths[] = cmxbu_beleg_rel_upload_to_abs($rel);
+		}
+	}
+
+	$legacy_url = (string) \get_post_meta($post_id, 'datei_url', true);
+	if ($legacy_url !== '') {
+		$legacy_path = \wp_parse_url($legacy_url, \PHP_URL_PATH);
+		if (\is_string($legacy_path) && $legacy_path !== '') {
+			$uploads_marker = '/uploads/';
+			$marker_pos = \strpos($legacy_path, $uploads_marker);
+			if ($marker_pos !== false) {
+				$rel = (string) \substr($legacy_path, $marker_pos + \strlen($uploads_marker));
+				if ($rel !== '') {
+					$paths[] = cmxbu_beleg_rel_upload_to_abs($rel);
+				}
+			}
+		}
+	}
+
+	$paths = \array_map('strval', $paths);
+	$paths = \array_filter($paths, static fn(string $path): bool => $path !== '');
+	return \array_values(\array_unique($paths));
+}
+
+function cmxbu_cleanup_beleg_archive_files(int $post_id): void {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+
+	$paths = cmxbu_collect_beleg_archive_paths($post_id, $post);
+	$attachment_ids = cmxbu_collect_beleg_upload_attachment_ids($post_id);
+
+	foreach ($attachment_ids as $attachment_id) {
+		$attached = (string) \get_attached_file((int) $attachment_id);
+		if ($attached !== '' && cmxbu_is_beleg_archive_abs_path($attached)) {
+			\wp_delete_attachment((int) $attachment_id, true);
+		}
+	}
+
+	foreach ($paths as $abs_path) {
+		if (!cmxbu_is_beleg_archive_abs_path($abs_path)) {
+			continue;
+		}
+		if (\is_file($abs_path)) {
+			@unlink($abs_path);
+		}
+	}
+
+	\delete_post_meta($post_id, cmxbu_beleg_uploads_meta_key());
+	\delete_post_meta($post_id, '_cmx_beleg_upload_prefix');
+	\delete_post_meta($post_id, 'datei_url');
+
+	$token_option_key = 'cmx_beleg_token_for_' . $post_id;
+	$token = \get_option($token_option_key);
+	if (\is_string($token) && $token !== '') {
+		\delete_option('cmx_beleg_token_data_' . $token);
+	}
+	\delete_option($token_option_key);
+}
+
+function cmxbu_cleanup_beleg_archive_files_on_delete(int $post_id): void {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+	cmxbu_cleanup_beleg_archive_files($post_id);
+}
+\add_action('before_delete_post', __NAMESPACE__ . '\\cmxbu_cleanup_beleg_archive_files_on_delete', 20, 1);
+
 // Einzelne Teil-Module einbinden (UI + Handler, aber KEINE Token-Erzeugung mehr)
 require_once __DIR__ . '/meta_action_send.php';
 require_once __DIR__ . '/meta_action_link.php';
