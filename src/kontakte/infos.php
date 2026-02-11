@@ -40,7 +40,7 @@ function cmx_has_local_logo(int $post_id): bool {
 /**
  * Hauptfunktion: lädt NUR, wenn wirklich noch nichts lokal existiert.
  */
-function cmx_fetch_logo_from_url(int $post_id) {
+function cmx_fetch_logo_from_url(int $post_id, float $max_wait_seconds = 2.0) {
 	if ($post_id <= 0) return new \WP_Error('bad_post', 'Ungültige Post-ID');
 
 	// Wenn bereits ein Logo existiert → fertig
@@ -61,6 +61,8 @@ function cmx_fetch_logo_from_url(int $post_id) {
 
 	$origin = cmx_get_origin($site_url);
 	if ($origin === '') return new \WP_Error('bad_url', 'Ungültige URL');
+	$max_wait_seconds = max(0.2, (float)$max_wait_seconds);
+	$deadline = microtime(true) + $max_wait_seconds;
 
 	// Kandidaten
 	$candidates = [
@@ -74,9 +76,14 @@ function cmx_fetch_logo_from_url(int $post_id) {
 	];
 
 	foreach ($candidates as $c) {
+		$remaining = $deadline - microtime(true);
+		if ($remaining <= 0 || $remaining < 1.0) {
+			return new \WP_Error('cmx_logo_timeout', 'Logo-Suche nach 2 Sekunden abgebrochen');
+		}
+
 		$img_url = rtrim($origin, '/') . $c;
 
-		$dl = cmx_download_to_local_and_save_meta($post_id, $img_url);
+		$dl = cmx_download_to_local_and_save_meta($post_id, $img_url, $remaining);
 		if (!\is_wp_error($dl)) {
 			\update_post_meta($post_id, '_cmx_logo_src', esc_url_raw($img_url));
 			return $dl;
@@ -107,7 +114,7 @@ function cmx_fetch_logo_from_url(int $post_id) {
 		return;
 	}
 
-	$res = cmx_fetch_logo_from_url((int)$post_id);
+	$res = cmx_fetch_logo_from_url((int)$post_id, 2.0);
 	if (\is_wp_error($res)) {
 		error_log('[CMX Logo] ' . $res->get_error_code() . ': ' . $res->get_error_message());
 	}
@@ -118,9 +125,14 @@ function cmx_fetch_logo_from_url(int $post_id) {
 /**
  * Laden & lokale Speicherung
  */
-function cmx_download_to_local_and_save_meta(int $post_id, string $image_url) {
+function cmx_download_to_local_and_save_meta(int $post_id, string $image_url, ?float $timeout_seconds = null) {
 
-	$tmp = \download_url($image_url, 8);
+	$timeout_seconds = ($timeout_seconds === null) ? 8.0 : (float)$timeout_seconds;
+	if ($timeout_seconds <= 0.0) {
+		return new \WP_Error('cmx_logo_timeout', 'Zeitlimit erreicht');
+	}
+	$request_timeout = max(1, (int)\ceil($timeout_seconds));
+	$tmp = \download_url($image_url, $request_timeout);
 	if (\is_wp_error($tmp)) return $tmp;
 
 	// verhindern, dass 404/HTML-Dateien als Bild gespeichert werden

@@ -28,6 +28,36 @@ function cmx_dav_fmt_time($ts) {
 	return $dt->format('d.m.Y H:i');
 }
 
+/** Schlichte HTML-Seite für leeres Archiv. */
+function cmx_dav_render_empty_archive_message(string $message = 'Es wurden noch keine Dateien abgelegt.'): string {
+	$msg = cmx_dav_h($message);
+	return '<!doctype html><html lang="de"><head><meta charset="utf-8">'
+		.'<meta name="viewport" content="width=device-width,initial-scale=1">'
+		.'<title>Archiv</title>'
+		.'</head><body style="margin:0;padding:32px;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;">'
+		.'<p style="margin:0;">'.$msg.'</p>'
+		.'</body></html>';
+}
+
+/** Prüft rekursiv, ob im Archiv mindestens eine Datei existiert. */
+function cmx_dav_has_any_files(string $dir): bool {
+	if (!is_dir($dir)) return false;
+	try {
+		$it = new \RecursiveIteratorIterator(
+			new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+			\RecursiveIteratorIterator::LEAVES_ONLY
+		);
+		foreach ($it as $entry) {
+			if ($entry instanceof \SplFileInfo && $entry->isFile()) {
+				return true;
+			}
+		}
+	} catch (\Throwable $e) {
+		return false;
+	}
+	return false;
+}
+
 /** Sicherheits-Helper für Pfade */
 function cmx_dav_is_subpath(string $base, string $path): bool {
 	$base = rtrim(str_replace('\\','/',$base), '/') . '/';
@@ -68,9 +98,26 @@ add_action('init', function () {
 	$path = parse_url($req, PHP_URL_PATH) ?? '/';
 	if (!preg_match('#^/archiv(?:/|$)#', $path)) return;
 
+	$sharePath = WP_CONTENT_DIR . '/uploads/misbuero';
+	// Wenn das Archiv-Verzeichnis noch nicht existiert: leere Seite statt DAV-XML-Fehler.
+	if (!is_dir($sharePath)) {
+		$method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+		if ($method === 'HEAD') {
+			status_header(200);
+			exit;
+		}
+		if ($method === 'GET') {
+			status_header(200);
+			header('Content-Type: text/html; charset=UTF-8');
+			echo cmx_dav_render_empty_archive_message();
+			exit;
+		}
+		status_header(404);
+		exit;
+	}
+
 	require_once plugin_dir_path(__FILE__) . '../vendor/autoload.php';
 
-	$sharePath = WP_CONTENT_DIR . '/uploads/misbuero';
 	$root      = new DAV\FS\Directory($sharePath);
 	$server    = new DAV\Server($root);
 	$server->setBaseUri('/archiv'); // bewusst ohne Slash am Ende
@@ -206,10 +253,17 @@ add_action('init', function () {
 			}
 		}
 
-		if ($node instanceof DAV\ICollection) {
+			if ($node instanceof DAV\ICollection) {
+				// Root-Archiv ohne Dateien: komplett leere Seite ausgeben.
+				if ($relPath === '' && !cmx_dav_has_any_files($sharePath)) {
+					$response->setStatus(200);
+					$response->setHeader('Content-Type', 'text/html; charset=UTF-8');
+					$response->setBody(cmx_dav_render_empty_archive_message());
+					return false;
+				}
 
-			$childrenRaw = iterator_to_array($node->getChildren());
-			$base        = rtrim($server->getBaseUri(), '/');
+				$childrenRaw = iterator_to_array($node->getChildren());
+				$base        = rtrim($server->getBaseUri(), '/');
 
 			// Sortier-Parameter einlesen
 			$sort = isset($q['sort']) && in_array($q['sort'], ['name','size','mtime'], true) ? $q['sort'] : 'name';
