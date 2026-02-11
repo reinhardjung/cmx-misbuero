@@ -260,12 +260,12 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $qr_raw = implode("\n", $qr_data);
 
 		/** ----------------------------------------------------------------
-		 * 4) QR-Bild generieren (grösser + Schweizer Kreuz für Endroid v4/v5)
+		 * 4) QR-Bild generieren (SIX-Zielgrösse 46 mm)
 		 * ---------------------------------------------------------------- */
 		try {
 
-				// QR-Code 60 mm gross
-				$qr_size_mm = 60 * $mm;
+				// QR-Code im Zahlteil: 46 mm
+				$qr_size_mm = 46 * $mm;
 
 				$qr = QrCode::create($qr_raw)
 						->setSize((int) $qr_size_mm)
@@ -307,9 +307,18 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $receipt_text_x = 4 * $mm;
     $payment_text_x = $zahlteil_x + 5 * $mm;
 
-    $qr_size      = 60 * $mm;
+    $qr_size      = 46 * $mm;
     $qr_x         = $payment_text_x;
-    $qr_y         = $zone_top + 16 * $mm;    // Abstand unter dem Titel
+    $qr_y         = $zone_top + 18 * $mm;    // Abstand unter dem Titel
+
+    // Typografie nahe SIX-Referenzlayout
+    $title_size = 10.5;
+    $label_size = 8.0;
+    $body_size  = 8.0;
+    $small_size = 6.8;
+
+    // Währung/Betrag links und rechts auf gleicher Höhe
+    $amount_row_y = $zone_top + 72 * $mm;
 
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere
@@ -362,30 +371,30 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * 7) EMPFANGSSCHEIN (linke Seite)
      * ---------------------------------------------------------------- */
     $x = $receipt_text_x;
-    $y = $zone_top + 10 * $mm;
+    $y = $zone_top + 8 * $mm;
 
-    $canvas->text($x, $y, 'Empfangsschein', $fontBold, 11, [0, 0, 0], $page);
-    $y += 8 * $mm;
+    $canvas->text($x, $y, 'Empfangsschein', $fontBold, $title_size, [0, 0, 0], $page);
+    $y += 7 * $mm;
 
-    $canvas->text($x, $y, 'Konto / Zahlbar an', $fontBold, 8.5, [0, 0, 0], $page);
-    $y += 4 * $mm;
+    $canvas->text($x, $y, 'Konto / Zahlbar an', $fontBold, $label_size, [0, 0, 0], $page);
+    $y += 3.6 * $mm;
 
     foreach ([$iban, $cr_name, $cr_str, $cr_zip] as $line) {
         if ($line !== '') {
-            $canvas->text($x, $y, $line, $font, 8.5, [0, 0, 0], $page);
-            $y += 3.5 * $mm;
+            $canvas->text($x, $y, $line, $font, $body_size, [0, 0, 0], $page);
+            $y += 3.3 * $mm;
         }
     }
 
     if ($ref_mode !== 'NON' && $ref_print !== '') {
         $y += 4 * $mm;
-        $canvas->text($x, $y, 'Referenz', $fontBold, 8.5, [0, 0, 0], $page);
-        $y += 4 * $mm;
+        $canvas->text($x, $y, 'Referenz', $fontBold, $label_size, [0, 0, 0], $page);
+        $y += 3.6 * $mm;
         // Referenz innerhalb der Empfangsschein-Breite halten.
-        $ref_font_size = 8.5;
+        $ref_font_size = $body_size;
         $ref_max_width = ($cut_x - 2 * $mm) - $x;
         if ($ref_max_width > 0 && method_exists($fontMetrics, 'getTextWidth')) {
-            while ($ref_font_size > 6.5) {
+            while ($ref_font_size > 6.25) {
                 $ref_width = $fontMetrics->getTextWidth($ref_print, $font, $ref_font_size);
                 if ($ref_width <= $ref_max_width) {
                     break;
@@ -397,31 +406,31 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     }
 
     $y += 6 * $mm;
-    $canvas->text($x, $y, 'Zahlbar durch', $fontBold, 8.5, [0, 0, 0], $page);
-    $y += 4 * $mm;
+    $canvas->text($x, $y, 'Zahlbar durch', $fontBold, $label_size, [0, 0, 0], $page);
+    $y += 3.6 * $mm;
 
     foreach ([$db_1, $db_2, $db_3] as $line) {
         if ($line !== '') {
-            $canvas->text($x, $y, $line, $font, 8.5, [0, 0, 0], $page);
-            $y += 3.5 * $mm;
+            $canvas->text($x, $y, $line, $font, $body_size, [0, 0, 0], $page);
+            $y += 3.3 * $mm;
         }
     }
 
     // Betrag links unten
-    $yb = $zone_top + $zone_height - 20 * $mm;
-    $canvas->text($x, $yb, 'Währung', $fontBold, 8.5, [0, 0, 0], $page);
-    $canvas->text($x + 28 * $mm, $yb, 'Betrag', $fontBold, 8.5, [0, 0, 0], $page);
+    $yb = $amount_row_y;
+    $canvas->text($x, $yb, 'Währung', $fontBold, $label_size, [0, 0, 0], $page);
+    $canvas->text($x + 24 * $mm, $yb, 'Betrag', $fontBold, $label_size, [0, 0, 0], $page);
 
-    $yb += 4 * $mm;
-    $canvas->text($x, $yb, $w, $font, 8.5, [0, 0, 0], $page);
-    $canvas->text($x + 28 * $mm, $yb, $betrag_print, $font, 8.5, [0, 0, 0], $page);
+    $yb += 4.2 * $mm;
+    $canvas->text($x, $yb, $w, $font, $body_size, [0, 0, 0], $page);
+    $canvas->text($x + 24 * $mm, $yb, $betrag_print, $font, $body_size, [0, 0, 0], $page);
 
     $canvas->text(
-        $x + 35 * $mm,
-        $zone_top + $zone_height - 7 * $mm,
+        $x + 38 * $mm,
+        $zone_top + 85 * $mm,
         'Annahmestelle',
         $font,
-        7,
+        $small_size,
         [0, 0, 0],
         $page
     );
@@ -431,29 +440,29 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * ---------------------------------------------------------------- */
     // Titel links im Zahlteil
     $x = $payment_text_x;
-    $y = $zone_top + 10 * $mm;
+    $y = $zone_top + 8 * $mm;
 
-    $canvas->text($x, $y, 'Zahlteil', $fontBold, 11, [0, 0, 0], $page);
+    $canvas->text($x, $y, 'Zahlteil', $fontBold, $title_size, [0, 0, 0], $page);
 
     // Konto-Block rechts neben dem QR-Code
     $acc_x = $qr_x + $qr_size + 5 * $mm;
-    $acc_y = $zone_top + 10 * $mm;
+    $acc_y = $zone_top + 8 * $mm;
 
-    $canvas->text($acc_x, $acc_y, 'Konto / Zahlbar an', $fontBold, 8.5, [0, 0, 0], $page);
-    $acc_y += 4 * $mm;
+    $canvas->text($acc_x, $acc_y, 'Konto / Zahlbar an', $fontBold, $label_size, [0, 0, 0], $page);
+    $acc_y += 3.6 * $mm;
 
     foreach ([$iban, $cr_name, $cr_str, $cr_zip] as $line) {
         if ($line !== '') {
-            $canvas->text($acc_x, $acc_y, $line, $font, 8.5, [0, 0, 0], $page);
-            $acc_y += 3.5 * $mm;
+            $canvas->text($acc_x, $acc_y, $line, $font, $body_size, [0, 0, 0], $page);
+            $acc_y += 3.3 * $mm;
         }
     }
 
     if ($ref_mode !== 'NON' && $ref_print !== '') {
         $acc_y += 4 * $mm;
-        $canvas->text($acc_x, $acc_y, 'Referenz', $fontBold, 8.5, [0, 0, 0], $page);
-        $acc_y += 4 * $mm;
-        $canvas->text($acc_x, $acc_y, $ref_print, $font, 8.5, [0, 0, 0], $page);
+        $canvas->text($acc_x, $acc_y, 'Referenz', $fontBold, $label_size, [0, 0, 0], $page);
+        $acc_y += 3.6 * $mm;
+        $canvas->text($acc_x, $acc_y, $ref_print, $font, $body_size, [0, 0, 0], $page);
     }
 
     // OPTIONAL: Zusätzliche Infos (hier Betreff)
@@ -461,33 +470,33 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     if ($subject !== '') {
         // Eine Leerzeile vor "Zusätzliche Informationen"
         $acc_y += 8 * $mm;
-        $canvas->text($acc_x, $acc_y, 'Zusätzliche Informationen', $fontBold, 8.5, [0, 0, 0], $page);
-        $acc_y += 4 * $mm;
-        $canvas->text($acc_x, $acc_y, $subject, $font, 8.5, [0, 0, 0], $page);
+        $canvas->text($acc_x, $acc_y, 'Zusätzliche Informationen', $fontBold, $label_size, [0, 0, 0], $page);
+        $acc_y += 3.6 * $mm;
+        $canvas->text($acc_x, $acc_y, $subject, $font, $body_size, [0, 0, 0], $page);
     }
 
-    // Zahler rechts unterhalb des QR-Codes
+    // Zahler rechts unter der Referenz (wie SIX-Muster)
     $pay_x = $acc_x;
-    $pay_y = $qr_y + $qr_size + 10 * $mm;
+    $pay_y = $acc_y + 6 * $mm;
 
-    $canvas->text($pay_x, $pay_y, 'Zahlbar durch', $fontBold, 8.5, [0, 0, 0], $page);
-    $pay_y += 4 * $mm;
+    $canvas->text($pay_x, $pay_y, 'Zahlbar durch', $fontBold, $label_size, [0, 0, 0], $page);
+    $pay_y += 3.6 * $mm;
 
     foreach ([$db_1, $db_2, $db_3] as $line) {
         if ($line !== '') {
-            $canvas->text($pay_x, $pay_y, $line, $font, 8.5, [0, 0, 0], $page);
-            $pay_y += 3.5 * $mm;
+            $canvas->text($pay_x, $pay_y, $line, $font, $body_size, [0, 0, 0], $page);
+            $pay_y += 3.3 * $mm;
         }
     }
 
     // Währung / Betrag beim QR
-    $wy = $qr_y + $qr_size + 8 * $mm;
-    $canvas->text($x, $wy, 'Währung', $fontBold, 8.5, [0, 0, 0], $page);
-    $canvas->text($x + 28 * $mm, $wy, 'Betrag', $fontBold, 8.5, [0, 0, 0], $page);
+    $wy = $amount_row_y;
+    $canvas->text($x, $wy, 'Währung', $fontBold, $label_size, [0, 0, 0], $page);
+    $canvas->text($x + 24 * $mm, $wy, 'Betrag', $fontBold, $label_size, [0, 0, 0], $page);
 
-    $wy += 4 * $mm;
-    $canvas->text($x, $wy, $w, $font, 8.5, [0, 0, 0], $page);
-    $canvas->text($x + 28 * $mm, $wy, $betrag_print, $font, 8.5, [0, 0, 0], $page);
+    $wy += 4.2 * $mm;
+    $canvas->text($x, $wy, $w, $font, $body_size, [0, 0, 0], $page);
+    $canvas->text($x + 24 * $mm, $wy, $betrag_print, $font, $body_size, [0, 0, 0], $page);
 
     /** ----------------------------------------------------------------
      * 9) QR-Code platzieren
