@@ -48,6 +48,30 @@ function cmx_qr_format_qrr_print(string $ref): string
 }
 
 /**
+ * Strasse/Hausnummer aus einer Zeile extrahieren (für QR-Adressstruktur "S").
+ *
+ * @return array{0:string,1:string} [street, house_no]
+ */
+function cmx_qr_split_street_house(string $line): array
+{
+    $line = trim((string) preg_replace('/\s+/', ' ', $line));
+    if ($line === '') {
+        return ['', ''];
+    }
+
+    // "Musterstrasse 12a"
+    if (preg_match('/^(.+?)\s+(\d+[A-Za-z0-9\/\-]*)$/u', $line, $m)) {
+        return [trim($m[1]), trim($m[2])];
+    }
+    // "12a Musterstrasse"
+    if (preg_match('/^(\d+[A-Za-z0-9\/\-]*)\s+(.+)$/u', $line, $m)) {
+        return [trim($m[2]), trim($m[1])];
+    }
+
+    return [$line, ''];
+}
+
+/**
  * Mod10-rekursiv Prüfziffer für eine 26-stellige QRR-Basis berechnen.
  */
 function cmx_qr_mod10_recursive_check_digit(string $base26): string
@@ -70,11 +94,14 @@ function cmx_qr_mod10_recursive_check_digit(string $base26): string
 /**
  * Gültige QRR aus Rechnungsnummer bauen.
  *
- * Falls eine Bank-Referenz als Vorlage vorhanden ist, bleibt deren fixer Präfix
- * (nicht-null Anfang der 26-stelligen Basis) erhalten.
- * Der Rest wird mit Debitor/Rechnungsnummer gefüllt und die Prüfziffer neu berechnet.
+ * Betriebsregel:
+ * - Erste 2 Stellen sind fix "65"
+ * - Danach entweder:
+ *   a) 6-stellige Debitor-ID + 18-stellige Rechnungsnummer (wenn passend)
+ *   b) 24-stellige Rechnungsnummer (Fallback)
+ * - Dann Mod10-rekursiv Prüfziffer (27. Stelle)
  */
-function cmx_qr_build_qrr_reference(string $invoice_number, int $debitor_id = 0, string $seed_reference = ''): string
+function cmx_qr_build_qrr_reference(string $invoice_number, int $debitor_id = 0): string
 {
     $invoice_digits = preg_replace('~\D+~', '', $invoice_number);
     if ($invoice_digits === '') {
@@ -83,39 +110,18 @@ function cmx_qr_build_qrr_reference(string $invoice_number, int $debitor_id = 0,
 
     $debitor_digits = preg_replace('~\D+~', '', (string) $debitor_id);
 
-    if ($debitor_digits !== '' && strlen($invoice_digits) <= 20) {
-        $dynamic26 = str_pad(substr($debitor_digits, -6), 6, '0', STR_PAD_LEFT)
-            . str_pad($invoice_digits, 20, '0', STR_PAD_LEFT);
+    if ($debitor_digits !== '' && strlen($invoice_digits) <= 18) {
+        $body24 = str_pad(substr($debitor_digits, -6), 6, '0', STR_PAD_LEFT)
+            . str_pad($invoice_digits, 18, '0', STR_PAD_LEFT);
     } else {
         // QRR erlaubt exakt 26 Stellen Basis + 1 Prüfziffer.
-        if (strlen($invoice_digits) > 26) {
+        if (strlen($invoice_digits) > 24) {
             return '';
         }
-        $dynamic26 = str_pad($invoice_digits, 26, '0', STR_PAD_LEFT);
+        $body24 = str_pad($invoice_digits, 24, '0', STR_PAD_LEFT);
     }
 
-    $seed_digits = preg_replace('~\D+~', '', $seed_reference);
-    $seed_base26 = '';
-    if (strlen($seed_digits) === 27 && cmx_qr_is_valid_qrr($seed_digits)) {
-        $seed_base26 = substr($seed_digits, 0, 26);
-    } elseif (strlen($seed_digits) >= 26) {
-        $seed_base26 = substr($seed_digits, 0, 26);
-    }
-
-    if ($seed_base26 !== '') {
-        $fixed_prefix = rtrim($seed_base26, '0');
-        $fixed_len = strlen($fixed_prefix);
-        if ($fixed_len >= 26) {
-            $base26 = substr($fixed_prefix, 0, 26);
-        } else {
-            $rest_len = 26 - $fixed_len;
-            $tail = substr($dynamic26, -$rest_len);
-            $base26 = $fixed_prefix . str_pad($tail, $rest_len, '0', STR_PAD_LEFT);
-        }
-    } else {
-        $base26 = $dynamic26;
-    }
-
+    $base26 = '65' . $body24;
     $check_digit = cmx_qr_mod10_recursive_check_digit($base26);
     if ($check_digit === '') {
         return '';
@@ -164,8 +170,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $invoice_number = trim((string)($tpl['document']['number'] ?? ''));
     $debitor_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
     $stored_qrr = preg_replace('~\D+~', '', (string) \get_post_meta($post_id, '_cmx_beleg_qrr', true));
-    $seed_ref = (string) ($tpl['bank']['qr_reference'] ?? '');
-    $expected_qrr = cmx_qr_build_qrr_reference($invoice_number, $debitor_id, $seed_ref);
+    $expected_qrr = cmx_qr_build_qrr_reference($invoice_number, $debitor_id);
 
     // Nur verwenden, wenn gespeicherte Referenz exakt zu den aktuellen Belegdaten passt.
     if ($expected_qrr !== '' && $stored_qrr === $expected_qrr) {
@@ -210,6 +215,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $cr_plz  = (string) ($tpl['me']['plz'] ?? '');
     $cr_ort  = (string) ($tpl['me']['ort'] ?? '');
     $cr_zip  = trim($cr_plz . ' ' . $cr_ort);
+    [$cr_street, $cr_house_no] = cmx_qr_split_street_house($cr_str);
 
     // Debitor-Adresse aus Beleg
     $deb_raw = (string) \get_post_meta($post_id, '_cmx_beleg_kontakt_addr', true);
@@ -227,6 +233,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     } else {
         $db_ort = $db_3;
     }
+    [$db_street, $db_house_no] = cmx_qr_split_street_house($db_2);
 
     $additional_info = trim((string)($tpl['document']['subject'] ?? ''));
     if ($additional_info === '') {
@@ -250,8 +257,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $iban,                  // IBAN
         'S',                    // Struktur (S = combined)
         $cr_name,
-        $cr_str,
-        '',
+        $cr_street,
+        $cr_house_no,
         $cr_plz,
         $cr_ort,
         'CH',
@@ -266,8 +273,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $w,
         'S',                    // Debtor Address Type
         $db_1,
-        $db_2,
-        '',
+        $db_street,
+        $db_house_no,
         $db_plz,
         $db_ort,
         $db_country,
