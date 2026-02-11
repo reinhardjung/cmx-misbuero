@@ -36,7 +36,7 @@ function cmx_startseite_replace_plesk_shortcode($content) {
 
 	$replacement = '';
 	if (\is_user_logged_in()) {
-		$replacement = '<td><br><br><br><a href="/telefonbuch/">Katalog</a></td>';
+		$replacement = '<td><br><br><br><a href="/telefonbuch/">Telefonbuch</a></td>';
 	}
 
 	return \str_replace('[cmx_plesk_telefon_link]', $replacement, $content);

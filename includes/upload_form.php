@@ -129,6 +129,23 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		if ( is_wp_error( $zahlungsgrund_terms ) ) {
 			$zahlungsgrund_terms = [];
 		}
+		$beleg_kategorie_tax = function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' )
+			? cmx_belege_kategorie_taxonomy()
+			: null;
+		$beleg_kategorie_terms = $beleg_kategorie_tax
+			? get_terms( [ 'taxonomy' => $beleg_kategorie_tax, 'hide_empty' => false, 'orderby' => 'name', 'order' => 'ASC' ] )
+			: [];
+		if ( is_wp_error( $beleg_kategorie_terms ) ) {
+			$beleg_kategorie_terms = [];
+		}
+		if ( ! empty( $beleg_kategorie_terms ) && function_exists( __NAMESPACE__ . '\\cmx_beleg_kategorie_allowed_slugs' ) ) {
+			$allowed_slugs = (array) cmx_beleg_kategorie_allowed_slugs();
+			if ( ! empty( $allowed_slugs ) ) {
+				$beleg_kategorie_terms = array_values( array_filter( $beleg_kategorie_terms, function( $term ) use ( $allowed_slugs ) {
+					return isset( $term->slug ) && in_array( (string) $term->slug, $allowed_slugs, true );
+				} ) );
+			}
+		}
 		$last_beleg_id = 0;
 		$last_beleg = get_posts( [
 			'post_type'      => 'belege',
@@ -153,6 +170,20 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			$terms = wp_get_post_terms( $last_beleg_id, $zahlungsgrund_tax, [ 'fields' => 'ids' ] );
 			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
 				$last_zahlungsgrund_id = (int) $terms[0];
+			}
+		}
+		$last_beleg_kategorie_id = 0;
+		if ( $last_beleg_id && $beleg_kategorie_tax ) {
+			$terms = wp_get_post_terms( $last_beleg_id, $beleg_kategorie_tax, [ 'fields' => 'ids' ] );
+			if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+				$last_beleg_kategorie_id = (int) $terms[0];
+			}
+		}
+		$last_beleg_richtung = '';
+		if ( $last_beleg_id ) {
+			$dir = sanitize_key( (string) get_post_meta( $last_beleg_id, '_cmx_beleg_richtung', true ) );
+			if ( in_array( $dir, [ 'ausgang', 'eingang' ], true ) ) {
+				$last_beleg_richtung = $dir;
 			}
 		}
 
@@ -377,6 +408,29 @@ final class MIS_BUERO_BELEG_UPLOAD {
 						<label class="camera">Beleg hochladen<input type="file" name="beleg_datei" accept="image/*,application/pdf" required></label>
 						<div class="hint">Foto, PNG, JPG oder PDF mit max. <?php echo (int) $max_mb; ?> MB</div>
 						<div class="preview" id="file_preview">Keine Datei ausgewählt.</div>
+					</div>
+
+					<div class="row">
+						<div class="field">
+							<label for="beleg_kategorie" class="js-select-last" data-target="beleg_kategorie" data-last="<?php echo (int) $last_beleg_kategorie_id; ?>">Belegkategorie</label>
+							<select id="beleg_kategorie" name="beleg_kategorie">
+								<option value="">Bitte wählen</option>
+								<?php foreach ( $beleg_kategorie_terms as $term ) : ?>
+									<option value="<?php echo (int) $term->term_id; ?>" <?php selected( (int) $last_beleg_kategorie_id, (int) $term->term_id ); ?>>
+										<?php echo esc_html( (string) $term->name ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+
+						<div class="field">
+							<label for="beleg_richtung" class="js-select-last" data-target="beleg_richtung" data-last="<?php echo esc_attr( $last_beleg_richtung ); ?>">Richtung</label>
+							<select id="beleg_richtung" name="beleg_richtung">
+								<option value="">Bitte wählen</option>
+								<option value="ausgang" <?php selected( $last_beleg_richtung, 'ausgang' ); ?>>Einnahme</option>
+								<option value="eingang" <?php selected( $last_beleg_richtung, 'eingang' ); ?>>Ausgabe</option>
+							</select>
+						</div>
 					</div>
 
 					<div class="row">
@@ -675,12 +729,14 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 		$ocr = self::ocr_extract( $upload['file'] );
 
-		$beleg_datum = sanitize_text_field( $_POST['beleg_datum'] ?? '' );
-		$betrag = sanitize_text_field( $_POST['betrag'] ?? '' );
-		$info = sanitize_textarea_field( $_POST['info'] ?? '' );
-		$status = sanitize_key( $_POST['status'] ?? '' );
-		$bezahlt_am = sanitize_text_field( $_POST['bezahlt_am'] ?? '' );
-		$projekt_id = (int) ( $_POST['projekt_id'] ?? 0 );
+			$beleg_datum = sanitize_text_field( $_POST['beleg_datum'] ?? '' );
+			$betrag = sanitize_text_field( $_POST['betrag'] ?? '' );
+			$info = sanitize_textarea_field( $_POST['info'] ?? '' );
+			$status = sanitize_key( $_POST['status'] ?? '' );
+			$bezahlt_am = sanitize_text_field( $_POST['bezahlt_am'] ?? '' );
+			$projekt_id = (int) ( $_POST['projekt_id'] ?? 0 );
+			$beleg_kategorie_id = (int) ( $_POST['beleg_kategorie'] ?? 0 );
+			$beleg_richtung = sanitize_key( (string) ( $_POST['beleg_richtung'] ?? '' ) );
 
 		update_post_meta( $post_id, 'beleg_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
 		update_post_meta( $post_id, 'betrag', $betrag ?: ( $ocr['betrag'] ?? '' ) );
@@ -695,10 +751,13 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			update_post_meta( $post_id, '_cmx_beleg_summe_override', $betrag );
 		}
 
-		$richtung_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
-			? constant( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
-			: '_cmx_beleg_richtung';
-		update_post_meta( $post_id, $richtung_key, 'eingang' );
+			$richtung_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
+				? constant( __NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG' )
+				: '_cmx_beleg_richtung';
+			if ( ! in_array( $beleg_richtung, [ 'ausgang', 'eingang' ], true ) ) {
+				$beleg_richtung = 'eingang';
+			}
+			update_post_meta( $post_id, $richtung_key, $beleg_richtung );
 
 		if ( $status !== '' ) {
 			$status_key = defined( __NAMESPACE__ . '\\CMX_BELEG_META_STATUS' )
@@ -726,9 +785,21 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		if ( function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
 			$tax = cmx_belege_kategorie_taxonomy();
 			if ( $tax ) {
-				$default_term = \get_term_by( 'slug', 'rechnung', $tax );
-				if ( $default_term && ! \is_wp_error( $default_term ) ) {
-					\wp_set_post_terms( $post_id, [ (int) $default_term->term_id ], $tax, false );
+				$set_term_ids = [];
+				if ( $beleg_kategorie_id > 0 ) {
+					$selected_term = \get_term( $beleg_kategorie_id, $tax );
+					if ( $selected_term && ! \is_wp_error( $selected_term ) ) {
+						$set_term_ids[] = (int) $selected_term->term_id;
+					}
+				}
+				if ( empty( $set_term_ids ) ) {
+					$default_term = \get_term_by( 'slug', 'rechnung', $tax );
+					if ( $default_term && ! \is_wp_error( $default_term ) ) {
+						$set_term_ids[] = (int) $default_term->term_id;
+					}
+				}
+				if ( ! empty( $set_term_ids ) ) {
+					\wp_set_post_terms( $post_id, $set_term_ids, $tax, false );
 				}
 			}
 		}
