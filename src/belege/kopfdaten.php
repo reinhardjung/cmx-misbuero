@@ -76,7 +76,14 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
 		$blacklist[] = '_cmx_beleg_copied_to';
 		$blacklist[] = '_cmx_beleg_pdf_type';
 		$blacklist[] = '_cmx_title_auto';
+		$blacklist[] = '_cmx_rechnungsnummer';
+		$blacklist[] = '_cmx_beleg_qrr';
 		$blacklist = array_unique($blacklist);
+
+		// Für Sync-Duplikate volatile Werte immer verwerfen, damit sie neu entstehen.
+		foreach (['_cmx_rechnungsnummer', '_cmx_beleg_qrr', '_cmx_beleg_pdf_type', '_cmx_title_auto'] as $volatile_key) {
+			\delete_post_meta($target_id, $volatile_key);
+		}
 
 		$all_meta = \get_post_meta($source_id);
 		foreach ($all_meta as $key => $values) {

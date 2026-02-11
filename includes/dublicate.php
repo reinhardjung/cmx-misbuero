@@ -28,6 +28,7 @@ function cmx_dup_meta_blacklist(): array {
 		'_edit_lock',
 		'_edit_last',
 		'_cmx_rechnungsnummer', // Beleg-Nr neu vergeben
+		'_cmx_beleg_qrr',       // QR-Referenz neu generieren
 		'_cmx_beleg_views',      // Aufrufe nicht übernehmen
 		'_cmx_beleg_views_log',  // Aufrufe-Log nicht übernehmen
 	]);
