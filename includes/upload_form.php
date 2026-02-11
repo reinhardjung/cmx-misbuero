@@ -186,6 +186,95 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				$last_beleg_richtung = $dir;
 			}
 		}
+		$richtung_opts = function_exists( __NAMESPACE__ . '\\cmx_beleg_richtung_options' )
+			? (array) cmx_beleg_richtung_options()
+			: [
+				'ausgang' => 'Ausgang (an Kunden)',
+				'eingang' => 'Eingang (von Lieferanten)',
+			];
+		if ( empty( $richtung_opts['ausgang'] ) ) {
+			$richtung_opts['ausgang'] = 'Ausgang (an Kunden)';
+		}
+		if ( empty( $richtung_opts['eingang'] ) ) {
+			$richtung_opts['eingang'] = 'Eingang (von Lieferanten)';
+		}
+		$richtung_label_map = [
+			'rechnung' => [
+				'ausgang' => 'Einnahme (an Kunden)',
+				'eingang' => 'Ausgabe (von Lieferanten)',
+			],
+			'rechnungen' => [
+				'ausgang' => 'Einnahme (an Kunden)',
+				'eingang' => 'Ausgabe (von Lieferanten)',
+			],
+			'gutschrift' => [
+				'ausgang' => 'Ausgabe (an Kunden)',
+				'eingang' => 'Einnahme (von Lieferanten)',
+			],
+			'gutschriften' => [
+				'ausgang' => 'Ausgabe (an Kunden)',
+				'eingang' => 'Einnahme (von Lieferanten)',
+			],
+			'quittung' => [
+				'ausgang' => 'Einnahme (an Kunden)',
+				'eingang' => 'Ausgabe (von Lieferanten)',
+			],
+			'quittungen' => [
+				'ausgang' => 'Einnahme (an Kunden)',
+				'eingang' => 'Ausgabe (von Lieferanten)',
+			],
+			'offerte' => [
+				'ausgang' => 'Ausgang (an Kunden)',
+				'eingang' => 'Eingang (von Lieferanten)',
+			],
+			'offerten' => [
+				'ausgang' => 'Ausgang (an Kunden)',
+				'eingang' => 'Eingang (von Lieferanten)',
+			],
+			'lieferschein' => [
+				'ausgang' => 'Ausgang (an Kunden)',
+				'eingang' => 'Eingang (von Lieferanten)',
+			],
+			'lieferscheine' => [
+				'ausgang' => 'Ausgang (an Kunden)',
+				'eingang' => 'Eingang (von Lieferanten)',
+			],
+		];
+		$richtung_default_dir = [
+			'rechnung' => 'ausgang',
+			'rechnungen' => 'ausgang',
+			'quittung' => 'ausgang',
+			'quittungen' => 'ausgang',
+			'lieferschein' => 'ausgang',
+			'lieferscheine' => 'ausgang',
+			'offerte' => 'ausgang',
+			'offerten' => 'ausgang',
+			'gutschrift' => 'eingang',
+			'gutschriften' => 'eingang',
+		];
+		$ini_kategorien = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
+			? (array) cmx_ini_get_value( 'Belege', 'Kategorien' )
+			: [];
+		foreach ( $ini_kategorien as $cat_name ) {
+			$slug = sanitize_title( (string) $cat_name );
+			if ( $slug === '' ) {
+				continue;
+			}
+			$ini_labels = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
+				? cmx_ini_get_value( 'BelegeRichtungLabels', (string) $cat_name )
+				: null;
+			if ( $ini_labels === null || $ini_labels === '' ) {
+				$ini_labels = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
+					? cmx_ini_get_value( 'BelegeRichtungLabels', (string) $slug )
+					: null;
+			}
+			if ( is_array( $ini_labels ) && count( $ini_labels ) >= 2 ) {
+				$richtung_label_map[ $slug ] = [
+					'ausgang' => (string) $ini_labels[0],
+					'eingang' => (string) $ini_labels[1],
+				];
+			}
+		}
 
 		$status_opts = function_exists( __NAMESPACE__ . '\\cmx_beleg_status_options' )
 			? cmx_beleg_status_options()
@@ -413,22 +502,22 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					<div class="row">
 						<div class="field">
 							<label for="beleg_kategorie" class="js-select-last" data-target="beleg_kategorie" data-last="<?php echo (int) $last_beleg_kategorie_id; ?>">Belegkategorie</label>
-							<select id="beleg_kategorie" name="beleg_kategorie">
-								<option value="">Bitte wählen</option>
-								<?php foreach ( $beleg_kategorie_terms as $term ) : ?>
-									<option value="<?php echo (int) $term->term_id; ?>" <?php selected( (int) $last_beleg_kategorie_id, (int) $term->term_id ); ?>>
-										<?php echo esc_html( (string) $term->name ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
+								<select id="beleg_kategorie" name="beleg_kategorie">
+									<option value="">Bitte wählen</option>
+									<?php foreach ( $beleg_kategorie_terms as $term ) : ?>
+										<option value="<?php echo (int) $term->term_id; ?>" data-slug="<?php echo esc_attr( (string) $term->slug ); ?>" <?php selected( (int) $last_beleg_kategorie_id, (int) $term->term_id ); ?>>
+											<?php echo esc_html( (string) $term->name ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
 						</div>
 
 						<div class="field">
 							<label for="beleg_richtung" class="js-select-last" data-target="beleg_richtung" data-last="<?php echo esc_attr( $last_beleg_richtung ); ?>">Richtung</label>
 							<select id="beleg_richtung" name="beleg_richtung">
 								<option value="">Bitte wählen</option>
-								<option value="ausgang" <?php selected( $last_beleg_richtung, 'ausgang' ); ?>>Einnahme</option>
-								<option value="eingang" <?php selected( $last_beleg_richtung, 'eingang' ); ?>>Ausgabe</option>
+								<option value="ausgang" <?php selected( $last_beleg_richtung, 'ausgang' ); ?>><?php echo esc_html( (string) $richtung_opts['ausgang'] ); ?></option>
+								<option value="eingang" <?php selected( $last_beleg_richtung, 'eingang' ); ?>><?php echo esc_html( (string) $richtung_opts['eingang'] ); ?></option>
 							</select>
 						</div>
 					</div>
@@ -522,12 +611,40 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			</div>
 		</div>
 
-		<script>
-		(function(){
-			function isoToday(){
-				var d = new Date();
-				var y = d.getFullYear();
-				var m = String(d.getMonth() + 1).padStart(2, "0");
+			<script>
+			(function(){
+				var richtungMap = <?php echo wp_json_encode( $richtung_label_map ); ?>;
+				var richtungOptions = <?php echo wp_json_encode( $richtung_opts ); ?>;
+				var richtungDefault = <?php echo wp_json_encode( $richtung_default_dir ); ?>;
+				var lastKategorieSlug = "";
+
+				function syncRichtungByKategorie(){
+					var catSelect = document.getElementById("beleg_kategorie");
+					var dirSelect = document.getElementById("beleg_richtung");
+					if (!catSelect || !dirSelect) return;
+					var selectedOpt = catSelect.options[catSelect.selectedIndex] || null;
+					var slug = selectedOpt ? (selectedOpt.getAttribute("data-slug") || "") : "";
+					var fallbackLabels = (richtungOptions && typeof richtungOptions === "object") ? richtungOptions : {};
+					var labels = (slug && richtungMap && richtungMap[slug]) ? richtungMap[slug] : fallbackLabels;
+					var aus = labels && labels.ausgang ? labels.ausgang : (fallbackLabels.ausgang || "Ausgang (an Kunden)");
+					var ein = labels && labels.eingang ? labels.eingang : (fallbackLabels.eingang || "Eingang (von Lieferanten)");
+					var ausOpt = dirSelect.querySelector('option[value="ausgang"]');
+					var einOpt = dirSelect.querySelector('option[value="eingang"]');
+					if (ausOpt) ausOpt.textContent = aus;
+					if (einOpt) einOpt.textContent = ein;
+					var defaultDir = (slug && richtungDefault && richtungDefault[slug]) ? richtungDefault[slug] : "";
+					var slugChanged = slug !== lastKategorieSlug;
+					if (defaultDir && (slugChanged || !dirSelect.value)) {
+						dirSelect.value = defaultDir;
+						dirSelect.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+					lastKategorieSlug = slug;
+				}
+
+				function isoToday(){
+					var d = new Date();
+					var y = d.getFullYear();
+					var m = String(d.getMonth() + 1).padStart(2, "0");
 				var day = String(d.getDate()).padStart(2, "0");
 				return y + "-" + m + "-" + day;
 			}
@@ -573,20 +690,25 @@ final class MIS_BUERO_BELEG_UPLOAD {
 					}
 				});
 			});
-			document.querySelectorAll(".js-select-last").forEach(function(label){
-				label.addEventListener("click", function(e){
-					e.preventDefault();
-					var target = document.getElementById(label.dataset.target || "");
-					var last = label.dataset.last || "";
-					if (target && last) {
-						target.value = last;
-						target.dispatchEvent(new Event("change", { bubbles: true }));
-					}
+				document.querySelectorAll(".js-select-last").forEach(function(label){
+					label.addEventListener("click", function(e){
+						e.preventDefault();
+						var target = document.getElementById(label.dataset.target || "");
+						var last = label.dataset.last || "";
+						if (target && last) {
+							target.value = last;
+							target.dispatchEvent(new Event("change", { bubbles: true }));
+						}
+					});
 				});
-			});
+				var catSelect = document.getElementById("beleg_kategorie");
+				if (catSelect) {
+					catSelect.addEventListener("change", syncRichtungByKategorie);
+				}
+				syncRichtungByKategorie();
 
-			var hasAi = <?php echo $has_ai_key ? 'true' : 'false'; ?>;
-			var token = <?php echo wp_json_encode( $upload_token ); ?>;
+				var hasAi = <?php echo $has_ai_key ? 'true' : 'false'; ?>;
+				var token = <?php echo wp_json_encode( $upload_token ); ?>;
 			var ajaxUrl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 			var fileInput = document.querySelector('input[name="beleg_datei"]');
 			var preview = document.getElementById("file_preview");
@@ -756,6 +878,28 @@ final class MIS_BUERO_BELEG_UPLOAD {
 				: '_cmx_beleg_richtung';
 			if ( ! in_array( $beleg_richtung, [ 'ausgang', 'eingang' ], true ) ) {
 				$beleg_richtung = 'eingang';
+				if ( $beleg_kategorie_id > 0 && function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
+					$tax = cmx_belege_kategorie_taxonomy();
+					$cat_term = $tax ? get_term( $beleg_kategorie_id, $tax ) : null;
+					$cat_slug = ( $cat_term && ! is_wp_error( $cat_term ) ) ? sanitize_title( (string) $cat_term->slug ) : '';
+					if ( $cat_slug !== '' ) {
+						$default_dir = [
+							'rechnung' => 'ausgang',
+							'rechnungen' => 'ausgang',
+							'quittung' => 'ausgang',
+							'quittungen' => 'ausgang',
+							'lieferschein' => 'ausgang',
+							'lieferscheine' => 'ausgang',
+							'offerte' => 'ausgang',
+							'offerten' => 'ausgang',
+							'gutschrift' => 'eingang',
+							'gutschriften' => 'eingang',
+						];
+						if ( isset( $default_dir[ $cat_slug ] ) ) {
+							$beleg_richtung = (string) $default_dir[ $cat_slug ];
+						}
+					}
+				}
 			}
 			update_post_meta( $post_id, $richtung_key, $beleg_richtung );
 
