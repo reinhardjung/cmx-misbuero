@@ -128,6 +128,70 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_iso2_from_land')) {
 		return 'CH';
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_postanschrift')) {
+	function cmx_build_kontakt_postanschrift(int $kontakt_id): string {
+		if ($kontakt_id <= 0) return '';
+
+		$firma = \trim((string) \get_the_title($kontakt_id));
+		$firma_lc = \function_exists('mb_strtolower') ? \mb_strtolower($firma) : \strtolower($firma);
+		if ($firma_lc === 'firmenname fehlt') {
+			$firma = '';
+		}
+
+		$vorname  = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+		$nachname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		$full_name = \trim(\preg_replace('/\s+/', ' ', $vorname . ' ' . $nachname));
+		$is_privat = !empty(\get_post_meta($kontakt_id, '_cmx_kontakte_privat', true));
+
+		$norm = static function (string $value): string {
+			$value = \trim((string) \preg_replace('/\s+/', ' ', $value));
+			return \function_exists('mb_strtolower') ? \mb_strtolower($value) : \strtolower($value);
+		};
+
+		$lines = [];
+		$firma_norm = $norm($firma);
+		$name_norm  = $norm($full_name);
+
+		// Firmenname zuerst, ausser es ist ein Privatkontakt mit identischem Namen.
+		if ($firma !== '' && (!$is_privat || $firma_norm !== $name_norm)) {
+			$lines[] = $firma;
+		}
+
+		// Danach Vorname + Nachname (falls vorhanden) als eigene Zeile.
+		if ($full_name !== '') {
+			$already_present = false;
+			foreach ($lines as $line) {
+				if ($norm($line) === $name_norm) {
+					$already_present = true;
+					break;
+				}
+			}
+			if (!$already_present) {
+				$lines[] = $full_name;
+			}
+		}
+
+		$str  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_strasse', true));
+		$plz  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_plz', true));
+		$ort  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_ort', true));
+		$iso2 = cmx_iso2_from_land($kontakt_id);
+
+		if ($str !== '') {
+			$lines[] = $str;
+		}
+
+		$city = \trim($plz . ' ' . $ort);
+		if ($city !== '') {
+			$lines[] = ($iso2 !== '' ? $iso2 . '-' : '') . $city;
+		}
+
+		$lines = \array_values(\array_filter(\array_map('trim', $lines), static function ($line) {
+			return $line !== '';
+		}));
+
+		return \implode("\n", $lines);
+	}
+}
 
 /** Rechnungsnummer (Format aus INI, externe Helperfunktion vorausgesetzt) */
 if (!\function_exists(__NAMESPACE__ . '\\cmx_generate_rechnungsnummer')) {
@@ -230,11 +294,7 @@ function cmx_ajax_search_projekte(): void {
 		$kontakt_title = $kontakt_id ? \get_the_title($kontakt_id) : '';
 		$kontakt_addr  = '';
 		if ($kontakt_id) {
-			$str  = \get_post_meta($kontakt_id, '_cmx_rechnung_strasse', true);
-			$plz  = \get_post_meta($kontakt_id, '_cmx_rechnung_plz', true);
-			$ort  = \get_post_meta($kontakt_id, '_cmx_rechnung_ort', true);
-			$iso2 = cmx_iso2_from_land($kontakt_id);
-			$kontakt_addr = \trim(\implode("\n", \array_filter([$kontakt_title, $str, $iso2.'-'.$plz.' '.$ort])));
+			$kontakt_addr = cmx_build_kontakt_postanschrift($kontakt_id);
 		}
 
 		$url = (string) (
@@ -288,11 +348,7 @@ function cmx_ajax_search_kontakte(): void {
 	$out = [];
 	foreach ($ids as $id) {
 		$title = \get_the_title($id);
-		$str   = \get_post_meta($id,'_cmx_rechnung_strasse',true);
-		$plz   = \get_post_meta($id,'_cmx_rechnung_plz',true);
-		$ort   = \get_post_meta($id,'_cmx_rechnung_ort',true);
-		$iso2  = cmx_iso2_from_land($id);
-		$addr  = \trim(\implode("\n", \array_filter([$title, $str, $iso2.'-'.$plz.' '.$ort])));
+		$addr  = cmx_build_kontakt_postanschrift((int) $id);
 		$out[] = [
 			'id'    => (int)$id,
 			'title' => $title,
@@ -506,11 +562,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 
 	/* Adresse */
 	if ($addr_text === '' && $kontakt_id) {
-		$str   = \get_post_meta($kontakt_id,'_cmx_rechnung_strasse',true);
-		$plz   = \get_post_meta($kontakt_id,'_cmx_rechnung_plz',true);
-		$ort   = \get_post_meta($kontakt_id,'_cmx_rechnung_ort',true);
-		$iso2  = cmx_iso2_from_land($kontakt_id);
-		$addr_text = \trim(\implode("\n", \array_filter([$kontakte_title, $str, $iso2.'-'.$plz.' '.$ort])));
+		$addr_text = cmx_build_kontakt_postanschrift($kontakt_id);
 	}
 	echo '<p><label><strong>Postanschrift</strong></label><br>';
 	echo '<textarea id="cmx_kontakt_addr" name="cmx_kontakt_addr" class="cmx-addr" rows="5">'.\esc_textarea($addr_text).'</textarea></p>';
