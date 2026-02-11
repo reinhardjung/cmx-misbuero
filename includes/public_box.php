@@ -164,10 +164,9 @@ add_action('add_meta_boxes', function() {
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
 					}
-					if ($show_pdf_icons) {
-						echo '<a href="#" title="Kopiere Download-Link in Zwischenablage" class="cmx-btn-copy" data-download-url="' . esc_attr($download_url) . '" style="text-decoration:none;"><span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span><span class="cmx-copy-label" style="margin-left:6px; font-size:12px; display:none;">kopiert</span></a>';
-						echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Download als PDF" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
-					}
+						if ($show_pdf_icons) {
+							echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Download als PDF" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
+						}
 					if ($delete_link) {
 						$delete_style = $is_belege
 							? 'color:#b32d2e; text-decoration:none;'
@@ -175,50 +174,8 @@ add_action('add_meta_boxes', function() {
 						echo '<a href="'.esc_url($delete_link).'" class="submitdelete deletion dashicons dashicons-trash" style="'.$delete_style.'" title="'.esc_attr__('In den Papierkorb verschieben', 'default').'"><span class="screen-reader-text">'.esc_html__('In den Papierkorb verschieben', 'default').'</span></a>';
 					}
 					echo '</div>';
-					if ($show_pdf_icons) {
-						echo '<script>
-							document.addEventListener("click", function(event) {
-								var target = event.target;
-								var btn = target.closest ? target.closest(".cmx-btn-copy") : null;
-								if (!btn) { return; }
-								event.preventDefault();
-
-								var url = btn.getAttribute("data-download-url");
-								if (!url) { return; }
-
-								function setCopiedLabel(btn) {
-									var label = btn.querySelector(".cmx-copy-label");
-									if (!label) { return; }
-									label.style.display = "inline-block";
-									btn.disabled = true;
-									setTimeout(function () {
-										label.style.display = "none";
-										btn.disabled = false;
-									}, 2000);
-								}
-
-								if (navigator.clipboard && navigator.clipboard.writeText) {
-									navigator.clipboard.writeText(url).then(function () {
-										setCopiedLabel(btn);
-									}).catch(function () {
-										setCopiedLabel(btn);
-									});
-								} else {
-									var textarea = document.createElement("textarea");
-									textarea.value = url;
-									textarea.style.position = "fixed";
-									textarea.style.opacity = "0";
-									document.body.appendChild(textarea);
-									textarea.select();
-									try { document.execCommand("copy"); } catch (e) {}
-									document.body.removeChild(textarea);
-									setCopiedLabel(btn);
-								}
-							});
-						</script>';
 					}
 				}
-			}
 		},
 		$screen->post_type,
 		'side',
