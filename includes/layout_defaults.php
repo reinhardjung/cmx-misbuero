@@ -73,7 +73,7 @@ function cmx_layout_defaults_builtin(): array {
 			'advanced' => '',
 		],
 		'meta-box-order_belege' => [
-			'side' => 'cmx_savebox,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_belege_ausgaben_box,belege_zahlungsgrunddiv,cmx_uploads_box,cmx_dokumente_box',
+			'side' => 'cmx_savebox,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,belege_zahlungsgrunddiv,cmx_uploads_box,cmx_dokumente_box',
 			'normal' => 'cmx_beleg_details,cmx_beleg_positionen,cmx_belege_internenotizen',
 			'advanced' => '',
 		],

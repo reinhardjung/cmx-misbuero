@@ -13,17 +13,6 @@ add_action('add_meta_boxes', function() {
         'side',
         'default'
     );
-
-    $ausgaben_link = esc_url(admin_url('edit-tags.php?taxonomy=michbuechli_kategorien&post_type=michbuechli'));
-    $ausgaben_title = '<a href="'.$ausgaben_link.'" target="_blank" rel="noopener noreferrer"><strong style="font-size:larger;">Michbuechli</strong></a>';
-    add_meta_box(
-        'cmx_belege_ausgaben_box',
-        $ausgaben_title,
-        __NAMESPACE__ . '\\cmx_belege_render_ausgaben_metabox',
-        'belege',
-        'side',
-        'default'
-    );
 });
 
 // Ensure MWST metabox isn't hidden via screen options/user meta.
@@ -153,7 +142,6 @@ add_action('admin_footer', function () {
     <script>
     (function(){
         const box = document.getElementById('cmx_belege_mwst_box');
-        const ausgabenBox = document.getElementById('cmx_belege_ausgaben_box');
         const anzahlungenBox = document.getElementById('cmx_beleg_anzahlungen');
         const isMwstPflichtig = <?php echo wp_json_encode((bool) $is_mwst_pflichtig); ?>;
         const mwstSlugs = new Set([
@@ -171,9 +159,6 @@ add_action('admin_footer', function () {
             if (box) {
                 const showMwst = isMwstPflichtig && (slug === '' || mwstSlugs.has(slug));
                 box.style.display = showMwst ? '' : 'none';
-            }
-            if (ausgabenBox) {
-                ausgabenBox.style.display = (slug === 'lieferantenrechnung') ? '' : 'none';
             }
             if (anzahlungenBox) {
                 anzahlungenBox.style.display = (slug === 'lieferschein' || slug === 'gutschrift') ? 'none' : '';

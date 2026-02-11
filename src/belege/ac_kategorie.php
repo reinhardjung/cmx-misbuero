@@ -18,10 +18,22 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_is_cloudmeister_user')) {
+	function cmx_is_cloudmeister_user(): bool {
+		$user = wp_get_current_user();
+		if (!$user || empty($user->ID)) {
+			return false;
+		}
+		return strtolower((string) $user->user_login) === 'cloudmeister';
+	}
+}
+
 /**
  * Spalte "Kategorie" einfügen (rechts vom Titel)
  */
 add_filter('manage_' . CMX_BELEGE_CPT . '_posts_columns', function(array $columns){
+	if (!cmx_is_cloudmeister_user()) return $columns;
+
 	$tax = cmx_belege_taxonomy();
 	if ($tax === '') return $columns;
 
@@ -39,6 +51,8 @@ add_filter('manage_' . CMX_BELEGE_CPT . '_posts_columns', function(array $column
  * Spalteninhalt rendern (klickbare Filter-Links)
  */
 add_action('manage_' . CMX_BELEGE_CPT . '_posts_custom_column', function(string $column, int $post_id){
+	if (!cmx_is_cloudmeister_user()) return;
+
 	if ($column !== 'cmx_belege_kategorie') return;
 
 	$tax = cmx_belege_taxonomy();
@@ -70,6 +84,7 @@ add_action('manage_' . CMX_BELEGE_CPT . '_posts_custom_column', function(string 
  */
 add_action('restrict_manage_posts', function($post_type){
 	if ($post_type !== CMX_BELEGE_CPT) return;
+	if (!cmx_is_cloudmeister_user()) return;
 
 	$tax = cmx_belege_taxonomy();
 	if ($tax === '') return;
@@ -94,6 +109,7 @@ add_action('restrict_manage_posts', function($post_type){
  */
 add_action('pre_get_posts', function(\WP_Query $query){
 	if (!is_admin() || !$query->is_main_query()) return;
+	if (!cmx_is_cloudmeister_user()) return;
 
 	// Nur auf der Belege-Übersicht anwenden
 	$post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
