@@ -9,6 +9,27 @@ if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_DATUM'))  define(__NAMESPACE__.'\\C
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG'))define(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG','_cmx_beleg_faellig_am');
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT'))define(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT','_cmx_beleg_bezahlt_am');
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_taxonomy')) {
+	function cmx_beleg_zahlungsgrund_taxonomy(): string {
+		$candidates = [];
+		if (\defined(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND')) {
+			$candidates[] = (string) \constant(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND');
+		}
+		$candidates[] = 'belege_zahlungsgrund';
+		$candidates[] = 'belege_zahlungsgruende';
+		$candidates[] = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('belege', 'zahlungsgrund')
+			: 'belege_zahlungsgrund';
+
+		foreach (\array_unique(\array_filter($candidates)) as $tax) {
+			if (\taxonomy_exists($tax)) {
+				return (string) $tax;
+			}
+		}
+		return '';
+	}
+}
+
 // Eigener Query-Var erlauben, damit WP ihn in der Listen-Abfrage nicht verwirft.
 add_filter('query_vars', function(array $vars){
 	if (!in_array('cmx_bezahlfilter', $vars, true)) {
@@ -100,6 +121,7 @@ $add_columns = function(array $columns){
 		'beleg_datum'   => __('Datum des Beleges', 'cmx'),
 		'beleg_faellig' => __('Fällig am', 'cmx'),
 		'beleg_bezahlt' => __('Bezahlt am', 'cmx'),
+		'beleg_zahlungsgrund' => __('Zahlungsgrund', 'cmx'),
 	];
 
 	$new = [];
@@ -147,7 +169,20 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			}
 		}
 		break;
-}
+		case 'beleg_zahlungsgrund':
+			$tax = cmx_beleg_zahlungsgrund_taxonomy();
+			if ($tax === '') {
+				echo '';
+				break;
+			}
+			$names = \wp_get_post_terms($post_id, $tax, ['fields' => 'names']);
+			if (\is_wp_error($names) || empty($names)) {
+				echo '';
+				break;
+			}
+			echo \esc_html(\implode(', ', \array_filter(\array_map('strval', $names))));
+			break;
+	}
 }, 10, 2);
 
 /** =========================

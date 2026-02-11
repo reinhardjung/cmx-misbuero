@@ -32,6 +32,94 @@ function cmx_dok_rel_ui_map(): array {
 	];
 }
 
+function cmx_dok_uploads_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+		: '_cmx_dokumente_uploads';
+}
+
+function cmx_dok_int_list($value): array {
+	$out = [];
+	foreach ((array) $value as $item) {
+		$id = (int) $item;
+		if ($id > 0) {
+			$out[] = $id;
+		}
+	}
+	return \array_values(\array_unique($out));
+}
+
+function cmx_dok_cleanup_legacy_kassenbuch_links(): int {
+	$kassen_meta = (string) (CMX_DOK_REL_META['kassenbuch'] ?? 'cmx_dokumente_kassenbuch');
+	$legacy_meta = 'cmx_dokumente_buchhaltung';
+
+	$dok_ids = \get_posts([
+		'post_type'      => basename(__DIR__),
+		'post_status'    => 'any',
+		'posts_per_page' => -1,
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+		'meta_query'     => [
+			'relation' => 'OR',
+			['key' => $kassen_meta, 'compare' => 'EXISTS'],
+			['key' => $legacy_meta, 'compare' => 'EXISTS'],
+		],
+	]);
+
+	if (empty($dok_ids)) {
+		return 0;
+	}
+
+	$uploads_meta_key = cmx_dok_uploads_meta_key();
+	$cleaned = 0;
+
+	foreach ($dok_ids as $dok_id) {
+		$dok_id = (int) $dok_id;
+		if ($dok_id <= 0) {
+			continue;
+		}
+
+		$target_ids = [];
+		$target_ids = \array_merge(
+			$target_ids,
+			cmx_dok_int_list(\get_post_meta($dok_id, $kassen_meta, true)),
+			cmx_dok_int_list(\get_post_meta($dok_id, $legacy_meta, true))
+		);
+		$target_ids = \array_values(\array_unique($target_ids));
+
+		foreach ($target_ids as $target_id) {
+			$existing = cmx_dok_int_list(\get_post_meta((int) $target_id, $uploads_meta_key, true));
+			if (empty($existing)) {
+				continue;
+			}
+			$updated = \array_values(\array_diff($existing, [$dok_id]));
+			if ($updated === $existing) {
+				continue;
+			}
+			if (empty($updated)) {
+				\delete_post_meta((int) $target_id, $uploads_meta_key);
+			} else {
+				\update_post_meta((int) $target_id, $uploads_meta_key, $updated);
+			}
+		}
+
+		\delete_post_meta($dok_id, $kassen_meta);
+		\delete_post_meta($dok_id, $legacy_meta);
+		$cleaned++;
+	}
+
+	return $cleaned;
+}
+
+\add_action('admin_init', function(): void {
+	$cleanup_done_key = 'cmx_dok_cleanup_kassenbuch_links_v1';
+	if ((string) \get_option($cleanup_done_key, '') === '1') {
+		return;
+	}
+	cmx_dok_cleanup_legacy_kassenbuch_links();
+	\update_option($cleanup_done_key, '1', false);
+}, 20);
+
 function cmx_render_dokumente_modules_metabox(\WP_Post $post): void {
 	wp_nonce_field('cmx_dokumente_modules_save', 'cmx_dokumente_modules_nonce');
 
