@@ -379,30 +379,35 @@ $recipient_html = $recipient_has_br
 		</div>
 	<?php endif; ?>
 
-<?php if (!$is_lieferschein && !(!$has_positions && !empty($tpl['document']['manual_total']))): ?>
-	<table class="totals-table" border="0">
-		<?php if ($has_positions): ?>
-			<tr>
-				<td colspan="<?= $col_count; ?>" class="text-right">
-					<strong>Zwischensumme <?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
-				</td>
-			</tr>
-		<?php endif; ?>
-		<?php if ($show_discount && $discount_sum > 0.0): ?>
-			<tr>
-				<td colspan="<?= $col_count; ?>" class="text-right">
-					Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?>
-				</td>
-			</tr>
-		<?php endif;
-		$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-		$mwst_amount = (float)($totals['tax_amount'] ?? 0);
-		$mwst_rate_pct = $mwst_rate * 100;
-		$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
-		?>
-		<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
-			<tr>
-				<td colspan="<?= $col_count; ?>" class="text-right">
+	<?php if (!$is_lieferschein && !(!$has_positions && !empty($tpl['document']['manual_total']))): ?>
+		<table class="totals-table" border="0">
+			<?php
+			$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+			$mwst_amount = (float)($totals['tax_amount'] ?? 0);
+			$mwst_rate_pct = $mwst_rate * 100;
+			$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+			$show_subtotal_row = $has_positions && (
+				($show_discount && $discount_sum > 0.0) ||
+				($mwst_rate > 0.0)
+			);
+			?>
+			<?php if ($show_subtotal_row): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>" class="text-right">
+						<strong>Zwischensumme <?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
+					</td>
+				</tr>
+			<?php endif; ?>
+			<?php if ($show_discount && $discount_sum > 0.0): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>" class="text-right">
+						Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?>
+					</td>
+				</tr>
+			<?php endif; ?>
+			<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>" class="text-right">
 					<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
 					<?= $mwst_label; ?>
 					<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
