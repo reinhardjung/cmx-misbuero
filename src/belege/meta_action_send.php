@@ -149,10 +149,36 @@ function cmxbu_handle_beleg_send(): void {
 		\wp_die('E-Mail konnte nicht gesendet werden.');
 	}
 
-	\wp_safe_redirect(\get_edit_post_link($post_id, ''));
+	$redirect = \add_query_arg(
+		[
+			'cmx_beleg_mail_sent' => '1',
+			'cmx_beleg_mail_to'   => \sanitize_email((string) $to),
+		],
+		\get_edit_post_link($post_id, '')
+	);
+	\wp_safe_redirect($redirect);
 	exit;
 }
 \add_action('admin_post_cmxbu_beleg_send', __NAMESPACE__ . '\\cmxbu_handle_beleg_send');
+
+\add_action('all_admin_notices', function (): void {
+	if (empty($_GET['cmx_beleg_mail_sent'])) {
+		return;
+	}
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || $screen->post_type !== 'belege' || $screen->base !== 'post') {
+		return;
+	}
+	$mail_to = isset($_GET['cmx_beleg_mail_to'])
+		? \sanitize_email((string) \wp_unslash($_GET['cmx_beleg_mail_to']))
+		: '';
+	if ($mail_to !== '') {
+		$link = '<a href="' . \esc_url('mailto:' . $mail_to) . '">' . \esc_html($mail_to) . '</a>';
+		echo '<div class="notice notice-success is-dismissible"><p>E-Mail wurde versendet an: ' . $link . '</p></div>';
+		return;
+	}
+	echo '<div class="notice notice-success is-dismissible"><p>E-Mail wurde versendet.</p></div>';
+});
 
 
 
