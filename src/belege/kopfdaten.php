@@ -593,21 +593,26 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				return {render, reset:()=>{items=[];active=-1;}};
 			}
 
-			/* === Labels klickbar: editieren ODER zur Liste springen === */
-			function wireLabel(lblId, hiddenId, listUrl){
-				const lbl=document.getElementById(lblId);
-				if(!lbl) return;
-				lbl.addEventListener("click", function(e){
-					e.preventDefault();
-					const h=document.getElementById(hiddenId);
-					const id=(h&&h.value)?h.value:"";
-					if(id){
-						const edit=this.getAttribute("data-edit")||"";
-						if(edit){ window.location.href=edit; return; }
-					}
-					window.location.href = this.getAttribute("data-list") || listUrl || "#";
-				});
-			}
+				/* === Labels klickbar: editieren ODER zur Liste springen === */
+				function openInNewTab(url){
+					if(!url || url==="#") return;
+					const w = window.open(url, "_blank", "noopener,noreferrer");
+					if(w){ w.opener = null; }
+				}
+				function wireLabel(lblId, hiddenId, listUrl){
+					const lbl=document.getElementById(lblId);
+					if(!lbl) return;
+					lbl.addEventListener("click", function(e){
+						e.preventDefault();
+						const h=document.getElementById(hiddenId);
+						const id=(h&&h.value)?h.value:"";
+						if(id){
+							const edit=this.getAttribute("data-edit")||"";
+							if(edit){ openInNewTab(edit); return; }
+						}
+						openInNewTab(this.getAttribute("data-list") || listUrl || "#");
+					});
+				}
 			wireLabel("cmx_label_projekt","cmx_projekt_id","edit.php?post_type=projekte");
 			wireLabel("cmx_label_kontakt","cmx_kontakt_id","edit.php?post_type=kontakte");
 
