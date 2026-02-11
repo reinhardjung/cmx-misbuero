@@ -150,7 +150,6 @@ function cmx_register_general_tab(): void {
 				$meta[] = $size_human;
 			}
 
-			echo '<input type="url" class="regular-text code" readonly value="' . \esc_attr($download_url) . '" />';
 			echo '<p class="description"><a href="' . \esc_url($download_url) . '" target="_blank" rel="noopener">Backup herunterladen</a>';
 			if (!empty($meta)) {
 				echo ' (' . \esc_html(\implode(' | ', $meta)) . ')';
