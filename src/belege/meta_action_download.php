@@ -2,7 +2,7 @@
 
 
 /**
- * Frontend-Handler für Beleg-Download per Token
+ * Frontend-Handler für Beleg-Anzeige per Token
  * URL: https://example.com/?beleg=TOKEN
  */
 function cmxbu_handle_beleg_download(): void {
@@ -46,7 +46,7 @@ function cmxbu_handle_beleg_download(): void {
 
 	\nocache_headers();
 	header('Content-Type: application/pdf');
-	header('Content-Disposition: attachment; filename="' . basename($pdf_abs_path) . '"');
+	header('Content-Disposition: inline; filename="' . basename($pdf_abs_path) . '"');
 	header('Content-Length: ' . filesize($pdf_abs_path));
 
 	readfile($pdf_abs_path);
