@@ -535,12 +535,21 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $canvas->image($tmp, $qr_x, $qr_y, $qr_size, $qr_size, $page);
 
     // Schweizer Kreuz (schwarz/weiss) in der Mitte des QR-Codes
+    // mit kleinem weissen Rand (Quiet Zone) um das Logo.
     $cross_size = 7 * $mm;
+    $cross_border = 0.6 * $mm;
     $cross_x = $qr_x + ($qr_size - $cross_size) / 2;
     $cross_y = $qr_y + ($qr_size - $cross_size) / 2;
 
     $prev_page = $canvas->get_page_number();
     $canvas->set_page_number($page);
+    $canvas->filled_rectangle(
+        $cross_x - $cross_border,
+        $cross_y - $cross_border,
+        $cross_size + (2 * $cross_border),
+        $cross_size + (2 * $cross_border),
+        [1, 1, 1]
+    );
     $canvas->filled_rectangle($cross_x, $cross_y, $cross_size, $cross_size, [0, 0, 0]);
 
     $bar = $cross_size * 0.2;
