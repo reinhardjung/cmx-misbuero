@@ -415,7 +415,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		if (!in_array($current_id, $allowed_ids, true)) {
 			$default_term = null;
 			foreach ($terms as $term) {
-				if ($term->slug === 'sonstiges') { $default_term = $term; break; }
+				if ($term->slug === 'rechnung') { $default_term = $term; break; }
 			}
 			if ($default_term === null) {
 				$default_term = $terms[0] ?? null;

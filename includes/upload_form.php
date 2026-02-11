@@ -726,7 +726,10 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		if ( function_exists( __NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy' ) ) {
 			$tax = cmx_belege_kategorie_taxonomy();
 			if ( $tax ) {
-				wp_set_post_terms( $post_id, [ 'sonstiges' ], $tax, false );
+				$default_term = \get_term_by( 'slug', 'rechnung', $tax );
+				if ( $default_term && ! \is_wp_error( $default_term ) ) {
+					\wp_set_post_terms( $post_id, [ (int) $default_term->term_id ], $tax, false );
+				}
 			}
 		}
 

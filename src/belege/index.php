@@ -48,7 +48,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'),CMX_TAX_BELEGE);
 });
 
-// Beleg-Kategorien sicherstellen (Rechnung, Gutschrift, Sonstiges)
+// Beleg-Kategorien sicherstellen
 \add_action('admin_init', function () {
 	$tax = cmx_belege_kategorie_taxonomy();
 	if (!$tax) return;
@@ -56,7 +56,6 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 	$required = [
 		'rechnung'  => 'Rechnung',
 		'gutschrift'=> 'Gutschrift',
-		'sonstiges' => 'Sonstiges',
 	];
 	foreach ($required as $slug => $label) {
 		if (!term_exists($slug, $tax) && !term_exists($label, $tax)) {
@@ -64,6 +63,20 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 		}
 	}
 });
+
+// Kategorie "Sonstiges" in Belegen konsequent entfernen.
+\add_action('admin_init', function () {
+	$tax = cmx_belege_kategorie_taxonomy();
+	if (!$tax) return;
+
+	$term = \get_term_by('slug', 'sonstiges', $tax);
+	if (!$term || \is_wp_error($term)) {
+		$term = \get_term_by('name', 'Sonstiges', $tax);
+	}
+	if ($term && !\is_wp_error($term)) {
+		\wp_delete_term((int) $term->term_id, $tax);
+	}
+}, 25);
 
 // Beleg-Kategorien aus INI ergänzen (fehlende Terms hinzufügen)
 \add_action('admin_init', function () {
