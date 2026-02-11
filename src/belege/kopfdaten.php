@@ -811,7 +811,9 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	} else {
 		\delete_post_meta($post_id, '_cmx_title_auto');
 	}
-}, 10, 3);
+// Später ausführen, damit alle anderen Beleg-Metaboxen ihre Werte bereits gespeichert haben,
+// bevor "Save as"/Duplizieren den Datensatz kopiert.
+}, 200, 3);
 
 add_filter('redirect_post_location', function (string $location, int $post_id): string {
 	if (!isset($GLOBALS['cmx_belege_dup_redirect_id'])) {

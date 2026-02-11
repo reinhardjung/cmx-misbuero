@@ -52,7 +52,7 @@ function cmx_render_support_tab(): void {
 		add_settings_error(
 			'cmx_support_msg',
 			'cmx_support_sent',
-			__('Deine Anfrage wurde verschickt und wird schnellstmöglichst von mir bearbeitet.'),
+			__('Deine Anfrage wurde verschickt und wird schnellstmöglichst von uns bearbeitet.'),
 			'updated'
 		);
 	}

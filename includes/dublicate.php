@@ -133,6 +133,8 @@ function cmx_duplicate_post_handler(): void {
 function cmx_duplicate_do(int $post_id) {
 	$orig = get_post($post_id);
 	if (!$orig) return new \WP_Error('cmx_dup_not_found', 'Original nicht gefunden.');
+	$had_skip_pdf_generation = !empty($GLOBALS['cmx_skip_beleg_pdf_generation']);
+	$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 
 	// Spezielle Behandlung für Belege: neue Beleg-Nr (Titel) generieren
 	$beleg_no = null;
@@ -159,7 +161,12 @@ function cmx_duplicate_do(int $post_id) {
 	];
 
 	$new_id = wp_insert_post($new_postarr, true);
-	if (is_wp_error($new_id)) return $new_id;
+	if (is_wp_error($new_id)) {
+		if (!$had_skip_pdf_generation) {
+			unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
+		}
+		return $new_id;
+	}
 
 	// Neue Beleg-Nr auch als Meta ablegen
 	if ($beleg_no) {
@@ -180,8 +187,9 @@ function cmx_duplicate_do(int $post_id) {
 	$all_meta  = get_post_meta($post_id);
 	foreach ($all_meta as $key => $values) {
 		if (in_array($key, $blacklist, true)) continue;
+		delete_post_meta($new_id, $key);
 		foreach ((array) $values as $val) {
-			update_post_meta($new_id, $key, maybe_unserialize($val));
+			add_post_meta($new_id, $key, maybe_unserialize($val));
 		}
 	}
 
@@ -189,6 +197,10 @@ function cmx_duplicate_do(int $post_id) {
 	$thumb_id = get_post_thumbnail_id($post_id);
 	if ($thumb_id) {
 		set_post_thumbnail($new_id, $thumb_id);
+	}
+
+	if (!$had_skip_pdf_generation) {
+		unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
 	}
 
 	// Nach dem Kopieren: Nummer/Title sicherstellen + PDF generieren
@@ -206,7 +218,7 @@ function cmx_duplicate_do(int $post_id) {
 		}
 
 		$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';
-		if (is_callable($gen_fn)) {
+		if (!$had_skip_pdf_generation && is_callable($gen_fn)) {
 			$post_obj = get_post($new_id);
 			if ($post_obj) {
 				$gen_fn($new_id, $post_obj, true);
