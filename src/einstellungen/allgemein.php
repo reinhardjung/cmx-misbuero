@@ -106,16 +106,109 @@ function cmx_register_general_tab(): void {
 	$backup_file = \sanitize_file_name((string) \get_option('misbuero_backup_file', ''));
 	$backup_created_raw = \trim((string) \get_option('misbuero_backup_created_at', ''));
 	$backup_size_bytes = (int) \get_option('misbuero_backup_size_bytes', 0);
+	$backup_path_option = \wp_normalize_path((string) \get_option('misbuero_backup_path', ''));
+	$backup_exists = false;
+	$backup_found_path = '';
+	$backup_dir = \defined('WP_CONTENT_DIR')
+		? \wp_normalize_path((string) \constant('WP_CONTENT_DIR') . '/uploads/misbuero-backups')
+		: '';
 
-	if ($backup_file === '' && $backup_download_url !== '' && \preg_match('/[?&]file=([^&]+)/i', $backup_download_url, $m_file)) {
-		$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+	if ($backup_file === '' && $backup_path_option !== '') {
+		$backup_file = \sanitize_file_name(\wp_basename($backup_path_option));
 	}
 
-	if ($backup_file !== '' && \preg_match('/^backup-[a-z0-9.-]+\-\d{8}\-\d{6}\-[a-z0-9]+\.(?:zip|tar\.gz)$/i', $backup_file)) {
-		$backup_download_url = \add_query_arg(['file' => $backup_file], \home_url('/misbuero-backup-download.php'));
+	if ($backup_file === '' && $backup_download_url !== '') {
+		if (\preg_match('#/misbuero-backups/([^/?#]+\.(?:zip|tar\.gz))\b#i', $backup_download_url, $m_file)) {
+			$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+		} elseif (\preg_match('/[?&]file=([^&]+)/i', $backup_download_url, $m_file)) {
+			$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+		}
 	}
 
-	if ($backup_download_url !== '') {
+	$backup_paths = [];
+	if ($backup_path_option !== '') {
+		$backup_paths[] = $backup_path_option;
+	}
+	if ($backup_file !== '') {
+		if ($backup_dir !== '') {
+			$backup_paths[] = \wp_normalize_path(\rtrim($backup_dir, '/\\') . '/' . $backup_file);
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) {
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) . 'backups/' . $backup_file);
+		}
+		if (\defined('WP_CONTENT_DIR')) {
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/' . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/misbuero/' . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/misbuero/backups/' . $backup_file);
+		}
+	}
+	$backup_paths = \array_values(\array_unique(\array_filter($backup_paths, static function ($path): bool {
+		return \is_string($path) && $path !== '';
+	})));
+
+	foreach ($backup_paths as $backup_path) {
+		if (\is_file($backup_path)) {
+			$backup_exists = true;
+			$backup_found_path = $backup_path;
+			break;
+		}
+	}
+
+	if (!$backup_exists && $backup_dir !== '' && \is_dir($backup_dir)) {
+		$domain_hint = \strtolower((string) \wp_parse_url(\home_url('/'), PHP_URL_HOST));
+		$domain_prefix = ($domain_hint !== '') ? 'backup-' . $domain_hint . '-' : '';
+		$best_any = '';
+		$best_any_mtime = 0;
+		$best_domain = '';
+		$best_domain_mtime = 0;
+		$files = \glob(\rtrim($backup_dir, '/\\') . '/backup-*');
+		if (!\is_array($files)) {
+			$files = [];
+		}
+		foreach ($files as $file_path) {
+			$file_path = \wp_normalize_path((string) $file_path);
+			if (!\is_file($file_path)) {
+				continue;
+			}
+			$basename = \basename($file_path);
+			if (!\preg_match('/^backup-[a-z0-9.-]+\-\d{8}\-\d{6}\-[a-z0-9]+\.(?:zip|tar\.gz)$/i', $basename)) {
+				continue;
+			}
+			$mtime = \filemtime($file_path);
+			$mtime = ($mtime !== false) ? (int) $mtime : 0;
+			if ($mtime >= $best_any_mtime) {
+				$best_any_mtime = $mtime;
+				$best_any = $basename;
+			}
+			if ($domain_prefix !== '' && \strpos(\strtolower($basename), $domain_prefix) === 0 && $mtime >= $best_domain_mtime) {
+				$best_domain_mtime = $mtime;
+				$best_domain = $basename;
+			}
+		}
+		$fallback_file = ($best_domain !== '') ? $best_domain : $best_any;
+		if ($fallback_file !== '') {
+			$backup_file = \sanitize_file_name($fallback_file);
+			$backup_found_path = \wp_normalize_path(\rtrim($backup_dir, '/\\') . '/' . $backup_file);
+			$backup_exists = \is_file($backup_found_path);
+		}
+	}
+
+	if ($backup_exists && $backup_size_bytes <= 0 && $backup_found_path !== '') {
+		$detected_size = \filesize($backup_found_path);
+		if (\is_int($detected_size) && $detected_size > 0) {
+			$backup_size_bytes = $detected_size;
+		}
+	}
+
+	if ($backup_exists && $backup_file !== '' && \defined('ABSPATH')) {
+		$local_endpoint_path = \wp_normalize_path(\rtrim((string) \constant('ABSPATH'), '/\\') . '/misbuero-backup-download.php');
+		if (\is_file($local_endpoint_path)) {
+			$backup_download_url = \add_query_arg(['file' => $backup_file], \home_url('/misbuero-backup-download.php'));
+		}
+	}
+
+	if ($backup_download_url !== '' && $backup_exists) {
 		\add_settings_field(
 			'misbuero_instance_backup_link',
 			'Backup',
