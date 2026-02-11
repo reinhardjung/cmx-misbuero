@@ -102,6 +102,66 @@ function cmx_register_general_tab(): void {
 	);
 
 	\add_settings_field(
+		'misbuero_instance_backup_link',
+		'Instanz-Backup',
+		function () {
+			$download_url = (string) \get_option('misbuero_backup_download_url', '');
+			$download_url = \esc_url_raw($download_url);
+			$backup_file = \sanitize_file_name((string) \get_option('misbuero_backup_file', ''));
+			$created_raw = \trim((string) \get_option('misbuero_backup_created_at', ''));
+			$size_bytes = (int) \get_option('misbuero_backup_size_bytes', 0);
+
+			if ($backup_file === '' && $download_url !== '' && \preg_match('/[?&]file=([^&]+)/i', $download_url, $m_file)) {
+				$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+			}
+
+			if ($backup_file !== '' && \preg_match('/^backup-[a-z0-9.-]+\-\d{8}\-\d{6}\-[a-z0-9]+\.(?:zip|tar\.gz)$/i', $backup_file)) {
+				$download_url = \add_query_arg(['file' => $backup_file], \home_url('/misbuero-backup-download.php'));
+			}
+
+			if ($download_url === '') {
+				echo '<em>Kein Backup vorhanden.</em>';
+				return;
+			}
+
+			$size_human = '';
+			if ($size_bytes > 0) {
+				$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+				$idx = 0;
+				$size = (float) $size_bytes;
+				while ($size >= 1024 && $idx < \count($units) - 1) {
+					$size /= 1024;
+					$idx++;
+				}
+				$dec = ($size >= 100 || $idx === 0) ? 0 : 1;
+				$size_human = \number_format($size, $dec, '.', '') . ' ' . $units[$idx];
+			}
+
+			$meta = [];
+			if ($created_raw !== '') {
+				$created_ts = \strtotime($created_raw);
+				if ($created_ts !== false) {
+					$meta[] = 'erstellt am ' . \date_i18n('d.m.Y H:i', $created_ts);
+				} else {
+					$meta[] = 'erstellt am ' . $created_raw;
+				}
+			}
+			if ($size_human !== '') {
+				$meta[] = $size_human;
+			}
+
+			echo '<input type="url" class="regular-text code" readonly value="' . \esc_attr($download_url) . '" />';
+			echo '<p class="description"><a href="' . \esc_url($download_url) . '" target="_blank" rel="noopener">Backup herunterladen</a>';
+			if (!empty($meta)) {
+				echo ' (' . \esc_html(\implode(' | ', $meta)) . ')';
+			}
+			echo '</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
 		'help_sync_button',
 		'Hilfe-Texte',
 		function () {
