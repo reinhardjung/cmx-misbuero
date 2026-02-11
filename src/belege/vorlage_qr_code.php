@@ -314,23 +314,48 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere
      * ---------------------------------------------------------------- */
+    // SIX-konforme horizontale Trennlinie oberhalb des QR-Blocks
+    $page_width = $canvas->get_width();
+    $h_cut_y = $zone_top;
     $canvas->line(
-        $cut_x,
-        $zone_top + 4 * $mm,
-        $cut_x,
-        $zone_top + $zone_height - 4 * $mm,
+        0,
+        $h_cut_y,
+        $page_width,
+        $h_cut_y,
         [0, 0, 0],
-        $page
+        1
     );
 
     $canvas->text(
-        $cut_x - (3 * $mm),
+        4 * $mm,
+        $h_cut_y - 1.8 * $mm,
+        '✂',
+        $font,
+        10,
+        [0, 0, 0]
+    );
+
+    // Vertikale Trennlinie zwischen Empfangsschein und Zahlteil
+    $canvas->line(
+        $cut_x,
+        $zone_top,
+        $cut_x,
+        $zone_top + $zone_height,
+        [0, 0, 0],
+        1
+    );
+
+    // Schere an der vertikalen Linie um 90° gedreht
+    $canvas->text(
+        $cut_x - (2.2 * $mm),
         $zone_top + 8 * $mm,
         '✂',
         $font,
         10,
         [0, 0, 0],
-        $page
+        0.0,
+        0.0,
+        90
     );
 
     /** ----------------------------------------------------------------
