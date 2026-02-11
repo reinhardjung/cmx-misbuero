@@ -48,6 +48,66 @@ function cmx_qr_format_qrr_print(string $ref): string
 }
 
 /**
+ * Mod10-rekursiv Prüfziffer für eine 26-stellige QRR-Basis berechnen.
+ */
+function cmx_qr_mod10_recursive_check_digit(string $base26): string
+{
+    $base26 = preg_replace('~\D+~', '', $base26);
+    if (strlen($base26) !== 26 || !ctype_digit($base26)) {
+        return '';
+    }
+
+    $table = [0,9,4,6,8,2,7,1,3,5];
+    $c     = 0;
+
+    for ($i = 0; $i < 26; $i++) {
+        $c = $table[($c + (int) $base26[$i]) % 10];
+    }
+
+    return (string) ((10 - $c) % 10);
+}
+
+/**
+ * Gültige QRR aus Rechnungsnummer bauen.
+ *
+ * Betriebsregel:
+ * - Erste 2 Stellen sind fix "65"
+ * - Danach entweder:
+ *   a) 6-stellige Debitor-ID + 18-stellige Rechnungsnummer (wenn passend)
+ *   b) 24-stellige Rechnungsnummer (Fallback)
+ * - Dann Mod10-rekursiv Prüfziffer (27. Stelle)
+ */
+function cmx_qr_build_qrr_reference(string $invoice_number, int $debitor_id = 0): string
+{
+    $invoice_digits = preg_replace('~\D+~', '', $invoice_number);
+    if ($invoice_digits === '') {
+        return '';
+    }
+
+    $debitor_digits = preg_replace('~\D+~', '', (string) $debitor_id);
+
+    if ($debitor_digits !== '' && strlen($invoice_digits) <= 18) {
+        $body24 = str_pad(substr($debitor_digits, -6), 6, '0', STR_PAD_LEFT)
+            . str_pad($invoice_digits, 18, '0', STR_PAD_LEFT);
+    } else {
+        // QRR erlaubt exakt 26 Stellen Basis + 1 Prüfziffer.
+        if (strlen($invoice_digits) > 24) {
+            return '';
+        }
+        $body24 = str_pad($invoice_digits, 24, '0', STR_PAD_LEFT);
+    }
+
+    $base26 = '65' . $body24;
+    $check_digit = cmx_qr_mod10_recursive_check_digit($base26);
+    if ($check_digit === '') {
+        return '';
+    }
+
+    $qrr = $base26 . $check_digit;
+    return cmx_qr_is_valid_qrr($qrr) ? $qrr : '';
+}
+
+/**
  * QR-Rechnungsblock (Empfangsschein + Zahlteil) am unteren Rand der LETZTEN Seite.
  *
  * A: Keine neue Seite – wird an den Beleg angehängt
@@ -72,7 +132,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $mm = 72 / 25.4;
 
     /** ----------------------------------------------------------------
-     * 1) Einstellungen & QRR
+     * 1) Einstellungen & Referenz
      * ---------------------------------------------------------------- */
     $qr_enabled = !empty($tpl['qr']['enabled']);
     $qr_iban    = trim((string)($tpl['qr']['iban'] ?? $tpl['bank']['qr_iban'] ?? ''));
@@ -83,19 +143,24 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         return;
     }
 
-    $ref_raw = trim((string)($tpl['bank']['qr_reference'] ?? ''));
-    $ref_mode = 'NON';
-    $ref_value = '';
-    $ref_print = '';
+    $invoice_number = trim((string)($tpl['document']['number'] ?? ''));
+    $debitor_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+    $stored_qrr = preg_replace('~\D+~', '', (string) \get_post_meta($post_id, '_cmx_beleg_qrr', true));
 
-    if ($ref_raw !== '') {
-        $qrr_digits = preg_replace('~\D+~', '', $ref_raw);
-        if (strlen($qrr_digits) === 27 && cmx_qr_is_valid_qrr($qrr_digits)) {
-            $ref_mode = 'QRR';
-            $ref_value = $qrr_digits;
-            $ref_print = cmx_qr_format_qrr_print($qrr_digits);
+    if (strlen($stored_qrr) === 27 && cmx_qr_is_valid_qrr($stored_qrr) && substr($stored_qrr, 0, 2) === '65') {
+        $qrr_reference = $stored_qrr;
+    } else {
+        $qrr_reference = cmx_qr_build_qrr_reference($invoice_number, $debitor_id);
+        if ($qrr_reference !== '') {
+            \update_post_meta($post_id, '_cmx_beleg_qrr', $qrr_reference);
+        } else {
+            \delete_post_meta($post_id, '_cmx_beleg_qrr');
         }
     }
+
+    $ref_mode = ($qrr_reference !== '') ? 'QRR' : 'NON';
+    $ref_value = $qrr_reference;
+    $ref_print = ($qrr_reference !== '') ? cmx_qr_format_qrr_print($qrr_reference) : '';
 
     /** ----------------------------------------------------------------
      * 2) Beträge & Adressen
@@ -104,13 +169,6 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $iban = ($ref_mode === 'QRR') ? $qr_iban : $bank_iban;
     if ($iban === '') {
         $iban = $qr_iban;
-    }
-
-    if ($ref_mode === 'QRR' && $qr_iban === '') {
-        $ref_mode = 'NON';
-        $ref_value = '';
-        $ref_print = '';
-        $iban = $bank_iban !== '' ? $bank_iban : $qr_iban;
     }
 
     if ($iban === '') {
@@ -245,7 +303,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $cut_x         = $receipt_width;         // Schnittlinie exakt bei 62 mm
     $zahlteil_x    = $cut_x;                 // Start des Zahlteils
 
-    $receipt_text_x = 5 * $mm;
+    // Nutzbare Breite im Empfangsschein leicht erhöhen (innerer Rand etwas kleiner)
+    $receipt_text_x = 4 * $mm;
     $payment_text_x = $zahlteil_x + 5 * $mm;
 
     $qr_size      = 60 * $mm;
@@ -297,7 +356,19 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $y += 4 * $mm;
         $canvas->text($x, $y, 'Referenz', $fontBold, 8.5, [0, 0, 0], $page);
         $y += 4 * $mm;
-        $canvas->text($x, $y, $ref_print, $font, 8.5, [0, 0, 0], $page);
+        // Referenz innerhalb der Empfangsschein-Breite halten.
+        $ref_font_size = 8.5;
+        $ref_max_width = ($cut_x - 2 * $mm) - $x;
+        if ($ref_max_width > 0 && method_exists($fontMetrics, 'getTextWidth')) {
+            while ($ref_font_size > 6.5) {
+                $ref_width = $fontMetrics->getTextWidth($ref_print, $font, $ref_font_size);
+                if ($ref_width <= $ref_max_width) {
+                    break;
+                }
+                $ref_font_size -= 0.25;
+            }
+        }
+        $canvas->text($x, $y, $ref_print, $font, $ref_font_size, [0, 0, 0], $page);
     }
 
     $y += 6 * $mm;
@@ -363,7 +434,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     // OPTIONAL: Zusätzliche Infos (hier Betreff)
     $subject = trim((string) ($tpl['document']['subject'] ?? ''));
     if ($subject !== '') {
-        $acc_y += 4 * $mm;
+        // Eine Leerzeile vor "Zusätzliche Informationen"
+        $acc_y += 8 * $mm;
         $canvas->text($acc_x, $acc_y, 'Zusätzliche Informationen', $fontBold, 8.5, [0, 0, 0], $page);
         $acc_y += 4 * $mm;
         $canvas->text($acc_x, $acc_y, $subject, $font, 8.5, [0, 0, 0], $page);
