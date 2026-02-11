@@ -132,7 +132,7 @@ function cmx_kommunikation_box_html($post): void {
 	echo '<table class="form-table"><tbody>';
 
 	// Telefone (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">direkt anrufen</th><td><div class="cmx-kommu-row">';
+	echo '<tr><th scope="row">Telefon</th><td><div class="cmx-kommu-row">';
 	for ($i = 1; $i <= 3; $i++) {
 		$val = isset($meta["telefon_$i"]) ? \esc_attr($meta["telefon_$i"]) : '';
 		$ddl = cmx_label_dropdown($phone_terms, "telefon_label_$i", $meta, CMX_TAX_PHONE_LABELS);
@@ -144,7 +144,7 @@ function cmx_kommunikation_box_html($post): void {
 	echo '</div></td></tr>';
 
 	// E-Mails (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">Mail schreiben</th><td><div class="cmx-kommu-row">';
+	echo '<tr><th scope="row">E-Mail</th><td><div class="cmx-kommu-row">';
 	for ($i = 1; $i <= 3; $i++) {
 		$val = isset($meta["email_$i"]) ? \esc_attr($meta["email_$i"]) : '';
 		$ddl = cmx_label_dropdown($mail_terms, "email_label_$i", $meta, CMX_TAX_MAIL_LABELS);
