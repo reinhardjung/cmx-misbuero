@@ -38,7 +38,7 @@ foreach ($positions as $row) {
 		break;
 	}
 }
-$show_position_index = $position_row_count > 1;
+$show_position_index = true;
 $show_sku = false;
 $show_discount = false;
 $discount_sum = 0.0;
@@ -182,13 +182,13 @@ $recipient_html = $recipient_has_br
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
-.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
-.positions-table tbody td { vertical-align: top; }
-.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
-.positions-table tbody tr.cmx-pdf-abschnitt-row td {
-	font-weight: 600;
-	border-top: 1px solid #999;
-	border-bottom: 1px solid #999;
+	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
+	.positions-table tbody td { vertical-align: top; }
+	.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
+	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
+		font-weight: 600;
+		border-top: 1px solid #999;
+		border-bottom: 1px solid #999;
 }
 .positions-table .cmx-pdf-abschnitt-text {
 	display: block;
@@ -351,7 +351,9 @@ $recipient_html = $recipient_has_br
 					<td colspan="<?= $col_count; ?>">—</td>
 				</tr>
 				<?php else: ?>
-					<?php $pos_no = 0; ?>
+					<?php
+					$pos_no = 0;
+					?>
 					<?php foreach ($positions as $i => $row): ?>
 						<?php
 						$row_type = (string)($row['row_type'] ?? 'position');
@@ -361,7 +363,7 @@ $recipient_html = $recipient_has_br
 							$section_text_html = (string)($row['section_text_html'] ?? '');
 							?>
 							<tr class="cmx-pdf-abschnitt-row">
-								<td colspan="<?= $col_count; ?>">
+								<td colspan="<?= $col_count; ?>"><br>
 									<?= htmlspecialchars($section_title, ENT_QUOTES, 'UTF-8'); ?>
 									<?php if ($section_text_html !== ''): ?>
 										<span class="cmx-pdf-abschnitt-text"><?= $section_text_html; ?></span>
@@ -408,14 +410,14 @@ $recipient_html = $recipient_has_br
 						<?php if ($show_discount): ?>
 							<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>
-						<?php if ($show_line_total): ?>
-							<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
-						<?php endif; ?>
-					</tr>
-				<?php endforeach; ?>
-			<?php endif; ?>
-			</tbody>
-		</table>
+							<?php if ($show_line_total): ?>
+								<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+						</tr>
+					<?php endforeach; ?>
+				<?php endif; ?>
+				</tbody>
+			</table>
 	<?php endif; ?>
 
 <?php if (!$has_positions && !empty($tpl['document']['manual_total'])): ?>
