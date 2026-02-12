@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Status');
 
 
 // Define: CONST 4 each Taxo
@@ -19,6 +19,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_PROJEKT
 // Create: @ll Taxos
 \add_action('init', function () {
 	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
+	cmx_create_taxo(basename(__DIR__), 'Status', 'Status', false);
 	// cmx_create_taxo(basename(__DIR__), 'Type', 'Typen', false);
 	// cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false); // REchungna ls default, genaus wioe Schwiez...
 }, 15);
@@ -36,4 +37,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_PROJEKT
 
 // Include: @ll metaboxes
 // cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, dokumente, tasks, tasks-side');
-cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, tasks, tasks-side');
+cmx_require_files(__DIR__,'stammdaten, kontakt, status, admincolumns, exports, imports, tasks, tasks-side');
