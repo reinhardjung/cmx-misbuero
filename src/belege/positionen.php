@@ -133,6 +133,16 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_items')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_admin_url')) {
+	function cmx_beleg_textbaustein_admin_url(): string {
+		$tax = cmx_beleg_textbaustein_taxonomy();
+		if ($tax === '') {
+			return '';
+		}
+		return \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($tax) . '&post_type=belege');
+	}
+}
+
 /* ------------------------------
  * Locale-robust: String -> Float normalisieren (Punkt/Komma/tausender)
  * ------------------------------ */
@@ -235,6 +245,9 @@ function cmx_render_position_row($i, $pos) {
 	$title        = $artikel_id ? get_the_title($artikel_id) : '';
 	$nr           = $artikel_id ? cmx_get_artikel_nr($artikel_id) : '';
 	$display      = esc_html( ($nr ? $nr.' – ' : '') . ($title ?: ($pos['artikel_name'] ?? '')) );
+	$textbaustein_edit_url = \function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')
+		? (string) cmx_beleg_textbaustein_admin_url()
+		: '';
 
 	$menge        = (string)($pos['menge'] ?? '');
 	$preis        = (string)($pos['preis'] ?? '');
@@ -280,7 +293,12 @@ function cmx_render_position_row($i, $pos) {
 
 	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
 
-	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
+	echo '<td class="cmx-pos-beschr-cell">';
+	if ($textbaustein_edit_url !== '') {
+		echo '<a href="'.esc_url($textbaustein_edit_url).'" class="cmx-textbaustein-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
+	}
+	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea>';
+	echo '</td>';
 	echo '<td class="cmx-pos-controls">';
 	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
 	echo '<button type="button" class="button-link-delete cmx-del-pos">✕</button>';
@@ -995,15 +1013,31 @@ function cmx_beleg_positionen_js() {
 		.cmx-art-suggest{ position:absolute; z-index:1000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
 		.cmx-art-suggest li{ margin:0; padding:0; cursor:pointer; }
 		.cmx-art-suggest li.active, .cmx-art-suggest li:hover{ background:#e5f3ff; }
-		.cmx-ac-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; padding:6px 8px; }
-		.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
-		.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+			.cmx-ac-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; padding:6px 8px; }
+			.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
+			.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 			#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
-			#cmx-positionen-table th:first-child,
-			#cmx-positionen-table td:first-child{ padding-right:20px; }
-			#cmx-positionen-table td textarea { resize: vertical; }
-			.cmx-pos-row td:first-child{ position:relative; padding-right:8px; }
+				#cmx-positionen-table th:first-child,
+				#cmx-positionen-table td:first-child{ padding-right:20px; }
+				#cmx-positionen-table td textarea { resize: vertical; }
+				#cmx-positionen-table td.cmx-pos-beschr-cell{
+					position:relative;
+					padding-left:26px;
+				}
+				#cmx-positionen-table .cmx-textbaustein-edit{
+					position:absolute;
+					left:6px;
+					top:8px;
+					text-decoration:none;
+					font-size:12px;
+					color:#2271b1;
+					line-height:1;
+				}
+				#cmx-positionen-table .cmx-textbaustein-edit:hover{
+					color:#135e96;
+				}
+				.cmx-pos-row td:first-child{ position:relative; padding-right:8px; }
 			.cmx-pos-total{ font-weight:600; text-align:right; }
 			#cmx-positionen-table td.cmx-pos-controls{
 				white-space:nowrap;

@@ -8,6 +8,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_abschnitt_is_row')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')) {
+	function cmx_beleg_textbaustein_admin_url(): string {
+		$tax = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_taxonomy')) {
+			$tax = (string) \call_user_func(__NAMESPACE__ . '\\cmx_beleg_textbaustein_taxonomy');
+		}
+		if ($tax === '') {
+			foreach (['belege_belegetextbausteine', 'belege_textbausteine', 'belege_textbaustein'] as $candidate) {
+				if (\taxonomy_exists($candidate)) {
+					$tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($tax === '') return '';
+		return \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($tax) . '&post_type=belege');
+	}
+}
+
 add_action('cmx_beleg_positionen_after_add_button', function (): void {
 	echo ' <button type="button" class="button button-secondary" id="cmx-add-abschnitt">Abschnitt hinzufügen</button>';
 }, 10);
@@ -20,12 +39,20 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 	$titel = \trim($titel);
 	$text = isset($pos['abschnitt_text']) ? (string) $pos['abschnitt_text'] : '';
 	$text = \trim($text);
+	$textbaustein_edit_url = \function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')
+		? (string) \call_user_func(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')
+		: '';
 
 	echo '<tr class="cmx-pos-row cmx-pos-row-abschnitt">';
 	echo '<td colspan="6">';
 	echo '<input type="hidden" name="cmx_positionen[' . $i . '][typ]" value="abschnitt">';
 	echo '<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' . $i . '][abschnitt_titel]" value="' . \esc_attr($titel) . '" placeholder="Abschnitt" style="width:100%;">';
+	echo '<div class="cmx-abschnitt-text-wrap">';
+	if ($textbaustein_edit_url !== '') {
+		echo '<a href="' . \esc_url($textbaustein_edit_url) . '" class="cmx-textbaustein-edit cmx-abschnitt-text-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
+	}
 	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;">' . \esc_textarea($text) . '</textarea>';
+	echo '</div>';
 	echo '</td>';
 	echo '<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
 	echo '</tr>';
@@ -65,11 +92,19 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 	if (!$screen || $screen->post_type !== 'belege' || $screen->base !== 'post') {
 		return;
 	}
+	$textbaustein_edit_link_html = '';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')) {
+		$url = (string) \call_user_func(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url');
+		if ($url !== '') {
+			$textbaustein_edit_link_html = '<a href="' . \esc_url($url) . '" class="cmx-textbaustein-edit cmx-abschnitt-text-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
+		}
+	}
 	?>
 	<script>
 	jQuery(function($){
 		const table = $('#cmx-positionen-table tbody');
 		if (!table.length) return;
+		const TEXTBAUSTEIN_EDIT_LINK = <?php echo \wp_json_encode($textbaustein_edit_link_html); ?>;
 
 		function nextRowIndex(){
 			let max = -1;
@@ -85,14 +120,17 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 			$(document).on('click', '#cmx-add-abschnitt', function(){
 				const i = nextRowIndex();
 				const rowHtml = '' +
-						'<tr class="cmx-pos-row cmx-pos-row-abschnitt">' +
-							'<td colspan="6">' +
-								'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
-								'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:100%;">' +
-								'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;"></textarea>' +
-							'</td>' +
-							'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>' +
-						'</tr>';
+							'<tr class="cmx-pos-row cmx-pos-row-abschnitt">' +
+								'<td colspan="6">' +
+									'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
+									'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:100%;">' +
+									'<div class="cmx-abschnitt-text-wrap">' +
+										TEXTBAUSTEIN_EDIT_LINK +
+										'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;"></textarea>' +
+									'</div>' +
+								'</td>' +
+								'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>' +
+							'</tr>';
 
 				const $row = $(rowHtml);
 				table.append($row);
@@ -108,19 +146,23 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 			});
 	});
 	</script>
-	<style>
-		.cmx-pos-actions #cmx-add-abschnitt { margin-left: 8px; }
-		#cmx-positionen-table .cmx-pos-row-abschnitt td { background: #f8f9fa; }
-		#cmx-positionen-table .cmx-abschnitt-titel {
-			font-weight: 600;
-			border-left: 3px solid #2271b1;
-			padding-left: 8px;
-		}
-		#cmx-positionen-table .cmx-abschnitt-text {
-			border-left: 3px solid #dcdcde;
-			padding-left: 8px;
-		}
-	</style>
+		<style>
+			.cmx-pos-actions #cmx-add-abschnitt { margin-left: 8px; }
+			#cmx-positionen-table .cmx-pos-row-abschnitt td { background: #f8f9fa; }
+			#cmx-positionen-table .cmx-abschnitt-titel {
+				font-weight: 600;
+				border-left: 3px solid #2271b1;
+				padding-left: 8px;
+			}
+			#cmx-positionen-table .cmx-abschnitt-text-wrap{
+				position:relative;
+				padding-left:26px;
+			}
+			#cmx-positionen-table .cmx-abschnitt-text {
+				border-left: 3px solid #dcdcde;
+				padding-left: 8px;
+			}
+		</style>
 	<?php
 }
 add_action('admin_footer-post.php', __NAMESPACE__ . '\\cmx_beleg_abschnitt_admin_footer');
