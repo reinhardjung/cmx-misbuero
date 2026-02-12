@@ -46,6 +46,43 @@ function cmx_projekte_detect_taxonomy(): ?string {
 	return null;
 }
 
+/** Kunden-Optionen für Admin-Filter (nur tatsächlich verwendete Kontakt-IDs) */
+if (!function_exists(__NAMESPACE__ . '\cmx_projekte_get_kunden_filter_options')) {
+	function cmx_projekte_get_kunden_filter_options(): array {
+		global $wpdb;
+
+		$sql = $wpdb->prepare(
+			"SELECT DISTINCT pm.meta_value
+			 FROM {$wpdb->postmeta} pm
+			 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			 WHERE pm.meta_key = %s
+			   AND p.post_type = %s
+			   AND p.post_status IN ('publish','draft','pending','future','private')
+			   AND pm.meta_value <> ''",
+			CMX_KONTAKT_META,
+			CMX_PROJEKT_CPT
+		);
+
+		$raw_ids = $wpdb->get_col($sql); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		if (empty($raw_ids) || !is_array($raw_ids)) return [];
+
+		$ids = array_values(array_unique(array_filter(array_map('absint', $raw_ids))));
+		if (empty($ids)) return [];
+
+		$options = [];
+		foreach ($ids as $id) {
+			if ($id <= 0 || !get_post_status($id)) continue;
+			$title = (string) get_the_title($id);
+			$options[$id] = $title !== '' ? $title : ('#' . $id);
+		}
+
+		if (!empty($options)) {
+			natcasesort($options);
+		}
+		return $options;
+	}
+}
+
 /** Datum-Helpers (ISO prüfen/säubern + CH-Format) */
 if (!function_exists(__NAMESPACE__ . '\cmx_proj_is_iso_date')) {
 	function cmx_proj_is_iso_date($value) {
@@ -258,6 +295,7 @@ add_action('manage_' . CMX_PROJEKT_CPT . '_posts_custom_column', function(string
 /** Sortierbarkeit: Kunde (nach Kontakt-ID) */
 add_filter('manage_edit-' . CMX_PROJEKT_CPT . '_sortable_columns', function(array $cols) {
 	$cols['cmx_kunde'] = 'cmx_kunde';
+	$cols['cmx_kategorie'] = 'cmx_sort_kategorie';
 	return $cols;
 });
 
@@ -288,6 +326,33 @@ add_action('restrict_manage_posts', function($post_type) {
 		'value_field'     => 'slug',
 	]);
 }, 10);
+
+/** B2: Kunden-Filter (Dropdown) über der Tabelle */
+add_action('restrict_manage_posts', function($post_type) {
+	if ($post_type !== CMX_PROJEKT_CPT) return;
+
+	$param = 'cmx_kunde_filter';
+	$selected = isset($_GET[$param]) ? absint(wp_unslash($_GET[$param])) : 0;
+	$options = cmx_projekte_get_kunden_filter_options();
+
+	if ($selected > 0 && !isset($options[$selected]) && get_post_status($selected)) {
+		$title = (string) get_the_title($selected);
+		$options[$selected] = $title !== '' ? $title : ('#' . $selected);
+		natcasesort($options);
+	}
+
+	echo '<select name="' . esc_attr($param) . '">';
+	echo '<option value="">' . esc_html__('Alle Kunden', 'cmx') . '</option>';
+	foreach ($options as $id => $label) {
+		printf(
+			'<option value="%d"%s>%s</option>',
+			(int) $id,
+			selected($selected, (int) $id, false),
+			esc_html($label)
+		);
+	}
+	echo '</select>';
+}, 11);
 
 /** =========================
  *  Admin-Liste: Beginn & Ende (zusätzliche Spalten, sortierbar)
@@ -327,6 +392,7 @@ add_filter('manage_edit-projekte_sortable_columns', function($sortable) {
 	$sortable['cmx_col_beginn'] = 'cmx_sort_beginn';
 	$sortable['cmx_col_ende']   = 'cmx_sort_ende';
 	$sortable['cmx_col_umsatz'] = 'cmx_sort_umsatz';
+	$sortable['cmx_kategorie']  = 'cmx_sort_kategorie';
 	// Kunde-Sortierung bleibt über den anderen Filter gesetzt
 	return $sortable;
 });
@@ -364,6 +430,19 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$q->set('orderby', 'meta_value_num');
 	}
 
+	// Filter Kunde
+	$kunde_filter = isset($_GET['cmx_kunde_filter']) ? absint(wp_unslash($_GET['cmx_kunde_filter'])) : 0;
+	if ($kunde_filter > 0) {
+		$meta_query = (array) $q->get('meta_query');
+		$meta_query[] = [
+			'key'     => CMX_KONTAKT_META,
+			'value'   => $kunde_filter,
+			'compare' => '=',
+			'type'    => 'NUMERIC',
+		];
+		$q->set('meta_query', $meta_query);
+	}
+
 	// Kategorie-Filter (greift auch ohne query_var)
 	$tax = cmx_projekte_detect_taxonomy();
 	if ($tax && taxonomy_exists($tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
@@ -378,6 +457,35 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		}
 	}
 });
+
+/** Sortierung Kategorie (Taxonomie-Termname) */
+add_filter('posts_clauses', function(array $clauses, \WP_Query $q): array {
+	if (!is_admin() || !$q->is_main_query()) return $clauses;
+	if ((string) $q->get('post_type') !== (string) CMX_PROJEKT_CPT) return $clauses;
+	if ((string) $q->get('orderby') !== 'cmx_sort_kategorie') return $clauses;
+
+	$tax = cmx_projekte_detect_taxonomy();
+	if (!$tax || !taxonomy_exists($tax) || !is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
+		return $clauses;
+	}
+
+	global $wpdb;
+	$order = strtoupper((string) $q->get('order')) === 'DESC' ? 'DESC' : 'ASC';
+	$tax_sql = esc_sql($tax);
+
+	$clauses['join'] .= " LEFT JOIN {$wpdb->term_relationships} cmxtr_kat ON ({$wpdb->posts}.ID = cmxtr_kat.object_id)";
+	$clauses['join'] .= " LEFT JOIN {$wpdb->term_taxonomy} cmxtt_kat ON (cmxtr_kat.term_taxonomy_id = cmxtt_kat.term_taxonomy_id AND cmxtt_kat.taxonomy = '{$tax_sql}')";
+	$clauses['join'] .= " LEFT JOIN {$wpdb->terms} cmxt_kat ON (cmxtt_kat.term_id = cmxt_kat.term_id)";
+
+	if (empty($clauses['groupby'])) {
+		$clauses['groupby'] = "{$wpdb->posts}.ID";
+	} elseif (strpos($clauses['groupby'], "{$wpdb->posts}.ID") === false) {
+		$clauses['groupby'] .= ", {$wpdb->posts}.ID";
+	}
+
+	$clauses['orderby'] = "COALESCE(MIN(cmxt_kat.name), '') {$order}, {$wpdb->posts}.ID {$order}";
+	return $clauses;
+}, 20, 2);
 
 /** =========================
  *  Meta-Box (SIDE): Projektzeitraum
