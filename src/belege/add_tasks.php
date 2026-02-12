@@ -87,7 +87,7 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		? cmxbu_meta_array($post_id, '_cmx_beleg_positionen')
 		: [];
 
-	$import_result = cmxbu_collect_task_positionen($tasks, $artikel_vks);
+	$import_result = cmxbu_collect_task_positionen($tasks, $artikel_vks, $projekt_id);
 	$positionen = array_merge($positionen, $import_result['positionen']);
 
 	$project_tasks_changed = !empty($import_result['uids_assigned']);
@@ -321,7 +321,7 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 /**
  * Sammle Positionen aus Tasks. Kann optional abgerechnete ignorieren oder erzwingen.
  */
-function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): array {
+function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks, int $projekt_id = 0): array {
 	$positionen = [];
 	$total = $skipped_done = $skipped_empty = $skipped_no_price = 0;
 	$imported = false;
@@ -373,6 +373,7 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): arra
 			'beschreibung' => $t['info'] ?? '',
 			'task_idx'     => $idx,
 			'task_uid'     => $uid,
+			'task_projekt_id' => $projekt_id > 0 ? (int) $projekt_id : null,
 		];
 
 		$imported_keys[] = $idx;

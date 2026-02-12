@@ -264,6 +264,75 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_task_refs_normalize_map')) {
+	function cmx_beleg_task_refs_normalize_map(array $raw_map): array {
+		$out = [];
+		foreach ($raw_map as $pid_raw => $refs_raw) {
+			$pid = (int) $pid_raw;
+			if ($pid <= 0 || !\is_array($refs_raw)) continue;
+			$uids = [];
+			$idx  = [];
+			foreach ((array) ($refs_raw['uids'] ?? []) as $uid_raw) {
+				$uid = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', (string) $uid_raw);
+				if ($uid !== '') $uids[$uid] = true;
+			}
+			foreach ((array) ($refs_raw['idx'] ?? []) as $idx_raw) {
+				if ($idx_raw === '' || $idx_raw === null || !\is_numeric((string) $idx_raw)) continue;
+				$idx[(int) $idx_raw] = true;
+			}
+			if (!empty($uids) || !empty($idx)) {
+				$out[$pid] = ['uids' => $uids, 'idx' => $idx];
+			}
+		}
+		return $out;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_task_refs_from_positionen')) {
+	function cmx_beleg_task_refs_from_positionen(array $positionen, int $fallback_projekt_id = 0): array {
+		$map = [];
+		foreach ($positionen as $row) {
+			if (!\is_array($row)) continue;
+			$uid = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($row['task_uid'] ?? ''));
+			$idx_raw = isset($row['task_idx']) ? (string) $row['task_idx'] : '';
+			$idx = ($idx_raw !== '' && \is_numeric($idx_raw)) ? (int) $idx_raw : null;
+			if ($uid === '' && $idx === null) continue;
+
+			$pid = isset($row['task_projekt_id']) ? (int) $row['task_projekt_id'] : 0;
+			if ($pid <= 0 && $fallback_projekt_id > 0) {
+				$pid = $fallback_projekt_id;
+			}
+			if ($pid <= 0) continue;
+
+			if (!isset($map[$pid])) {
+				$map[$pid] = ['uids' => [], 'idx' => []];
+			}
+			if ($uid !== '') {
+				$map[$pid]['uids'][$uid] = true;
+			}
+			if ($idx !== null) {
+				$map[$pid]['idx'][$idx] = true;
+			}
+		}
+		return $map;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_task_refs_map_for_meta')) {
+	function cmx_beleg_task_refs_map_for_meta(array $map): array {
+		$out = [];
+		foreach ($map as $pid => $refs) {
+			$pid = (int) $pid;
+			if ($pid <= 0 || !\is_array($refs)) continue;
+			$uids = \array_values(\array_keys((array) ($refs['uids'] ?? [])));
+			$idx  = \array_values(\array_map('intval', \array_keys((array) ($refs['idx'] ?? []))));
+			if (empty($uids) && empty($idx)) continue;
+			$out[(string) $pid] = ['uids' => $uids, 'idx' => $idx];
+		}
+		return $out;
+	}
+}
+
 /* ------------------------------
  * Locale-robust: String -> Float normalisieren (Punkt/Komma/tausender)
  * ------------------------------ */
@@ -387,6 +456,8 @@ function cmx_render_position_row($i, $pos) {
 	$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int) $task_idx_raw : null;
 	$task_uid_raw = isset($pos['task_uid']) ? (string) $pos['task_uid'] : '';
 	$task_uid     = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+	$task_projekt_id_raw = isset($pos['task_projekt_id']) ? (string) $pos['task_projekt_id'] : '';
+	$task_projekt_id     = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int) $task_projekt_id_raw : null;
 
 	$menge_display = $menge !== '' ? cmx_format_swiss_number(cmx_norm_decimal($menge), 2) : '';
 	$preis_display = $preis !== '' ? cmx_format_swiss_number(cmx_norm_decimal($preis), 2) : '';
@@ -409,6 +480,7 @@ function cmx_render_position_row($i, $pos) {
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_idx]" class="cmx-task-idx" value="'.($task_idx === null ? '' : esc_attr((string) $task_idx)).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_uid]" class="cmx-task-uid" value="'.esc_attr($task_uid).'">';
+	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_projekt_id]" class="cmx-task-projekt-id" value="'.($task_projekt_id === null ? '' : esc_attr((string) $task_projekt_id)).'">';
 	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
 	echo '</td>';
 
@@ -496,10 +568,12 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			$beschreibung_raw = wp_unslash($beschreibung_raw);
 			$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
 			$beschreibung = trim($beschreibung_raw);
-			$task_idx_raw = isset($row['task_idx']) ? trim((string)$row['task_idx']) : '';
-			$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
-			$task_uid_raw = isset($row['task_uid']) ? (string)$row['task_uid'] : '';
-			$task_uid     = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+				$task_idx_raw = isset($row['task_idx']) ? trim((string)$row['task_idx']) : '';
+				$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+				$task_uid_raw = isset($row['task_uid']) ? (string)$row['task_uid'] : '';
+				$task_uid     = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+				$task_projekt_id_raw = isset($row['task_projekt_id']) ? trim((string)$row['task_projekt_id']) : '';
+				$task_projekt_id     = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
 
 			// negative Mengen zulassen; nur 0 verwerfen
 			if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -510,11 +584,12 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 				'menge'        => $menge,
 				'preis'        => $preis,
 				'rabatt'       => $rabatt,
-				'beschreibung' => $beschreibung,
-				'task_idx'     => $task_idx,
-				'task_uid'     => $task_uid,
-			];
-		}
+					'beschreibung' => $beschreibung,
+					'task_idx'     => $task_idx,
+					'task_uid'     => $task_uid,
+					'task_projekt_id' => $task_projekt_id,
+				];
+			}
 
 	// Altdaten angleichen (können als JSON-String oder Array vorliegen)
 	$old_raw  = get_post_meta($post_id, '_cmx_beleg_positionen', true);
@@ -537,6 +612,92 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 	}
 
 }, 10, 3);
+
+add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
+	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (\wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id)) return;
+	if ($post->post_type !== 'belege') return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+
+	$positionen = \function_exists(__NAMESPACE__ . '\\cmx_beleg_meta_array')
+		? cmx_beleg_meta_array((int) $post_id, '_cmx_beleg_positionen')
+		: [];
+
+	$fallback_pid = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
+	if ($fallback_pid <= 0 && \function_exists(__NAMESPACE__ . '\\cmx_meta_projekt_ids')) {
+		foreach ((array) cmx_meta_projekt_ids() as $mk) {
+			$fallback_pid = (int) \get_post_meta($post_id, (string) $mk, true);
+			if ($fallback_pid > 0) break;
+		}
+	}
+
+	$current_map = \function_exists(__NAMESPACE__ . '\\cmx_beleg_task_refs_from_positionen')
+		? cmx_beleg_task_refs_from_positionen((array) $positionen, $fallback_pid)
+		: [];
+	$prev_raw_map = \function_exists(__NAMESPACE__ . '\\cmx_beleg_meta_array')
+		? cmx_beleg_meta_array((int) $post_id, '_cmx_beleg_task_refs_by_project')
+		: [];
+	$prev_map = \function_exists(__NAMESPACE__ . '\\cmx_beleg_task_refs_normalize_map')
+		? cmx_beleg_task_refs_normalize_map((array) $prev_raw_map)
+		: [];
+
+	if (empty($current_map) && empty($prev_map)) {
+		\delete_post_meta($post_id, '_cmx_beleg_task_refs_by_project');
+		return;
+	}
+
+	$all_pids = [];
+	foreach (\array_keys($current_map) as $pid) $all_pids[(int) $pid] = true;
+	foreach (\array_keys($prev_map) as $pid) $all_pids[(int) $pid] = true;
+
+	foreach (\array_keys($all_pids) as $pid) {
+		$pid = (int) $pid;
+		if ($pid <= 0) continue;
+
+		$tasks = \function_exists(__NAMESPACE__ . '\\cmx_beleg_meta_array')
+			? cmx_beleg_meta_array($pid, '_cmx_projekt_tasks')
+			: [];
+		if (empty($tasks)) continue;
+
+		$current_refs = isset($current_map[$pid]) && \is_array($current_map[$pid]) ? $current_map[$pid] : ['uids' => [], 'idx' => []];
+		$prev_refs = isset($prev_map[$pid]) && \is_array($prev_map[$pid]) ? $prev_map[$pid] : ['uids' => [], 'idx' => []];
+		$current_uids = \is_array($current_refs['uids'] ?? null) ? (array) $current_refs['uids'] : [];
+		$current_idx  = \is_array($current_refs['idx'] ?? null) ? (array) $current_refs['idx'] : [];
+		$prev_uids    = \is_array($prev_refs['uids'] ?? null) ? (array) $prev_refs['uids'] : [];
+		$prev_idx     = \is_array($prev_refs['idx'] ?? null) ? (array) $prev_refs['idx'] : [];
+
+		$changed = false;
+		foreach ($tasks as $idx => &$task_row) {
+			if (!\is_array($task_row)) continue;
+
+			$task_uid = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($task_row['uid'] ?? ''));
+			$is_now = ($task_uid !== '' && isset($current_uids[$task_uid])) || isset($current_idx[(int) $idx]);
+			$was_before = ($task_uid !== '' && isset($prev_uids[$task_uid])) || isset($prev_idx[(int) $idx]);
+			if (!$is_now && !$was_before) continue;
+
+			$target = $is_now ? 1 : 0;
+			$current_flag = \function_exists(__NAMESPACE__ . '\\cmx_beleg_truthy') && cmx_beleg_truthy($task_row['abgerechnet'] ?? 0) ? 1 : 0;
+			if ($current_flag !== $target) {
+				$task_row['abgerechnet'] = $target;
+				$changed = true;
+			}
+		}
+		unset($task_row);
+
+		if ($changed) {
+			\update_post_meta($pid, '_cmx_projekt_tasks', $tasks);
+		}
+	}
+
+	$store_map = \function_exists(__NAMESPACE__ . '\\cmx_beleg_task_refs_map_for_meta')
+		? cmx_beleg_task_refs_map_for_meta($current_map)
+		: [];
+	if (empty($store_map)) {
+		\delete_post_meta($post_id, '_cmx_beleg_task_refs_by_project');
+	} else {
+		\update_post_meta($post_id, '_cmx_beleg_task_refs_by_project', $store_map);
+	}
+}, 90, 3);
 
 /* ------------------------------
  * AJAX: VK-Preis aus Artikel (_cmx_artikel_vk)
@@ -1018,6 +1179,8 @@ function cmx_beleg_positionen_js() {
 				const taskIdxRaw = task.task_idx;
 				const taskIdx = (taskIdxRaw === undefined || taskIdxRaw === null || taskIdxRaw === '') ? '' : String(taskIdxRaw);
 				const taskUid = (task.task_uid || '').toString();
+				const taskProjektRaw = task.projekt_id;
+				const taskProjektId = (taskProjektRaw === undefined || taskProjektRaw === null || taskProjektRaw === '') ? '' : String(taskProjektRaw);
 				const artikelLabel = (task.artikel_label || task.artikel_title || '').toString();
 				const menge = parseNumberFlexible(task.menge || '');
 				const preis = parseNumberFlexible(task.preis || '');
@@ -1027,6 +1190,7 @@ function cmx_beleg_positionen_js() {
 				const $articleInput = $row.find('.cmx-artikel-autocomplete').first();
 				const $taskIdx = $row.find('.cmx-task-idx').first();
 				const $taskUid = $row.find('.cmx-task-uid').first();
+				const $taskProjekt = $row.find('.cmx-task-projekt-id').first();
 				const $qty = $row.find('input[name*="[menge]"]').first();
 				const $price = $row.find('input[name*="[preis]"]').first();
 				const $discount = $row.find('input[name*="[rabatt]"]').first();
@@ -1037,6 +1201,7 @@ function cmx_beleg_positionen_js() {
 				$articleInput.val(artikelLabel);
 				$taskIdx.val(taskIdx);
 				$taskUid.val(taskUid.replace(/[^A-Za-z0-9_-]/g, ''));
+				$taskProjekt.val(taskProjektId.replace(/[^0-9]/g, ''));
 				$qty.val(menge > 0 ? formatSwiss(menge) : '');
 				$price.val(preis > 0 ? formatSwiss(preis) : '');
 				$discount.val('');
@@ -1071,10 +1236,10 @@ function cmx_beleg_positionen_js() {
 
 				newRow.find('input, textarea').each(function(){
 					let $el = $(this), name = $el.attr('name');
-					if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
-					if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
-					else if($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid')){ $el.val(''); }
-					else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
+						if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
+						if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
+						else if($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')){ $el.val(''); }
+						else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
 					else if($el.is('[name*="[menge]"]')){ $el.val(''); }
 					else if($el.is('[name*="[preis]"]')){ $el.val(''); }
 					else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
@@ -1429,7 +1594,7 @@ function cmx_beleg_positionen_js() {
 						$row.find('input, textarea').each(function(){
 							const $el = $(this);
 							if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
-							else if ($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid')) { $el.val(''); }
+							else if ($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')) { $el.val(''); }
 							else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
 							else { $el.val(''); }
 						});
@@ -1635,10 +1800,12 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$beschreibung_raw = wp_unslash($beschreibung_raw);
 		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
 		$beschreibung = trim($beschreibung_raw);
-		$task_idx_raw = isset($r['task_idx']) ? trim((string)$r['task_idx']) : '';
-		$task_idx = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
-		$task_uid_raw = isset($r['task_uid']) ? (string)$r['task_uid'] : '';
-		$task_uid = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+			$task_idx_raw = isset($r['task_idx']) ? trim((string)$r['task_idx']) : '';
+			$task_idx = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+			$task_uid_raw = isset($r['task_uid']) ? (string)$r['task_uid'] : '';
+			$task_uid = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+			$task_projekt_id_raw = isset($r['task_projekt_id']) ? trim((string)$r['task_projekt_id']) : '';
+			$task_projekt_id = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -1649,10 +1816,11 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 			'menge'        => $menge,
 			'preis'        => $preis,
 			'rabatt'       => $rabatt,
-			'beschreibung' => $beschreibung,
-			'task_idx'     => $task_idx,
-			'task_uid'     => $task_uid,
-		];
+				'beschreibung' => $beschreibung,
+				'task_idx'     => $task_idx,
+				'task_uid'     => $task_uid,
+				'task_projekt_id' => $task_projekt_id,
+			];
 	}
 
 	$old = get_post_meta($post_id, '_cmx_beleg_positionen', true);
