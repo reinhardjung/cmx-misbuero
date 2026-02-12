@@ -98,7 +98,12 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 				table.append($row);
 				table.trigger('cmx_positionen_rows_changed');
 				setTimeout(function(){
-					$row.find('.cmx-abschnitt-titel').focus().select();
+					const $txt = $row.find('.cmx-abschnitt-text').first();
+					if ($txt.length) {
+						$txt.trigger('focus').trigger('click');
+					} else {
+						$row.find('.cmx-abschnitt-titel').focus().select();
+					}
 				}, 0);
 			});
 	});

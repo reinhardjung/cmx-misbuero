@@ -35,6 +35,104 @@ if (!function_exists(__NAMESPACE__ . '\cmx_get_artikel_nr')) {
 	}
 }
 
+/* ---------------------------------
+ * Taxonomie-Erkennung: Belege-Textbausteine
+ * --------------------------------- */
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_taxonomy')) {
+	function cmx_beleg_textbaustein_taxonomy(): string {
+		$candidates = [];
+		$const = __NAMESPACE__ . '\\TAX_BELEGE_BELEGETEXTBAUSTEINE';
+		if (\defined($const)) {
+			$candidates[] = (string) \constant($const);
+		}
+		$candidates = \array_merge($candidates, [
+			'belege_belegetextbausteine',
+			'belege_textbausteine',
+			'belege_textbaustein',
+			'beleg_textbausteine',
+			'beleg_textbaustein',
+		]);
+		foreach ($candidates as $tax) {
+			$tax = \sanitize_key((string) $tax);
+			if ($tax !== '' && \taxonomy_exists($tax)) return $tax;
+		}
+		return '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_items')) {
+	function cmx_beleg_textbaustein_items(string $search = '', int $limit = 30): array {
+		$items = [];
+		$seen  = [];
+		$search = trim((string) $search);
+		$search_lc = $search !== '' ? (function_exists('mb_strtolower') ? mb_strtolower($search, 'UTF-8') : strtolower($search)) : '';
+
+		$add_item = static function(string $name, string $desc = '', int $id = 0) use (&$items, &$seen, $search_lc): void {
+			$name = trim($name);
+			$desc = trim($desc);
+			if ($name === '' && $desc === '') return;
+
+			$name_lc = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+			$desc_lc = function_exists('mb_strtolower') ? mb_strtolower($desc, 'UTF-8') : strtolower($desc);
+			if ($search_lc !== '' && strpos($name_lc, $search_lc) === false && strpos($desc_lc, $search_lc) === false) {
+				return;
+			}
+
+			$key = $name_lc . '|' . $desc_lc;
+			if (isset($seen[$key])) return;
+			$seen[$key] = true;
+
+			$items[] = [
+				'label' => $name,
+				'value' => $id,
+				'nr'    => $name,
+				'title' => $desc,
+				'text'  => ($desc !== '' ? $desc : $name),
+			];
+		};
+
+		$tax = cmx_beleg_textbaustein_taxonomy();
+		if ($tax !== '') {
+			$terms = get_terms([
+				'taxonomy'   => $tax,
+				'hide_empty' => false,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+				'number'     => $limit,
+			]);
+			if (!is_wp_error($terms) && is_array($terms)) {
+				foreach ($terms as $t) {
+					$add_item((string)($t->name ?? ''), (string)($t->description ?? ''), (int)($t->term_id ?? 0));
+				}
+			}
+		}
+
+		// Fallback/Ergaenzung aus INI-Section [BelegeTextbausteine]
+		$ini_file = \dirname(__DIR__, 2) . '/includes/globales.ini';
+		if (\is_file($ini_file)) {
+			$ini = \parse_ini_file($ini_file, true, INI_SCANNER_TYPED);
+			if (\is_array($ini)) {
+				foreach ($ini as $section_name => $section_data) {
+					if (!\is_array($section_data)) continue;
+					if (\strcasecmp((string) $section_name, 'BelegeTextbausteine') !== 0) continue;
+					foreach ($section_data as $name => $desc_raw) {
+						$desc = \is_array($desc_raw)
+							? \implode(', ', \array_values(\array_filter(\array_map(static fn($v) => \trim((string) $v), $desc_raw), static fn($v) => $v !== '')))
+							: \trim((string) $desc_raw);
+						$add_item((string) $name, $desc, 0);
+					}
+					break;
+				}
+			}
+		}
+
+		if (\count($items) > $limit) {
+			$items = \array_slice($items, 0, $limit);
+		}
+		return $items;
+	}
+}
+
 /* ------------------------------
  * Locale-robust: String -> Float normalisieren (Punkt/Komma/tausender)
  * ------------------------------ */
@@ -368,6 +466,19 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 });
 
 /* ------------------------------
+ * AJAX: Belege-Textbausteine-Suche (Taxonomie)
+ * ------------------------------ */
+add_action('wp_ajax_cmx_search_beleg_textbausteine', function() {
+	if (!current_user_can('edit_posts')) wp_send_json_error(['msg' => 'forbidden'], 403);
+
+	$term = isset($_GET['term']) ? \sanitize_text_field(\wp_unslash($_GET['term'])) : '';
+	$items = \function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_items')
+		? cmx_beleg_textbaustein_items($term, 30)
+		: [];
+	wp_send_json($items);
+});
+
+/* ------------------------------
  * JS – Suggest + Berechnung (inkl. negative Beträge & Gesamtsumme)
  * ------------------------------ */
 function cmx_beleg_positionen_js() {
@@ -600,7 +711,7 @@ function cmx_beleg_positionen_js() {
 					}
 				}else if(e.key==='ArrowUp'){
 					if(listEl.style.display==='block'){ e.preventDefault(); move(-1); }
-				}else if(e.key==='Enter' || e==='Tab'){
+				}else if(e.key==='Enter' || e.key==='Tab'){
 					if(listEl.style.display==='block'){
 						const idx = active>-1 ? active : 0;
 						e.preventDefault(); choose(idx);
@@ -617,14 +728,28 @@ function cmx_beleg_positionen_js() {
 			return { render, reset:()=>{ items=[]; active=-1; } };
 		}
 
-		function fetchArtikel(term, cb){
-			$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_artikel', term: term||'' }, function(data){
-				const rows = Array.isArray(data) ? data.map(it=>({ id: it.value, title: it.title||'', nr: it.nr||'' })) : [];
-				cb(rows);
-			});
-		}
+			function fetchArtikel(term, cb){
+				$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_artikel', term: term||'' }, function(data){
+					const rows = Array.isArray(data) ? data.map(it=>({ id: it.value, title: it.title||'', nr: it.nr||'' })) : [];
+					cb(rows);
+				});
+			}
 
-		function initArtikelSuggest($ctx){
+			function fetchTextbausteine(term, cb){
+				$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_beleg_textbausteine', term: term||'' }, function(data){
+					const rows = Array.isArray(data)
+						? data.map(it=>({
+							id: it.value || 0,
+							nr: it.nr || '',
+							title: it.title || '',
+							text: it.text || ''
+						}))
+						: [];
+					cb(rows);
+				});
+			}
+
+			function initArtikelSuggest($ctx){
 			$ctx.find('.cmx-artikel-autocomplete').each(function(){
 				const $input = $(this);
 				try{ if($.ui && $.ui.autocomplete && $input.data('ui-autocomplete')) $input.autocomplete('destroy'); }catch(e){}
@@ -679,9 +804,48 @@ function cmx_beleg_positionen_js() {
 				});
 				$input.on('focus click', function(){ doSearch($input.val()); });
 
-				$input.data('cmx-suggest-ready', true);
-			});
-		}
+					$input.data('cmx-suggest-ready', true);
+				});
+			}
+
+			function initTextbausteinSuggest($ctx){
+				$ctx.find('textarea[name*="[beschreibung]"], textarea[name*="[abschnitt_text]"]').each(function(){
+					const $input = $(this);
+					if($input.data('cmx-text-suggest-ready')) return;
+
+					const $cell = $input.closest('td');
+					if($cell.css('position')==='static'){ $cell.css('position','relative'); }
+					const $ul = $('<ul class="cmx-art-suggest cmx-text-suggest" style="display:none"></ul>');
+					$input.after($ul);
+
+					const nav = makeNavigator($input[0], $ul[0], chooseItem);
+					let t = null;
+
+					function chooseItem(it){
+						const txt = (it.text || it.title || it.nr || '').toString().trim();
+						if (txt !== '') {
+							$input.val(txt).trigger('input').trigger('change');
+						}
+						setTimeout(function(){
+							$input.focus();
+						}, 0);
+					}
+
+					function doSearch(q){
+						fetchTextbausteine(q, function(rows){ nav.render(rows); });
+					}
+
+					$input.on('input', function(){
+						if(t) clearTimeout(t);
+						const q = ($input.val() || '').toString().trim();
+						if(q.length < 1){ doSearch(''); return; }
+						t = setTimeout(()=>doSearch(q), 120);
+					});
+					$input.on('focus click', function(){ doSearch(''); });
+
+					$input.data('cmx-text-suggest-ready', true);
+				});
+			}
 
 		/* ========= Eingabe-Events ========= */
 		const selectorMRP = 'input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]';
@@ -689,6 +853,7 @@ function cmx_beleg_positionen_js() {
 		table.on('mouseup', selectorMRP, function(e){ e.preventDefault(); });
 
 			initArtikelSuggest(table);
+			initTextbausteinSuggest(table);
 			initSortable();
 
 			table.on('input change', selectorMRP, function(){ recalcAll(); });
@@ -706,10 +871,12 @@ function cmx_beleg_positionen_js() {
 			recalcAll();
 		});
 
-			table.on('cmx_positionen_rows_changed', function(){
-				refreshSortable();
-				recalcAll();
-			});
+				table.on('cmx_positionen_rows_changed', function(){
+					initArtikelSuggest(table);
+					initTextbausteinSuggest(table);
+					refreshSortable();
+					recalcAll();
+				});
 
 			// Neue Zeile
 			$('#cmx-add-pos').on('click', function(){
@@ -720,20 +887,22 @@ function cmx_beleg_positionen_js() {
 			}
 			let newRow=$template.clone();
 
-			newRow.find('input, textarea').each(function(){
-				let $el=$(this), name=$el.attr('name');
-				if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
-				if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
-				else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
+				newRow.find('input, textarea').each(function(){
+					let $el=$(this), name=$el.attr('name');
+					if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
+					if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
+					else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
 				else if($el.is('[name*="[menge]"]')){ $el.val(''); }
 				else if($el.is('[name*="[preis]"]')){ $el.val(''); }
 				else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
-				else if($el.is('textarea')){ $el.val(''); } else { $el.val(''); }
-			});
-			newRow.find('.cmx-pos-total').text('0,00');
+					else if($el.is('textarea')){ $el.val('').removeData('cmx-text-suggest-ready'); } else { $el.val(''); }
+				});
+				newRow.find('.cmx-art-suggest').remove();
+				newRow.find('.cmx-pos-total').text('0,00');
 
 				table.append(newRow);
 				initArtikelSuggest(newRow);
+				initTextbausteinSuggest(newRow);
 				table.trigger('cmx_positionen_rows_changed');
 
 				setTimeout(()=>{ newRow.find('.cmx-artikel-autocomplete').trigger('focus'); }, 0);
