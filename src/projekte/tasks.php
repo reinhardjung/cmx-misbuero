@@ -74,6 +74,12 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			const d = new Date();
 			return d.toISOString().slice(0,10);
 		}
+		function nowTime() {
+			const d = new Date();
+			const hh = String(d.getHours()).padStart(2, '0');
+			const mm = String(d.getMinutes()).padStart(2, '0');
+			return hh + ':' + mm;
+		}
 
 		function addRow(data){
 			const idx = container.querySelectorAll('.cmx-task-row').length;
@@ -101,18 +107,27 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 					row.remove();
 				}
 			}
-			if (e.target.classList.contains('cmx-task-today')) {
-				e.preventDefault();
-				const row = e.target.closest('.cmx-task-row');
-				if (!row) return;
-				const dateInput = row.querySelector('input[type="date"]');
-				if (dateInput) {
-					dateInput.value = today();
+				if (e.target.classList.contains('cmx-task-today')) {
+					e.preventDefault();
+					const row = e.target.closest('.cmx-task-row');
+					if (!row) return;
+					const dateInput = row.querySelector('input[type="date"]');
+					if (dateInput) {
+						dateInput.value = today();
+					}
 				}
-			}
-		});
-	})();
-	</script>
+				if (e.target.classList.contains('cmx-task-now')) {
+					e.preventDefault();
+					const row = e.target.closest('.cmx-task-row');
+					if (!row) return;
+					const timeInput = row.querySelector('input[type="time"]');
+					if (timeInput) {
+						timeInput.value = nowTime();
+					}
+				}
+			});
+		})();
+		</script>
 
 	<script type="text/template" id="cmx-task-template">
 		<?php cmx_render_task_row('__INDEX__', ['datum'=>'','zeit'=>'','dauer'=>'','artikel_id'=>'','info'=>''], $artikel_options, true); ?>
@@ -137,10 +152,13 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<span style="display:flex;align-items:center;gap:6px;">Datum <a href="#" class="cmx-task-today" style="color:#d63638;text-decoration:none;">heute</a></span>';
 	echo '<input type="date" name="cmx_tasks['.$name_base.'][datum]" value="'.$datum.'" />';
 	echo '</label>';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:120px;"><span>Uhrzeit</span><input type="time" name="cmx_tasks['.$name_base.'][zeit]" value="'.$zeit.'" /></label>';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:120px;">';
+	echo '<span style="display:flex;align-items:center;gap:6px;">Uhrzeit <a href="#" class="cmx-task-now" style="color:#d63638;text-decoration:none;">jetzt</a></span>';
+	echo '<input type="time" name="cmx_tasks['.$name_base.'][zeit]" value="'.$zeit.'" />';
+	echo '</label>';
 	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:100px;"><span>Dauer (h)</span><input type="number" step="0.25" min="0" name="cmx_tasks['.$name_base.'][dauer]" value="'.$dauer.'" /></label>';
 
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1 1 220px;"><span>Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]">';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1 1 220px;"><span>&nbsp;Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]">';
 	echo '<option value="">— auswählen —</option>';
 	foreach ($artikel_options as $opt) {
 		printf('<option value="%d"%s>%s</option>', (int)$opt['id'], selected($art_id, $opt['id'], false), esc_html($opt['label']));
@@ -148,11 +166,12 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '</select></label>';
 
 	$checked = !empty($row['abgerechnet']) ? 'checked' : '';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Abgerechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.'></label>';
-
-	echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 100%;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="2" style="width:100%;">'.$info.'</textarea></label>';
-
-	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen">-</button>';
+	// echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Abgerechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.'></label>';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Abgerechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
+	echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 auto;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="2" style="width:100%;">'.$info.'</textarea></label>';
+	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:red; font-size:large;">x</button>';
+	echo '</div>';
 	echo '</div>';
 }
 

@@ -203,9 +203,9 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 	echo '<table class="widefat striped" id="cmx-positionen-table">
 			<thead><tr>
 				<th><a href="/wp-admin/edit.php?post_type=artikel" target="_blank" rel="noopener noreferrer">Artikel</a></th>
-				<th>Menge</th>
-				<th>Einzelpreis</th>
-				<th>Rabatt</th>
+				<th>&nbsp;&nbsp;Menge</th>
+				<th>&nbsp;&nbsp;Einzelpreis</th>
+				<th>&nbsp;&nbsp;Rabatt</th>
 				<th style="text-align:right;">Gesamt</th>
 				<th>zus&auml;tzliche Notiz</th>
 				<th></th>
