@@ -19,6 +19,7 @@ if (!defined('CMX_PROJEKT_TAX'))  define('CMX_PROJEKT_TAX', 'projekt_kategorie')
 if (!defined('CMX_PROJ_BEG_META'))  define('CMX_PROJ_BEG_META',  '_cmx_projekt_beginn'); // YYYY-MM-DD
 if (!defined('CMX_PROJ_END_META'))  define('CMX_PROJ_END_META',  '_cmx_projekt_ende');   // YYYY-MM-DD
 if (!defined('CMX_PROJ_NONCE_KEY')) define('CMX_PROJ_NONCE_KEY', 'cmx_proj_zeitraum_nonce');
+if (!defined('CMX_PROJ_UMSATZ_META')) define('CMX_PROJ_UMSATZ_META', '_cmx_projekt_umsatz_total');
 
 /** =========================
  *  Helpers
@@ -65,6 +66,131 @@ if (!function_exists(__NAMESPACE__ . '\cmx_format_ch_date')) {
 		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$yyyy_mm_dd)) return '';
 		$ts = strtotime($yyyy_mm_dd . ' 00:00:00');
 		return $ts ? date('d.m.Y', $ts) : '';
+	}
+}
+
+/** Umsatz-Helfer (für Admin-Spalte) */
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_decimal_to_float_fallback')) {
+	function cmx_proj_decimal_to_float_fallback($value): float {
+		$s = trim((string) $value);
+		if ($s === '') return 0.0;
+		$s = str_replace([" ", "'"], '', $s);
+		$has_comma = strpos($s, ',') !== false;
+		$has_dot   = strpos($s, '.') !== false;
+		if ($has_comma && $has_dot) {
+			if (strrpos($s, ',') > strrpos($s, '.')) {
+				$s = str_replace('.', '', $s);
+				$s = str_replace(',', '.', $s);
+			} else {
+				$s = str_replace(',', '', $s);
+			}
+		} elseif ($has_comma) {
+			$s = str_replace(',', '.', $s);
+		}
+		return is_numeric($s) ? (float) $s : 0.0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_calc_umsatz_total')) {
+	function cmx_proj_calc_umsatz_total(int $post_id): float {
+		$tasks_meta_key = defined(__NAMESPACE__ . '\CMX_PROJEKT_TASK_META')
+			? CMX_PROJEKT_TASK_META
+			: '_cmx_projekt_tasks';
+		$vk_meta_key = defined(__NAMESPACE__ . '\CMX_ARTIKEL_META_VK')
+			? CMX_ARTIKEL_META_VK
+			: '_cmx_artikel_vk';
+
+		$tasks = get_post_meta($post_id, $tasks_meta_key, true);
+		if (!is_array($tasks) || empty($tasks)) return 0.0;
+
+		static $artikel_vk_cache = [];
+		$total = 0.0;
+
+		foreach ($tasks as $row) {
+			if (!is_array($row)) continue;
+
+			$artikel_id = (int) ($row['artikel_id'] ?? 0);
+			if ($artikel_id <= 0) continue;
+
+			$dauer = function_exists(__NAMESPACE__ . '\cmx_projekt_decimal_to_float')
+				? cmx_projekt_decimal_to_float($row['dauer'] ?? 0)
+				: cmx_proj_decimal_to_float_fallback($row['dauer'] ?? 0);
+			if ($dauer <= 0) continue;
+
+			if (!array_key_exists($artikel_id, $artikel_vk_cache)) {
+				$vk_raw = get_post_meta($artikel_id, $vk_meta_key, true);
+				$artikel_vk_cache[$artikel_id] = function_exists(__NAMESPACE__ . '\cmx_projekt_decimal_to_float')
+					? cmx_projekt_decimal_to_float($vk_raw)
+					: cmx_proj_decimal_to_float_fallback($vk_raw);
+			}
+
+			$vk = (float) $artikel_vk_cache[$artikel_id];
+			if ($vk <= 0) continue;
+
+			$total += ($dauer * $vk);
+		}
+
+		return $total;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_format_chf')) {
+	function cmx_proj_format_chf($value): string {
+		$amount = (float) $value;
+		if (function_exists(__NAMESPACE__ . '\cmx_projekt_format_swiss_number')) {
+			return 'CHF ' . cmx_projekt_format_swiss_number($amount, 2);
+		}
+		return 'CHF ' . number_format($amount, 2, '.', "'");
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_format_decimal_parts')) {
+	function cmx_proj_format_decimal_parts($value): array {
+		$formatted = function_exists(__NAMESPACE__ . '\cmx_projekt_format_swiss_number')
+			? cmx_projekt_format_swiss_number((float) $value, 2)
+			: number_format((float) $value, 2, '.', "'");
+		$parts = explode('.', $formatted, 2);
+		return [
+			'int'  => (string) ($parts[0] ?? '0'),
+			'sep'  => '.',
+			'frac' => (string) ($parts[1] ?? '00'),
+		];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_sync_umsatz_meta')) {
+	function cmx_proj_sync_umsatz_meta(int $post_id): float {
+		$total = cmx_proj_calc_umsatz_total($post_id);
+		update_post_meta($post_id, CMX_PROJ_UMSATZ_META, (string) $total);
+		return $total;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_prime_missing_umsatz_meta')) {
+	function cmx_proj_prime_missing_umsatz_meta(): void {
+		static $done = false;
+		if ($done) return;
+		$done = true;
+
+		$ids = get_posts([
+			'post_type'              => CMX_PROJEKT_CPT,
+			'post_status'            => ['publish', 'draft', 'pending', 'future', 'private'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'suppress_filters'       => true,
+			'meta_query'             => [[
+				'key'     => CMX_PROJ_UMSATZ_META,
+				'compare' => 'NOT EXISTS',
+			]],
+		]);
+
+		if (empty($ids) || !is_array($ids)) return;
+		foreach ($ids as $id) {
+			cmx_proj_sync_umsatz_meta((int) $id);
+		}
 	}
 }
 
@@ -200,6 +326,7 @@ add_action('manage_projekte_posts_custom_column', function($column, $post_id) {
 add_filter('manage_edit-projekte_sortable_columns', function($sortable) {
 	$sortable['cmx_col_beginn'] = 'cmx_sort_beginn';
 	$sortable['cmx_col_ende']   = 'cmx_sort_ende';
+	$sortable['cmx_col_umsatz'] = 'cmx_sort_umsatz';
 	// Kunde-Sortierung bleibt über den anderen Filter gesetzt
 	return $sortable;
 });
@@ -229,6 +356,12 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$q->set('meta_key', CMX_PROJ_END_META);
 		$q->set('orderby', 'meta_value');
 		$q->set('meta_type', 'DATE');
+	}
+	if ($orderby === 'cmx_sort_umsatz') {
+		// Fehlende Cache-Werte einmalig aufbauen, damit alle Projekte sortierbar sind.
+		cmx_proj_prime_missing_umsatz_meta();
+		$q->set('meta_key', CMX_PROJ_UMSATZ_META);
+		$q->set('orderby', 'meta_value_num');
 	}
 
 	// Kategorie-Filter (greift auch ohne query_var)
@@ -295,6 +428,14 @@ add_action('save_post_projekte', function($post_id) {
 	update_post_meta($post_id, CMX_PROJ_END_META, $ende);
 });
 
+/** Umsatz-Cache beim Speichern aktualisieren (für Sortierung). */
+add_action('save_post_projekte', function($post_id) {
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (wp_is_post_revision($post_id)) return;
+	if (!current_user_can('edit_post', $post_id)) return;
+	cmx_proj_sync_umsatz_meta((int) $post_id);
+}, 120);
+
 
 
 /**
@@ -345,6 +486,42 @@ add_filter('manage_edit-projekte_columns', function(array $columns) {
 }, 30);
 
 /**
+ * Spalte "Umsatz" einfügen (immer als letzte Spalte).
+ */
+add_filter('manage_edit-projekte_columns', function(array $columns) {
+	unset($columns['cmx_col_umsatz']);
+	$columns['cmx_col_umsatz'] = 'Umsatz';
+	return $columns;
+}, 999);
+
+/** Umsatz-Spalte: Dezimalstellen sauber untereinander ausrichten */
+add_action('admin_head-edit.php', function() {
+	$screen = function_exists('get_current_screen') ? get_current_screen() : null;
+	if (!$screen || $screen->id !== 'edit-projekte') return;
+	echo '<style>
+		td.column-cmx_col_umsatz {
+			text-align: left;
+			white-space: nowrap;
+		}
+		td.column-cmx_col_umsatz .cmx-umsatz-num {
+			display: inline-flex;
+			align-items: baseline;
+			font-variant-numeric: tabular-nums;
+			margin-left: -30px;
+		}
+		td.column-cmx_col_umsatz .cmx-umsatz-int {
+			display: inline-block;
+			min-width: 9ch;
+			text-align: right;
+		}
+		td.column-cmx_col_umsatz .cmx-umsatz-sep,
+		td.column-cmx_col_umsatz .cmx-umsatz-frac {
+			display: inline-block;
+		}
+	</style>';
+});
+
+/**
  * Spalteninhalt "URL" ausgeben
  */
 add_action('manage_projekte_posts_custom_column', function($column, $post_id) {
@@ -367,4 +544,19 @@ add_action('manage_projekte_posts_custom_column', function($column, $post_id) {
 	echo '<a href="' . esc_url($display) . '" target="_blank" rel="noopener noreferrer">'
 		. esc_html($url)
 		. '</a>';
+}, 10, 2);
+
+/**
+ * Spalteninhalt "Umsatz" ausgeben
+ */
+add_action('manage_projekte_posts_custom_column', function($column, $post_id) {
+	if ($column !== 'cmx_col_umsatz') return;
+
+	$total = cmx_proj_calc_umsatz_total((int) $post_id);
+	$parts = cmx_proj_format_decimal_parts($total);
+	echo '<span class="cmx-umsatz-num">'
+		. '<span class="cmx-umsatz-int">' . esc_html($parts['int']) . '</span>'
+		. '<span class="cmx-umsatz-sep">' . esc_html($parts['sep']) . '</span>'
+		. '<span class="cmx-umsatz-frac">' . esc_html($parts['frac']) . '</span>'
+		. '</span>';
 }, 10, 2);
