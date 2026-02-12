@@ -88,6 +88,21 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_richtung_label_map')) {
 
 if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_slug')) {
 	function cmx_beleg_admin_kategorie_slug(int $post_id): string {
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
+			? cmx_beleg_admin_kategorie_taxonomy()
+			: '';
+		if ($tax !== '') {
+			$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($slugs) && !empty($slugs[0])) {
+				return (string) $slugs[0];
+			}
+		}
+		return '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')) {
+	function cmx_beleg_admin_kategorie_taxonomy(): string {
 		$tax_candidates = [];
 		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')) {
 			$tax = (string) cmx_belege_taxonomy();
@@ -100,10 +115,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_slug')) {
 			if (!\taxonomy_exists($tax)) {
 				continue;
 			}
-			$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
-			if (!\is_wp_error($slugs) && !empty($slugs[0])) {
-				return (string) $slugs[0];
-			}
+			return (string) $tax;
 		}
 		return '';
 	}
@@ -224,16 +236,28 @@ if (!function_exists(__NAMESPACE__.'\\cmx_echo_date')) {
  * Spalten registrieren (beide Hooks für maximale Kompatibilität)
  * ========================= */
 $add_columns = function(array $columns){
+	$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
+		? cmx_beleg_admin_kategorie_taxonomy()
+		: '';
+	$show_category_col = $tax !== '';
+
 	$insert = [
 		'beleg_datum'   => __('Datum des Beleges', 'cmx'),
 		'beleg_faellig' => __('Fällig am', 'cmx'),
 		'beleg_bezahlt' => __('Bezahlt am', 'cmx'),
 		'beleg_zahlungsgrund' => __('Zahlungsgrund', 'cmx'),
-		'beleg_richtung' => __('Richtung', 'cmx'),
 	];
+	if ($show_category_col) {
+		$insert['cmx_belege_kategorie'] = __('Kategorie', 'cmx');
+	}
+	$insert['beleg_richtung'] = __('Richtung', 'cmx');
 
 	$new = [];
 	foreach ($columns as $key => $label) {
+		// Vorhandene Kategorie-Spalte überspringen und gezielt neu platzieren.
+		if ($key === 'cmx_belege_kategorie') {
+			continue;
+		}
 		$new[$key] = $label;
 		if ($key === 'title') {
 			$new = array_merge($new, $insert);
@@ -249,6 +273,39 @@ add_filter('manage_' . CMX_PT_BELEGE . '_posts_columns', $add_columns, 20);
  * ========================= */
 add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $column, int $post_id){
 	switch ($column) {
+		case 'cmx_belege_kategorie':
+			// Für Cloudmeister rendert ac_kategorie.php bereits die Kategorie-Spalte.
+			if (\function_exists(__NAMESPACE__ . '\\cmx_is_cloudmeister_user') && cmx_is_cloudmeister_user()) {
+				break;
+			}
+			$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
+				? cmx_beleg_admin_kategorie_taxonomy()
+				: '';
+			if ($tax === '') {
+				echo '';
+				break;
+			}
+			$terms = \wp_get_post_terms($post_id, $tax, ['orderby' => 'name', 'order' => 'ASC']);
+			if (\is_wp_error($terms) || empty($terms)) {
+				echo '';
+				break;
+			}
+			$links = [];
+			foreach ($terms as $term) {
+				if (!($term instanceof \WP_Term)) {
+					continue;
+				}
+				$url = \add_query_arg(
+					[
+						'post_type' => CMX_PT_BELEGE,
+						$tax => (string) $term->slug,
+					],
+					\admin_url('edit.php')
+				);
+				$links[] = '<a href="' . \esc_url($url) . '">' . \esc_html((string) $term->name) . '</a>';
+			}
+			echo \implode(', ', $links);
+			break;
 		case 'beleg_datum':
 			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_DATUM, true) );
 			break;
@@ -334,6 +391,7 @@ add_filter('manage_edit-' . CMX_PT_BELEGE . '_sortable_columns', function(array 
 	$columns['beleg_datum']   = 'beleg_datum';
 	$columns['beleg_faellig'] = 'beleg_faellig';
 	$columns['beleg_bezahlt'] = 'beleg_bezahlt';
+	$columns['cmx_belege_kategorie'] = 'beleg_kategorie_custom';
 	$columns['beleg_richtung'] = 'beleg_richtung';
 	$columns['beleg_zahlungsgrund'] = 'beleg_zahlungsgrund';
 	return $columns;
@@ -345,12 +403,41 @@ add_action('restrict_manage_posts', function($post_type){
 	$selected = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
 	$dir_selected = isset($_GET['cmx_richtungfilter']) ? sanitize_key($_GET['cmx_richtungfilter']) : '';
 	$zg_selected = isset($_GET['cmx_zahlungsgrundfilter']) ? sanitize_text_field($_GET['cmx_zahlungsgrundfilter']) : '';
+	$cat_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
+		? cmx_beleg_admin_kategorie_taxonomy()
+		: '';
+	$cat_selected = ($cat_tax !== '' && isset($_GET[$cat_tax])) ? sanitize_title((string) \wp_unslash($_GET[$cat_tax])) : '';
 
 	echo '<select name="cmx_bezahlfilter" id="cmx_bezahlfilter" class="postform">';
 		echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
 		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlte', 'cmx') . '</option>';
 		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offene', 'cmx') . '</option>';
 	echo '</select>';
+
+	$show_category_filter = true;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_is_cloudmeister_user') && cmx_is_cloudmeister_user()) {
+		// Für Cloudmeister rendert ac_kategorie.php bereits den Kategorien-Filter.
+		$show_category_filter = false;
+	}
+	if ($show_category_filter && $cat_tax !== '') {
+		$cat_terms = \get_terms([
+			'taxonomy'   => $cat_tax,
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		]);
+		if (!\is_wp_error($cat_terms)) {
+			echo '<select name="' . \esc_attr($cat_tax) . '" id="' . \esc_attr($cat_tax) . '" class="postform">';
+				echo '<option value="">' . esc_html__('Alle Kategorien', 'cmx') . '</option>';
+				foreach ($cat_terms as $term) {
+					if (!($term instanceof \WP_Term)) {
+						continue;
+					}
+					echo '<option value="' . \esc_attr((string) $term->slug) . '" ' . selected($cat_selected, (string) $term->slug, false) . '>' . esc_html((string) $term->name) . '</option>';
+				}
+			echo '</select>';
+		}
+	}
 
 	$dir_opts = \function_exists(__NAMESPACE__ . '\\cmx_beleg_richtung_options')
 		? (array) cmx_beleg_richtung_options()
@@ -495,23 +582,26 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	}
 
 	// Sortierung
-	switch ($q->get('orderby')) {
-		case 'beleg_datum':
-			$q->set('meta_key', CMX_BELEG_META_DATUM);
-			$q->set('orderby', 'meta_value');
-			break;
+		switch ($q->get('orderby')) {
+			case 'beleg_datum':
+				$q->set('meta_key', CMX_BELEG_META_DATUM);
+				$q->set('orderby', 'meta_value');
+				break;
 		case 'beleg_faellig':
 			$q->set('meta_key', CMX_BELEG_META_FAELLIG);
 			$q->set('orderby', 'meta_value');
 			break;
-		case 'beleg_bezahlt':
-			// Immer custom sort, damit unbezahlte (ohne Meta) nicht rausfallen
-			$q->set('orderby', 'beleg_bezahlt_custom');
-			break;
-		case 'beleg_richtung':
-			$q->set('meta_key', '_cmx_beleg_richtung');
-			$q->set('orderby', 'meta_value');
-			break;
+			case 'beleg_bezahlt':
+				// Immer custom sort, damit unbezahlte (ohne Meta) nicht rausfallen
+				$q->set('orderby', 'beleg_bezahlt_custom');
+				break;
+			case 'beleg_kategorie_custom':
+				$q->set('orderby', 'beleg_kategorie_custom');
+				break;
+			case 'beleg_richtung':
+				$q->set('meta_key', '_cmx_beleg_richtung');
+				$q->set('orderby', 'meta_value');
+				break;
 		case 'beleg_zahlungsgrund':
 			$q->set('orderby', 'beleg_zahlungsgrund_custom');
 			break;
@@ -524,7 +614,7 @@ add_filter('posts_clauses', function($clauses, \WP_Query $q){
 	$pt = $q->get('post_type');
 	if ($pt !== CMX_PT_BELEGE && (!is_array($pt) || !in_array(CMX_PT_BELEGE, $pt, true))) return $clauses;
 	$orderby = (string) $q->get('orderby');
-	if ($orderby !== 'beleg_bezahlt_custom' && $orderby !== 'beleg_zahlungsgrund_custom') return $clauses;
+	if ($orderby !== 'beleg_bezahlt_custom' && $orderby !== 'beleg_zahlungsgrund_custom' && $orderby !== 'beleg_kategorie_custom') return $clauses;
 
 	$order = strtoupper($q->get('order')) === 'DESC' ? 'DESC' : 'ASC';
 	global $wpdb;
@@ -539,6 +629,32 @@ add_filter('posts_clauses', function($clauses, \WP_Query $q){
 			$clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} AS cmx_order_paid2 ON cmx_order_paid2.post_id = {$wpdb->posts}.ID AND cmx_order_paid2.meta_key = '{$key2}'";
 		}
 		$clauses['orderby'] = "COALESCE(NULLIF(cmx_order_paid1.meta_value,''), NULLIF(cmx_order_paid2.meta_value,'')) {$order}, {$wpdb->posts}.post_date {$order}";
+		return $clauses;
+	}
+
+	if ($orderby === 'beleg_kategorie_custom') {
+		$cat_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
+			? cmx_beleg_admin_kategorie_taxonomy()
+			: '';
+		if ($cat_tax === '') {
+			return $clauses;
+		}
+		$cat_tax_sql = esc_sql($cat_tax);
+		if (strpos($clauses['join'], 'cmxcat_rel') === false) {
+			$clauses['join'] .= " LEFT JOIN {$wpdb->term_relationships} AS cmxcat_rel ON cmxcat_rel.object_id = {$wpdb->posts}.ID";
+		}
+		if (strpos($clauses['join'], 'cmxcat_tax') === false) {
+			$clauses['join'] .= " LEFT JOIN {$wpdb->term_taxonomy} AS cmxcat_tax ON cmxcat_tax.term_taxonomy_id = cmxcat_rel.term_taxonomy_id AND cmxcat_tax.taxonomy = '{$cat_tax_sql}'";
+		}
+		if (strpos($clauses['join'], 'cmxcat_term') === false) {
+			$clauses['join'] .= " LEFT JOIN {$wpdb->terms} AS cmxcat_term ON cmxcat_term.term_id = cmxcat_tax.term_id";
+		}
+		if (trim((string) ($clauses['groupby'] ?? '')) === '') {
+			$clauses['groupby'] = "{$wpdb->posts}.ID";
+		} elseif (strpos((string) $clauses['groupby'], "{$wpdb->posts}.ID") === false) {
+			$clauses['groupby'] .= ", {$wpdb->posts}.ID";
+		}
+		$clauses['orderby'] = "MIN(COALESCE(cmxcat_term.name,'')) {$order}, {$wpdb->posts}.post_date {$order}";
 		return $clauses;
 	}
 

@@ -5,7 +5,7 @@ add_action( 'admin_menu', __NAMESPACE__ . '\\cmx_remove_comments_menu', 999 );
 function cmx_remove_comments_menu() {
 	global $menu, $submenu;
 
-	if (isset($menu[2][0])) { $menu[2][0] = 'Cockpit'; }	// "Dashboard" -> Übersicht
+	if (isset($menu[2][0])) { $menu[2][0] = 'Dashboard'; }	// "Dashboard" -> Übersicht
 	// if (isset($submenu['index.php'][0][0])) { Unterpunkt "Startseite" unter Dashboard umbenennen
 	// 	 $submenu['index.php'][0][0] = 'Übersicht';
 	// }
