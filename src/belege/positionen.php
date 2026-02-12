@@ -103,16 +103,26 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 			</tr></thead>
 			<tbody>';
 
+	$has_article_rows = false;
 	if (!empty($positionen)) {
 		foreach ($positionen as $i => $pos) {
+			$custom_rendered = (bool) \apply_filters('cmx_beleg_positionen_render_custom_row', false, (int) $i, $pos);
+			if ($custom_rendered) {
+				continue;
+			}
+			$has_article_rows = true;
 			cmx_render_position_row($i, $pos);
 		}
-	} else {
-		cmx_render_position_row(0, []);
+	}
+	if (empty($positionen) || !$has_article_rows) {
+		$next_i = !empty($positionen) ? \count($positionen) : 0;
+		cmx_render_position_row($next_i, []);
 	}
 
 	echo '</tbody></table>';
-	echo '<p><button type="button" class="button button-secondary" id="cmx-add-pos">+ Position hinzufügen</button></p>';
+	echo '<p class="cmx-pos-actions"><button type="button" class="button button-secondary" id="cmx-add-pos">+ Position hinzufügen</button>';
+	\do_action('cmx_beleg_positionen_after_add_button');
+	echo '</p>';
 	echo '</div>';
 
 	cmx_beleg_positionen_js();
@@ -197,6 +207,14 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 	$clean = [];
 	foreach ($positionen as $row) {
 		if (!is_array($row)) continue;
+		$custom = \apply_filters('cmx_beleg_positionen_clean_custom_row', null, $row, (int) $post_id);
+		if (\is_array($custom)) {
+			$clean[] = $custom;
+			continue;
+		}
+		if ($custom === false) {
+			continue;
+		}
 
 		$artikel_id   = isset($row['artikel_id']) ? (int)$row['artikel_id'] : 0;
 
@@ -409,6 +427,16 @@ function cmx_beleg_positionen_js() {
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
 		}
+		function nextRowIndex(){
+			let max = -1;
+			table.find('input[name^="cmx_positionen["], textarea[name^="cmx_positionen["]').each(function(){
+				const m = ((this.name || '') + '').match(/^cmx_positionen\[(\d+)\]/);
+				if (!m) return;
+				const idx = parseInt(m[1], 10);
+				if (!isNaN(idx) && idx > max) max = idx;
+			});
+			return max + 1;
+		}
 
 		function recalcRowTotal($row){
 			const menge=parseNumberFlexible($row.find('input[name*="[menge]"]').val());
@@ -586,8 +614,12 @@ function cmx_beleg_positionen_js() {
 
 		// Neue Zeile
 		$('#cmx-add-pos').on('click', function(){
-			let i=table.find('tr').length;
-			let newRow=table.find('tr:first').clone();
+			let i = nextRowIndex();
+			let $template = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first');
+			if (!$template.length) {
+				$template = table.find('tr:first');
+			}
+			let newRow=$template.clone();
 
 			newRow.find('input, textarea').each(function(){
 				let $el=$(this), name=$el.attr('name');
@@ -681,6 +713,15 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 
 	$clean = [];
 	foreach ($rows as $r) {
+		if (!\is_array($r)) continue;
+		$custom = \apply_filters('cmx_beleg_positionen_clean_custom_row', null, $r, (int) $post_id);
+		if (\is_array($custom)) {
+			$clean[] = $custom;
+			continue;
+		}
+		if ($custom === false) {
+			continue;
+		}
 		$artikel_id   = isset($r['artikel_id']) ? (int)$r['artikel_id'] : 0;
 
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($r['menge'] ?? ''));
