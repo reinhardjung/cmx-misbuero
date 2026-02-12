@@ -55,7 +55,12 @@ add_action('add_meta_boxes', function() {
 			</p>
 
 			<p>
-				<label for="cmx_projekt_ende"><strong>Ende</strong></label><br>
+				<label for="cmx_projekt_ende">
+					<strong>Ende</strong>
+					<small>
+						<a href="#" id="cmx_set_today_end" style="font-size:11px; text-decoration:none; margin-left:6px;">(heute)</a>
+					</small>
+				</label><br>
 				<input type="date" id="cmx_projekt_ende" name="cmx_projekt_ende"
 					value="<?php echo esc_attr($ende); ?>" style="width:100%;">
 			</p>
@@ -78,7 +83,9 @@ add_action('add_meta_boxes', function() {
 			document.addEventListener('DOMContentLoaded', function() {
 				const urlInput   = document.getElementById('cmx_projekt_url');
 				const beginnInput = document.getElementById('cmx_projekt_beginn');
+				const endeInput = document.getElementById('cmx_projekt_ende');
 				const todayLink  = document.getElementById('cmx_set_today');
+				const todayEndLink = document.getElementById('cmx_set_today_end');
 
 				// Auto-https bei URL
 				if (urlInput) {
@@ -97,6 +104,16 @@ add_action('add_meta_boxes', function() {
 						const now = new Date();
 						const iso = now.toISOString().split('T')[0];
 						beginnInput.value = iso;
+					});
+				}
+
+				// Heute-Link setzt aktuelles Datum bei Ende
+				if (todayEndLink && endeInput) {
+					todayEndLink.addEventListener('click', function(e) {
+						e.preventDefault();
+						const now = new Date();
+						const iso = now.toISOString().split('T')[0];
+						endeInput.value = iso;
 					});
 				}
 			});
