@@ -523,12 +523,19 @@ function cmx_beleg_positionen_js() {
 					$row.find('.cmx-artikel-id').val(it.id||0);
 					$input.val((it.nr?it.nr+' – ':'') + (it.title||''));
 					const $edit = $row.find('.cmx-artikel-edit');
+					const $qty = $row.find('input[name*="[menge]"]').first();
 					if (it.id) {
 						$edit.attr('href', <?php echo wp_json_encode(admin_url('post.php?post=')); ?> + it.id + '&action=edit');
 						$edit.css({ 'pointer-events':'auto', 'opacity':'1' });
 					} else {
 						$edit.removeAttr('href');
 						$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
+					}
+					if ($qty.length) {
+						const qtyRaw = ($qty.val() ?? '').toString().trim();
+						if (qtyRaw === '') {
+							$qty.val(formatSwiss(1)).trigger('input');
+						}
 					}
 					if(it.id){
 						$.post(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_get_artikel_vk', artikel_id: it.id }, function(resp){
@@ -538,7 +545,7 @@ function cmx_beleg_positionen_js() {
 						}, 'json');
 					}
 					setTimeout(function(){
-						$row.find('input[name*="[menge]"]').first().focus().select();
+						$qty.focus().select();
 					}, 0);
 				}
 				function doSearch(q){ fetchArtikel(q, (rows)=>{ nav.render(rows); }); }
