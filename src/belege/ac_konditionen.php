@@ -317,14 +317,12 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 		if ($val) {
 			cmx_echo_date($val);
 		} else {
-			// Button zum Setzen auf heute – nur für rechnung/lieferantenrechnung/gutschrift
+			// Button zum Setzen auf heute – nur für abrechenbare Kategorien
 			$show_btn = false;
-			$type_slug = null;
-			$terms = wp_get_post_terms($post_id, 'belege_kategorien', ['fields' => 'slugs']);
-			if (!is_wp_error($terms) && !empty($terms)) {
-				$type_slug = (string) $terms[0];
-			}
-			$allowed = ['rechnung','lieferantenrechnung','gutschrift'];
+			$type_slug = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_slug')
+				? (string) cmx_beleg_admin_kategorie_slug($post_id)
+				: '';
+			$allowed = ['rechnung','lieferantenrechnung','gutschrift','quittung','quittungen'];
 			if ($type_slug && in_array(strtolower($type_slug), $allowed, true)) {
 				$show_btn = true;
 			}
