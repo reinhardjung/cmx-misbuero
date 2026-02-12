@@ -16,7 +16,19 @@ $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): strin
 
 $positions = (array)($tpl['positions'] ?? []);
 $has_positions = false;
+$has_section_rows = false;
+$position_row_count = 0;
 foreach ($positions as $row) {
+	$row_type = (string)($row['row_type'] ?? 'position');
+	if ($row_type === 'abschnitt') {
+		$section_title = trim((string)($row['section_title'] ?? ''));
+		$section_text = trim((string)($row['section_text'] ?? ''));
+		if ($section_title !== '' || $section_text !== '') {
+			$has_section_rows = true;
+		}
+		continue;
+	}
+	$position_row_count++;
 	$item = trim((string)($row['item'] ?? ''));
 	$qty = (float)($row['qty'] ?? 0);
 	$unit_price = (float)($row['unit_price'] ?? 0);
@@ -26,12 +38,13 @@ foreach ($positions as $row) {
 		break;
 	}
 }
-$show_position_index = count($positions) > 1;
+$show_position_index = $position_row_count > 1;
 $show_sku = false;
 $show_discount = false;
 $discount_sum = 0.0;
 $positions_sum = 0.0;
 foreach ($positions as $row) {
+	if ((string)($row['row_type'] ?? 'position') === 'abschnitt') continue;
 	$sku_val = trim((string)($row['article_number'] ?? ''));
 	if ($sku_val !== '') $show_sku = true;
 	$qty = (float)($row['qty'] ?? 0);
@@ -91,6 +104,7 @@ $totals = array_replace([
 
 if ($totals['total'] == 0.0 && !empty($positions)) {
 	foreach ($positions as $row) {
+		if ((string)($row['row_type'] ?? 'position') === 'abschnitt') continue;
 		$qty = (float)($row['qty'] ?? 0);
 		$unit_price = (float)($row['unit_price'] ?? 0);
 		$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
@@ -170,6 +184,17 @@ $recipient_html = $recipient_has_br
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
 .positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
 .positions-table tbody td { vertical-align: top; }
+.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
+.positions-table tbody tr.cmx-pdf-abschnitt-row td {
+	font-weight: 600;
+	border-top: 1px solid #999;
+	border-bottom: 1px solid #999;
+}
+.positions-table .cmx-pdf-abschnitt-text {
+	display: block;
+	margin-top: 4px;
+	font-weight: 400;
+}
 .positions-table th.col-num { text-align: right; padding-right: 8px; }
 	.totals-table,
 	.totals-table tr,
@@ -297,7 +322,7 @@ $recipient_html = $recipient_has_br
 		<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
 	<?php endif; ?>
 
-<?php if ($has_positions): ?>
+<?php if ($has_positions || $has_section_rows): ?>
 		<table class="positions-table">
 			<thead>
 				<tr>
@@ -325,12 +350,33 @@ $recipient_html = $recipient_has_br
 				<tr>
 					<td colspan="<?= $col_count; ?>">—</td>
 				</tr>
-			<?php else: ?>
-				<?php foreach ($positions as $i => $row): ?>
-					<?php
-					$qty = (float)($row['qty'] ?? 0);
-					$unit = (string)($row['unit'] ?? '');
-					$unit_price = (float)($row['unit_price'] ?? 0);
+				<?php else: ?>
+					<?php $pos_no = 0; ?>
+					<?php foreach ($positions as $i => $row): ?>
+						<?php
+						$row_type = (string)($row['row_type'] ?? 'position');
+						if ($row_type === 'abschnitt') {
+							$section_title = (string)($row['section_title'] ?? '');
+							$section_text = (string)($row['section_text'] ?? '');
+							$section_text_html = (string)($row['section_text_html'] ?? '');
+							?>
+							<tr class="cmx-pdf-abschnitt-row">
+								<td colspan="<?= $col_count; ?>">
+									<?= htmlspecialchars($section_title, ENT_QUOTES, 'UTF-8'); ?>
+									<?php if ($section_text_html !== ''): ?>
+										<span class="cmx-pdf-abschnitt-text"><?= $section_text_html; ?></span>
+									<?php elseif ($section_text !== ''): ?>
+										<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<?php
+							continue;
+						}
+						$pos_no++;
+						$qty = (float)($row['qty'] ?? 0);
+						$unit = (string)($row['unit'] ?? '');
+						$unit_price = (float)($row['unit_price'] ?? 0);
 					$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
 					$line_subtotal = $qty * $unit_price;
 					$line_discount = $line_subtotal - $line_total;
@@ -340,10 +386,10 @@ $recipient_html = $recipient_has_br
 					$sku = (string)($row['article_number'] ?? '');
 					$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
 					?>
-					<tr>
-						<?php if ($show_position_index): ?>
-							<td><?= htmlspecialchars((string)($i + 1), ENT_QUOTES, 'UTF-8'); ?></td>
-						<?php endif; ?>
+						<tr>
+							<?php if ($show_position_index): ?>
+								<td><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
 						<?php if ($show_sku): ?>
 							<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>

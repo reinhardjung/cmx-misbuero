@@ -201,6 +201,7 @@ function cmxbu_beleg_has_positions(array $calc): bool {
 	if (empty($calc['positionen']) || !is_array($calc['positionen'])) return false;
 	foreach ($calc['positionen'] as $row) {
 		if (!is_array($row)) continue;
+		if (($row['row_type'] ?? '') === 'abschnitt') continue;
 		$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
 		$qty = (float)($row['qty'] ?? 0);
 		$unit_price = (float)($row['unit_price'] ?? 0);

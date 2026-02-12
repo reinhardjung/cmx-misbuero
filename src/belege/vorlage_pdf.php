@@ -493,6 +493,34 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 
 		foreach ($rows as $i=>$r) {
 			if (!is_array($r)) $r=['artikel_id'=>0,'menge'=>1,'preis'=>0.0,'rabatt'=>'','beschreibung'=>''];
+			$row_type = \sanitize_key((string)($r['typ'] ?? $r['row_type'] ?? ''));
+			if ($row_type === 'abschnitt') {
+				$section_title = \trim((string)($r['abschnitt_titel'] ?? $r['section_title'] ?? ''));
+				$section_text_raw = $r['abschnitt_text'] ?? $r['section_text'] ?? $r['beschreibung'] ?? '';
+				$section_text = cmxbu_sanitize_note_html($section_text_raw);
+				if ($section_title === '' && $section_text['text'] === '') {
+					continue;
+				}
+				$out['positionen'][] = [
+					'index'                 => $i,
+					'row_type'              => 'abschnitt',
+					'section_title'         => $section_title,
+					'section_text'          => (string)($section_text['text'] ?? ''),
+					'section_text_html'     => (string)($section_text['html'] ?? ''),
+					'article_number'        => '',
+					'title'                 => '',
+					'qty'                   => 0.0,
+					'unit_price'            => 0.0,
+					'line_total'            => 0.0,
+					'discount'              => '',
+					'has_discount'          => false,
+					'desc_text'             => '',
+					'desc_html'             => '',
+					'desc_raw'              => '',
+					'article_belegtext_html'=> '',
+				];
+				continue;
+			}
 
 			$artikel_id = (int)($r['artikel_id'] ?? 0);
 
@@ -580,6 +608,10 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 
 			$out['positionen'][] = [
 				'index'                 => $i,
+				'row_type'              => 'position',
+				'section_title'         => '',
+				'section_text'          => '',
+				'section_text_html'     => '',
 				'article_number'        => $artnr,
 				'title'                 => $title,
 				'qty'                   => $qty,
@@ -635,6 +667,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 				$has_positions = false;
 				foreach ($rows as $row) {
 					if (!is_array($row)) continue;
+					if (\sanitize_key((string)($row['typ'] ?? '')) === 'abschnitt') continue;
 					$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
 					$qty = $to_float($row['menge'] ?? $row['qty'] ?? 0);
 					$price = $to_float($row['preis'] ?? $row['unit_price'] ?? 0);
@@ -773,6 +806,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		if (!empty($calc['positionen']) && is_array($calc['positionen'])) {
 			foreach ($calc['positionen'] as $row) {
 				if (!is_array($row)) continue;
+				if (($row['row_type'] ?? '') === 'abschnitt') continue;
 				$item = trim((string)($row['title'] ?? ''));
 				$qty = (float)($row['qty'] ?? 0);
 				$unit_price = (float)($row['unit_price'] ?? 0);
@@ -865,6 +899,10 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			],
 			'positions'=>array_map(function($p){
 				return [
+					'row_type'=>(string)($p['row_type'] ?? 'position'),
+					'section_title'=>(string)($p['section_title'] ?? ''),
+					'section_text'=>(string)($p['section_text'] ?? ''),
+					'section_text_html'=>(string)($p['section_text_html'] ?? ''),
 					'article_number'=>(string)($p['article_number'] ?? ''),
 					'item'=>(string)($p['title'] ?? ''),
 					'qty'=>(float)($p['qty'] ?? 0),
