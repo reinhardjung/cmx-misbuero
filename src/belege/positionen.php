@@ -1027,17 +1027,18 @@ function cmx_beleg_positionen_js() {
 		}
 
 		/* ========= Suggest (unverändert) ========= */
-		function makeNavigator(inputEl, listEl, chooseCb){
-			let active=-1, items=[];
-			function esc(s){ return (s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-			function render(arr){
-				items = Array.isArray(arr) ? arr : [];
-				if(!items.length){ listEl.style.display='none'; listEl.innerHTML=''; active=-1; return; }
-				listEl.innerHTML = items.map((it,i)=>(
-					`<li data-index="${i}">
-						<div class="cmx-ac-row">
-							<span class="cmx-ac-nr">${esc(it.nr||'')}</span>
-							<span class="cmx-ac-title">${esc(it.title||'')}</span>
+			function makeNavigator(inputEl, listEl, chooseCb){
+				let active=-1, items=[];
+				function esc(s){ return (s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+				function closeList(){ listEl.style.display='none'; listEl.innerHTML=''; active=-1; }
+				function render(arr){
+					items = Array.isArray(arr) ? arr : [];
+					if(!items.length){ closeList(); return; }
+					listEl.innerHTML = items.map((it,i)=>(
+						`<li data-index="${i}">
+							<div class="cmx-ac-row">
+								<span class="cmx-ac-nr">${esc(it.nr||'')}</span>
+								<span class="cmx-ac-title">${esc(it.title||'')}</span>
 						</div>
 					</li>`
 				)).join('');
@@ -1048,11 +1049,11 @@ function cmx_beleg_positionen_js() {
 				active = (active + d + items.length) % items.length;
 				[...listEl.children].forEach((li,i)=>li.classList.toggle('active', i===active));
 			}
-			function choose(i){
-				if(i<0||i>=items.length) return;
-				chooseCb(items[i]);
-				listEl.style.display='none'; listEl.innerHTML=''; active=-1;
-			}
+				function choose(i){
+					if(i<0||i>=items.length) return;
+					chooseCb(items[i]);
+					closeList();
+				}
 			listEl.addEventListener('mousedown', e=>{
 				const li=e.target.closest('li'); if(!li) return;
 				e.preventDefault();
@@ -1069,20 +1070,25 @@ function cmx_beleg_positionen_js() {
 					}
 				}else if(e.key==='ArrowUp'){
 					if(listEl.style.display==='block'){ e.preventDefault(); move(-1); }
-				}else if(e.key==='Enter' || e.key==='Tab'){
-					if(listEl.style.display==='block'){
-						const idx = active>-1 ? active : 0;
-						e.preventDefault(); choose(idx);
+					}else if(e.key==='Enter'){
+						if(listEl.style.display==='block'){
+							const idx = active>-1 ? active : 0;
+							e.preventDefault(); choose(idx);
+						}
+					}else if(e.key==='Tab'){
+						if(listEl.style.display==='block'){
+							// Beim Verlassen mit TAB niemals automatisch auswählen.
+							closeList();
+						}
+					}else if(e.key==='Escape'){
+						if(listEl.style.display==='block'){ e.preventDefault(); closeList(); }
 					}
-				}else if(e.key==='Escape'){
-					if(listEl.style.display==='block'){ e.preventDefault(); listEl.style.display='none'; listEl.innerHTML=''; active=-1; }
-				}
-			});
-			document.addEventListener('click', e=>{
-				if(!listEl.contains(e.target) && e.target!==inputEl){
-					listEl.style.display='none'; listEl.innerHTML=''; active=-1;
-				}
-			});
+				});
+				document.addEventListener('click', e=>{
+					if(!listEl.contains(e.target) && e.target!==inputEl){
+						closeList();
+					}
+				});
 			return { render, reset:()=>{ items=[]; active=-1; } };
 		}
 
