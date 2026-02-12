@@ -7,6 +7,28 @@
 
 const CMX_PROJEKT_TASK_META = '_cmx_projekt_tasks';
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')) {
+	function cmx_projekt_task_uid($raw = ''): string {
+		$uid = (string) $raw;
+		$uid = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', $uid);
+		$uid = \substr($uid, 0, 80);
+		if ($uid !== '') return $uid;
+
+		$seed = '';
+		if (\function_exists('\\wp_generate_uuid4')) {
+			$seed = (string) \wp_generate_uuid4();
+		}
+		if ($seed === '') {
+			$seed = \uniqid('', true);
+		}
+		$seed = (string) \preg_replace('/[^A-Za-z0-9]/', '', $seed);
+		if ($seed === '') {
+			$seed = (string) \mt_rand(100000, 999999) . (string) \time();
+		}
+		return 'tsk_' . \substr($seed, 0, 64);
+	}
+}
+
 // Metabox registrieren
 \add_action('add_meta_boxes', function() {
 	\add_meta_box(
@@ -66,20 +88,23 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 
 	?>
 	<script>
-	(function(){
-		const container = document.getElementById('cmx-projekt-tasks');
-		if (!container) return;
+		(function(){
+			const container = document.getElementById('cmx-projekt-tasks');
+			if (!container) return;
 
 		function today() {
 			const d = new Date();
 			return d.toISOString().slice(0,10);
 		}
-		function nowTime() {
-			const d = new Date();
-			const hh = String(d.getHours()).padStart(2, '0');
-			const mm = String(d.getMinutes()).padStart(2, '0');
-			return hh + ':' + mm;
-		}
+			function nowTime() {
+				const d = new Date();
+				const hh = String(d.getHours()).padStart(2, '0');
+				const mm = String(d.getMinutes()).padStart(2, '0');
+				return hh + ':' + mm;
+			}
+			function newUid() {
+				return 'tsk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+			}
 
 		function addRow(data){
 			const idx = container.querySelectorAll('.cmx-task-row').length;
@@ -89,12 +114,20 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			const rowEl = wrapper.firstElementChild;
 			// Vorbelegte Werte
 			rowEl.querySelector('input[name*="[datum]"]').value  = data?.datum  || '';
-			rowEl.querySelector('input[name*="[zeit]"]').value   = data?.zeit   || '';
-			rowEl.querySelector('input[name*="[dauer]"]').value  = data?.dauer  || '';
-			rowEl.querySelector('select[name*="[artikel_id]"]').value = data?.artikel_id || '';
-			rowEl.querySelector('textarea[name*="[info]"]').value = data?.info || '';
-			container.appendChild(rowEl);
-		}
+				rowEl.querySelector('input[name*="[zeit]"]').value   = data?.zeit   || '';
+				rowEl.querySelector('input[name*="[dauer]"]').value  = data?.dauer  || '';
+				rowEl.querySelector('select[name*="[artikel_id]"]').value = data?.artikel_id || '';
+				rowEl.querySelector('textarea[name*="[info]"]').value = data?.info || '';
+				const uidInput = rowEl.querySelector('input[name*="[uid]"]');
+				if (uidInput && !uidInput.value) {
+					uidInput.value = newUid();
+				}
+				container.appendChild(rowEl);
+			}
+
+			container.querySelectorAll('input[name*="[uid]"]').forEach(function(el){
+				if (!el.value) el.value = newUid();
+			});
 
 		document.getElementById('cmx-task-add')?.addEventListener('click', function(){
 			addRow({});
@@ -144,10 +177,18 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	$dauer  = esc_attr($row['dauer'] ?? '');
 	$art_id = (int) ($row['artikel_id'] ?? 0);
 	$info   = esc_textarea($row['info'] ?? '');
+	$task_uid_raw = (string) ($row['uid'] ?? '');
+	$task_uid = '';
+	if (!$is_template) {
+		$task_uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
+			? cmx_projekt_task_uid($task_uid_raw)
+			: $task_uid_raw;
+	}
 
 	$name_base = $is_template ? '__INDEX__' : (string)$idx;
 
 	echo '<div class="cmx-task-row" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;">';
+	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
 	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:140px;">';
 	echo '<span style="display:flex;align-items:center;gap:6px;">Datum <a href="#" class="cmx-task-today" style="color:#d63638;text-decoration:none;">heute</a></span>';
 	echo '<input type="date" name="cmx_tasks['.$name_base.'][datum]" value="'.$datum.'" />';
@@ -166,8 +207,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '</select></label>';
 
 	$checked = !empty($row['abgerechnet']) ? 'checked' : '';
-	// echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Abgerechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.'></label>';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Abgerechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
 	echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
 	echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 auto;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="2" style="width:100%;">'.$info.'</textarea></label>';
 	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:red; font-size:large;">x</button>';
@@ -183,10 +223,20 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 
 	$rows = $_POST['cmx_tasks'] ?? [];
 	if (!is_array($rows)) $rows = [];
+	$seen_uids = [];
 
 	$clean = [];
 	foreach ($rows as $row) {
 		if (!is_array($row)) continue;
+		$uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
+			? cmx_projekt_task_uid($row['uid'] ?? '')
+			: (string) ($row['uid'] ?? '');
+		while ($uid === '' || isset($seen_uids[$uid])) {
+			$uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
+				? cmx_projekt_task_uid('')
+				: ('tsk_' . \uniqid());
+		}
+		$seen_uids[$uid] = true;
 		$datum  = sanitize_text_field($row['datum'] ?? '');
 		$zeit   = sanitize_text_field($row['zeit'] ?? '');
 		$dauer  = sanitize_text_field($row['dauer'] ?? '');
@@ -202,6 +252,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 		}
 
 		$clean[] = [
+			'uid'        => $uid,
 			'datum'      => $datum,
 			'zeit'       => $zeit,
 			'dauer'      => $dauer,

@@ -143,6 +143,127 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_admin_url')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_meta_array')) {
+	function cmx_beleg_meta_array(int $post_id, string $meta_key): array {
+		$raw = \get_post_meta($post_id, $meta_key, true);
+		if (\is_string($raw) && $raw !== '') {
+			$tmp = \json_decode($raw, true);
+			if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+				return $tmp;
+			}
+			$tmp = @\maybe_unserialize($raw);
+			return \is_array($tmp) ? $tmp : [];
+		}
+		return \is_array($raw) ? $raw : [];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_truthy')) {
+	function cmx_beleg_truthy($value): bool {
+		if ($value === true) return true;
+		if ($value === 1 || $value === '1') return true;
+		$s = \strtolower(\trim((string) $value));
+		return \in_array($s, ['true', 'yes', 'on'], true);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
+	function cmx_beleg_open_task_items(int $projekt_id = 0, string $search = '', int $limit = 150): array {
+		$limit = max(1, min(500, (int) $limit));
+		$search = \trim((string) $search);
+		$search_lc = $search !== ''
+			? (\function_exists('mb_strtolower') ? \mb_strtolower($search, 'UTF-8') : \strtolower($search))
+			: '';
+
+		$projekt_ids = [];
+		if ($projekt_id > 0) {
+			$post = \get_post($projekt_id);
+			if ($post && $post->post_type === 'projekte' && $post->post_status !== 'trash') {
+				$projekt_ids[] = (int) $projekt_id;
+			}
+		} else {
+			$q = new \WP_Query([
+				'post_type'      => 'projekte',
+				'post_status'    => ['publish', 'draft', 'pending', 'future', 'private'],
+				'posts_per_page' => 200,
+				'orderby'        => 'modified',
+				'order'          => 'DESC',
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			]);
+			$projekt_ids = \array_map('intval', (array) ($q->posts ?? []));
+			\wp_reset_postdata();
+		}
+		if (empty($projekt_ids)) return [];
+
+		$items = [];
+		$vk_cache = [];
+		$vk_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
+
+		foreach ($projekt_ids as $pid) {
+			$projekt_title = (string) \get_the_title($pid);
+			if ($projekt_title === '') $projekt_title = '#' . $pid;
+
+			$tasks = cmx_beleg_meta_array($pid, '_cmx_projekt_tasks');
+			if (empty($tasks)) continue;
+
+			foreach ($tasks as $idx => $task) {
+				if (!\is_array($task)) continue;
+				if (cmx_beleg_truthy($task['abgerechnet'] ?? 0)) continue;
+
+				$artikel_id = (int) ($task['artikel_id'] ?? 0);
+				$dauer = (float) cmx_norm_decimal((string) ($task['dauer'] ?? '0'));
+				if ($artikel_id <= 0 || $dauer <= 0) continue;
+
+				if (!isset($vk_cache[$artikel_id])) {
+					$vk_raw = (string) \get_post_meta($artikel_id, $vk_key, true);
+					$vk_cache[$artikel_id] = (float) cmx_norm_decimal($vk_raw);
+				}
+				$preis = (float) $vk_cache[$artikel_id];
+				if (!\is_finite($preis)) $preis = 0.0;
+
+				$artikel_title = (string) \get_the_title($artikel_id);
+				if ($artikel_title === '') $artikel_title = '#' . $artikel_id;
+				$artikel_nr = \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')
+					? (string) cmx_get_artikel_nr($artikel_id)
+					: '';
+				$artikel_label = \trim(($artikel_nr !== '' ? $artikel_nr . ' – ' : '') . $artikel_title);
+
+				$info  = \trim((string) ($task['info'] ?? ''));
+				$datum = \trim((string) ($task['datum'] ?? ''));
+				$zeit  = \trim((string) ($task['zeit'] ?? ''));
+				$uid   = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($task['uid'] ?? ''));
+
+				if ($search_lc !== '') {
+					$hay = $projekt_title . ' ' . $artikel_label . ' ' . $info . ' ' . $datum . ' ' . $zeit;
+					$hay_lc = \function_exists('mb_strtolower') ? \mb_strtolower($hay, 'UTF-8') : \strtolower($hay);
+					if (\strpos($hay_lc, $search_lc) === false) continue;
+				}
+
+				$items[] = [
+					'projekt_id'    => (int) $pid,
+					'projekt_title' => $projekt_title,
+					'task_idx'      => (int) $idx,
+					'task_uid'      => $uid,
+					'artikel_id'    => (int) $artikel_id,
+					'artikel_label' => $artikel_label,
+					'artikel_nr'    => $artikel_nr,
+					'artikel_title' => $artikel_title,
+					'menge'         => (string) $dauer,
+					'preis'         => (string) $preis,
+					'info'          => $info,
+					'datum'         => $datum,
+					'zeit'          => $zeit,
+				];
+
+				if (\count($items) >= $limit) break 2;
+			}
+		}
+
+		return $items;
+	}
+}
+
 /* ------------------------------
  * Locale-robust: String -> Float normalisieren (Punkt/Komma/tausender)
  * ------------------------------ */
@@ -229,13 +350,22 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 	}
 
 	echo '</tbody></table>';
-	echo '<p class="cmx-pos-actions"><button type="button" class="button button-secondary" id="cmx-add-pos">+ Position hinzufügen</button>';
+	echo '<div class="cmx-pos-actions"><button type="button" class="button button-secondary" id="cmx-add-pos">+ Position hinzufügen</button>';
 	\do_action('cmx_beleg_positionen_after_add_button');
-	echo '</p>';
+	echo '</div>';
 	echo '</div>';
 
 	cmx_beleg_positionen_js();
 }
+
+add_action('cmx_beleg_positionen_after_add_button', function(): void {
+	echo ' <div class="cmx-task-picker-wrap" id="cmx-task-picker-wrap">';
+	echo '<button type="button" class="button button-secondary" id="cmx-add-task">Task hinzufügen</button>';
+	echo '<div class="cmx-task-picker-panel" id="cmx-task-picker-panel" style="display:none;">';
+	echo '<input type="text" id="cmx-task-picker-search" class="regular-text" placeholder="Task suchen..." autocomplete="off">';
+	echo '<ul id="cmx-task-picker-list" class="cmx-task-picker-list"></ul>';
+	echo '</div></div>';
+}, 20);
 
 /* ------------------------------
  * Einzelzeile rendern (Autocomplete für Artikel)
@@ -253,6 +383,10 @@ function cmx_render_position_row($i, $pos) {
 	$preis        = (string)($pos['preis'] ?? '');
 	$beschreibung = esc_textarea($pos['beschreibung'] ?? '');
 	$rabatt_raw   = trim((string)($pos['rabatt'] ?? ''));
+	$task_idx_raw = isset($pos['task_idx']) ? (string) $pos['task_idx'] : '';
+	$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int) $task_idx_raw : null;
+	$task_uid_raw = isset($pos['task_uid']) ? (string) $pos['task_uid'] : '';
+	$task_uid     = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
 
 	$menge_display = $menge !== '' ? cmx_format_swiss_number(cmx_norm_decimal($menge), 2) : '';
 	$preis_display = $preis !== '' ? cmx_format_swiss_number(cmx_norm_decimal($preis), 2) : '';
@@ -273,6 +407,8 @@ function cmx_render_position_row($i, $pos) {
 	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
 	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
+	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_idx]" class="cmx-task-idx" value="'.($task_idx === null ? '' : esc_attr((string) $task_idx)).'">';
+	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_uid]" class="cmx-task-uid" value="'.esc_attr($task_uid).'">';
 	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
 	echo '</td>';
 
@@ -295,7 +431,16 @@ function cmx_render_position_row($i, $pos) {
 
 	echo '<td class="cmx-pos-beschr-cell">';
 	if ($textbaustein_edit_url !== '') {
-		echo '<a href="'.esc_url($textbaustein_edit_url).'" class="cmx-textbaustein-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
+		// echo '<a href="'.esc_url($textbaustein_edit_url).'" class="cmx-textbaustein-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
+echo '<a href="'.esc_url($textbaustein_edit_url).'"
+class="cmx-textbaustein-edit"
+aria-label="Textbausteine bearbeiten"
+title="Textbausteine im neuen Tab bearbeiten"
+target="_blank"
+rel="noopener noreferrer">
+<span style="display:inline-block; transform:translateY(5px);">✎</span>
+</a>';
+
 	}
 	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea>';
 	echo '</td>';
@@ -347,25 +492,29 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 		$rabatt_raw   = isset($row['rabatt']) ? (string)$row['rabatt'] : '';
 		$rabatt       = sanitize_text_field($rabatt_raw);
 
-		$beschreibung_raw = isset($row['beschreibung']) ? (string)$row['beschreibung'] : '';
-		$beschreibung_raw = wp_unslash($beschreibung_raw);
-		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
-		$beschreibung = trim($beschreibung_raw);
-		$task_idx     = isset($row['task_idx']) ? (int)$row['task_idx'] : null;
+			$beschreibung_raw = isset($row['beschreibung']) ? (string)$row['beschreibung'] : '';
+			$beschreibung_raw = wp_unslash($beschreibung_raw);
+			$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
+			$beschreibung = trim($beschreibung_raw);
+			$task_idx_raw = isset($row['task_idx']) ? trim((string)$row['task_idx']) : '';
+			$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+			$task_uid_raw = isset($row['task_uid']) ? (string)$row['task_uid'] : '';
+			$task_uid     = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
 
-		// negative Mengen zulassen; nur 0 verwerfen
-		if ($artikel_id <= 0 || $menge == 0.0) continue;
-		if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
+			// negative Mengen zulassen; nur 0 verwerfen
+			if ($artikel_id <= 0 || $menge == 0.0) continue;
+			if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
 
-		$clean[] = [
-			'artikel_id'   => $artikel_id,
-			'menge'        => $menge,
-			'preis'        => $preis,
-			'rabatt'       => $rabatt,
-			'beschreibung' => $beschreibung,
-			'task_idx'     => $task_idx,
-		];
-	}
+			$clean[] = [
+				'artikel_id'   => $artikel_id,
+				'menge'        => $menge,
+				'preis'        => $preis,
+				'rabatt'       => $rabatt,
+				'beschreibung' => $beschreibung,
+				'task_idx'     => $task_idx,
+				'task_uid'     => $task_uid,
+			];
+		}
 
 	// Altdaten angleichen (können als JSON-String oder Array vorliegen)
 	$old_raw  = get_post_meta($post_id, '_cmx_beleg_positionen', true);
@@ -496,6 +645,17 @@ add_action('wp_ajax_cmx_search_beleg_textbausteine', function() {
 	wp_send_json($items);
 });
 
+add_action('wp_ajax_cmx_search_beleg_tasks', function() {
+	if (!\current_user_can('edit_posts')) \wp_send_json_error(['msg' => 'forbidden'], 403);
+
+	$term = isset($_GET['term']) ? \sanitize_text_field(\wp_unslash($_GET['term'])) : '';
+	$projekt_id = isset($_GET['projekt_id']) ? (int) $_GET['projekt_id'] : 0;
+	$items = \function_exists(__NAMESPACE__ . '\\cmx_beleg_open_task_items')
+		? cmx_beleg_open_task_items($projekt_id, $term, 150)
+		: [];
+	\wp_send_json($items);
+});
+
 /* ------------------------------
  * JS – Suggest + Berechnung (inkl. negative Beträge & Gesamtsumme)
  * ------------------------------ */
@@ -506,6 +666,15 @@ function cmx_beleg_positionen_js() {
 	jQuery(function($){
 		const table   = $('#cmx-positionen-table tbody');
 		const AJAX_URL = <?php echo wp_json_encode($ajax_url); ?>;
+		const ARTICLE_EDIT_BASE = <?php echo wp_json_encode(admin_url('post.php?post=')); ?>;
+		const $taskPickerWrap = $('#cmx-task-picker-wrap');
+		const $taskPickerPanel = $('#cmx-task-picker-panel');
+		const $taskPickerSearch = $('#cmx-task-picker-search');
+		const $taskPickerList = $('#cmx-task-picker-list');
+		let taskPickerItems = [];
+		let taskPickerActive = -1;
+		let taskPickerTimer = null;
+		let taskPickerSeq = 0;
 		let dragMode = 'row';
 
 		// ROBUSTER Parser: akzeptiert 1'234.56, 1'234,56, 1234,56, 1234.56
@@ -560,6 +729,12 @@ function cmx_beleg_positionen_js() {
 			txt = txt.replace(/chf|fr\.?/gi, '').trim();
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
+		}
+		function escHtml(s){
+			return (s ?? '').toString()
+				.replace(/&/g,'&amp;')
+				.replace(/</g,'&lt;')
+				.replace(/>/g,'&gt;');
 		}
 			function nextRowIndex(){
 				let max = -1;
@@ -767,6 +942,146 @@ function cmx_beleg_positionen_js() {
 				});
 			}
 
+			function currentProjektId(){
+				const raw = ($('#cmx_projekt_id').val() || '').toString().trim();
+				const id = parseInt(raw, 10);
+				return isNaN(id) ? 0 : id;
+			}
+
+			function fetchOffeneTasks(term, cb){
+				$.getJSON(AJAX_URL, {
+					action: 'cmx_search_beleg_tasks',
+					term: term || '',
+					projekt_id: currentProjektId()
+				}, function(data){
+					cb(Array.isArray(data) ? data : []);
+				}).fail(function(){
+					cb([]);
+				});
+			}
+
+			function taskPickerClose(){
+				taskPickerItems = [];
+				taskPickerActive = -1;
+				if($taskPickerList.length) $taskPickerList.empty();
+				if($taskPickerPanel.length) $taskPickerPanel.hide();
+			}
+
+			function taskPickerRender(items){
+				taskPickerItems = Array.isArray(items) ? items : [];
+				taskPickerActive = -1;
+				if (!$taskPickerList.length) return;
+				if (!taskPickerItems.length) {
+					$taskPickerList.html('<li class="cmx-task-picker-empty">Keine offenen Tasks gefunden.</li>');
+					return;
+				}
+
+				const html = taskPickerItems.map((it, idx) => {
+					const artikel = (it.artikel_label || it.artikel_title || '').toString();
+					const proj = (it.projekt_title || '').toString();
+					const datumZeit = ((it.datum || '') + ' ' + (it.zeit || '')).trim();
+					const dauer = parseNumberFlexible(it.menge || '0');
+					const info = (it.info || '').toString().trim();
+					const metaParts = [];
+					if (proj) metaParts.push(proj);
+					if (datumZeit) metaParts.push(datumZeit);
+					if (dauer > 0) metaParts.push(formatSwiss(dauer) + ' h');
+					const meta = metaParts.join(' · ');
+					return '' +
+						'<li data-index="' + idx + '">' +
+							'<div class="cmx-task-picker-row">' +
+								'<span class="cmx-task-picker-title">' + escHtml(artikel) + '</span>' +
+								(meta ? '<span class="cmx-task-picker-meta">' + escHtml(meta) + '</span>' : '') +
+								(info ? '<span class="cmx-task-picker-info">' + escHtml(info) + '</span>' : '') +
+							'</div>' +
+						'</li>';
+				}).join('');
+				$taskPickerList.html(html);
+			}
+
+			function taskPickerFetchAndRender(term){
+				const reqSeq = ++taskPickerSeq;
+				fetchOffeneTasks(term, function(rows){
+					if (reqSeq !== taskPickerSeq) return;
+					taskPickerRender(rows);
+				});
+			}
+
+			function applyTaskPrefill($row, task){
+				if (!task || typeof task !== 'object') return;
+
+				const artikelId = parseInt(task.artikel_id || 0, 10) || 0;
+				const taskIdxRaw = task.task_idx;
+				const taskIdx = (taskIdxRaw === undefined || taskIdxRaw === null || taskIdxRaw === '') ? '' : String(taskIdxRaw);
+				const taskUid = (task.task_uid || '').toString();
+				const artikelLabel = (task.artikel_label || task.artikel_title || '').toString();
+				const menge = parseNumberFlexible(task.menge || '');
+				const preis = parseNumberFlexible(task.preis || '');
+				const info = (task.info || '').toString();
+
+				const $articleId = $row.find('.cmx-artikel-id').first();
+				const $articleInput = $row.find('.cmx-artikel-autocomplete').first();
+				const $taskIdx = $row.find('.cmx-task-idx').first();
+				const $taskUid = $row.find('.cmx-task-uid').first();
+				const $qty = $row.find('input[name*="[menge]"]').first();
+				const $price = $row.find('input[name*="[preis]"]').first();
+				const $discount = $row.find('input[name*="[rabatt]"]').first();
+				const $desc = $row.find('textarea[name*="[beschreibung]"]').first();
+				const $edit = $row.find('.cmx-artikel-edit').first();
+
+				$articleId.val(artikelId > 0 ? artikelId : '');
+				$articleInput.val(artikelLabel);
+				$taskIdx.val(taskIdx);
+				$taskUid.val(taskUid.replace(/[^A-Za-z0-9_-]/g, ''));
+				$qty.val(menge > 0 ? formatSwiss(menge) : '');
+				$price.val(preis > 0 ? formatSwiss(preis) : '');
+				$discount.val('');
+				$desc.val(info);
+
+				if ($edit.length) {
+					if (artikelId > 0) {
+						$edit.attr('href', ARTICLE_EDIT_BASE + artikelId + '&action=edit');
+						$edit.css({ 'pointer-events':'auto', 'opacity':'1' });
+					} else {
+						$edit.removeAttr('href');
+						$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
+					}
+				}
+			}
+
+			function addPositionRow(prefill){
+				let i = nextRowIndex();
+				let $template = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first');
+				if (!$template.length) {
+					$template = table.find('tr:first');
+				}
+				let newRow = $template.clone();
+
+				newRow.find('input, textarea').each(function(){
+					let $el = $(this), name = $el.attr('name');
+					if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
+					if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
+					else if($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid')){ $el.val(''); }
+					else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
+					else if($el.is('[name*="[menge]"]')){ $el.val(''); }
+					else if($el.is('[name*="[preis]"]')){ $el.val(''); }
+					else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
+					else if($el.is('textarea')){ $el.val('').removeData('cmx-text-suggest-ready'); } else { $el.val(''); }
+				});
+				newRow.find('.cmx-art-suggest').remove();
+				newRow.find('.cmx-pos-total').text('0,00');
+
+				if (prefill && typeof prefill === 'object') {
+					applyTaskPrefill(newRow, prefill);
+				}
+
+				table.append(newRow);
+				initArtikelSuggest(newRow);
+				initTextbausteinSuggest(newRow);
+				table.trigger('cmx_positionen_rows_changed');
+				return newRow;
+			}
+
 			function initArtikelSuggest($ctx){
 			$ctx.find('.cmx-artikel-autocomplete').each(function(){
 				const $input = $(this);
@@ -899,6 +1214,14 @@ function cmx_beleg_positionen_js() {
 									closeList();
 									return;
 								}
+							} else {
+								// Zusätzliche Notiz: Vorschlagsliste nur bei leerem Feld anzeigen.
+								if (q.length > 0) {
+									closeList();
+									return;
+								}
+								doSearch('');
+								return;
 							}
 							if(q.length < 1){ doSearch(''); return; }
 							t = setTimeout(()=>doSearch(q), 120);
@@ -909,12 +1232,18 @@ function cmx_beleg_positionen_js() {
 									closeList();
 									return;
 							}
-							if (isAbschnittTitel) {
-								const q = ($input.val() || '').toString().trim();
-								if (q !== '') {
-									closeList();
-									return;
-								}
+								if (isAbschnittTitel) {
+									const q = ($input.val() || '').toString().trim();
+									if (q !== '') {
+										closeList();
+										return;
+									}
+								} else {
+									const q = ($input.val() || '').toString().trim();
+									if (q !== '') {
+										closeList();
+										return;
+									}
 								}
 								doSearch('');
 							});
@@ -959,33 +1288,109 @@ function cmx_beleg_positionen_js() {
 
 			// Neue Zeile
 			$('#cmx-add-pos').on('click', function(){
-			let i = nextRowIndex();
-			let $template = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first');
-			if (!$template.length) {
-				$template = table.find('tr:first');
-			}
-			let newRow=$template.clone();
-
-				newRow.find('input, textarea').each(function(){
-					let $el=$(this), name=$el.attr('name');
-					if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
-					if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
-					else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
-				else if($el.is('[name*="[menge]"]')){ $el.val(''); }
-				else if($el.is('[name*="[preis]"]')){ $el.val(''); }
-				else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
-					else if($el.is('textarea')){ $el.val('').removeData('cmx-text-suggest-ready'); } else { $el.val(''); }
-				});
-				newRow.find('.cmx-art-suggest').remove();
-				newRow.find('.cmx-pos-total').text('0,00');
-
-				table.append(newRow);
-				initArtikelSuggest(newRow);
-				initTextbausteinSuggest(newRow);
-				table.trigger('cmx_positionen_rows_changed');
-
-				setTimeout(()=>{ newRow.find('.cmx-artikel-autocomplete').trigger('focus'); }, 0);
+				const $row = addPositionRow({});
+				setTimeout(()=>{ $row.find('.cmx-artikel-autocomplete').trigger('focus'); }, 0);
 			});
+
+			function taskPickerChoose(index){
+				const idx = parseInt(index, 10);
+				if (isNaN(idx) || idx < 0 || idx >= taskPickerItems.length) return;
+				const selected = taskPickerItems[idx];
+				let $row = $();
+				const $lastRow = table.children('tr').last();
+				const lastIsArticleRow = $lastRow.length
+					&& $lastRow.hasClass('cmx-pos-row')
+					&& !$lastRow.hasClass('cmx-pos-row-abschnitt');
+
+				if (lastIsArticleRow) {
+					const rawId = ($lastRow.find('.cmx-artikel-id').first().val() || '').toString().trim();
+					const artikelId = parseInt(rawId, 10);
+					const hasSelectedArticle = !isNaN(artikelId) && artikelId > 0;
+					if (!hasSelectedArticle) {
+						applyTaskPrefill($lastRow, selected);
+						table.trigger('cmx_positionen_rows_changed');
+						$row = $lastRow;
+					}
+				}
+
+				if (!$row.length) {
+					$row = addPositionRow(selected);
+				}
+
+				taskPickerClose();
+				setTimeout(function(){
+					const $qty = $row.find('input[name*="[menge]"]').first();
+					if ($qty.length) {
+						$qty.trigger('focus').select();
+					} else {
+						$row.find('.cmx-artikel-autocomplete').first().trigger('focus');
+					}
+				}, 0);
+			}
+
+			if ($taskPickerWrap.length) {
+				$(document).on('click', '#cmx-add-task', function(e){
+					e.preventDefault();
+					if ($taskPickerPanel.is(':visible')) {
+						taskPickerClose();
+						return;
+					}
+					taskPickerSeq++;
+					taskPickerItems = [];
+					taskPickerActive = -1;
+					$taskPickerPanel.show();
+					$taskPickerSearch.val('');
+					$taskPickerList.html('<li class="cmx-task-picker-empty">Lade offene Tasks...</li>');
+					taskPickerFetchAndRender('');
+					setTimeout(function(){ $taskPickerSearch.trigger('focus'); }, 0);
+				});
+
+				$taskPickerSearch.on('input', function(){
+					if (taskPickerTimer) clearTimeout(taskPickerTimer);
+					const q = ($(this).val() || '').toString().trim();
+					taskPickerTimer = setTimeout(function(){
+						taskPickerFetchAndRender(q);
+					}, 120);
+				});
+
+				$taskPickerSearch.on('keydown', function(e){
+					if (!$taskPickerPanel.is(':visible')) return;
+					if (e.key === 'Escape') {
+						e.preventDefault();
+						taskPickerClose();
+						return;
+					}
+					if (!taskPickerItems.length) return;
+					if (e.key === 'ArrowDown') {
+						e.preventDefault();
+						taskPickerActive = (taskPickerActive + 1 + taskPickerItems.length) % taskPickerItems.length;
+					} else if (e.key === 'ArrowUp') {
+						e.preventDefault();
+						taskPickerActive = (taskPickerActive - 1 + taskPickerItems.length) % taskPickerItems.length;
+					} else if (e.key === 'Enter') {
+						e.preventDefault();
+						const idx = taskPickerActive > -1 ? taskPickerActive : 0;
+						taskPickerChoose(idx);
+						return;
+					} else {
+						return;
+					}
+					$taskPickerList.children('li[data-index]').removeClass('active')
+						.eq(taskPickerActive).addClass('active');
+				});
+
+				$taskPickerList.on('mousedown', 'li[data-index]', function(e){
+					e.preventDefault();
+					taskPickerChoose($(this).attr('data-index'));
+				});
+
+				$(document).on('mousedown', function(e){
+					if (!$taskPickerPanel.is(':visible')) return;
+					if (!$taskPickerWrap.is(e.target) && $taskPickerWrap.has(e.target).length === 0) {
+						taskPickerClose();
+					}
+				});
+			}
 
 		// Entfernen
 		table.on('click','.cmx-del-pos',function(){
@@ -1009,13 +1414,45 @@ function cmx_beleg_positionen_js() {
 		recalcAll();
 	});
 	</script>
-	<style>
-		.cmx-art-suggest{ position:absolute; z-index:1000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
-		.cmx-art-suggest li{ margin:0; padding:0; cursor:pointer; }
-		.cmx-art-suggest li.active, .cmx-art-suggest li:hover{ background:#e5f3ff; }
-			.cmx-ac-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; padding:6px 8px; }
-			.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
-			.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+		<style>
+			.cmx-art-suggest{ position:absolute; z-index:1000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
+			.cmx-art-suggest li{ margin:0; padding:0; cursor:pointer; }
+			.cmx-art-suggest li.active, .cmx-art-suggest li:hover{ background:#e5f3ff; }
+			.cmx-task-picker-wrap{ position:relative; display:inline-block; margin-left:8px; }
+			.cmx-task-picker-panel{
+				position:absolute;
+				top:0;
+				left:calc(100% + 6px);
+				z-index:1200;
+				width:520px;
+				max-width:86vw;
+				padding:8px;
+				border:1px solid #ccd0d4;
+				background:#fff;
+				box-shadow:0 6px 16px rgba(0,0,0,.08);
+			}
+			#cmx-task-picker-search{ width:100%; margin-bottom:6px; }
+			.cmx-task-picker-list{
+				max-height:320px;
+				overflow:auto;
+				margin:0;
+				padding:0;
+				list-style:none;
+				border:1px solid #dcdcde;
+				background:#fff;
+			}
+			.cmx-task-picker-list li{ margin:0; padding:0; cursor:pointer; border-bottom:1px solid #f0f0f1; }
+			.cmx-task-picker-list li:last-child{ border-bottom:0; }
+			.cmx-task-picker-list li:hover,
+			.cmx-task-picker-list li.active{ background:#e5f3ff; }
+			.cmx-task-picker-row{ display:flex; flex-direction:column; gap:2px; padding:6px 8px; }
+			.cmx-task-picker-title{ font-weight:600; line-height:1.25; }
+			.cmx-task-picker-meta{ font-size:12px; color:#50575e; line-height:1.2; }
+			.cmx-task-picker-info{ font-size:12px; color:#646970; line-height:1.2; }
+			.cmx-task-picker-empty{ padding:8px; color:#646970; cursor:default; }
+				.cmx-ac-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; padding:6px 8px; }
+				.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
+				.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 			#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
 				#cmx-positionen-table th:first-child,
@@ -1166,6 +1603,10 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$beschreibung_raw = wp_unslash($beschreibung_raw);
 		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
 		$beschreibung = trim($beschreibung_raw);
+		$task_idx_raw = isset($r['task_idx']) ? trim((string)$r['task_idx']) : '';
+		$task_idx = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+		$task_uid_raw = isset($r['task_uid']) ? (string)$r['task_uid'] : '';
+		$task_uid = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -1177,6 +1618,8 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 			'preis'        => $preis,
 			'rabatt'       => $rabatt,
 			'beschreibung' => $beschreibung,
+			'task_idx'     => $task_idx,
+			'task_uid'     => $task_uid,
 		];
 	}
 

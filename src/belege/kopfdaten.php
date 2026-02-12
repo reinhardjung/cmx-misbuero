@@ -536,6 +536,7 @@ echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'
 	echo '  <div class="cmx-input-row">';
 	echo '    <input type="text" id="cmx_projekt_search" name="cmx_projekt_search" autocomplete="off" value="'.\esc_attr($display_proj).'" placeholder="Projekt suchen...">';
 	echo '    <input type="hidden" id="cmx_projekt_id" name="cmx_projekt_id" value="'.\esc_attr((string)$projekt_id).'">';
+	echo '    <input type="hidden" id="cmx_projekt_selected" name="cmx_projekt_selected" value="0">';
 	echo '    <button type="button" class="button button-small" id="cmx_projekt_clear" title="Auswahl löschen">X</button>';
 	echo '  </div>';
 	echo '  <ul id="cmx_projekt_suggest" style="display:none"></ul>';
@@ -621,6 +622,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			/* --- Projekte --- */
 			const pI=document.getElementById("cmx_projekt_search");
 			const pH=document.getElementById("cmx_projekt_id");
+			const pS=document.getElementById("cmx_projekt_selected");
 			const pL=document.getElementById("cmx_projekt_suggest");
 			const pC=document.getElementById("cmx_projekt_clear");
 			let pT=null;
@@ -628,6 +630,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 
 			function chooseProject(it){
 				pI.value=it.title||""; pH.value=it.id||""; pI.focus();
+				if(pS){ pS.value="1"; }
 				if(it.kontakt_id){
 					const kI=document.getElementById("cmx_kontakt_search");
 					const kH=document.getElementById("cmx_kontakt_id");
@@ -658,7 +661,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				pI.addEventListener("focus", ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 				pI.addEventListener("click",  ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 			}
-			if(pC){ pC.addEventListener("click",()=>{ pI.value=""; pH.value=""; pL.style.display="none"; pL.innerHTML=""; projNav.reset(); pI.focus(); }); }
+			if(pC){ pC.addEventListener("click",()=>{ pI.value=""; pH.value=""; if(pS){ pS.value="1"; } pL.style.display="none"; pL.innerHTML=""; projNav.reset(); pI.focus(); }); }
 
 			/* --- Kontakte --- */
 			const kI=document.getElementById("cmx_kontakt_search");

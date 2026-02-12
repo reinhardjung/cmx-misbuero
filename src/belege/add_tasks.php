@@ -8,56 +8,73 @@
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_add_tasks_to_beleg', 2, 3);
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_mark_project_tasks_paid', 30, 3);
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_sync_task_billing_flags', 50, 3);
+
+function cmxbu_meta_array(int $post_id, string $meta_key): array {
+	$raw = \get_post_meta($post_id, $meta_key, true);
+	if (\is_string($raw) && $raw !== '') {
+		$tmp = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) return $tmp;
+		$tmp = @\maybe_unserialize($raw);
+		return \is_array($tmp) ? $tmp : [];
+	}
+	return \is_array($raw) ? $raw : [];
+}
+
+function cmxbu_truthy($value): bool {
+	if ($value === true) return true;
+	if ($value === 1 || $value === '1') return true;
+	$s = \strtolower(\trim((string) $value));
+	return \in_array($s, ['true', 'yes', 'on'], true);
+}
+
+function cmxbu_normalize_task_uid($raw = ''): string {
+	$uid = (string) $raw;
+	$uid = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', $uid);
+	$uid = \substr($uid, 0, 80);
+	return $uid;
+}
+
+function cmxbu_create_task_uid(): string {
+	$seed = '';
+	if (\function_exists('\\wp_generate_uuid4')) {
+		$seed = (string) \wp_generate_uuid4();
+	}
+	if ($seed === '') {
+		$seed = \uniqid('', true);
+	}
+	$seed = (string) \preg_replace('/[^A-Za-z0-9]/', '', $seed);
+	if ($seed === '') {
+		$seed = (string) \mt_rand(100000, 999999) . (string) \time();
+	}
+	return 'tsk_' . \substr($seed, 0, 64);
+}
+
 function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
 	if ($post->post_status === 'auto-draft') return;
 
-	// Projekt-ID aus POST oder Meta holen
+	// Import nur dann auslösen, wenn im Formular aktiv eine Projektauswahl gemacht wurde.
+	$selection_raw = isset($_POST['cmx_projekt_selected']) ? \wp_unslash($_POST['cmx_projekt_selected']) : '';
+	$project_selection_made = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
+		? cmxbu_truthy($selection_raw)
+		: (\trim((string) $selection_raw) === '1');
+	if (!$project_selection_made) return;
+
+	// Projekt-ID nur aus der aktuellen Formularauswahl übernehmen.
 	$projekt_id = isset($_POST['cmx_projekt_id']) ? (int) $_POST['cmx_projekt_id'] : 0;
-	if ($projekt_id <= 0 && function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
-		foreach (cmx_meta_projekt_ids() as $key) {
-			$projekt_id = (int) \get_post_meta($post_id, $key, true);
-			if ($projekt_id > 0) break;
-		}
-	}
-	if ($projekt_id <= 0) {
-		$projekt_id = (int) \get_post_meta($post_id, 'cmx_projekt_id', true);
-		// fallback auf eventuelle alte Keys
-		if ($projekt_id <= 0) {
-			$projekt_id = (int) \get_post_meta($post_id, '_projekt_id', true);
-		}
-	}
 	if ($projekt_id <= 0) return;
 
 	// Debug: Protokolliere Importversuch (einmal pro Save)
 	\error_log("[CMX] Beleg {$post_id}: versuche Tasks von Projekt {$projekt_id} zu importieren.");
 
-	// Falls bereits importiert → abbrechen, um Duplikate zu vermeiden
-	$already_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
-	if ($already_imported === (string) $projekt_id) {
-		\error_log("[CMX] Beleg {$post_id}: Tasks bereits importiert, überspringe.");
-		return;
-	}
-
 	// Projekt-ID ggf. persistieren
-	update_post_meta($post_id, '_cmx_beleg_projekt_id', $projekt_id);
+	\update_post_meta($post_id, '_cmx_beleg_projekt_id', $projekt_id);
 
 	// Tasks des Projekts laden
-	$tasks_raw = \get_post_meta($projekt_id, '_cmx_projekt_tasks', true);
-	if (is_string($tasks_raw) && $tasks_raw !== '') {
-		$tmp = json_decode($tasks_raw, true);
-		if (json_last_error() === JSON_ERROR_NONE) {
-			$tasks = $tmp;
-		} else {
-			$tmp = @maybe_unserialize($tasks_raw);
-			$tasks = is_array($tmp) ? $tmp : [];
-		}
-	} elseif (is_array($tasks_raw)) {
-		$tasks = $tasks_raw;
-	} else {
-		$tasks = [];
-	}
+	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
+		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		: [];
 	if (empty($tasks)) {
 		\error_log("[CMX] Beleg {$post_id}: keine Tasks gefunden.");
 		return;
@@ -66,24 +83,14 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 	$artikel_vks = [];
 
 	// Bestehende Positionen robust laden (JSON-String oder Array)
-	$positionen_raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
-	if (is_string($positionen_raw) && $positionen_raw !== '') {
-		$tmp = json_decode($positionen_raw, true);
-		if (json_last_error() === JSON_ERROR_NONE) {
-			$positionen = $tmp;
-		} else {
-			$positionen = @maybe_unserialize($positionen_raw);
-			if (!is_array($positionen)) $positionen = [];
-		}
-	} elseif (is_array($positionen_raw)) {
-		$positionen = $positionen_raw;
-	} else {
-		$positionen = [];
-	}
+	$positionen = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
+		? cmxbu_meta_array($post_id, '_cmx_beleg_positionen')
+		: [];
 
 	$import_result = cmxbu_collect_task_positionen($tasks, $artikel_vks);
 	$positionen = array_merge($positionen, $import_result['positionen']);
 
+	$project_tasks_changed = !empty($import_result['uids_assigned']);
 	if ($import_result['imported']) {
 		$positionen = array_values($positionen);
 		$_POST['cmx_positionen'] = $positionen;
@@ -91,17 +98,31 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		\update_post_meta($post_id, '_cmx_beleg_positionen', wp_json_encode($positionen));
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $projekt_id);
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', wp_json_encode($import_result['imported_keys']));
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $projekt_id);
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', wp_json_encode($import_result['imported_uids']));
 		// Tasks im Projekt sofort als abgerechnet markieren, damit sie nicht erneut importiert werden
-		foreach ($import_result['imported_keys'] as $idx) {
-			if (isset($tasks[$idx]) && is_array($tasks[$idx])) {
-				$tasks[$idx]['abgerechnet'] = 1;
+		$uid_set = [];
+		foreach (($import_result['imported_uids'] ?? []) as $uid) {
+			$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid') ? cmxbu_normalize_task_uid($uid) : (string) $uid;
+			if ($uid !== '') $uid_set[$uid] = true;
+		}
+		foreach ($tasks as &$task_row) {
+			if (!\is_array($task_row)) continue;
+			$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+				? cmxbu_normalize_task_uid($task_row['uid'] ?? '')
+				: (string) ($task_row['uid'] ?? '');
+			if ($uid !== '' && isset($uid_set[$uid])) {
+				$task_row['abgerechnet'] = 1;
+				$project_tasks_changed = true;
 			}
 		}
-		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
+		unset($task_row);
 		\error_log("[CMX] Beleg {$post_id}: ".count($import_result['positionen'])." Task-Positionen ergänzt (Projekt {$projekt_id}).");
 	} else {
 		\error_log("[CMX] Beleg {$post_id}: keine neuen Tasks importiert. Tasks gesamt={$import_result['total']}, abgerechnet={$import_result['skipped_done']}, ohne Art/Dauer={$import_result['skipped_empty']}, ohne Preis={$import_result['skipped_no_price']}.");
+	}
+
+	if ($project_tasks_changed) {
+		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
 	}
 }
 
@@ -123,9 +144,13 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 	// Wurden Tasks importiert? Nur dann weiter
 	$projekt_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
 	if ($projekt_imported === '') return;
+	$imported_uids_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', true);
+	$imported_uids = $imported_uids_json ? json_decode($imported_uids_json, true) : [];
 	$imported_keys_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', true);
 	$imported_keys = $imported_keys_json ? json_decode($imported_keys_json, true) : [];
-	if (!is_array($imported_keys) || empty($imported_keys)) return;
+	if (!is_array($imported_keys)) $imported_keys = [];
+	if (!is_array($imported_uids)) $imported_uids = [];
+	if (empty($imported_keys) && empty($imported_uids)) return;
 
 	// Projekt-ID ermitteln
 	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
@@ -137,29 +162,38 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 	}
 	if ($projekt_id <= 0) return;
 
-	$tasks_raw = \get_post_meta($projekt_id, '_cmx_projekt_tasks', true);
-	if (is_string($tasks_raw) && $tasks_raw !== '') {
-		$tmp = json_decode($tasks_raw, true);
-		if (json_last_error() === JSON_ERROR_NONE) {
-			$tasks = $tmp;
-		} else {
-			$tmp = @maybe_unserialize($tasks_raw);
-			$tasks = is_array($tmp) ? $tmp : [];
-		}
-	} elseif (is_array($tasks_raw)) {
-		$tasks = $tasks_raw;
-	} else {
-		$tasks = [];
-	}
+	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
+		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		: [];
 
 	if (empty($tasks)) return;
 
-	$updated = false;
-	foreach ($imported_keys as $idx) {
-		if (!isset($tasks[$idx]) || !is_array($tasks[$idx])) continue;
-		$tasks[$idx]['abgerechnet'] = 1;
-		$updated = true;
+	$uid_set = [];
+	foreach ($imported_uids as $uid) {
+		$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid') ? cmxbu_normalize_task_uid($uid) : (string) $uid;
+		if ($uid !== '') $uid_set[$uid] = true;
 	}
+	$key_set = [];
+	foreach ($imported_keys as $idx) {
+		if ($idx === '' || $idx === null || !\is_numeric((string) $idx)) continue;
+		$key_set[(int) $idx] = true;
+	}
+
+	$updated = false;
+	foreach ($tasks as $idx => &$task_row) {
+		if (!\is_array($task_row)) continue;
+		$task_uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+			? cmxbu_normalize_task_uid($task_row['uid'] ?? '')
+			: (string) ($task_row['uid'] ?? '');
+		$match = ($task_uid !== '' && isset($uid_set[$task_uid])) || isset($key_set[(int) $idx]);
+		if (!$match) continue;
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmxbu_truthy') || !cmxbu_truthy($task_row['abgerechnet'] ?? 0)) {
+			$task_row['abgerechnet'] = 1;
+			$updated = true;
+		}
+	}
+	unset($task_row);
 
 	if ($updated) {
 		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
@@ -180,9 +214,13 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 
 	$projekt_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
 	if ($projekt_imported === '') return;
+	$imported_uids_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', true);
+	$imported_uids = $imported_uids_json ? json_decode($imported_uids_json, true) : [];
 	$imported_keys_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', true);
 	$imported_keys = $imported_keys_json ? json_decode($imported_keys_json, true) : [];
-	if (!is_array($imported_keys) || empty($imported_keys)) return;
+	if (!is_array($imported_keys)) $imported_keys = [];
+	if (!is_array($imported_uids)) $imported_uids = [];
+	if (empty($imported_keys) && empty($imported_uids)) return;
 
 	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
 	if ($projekt_id <= 0 && function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
@@ -193,60 +231,89 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 	}
 	if ($projekt_id <= 0) return;
 
-	$tasks_raw = \get_post_meta($projekt_id, '_cmx_projekt_tasks', true);
-	if (is_string($tasks_raw) && $tasks_raw !== '') {
-		$tmp = json_decode($tasks_raw, true);
-		if (json_last_error() === JSON_ERROR_NONE) {
-			$tasks = $tmp;
-		} else {
-			$tmp = @maybe_unserialize($tasks_raw);
-			$tasks = is_array($tmp) ? $tmp : [];
-		}
-	} elseif (is_array($tasks_raw)) {
-		$tasks = $tasks_raw;
-	} else {
-		$tasks = [];
-	}
+	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
+		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		: [];
 	if (empty($tasks)) return;
 
-	// Aktuelle Positionen laden und task_idx sammeln
-	$positionen_raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
-	if (is_string($positionen_raw) && $positionen_raw !== '') {
-		$tmp = json_decode($positionen_raw, true);
-		if (json_last_error() === JSON_ERROR_NONE) {
-			$positionen = $tmp;
-		} else {
-			$positionen = @maybe_unserialize($positionen_raw);
-			if (!is_array($positionen)) $positionen = [];
+	// Aktuelle Positionen laden und Task-Referenzen sammeln
+	$positionen = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
+		? cmxbu_meta_array($post_id, '_cmx_beleg_positionen')
+		: [];
+	$present_uid = [];
+	$present_idx = [];
+	foreach ($positionen as $row) {
+		if (!\is_array($row)) continue;
+		$row_uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+			? cmxbu_normalize_task_uid($row['task_uid'] ?? '')
+			: (string) ($row['task_uid'] ?? '');
+		if ($row_uid !== '') {
+			$present_uid[$row_uid] = true;
 		}
-	} elseif (is_array($positionen_raw)) {
-		$positionen = $positionen_raw;
-	} else {
-		$positionen = [];
+		if (isset($row['task_idx']) && $row['task_idx'] !== '' && \is_numeric((string) $row['task_idx'])) {
+			$present_idx[(int)$row['task_idx']] = true;
+		}
 	}
 
-	$present = [];
-	foreach ($positionen as $row) {
-		if (!is_array($row)) continue;
-		if (isset($row['task_idx']) && $row['task_idx'] !== '') {
-			$present[(int)$row['task_idx']] = true;
+	$import_uid_set = [];
+	foreach ($imported_uids as $uid) {
+		$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid') ? cmxbu_normalize_task_uid($uid) : (string) $uid;
+		if ($uid !== '') $import_uid_set[$uid] = true;
+	}
+	$import_key_set = [];
+	foreach ($imported_keys as $idx) {
+		if ($idx === '' || $idx === null || !\is_numeric((string) $idx)) continue;
+		$import_key_set[(int) $idx] = true;
+	}
+
+	// Legacy-Migration: wenn nur idx bekannt ist, importierte UIDs einmalig nachtragen.
+	$tasks_uid_migrated = false;
+	if (empty($import_uid_set) && !empty($import_key_set)) {
+		$migrated_uids = [];
+		foreach ($import_key_set as $idx => $_) {
+			if (!isset($tasks[$idx]) || !\is_array($tasks[$idx])) continue;
+			$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+				? cmxbu_normalize_task_uid($tasks[$idx]['uid'] ?? '')
+				: (string) ($tasks[$idx]['uid'] ?? '');
+			if ($uid === '' && \function_exists(__NAMESPACE__ . '\\cmxbu_create_task_uid')) {
+				$uid = cmxbu_create_task_uid();
+				$tasks[$idx]['uid'] = $uid;
+				$tasks_uid_migrated = true;
+			}
+			if ($uid !== '') {
+				$migrated_uids[$uid] = true;
+			}
+		}
+		if (!empty($migrated_uids)) {
+			$import_uid_set = $migrated_uids;
+			\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \wp_json_encode(\array_keys($migrated_uids)));
 		}
 	}
 
 	$updated = false;
-	foreach ($imported_keys as $idx) {
-		$idx = (int)$idx;
-		if (!isset($tasks[$idx]) || !is_array($tasks[$idx])) continue;
-		$should = isset($present[$idx]) ? 1 : 0;
-		$current = $tasks[$idx]['abgerechnet'] ?? 0;
-		$current = (int) (is_string($current) ? ($current === '1') : (bool)$current);
+	foreach ($tasks as $idx => &$task_row) {
+		if (!\is_array($task_row)) continue;
+		$task_uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+			? cmxbu_normalize_task_uid($task_row['uid'] ?? '')
+			: (string) ($task_row['uid'] ?? '');
+
+		$should = null;
+		if ($task_uid !== '' && isset($import_uid_set[$task_uid])) {
+			$should = isset($present_uid[$task_uid]) ? 1 : 0;
+		} elseif (isset($import_key_set[(int) $idx])) {
+			$should = isset($present_idx[(int) $idx]) ? 1 : 0;
+		}
+		if ($should === null) continue;
+
+		$current = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy') && cmxbu_truthy($task_row['abgerechnet'] ?? 0) ? 1 : 0;
 		if ($current !== $should) {
-			$tasks[$idx]['abgerechnet'] = $should;
+			$task_row['abgerechnet'] = $should;
 			$updated = true;
 		}
 	}
+	unset($task_row);
 
-	if ($updated) {
+	if ($updated || $tasks_uid_migrated) {
 		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
 	}
 }
@@ -259,12 +326,28 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): arra
 	$total = $skipped_done = $skipped_empty = $skipped_no_price = 0;
 	$imported = false;
 	$imported_keys = [];
+	$imported_uids = [];
+	$uids_assigned = false;
 
 	foreach ($tasks as $idx => &$t) {
 		if (!is_array($t)) continue;
+		$uid_before = isset($t['uid']) ? (string) $t['uid'] : '';
+		$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+			? cmxbu_normalize_task_uid($uid_before)
+			: $uid_before;
+		if ($uid === '' && \function_exists(__NAMESPACE__ . '\\cmxbu_create_task_uid')) {
+			$uid = cmxbu_create_task_uid();
+		}
+		if ($uid !== $uid_before) {
+			$uids_assigned = true;
+		}
+		$t['uid'] = $uid;
+
 		$total++;
 		$flag = $t['abgerechnet'] ?? '';
-		$is_done = in_array((string)$flag, ['1','true','yes'], true) || $flag === true;
+		$is_done = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
+			? cmxbu_truthy($flag)
+			: (\in_array((string)$flag, ['1','true','yes'], true) || $flag === true);
 		if ($is_done) { $skipped_done++; continue; }
 
 		$art_id = (int) ($t['artikel_id'] ?? 0);
@@ -289,9 +372,11 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): arra
 			'rabatt'       => '',
 			'beschreibung' => $t['info'] ?? '',
 			'task_idx'     => $idx,
+			'task_uid'     => $uid,
 		];
 
 		$imported_keys[] = $idx;
+		$imported_uids[] = $uid;
 		$imported = true;
 	}
 	unset($t);
@@ -304,5 +389,7 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks): arra
 		'skipped_empty'   => $skipped_empty,
 		'skipped_no_price'=> $skipped_no_price,
 		'imported_keys'   => $imported_keys,
+		'imported_uids'   => $imported_uids,
+		'uids_assigned'   => $uids_assigned,
 	];
 }
