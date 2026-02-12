@@ -7,6 +7,7 @@ add_action('admin_enqueue_scripts', function() {
 	$screen = function_exists('get_current_screen') ? get_current_screen() : null;
 	if ($screen && $screen->post_type === 'belege') {
 		wp_enqueue_script('jquery-ui-autocomplete');
+		wp_enqueue_script('jquery-ui-sortable');
 		wp_enqueue_style('wp-jquery-ui-dialog'); // Basis-Styles für jQuery UI
 	}
 });
@@ -182,7 +183,10 @@ function cmx_render_position_row($i, $pos) {
 	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
 
 	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
-	echo '<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
+	echo '<td class="cmx-pos-controls">';
+	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
+	echo '<button type="button" class="button-link-delete cmx-del-pos">✕</button>';
+	echo '</td>';
 
 	echo '</tr>';
 }
@@ -373,6 +377,7 @@ function cmx_beleg_positionen_js() {
 	jQuery(function($){
 		const table   = $('#cmx-positionen-table tbody');
 		const AJAX_URL = <?php echo wp_json_encode($ajax_url); ?>;
+		let dragMode = 'row';
 
 		// ROBUSTER Parser: akzeptiert 1'234.56, 1'234,56, 1234,56, 1234.56
 		function parseNumberFlexible(val){
@@ -427,16 +432,99 @@ function cmx_beleg_positionen_js() {
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
 		}
-		function nextRowIndex(){
-			let max = -1;
-			table.find('input[name^="cmx_positionen["], textarea[name^="cmx_positionen["]').each(function(){
-				const m = ((this.name || '') + '').match(/^cmx_positionen\[(\d+)\]/);
+			function nextRowIndex(){
+				let max = -1;
+				table.find('input[name^="cmx_positionen["], textarea[name^="cmx_positionen["]').each(function(){
+					const m = ((this.name || '') + '').match(/^cmx_positionen\[(\d+)\]/);
 				if (!m) return;
 				const idx = parseInt(m[1], 10);
 				if (!isNaN(idx) && idx > max) max = idx;
+				});
+				return max + 1;
+			}
+
+			function initSortable(){
+				if (!$.fn.sortable || !table.length) return;
+				if (table.data('ui-sortable')) {
+					table.sortable('destroy');
+				}
+				table.sortable({
+					items: '> tr.cmx-pos-row',
+					handle: '.cmx-pos-drag-handle, .cmx-section-drag-handle',
+					cancel: 'input, textarea, a, button:not(.cmx-section-drag-handle)',
+					placeholder: 'cmx-pos-sort-placeholder',
+					forcePlaceholderSize: true,
+					tolerance: 'pointer',
+					helper: function(e, tr){
+						const $originals = tr.children();
+						const $helper = tr.clone();
+						$helper.children().each(function(index){
+							$(this).width($originals.eq(index).outerWidth());
+						});
+						return $helper;
+					},
+					start: function(e, ui){
+						const colCount = $('#cmx-positionen-table thead th').length || 7;
+						ui.placeholder
+							.empty()
+							.append('<td class="cmx-pos-sort-placeholder-cell" colspan="' + colCount + '"></td>');
+
+						const moveWholeSection = dragMode === 'section' && ui.item.hasClass('cmx-pos-row-abschnitt');
+						ui.item.data('cmx-move-whole-section', moveWholeSection ? 1 : 0);
+						if (moveWholeSection) {
+							const $followers = ui.item.nextUntil('tr.cmx-pos-row-abschnitt', 'tr.cmx-pos-row');
+							const followersCount = $followers.length;
+							ui.item.data('cmx-section-followers', $followers.detach());
+							table.addClass('cmx-section-drag-active');
+							ui.helper.addClass('cmx-sorting-section');
+							ui.placeholder.addClass('cmx-pos-sort-placeholder-section');
+							ui.placeholder.find('.cmx-pos-sort-placeholder-cell').html(
+								'<span class="cmx-pos-sort-placeholder-label">Abschnitt verschieben' +
+								(followersCount > 0 ? ' (' + (followersCount + 1) + ' Zeilen)' : '') +
+								'</span>'
+							);
+							ui.placeholder.height(ui.helper.outerHeight());
+							return;
+						}
+						ui.placeholder.removeClass('cmx-pos-sort-placeholder-section');
+						ui.placeholder.find('.cmx-pos-sort-placeholder-cell')
+							.html('<span class="cmx-pos-sort-placeholder-label">Position verschieben</span>');
+						ui.placeholder.height(ui.helper.outerHeight());
+					},
+					sort: function(e, ui){
+						if (!ui.item.data('cmx-move-whole-section')) return;
+						ui.placeholder.height(ui.helper.outerHeight());
+					},
+					stop: function(e, ui){
+						if (ui.item.data('cmx-move-whole-section')) {
+							const $followers = ui.item.data('cmx-section-followers');
+							if ($followers && $followers.length) {
+								ui.item.after($followers);
+							}
+						}
+						table.removeClass('cmx-section-drag-active');
+						ui.item.removeClass('cmx-sorting-section');
+						ui.item.removeData('cmx-move-whole-section');
+						ui.item.removeData('cmx-section-followers');
+						table.children('tr.ui-sortable-placeholder, tr.cmx-pos-sort-placeholder').remove();
+						dragMode = 'row';
+						table.trigger('cmx_positionen_rows_changed');
+					}
+				});
+			}
+
+			function refreshSortable(){
+				if ($.fn.sortable && table.data('ui-sortable')) {
+					table.sortable('refresh');
+				}
+			}
+
+			table.on('mousedown touchstart', '.cmx-pos-drag-handle', function(){
+				dragMode = 'row';
 			});
-			return max + 1;
-		}
+			table.on('mousedown touchstart', '.cmx-section-drag-handle', function(){
+				dragMode = 'section';
+			});
 
 		function recalcRowTotal($row){
 			const menge=parseNumberFlexible($row.find('input[name*="[menge]"]').val());
@@ -595,9 +683,10 @@ function cmx_beleg_positionen_js() {
 		table.on('focus', selectorMRP, function(){ const el=this; setTimeout(()=>{ try{ el.select(); }catch(e){} }, 0); });
 		table.on('mouseup', selectorMRP, function(e){ e.preventDefault(); });
 
-		initArtikelSuggest(table);
+			initArtikelSuggest(table);
+			initSortable();
 
-		table.on('input change', selectorMRP, function(){ recalcAll(); });
+			table.on('input change', selectorMRP, function(){ recalcAll(); });
 		table.on('blur', 'input[name*="[menge]"], input[name*="[preis]"]', function(){
 			const raw = ($(this).val() ?? '').toString().trim();
 			if (raw === '') return;
@@ -612,8 +701,13 @@ function cmx_beleg_positionen_js() {
 			recalcAll();
 		});
 
-		// Neue Zeile
-		$('#cmx-add-pos').on('click', function(){
+			table.on('cmx_positionen_rows_changed', function(){
+				refreshSortable();
+				recalcAll();
+			});
+
+			// Neue Zeile
+			$('#cmx-add-pos').on('click', function(){
 			let i = nextRowIndex();
 			let $template = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first');
 			if (!$template.length) {
@@ -633,12 +727,12 @@ function cmx_beleg_positionen_js() {
 			});
 			newRow.find('.cmx-pos-total').text('0,00');
 
-			table.append(newRow);
-			initArtikelSuggest(newRow);
+				table.append(newRow);
+				initArtikelSuggest(newRow);
+				table.trigger('cmx_positionen_rows_changed');
 
-			setTimeout(()=>{ newRow.find('.cmx-artikel-autocomplete').trigger('focus'); }, 0);
-			setTimeout(recalcAll, 0);
-		});
+				setTimeout(()=>{ newRow.find('.cmx-artikel-autocomplete').trigger('focus'); }, 0);
+			});
 
 		// Entfernen
 		table.on('click','.cmx-del-pos',function(){
@@ -655,8 +749,8 @@ function cmx_beleg_positionen_js() {
 				});
 				$row.find('.cmx-pos-total').text('0,00');
 			}
-			setTimeout(recalcAll, 0);
-		});
+				table.trigger('cmx_positionen_rows_changed');
+			});
 
 		// Initial
 		recalcAll();
@@ -670,14 +764,76 @@ function cmx_beleg_positionen_js() {
 		.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
 		.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-		#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
-		#cmx-positionen-table th:first-child,
-		#cmx-positionen-table td:first-child{ padding-right:20px; }
-		#cmx-positionen-table td textarea { resize: vertical; }
-		.cmx-pos-row td:first-child{ position:relative; padding-right:8px; }
-		.cmx-pos-total{ font-weight:600; text-align:right; }
-		.cmx-artikel-edit{
-			position:absolute;
+			#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
+			#cmx-positionen-table th:first-child,
+			#cmx-positionen-table td:first-child{ padding-right:20px; }
+			#cmx-positionen-table td textarea { resize: vertical; }
+			.cmx-pos-row td:first-child{ position:relative; padding-right:8px; }
+			.cmx-pos-total{ font-weight:600; text-align:right; }
+			#cmx-positionen-table td.cmx-pos-controls{
+				white-space:nowrap;
+				width:1%;
+				text-align:right;
+				vertical-align:top;
+				padding-left:4px;
+				padding-right:6px;
+			}
+			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos,
+			#cmx-positionen-table .cmx-pos-controls .cmx-pos-drag-handle,
+			#cmx-positionen-table .cmx-pos-controls .cmx-section-drag-handle{
+				vertical-align:top;
+			}
+			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos{ margin-left:4px; }
+			#cmx-positionen-table .cmx-pos-drag-handle{
+				cursor:move;
+				display:inline-flex;
+				align-items:center;
+				justify-content:center;
+				width:20px;
+				height:20px;
+				margin-right:4px;
+				color:#646970;
+				border-radius:3px;
+				user-select:none;
+				font-weight:600;
+			}
+			#cmx-positionen-table .cmx-section-drag-handle{
+				cursor:move;
+				margin-right:4px;
+				min-height:24px;
+				line-height:1.6;
+				padding:0 6px;
+			}
+			#cmx-positionen-table .cmx-pos-drag-handle:hover{ background:#f0f0f1; color:#1d2327; }
+			#cmx-positionen-table tr.ui-sortable-helper td{
+				background:#fff;
+				box-shadow: inset 0 0 0 1px #c3c4c7;
+			}
+			#cmx-positionen-table tr.ui-sortable-helper.cmx-sorting-section td{
+				background:#eef6ff;
+				box-shadow: inset 0 0 0 1px #72aee6;
+			}
+			#cmx-positionen-table tr.cmx-pos-sort-placeholder td.cmx-pos-sort-placeholder-cell{
+				background:#f6f7f7 !important;
+				border:1px dashed #8c8f94;
+				height:34px;
+				padding:4px 8px;
+			}
+			#cmx-positionen-table tr.cmx-pos-sort-placeholder-section td.cmx-pos-sort-placeholder-cell{
+				background:#eaf4ff !important;
+				border-color:#72aee6;
+			}
+			#cmx-positionen-table .cmx-pos-sort-placeholder-label{
+				display:inline-block;
+				font-size:11px;
+				font-weight:600;
+				color:#1d2327;
+			}
+			#cmx-positionen-table.cmx-section-drag-active tr.cmx-pos-row-abschnitt td{
+				background:#f0f6fc;
+			}
+			.cmx-artikel-edit{
+				position:absolute;
 			left:6px;
 			top:50%;
 			transform:translateY(-50%);

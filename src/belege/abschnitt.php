@@ -27,7 +27,7 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 	echo '<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' . $i . '][abschnitt_titel]" value="' . \esc_attr($titel) . '" placeholder="Abschnitt" style="width:100%;">';
 	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;">' . \esc_textarea($text) . '</textarea>';
 	echo '</td>';
-	echo '<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
+	echo '<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">Abschnitt</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
 	echo '</tr>';
 
 	return true;
@@ -85,21 +85,22 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 			$(document).on('click', '#cmx-add-abschnitt', function(){
 				const i = nextRowIndex();
 				const rowHtml = '' +
-					'<tr class="cmx-pos-row cmx-pos-row-abschnitt">' +
-						'<td colspan="6">' +
-							'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
-							'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:100%;">' +
-							'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;"></textarea>' +
-						'</td>' +
-						'<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>' +
-					'</tr>';
+						'<tr class="cmx-pos-row cmx-pos-row-abschnitt">' +
+							'<td colspan="6">' +
+								'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
+								'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:100%;">' +
+								'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;"></textarea>' +
+							'</td>' +
+							'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">Abschnitt</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>' +
+						'</tr>';
 
-			const $row = $(rowHtml);
-			table.append($row);
-			setTimeout(function(){
-				$row.find('.cmx-abschnitt-titel').focus().select();
-			}, 0);
-		});
+				const $row = $(rowHtml);
+				table.append($row);
+				table.trigger('cmx_positionen_rows_changed');
+				setTimeout(function(){
+					$row.find('.cmx-abschnitt-titel').focus().select();
+				}, 0);
+			});
 	});
 	</script>
 	<style>
