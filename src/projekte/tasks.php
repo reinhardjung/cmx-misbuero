@@ -29,6 +29,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')) {
+	function cmx_projekt_decimal_normalize($value): string {
+		$s = \trim((string) $value);
+		if ($s === '') return '';
+		$s = \str_replace([" ", "'"], '', $s);
+		$has_comma = \strpos($s, ',') !== false;
+		$has_dot   = \strpos($s, '.') !== false;
+		if ($has_comma && $has_dot) {
+			if (\strrpos($s, ',') > \strrpos($s, '.')) {
+				$s = \str_replace('.', '', $s);
+				$s = \str_replace(',', '.', $s);
+			} else {
+				$s = \str_replace(',', '', $s);
+			}
+		} elseif ($has_comma) {
+			$s = \str_replace(',', '.', $s);
+		}
+		return \is_numeric($s) ? $s : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_to_float')) {
+	function cmx_projekt_decimal_to_float($value): float {
+		$norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
+			? cmx_projekt_decimal_normalize($value)
+			: \trim((string) $value);
+		return $norm !== '' ? (float) $norm : 0.0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_format_swiss_number')) {
+	function cmx_projekt_format_swiss_number($value, int $decimals = 2): string {
+		return \number_format((float) $value, $decimals, '.', "'");
+	}
+}
+
 // Metabox registrieren
 \add_action('add_meta_boxes', function() {
 	\add_meta_box(
@@ -92,6 +128,48 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			const container = document.getElementById('cmx-projekt-tasks');
 			if (!container) return;
 
+		function parseSwissDecimal(value){
+			let s = (value ?? '').toString().trim();
+			if (s === '') return NaN;
+			s = s.replace(/\s+/g, '').replace(/'/g, '');
+			const hasComma = s.indexOf(',') > -1;
+			const hasDot = s.indexOf('.') > -1;
+			if (hasComma && hasDot) {
+				if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+					s = s.replace(/\./g, '').replace(/,/g, '.');
+				} else {
+					s = s.replace(/,/g, '');
+				}
+			} else if (hasComma) {
+				s = s.replace(/,/g, '.');
+			}
+			const n = parseFloat(s);
+			return Number.isFinite(n) ? n : NaN;
+		}
+		function formatSwissNumber(value){
+			const n = Number(value);
+			if (!Number.isFinite(n)) return '';
+			const fixed = n.toFixed(2).split('.');
+			let left = fixed[0];
+			let out = '';
+			while (left.length > 3) {
+				out = "'" + left.slice(-3) + out;
+				left = left.slice(0, -3);
+			}
+			return left + out + '.' + fixed[1];
+		}
+		function formatDauerInput(input){
+			if (!input) return;
+			const raw = (input.value || '').toString().trim();
+			if (raw === '') {
+				input.value = '';
+				return;
+			}
+			const n = parseSwissDecimal(raw);
+			if (!Number.isFinite(n)) return;
+			input.value = formatSwissNumber(n);
+		}
+
 		function today() {
 			const d = new Date();
 			return d.toISOString().slice(0,10);
@@ -115,7 +193,11 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			// Vorbelegte Werte
 			rowEl.querySelector('input[name*="[datum]"]').value  = data?.datum  || '';
 				rowEl.querySelector('input[name*="[zeit]"]').value   = data?.zeit   || '';
-				rowEl.querySelector('input[name*="[dauer]"]').value  = data?.dauer  || '';
+				const dauerInput = rowEl.querySelector('input[name*="[dauer]"]');
+				if (dauerInput) {
+					dauerInput.value = data?.dauer || '';
+					formatDauerInput(dauerInput);
+				}
 				rowEl.querySelector('select[name*="[artikel_id]"]').value = data?.artikel_id || '';
 				rowEl.querySelector('textarea[name*="[info]"]').value = data?.info || '';
 				const uidInput = rowEl.querySelector('input[name*="[uid]"]');
@@ -128,6 +210,22 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			container.querySelectorAll('input[name*="[uid]"]').forEach(function(el){
 				if (!el.value) el.value = newUid();
 			});
+			container.querySelectorAll('input[name*="[dauer]"]').forEach(function(el){
+				formatDauerInput(el);
+			});
+
+		container.addEventListener('focusin', function(e){
+			const t = e.target;
+			if (!t || !t.matches || !t.matches('input[name*="[dauer]"]')) return;
+			setTimeout(function(){
+				try { t.select(); } catch(err) {}
+			}, 0);
+		});
+		container.addEventListener('blur', function(e){
+			const t = e.target;
+			if (!t || !t.matches || !t.matches('input[name*="[dauer]"]')) return;
+			formatDauerInput(t);
+		}, true);
 
 		document.getElementById('cmx-task-add')?.addEventListener('click', function(){
 			addRow({});
@@ -174,7 +272,18 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_template = false): void {
 	$datum  = esc_attr($row['datum'] ?? '');
 	$zeit   = esc_attr($row['zeit'] ?? '');
-	$dauer  = esc_attr($row['dauer'] ?? '');
+	$dauer_raw = (string) ($row['dauer'] ?? '');
+	$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
+		? cmx_projekt_decimal_normalize($dauer_raw)
+		: '';
+	$dauer = '';
+	if ($dauer_raw !== '') {
+		if ($dauer_norm !== '' && \function_exists(__NAMESPACE__ . '\\cmx_projekt_format_swiss_number')) {
+			$dauer = \esc_attr(cmx_projekt_format_swiss_number((float) $dauer_norm, 2));
+		} else {
+			$dauer = \esc_attr($dauer_raw);
+		}
+	}
 	$art_id = (int) ($row['artikel_id'] ?? 0);
 	$info   = esc_textarea($row['info'] ?? '');
 	$task_uid_raw = (string) ($row['uid'] ?? '');
@@ -197,7 +306,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<span style="display:flex;align-items:center;gap:6px;">Uhrzeit <a href="#" class="cmx-task-now" style="color:#d63638;text-decoration:none;">jetzt</a></span>';
 	echo '<input type="time" name="cmx_tasks['.$name_base.'][zeit]" value="'.$zeit.'" />';
 	echo '</label>';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:100px;"><span>Dauer (h)</span><input type="number" step="0.25" min="0" name="cmx_tasks['.$name_base.'][dauer]" value="'.$dauer.'" /></label>';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:100px;"><span>Dauer (h)</span><input type="text" inputmode="decimal" class="cmx-task-dauer" name="cmx_tasks['.$name_base.'][dauer]" value="'.$dauer.'" /></label>';
 
 	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1 1 220px;"><span>&nbsp;Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]">';
 	echo '<option value="">— auswählen —</option>';
@@ -239,7 +348,11 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 		$seen_uids[$uid] = true;
 		$datum  = sanitize_text_field($row['datum'] ?? '');
 		$zeit   = sanitize_text_field($row['zeit'] ?? '');
-		$dauer  = sanitize_text_field($row['dauer'] ?? '');
+		$dauer_raw = sanitize_text_field($row['dauer'] ?? '');
+		$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
+			? cmx_projekt_decimal_normalize($dauer_raw)
+			: '';
+		$dauer  = ($dauer_raw === '' || $dauer_norm === '') ? '' : \number_format((float) $dauer_norm, 2, '.', '');
 		$art_id = (int) ($row['artikel_id'] ?? 0);
 		$info   = sanitize_textarea_field($row['info'] ?? '');
 

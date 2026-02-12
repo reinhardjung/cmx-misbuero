@@ -26,13 +26,17 @@ function cmx_render_projekt_umsatz_box(\WP_Post $post): void {
 
 	foreach ($tasks as $row) {
 		if (!is_array($row)) continue;
-		$dauer = (float) str_replace(',', '.', (string) ($row['dauer'] ?? 0));
+		$dauer = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_to_float')
+			? cmx_projekt_decimal_to_float($row['dauer'] ?? 0)
+			: (float) \str_replace(',', '.', (string) ($row['dauer'] ?? 0));
 		$art_id = (int) ($row['artikel_id'] ?? 0);
 		if ($dauer <= 0 || $art_id <= 0) continue;
 
 		$vk_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
 		$vk_raw = \get_post_meta($art_id, $vk_key, true);
-		$vk     = (float) str_replace(',', '.', (string) $vk_raw);
+		$vk     = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_to_float')
+			? cmx_projekt_decimal_to_float($vk_raw)
+			: (float) \str_replace(',', '.', (string) $vk_raw);
 		if ($vk <= 0) continue;
 
 		$betrag = $dauer * $vk;
@@ -55,14 +59,14 @@ function cmx_render_projekt_umsatz_box(\WP_Post $post): void {
 			printf(
 				'<li>%s: %s h × CHF %s = <strong>CHF %s</strong></li>',
 				esc_html($r['artikel']),
-				number_format($r['dauer'], 2, ',', '\''),
-				number_format($r['vk'], 2, ',', '\''),
-				number_format($r['betrag'], 2, ',', '\'')
+				number_format($r['dauer'], 2, '.', '\''),
+				number_format($r['vk'], 2, '.', '\''),
+				number_format($r['betrag'], 2, '.', '\'')
 			);
 		}
 		echo '</ul>';
 	}
 
-	echo '<p style="margin:8px 0 0;"><strong>Gesamt:</strong><br><span style="font-size:18px;">CHF ' . number_format($total, 2, ',', '\'') . '</span></p>';
+	echo '<p style="margin:8px 0 0;"><strong>Gesamt:</strong><br><span style="font-size:18px;">CHF ' . number_format($total, 2, '.', '\'') . '</span></p>';
 	echo '</div>';
 }
