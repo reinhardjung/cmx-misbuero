@@ -98,11 +98,11 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 				table.append($row);
 				table.trigger('cmx_positionen_rows_changed');
 				setTimeout(function(){
-					const $txt = $row.find('.cmx-abschnitt-text').first();
-					if ($txt.length) {
-						$txt.trigger('focus').trigger('click');
+					const $title = $row.find('.cmx-abschnitt-titel').first();
+					if ($title.length) {
+						$title.trigger('focus').trigger('click').select();
 					} else {
-						$row.find('.cmx-abschnitt-titel').focus().select();
+						$row.find('.cmx-abschnitt-text').first().trigger('focus').trigger('click');
 					}
 				}, 0);
 			});

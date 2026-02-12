@@ -808,44 +808,105 @@ function cmx_beleg_positionen_js() {
 				});
 			}
 
-			function initTextbausteinSuggest($ctx){
-				$ctx.find('textarea[name*="[beschreibung]"], textarea[name*="[abschnitt_text]"]').each(function(){
-					const $input = $(this);
-					if($input.data('cmx-text-suggest-ready')) return;
+				function initTextbausteinSuggest($ctx){
+					$ctx.find('textarea[name*="[beschreibung]"], input[name*="[abschnitt_titel]"]').each(function(){
+						const $input = $(this);
+						if($input.data('cmx-text-suggest-ready')) return;
+						const isAbschnittTitel = $input.is('input[name*="[abschnitt_titel]"]');
 
-					const $cell = $input.closest('td');
-					if($cell.css('position')==='static'){ $cell.css('position','relative'); }
-					const $ul = $('<ul class="cmx-art-suggest cmx-text-suggest" style="display:none"></ul>');
-					$input.after($ul);
+						const $cell = $input.closest('td');
+						if($cell.css('position')==='static'){ $cell.css('position','relative'); }
+						const $ul = $('<ul class="cmx-art-suggest cmx-text-suggest" style="display:none"></ul>');
+						$input.after($ul);
 
-					const nav = makeNavigator($input[0], $ul[0], chooseItem);
-					let t = null;
+						const nav = makeNavigator($input[0], $ul[0], chooseItem);
+						let t = null;
+						let querySeq = 0;
 
-					function chooseItem(it){
-						const txt = (it.text || it.title || it.nr || '').toString().trim();
-						if (txt !== '') {
-							$input.val(txt).trigger('input').trigger('change');
+						function closeList(){
+							$ul.hide().empty();
+							if (nav && typeof nav.reset === 'function') nav.reset();
 						}
-						setTimeout(function(){
-							$input.focus();
-						}, 0);
-					}
+
+						function chooseItem(it){
+							if (t) {
+								clearTimeout(t);
+								t = null;
+							}
+							// Invalidate pending AJAX callbacks from previous keystrokes.
+							querySeq++;
+							if (isAbschnittTitel) {
+								const titel = (it.nr || it.label || '').toString().trim();
+								const beschreibung = (it.title || it.text || '').toString().trim();
+								if (titel !== '') {
+									$input.val(titel).trigger('change');
+								}
+								const $row = $input.closest('tr');
+								const $abschnittText = $row.find('textarea[name*="[abschnitt_text]"]').first();
+								if ($abschnittText.length && beschreibung !== '') {
+									$abschnittText.val(beschreibung).trigger('change');
+								}
+								$input.data('cmx-text-selected', 1);
+							} else {
+								const txt = (it.text || it.title || it.nr || '').toString().trim();
+								if (txt !== '') {
+									$input.val(txt).trigger('change');
+								}
+							}
+							$input.data('cmx-text-suppress-open', 1);
+							closeList();
+							setTimeout(function(){
+								$input.focus();
+							}, 0);
+						}
 
 					function doSearch(q){
-						fetchTextbausteine(q, function(rows){ nav.render(rows); });
+						const reqSeq = ++querySeq;
+						fetchTextbausteine(q, function(rows){
+							if (reqSeq !== querySeq) return;
+							nav.render(rows);
+						});
 					}
 
-					$input.on('input', function(){
-						if(t) clearTimeout(t);
-						const q = ($input.val() || '').toString().trim();
-						if(q.length < 1){ doSearch(''); return; }
-						t = setTimeout(()=>doSearch(q), 120);
-					});
-					$input.on('focus click', function(){ doSearch(''); });
+						$input.on('input', function(){
+							if(t) clearTimeout(t);
+							const q = ($input.val() || '').toString().trim();
+							if (isAbschnittTitel) {
+								if (q.length < 1) {
+									$input.removeData('cmx-text-selected');
+									doSearch('');
+									return;
+								}
+								if ($input.data('cmx-text-selected')) {
+									closeList();
+									return;
+								}
+							}
+							if(q.length < 1){ doSearch(''); return; }
+							t = setTimeout(()=>doSearch(q), 120);
+						});
+							$input.on('focus click', function(){
+								if ($input.data('cmx-text-suppress-open')) {
+									$input.removeData('cmx-text-suppress-open');
+									closeList();
+									return;
+							}
+							if (isAbschnittTitel) {
+								const q = ($input.val() || '').toString().trim();
+								if (q !== '') {
+									closeList();
+									return;
+								}
+								}
+								doSearch('');
+							});
+							$input.on('blur', function(){
+								setTimeout(function(){ closeList(); }, 120);
+							});
 
-					$input.data('cmx-text-suggest-ready', true);
-				});
-			}
+						$input.data('cmx-text-suggest-ready', true);
+					});
+				}
 
 		/* ========= Eingabe-Events ========= */
 		const selectorMRP = 'input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]';
