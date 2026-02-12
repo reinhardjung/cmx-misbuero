@@ -525,6 +525,11 @@ function cmx_beleg_positionen_js() {
 			table.on('mousedown touchstart', '.cmx-section-drag-handle', function(){
 				dragMode = 'section';
 			});
+			table.on('pointerdown', '.cmx-pos-drag-handle, .cmx-section-drag-handle', function(e){
+				// Global help modal listens on document pointerdown (long-press).
+				// Ignore drag handles so no help popup appears during sorting.
+				e.stopPropagation();
+			});
 
 		function recalcRowTotal($row){
 			const menge=parseNumberFlexible($row.find('input[name*="[menge]"]').val());
