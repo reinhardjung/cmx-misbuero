@@ -800,9 +800,16 @@ function cmx_beleg_positionen_js() {
 			#cmx-positionen-table .cmx-section-drag-handle{
 				cursor:move;
 				margin-right:4px;
-				min-height:24px;
-				line-height:1.6;
-				padding:0 6px;
+				display:inline-flex;
+				align-items:center;
+				justify-content:center;
+				width:20px;
+				min-width:20px;
+				height:20px;
+				min-height:20px;
+				line-height:1;
+				padding:0;
+				font-weight:600;
 			}
 			#cmx-positionen-table .cmx-pos-drag-handle:hover{ background:#f0f0f1; color:#1d2327; }
 			#cmx-positionen-table tr.ui-sortable-helper td{
