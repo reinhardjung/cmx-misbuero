@@ -36,12 +36,18 @@ function cmx_const_taxos(string $prefix_const, string $prefix_value, string $tax
 
 
 // cmx_seed_taxo('Artikel','Marken,Farben,Einheiten,Typen,Kategorien');
-function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos): void {
+function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = ''): void {
 	$labels = array_filter(array_map('trim', explode(',', $myTaxos)));
 	if (empty($labels)) return;
 
 	$constBase = cmx_sani_key($base,'upper');
 	$slugBase  = cmx_sani_key($base,'lower');
+	$iniAll = [];
+	$iniFile = __DIR__ . '/globales.ini';
+	if (\is_file($iniFile)) {
+		$parsed = \parse_ini_file($iniFile, true, INI_SCANNER_TYPED);
+		if (\is_array($parsed)) $iniAll = $parsed;
+	}
 
 	foreach ($labels as $label) {
 		$upper    = cmx_sani_key($label,'upper');
@@ -52,12 +58,84 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos): void {
 		if (!taxonomy_exists($taxonomy)) continue;
 
 		$have = get_terms(['taxonomy'=>$taxonomy,'hide_empty'=>false,'fields'=>'ids','number'=>1]);
-		if (is_wp_error($have) || !empty($have)) continue;
+		if (is_wp_error($have)) continue;
 
 		$terms = function_exists(__NAMESPACE__.'\\cmx_ini_get_value')
 			? (array) cmx_ini_get_value($slugBase, $lowerKey) // optional: Basisbereich auch dynamisch
 			: [];
-		$terms = array_values(array_filter(array_map('trim', $terms), fn($v)=>$v!==''));
+		$terms = array_values(array_filter(array_map(static fn($v) => trim((string) $v), $terms), static fn($v) => $v !== ''));
+
+		// Erweiterung: Section [<TaxonomieLabel>] als Name=>Beschreibung lesen
+		// Beispiel:
+		// [BelegeTextbausteine]
+		// Barbetrieb="Frontdesk - Barbereich"
+		$sectionEntries = [];
+		if (!empty($iniAll)) {
+			foreach ($iniAll as $sectionName => $sectionData) {
+				if (!\is_array($sectionData)) continue;
+				if (\strcasecmp((string) $sectionName, (string) $label) !== 0) continue;
+				foreach ($sectionData as $name => $descRaw) {
+					$name = \trim((string) $name);
+					if ($name === '') continue;
+					if (\is_array($descRaw)) {
+						$desc = \implode(', ', \array_values(\array_filter(\array_map(static fn($v) => \trim((string) $v), $descRaw), static fn($v) => $v !== '')));
+					} else {
+						$desc = \trim((string) $descRaw);
+					}
+					$sectionEntries[$name] = $desc;
+				}
+				break;
+			}
+		}
+
+		// Falls die Taxonomie schon Werte hat, nur dann weitermachen, wenn Section-Mapping vorhanden ist.
+		// So bleibt das bisherige Verhalten für Standard-Listen unverändert.
+		if (!empty($have) && empty($sectionEntries)) continue;
+
+		// Falls sowohl Listenwerte als auch Section-Mapping existieren:
+		// Listenwerte als Namen ohne Beschreibung ergänzen.
+		if (!empty($sectionEntries) && !empty($terms)) {
+			foreach ($terms as $name) {
+				if ($name !== '' && !isset($sectionEntries[$name])) $sectionEntries[$name] = '';
+			}
+		}
+
+		// Name=>Beschreibung Seeding (upsert)
+		if (!empty($sectionEntries)) {
+			wp_defer_term_counting(true);
+			foreach ($sectionEntries as $name => $description) {
+				$name = \trim((string) $name);
+				if ($name === '') continue;
+
+				$exists = \term_exists($name, $taxonomy);
+				if (!$exists) {
+					$args = [];
+					$description = \trim((string) $description);
+					if ($description !== '') $args['description'] = $description;
+					wp_insert_term($name, $taxonomy, $args);
+					continue;
+				}
+
+				$term_id = 0;
+				if (\is_array($exists)) {
+					$term_id = (int) ($exists['term_id'] ?? 0);
+				} elseif (\is_numeric($exists)) {
+					$term_id = (int) $exists;
+				}
+
+				$description = \trim((string) $description);
+				if ($term_id > 0 && $description !== '') {
+					$term = \get_term($term_id, $taxonomy);
+					if ($term && !\is_wp_error($term) && (string) $term->description !== $description) {
+						\wp_update_term($term_id, $taxonomy, ['description' => $description]);
+					}
+				}
+			}
+			wp_defer_term_counting(false);
+			continue;
+		}
+
+		if (!empty($have)) continue;
 		if (empty($terms)) continue;
 
 		wp_defer_term_counting(true);
