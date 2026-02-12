@@ -46,6 +46,33 @@ function cmx_projekte_detect_taxonomy(): ?string {
 	return null;
 }
 
+/** Status-Taxonomie für Projekte ermitteln */
+if (!function_exists(__NAMESPACE__ . '\cmx_projekte_detect_status_taxonomy')) {
+	function cmx_projekte_detect_status_taxonomy(): ?string {
+		if (function_exists(__NAMESPACE__ . '\cmx_projekte_status_tax')) {
+			$tax = (string) cmx_projekte_status_tax();
+			if ($tax !== '' && taxonomy_exists($tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
+				return $tax;
+			}
+		}
+
+		if (defined(__NAMESPACE__ . '\TAX_PROJEKTE_STATUS')) {
+			$tax = (string) TAX_PROJEKTE_STATUS;
+			if ($tax !== '' && taxonomy_exists($tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
+				return $tax;
+			}
+		}
+
+		foreach (['projekte_status', 'projekt_status', 'status'] as $candidate) {
+			if (taxonomy_exists($candidate) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $candidate)) {
+				return $candidate;
+			}
+		}
+
+		return null;
+	}
+}
+
 /** Kunden-Optionen für Admin-Filter (nur tatsächlich verwendete Kontakt-IDs) */
 if (!function_exists(__NAMESPACE__ . '\cmx_projekte_get_kunden_filter_options')) {
 	function cmx_projekte_get_kunden_filter_options(): array {
@@ -245,11 +272,13 @@ add_filter("manage_" . CMX_PROJEKT_CPT . "_posts_columns", function(array $colum
 		if ($key === 'title') {
 			$new['cmx_kunde']     = __('Kunde', 'cmx');
 			$new['cmx_kategorie'] = __('Kategorie', 'cmx');
+			$new['cmx_status']    = __('Status', 'cmx');
 		}
 	}
 	if (!isset($columns['title'])) {
 		$new['cmx_kunde']     = __('Kunde', 'cmx');
 		$new['cmx_kategorie'] = __('Kategorie', 'cmx');
+		$new['cmx_status']    = __('Status', 'cmx');
 	}
 	return $new;
 }, 20);
@@ -290,12 +319,32 @@ add_action('manage_' . CMX_PROJEKT_CPT . '_posts_custom_column', function(string
 		return;
 	}
 
+	if ($column === 'cmx_status') {
+		$tax = cmx_projekte_detect_status_taxonomy();
+		if (!$tax) { echo ''; return; }
+
+		$terms = get_the_terms($post_id, $tax);
+		if (empty($terms) || is_wp_error($terms)) { echo ''; return; }
+
+		$out = [];
+		foreach ($terms as $t) {
+			$url = add_query_arg([
+				'post_type'         => CMX_PROJEKT_CPT,
+				'cmx_status_filter' => $t->slug,
+			], admin_url('edit.php'));
+			$out[] = '<a href="' . esc_url($url) . '">' . esc_html($t->name) . '</a>';
+		}
+		echo implode(', ', $out);
+		return;
+	}
+
 }, 10, 2);
 
 /** Sortierbarkeit: Kunde (nach Kontakt-ID) */
 add_filter('manage_edit-' . CMX_PROJEKT_CPT . '_sortable_columns', function(array $cols) {
 	$cols['cmx_kunde'] = 'cmx_kunde';
 	$cols['cmx_kategorie'] = 'cmx_sort_kategorie';
+	$cols['cmx_status'] = 'cmx_sort_status';
 	return $cols;
 });
 
@@ -325,6 +374,36 @@ add_action('restrict_manage_posts', function($post_type) {
 		'hide_empty'      => false,
 		'value_field'     => 'slug',
 	]);
+}, 10);
+
+/** B1b: Status-Filter (Dropdown) über der Tabelle */
+add_action('restrict_manage_posts', function($post_type) {
+	if ($post_type !== CMX_PROJEKT_CPT) return;
+
+	$tax = cmx_projekte_detect_status_taxonomy();
+	if (!$tax || !taxonomy_exists($tax) || !is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) return;
+
+	$param = 'cmx_status_filter';
+	$selected = isset($_GET[$param]) ? sanitize_text_field(wp_unslash($_GET[$param])) : '';
+	$terms = get_terms([
+		'taxonomy'   => $tax,
+		'hide_empty' => false,
+		'orderby'    => 'name',
+		'order'      => 'ASC',
+	]);
+	if (is_wp_error($terms)) return;
+
+	echo '<select name="' . esc_attr($param) . '">';
+	echo '<option value="">' . esc_html__('Alle Status', 'cmx') . '</option>';
+	foreach ($terms as $term) {
+		printf(
+			'<option value="%s"%s>%s</option>',
+			esc_attr($term->slug),
+			selected($selected, (string) $term->slug, false),
+			esc_html($term->name)
+		);
+	}
+	echo '</select>';
 }, 10);
 
 /** B2: Kunden-Filter (Dropdown) über der Tabelle */
@@ -393,6 +472,7 @@ add_filter('manage_edit-projekte_sortable_columns', function($sortable) {
 	$sortable['cmx_col_ende']   = 'cmx_sort_ende';
 	$sortable['cmx_col_umsatz'] = 'cmx_sort_umsatz';
 	$sortable['cmx_kategorie']  = 'cmx_sort_kategorie';
+	$sortable['cmx_status']     = 'cmx_sort_status';
 	// Kunde-Sortierung bleibt über den anderen Filter gesetzt
 	return $sortable;
 });
@@ -443,28 +523,57 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$q->set('meta_query', $meta_query);
 	}
 
-	// Kategorie-Filter (greift auch ohne query_var)
-	$tax = cmx_projekte_detect_taxonomy();
-	if ($tax && taxonomy_exists($tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
-		$selected = isset($_GET[$tax]) ? sanitize_text_field(wp_unslash($_GET[$tax])) : '';
-		if ($selected !== '' && $selected !== '0') {
-			$q->set('tax_query', [[
-				'taxonomy'         => $tax,
+	// Taxonomie-Filter (Kategorie + Status)
+	$tax_query = (array) $q->get('tax_query');
+
+	$category_tax = cmx_projekte_detect_taxonomy();
+	if ($category_tax && taxonomy_exists($category_tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $category_tax)) {
+		$selected_category = isset($_GET[$category_tax]) ? sanitize_text_field(wp_unslash($_GET[$category_tax])) : '';
+		if ($selected_category !== '' && $selected_category !== '0') {
+			$tax_query[] = [
+				'taxonomy'         => $category_tax,
 				'field'            => 'slug',
-				'terms'            => [$selected],
+				'terms'            => [$selected_category],
 				'include_children' => true,
-			]]);
+			];
 		}
+	}
+
+	$status_tax = cmx_projekte_detect_status_taxonomy();
+	$selected_status = isset($_GET['cmx_status_filter']) ? sanitize_text_field(wp_unslash($_GET['cmx_status_filter'])) : '';
+	if ($status_tax && taxonomy_exists($status_tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $status_tax) && $selected_status !== '' && $selected_status !== '0') {
+		$tax_query[] = [
+			'taxonomy'         => $status_tax,
+			'field'            => 'slug',
+			'terms'            => [$selected_status],
+			'include_children' => false,
+		];
+	}
+
+	$has_tax_filters = false;
+	foreach ($tax_query as $key => $clause) {
+		if (is_int($key) && is_array($clause) && !empty($clause['taxonomy'])) {
+			$has_tax_filters = true;
+			break;
+		}
+	}
+	if ($has_tax_filters) {
+		if (!isset($tax_query['relation'])) {
+			$tax_query['relation'] = 'AND';
+		}
+		$q->set('tax_query', $tax_query);
 	}
 });
 
-/** Sortierung Kategorie (Taxonomie-Termname) */
+/** Sortierung Kategorie/Status (Taxonomie-Termname) */
 add_filter('posts_clauses', function(array $clauses, \WP_Query $q): array {
 	if (!is_admin() || !$q->is_main_query()) return $clauses;
 	if ((string) $q->get('post_type') !== (string) CMX_PROJEKT_CPT) return $clauses;
-	if ((string) $q->get('orderby') !== 'cmx_sort_kategorie') return $clauses;
+	$orderby = (string) $q->get('orderby');
+	if (!in_array($orderby, ['cmx_sort_kategorie', 'cmx_sort_status'], true)) return $clauses;
 
-	$tax = cmx_projekte_detect_taxonomy();
+	$is_status_sort = ($orderby === 'cmx_sort_status');
+	$tax = $is_status_sort ? cmx_projekte_detect_status_taxonomy() : cmx_projekte_detect_taxonomy();
 	if (!$tax || !taxonomy_exists($tax) || !is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) {
 		return $clauses;
 	}
@@ -472,10 +581,14 @@ add_filter('posts_clauses', function(array $clauses, \WP_Query $q): array {
 	global $wpdb;
 	$order = strtoupper((string) $q->get('order')) === 'DESC' ? 'DESC' : 'ASC';
 	$tax_sql = esc_sql($tax);
+	$suffix = $is_status_sort ? 'status' : 'kat';
+	$tr_alias = 'cmxtr_' . $suffix;
+	$tt_alias = 'cmxtt_' . $suffix;
+	$t_alias  = 'cmxt_' . $suffix;
 
-	$clauses['join'] .= " LEFT JOIN {$wpdb->term_relationships} cmxtr_kat ON ({$wpdb->posts}.ID = cmxtr_kat.object_id)";
-	$clauses['join'] .= " LEFT JOIN {$wpdb->term_taxonomy} cmxtt_kat ON (cmxtr_kat.term_taxonomy_id = cmxtt_kat.term_taxonomy_id AND cmxtt_kat.taxonomy = '{$tax_sql}')";
-	$clauses['join'] .= " LEFT JOIN {$wpdb->terms} cmxt_kat ON (cmxtt_kat.term_id = cmxt_kat.term_id)";
+	$clauses['join'] .= " LEFT JOIN {$wpdb->term_relationships} {$tr_alias} ON ({$wpdb->posts}.ID = {$tr_alias}.object_id)";
+	$clauses['join'] .= " LEFT JOIN {$wpdb->term_taxonomy} {$tt_alias} ON ({$tr_alias}.term_taxonomy_id = {$tt_alias}.term_taxonomy_id AND {$tt_alias}.taxonomy = '{$tax_sql}')";
+	$clauses['join'] .= " LEFT JOIN {$wpdb->terms} {$t_alias} ON ({$tt_alias}.term_id = {$t_alias}.term_id)";
 
 	if (empty($clauses['groupby'])) {
 		$clauses['groupby'] = "{$wpdb->posts}.ID";
@@ -483,7 +596,7 @@ add_filter('posts_clauses', function(array $clauses, \WP_Query $q): array {
 		$clauses['groupby'] .= ", {$wpdb->posts}.ID";
 	}
 
-	$clauses['orderby'] = "COALESCE(MIN(cmxt_kat.name), '') {$order}, {$wpdb->posts}.ID {$order}";
+	$clauses['orderby'] = "COALESCE(MIN({$t_alias}.name), '') {$order}, {$wpdb->posts}.ID {$order}";
 	return $clauses;
 }, 20, 2);
 
