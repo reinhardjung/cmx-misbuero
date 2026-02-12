@@ -177,7 +177,7 @@ $recipient_html = $recipient_has_br
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
-	.positions-table tbody tr:nth-child(even) { background: #f3f3f3; }
+		.positions-table tbody tr.cmx-pdf-pos-even { background: #f3f3f3; }
 	.positions-table tbody td { vertical-align: top; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
@@ -349,6 +349,7 @@ $recipient_html = $recipient_has_br
 				<?php else: ?>
 					<?php
 					$pos_no = 0;
+					$zebra_block_pos = 0;
 					?>
 					<?php foreach ($positions as $i => $row): ?>
 						<?php
@@ -367,24 +368,27 @@ $recipient_html = $recipient_has_br
 									<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
 								<?php endif; ?>
 							</td>
-						</tr>
-						<?php
-						continue;
-					}
-					$pos_no++;
-					$qty = (float)($row['qty'] ?? 0);
-					$unit = (string)($row['unit'] ?? '');
-					$unit_price = (float)($row['unit_price'] ?? 0);
-				$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+							</tr>
+							<?php
+							$zebra_block_pos = 0;
+							continue;
+						}
+						$pos_no++;
+						$zebra_block_pos++;
+						$qty = (float)($row['qty'] ?? 0);
+						$unit = (string)($row['unit'] ?? '');
+						$unit_price = (float)($row['unit_price'] ?? 0);
+					$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
 				$line_subtotal = $qty * $unit_price;
 				$line_discount = $line_subtotal - $line_total;
 				$item = (string)($row['item'] ?? '');
 				$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
-				$desc_html = (string)($row['desc_html'] ?? '');
-				$sku = (string)($row['article_number'] ?? '');
-				$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
-				?>
-					<tr>
+					$desc_html = (string)($row['desc_html'] ?? '');
+					$sku = (string)($row['article_number'] ?? '');
+					$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
+					$row_class = ($zebra_block_pos % 2 === 0) ? ' class="cmx-pdf-pos-even"' : '';
+					?>
+						<tr<?= $row_class; ?>>
 						<?php if ($show_position_index): ?>
 							<td><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>
