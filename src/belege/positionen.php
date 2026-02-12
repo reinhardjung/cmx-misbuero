@@ -667,6 +667,10 @@ function cmx_beleg_positionen_js() {
 		const table   = $('#cmx-positionen-table tbody');
 		const AJAX_URL = <?php echo wp_json_encode($ajax_url); ?>;
 		const ARTICLE_EDIT_BASE = <?php echo wp_json_encode(admin_url('post.php?post=')); ?>;
+		const INITIAL_ARTICLE_ROW_HTML = (function(){
+			const $tpl = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first').first();
+			return $tpl.length ? $('<div>').append($tpl.clone()).html() : '';
+		})();
 		const $taskPickerWrap = $('#cmx-task-picker-wrap');
 		const $taskPickerPanel = $('#cmx-task-picker-panel');
 		const $taskPickerSearch = $('#cmx-task-picker-search');
@@ -1053,7 +1057,15 @@ function cmx_beleg_positionen_js() {
 				let i = nextRowIndex();
 				let $template = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first');
 				if (!$template.length) {
+					if (INITIAL_ARTICLE_ROW_HTML) {
+						$template = $(INITIAL_ARTICLE_ROW_HTML).filter('tr.cmx-pos-row').first();
+					}
+				}
+				if (!$template.length) {
 					$template = table.find('tr:first');
+				}
+				if (!$template.length) {
+					return $();
 				}
 				let newRow = $template.clone();
 
@@ -1392,22 +1404,42 @@ function cmx_beleg_positionen_js() {
 				});
 			}
 
-		// Entfernen
-		table.on('click','.cmx-del-pos',function(){
-			const $row = $(this).closest('tr');
-			if (table.find('tr').length > 1) {
-				$row.remove();
-			} else {
-				// Letzte Zeile: Inhalte leeren, damit kein zusätzlicher Platzhalter nötig ist
-				$row.find('input, textarea').each(function(){
-					const $el = $(this);
-					if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
-					else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
-					else { $el.val(''); }
-				});
-				$row.find('.cmx-pos-total').text('0,00');
-			}
-				table.trigger('cmx_positionen_rows_changed');
+			// Entfernen
+			table.on('click','.cmx-del-pos',function(){
+				const $row = $(this).closest('tr');
+				const rowCount = table.find('tr').length;
+				const isAbschnitt = $row.hasClass('cmx-pos-row-abschnitt');
+				let rowsChangedHandled = false;
+
+				if (rowCount > 1) {
+					$row.remove();
+				} else {
+					if (isAbschnitt) {
+						// Wenn nur noch ein Abschnitt existiert und gelöscht wird, direkt leere Artikel-Zeile wiederherstellen.
+						$row.remove();
+						const $newRow = addPositionRow({});
+						if ($newRow.length) {
+							rowsChangedHandled = true;
+							setTimeout(function(){
+								$newRow.find('.cmx-artikel-autocomplete').first().trigger('focus');
+							}, 0);
+						}
+					} else {
+						// Letzte normale Positionszeile: Inhalte leeren, damit kein zusätzlicher Platzhalter nötig ist
+						$row.find('input, textarea').each(function(){
+							const $el = $(this);
+							if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
+							else if ($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid')) { $el.val(''); }
+							else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
+							else { $el.val(''); }
+						});
+						$row.find('.cmx-pos-total').text('0,00');
+					}
+				}
+
+				if (!rowsChangedHandled) {
+					table.trigger('cmx_positionen_rows_changed');
+				}
 			});
 
 		// Initial
