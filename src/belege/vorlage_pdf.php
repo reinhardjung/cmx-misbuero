@@ -957,9 +957,16 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 
 		$bank  = cmxbu_get_preferred_bank();
 		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
-		$qr_meta_enabled = ($qr_iban !== '');
+		$bank_iban = trim((string)($bank['iban'] ?? ''));
+		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
+		$qr_user_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));
+		$qr_meta_enabled = $qr_user_enabled && ($qr_iban !== '');
 		$qr_should_print = $qr_meta_enabled
 			&& (strtolower($beleg_type) === 'rechnung');
+		$qr_payment_iban = $qr_user_enabled ? $qr_iban : $bank_iban;
+		if ($qr_payment_iban === '') {
+			$qr_payment_iban = $qr_iban;
+		}
 // var_dump($dates['currency']); exit;
 		// Platzhalter für Vorlage
 		$tpl = [
@@ -1002,8 +1009,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			}, $calc['positionen']),
 			'any_discount' => (bool)($calc['any_discount'] ?? false),
 			'qr' => [
-				'enabled' => $qr_meta_enabled,
-				'iban' => $qr_iban,
+				'enabled' => $qr_user_enabled,
+				'iban' => $qr_payment_iban,
 				'will_print' => $qr_should_print,
 			],
 			'tax' => [
