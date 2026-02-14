@@ -190,6 +190,23 @@ $recipient_html = $recipient_has_br
 	margin-top: 4px;
 	font-weight: 400;
 }
+.positions-table th.col-pos,
+.positions-table td.col-pos {
+	width: 38px;
+	min-width: 38px;
+	white-space: nowrap;
+}
+.positions-table th.col-sku,
+.positions-table td.col-sku {
+	width: 96px;
+	min-width: 96px;
+}
+.positions-table th.col-qty,
+.positions-table td.col-qty {
+	width: 88px;
+	min-width: 88px;
+	white-space: nowrap;
+}
 .positions-table th.col-num { text-align: right; padding-right: 8px; }
 	.totals-table,
 	.totals-table tr,
@@ -323,13 +340,13 @@ $recipient_html = $recipient_has_br
 		<thead>
 			<tr>
 				<?php if ($show_position_index): ?>
-					<th>Pos.</th>
+					<th class="col-pos">Pos.</th>
 				<?php endif; ?>
 				<?php if ($show_sku): ?>
-					<th>SKU</th>
+					<th class="col-sku">SKU</th>
 				<?php endif; ?>
 				<th>Artikel</th>
-				<th class="col-num">Menge</th>
+				<th class="col-num col-qty">Menge</th>
 				<?php if ($show_unit_price): ?>
 					<th class="col-num">Einzelpreis</th>
 				<?php endif; ?>
@@ -390,10 +407,10 @@ $recipient_html = $recipient_has_br
 					?>
 						<tr<?= $row_class; ?>>
 						<?php if ($show_position_index): ?>
-							<td><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
+							<td class="col-pos"><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>
 					<?php if ($show_sku): ?>
-						<td><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
 					<td>
 						<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
@@ -403,7 +420,7 @@ $recipient_html = $recipient_has_br
 							<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
 						<?php endif; ?>
 					</td>
-					<td class="text-right"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
+					<td class="text-right col-qty"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php if ($show_unit_price): ?>
 						<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
