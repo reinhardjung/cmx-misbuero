@@ -313,6 +313,18 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	min-width: 88px;
 	white-space: nowrap;
 }
+.positions-table th.col-unit-price,
+.positions-table td.col-unit-price {
+	width: 96px;
+	min-width: 96px;
+	white-space: nowrap;
+}
+.positions-table th.col-line-total,
+.positions-table td.col-line-total {
+	width: 96px;
+	min-width: 96px;
+	white-space: nowrap;
+}
 .positions-table th.col-num { text-align: right; padding-right: 8px; }
 	.totals-table,
 	.totals-table tr,
@@ -449,13 +461,13 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<th>Artikel</th>
 				<th class="col-num col-qty">Menge</th>
 				<?php if ($show_unit_price): ?>
-					<th class="col-num">Einzelpreis</th>
+					<th class="col-num col-unit-price">Einzelpreis</th>
 				<?php endif; ?>
 				<?php if ($show_discount): ?>
 					<th class="col-num">Rabatt</th>
 				<?php endif; ?>
 				<?php if ($show_line_total): ?>
-					<th class="col-num">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+					<th class="col-num col-line-total">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
 				<?php endif; ?>
 			</tr>
 		</thead>
@@ -523,13 +535,13 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 					</td>
 					<td class="text-right col-qty"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php if ($show_unit_price): ?>
-						<td class="text-right"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
 					<?php if ($show_discount): ?>
 						<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
 					<?php if ($show_line_total): ?>
-						<td class="text-right"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right col-line-total"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
 					<?php endif; ?>
 				</tr>
 			<?php endforeach; ?>
