@@ -147,6 +147,38 @@ function cmx_field_textarea_beleg(array $args): void {
 		style="width:100%;">' . esc_textarea($display) . '</textarea>';
 }
 
+function cmx_field_select_briefbogen(array $args): void {
+	$key = (string)($args['key'] ?? '');
+	$options = (array) get_option('cmx_belege', []);
+	$current = strtolower(trim((string)($options[$key] ?? 'dl_left')));
+	$choices = [
+		'dl_left' => 'DL (DIN lang) - Fenster links',
+		'c5_left' => 'C5 gefalzt - Fenster links',
+		'c4_left' => 'C4 ungefalzt - Fenster links',
+		'dl_right' => 'DL (DIN lang) - Fenster rechts',
+		'c5_right' => 'C5 gefalzt - Fenster rechts',
+		'c4_right' => 'C4 ungefalzt - Fenster rechts',
+	];
+	$legacy_map = [
+		'dl' => 'dl_left',
+		'c5' => 'c5_left',
+		'c4' => 'c4_left',
+	];
+	if (isset($legacy_map[$current])) {
+		$current = $legacy_map[$current];
+	}
+	if (!isset($choices[$current])) {
+		$current = 'dl_left';
+	}
+
+	echo '<select name="cmx_belege[' . esc_attr($key) . ']" style="min-width:320px;">';
+	foreach ($choices as $val => $label) {
+		echo '<option value="' . esc_attr($val) . '" ' . selected($current, $val, false) . '>' . esc_html($label) . '</option>';
+	}
+	echo '</select>';
+	echo '<p class="description">Standard-Briefbogen für diese Belegart.</p>';
+}
+
 
 /* ------------------------------------------------------------
  * FELDER REGISTRIEREN
@@ -187,5 +219,38 @@ add_action('admin_init', function() {
 
 		$add($page, "sec_{$sub}", 'Belegfuss',   "belegfuss_{$sub}", 4);
 		$add($page, "sec_{$sub}", 'E-Mail Text', "mail_{$sub}",      8);
+		add_settings_field(
+			"briefbogen_{$sub}",
+			'Briefbogen',
+			__NAMESPACE__ . '\\cmx_field_select_briefbogen',
+			$page,
+			"sec_{$sub}",
+			[
+				'key' => "briefbogen_{$sub}",
+			]
+		);
 	}
 });
+
+add_filter('pre_update_option_cmx_belege', function($new, $old) {
+	if (!is_array($new)) {
+		return is_array($old) ? $old : [];
+	}
+
+	$allowed = ['dl_left', 'c5_left', 'c4_left', 'dl_right', 'c5_right', 'c4_right'];
+	$legacy_map = [
+		'dl' => 'dl_left',
+		'c5' => 'c5_left',
+		'c4' => 'c4_left',
+	];
+	foreach (['angebot', 'gutschrift', 'lieferschein', 'rechnung'] as $type) {
+		$key = 'briefbogen_' . $type;
+		$val = strtolower(trim((string)($new[$key] ?? 'dl_left')));
+		if (isset($legacy_map[$val])) {
+			$val = $legacy_map[$val];
+		}
+		$new[$key] = in_array($val, $allowed, true) ? $val : 'dl_left';
+	}
+
+	return $new;
+}, 10, 2);

@@ -31,12 +31,21 @@ if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_WIDTH_MM')) define(__NAMESPACE__.
 if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_HEIGHT_MM', 40.0);
 if (!defined(__NAMESPACE__.'\\CMX_DL_HEADER_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_DL_HEADER_HEIGHT_MM', 98.0);
 if (!defined(__NAMESPACE__.'\\CMX_DL_META_TOP_MM')) define(__NAMESPACE__.'\\CMX_DL_META_TOP_MM', 38.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_X_RIGHT_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_X_RIGHT_MM', 105.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_RECIPIENT_X_MM')) define(__NAMESPACE__.'\\CMX_C5_RECIPIENT_X_MM', 20.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_RECIPIENT_Y_MM')) define(__NAMESPACE__.'\\CMX_C5_RECIPIENT_Y_MM', 45.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_RECIPIENT_WIDTH_MM')) define(__NAMESPACE__.'\\CMX_C5_RECIPIENT_WIDTH_MM', 85.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_RECIPIENT_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C5_RECIPIENT_HEIGHT_MM', 40.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_HEADER_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C5_HEADER_HEIGHT_MM', 98.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_META_TOP_MM')) define(__NAMESPACE__.'\\CMX_C5_META_TOP_MM', 38.0);
+if (!defined(__NAMESPACE__.'\\CMX_C5_RECIPIENT_X_RIGHT_MM')) define(__NAMESPACE__.'\\CMX_C5_RECIPIENT_X_RIGHT_MM', 105.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_MM', 20.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_Y_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_Y_MM', 55.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_WIDTH_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_WIDTH_MM', 90.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_HEIGHT_MM', 40.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_HEADER_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C4_HEADER_HEIGHT_MM', 110.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_META_TOP_MM')) define(__NAMESPACE__.'\\CMX_C4_META_TOP_MM', 38.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_RIGHT_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_RIGHT_MM', 100.0);
 if (!defined(__NAMESPACE__.'\\CMX_C4_SWITCH_PAGE_THRESHOLD')) define(__NAMESPACE__.'\\CMX_C4_SWITCH_PAGE_THRESHOLD', 5);
 
 // function mytheme_enqueue_local_fonts() {
@@ -154,6 +163,32 @@ function cmx_get_belegfuss(string $key): string {
 		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
 	}
 	return '';
+}
+
+function cmx_get_beleg_briefbogen(string $beleg_type): string {
+	$beleg_type = strtolower(trim($beleg_type));
+	$key_map = [
+		'angebot' => 'angebot',
+		'offerte' => 'angebot',
+		'gutschrift' => 'gutschrift',
+		'lieferschein' => 'lieferschein',
+		'rechnung' => 'rechnung',
+	];
+	$type_key = $key_map[$beleg_type] ?? 'rechnung';
+	$option_key = 'briefbogen_' . $type_key;
+	$options = (array) get_option('cmx_belege', []);
+	$selected = strtolower(trim((string)($options[$option_key] ?? 'dl_left')));
+	$legacy_map = [
+		'dl' => 'dl_left',
+		'c5' => 'c5_left',
+		'c4' => 'c4_left',
+	];
+	if (isset($legacy_map[$selected])) {
+		$selected = $legacy_map[$selected];
+	}
+	$allowed = ['dl_left', 'c5_left', 'c4_left', 'dl_right', 'c5_right', 'c4_right'];
+
+	return in_array($selected, $allowed, true) ? $selected : 'dl_left';
 }
 
 
@@ -990,8 +1025,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			'bank' => $bank,
 		];
 		$layout_profiles = [
-			'dl' => [
-				'profile' => 'dl',
+			'dl_left' => [
+				'profile' => 'dl_left',
 				'logo_x_mm' => (float) CMX_LOGO_X_MM,
 				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
 				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
@@ -1003,8 +1038,21 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'meta_top_mm' => (float) CMX_DL_META_TOP_MM,
 				'show_recipient_label' => false,
 			],
-			'c4' => [
-				'profile' => 'c4',
+			'c5_left' => [
+				'profile' => 'c5_left',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_C5_RECIPIENT_X_MM,
+				'recipient_y_mm' => (float) CMX_C5_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_C5_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_C5_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_C5_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_C5_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
+			'c4_left' => [
+				'profile' => 'c4_left',
 				'logo_x_mm' => (float) CMX_LOGO_X_MM,
 				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
 				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
@@ -1016,8 +1064,48 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'meta_top_mm' => (float) CMX_C4_META_TOP_MM,
 				'show_recipient_label' => false,
 			],
+			'dl_right' => [
+				'profile' => 'dl_right',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_DL_RECIPIENT_X_RIGHT_MM,
+				'recipient_y_mm' => (float) CMX_DL_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_DL_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_DL_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_DL_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_DL_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
+			'c5_right' => [
+				'profile' => 'c5_right',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_C5_RECIPIENT_X_RIGHT_MM,
+				'recipient_y_mm' => (float) CMX_C5_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_C5_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_C5_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_C5_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_C5_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
+			'c4_right' => [
+				'profile' => 'c4_right',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_C4_RECIPIENT_X_RIGHT_MM,
+				'recipient_y_mm' => (float) CMX_C4_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_C4_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_C4_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_C4_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_C4_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
 		];
-		$tpl['layout'] = $layout_profiles['dl'];
+		$preferred_layout = cmx_get_beleg_briefbogen((string)$beleg_type);
+		$tpl['layout'] = $layout_profiles[$preferred_layout] ?? $layout_profiles['dl_left'];
 
 		// Vorlage laden & rendern
 		$tpl_dir = trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/';
@@ -1081,8 +1169,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 
 			$dom = $build_dom($html, $page_css, $tpl, $post_id);
 			$probe_pages = $dom->getCanvas()->get_page_count();
-			if ($probe_pages > (int) CMX_C4_SWITCH_PAGE_THRESHOLD) {
-				$tpl['layout'] = $layout_profiles['c4'];
+			$current_layout = strtolower((string)($tpl['layout']['profile'] ?? 'dl_left'));
+			$is_c4_layout = (strpos($current_layout, 'c4') === 0);
+			if (!$is_c4_layout && $probe_pages > (int) CMX_C4_SWITCH_PAGE_THRESHOLD) {
+				$target_c4_profile = (substr($current_layout, -6) === '_right') ? 'c4_right' : 'c4_left';
+				$tpl['layout'] = $layout_profiles[$target_c4_profile] ?? $layout_profiles['c4_left'];
 				$html = $render_html($tpl_path, $tpl, $cmx_beleg_adress);
 				if (mb_strlen($html, '8bit') < 50) {
 					cmxbu_log('FEHLER: HTML leer/zu kurz (C4).');
