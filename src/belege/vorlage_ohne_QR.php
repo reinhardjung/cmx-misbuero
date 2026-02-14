@@ -248,12 +248,14 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		width: <?= htmlspecialchars($recipient_w_css, ENT_QUOTES, 'UTF-8'); ?>;
 		min-height: <?= htmlspecialchars($recipient_h_css, ENT_QUOTES, 'UTF-8'); ?>;
 		float: none;
+		font-size: 14px;
 	}
 	.recipient-window .recipient-label { display: <?= htmlspecialchars($recipient_label_display, ENT_QUOTES, 'UTF-8'); ?>; margin-bottom: 2mm; }
 	.recipient-window .recipient-lines { line-height: 1.3; }
 	h1 { margin-top: 0; font-size: 20px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
+	.beleg-content { margin-top: -42px; }
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
@@ -396,16 +398,17 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		<div class="clear"></div>
 	</div>
 
-	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
-	<?php if ($beleg_subject !== ''): ?>
-		<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
-	<?php endif; ?>
-	<?php if ($beleg_description !== ''): ?>
-		<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
-	<?php endif; ?>
+	<div class="beleg-content">
+		<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+		<?php if ($beleg_subject !== ''): ?>
+			<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+		<?php endif; ?>
+		<?php if ($beleg_description !== ''): ?>
+			<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
+		<?php endif; ?>
 
-<?php if ($has_positions || $has_section_rows): ?>
-		<table class="positions-table">
+	<?php if ($has_positions || $has_section_rows): ?>
+			<table class="positions-table">
 			<thead>
 				<tr>
 					<?php if ($show_position_index): ?>
@@ -504,7 +507,8 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<?php endif; ?>
 				</tbody>
 			</table>
-	<?php endif; ?>
+		<?php endif; ?>
+	</div>
 
 		<?php if (!$is_lieferschein): ?>
 			<table class="totals-table" border="0">
