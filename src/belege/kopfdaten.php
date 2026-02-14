@@ -944,17 +944,26 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				let pT=null;
 				const projNav=makeNavigator(pI,pL,chooseProject);
 				function isManual(el){ return !!el && String(el.value||"0")==="1"; }
+				function isEmpty(val){ return !val || String(val).trim()===""; }
 
 				function chooseProject(it){
 					pI.value=it.title||""; pH.value=it.id||""; pI.focus();
 					if(pS){ pS.value="1"; }
-				if(it.kontakt_id){
+					if(it.kontakt_id){
 					const kI=document.getElementById("cmx_kontakt_search");
 					const kH=document.getElementById("cmx_kontakt_id");
 					const kA=document.getElementById("cmx_kontakt_addr");
-					if(kI&&kH){ kI.value=it.kontakt_title||""; kH.value=it.kontakt_id||""; }
-					if(kA){ kA.value=it.kontakt_addr||""; }
-				}
+						if(kI&&kH){ kI.value=it.kontakt_title||""; kH.value=it.kontakt_id||""; }
+						if(kA){ kA.value=it.kontakt_addr||""; }
+					}
+					const bothEmpty = (!betInput || isEmpty(betInput.value)) && (!beschInput || isEmpty(beschInput.value));
+					if (bothEmpty) {
+						if(betInput){ betInput.value=(it.subject||"").trim(); }
+						if(beschInput){ beschInput.value=(it.description||"").trim(); }
+						if(betManualInput){ betManualInput.value="0"; }
+						if(beschManualInput){ beschManualInput.value="0"; }
+						return;
+					}
 					if(betInput && !isManual(betManualInput)){
 						betInput.value=(it.subject||"").trim();
 						if(betManualInput){ betManualInput.value="0"; }
@@ -1136,8 +1145,42 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
 		}
 		if ($selected_projekt_id > 0) {
+			$current_betreff = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')
+				? (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true)
+				: '';
+			$current_beschreibung = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')
+				? (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true)
+				: '';
+			$both_empty = \trim($current_betreff) === '' && \trim(\wp_strip_all_tags($current_beschreibung)) === '';
+
+			if ($projekt_selection_changed && $both_empty) {
+				$projekt_betreff = cmx_get_projekt_betreff_value($selected_projekt_id);
+				$projekt_beschreibung = cmx_get_projekt_beschreibung_value($selected_projekt_id);
+
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && $projekt_betreff !== '') {
+					\update_post_meta($post_id, CMX_BELEG_META_BETREFF, $projekt_betreff);
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG') && $projekt_beschreibung !== '') {
+					\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, $projekt_beschreibung);
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) {
+					\delete_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL);
+					$betreff_manual = false;
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) {
+					\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL);
+					$beschreibung_manual = false;
+				}
+
+				$current_betreff = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')
+					? (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true)
+					: $current_betreff;
+				$current_beschreibung = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')
+					? (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true)
+					: $current_beschreibung;
+			}
+
 			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')) {
-				$current_betreff = (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true);
 				if (!$betreff_manual && \trim($current_betreff) === '') {
 					$projekt_betreff = cmx_get_projekt_betreff_value($selected_projekt_id);
 					if ($projekt_betreff !== '') {
@@ -1146,7 +1189,6 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				}
 			}
 			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')) {
-				$current_beschreibung = (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true);
 				if (!$beschreibung_manual && \trim(\wp_strip_all_tags($current_beschreibung)) === '') {
 					$projekt_beschreibung = cmx_get_projekt_beschreibung_value($selected_projekt_id);
 					if ($projekt_beschreibung !== '') {
