@@ -42,6 +42,7 @@ function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): 
  * PDF-Typ für Darstellung/Dateinamen normalisieren.
  * Regel: Rechnung + Unterkategorie "Ausgabe" (Meta-Richtung "eingang")
  * wird als Lieferantenrechnung geführt.
+ * Gleiches gilt für Quittung -> Lieferantenquittung.
  */
 function cmxbu_get_beleg_pdf_effective_type(int $post_id, string $type): string {
 	$type = \sanitize_key($type);
@@ -49,12 +50,15 @@ function cmxbu_get_beleg_pdf_effective_type(int $post_id, string $type): string 
 		$type = 'rechnung';
 	}
 
-	if ($type === 'rechnung' || $type === 'rechnungen') {
+	if ($type === 'rechnung' || $type === 'rechnungen' || $type === 'quittung' || $type === 'quittungen') {
 		$richtung_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
 			: '_cmx_beleg_richtung';
 		$richtung = \sanitize_key((string) \get_post_meta($post_id, $richtung_key, true));
 		if ($richtung === 'eingang' || $richtung === 'ausgabe') {
+			if ($type === 'quittung' || $type === 'quittungen') {
+				return 'lieferantenquittung';
+			}
 			return 'lieferantenrechnung';
 		}
 	}

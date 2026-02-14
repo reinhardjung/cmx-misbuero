@@ -774,8 +774,10 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Titel je nach Belegtyp ** Meine Helper Funktion nutzen
 		$type_map = [
 			'rechnung'             => 'Rechnung',
+			'quittung'             => 'Quittung',
 			'angebot'              => 'Offerte',
 			'lieferantenrechnung'  => 'Lieferantenrechnung',
+			'lieferantenquittung'  => 'Lieferantenquittung',
 			'gutschrift'           => 'Gutschrift',
 			'mahnung'              => 'Mahnung',
 		];
