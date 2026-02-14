@@ -108,31 +108,104 @@ add_action('add_meta_boxes', function() {
 			echo '</div>';
 			echo '</div>';
 
-			if ($is_belege && $post->ID) {
-				$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
-				$from_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_from', true);
-				$to_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_to', true);
-
-				if ($from_id > 0) {
-					$from_link = get_edit_post_link($from_id, '');
-					$from_cat = '';
+				if ($is_belege && $post->ID) {
+					$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
+					$from_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_from', true);
+					$to_id = (int) get_post_meta($post->ID, '_cmx_beleg_copied_to', true);
+					$current_slug = '';
 					if ($tax) {
+						$current_slugs = wp_get_post_terms($post->ID, $tax, ['fields' => 'slugs']);
+						if (!is_wp_error($current_slugs) && !empty($current_slugs)) {
+							$current_slug = (string) $current_slugs[0];
+						}
+					}
+					$is_rechnung = in_array($current_slug, ['rechnung', 'rechnungen'], true);
+
+					if ($from_id > 0) {
+						$from_link = get_edit_post_link($from_id, '');
+						$from_cat = '';
+						if ($tax) {
 						$from_terms = wp_get_post_terms($from_id, $tax, ['fields' => 'names']);
 						if (!is_wp_error($from_terms) && !empty($from_terms)) {
 							$from_cat = (string) $from_terms[0];
 						}
 					}
-					if ($from_link && $from_cat !== '') {
-						echo '<div style="margin-top:0px; font-size:12px;">';
-						echo 'von ' . esc_html($from_cat) . ': <a href="' . esc_url($from_link) . '">' . esc_html(get_the_title($from_id)) . '</a>';
-						echo '</div>';
-					}
-				} elseif ($to_id > 0) {
-					$to_link = get_edit_post_link($to_id, '');
-					$to_cat = '';
-					if ($tax) {
-						$to_terms = wp_get_post_terms($to_id, $tax, ['fields' => 'names']);
-						if (!is_wp_error($to_terms) && !empty($to_terms)) {
+						if ($from_link && $from_cat !== '') {
+							echo '<div style="margin-top:0px; font-size:12px;">';
+							echo 'von ' . esc_html($from_cat) . ': <a href="' . esc_url($from_link) . '">' . esc_html(get_the_title($from_id)) . '</a>';
+							echo '</div>';
+						}
+					} elseif ($is_rechnung) {
+						$liefer_ids = [];
+
+						$linked_args = [
+							'post_type' => 'belege',
+							'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+							'fields' => 'ids',
+							'posts_per_page' => -1,
+							'no_found_rows' => true,
+							'suppress_filters' => true,
+							'orderby' => ['date' => 'ASC', 'ID' => 'ASC'],
+							'order' => 'ASC',
+							'meta_query' => [[
+								'key' => '_cmx_beleg_copied_from',
+								'value' => (int) $post->ID,
+								'compare' => '=',
+							]],
+						];
+						if ($tax) {
+							$linked_args['tax_query'] = [[
+								'taxonomy' => $tax,
+								'field' => 'slug',
+								'terms' => ['lieferschein', 'lieferscheine'],
+							]];
+						}
+						$linked_ids = get_posts($linked_args);
+						if (is_array($linked_ids)) {
+							foreach ($linked_ids as $lid) {
+								$lid = (int) $lid;
+								if ($lid > 0 && $lid !== (int) $post->ID) {
+									$liefer_ids[] = $lid;
+								}
+							}
+						}
+
+						// Legacy-Fallback: einzelne alte Verknüpfung ergänzen, falls sie in der Query fehlt.
+						if ($to_id > 0 && !in_array((int) $to_id, $liefer_ids, true)) {
+							$to_post = get_post($to_id);
+							if ($to_post && $to_post->post_type === 'belege' && $to_post->post_status !== 'trash') {
+								if ($tax) {
+									$to_slugs = wp_get_post_terms($to_id, $tax, ['fields' => 'slugs']);
+									if (!is_wp_error($to_slugs) && array_intersect(['lieferschein', 'lieferscheine'], array_map('strval', (array) $to_slugs))) {
+										$liefer_ids[] = (int) $to_id;
+									}
+								} else {
+									$liefer_ids[] = (int) $to_id;
+								}
+							}
+						}
+						$liefer_ids = array_values(array_unique(array_map('intval', $liefer_ids)));
+						if (!empty($liefer_ids)) {
+							$links = [];
+							foreach ($liefer_ids as $lid) {
+								$edit_link = get_edit_post_link($lid, '');
+								if (!$edit_link) {
+									continue;
+								}
+								$links[] = '<a href="' . esc_url($edit_link) . '">' . esc_html(get_the_title($lid)) . '</a>';
+							}
+							if (!empty($links)) {
+								echo '<div style="margin-top:0px; font-size:12px;">';
+								echo (count($links) > 1 ? 'zu Lieferscheinen: ' : 'zu Lieferschein: ') . implode(', ', $links);
+								echo '</div>';
+							}
+						}
+					} elseif ($to_id > 0) {
+						$to_link = get_edit_post_link($to_id, '');
+						$to_cat = '';
+						if ($tax) {
+							$to_terms = wp_get_post_terms($to_id, $tax, ['fields' => 'names']);
+							if (!is_wp_error($to_terms) && !empty($to_terms)) {
 							$to_cat = (string) $to_terms[0];
 						}
 					}

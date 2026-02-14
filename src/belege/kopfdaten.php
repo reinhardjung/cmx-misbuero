@@ -114,6 +114,183 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
 		}
 	}
 }
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_positionen_meta_array')) {
+	function cmx_beleg_positionen_meta_array(int $post_id): array {
+		$raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
+		if (\is_array($raw)) {
+			return $raw;
+		}
+		if (\is_string($raw) && $raw !== '') {
+			$tmp = \json_decode($raw, true);
+			if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+				return $tmp;
+			}
+			$tmp = @\maybe_unserialize($raw);
+			if (\is_array($tmp)) {
+				return $tmp;
+			}
+		}
+		return [];
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_is_abschnitt')) {
+	function cmx_beleg_row_is_abschnitt($row): bool {
+		if (!\is_array($row)) {
+			return false;
+		}
+		$typ = \sanitize_key((string)($row['typ'] ?? $row['row_type'] ?? ''));
+		return $typ === 'abschnitt';
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_is_position')) {
+	function cmx_beleg_row_is_position($row): bool {
+		if (!\is_array($row)) {
+			return false;
+		}
+		if (cmx_beleg_row_is_abschnitt($row)) {
+			return false;
+		}
+		if (isset($row['artikel_id']) && (int)$row['artikel_id'] > 0) {
+			return true;
+		}
+		return isset($row['menge']) || isset($row['preis']) || isset($row['rabatt']) || isset($row['beschreibung']);
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_signature')) {
+	function cmx_beleg_row_signature(array $row): string {
+		$payload = [
+			'artikel_id' => (int)($row['artikel_id'] ?? 0),
+			'menge' => (float) \CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($row['menge'] ?? 0)),
+			'preis' => (float) \CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($row['preis'] ?? 0)),
+			'rabatt' => \trim((string)($row['rabatt'] ?? '')),
+			'beschreibung' => \trim((string)($row['beschreibung'] ?? '')),
+			'task_uid' => \trim((string)($row['task_uid'] ?? '')),
+			'task_idx' => isset($row['task_idx']) && \is_numeric($row['task_idx']) ? (int)$row['task_idx'] : null,
+			'task_projekt_id' => isset($row['task_projekt_id']) && \is_numeric($row['task_projekt_id']) ? (int)$row['task_projekt_id'] : null,
+		];
+		return \md5((string)\wp_json_encode($payload));
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_lieferschein_duplicate_ids')) {
+	function cmx_beleg_lieferschein_duplicate_ids(int $source_id, int $exclude_id = 0): array {
+		$args = [
+			'post_type' => 'belege',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'fields' => 'ids',
+			'posts_per_page' => -1,
+			'no_found_rows' => true,
+			'suppress_filters' => true,
+			'meta_query' => [
+				[
+					'key' => '_cmx_beleg_copied_from',
+					'value' => (int)$source_id,
+					'compare' => '=',
+				],
+			],
+		];
+		if ($exclude_id > 0) {
+			$args['post__not_in'] = [(int)$exclude_id];
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if (\is_string($tax) && $tax !== '') {
+			$args['tax_query'] = [[
+				'taxonomy' => $tax,
+				'field' => 'slug',
+				'terms' => ['lieferschein', 'lieferscheine'],
+			]];
+		}
+		$ids = \get_posts($args);
+		if (!\is_array($ids)) {
+			return [];
+		}
+		return \array_values(\array_filter(\array_map('intval', $ids), static function (int $id) use ($source_id, $exclude_id): bool {
+			if ($id <= 0) return false;
+			if ($id === $source_id) return false;
+			if ($exclude_id > 0 && $id === $exclude_id) return false;
+			return true;
+		}));
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_prepare_lieferschein_duplicate_positions')) {
+	function cmx_beleg_prepare_lieferschein_duplicate_positions(int $source_id, int $target_id): void {
+		$source_rows = cmx_beleg_positionen_meta_array($source_id);
+		if (empty($source_rows) || !\is_array($source_rows)) {
+			\update_post_meta($target_id, '_cmx_beleg_positionen', []);
+			return;
+		}
+
+		$source_counts = [];
+		$source_sigs = [];
+		$total_source_positions = 0;
+		foreach ($source_rows as $idx => $row) {
+			if (!cmx_beleg_row_is_position($row)) {
+				continue;
+			}
+			$sig = cmx_beleg_row_signature((array)$row);
+			$source_sigs[(int)$idx] = $sig;
+			$source_counts[$sig] = (int)($source_counts[$sig] ?? 0) + 1;
+			$total_source_positions++;
+		}
+		if ($total_source_positions <= 0) {
+			\update_post_meta($target_id, '_cmx_beleg_positionen', []);
+			return;
+		}
+
+		$used_counts = [];
+		$existing_ids = cmx_beleg_lieferschein_duplicate_ids($source_id, $target_id);
+		foreach ($existing_ids as $lieferschein_id) {
+			$rows = cmx_beleg_positionen_meta_array((int)$lieferschein_id);
+			foreach ($rows as $row) {
+				if (!cmx_beleg_row_is_position($row)) {
+					continue;
+				}
+				$sig = cmx_beleg_row_signature((array)$row);
+				$used_counts[$sig] = (int)($used_counts[$sig] ?? 0) + 1;
+			}
+		}
+
+		$selected_counts = [];
+		$include_mask = [];
+		$included_positions = 0;
+		foreach ($source_rows as $idx => $row) {
+			if (!isset($source_sigs[(int)$idx])) {
+				continue;
+			}
+			$sig = $source_sigs[(int)$idx];
+			$remaining = (int)($source_counts[$sig] ?? 0)
+				- (int)($used_counts[$sig] ?? 0)
+				- (int)($selected_counts[$sig] ?? 0);
+			if ($remaining > 0) {
+				$include_mask[(int)$idx] = true;
+				$selected_counts[$sig] = (int)($selected_counts[$sig] ?? 0) + 1;
+				$included_positions++;
+			}
+		}
+
+		// Erster Lieferschein: unverändert alle Zeilen aus der Quelle übernehmen.
+		if ($included_positions >= $total_source_positions) {
+			return;
+		}
+
+		$filtered_rows = [];
+		$pending_abschnitt = null;
+		foreach ($source_rows as $idx => $row) {
+			if (cmx_beleg_row_is_abschnitt($row)) {
+				$pending_abschnitt = $row;
+				continue;
+			}
+			if (isset($include_mask[(int)$idx])) {
+				if ($pending_abschnitt !== null) {
+					$filtered_rows[] = $pending_abschnitt;
+					$pending_abschnitt = null;
+				}
+				$filtered_rows[] = $row;
+			}
+		}
+
+		\update_post_meta($target_id, '_cmx_beleg_positionen', $filtered_rows);
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
 	function cmx_kontakte_cpt(): string {
 		if (\post_type_exists('kontakte')) return 'kontakte';
@@ -795,7 +972,9 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_save_as']));
 		$copy_map = [
 			'rechnung' => 'lieferschein',
+			'rechnungen' => 'lieferschein',
 			'offerte'  => 'rechnung',
+			'offerten' => 'rechnung',
 		];
 		$normalized_val = $val;
 		if ($val === 'rechnung_kopie') {
@@ -808,14 +987,19 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			return;
 		}
 		if (isset($copy_map[$current_kategorie_slug]) && $copy_map[$current_kategorie_slug] === $normalized_val) {
+			$is_rechnung_to_lieferschein = \in_array($current_kategorie_slug, ['rechnung', 'rechnungen'], true)
+				&& \in_array($normalized_val, ['lieferschein', 'lieferscheine'], true);
 			$GLOBALS['cmx_belege_dup_guard'][$post_id] = true;
 			$GLOBALS['cmx_belege_duplication_in_progress'] = true;
 			$dup_fn = __NAMESPACE__ . '\\cmx_duplicate_do';
-			$existing_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
-			if ($existing_id > 0) {
-				$existing_post = \get_post($existing_id);
-				if (!$existing_post || $existing_post->post_type !== 'belege' || $existing_post->post_status === 'trash') {
-					$existing_id = 0;
+			$existing_id = 0;
+			if (!$is_rechnung_to_lieferschein) {
+				$existing_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+				if ($existing_id > 0) {
+					$existing_post = \get_post($existing_id);
+					if (!$existing_post || $existing_post->post_type !== 'belege' || $existing_post->post_status === 'trash') {
+						$existing_id = 0;
+					}
 				}
 			}
 			if ($existing_id > 0) {
@@ -842,6 +1026,12 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 						}
 					}
 					\delete_post_meta($new_id, '_cmx_beleg_pdf_type');
+					if ($is_rechnung_to_lieferschein) {
+						$prep_fn = __NAMESPACE__ . '\\cmx_beleg_prepare_lieferschein_duplicate_positions';
+						if (\is_callable($prep_fn)) {
+							$prep_fn((int)$post_id, (int)$new_id);
+						}
+					}
 					\update_post_meta($new_id, '_cmx_beleg_copied_from', (int) $post_id);
 					\update_post_meta($post_id, '_cmx_beleg_copied_to', (int) $new_id);
 					$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';

@@ -464,7 +464,15 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			$rows = [];
 		}
 		if (isset($_POST['cmx_positionen']) && is_array($_POST['cmx_positionen'])) {
-			$rows = cmxbu_deep_unslash($_POST['cmx_positionen']);
+			$posted_post_id = 0;
+			if (isset($_POST['post_ID'])) {
+				$posted_post_id = (int) $_POST['post_ID'];
+			} elseif (isset($_POST['post_id'])) {
+				$posted_post_id = (int) $_POST['post_id'];
+			}
+			if ($posted_post_id === $post_id) {
+				$rows = cmxbu_deep_unslash($_POST['cmx_positionen']);
+			}
 		}
 
 		$norm_minus = static function(string $s): string {
@@ -825,7 +833,13 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$manual_total_value = null;
 		if (!$has_positions) {
 			$override = '';
-			if (isset($_POST['cmx_beleg_summe_override'])) {
+			$posted_post_id = 0;
+			if (isset($_POST['post_ID'])) {
+				$posted_post_id = (int) $_POST['post_ID'];
+			} elseif (isset($_POST['post_id'])) {
+				$posted_post_id = (int) $_POST['post_id'];
+			}
+			if ($posted_post_id === $post_id && isset($_POST['cmx_beleg_summe_override'])) {
 				$override = (string) cmxbu_deep_unslash($_POST['cmx_beleg_summe_override']);
 			}
 			if ($override === '') {
