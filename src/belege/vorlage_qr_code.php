@@ -346,8 +346,8 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $body_size  = 6.8;
     $small_size = 6.0;
 
-    // Währung/Betrag links und rechts auf gleicher Höhe (2 Zeilen höher)
-    $amount_row_y = $zone_top + 65.2 * $mm;
+    // Währung/Betrag links und rechts auf gleicher Höhe (1 Zeile tiefer)
+    $amount_row_y = $zone_top + 68.6 * $mm;
 
     /** ----------------------------------------------------------------
      * 6) Trennlinie + Schere
