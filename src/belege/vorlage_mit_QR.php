@@ -69,6 +69,7 @@ $is_ausgang = ($richtung === 'ausgang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 $is_gutschrift = ($beleg_type === 'gutschrift');
+$is_offerte = in_array($beleg_type, ['offerte', 'angebot'], true);
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -149,6 +150,33 @@ $recipient_has_br = (stripos($recipient_block, '<br') !== false);
 $recipient_html = $recipient_has_br
 	? wp_kses($recipient_block, ['br' => []])
 	: nl2br(esc_html($recipient_block));
+$layout = (array)($tpl['layout'] ?? []);
+$layout_profile = strtolower((string)($layout['profile'] ?? 'dl'));
+$fmt_mm = static function($value): string {
+	$mm = (float)$value;
+	return rtrim(rtrim(number_format($mm, 2, '.', ''), '0'), '.') . 'mm';
+};
+$logo_x_css = $fmt_mm((float)($layout['logo_x_mm'] ?? 150.0));
+$logo_y_css = $fmt_mm((float)($layout['logo_y_mm'] ?? 20.0));
+$logo_w_css = $fmt_mm((float)($layout['logo_width_mm'] ?? 40.0));
+$recipient_x_css = $fmt_mm((float)($layout['recipient_x_mm'] ?? 20.0));
+$recipient_y_css = $fmt_mm((float)($layout['recipient_y_mm'] ?? 45.0));
+$recipient_w_css = $fmt_mm((float)($layout['recipient_width_mm'] ?? 85.0));
+$recipient_h_css = $fmt_mm((float)($layout['recipient_height_mm'] ?? 40.0));
+$header_h_css = $fmt_mm((float)($layout['header_height_mm'] ?? 98.0));
+$meta_top_css = $fmt_mm((float)($layout['meta_top_mm'] ?? 38.0));
+$show_recipient_label = !empty($layout['show_recipient_label']);
+$recipient_label_display = $show_recipient_label ? 'block' : 'none';
+$brand_logo = trim((string)($tpl['branding']['logo'] ?? ''));
+$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
+if ($brand_url === '') {
+	$brand_url = trim((string)($tpl['me']['website'] ?? ''));
+}
+if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
+	$brand_url = 'https://' . $brand_url;
+}
+$show_due_line = ($beleg_type === 'rechnung') || $is_offerte;
+$due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -158,20 +186,68 @@ $recipient_html = $recipient_has_br
 <style>
 	body { font-family: Arial, sans-serif; font-size: 12px; color: #000; }
 	.container { width: 100%; }
-	.header { margin-bottom: 24px; }
-	.address { width: 50%; float: left; }
-	.sender-wrap { display: flex; align-items: flex-start; gap: 10px; }
-	.sender-logo { width: 150px; height: auto; max-width: 100%; display: block; margin-bottom: 6px; }
-	.sender-table { width: 100%; border-collapse: collapse; }
-	.sender-table td { border: 0; padding: 0; vertical-align: top; }
-	.sender-contact { font-size: 11px; text-align: right; white-space: nowrap; padding-left: 8px; }
-	.sender-contact a { color: inherit; text-decoration: none; }
-	.invoice-meta { width: 140px; float: right; text-align: right; }
+	.header {
+		position: relative;
+		min-height: <?= htmlspecialchars($header_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+		margin-bottom: 6mm;
+	}
+	.sender-address {
+		width: 100%;
+		float: none;
+		padding-right: 0;
+		box-sizing: border-box;
+	}
+	.sender-row {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+	.sender-row td {
+		border: 0;
+		padding: 0;
+		vertical-align: top;
+	}
+	.sender-left { width: 37%; }
+	.sender-center {
+		width: 26%;
+		text-align: center;
+	}
+	.sender-right {
+		width: 37%;
+		text-align: right;
+		white-space: nowrap;
+	}
+	.sender-right a { color: inherit; text-decoration: none; }
+	.sender-logo {
+		width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+		min-width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+		max-width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+		height: auto;
+		display: block;
+		margin: 0 auto;
+	}
+	.invoice-meta {
+		width: 40mm;
+		position: absolute;
+		right: 0;
+		top: <?= htmlspecialchars($meta_top_css, ENT_QUOTES, 'UTF-8'); ?>;
+		text-align: right;
+	}
 	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
 	.invoice-meta td,
 	.invoice-meta tr { border: 0 !important; }
 	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
-	h1 { margin-top: 32px; font-size: 20px; }
+	.recipient-window {
+		position: absolute;
+		left: <?= htmlspecialchars($recipient_x_css, ENT_QUOTES, 'UTF-8'); ?>;
+		top: <?= htmlspecialchars($recipient_y_css, ENT_QUOTES, 'UTF-8'); ?>;
+		width: <?= htmlspecialchars($recipient_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+		min-height: <?= htmlspecialchars($recipient_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+		float: none;
+	}
+	.recipient-window .recipient-label { display: <?= htmlspecialchars($recipient_label_display, ENT_QUOTES, 'UTF-8'); ?>; margin-bottom: 2mm; }
+	.recipient-window .recipient-lines { line-height: 1.3; }
+	h1 { margin-top: 0; font-size: 20px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
@@ -227,8 +303,8 @@ $recipient_html = $recipient_has_br
 </head>
 <body>
 <div class="container">
-	<div class="header">
-		<div class="address">
+	<div class="header header-layout-<?= htmlspecialchars($layout_profile, ENT_QUOTES, 'UTF-8'); ?>">
+		<div class="sender-address">
 			<?php
 			$me_phone = trim((string)($tpl['me']['phone'] ?? ''));
 			$me_email = trim((string)($tpl['me']['email'] ?? ''));
@@ -261,33 +337,22 @@ $recipient_html = $recipient_has_br
 				$me_web_href = 'https://' . $me_web_href;
 			}
 			?>
-			<table class="sender-table">
+			<table class="sender-row">
 				<tr>
-					<td>
-						<div class="sender-wrap">
-							<?php if (!empty($tpl['branding']['logo'])): ?>
-								<?php
-								$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
-								if ($brand_url === '') {
-									$brand_url = trim((string)($tpl['me']['website'] ?? ''));
-								}
-								if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
-									$brand_url = 'https://' . $brand_url;
-								}
-								?>
-								<?php if ($brand_url !== ''): ?>
-									<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
-										<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
-									</a>
-								<?php else: ?>
-									<img class="sender-logo" src="<?= htmlspecialchars((string)$tpl['branding']['logo'], ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
-								<?php endif; ?>
+					<td class="sender-left"><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></td>
+					<td class="sender-center">
+						<?php if ($brand_logo !== ''): ?>
+							<?php if ($brand_url !== ''): ?>
+								<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
+									<img class="sender-logo" src="<?= htmlspecialchars($brand_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+								</a>
+							<?php else: ?>
+								<img class="sender-logo" src="<?= htmlspecialchars($brand_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
 							<?php endif; ?>
-							<div><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></div>
-						</div>
+						<?php endif; ?>
 					</td>
-					<?php if ($has_contact): ?>
-						<td class="sender-contact">
+					<td class="sender-right">
+						<?php if ($has_contact): ?>
 							<?php if ($me_phone !== ''): ?>
 								<div><a href="tel:<?= htmlspecialchars($me_phone_href, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($me_phone_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
 							<?php endif; ?>
@@ -297,8 +362,8 @@ $recipient_html = $recipient_has_br
 							<?php if ($me_web !== ''): ?>
 								<div><a href="<?= htmlspecialchars($me_web_href, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($me_web_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
 							<?php endif; ?>
-						</td>
-					<?php endif; ?>
+						<?php endif; ?>
+					</td>
 				</tr>
 			</table>
 		</div>
@@ -309,25 +374,26 @@ $recipient_html = $recipient_has_br
 					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
 				</tr>
-				<tr>
-					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['due'] ?? 'Fällig bis', ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
-				</tr>
+				<?php if ($show_due_line): ?>
+					<tr>
+						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($due_label, ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endif; ?>
 				<tr>
 					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
 					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['period'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
 				</tr>
 			</table>
 		</div>
+		<div class="recipient-window">
+			<div class="recipient-label"><strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<div class="recipient-lines"><?= $recipient_html; ?></div>
+		</div>
 		<div class="clear"></div>
 	</div>
 
-	<div class="address">
-		<strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong>
-		<div><?= $recipient_html; ?></div>
-	</div>
-
-	<h1 class="text-right" style="margin-top: 64px;"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+	<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
 	<?php if ($beleg_subject !== ''): ?>
 		<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
 	<?php endif; ?>

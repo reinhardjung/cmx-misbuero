@@ -22,6 +22,22 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_log')) {
 		error_log('[CMX PDF] '.$msg.($ctx ? ' | '.json_encode($ctx, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) : ''));
 	}
 }
+if (!defined(__NAMESPACE__.'\\CMX_LOGO_X_MM')) define(__NAMESPACE__.'\\CMX_LOGO_X_MM', 150.0);
+if (!defined(__NAMESPACE__.'\\CMX_LOGO_Y_MM')) define(__NAMESPACE__.'\\CMX_LOGO_Y_MM', 20.0);
+if (!defined(__NAMESPACE__.'\\CMX_LOGO_WIDTH_MM')) define(__NAMESPACE__.'\\CMX_LOGO_WIDTH_MM', 40.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_X_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_X_MM', 20.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_Y_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_Y_MM', 45.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_WIDTH_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_WIDTH_MM', 85.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_RECIPIENT_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_DL_RECIPIENT_HEIGHT_MM', 40.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_HEADER_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_DL_HEADER_HEIGHT_MM', 98.0);
+if (!defined(__NAMESPACE__.'\\CMX_DL_META_TOP_MM')) define(__NAMESPACE__.'\\CMX_DL_META_TOP_MM', 38.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_X_MM', 20.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_Y_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_Y_MM', 55.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_WIDTH_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_WIDTH_MM', 90.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_RECIPIENT_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C4_RECIPIENT_HEIGHT_MM', 40.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_HEADER_HEIGHT_MM')) define(__NAMESPACE__.'\\CMX_C4_HEADER_HEIGHT_MM', 110.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_META_TOP_MM')) define(__NAMESPACE__.'\\CMX_C4_META_TOP_MM', 38.0);
+if (!defined(__NAMESPACE__.'\\CMX_C4_SWITCH_PAGE_THRESHOLD')) define(__NAMESPACE__.'\\CMX_C4_SWITCH_PAGE_THRESHOLD', 5);
 
 // function mytheme_enqueue_local_fonts() {
 //     wp_enqueue_style(
@@ -910,177 +926,216 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$qr_should_print = $qr_meta_enabled
 			&& (strtolower($beleg_type) === 'rechnung');
 // var_dump($dates['currency']); exit;
-
-
-
 		// Platzhalter für Vorlage
 		$tpl = [
-			'branding'=>['logo'=>$branding_logo,'website'=>$opts['website']??''],
-			'labels'=>$labels,
-			'format'=>$fmt,
-			'document'=>[
-				'type'=>$beleg_type,
-				'richtung'=>(string) get_post_meta($post_id, '_cmx_beleg_richtung', true),
-				'number'=>$title_safe,
-				'title'=>$doc_label.' '.$title_safe,              // <- C
-				'date'=> date('d.m.Y', strtotime($dates['date_invoice'])),
-				'due'=>date('d.m.Y', strtotime($dates['date_due'])),
-				'currency'=>$dates['currency'],
-
-				'period'=>$dates['period'],
-				'subtotal'=>$calc['subtotal'],
-				'total'=>$calc['total'],
-				'manual_total'=>$manual_total_value,
-				'subject'=> (string)get_post_meta($post_id,'_cmx_beleg_betreff',true),
-				'description'=>(string)get_post_meta($post_id,'_cmx_beleg_beschreibung',true), // <- A (wird im Template direkt unter Betreff ausgegeben)
+			'branding' => ['logo' => $branding_logo, 'website' => $opts['website'] ?? ''],
+			'labels' => $labels,
+			'format' => $fmt,
+			'document' => [
+				'type' => $beleg_type,
+				'richtung' => (string) get_post_meta($post_id, '_cmx_beleg_richtung', true),
+				'number' => $title_safe,
+				'title' => $doc_label . ' ' . $title_safe,
+				'date' => date('d.m.Y', strtotime($dates['date_invoice'])),
+				'due' => date('d.m.Y', strtotime($dates['date_due'])),
+				'currency' => $dates['currency'],
+				'period' => $dates['period'],
+				'subtotal' => $calc['subtotal'],
+				'total' => $calc['total'],
+				'manual_total' => $manual_total_value,
+				'subject' => (string) get_post_meta($post_id, '_cmx_beleg_betreff', true),
+				'description' => (string) get_post_meta($post_id, '_cmx_beleg_beschreibung', true),
 			],
-			'positions'=>array_map(function($p){
+			'positions' => array_map(function($p){
 				return [
-					'row_type'=>(string)($p['row_type'] ?? 'position'),
-					'section_title'=>(string)($p['section_title'] ?? ''),
-					'section_text'=>(string)($p['section_text'] ?? ''),
-					'section_text_html'=>(string)($p['section_text_html'] ?? ''),
-					'article_number'=>(string)($p['article_number'] ?? ''),
-					'item'=>(string)($p['title'] ?? ''),
-					'qty'=>(float)($p['qty'] ?? 0),
-					'unit_price'=>(float)($p['unit_price'] ?? 0),
-					'line_total'=>(float)($p['line_total'] ?? 0),
-					'discount'=>(string)($p['discount'] ?? ''),
-					'has_discount'=>(bool)($p['has_discount'] ?? false),
-					'desc_text'=>(string)($p['desc_text'] ?? ''),
-					'desc_html'=>(string)($p['desc_html'] ?? ''),
-					'desc_raw' =>(string)($p['desc_raw']  ?? ''),
-					'article_belegtext_html'=>(string)($p['article_belegtext_html'] ?? ''), // <- B (Template zeigt diese Spalte)
+					'row_type' => (string)($p['row_type'] ?? 'position'),
+					'section_title' => (string)($p['section_title'] ?? ''),
+					'section_text' => (string)($p['section_text'] ?? ''),
+					'section_text_html' => (string)($p['section_text_html'] ?? ''),
+					'article_number' => (string)($p['article_number'] ?? ''),
+					'item' => (string)($p['title'] ?? ''),
+					'qty' => (float)($p['qty'] ?? 0),
+					'unit_price' => (float)($p['unit_price'] ?? 0),
+					'line_total' => (float)($p['line_total'] ?? 0),
+					'discount' => (string)($p['discount'] ?? ''),
+					'has_discount' => (bool)($p['has_discount'] ?? false),
+					'desc_text' => (string)($p['desc_text'] ?? ''),
+					'desc_html' => (string)($p['desc_html'] ?? ''),
+					'desc_raw' => (string)($p['desc_raw'] ?? ''),
+					'article_belegtext_html' => (string)($p['article_belegtext_html'] ?? ''),
 				];
 			}, $calc['positionen']),
-			'any_discount'=> (bool)($calc['any_discount'] ?? false),
-			'qr'=>[
-				'enabled'=>$qr_meta_enabled,
-				'iban'=>$qr_iban,
-				'will_print'=>$qr_should_print,
+			'any_discount' => (bool)($calc['any_discount'] ?? false),
+			'qr' => [
+				'enabled' => $qr_meta_enabled,
+				'iban' => $qr_iban,
+				'will_print' => $qr_should_print,
 			],
-			'tax'=>[
-				'rate'=>$mwst['rate'],
-				'label'=>$mwst['label'],
-				'amount'=>$calc['tax_amount'],
-				'is_brutto'=>$is_brutto,
+			'tax' => [
+				'rate' => $mwst['rate'],
+				'label' => $mwst['label'],
+				'amount' => $calc['tax_amount'],
+				'is_brutto' => $is_brutto,
 			],
-			'totals'=>[
-				'net'=>$calc['net'],
-				'gross'=>$calc['gross'],
-				'tax'=>$calc['tax_amount'],
-				'tax_rate'=>$mwst['rate'],
-				'is_brutto'=>$is_brutto,
-				'is_mwst_pflichtig'=>$is_mwst_pflichtig,
+			'totals' => [
+				'net' => $calc['net'],
+				'gross' => $calc['gross'],
+				'tax' => $calc['tax_amount'],
+				'tax_rate' => $mwst['rate'],
+				'is_brutto' => $is_brutto,
+				'is_mwst_pflichtig' => $is_mwst_pflichtig,
 			],
-			'anzahlungen'=>$anzahlungen,
-			'me'=>$me,
-			'bank'=>$bank,
+			'anzahlungen' => $anzahlungen,
+			'me' => $me,
+			'bank' => $bank,
 		];
+		$layout_profiles = [
+			'dl' => [
+				'profile' => 'dl',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_DL_RECIPIENT_X_MM,
+				'recipient_y_mm' => (float) CMX_DL_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_DL_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_DL_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_DL_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_DL_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
+			'c4' => [
+				'profile' => 'c4',
+				'logo_x_mm' => (float) CMX_LOGO_X_MM,
+				'logo_y_mm' => (float) CMX_LOGO_Y_MM,
+				'logo_width_mm' => (float) CMX_LOGO_WIDTH_MM,
+				'recipient_x_mm' => (float) CMX_C4_RECIPIENT_X_MM,
+				'recipient_y_mm' => (float) CMX_C4_RECIPIENT_Y_MM,
+				'recipient_width_mm' => (float) CMX_C4_RECIPIENT_WIDTH_MM,
+				'recipient_height_mm' => (float) CMX_C4_RECIPIENT_HEIGHT_MM,
+				'header_height_mm' => (float) CMX_C4_HEADER_HEIGHT_MM,
+				'meta_top_mm' => (float) CMX_C4_META_TOP_MM,
+				'show_recipient_label' => false,
+			],
+		];
+		$tpl['layout'] = $layout_profiles['dl'];
 
 		// Vorlage laden & rendern
-		$tpl_dir  = trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/';
-		// error_log($tpl_dir);
+		$tpl_dir = trailingslashit(defined('CMX_PLUGIN_DIR') ? CMX_PLUGIN_DIR : plugin_dir_path(__FILE__)) . 'src/belege/';
 		if ($qr_should_print) {
 			$tpl_path = $tpl_dir . 'vorlage_mit_QR.php';
 		} else {
 			$tpl_path = $tpl_dir . 'vorlage_ohne_QR.php';
 		}
-		if (!is_file($tpl_path)) { cmxbu_log('FEHLER: Vorlage fehlt.',['path'=>$tpl_path]); return; }
-
-		ob_start(); include $tpl_path; $html=trim((string)ob_get_clean());
-		if (mb_strlen($html,'8bit')<50) { cmxbu_log('FEHLER: HTML leer/zu kurz.'); return; }
+		if (!is_file($tpl_path)) {
+			cmxbu_log('FEHLER: Vorlage fehlt.', ['path' => $tpl_path]);
+			return;
+		}
 
 		try {
+			$render_html = static function(string $template_path, array $tpl_data, string $recipient_addr): string {
+				$tpl = $tpl_data;
+				$cmx_beleg_adress = $recipient_addr;
+				ob_start();
+				include $template_path;
+				return trim((string) ob_get_clean());
+			};
+			$build_dom = static function(string $html, string $page_css, array $tpl_data, int $beleg_id): Dompdf {
+				$opt = new Options();
+				$opt->set('isRemoteEnabled', true);
+				$opt->set('isHtml5ParserEnabled', true);
+				$opt->set('defaultFont', 'DejaVu Sans');
+				$dom = new Dompdf($opt);
+				$dom->setPaper('A4', 'portrait');
+				$dom->loadHtml($page_css . $html, 'UTF-8');
+				$dom->render();
+				cmx_add_qr_page($dom, $tpl_data, $beleg_id);
+				return $dom;
+			};
 
-    // Zielpfad prüfen/anlegen
-    $dir = \dirname($pdf_path);
-    if (!is_dir($dir) && !\wp_mkdir_p($dir)) {
-        cmxbu_log('FEHLER: Ordner konnte nicht erstellt werden', ['dir' => $dir]);
-        return;
-    }
-
-    // CSS: Kopf-Platz ab Seite 2, Footer-Platz auf allen Seiten
-    $css = '<style>
-      @page {
-        margin-top: 100px;      /* Kopfbereich Seite >= 2 */
-        margin-right: 30px;
-        margin-left: 30px;
-        margin-bottom: 90px;    /* Footer-Reserve */
-      }
-      @page :first {
-        margin-top: 40px;       /* Seite 1: kein Kopf */
-        margin-right: 30px;
-        margin-left: 30px;
-        margin-bottom: 90px;
-      }
-    </style>';
-
-	// DOMPDF Setup
-	$opt = new Options();
-	$opt->set('isRemoteEnabled', true);
-	$opt->set('isHtml5ParserEnabled', true);
-	$opt->set('defaultFont', 'DejaVu Sans');
-
-	$dom = new Dompdf($opt);
-	$dom->setPaper('A4', 'portrait');
-	$dom->loadHtml($css . $html, 'UTF-8');
-
-	// Rendern (einmal)
-	$dom->render();
-
-	// QR-Code hinzufügen
-	cmx_add_qr_page($dom, $tpl, $post_id);
-
-	// Canvas/Font
-	$canvas      = $dom->getCanvas();
-	$fontMetrics = $dom->getFontMetrics();
-	$fontHeader  = $fontMetrics->getFont('DejaVu Sans', 'bold');
-	$fontFooter  = $fontMetrics->getFont('DejaVu Sans', 'normal');
-
-	// Seitenanzahl
-	$page_count  = $canvas->get_page_count();
-
-	// Kopf ab Seite 2
-	if ($page_count > 1) {
-			$beleg_titel = $tpl['document']['title'] ?? 'Beleg';
-			for ($i = 2; $i <= $page_count; $i++) {
-					$canvas->text(50, 55, $beleg_titel, $fontHeader, 11, [0.1, 0.1, 0.1], $i);
+			$dir = \dirname($pdf_path);
+			if (!is_dir($dir) && !\wp_mkdir_p($dir)) {
+				cmxbu_log('FEHLER: Ordner konnte nicht erstellt werden', ['dir' => $dir]);
+				return;
 			}
-	}
 
-	// Seitenzahlen im Kopfbereich (nur wenn mehr als 1 Seite)
-	// (deaktiviert auf Wunsch)
+			$page_css = '<style>
+			  @page {
+				margin-top: 100px;      /* Kopfbereich Seite >= 2 */
+				margin-right: 30px;
+				margin-left: 30px;
+				margin-bottom: 90px;    /* Footer-Reserve */
+			  }
+			  @page :first {
+				margin-top: 30px;       /* Seite 1: gleich wie links/rechts */
+				margin-right: 30px;
+				margin-left: 30px;
+				margin-bottom: 90px;
+			  }
+			</style>';
 
-	// Seitenzahlen unten
-	// if ($page_count > 1) {
-	// 		$canvas->page_text(
-	// 				535, 780,
-	// 				'Seite {PAGE_NUM} von {PAGE_COUNT}',
-	// 				$fontFooter, 5,
-	// 				[0.5, 0.5, 0.5]
-	// 		);
-	// }
+			$html = $render_html($tpl_path, $tpl, $cmx_beleg_adress);
+			if (mb_strlen($html, '8bit') < 50) {
+				cmxbu_log('FEHLER: HTML leer/zu kurz.');
+				return;
+			}
 
-	// Schreiben (EINZIGER finaler Save!)
-	$pdf_binary = $dom->output();
-	if ($pdf_binary === '' || $pdf_binary === false) {
-			cmxbu_log('FEHLER: Leerer PDF-Output');
+			$dom = $build_dom($html, $page_css, $tpl, $post_id);
+			$probe_pages = $dom->getCanvas()->get_page_count();
+			if ($probe_pages > (int) CMX_C4_SWITCH_PAGE_THRESHOLD) {
+				$tpl['layout'] = $layout_profiles['c4'];
+				$html = $render_html($tpl_path, $tpl, $cmx_beleg_adress);
+				if (mb_strlen($html, '8bit') < 50) {
+					cmxbu_log('FEHLER: HTML leer/zu kurz (C4).');
+					return;
+				}
+				$dom = $build_dom($html, $page_css, $tpl, $post_id);
+				cmxbu_log('Layout auf C4 umgestellt', ['post_id' => $post_id, 'pages' => $probe_pages]);
+			}
+
+			$canvas = $dom->getCanvas();
+			$fontMetrics = $dom->getFontMetrics();
+			$fontHeader = $fontMetrics->getFont('DejaVu Sans', 'bold');
+			$fontFooter = $fontMetrics->getFont('DejaVu Sans', 'normal');
+
+			$page_count = $canvas->get_page_count();
+
+			// Kopf ab Seite 2
+			if ($page_count > 1) {
+				$beleg_titel = $tpl['document']['title'] ?? 'Beleg';
+				for ($i = 2; $i <= $page_count; $i++) {
+					$canvas->text(50, 55, $beleg_titel, $fontHeader, 11, [0.1, 0.1, 0.1], $i);
+				}
+			}
+
+			// Seitenzahlen im Kopfbereich (nur wenn mehr als 1 Seite)
+			// (deaktiviert auf Wunsch)
+
+			// Seitenzahlen unten
+			// if ($page_count > 1) {
+			// 		$canvas->page_text(
+			// 				535, 780,
+			// 				'Seite {PAGE_NUM} von {PAGE_COUNT}',
+			// 				$fontFooter, 5,
+			// 				[0.5, 0.5, 0.5]
+			// 		);
+			// }
+
+			$pdf_binary = $dom->output();
+			if ($pdf_binary === '' || $pdf_binary === false) {
+				cmxbu_log('FEHLER: Leerer PDF-Output');
+				return;
+			}
+
+			if (!cmxbu_save_beleg_pdf($pdf_path, $pdf_binary)) {
+				cmxbu_log('FEHLER: PDF konnte nicht geschrieben werden', ['path' => $pdf_path]);
+				return;
+			}
+
+			cmxbu_log('PDF erstellt', ['pdf' => $pdf_path, 'layout' => (string)($tpl['layout']['profile'] ?? 'dl')]);
+		} catch (\Throwable $e) {
+			cmxbu_log('DOMPDF EXCEPTION', ['error' => $e->getMessage()]);
 			return;
-	}
-
-	if (!cmxbu_save_beleg_pdf($pdf_path, $pdf_binary)) {
-			cmxbu_log('FEHLER: PDF konnte nicht geschrieben werden', ['path' => $pdf_path]);
-			return;
-	}
-
-	cmxbu_log('PDF erstellt', ['pdf' => $pdf_path]);
-
-
-} catch (\Throwable $e) {
-    cmxbu_log('DOMPDF EXCEPTION', ['error' => $e->getMessage()]);
-    return;
-}
+		}
 
 }
 

@@ -125,17 +125,19 @@ add_action('add_meta_boxes', function() {
 						$from_link = get_edit_post_link($from_id, '');
 						$from_cat = '';
 						if ($tax) {
-						$from_terms = wp_get_post_terms($from_id, $tax, ['fields' => 'names']);
-						if (!is_wp_error($from_terms) && !empty($from_terms)) {
-							$from_cat = (string) $from_terms[0];
+							$from_terms = wp_get_post_terms($from_id, $tax, ['fields' => 'names']);
+							if (!is_wp_error($from_terms) && !empty($from_terms)) {
+								$from_cat = (string) $from_terms[0];
+							}
 						}
-					}
 						if ($from_link && $from_cat !== '') {
 							echo '<div style="margin-top:0px; font-size:12px;">';
 							echo 'von ' . esc_html($from_cat) . ': <a href="' . esc_url($from_link) . '">' . esc_html(get_the_title($from_id)) . '</a>';
 							echo '</div>';
 						}
-					} elseif ($is_rechnung) {
+					}
+
+					if ($is_rechnung) {
 						$liefer_ids = [];
 
 						$linked_args = [
@@ -184,6 +186,7 @@ add_action('add_meta_boxes', function() {
 								}
 							}
 						}
+
 						$liefer_ids = array_values(array_unique(array_map('intval', $liefer_ids)));
 						if (!empty($liefer_ids)) {
 							$links = [];
@@ -206,15 +209,15 @@ add_action('add_meta_boxes', function() {
 						if ($tax) {
 							$to_terms = wp_get_post_terms($to_id, $tax, ['fields' => 'names']);
 							if (!is_wp_error($to_terms) && !empty($to_terms)) {
-							$to_cat = (string) $to_terms[0];
+								$to_cat = (string) $to_terms[0];
+							}
+						}
+						if ($to_link && $to_cat !== '') {
+							echo '<div style="margin-top:0px; font-size:12px;">';
+							echo 'zu ' . esc_html($to_cat) . ': <a href="' . esc_url($to_link) . '">' . esc_html(get_the_title($to_id)) . '</a>';
+							echo '</div>';
 						}
 					}
-					if ($to_link && $to_cat !== '') {
-						echo '<div style="margin-top:0px; font-size:12px;">';
-						echo 'zu ' . esc_html($to_cat) . ': <a href="' . esc_url($to_link) . '">' . esc_html(get_the_title($to_id)) . '</a>';
-						echo '</div>';
-					}
-				}
 			}
 
 			// Icons: Duplizieren + Papierkorb (ohne Text)

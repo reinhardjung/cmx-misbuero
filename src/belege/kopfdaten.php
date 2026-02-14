@@ -13,6 +13,8 @@ defined('ABSPATH') || die('Oxytocin!');
  * ========================================================= */
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF'))        \define(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF', '_cmx_beleg_betreff');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG'))   \define(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG', '_cmx_beleg_beschreibung');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) \define(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL', '_cmx_beleg_betreff_manual');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) \define(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL', '_cmx_beleg_beschreibung_manual');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID'))     \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID', '_cmx_beleg_kontakt_id');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR'))   \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR', '_cmx_beleg_kontakt_addr');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL'))  \define(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL', '_cmx_beleg_projekt_label');
@@ -43,6 +45,136 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
 			'ausgang' => 'Ausgang (für den Kunden)',
 			'eingang' => 'Eingang (vom Lieferanten)',
 		];
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_strip_url_protocol')) {
+	function cmx_strip_url_protocol(string $url): string {
+		$url = \trim($url);
+		if ($url === '') {
+			return '';
+		}
+		$clean = \preg_replace('~^[a-z][a-z0-9+\-.]*://~i', '', $url);
+		if (\is_string($clean)) {
+			$url = $clean;
+		}
+		if (\strncmp($url, '//', 2) === 0) {
+			$url = (string) \substr($url, 2);
+		}
+		$url = (string) \preg_replace('~/+$~', '', $url);
+		return \trim($url);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_url_value')) {
+	function cmx_get_projekt_url_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+		$url = (string) (
+			\get_post_meta($projekt_id, '_cmx_projekt_url', true) ?:
+			\get_post_meta($projekt_id, 'projekt_url', true) ?:
+			\get_post_meta($projekt_id, '_cmx_url', true)
+		);
+		return cmx_strip_url_protocol($url);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_kategorien_value')) {
+	function cmx_get_projekt_kategorien_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+
+		$tax = '';
+		$detect_fn = __NAMESPACE__ . '\\cmx_projekte_detect_taxonomy';
+		if (\is_callable($detect_fn)) {
+			$detected = (string) \call_user_func($detect_fn);
+			if ($detected !== '' && \taxonomy_exists($detected) && \is_object_in_taxonomy('projekte', $detected)) {
+				$tax = $detected;
+			}
+		}
+		if ($tax === '') {
+			foreach (['projekt_kategorie', 'projekte_kategorie', 'projekt_kategorien', 'projekte_kategorien'] as $candidate) {
+				if (\taxonomy_exists($candidate) && \is_object_in_taxonomy('projekte', $candidate)) {
+					$tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($tax === '') {
+			return '';
+		}
+
+		$names = \wp_get_post_terms($projekt_id, $tax, ['fields' => 'names']);
+		if (\is_wp_error($names) || empty($names)) {
+			return '';
+		}
+		$clean = [];
+		foreach ((array) $names as $name) {
+			$name = \trim((string) $name);
+			if ($name !== '' && !\in_array($name, $clean, true)) {
+				$clean[] = $name;
+			}
+		}
+		return \implode(', ', $clean);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_beschreibung_value')) {
+	function cmx_get_projekt_beschreibung_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+		$post = \get_post($projekt_id);
+		if (!$post || $post->post_type !== 'projekte') {
+			return '';
+		}
+
+		$raw = '';
+		$candidates = [
+			(string) \get_post_meta($projekt_id, '_cmx_projekt_beschreibung', true),
+			(string) \get_post_meta($projekt_id, 'projekt_beschreibung', true),
+			(string) $post->post_excerpt,
+			(string) $post->post_content,
+		];
+		foreach ($candidates as $candidate) {
+			if (\trim($candidate) !== '') {
+				$raw = $candidate;
+				break;
+			}
+		}
+		if ($raw === '') {
+			return '';
+		}
+
+		$raw_no_comments = \preg_replace('/<!--[\s\S]*?-->/', '', $raw);
+		if (\is_string($raw_no_comments)) {
+			$raw = $raw_no_comments;
+		}
+		$raw = (string) \strip_shortcodes($raw);
+
+		return \trim((string) \wp_strip_all_tags($raw));
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_betreff_value')) {
+	function cmx_get_projekt_betreff_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+
+		$url = cmx_get_projekt_url_value($projekt_id);
+		$kategorien = cmx_get_projekt_kategorien_value($projekt_id);
+
+		$parts = [];
+		if ($url !== '') {
+			$parts[] = $url;
+		}
+		if ($kategorien !== '') {
+			$parts[] = $kategorien;
+		}
+
+		if (empty($parts)) {
+			return 'Projekte:';
+		}
+
+		return 'Projekte: ' . \implode(' | ', $parts);
 	}
 }
 if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
@@ -474,11 +606,9 @@ function cmx_ajax_search_projekte(): void {
 			$kontakt_addr = cmx_build_kontakt_postanschrift($kontakt_id);
 		}
 
-		$url = (string) (
-			\get_post_meta($id, '_cmx_projekt_url', true) ?:
-			\get_post_meta($id, 'projekt_url', true) ?:
-			\get_post_meta($id, '_cmx_url', true)
-		);
+		$url = cmx_get_projekt_url_value((int) $id);
+		$description = cmx_get_projekt_beschreibung_value((int) $id);
+		$subject = cmx_get_projekt_betreff_value((int) $id);
 
 		$out[] = [
 			'id'            => (int)$id,
@@ -488,6 +618,8 @@ function cmx_ajax_search_projekte(): void {
 			'kontakt_title' => $kontakt_title,
 			'kontakt_addr'  => $kontakt_addr,
 			'url'           => $url,
+			'description'   => $description,
+			'subject'       => $subject,
 		];
 	}
 	\wp_send_json_success(['items'=>$out]);
@@ -553,6 +685,8 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	$kontakt_label  = (string)\get_post_meta($post->ID, CMX_BELEG_META_KONTAKT_LABEL, true);
 	$projekt_id     = (int)\get_post_meta($post->ID, CMX_BELEG_META_PROJEKT_ID, true);
 	$richtung       = (string)\get_post_meta($post->ID, CMX_BELEG_META_RICHTUNG, true);
+	$betreff_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL') && (int)\get_post_meta($post->ID, CMX_BELEG_META_BETREFF_MANUAL, true) === 1 ? 1 : 0;
+	$beschreibung_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL') && (int)\get_post_meta($post->ID, CMX_BELEG_META_BESCHREIBUNG_MANUAL, true) === 1 ? 1 : 0;
 
 	\wp_nonce_field('cmx_beleg_details_save', 'cmx_beleg_details_nonce');
 
@@ -692,10 +826,12 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 
 	// echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
 	echo '<p><label><strong>Betreff</strong></label><br>';
-	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'"></p>';
+	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'">';
+	echo '<input type="hidden" id="cmx_beleg_betreff_manual" name="cmx_beleg_betreff_manual" value="'.\esc_attr((string)$betreff_manual).'"></p>';
 
 	echo '<p><label><strong>Beschreibung</strong></label><br>';
-	echo '<textarea name="cmx_beleg_beschreibung" rows="7">'.\esc_textarea($beschreibung).'</textarea></p>';
+	echo '<textarea id="cmx_beleg_beschreibung" name="cmx_beleg_beschreibung" rows="7">'.\esc_textarea($beschreibung).'</textarea>';
+	echo '<input type="hidden" id="cmx_beleg_beschreibung_manual" name="cmx_beleg_beschreibung_manual" value="'.\esc_attr((string)$beschreibung_manual).'"></p>';
 	echo '</div>';
 
 	/* --- rechte Spalte --- */
@@ -794,20 +930,24 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			wireLabel("cmx_label_projekt","cmx_projekt_id","edit.php?post_type=projekte");
 			wireLabel("cmx_label_kontakt","cmx_kontakt_id","edit.php?post_type=kontakte");
 
-			const betInput=document.getElementById("cmx_beleg_betreff");
+				const betInput=document.getElementById("cmx_beleg_betreff");
+				const beschInput=document.getElementById("cmx_beleg_beschreibung");
+				const betManualInput=document.getElementById("cmx_beleg_betreff_manual");
+				const beschManualInput=document.getElementById("cmx_beleg_beschreibung_manual");
 
-			/* --- Projekte --- */
+				/* --- Projekte --- */
 			const pI=document.getElementById("cmx_projekt_search");
 			const pH=document.getElementById("cmx_projekt_id");
 			const pS=document.getElementById("cmx_projekt_selected");
-			const pL=document.getElementById("cmx_projekt_suggest");
-			const pC=document.getElementById("cmx_projekt_clear");
-			let pT=null;
-			const projNav=makeNavigator(pI,pL,chooseProject);
+				const pL=document.getElementById("cmx_projekt_suggest");
+				const pC=document.getElementById("cmx_projekt_clear");
+				let pT=null;
+				const projNav=makeNavigator(pI,pL,chooseProject);
+				function isManual(el){ return !!el && String(el.value||"0")==="1"; }
 
-			function chooseProject(it){
-				pI.value=it.title||""; pH.value=it.id||""; pI.focus();
-				if(pS){ pS.value="1"; }
+				function chooseProject(it){
+					pI.value=it.title||""; pH.value=it.id||""; pI.focus();
+					if(pS){ pS.value="1"; }
 				if(it.kontakt_id){
 					const kI=document.getElementById("cmx_kontakt_search");
 					const kH=document.getElementById("cmx_kontakt_id");
@@ -815,13 +955,24 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 					if(kI&&kH){ kI.value=it.kontakt_title||""; kH.value=it.kontakt_id||""; }
 					if(kA){ kA.value=it.kontakt_addr||""; }
 				}
-				if(betInput && (!betInput.value || betInput.value.trim()==="") && it.url){
-					betInput.value=(it.url||"").replace(/^\s*[a-z][a-z0-9+\-.]*:\/\//i,"");
+					if(betInput && !isManual(betManualInput)){
+						betInput.value=(it.subject||"").trim();
+						if(betManualInput){ betManualInput.value="0"; }
+					}
+					if(beschInput && !isManual(beschManualInput)){
+						beschInput.value=(it.description||"").trim();
+						if(beschManualInput){ beschManualInput.value="0"; }
+					}
 				}
-			}
-			function pSearch(q){
-				const url="'.\esc_js($ajax_url).'?action=cmx_search_projekte&_ajax_nonce='.\esc_js($ajax_nonce_proj).'&q="+encodeURIComponent(q);
-				fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(j=>{
+				if(betInput && betManualInput){
+					betInput.addEventListener("input", function(){ betManualInput.value="1"; });
+				}
+				if(beschInput && beschManualInput){
+					beschInput.addEventListener("input", function(){ beschManualInput.value="1"; });
+				}
+				function pSearch(q){
+					const url="'.\esc_js($ajax_url).'?action=cmx_search_projekte&_ajax_nonce='.\esc_js($ajax_nonce_proj).'&q="+encodeURIComponent(q);
+					fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(j=>{
 					if(!j||!j.success){pL.style.display="none"; pL.innerHTML=""; projNav.reset(); return;}
 					projNav.render(j.data.items||[]);
 				}).catch(()=>{pL.style.display="none"; pL.innerHTML=""; projNav.reset();});
@@ -932,6 +1083,27 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, \wp_kses_post(\wp_unslash($_POST['cmx_beleg_beschreibung'])));
 		}
 
+		$betreff_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')
+			? ((isset($_POST['cmx_beleg_betreff_manual']) ? (int)\wp_unslash($_POST['cmx_beleg_betreff_manual']) : (int)\get_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL, true)) === 1)
+			: false;
+		$beschreibung_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')
+			? ((isset($_POST['cmx_beleg_beschreibung_manual']) ? (int)\wp_unslash($_POST['cmx_beleg_beschreibung_manual']) : (int)\get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL, true)) === 1)
+			: false;
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) {
+			if ($betreff_manual) {
+				\update_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL, 1);
+			} else {
+				\delete_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL);
+			}
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) {
+			if ($beschreibung_manual) {
+				\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL, 1);
+			} else {
+				\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL);
+			}
+		}
+
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') && isset($_POST['cmx_kontakt_id'])) {
 			$kid = (int) $_POST['cmx_kontakt_id'];
 			if ($kid > 0) \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_ID, $kid);
@@ -946,8 +1118,15 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL);
 		}
 
+		$previous_projekt_id = \defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID')
+			? (int) \get_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID, true)
+			: 0;
+		$projekt_selection_changed = isset($_POST['cmx_projekt_selected']) && (int) \wp_unslash($_POST['cmx_projekt_selected']) === 1;
+
+		$selected_projekt_id = 0;
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID') && isset($_POST['cmx_projekt_id'])) {
 			$pid = (int) $_POST['cmx_projekt_id'];
+			$selected_projekt_id = $pid;
 			if ($pid > 0) \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID, $pid);
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID);
 		}
@@ -956,7 +1135,35 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			if ($proj_label !== '') \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL, $proj_label);
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
 		}
-	}
+		if ($selected_projekt_id > 0) {
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')) {
+				$current_betreff = (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true);
+				if (!$betreff_manual && \trim($current_betreff) === '') {
+					$projekt_betreff = cmx_get_projekt_betreff_value($selected_projekt_id);
+					if ($projekt_betreff !== '') {
+						\update_post_meta($post_id, CMX_BELEG_META_BETREFF, $projekt_betreff);
+					}
+				}
+			}
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')) {
+				$current_beschreibung = (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true);
+				if (!$beschreibung_manual && \trim(\wp_strip_all_tags($current_beschreibung)) === '') {
+					$projekt_beschreibung = cmx_get_projekt_beschreibung_value($selected_projekt_id);
+					if ($projekt_beschreibung !== '') {
+						\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, $projekt_beschreibung);
+					}
+				}
+			}
+		}
+		if ($selected_projekt_id <= 0 && ($previous_projekt_id > 0 || $projekt_selection_changed)) {
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && !$betreff_manual) {
+				\delete_post_meta($post_id, CMX_BELEG_META_BETREFF);
+			}
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG') && !$beschreibung_manual) {
+				\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG);
+			}
+		}
+		}
 
 	if ($current_kategorie_slug === '') {
 		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
