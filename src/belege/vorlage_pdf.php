@@ -829,11 +829,29 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			if ($override !== '') {
 				$ov = (float) cmx_norm_decimal($override);
 				$manual_total_value = $ov;
-				$calc['subtotal'] = $ov;
-				$calc['total'] = $ov;
-				$calc['net'] = $ov;
-				$calc['gross'] = $ov;
-				$calc['tax_amount'] = 0.0;
+				$rate = max(0.0, (float)($mwst['rate'] ?? 0.0));
+				$net = $ov;
+				$gross = $ov;
+				$tax = 0.0;
+				if ($rate > 0.0) {
+					if ($is_brutto) {
+						$gross = $ov;
+						$net = $gross / (1 + $rate);
+						$tax = $gross - $net;
+					} else {
+						$net = $ov;
+						$tax = $net * $rate;
+						$gross = $net + $tax;
+					}
+					$net = round($net, 2);
+					$tax = round($tax, 2);
+					$gross = round($gross, 2);
+				}
+				$calc['subtotal'] = $net;
+				$calc['total'] = $gross;
+				$calc['net'] = $net;
+				$calc['gross'] = $gross;
+				$calc['tax_amount'] = $tax;
 			}
 		}
 		$anzahlungen_raw = get_post_meta($post_id, defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN') ? CMX_BELEG_META_ANZAHLUNGEN : '_cmx_beleg_anzahlungen', true);

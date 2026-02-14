@@ -424,32 +424,32 @@ $recipient_html = $recipient_has_br
 			</table>
 	<?php endif; ?>
 
-<?php if (!$has_positions && !empty($tpl['document']['manual_total'])): ?>
-		<?php $manual_total = (float)$tpl['document']['manual_total']; ?>
-		<div style="margin-top:16px;text-align:right;">
-			<strong>Total <?= htmlspecialchars($__fmt_num($manual_total), ENT_QUOTES, 'UTF-8'); ?></strong>
-		</div>
-	<?php endif; ?>
-
-	<?php if (!$is_lieferschein && !(!$has_positions && !empty($tpl['document']['manual_total']))): ?>
-		<table class="totals-table" border="0">
-			<?php
-			$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-			$mwst_amount = (float)($totals['tax_amount'] ?? 0);
-			$mwst_rate_pct = $mwst_rate * 100;
-			$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
-			$show_subtotal_row = $has_positions && (
-				($show_discount && $discount_sum > 0.0) ||
-				($mwst_rate > 0.0)
-			);
-			?>
-			<?php if ($show_subtotal_row): ?>
-				<tr>
-					<td colspan="<?= $col_count; ?>" class="text-right">
-						<strong>Zwischensumme <?= htmlspecialchars($__fmt_num((float)$positions_sum), ENT_QUOTES, 'UTF-8'); ?></strong>
-					</td>
-				</tr>
-			<?php endif; ?>
+		<?php if (!$is_lieferschein): ?>
+			<table class="totals-table" border="0">
+				<?php
+				$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+				$mwst_amount = (float)($totals['tax_amount'] ?? 0);
+				$mwst_rate_pct = $mwst_rate * 100;
+				$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+				$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
+					&& $tpl['document']['manual_total'] !== null
+					&& $tpl['document']['manual_total'] !== '';
+				$subtotal_value = $has_positions
+					? (float)$positions_sum
+					: ($manual_total_defined
+						? (float)$tpl['document']['manual_total']
+						: (float)($totals['subtotal'] ?? 0));
+				$show_subtotal_row = ($show_discount && $discount_sum > 0.0)
+					|| ($mwst_rate > 0.0)
+					|| $manual_total_defined;
+				?>
+				<?php if ($show_subtotal_row): ?>
+					<tr>
+						<td colspan="<?= $col_count; ?>" class="text-right">
+							<strong>Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?></strong>
+						</td>
+					</tr>
+				<?php endif; ?>
 			<?php if ($show_discount && $discount_sum > 0.0): ?>
 				<tr>
 					<td colspan="<?= $col_count; ?>" class="text-right">
@@ -487,10 +487,7 @@ $recipient_html = $recipient_has_br
 
 	<?php if (!$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
-$anz_base_total = (float)($totals['total'] ?? 0);
-if (!$has_positions && !empty($tpl['document']['manual_total'])) {
-	$anz_base_total = (float)$tpl['document']['manual_total'];
-}
+		$anz_base_total = (float)($totals['total'] ?? 0);
 		$anzahlungen_sum = 0.0;
 		foreach ($tpl['anzahlungen'] as $row) {
 			$anz_amount_raw = (string)($row['betrag'] ?? 0);
