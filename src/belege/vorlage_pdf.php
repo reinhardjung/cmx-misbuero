@@ -730,6 +730,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$beleg_type = $override_type;
 		}
 		$beleg_type = apply_filters('cmx_beleg_pdf_type', $beleg_type, $post_id);
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_effective_type')) {
+			$beleg_type = (string) cmxbu_get_beleg_pdf_effective_type($post_id, (string) $beleg_type);
+		}
 
 		// Upload-Ziel
 		if (!defined('CMX_UPLOADS_MISBUERO') || !CMX_UPLOADS_MISBUERO) {

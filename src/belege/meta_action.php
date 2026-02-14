@@ -38,6 +38,30 @@ function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): 
 	return $default_type;
 }
 
+/**
+ * PDF-Typ für Darstellung/Dateinamen normalisieren.
+ * Regel: Rechnung + Unterkategorie "Ausgabe" (Meta-Richtung "eingang")
+ * wird als Lieferantenrechnung geführt.
+ */
+function cmxbu_get_beleg_pdf_effective_type(int $post_id, string $type): string {
+	$type = \sanitize_key($type);
+	if ($type === '') {
+		$type = 'rechnung';
+	}
+
+	if ($type === 'rechnung' || $type === 'rechnungen') {
+		$richtung_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			: '_cmx_beleg_richtung';
+		$richtung = \sanitize_key((string) \get_post_meta($post_id, $richtung_key, true));
+		if ($richtung === 'eingang' || $richtung === 'ausgabe') {
+			return 'lieferantenrechnung';
+		}
+	}
+
+	return $type;
+}
+
 function cmxbu_beleg_type_filename_slug(string $type): string {
 	return ($type === 'angebot') ? 'offerte' : $type;
 }
@@ -47,8 +71,9 @@ function cmxbu_beleg_type_filename_slug(string $type): string {
  * Rückgabe: [relativer Pfad, absoluter Pfad]
  */
 function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
-	[$title, $type] = cmx_get_beleg_type($post);
-	$type = cmxbu_get_beleg_pdf_type_override((int) $post->ID, $type);
+	[$title, $type_raw] = cmx_get_beleg_type($post);
+	$type = cmxbu_get_beleg_pdf_type_override((int) $post->ID, $type_raw);
+	$type = cmxbu_get_beleg_pdf_effective_type((int) $post->ID, $type);
 	$file_type = cmxbu_beleg_type_filename_slug($type);
 
 	$title_safe = ($title !== '') ? $title : (string) $post->ID;
@@ -77,8 +102,16 @@ function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 				return [$year . '/belege/' . basename($prefixed), $prefixed];
 			}
 		}
+
+		$legacy_types = [];
 		if ($file_type !== $type) {
-			$old_base = \sanitize_title($title_safe . '_' . $type);
+			$legacy_types[] = $type;
+		}
+		if ($type_raw !== '' && $type_raw !== $type && $type_raw !== $file_type) {
+			$legacy_types[] = $type_raw;
+		}
+		foreach (array_values(array_unique($legacy_types)) as $legacy_type) {
+			$old_base = \sanitize_title($title_safe . '_' . $legacy_type);
 			$old_abs = $dir . $old_base . '.pdf';
 			if (is_file($old_abs)) {
 				return [$year . '/belege/' . $old_base . '.pdf', $old_abs];
