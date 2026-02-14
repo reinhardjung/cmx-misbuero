@@ -119,7 +119,112 @@ add_action('add_meta_boxes', function() {
 							$current_slug = (string) $current_slugs[0];
 						}
 					}
-					$is_rechnung = in_array($current_slug, ['rechnung', 'rechnungen'], true);
+					$rechnung_slugs = ['rechnung', 'rechnungen'];
+					$lieferschein_slugs = ['lieferschein', 'lieferscheine'];
+					$is_rechnung = in_array($current_slug, $rechnung_slugs, true);
+					$is_lieferschein = in_array($current_slug, $lieferschein_slugs, true);
+					$get_beleg_slug = static function (int $beleg_id) use ($tax): string {
+						if ($beleg_id <= 0 || $tax === '') {
+							return '';
+						}
+						$slugs = wp_get_post_terms($beleg_id, $tax, ['fields' => 'slugs']);
+						if (is_wp_error($slugs) || empty($slugs)) {
+							return '';
+						}
+						return (string) $slugs[0];
+					};
+					$is_lieferschein_id = static function (int $beleg_id) use ($tax, $get_beleg_slug, $lieferschein_slugs): bool {
+						if ($beleg_id <= 0) {
+							return false;
+						}
+						if ($tax === '') {
+							return true;
+						}
+						$slug = $get_beleg_slug($beleg_id);
+						return in_array($slug, $lieferschein_slugs, true);
+					};
+					$sort_liefer_ids = static function (array $ids): array {
+						$ids = array_values(array_filter(array_unique(array_map('intval', $ids)), static function (int $id): bool {
+							return $id > 0;
+						}));
+						if (count($ids) < 2) {
+							return $ids;
+						}
+						$order_map = [];
+						foreach ($ids as $lid) {
+							$p = get_post($lid);
+							$ts = 0;
+							if ($p) {
+								$date_raw = (string) ((isset($p->post_date_gmt) && $p->post_date_gmt !== '0000-00-00 00:00:00')
+									? $p->post_date_gmt
+									: $p->post_date);
+								$ts_val = ($date_raw !== '') ? strtotime($date_raw) : 0;
+								$ts = ($ts_val !== false) ? (int) $ts_val : 0;
+							}
+							$order_map[$lid] = $ts;
+						}
+						usort($ids, static function (int $a, int $b) use ($order_map): int {
+							$ta = (int) ($order_map[$a] ?? 0);
+							$tb = (int) ($order_map[$b] ?? 0);
+							if ($ta === $tb) {
+								return $a <=> $b;
+							}
+							return $ta <=> $tb;
+						});
+						return $ids;
+					};
+					$collect_lieferschein_ids = static function (int $source_id) use ($tax, $lieferschein_slugs, $sort_liefer_ids): array {
+						if ($source_id <= 0) {
+							return [];
+						}
+						$queue = [(int) $source_id];
+						$seen_sources = [];
+						$liefer_ids = [];
+						while (!empty($queue)) {
+							$current_source = (int) array_shift($queue);
+							if ($current_source <= 0 || isset($seen_sources[$current_source])) {
+								continue;
+							}
+							$seen_sources[$current_source] = true;
+							$args = [
+								'post_type' => 'belege',
+								'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+								'fields' => 'ids',
+								'posts_per_page' => -1,
+								'no_found_rows' => true,
+								'suppress_filters' => true,
+								'orderby' => ['date' => 'ASC', 'ID' => 'ASC'],
+								'order' => 'ASC',
+								'meta_query' => [[
+									'key' => '_cmx_beleg_copied_from',
+									'value' => (int) $current_source,
+									'compare' => '=',
+								]],
+							];
+							if ($tax) {
+								$args['tax_query'] = [[
+									'taxonomy' => $tax,
+									'field' => 'slug',
+									'terms' => $lieferschein_slugs,
+								]];
+							}
+							$child_ids = get_posts($args);
+							if (!is_array($child_ids) || empty($child_ids)) {
+								continue;
+							}
+							foreach ($child_ids as $lid) {
+								$lid = (int) $lid;
+								if ($lid <= 0) {
+									continue;
+								}
+								if (!in_array($lid, $liefer_ids, true)) {
+									$liefer_ids[] = $lid;
+								}
+								$queue[] = $lid;
+							}
+						}
+						return $sort_liefer_ids($liefer_ids);
+					};
 
 					if ($from_id > 0) {
 						$from_link = get_edit_post_link($from_id, '');
@@ -137,71 +242,59 @@ add_action('add_meta_boxes', function() {
 						}
 					}
 
+					$liefer_ids = [];
 					if ($is_rechnung) {
-						$liefer_ids = [];
-
-						$linked_args = [
-							'post_type' => 'belege',
-							'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
-							'fields' => 'ids',
-							'posts_per_page' => -1,
-							'no_found_rows' => true,
-							'suppress_filters' => true,
-							'orderby' => ['date' => 'ASC', 'ID' => 'ASC'],
-							'order' => 'ASC',
-							'meta_query' => [[
-								'key' => '_cmx_beleg_copied_from',
-								'value' => (int) $post->ID,
-								'compare' => '=',
-							]],
-						];
-						if ($tax) {
-							$linked_args['tax_query'] = [[
-								'taxonomy' => $tax,
-								'field' => 'slug',
-								'terms' => ['lieferschein', 'lieferscheine'],
-							]];
+						$liefer_ids = $collect_lieferschein_ids((int) $post->ID);
+						if ($to_id > 0 && !in_array((int) $to_id, $liefer_ids, true) && $is_lieferschein_id((int) $to_id)) {
+							$liefer_ids[] = (int) $to_id;
+							$liefer_ids = $sort_liefer_ids($liefer_ids);
 						}
-						$linked_ids = get_posts($linked_args);
-						if (is_array($linked_ids)) {
-							foreach ($linked_ids as $lid) {
-								$lid = (int) $lid;
-								if ($lid > 0 && $lid !== (int) $post->ID) {
-									$liefer_ids[] = $lid;
-								}
+					} elseif ($is_lieferschein) {
+						$source_rechnung_id = 0;
+						$trace_id = (int) $from_id;
+						$trace_seen = [];
+						while ($trace_id > 0 && !isset($trace_seen[$trace_id])) {
+							$trace_seen[$trace_id] = true;
+							$trace_slug = $get_beleg_slug($trace_id);
+							if (in_array($trace_slug, $rechnung_slugs, true)) {
+								$source_rechnung_id = $trace_id;
+								break;
 							}
+							if (in_array($trace_slug, $lieferschein_slugs, true)) {
+								$next_trace = (int) get_post_meta($trace_id, '_cmx_beleg_copied_from', true);
+								if ($next_trace <= 0) {
+									break;
+								}
+								$trace_id = $next_trace;
+								continue;
+							}
+							break;
 						}
-
-						// Legacy-Fallback: einzelne alte Verknüpfung ergänzen, falls sie in der Query fehlt.
-						if ($to_id > 0 && !in_array((int) $to_id, $liefer_ids, true)) {
-							$to_post = get_post($to_id);
-							if ($to_post && $to_post->post_type === 'belege' && $to_post->post_status !== 'trash') {
-								if ($tax) {
-									$to_slugs = wp_get_post_terms($to_id, $tax, ['fields' => 'slugs']);
-									if (!is_wp_error($to_slugs) && array_intersect(['lieferschein', 'lieferscheine'], array_map('strval', (array) $to_slugs))) {
-										$liefer_ids[] = (int) $to_id;
-									}
-								} else {
-									$liefer_ids[] = (int) $to_id;
-								}
-							}
+						$source_id = $source_rechnung_id > 0 ? $source_rechnung_id : ((int) $from_id > 0 ? (int) $from_id : 0);
+						if ($source_id > 0) {
+							$liefer_ids = $collect_lieferschein_ids($source_id);
 						}
-
-						$liefer_ids = array_values(array_unique(array_map('intval', $liefer_ids)));
-						if (!empty($liefer_ids)) {
-							$links = [];
-							foreach ($liefer_ids as $lid) {
-								$edit_link = get_edit_post_link($lid, '');
-								if (!$edit_link) {
-									continue;
-								}
-								$links[] = '<a href="' . esc_url($edit_link) . '">' . esc_html(get_the_title($lid)) . '</a>';
+						if (!in_array((int) $post->ID, $liefer_ids, true)) {
+							$liefer_ids[] = (int) $post->ID;
+						}
+						if ($to_id > 0 && !in_array((int) $to_id, $liefer_ids, true) && $is_lieferschein_id((int) $to_id)) {
+							$liefer_ids[] = (int) $to_id;
+						}
+						$liefer_ids = $sort_liefer_ids($liefer_ids);
+					}
+					if (!empty($liefer_ids)) {
+						$links = [];
+						foreach ($liefer_ids as $lid) {
+							$edit_link = get_edit_post_link($lid, '');
+							if (!$edit_link) {
+								continue;
 							}
-							if (!empty($links)) {
-								echo '<div style="margin-top:0px; font-size:12px;">';
-								echo (count($links) > 1 ? 'zu Lieferscheinen: ' : 'zu Lieferschein: ') . implode(', ', $links);
-								echo '</div>';
-							}
+							$links[] = '<a href="' . esc_url($edit_link) . '">' . esc_html(get_the_title($lid)) . '</a>';
+						}
+						if (!empty($links)) {
+							echo '<div style="margin-top:0px; font-size:12px;">';
+							echo (count($links) > 1 ? 'zu Lieferscheinen: ' : 'zu Lieferschein: ') . implode(', ', $links);
+							echo '</div>';
 						}
 					} elseif ($to_id > 0) {
 						$to_link = get_edit_post_link($to_id, '');
