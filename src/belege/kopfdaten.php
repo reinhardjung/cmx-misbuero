@@ -171,10 +171,10 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_betreff_value')) {
 		}
 
 		if (empty($parts)) {
-			return 'Projekte:';
+			return 'Projekt:';
 		}
 
-		return 'Projekte: ' . \implode(' | ', $parts);
+		return 'Projekt: ' . \implode(' | ', $parts);
 	}
 }
 if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {

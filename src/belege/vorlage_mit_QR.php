@@ -136,6 +136,14 @@ $sender_block = trim(
 	($tpl['me']['strasse'] ?? '') . "\n" .
 	$sender_city_line
 );
+$sender_line_parts = array_values(array_filter([
+	trim((string)($tpl['me']['company'] ?? '')),
+	trim((string)($tpl['me']['strasse'] ?? '')),
+	trim((string)$sender_city_line),
+], static function (string $v): bool {
+	return $v !== '';
+}));
+$sender_line = implode(' â€¢ ', $sender_line_parts);
 
 $recipient_block = trim((string)($cmx_beleg_adress ?? ''));
 if ($recipient_block === '') {
@@ -159,7 +167,9 @@ $fmt_mm = static function($value): string {
 $logo_x_css = $fmt_mm((float)($layout['logo_x_mm'] ?? 150.0));
 $logo_y_css = $fmt_mm((float)($layout['logo_y_mm'] ?? 20.0));
 $logo_w_css = $fmt_mm((float)($layout['logo_width_mm'] ?? 40.0));
-$recipient_x_css = $fmt_mm((float)($layout['recipient_x_mm'] ?? 20.0));
+$recipient_x_mm = (float)($layout['recipient_x_mm'] ?? 20.0);
+$recipient_x_shift_mm = 13.23; // 50px
+$recipient_x_css = $fmt_mm($recipient_x_mm - $recipient_x_shift_mm);
 $recipient_y_css = $fmt_mm((float)($layout['recipient_y_mm'] ?? 45.0));
 $recipient_w_css = $fmt_mm((float)($layout['recipient_width_mm'] ?? 85.0));
 $recipient_h_css = $fmt_mm((float)($layout['recipient_height_mm'] ?? 40.0));
@@ -247,11 +257,29 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		font-size: 14px;
 	}
 	.recipient-window .recipient-label { display: <?= htmlspecialchars($recipient_label_display, ENT_QUOTES, 'UTF-8'); ?>; margin-bottom: 2mm; }
+	.recipient-window .recipient-sender-line {
+		font-size: 10px;
+		line-height: 1.2;
+		white-space: nowrap;
+		margin-bottom: 1.5mm;
+	}
 	.recipient-window .recipient-lines { line-height: 1.3; }
 	h1 { margin-top: 0; font-size: 20px; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
-	.beleg-content { margin-top: -42px; }
+	.beleg-content {
+		margin-top: -56px;
+		position: relative;
+	}
+	.beleg-content .fold-mark-left {
+		position: absolute;
+		left: 0;
+		top: 22px;
+		display: block;
+		width: 3mm;
+		height: 0;
+		border-top: 1px solid #999;
+	}
 	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
@@ -389,6 +417,9 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 			</table>
 		</div>
 		<div class="recipient-window">
+			<?php if ($sender_line !== ''): ?>
+				<div class="recipient-sender-line"><?= htmlspecialchars($sender_line, ENT_QUOTES, 'UTF-8'); ?></div>
+			<?php endif; ?>
 			<div class="recipient-label"><strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong></div>
 			<div class="recipient-lines"><?= $recipient_html; ?></div>
 		</div>
@@ -396,6 +427,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	</div>
 
 	<div class="beleg-content">
+		<span class="fold-mark-left"></span>
 		<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
 		<?php if ($beleg_subject !== ''): ?>
 			<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
