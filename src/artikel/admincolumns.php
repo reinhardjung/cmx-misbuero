@@ -86,7 +86,6 @@ function cmx_lieferanten_args(): array {
 	$new['farben']         = 'Farbe';
 	$new['einheiten']      = 'Einheit';
 	$new['lieferant']      = 'Lieferant';
-	$new['lieferant_nr']   = 'Lieferanten-Nr.';
 	$new['vk']             = 'VK';
 	$new['ek']             = 'EK';
 	$new['marge']          = 'Marge';
@@ -183,11 +182,6 @@ function cmx_lieferanten_args(): array {
 			}
 			break;
 
-		case 'lieferant_nr':
-			$nr = (string) \get_post_meta($post_id, defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_LIEFERANT_NR') ? CMX_ARTIKEL_META_LIEFERANT_NR : '_cmx_art_lieferant_nr', true);
-			echo esc_html($nr);
-			break;
-
 		case 'vk':
 			$vk = (float)\get_post_meta($post_id, CMX_ARTIKEL_META_VK, true);
 			echo \esc_html(cmx_format_swiss_number($vk, 2));
@@ -206,7 +200,7 @@ function cmx_lieferanten_args(): array {
 		case 'verkaufbar':
 			$not_sellable = (int) \get_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, true) === 1;
 			echo $not_sellable
-				? '<span class="dashicons dashicons-yes-alt" title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>'
+				? '<span class="dashicons dashicons-no-alt" title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>'
 				: '';
 			break;
 
@@ -243,7 +237,6 @@ function cmx_lieferanten_args(): array {
 	$cols['sku']            = 'sku';
 	$cols['marken']         = 'marke';
 	$cols['lieferant']      = 'lieferant';
-	$cols['lieferant_nr']   = 'lieferant_nr';
 	$cols['vk']             = 'vk';
 	$cols['ek']             = 'ek';
 	$cols['marge']          = 'marge';
