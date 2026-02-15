@@ -43,6 +43,23 @@ function cmx_beleg_zahlungsart_tax(): ?string {
 	return null;
 }
 
+function cmx_beleg_zahlungsgrund_tax(): ?string {
+	$candidates = [];
+	if (\defined(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND')) {
+		$candidates[] = (string) \constant(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND');
+	}
+	$candidates[] = 'belege_zahlungsgrund';
+	$candidates[] = 'belege_zahlungsgruende';
+	$candidates[] = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+		? (string) cmx_tax_key('belege', 'zahlungsgrund')
+		: 'belege_zahlungsgrund';
+
+	foreach (\array_values(\array_unique(\array_filter($candidates))) as $tax) {
+		if (\taxonomy_exists($tax)) return (string) $tax;
+	}
+	return null;
+}
+
 /**
  * Liefert eine eindeutige, sortierte Liste möglicher Währungen aus dem CPT "artikel".
  */
@@ -113,6 +130,24 @@ function cmx_get_artikel_waehrungen(): array {
 		'high'
 	);
 });
+
+// Zahlungsgrund wird direkt in "Konditionen" gerendert; doppelte Standard-Taxobox ausblenden.
+\add_action('add_meta_boxes_belege', function () {
+	$zg_tax = cmx_beleg_zahlungsgrund_tax();
+	$ids = [
+		'belege_zahlungsgrunddiv',
+		'tagsdiv-belege_zahlungsgrund',
+		'belege_zahlungsgruendediv',
+		'tagsdiv-belege_zahlungsgruende',
+	];
+	if ($zg_tax) {
+		$ids[] = $zg_tax . 'div';
+		$ids[] = 'tagsdiv-' . $zg_tax;
+	}
+	foreach (\array_unique($ids) as $id) {
+		\remove_meta_box((string) $id, 'belege', 'side');
+	}
+}, 100);
 
 /**
  * Render der Side-Box
@@ -252,12 +287,12 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	echo '</p>';
 
-	/* ===== NEU: Status (als letztes Feld) ===== */
-	$status = \get_post_meta($post->ID, CMX_BELEG_META_STATUS, true);
-	$status_opts = cmx_beleg_status_options();
-	if (!isset($status_opts[$status])) {
-		$status = array_key_first($status_opts);
-	}
+		/* ===== NEU: Status ===== */
+		$status = \get_post_meta($post->ID, CMX_BELEG_META_STATUS, true);
+		$status_opts = cmx_beleg_status_options();
+		if (!isset($status_opts[$status])) {
+			$status = array_key_first($status_opts);
+		}
 	echo '<p style="margin:8px 0 0;">';
 	echo '<label for="cmx_beleg_status" style="display:block;margin-bottom:6px;"><strong>Status</strong></label>';
 	echo '<select name="cmx_beleg_status" id="cmx_beleg_status" style="width:100%;">';
@@ -289,7 +324,27 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		echo '</p>';
 	}
 
-	echo '</div>';
+		echo '</div>';
+
+		/* ===== NEU: Zahlungsgrund (immer sichtbar, als letztes Feld) ===== */
+		$zg_tax = cmx_beleg_zahlungsgrund_tax();
+		if ($zg_tax) {
+			$zg_terms = \get_terms(['taxonomy' => $zg_tax, 'hide_empty' => false]);
+			$zg_current_terms = \wp_get_post_terms($post->ID, $zg_tax, ['fields' => 'ids']);
+			$zg_current_id = (int) ($zg_current_terms[0] ?? 0);
+
+			echo '<p id="cmx_beleg_zahlungsgrund_wrap" style="margin:8px 0 0;">';
+			echo '<label for="cmx_beleg_zahlungsgrund" style="display:block;margin-bottom:6px;"><strong>Zahlungsgrund</strong></label>';
+			echo '<select name="cmx_beleg_zahlungsgrund" id="cmx_beleg_zahlungsgrund" style="width:100%;">';
+			echo '<option value="">— auswählen —</option>';
+			if (!\is_wp_error($zg_terms)) {
+				foreach ($zg_terms as $term) {
+					echo '<option value="' . \esc_attr((string) $term->term_id) . '"' . \selected($zg_current_id, (int) $term->term_id, false) . '>' . \esc_html((string) $term->name) . '</option>';
+				}
+			}
+			echo '</select>';
+			echo '</p>';
+		}
 
 	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");var payFields=document.getElementById("cmx_beleg_payment_fields");function findZahlungsgrundBoxes(){var nodes=[];document.querySelectorAll(".postbox").forEach(function(box){var title=box.querySelector(".hndle, h2, h3");var t=title?title.textContent.trim():"";if(t&&t.toLowerCase().includes("zahlungsgrund")){nodes.push(box);}});var direct=document.querySelectorAll("#tagsdiv-belege_zahlungsgrund, #belege_zahlungsgrunddiv, .postbox[id*=\\"zahlungsgrund\\"]");direct.forEach(function(n){if(nodes.indexOf(n)===-1) nodes.push(n);});return nodes;}var canPay=!!(inpB&&selS);function hasValidDate(){return canPay&&/^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(!canPay){return;}if(hasValidDate()){if(selS.value!=="bezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}}function syncPay(){if(!canPay||!payWrap){return;}var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function syncKategorieFields(){var slug=getSlug();var hide=slug==="offerte"||slug==="lieferschein";if(payFields){payFields.style.display=hide?"none":"";}findZahlungsgrundBoxes().forEach(function(box){box.style.display=hide?"none":"";});if(hide&&canPay){inpB.value="";selS.value="offen";syncPay();}}function onStatusChange(){if(!canPay){return;}if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="teilbezahlt"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}if(canPay){inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){syncKategorieFields();}});document.addEventListener("DOMContentLoaded",syncKategorieFields);setTimeout(syncKategorieFields,0);syncStatus();syncPay();})();</script>';
 }
@@ -363,6 +418,17 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 			\wp_set_post_terms($post_id, [$term_id], $pay_tax, false);
 		} else {
 			\wp_set_post_terms($post_id, [], $pay_tax, false);
+		}
+	}
+
+	// ===== NEU: Zahlungsgrund =====
+	$zg_tax = cmx_beleg_zahlungsgrund_tax();
+	if ($zg_tax) {
+		$term_id = isset($_POST['cmx_beleg_zahlungsgrund']) ? (int) $_POST['cmx_beleg_zahlungsgrund'] : 0;
+		if ($term_id > 0) {
+			\wp_set_post_terms($post_id, [$term_id], $zg_tax, false);
+		} else {
+			\wp_set_post_terms($post_id, [], $zg_tax, false);
 		}
 	}
 }, 10, 3);
