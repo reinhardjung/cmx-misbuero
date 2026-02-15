@@ -23,6 +23,19 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_PLZ'))       define(__NAMESPACE__.
 if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_ORT'))       define(__NAMESPACE__.'\\CMX_LIEFER_META_ORT','_cmx_liefer_ort');
 if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.'\\CMX_LIEFER_META_LAND','_cmx_liefer_land');
 
+function cmx_import_find_existing_kontakt_id_by_title(string $title): int {
+	global $wpdb;
+	$title = \trim($title);
+	if ($title === '') return 0;
+	$sql = $wpdb->prepare(
+		"SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_title = %s AND post_status <> 'trash' ORDER BY ID ASC LIMIT 1",
+		CMX_PT_KONTAKTE,
+		$title
+	);
+	$id = (int) $wpdb->get_var($sql);
+	return $id > 0 ? $id : 0;
+}
+
 
 /**
  * 1) Import-Link oben in der Liste einfügen
@@ -49,20 +62,23 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.
 		<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_kontakte_import'); ?>
 			<input type="hidden" name="cmx_do_import_kontakte" value="1">
-			<table class="form-table" role="presentation" style="margin-top:1em;">
-				<tbody>
-					<tr>
-						<th scope="row"><label for="cmx_csv_file">CSV-Datei</label></th>
-						<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv" required></td>
-					</tr>
-					<!-- Optional: Update-Modus
-					<tr>
-						<th scope="row"><label for="cmx_update_mode">Update-Modus</label></th>
-						<td><label><input type="checkbox" id="cmx_update_mode" name="update_mode" value="1"> Wenn <code>ID</code> vorhanden ist, bestehenden Kontakt aktualisieren</label></td>
-					</tr>
-					-->
-				</tbody>
-			</table>
+				<table class="form-table" role="presentation" style="margin-top:1em;">
+					<tbody>
+						<tr>
+							<th scope="row"><label for="cmx_update_mode">Existierende überschreiben?</label></th>
+							<td>
+								<label>
+									<input type="checkbox" id="cmx_update_mode" name="update_mode" value="1">
+									Ja, Kontakte mit gleichem Namen aktualisieren
+								</label>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="cmx_csv_file">CSV-Datei</label></th>
+							<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv" required></td>
+						</tr>
+					</tbody>
+				</table>
 			<p class="submit">
 				<button type="submit" class="button button-primary">Import starten</button>
 				<a href="<?php echo esc_url(admin_url('edit.php?post_type=' . CMX_PT_KONTAKTE)); ?>" class="button">Abbrechen</a>
@@ -216,7 +232,13 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 		}
 
 		$is_update = false;
-		if ($update_mode && !empty($row['ID'])) { $postarr['ID'] = (int)$row['ID']; $is_update = true; }
+		if ($update_mode) {
+			$existing_id = cmx_import_find_existing_kontakt_id_by_title($title);
+			if ($existing_id > 0) {
+				$postarr['ID'] = $existing_id;
+				$is_update = true;
+			}
+		}
 
 		$post_id = \wp_insert_post($postarr, true);
 		if (\is_wp_error($post_id)) continue;
