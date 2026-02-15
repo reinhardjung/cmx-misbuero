@@ -285,8 +285,8 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
 		.positions-table tbody tr.cmx-pdf-pos-even { background: #f3f3f3; }
-		/* Avoid covering shifted qty text in zebra rows. */
-		.positions-table tbody tr.cmx-pdf-pos-even td.col-unit { background: transparent; }
+		.positions-table tbody tr.cmx-pdf-pos-even td.col-qty,
+		.positions-table tbody tr.cmx-pdf-pos-even td.col-unit { background: #f3f3f3; }
 	.positions-table tbody td { vertical-align: top; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
@@ -315,18 +315,23 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	width: 88px;
 	min-width: 88px;
 	white-space: nowrap;
+	position: relative;
+	z-index: 2;
 }
 .positions-table th.col-unit,
 .positions-table td.col-unit {
 	width: 88px;
 	min-width: 88px;
 	white-space: nowrap;
+	position: relative;
+	z-index: 1;
 }
 .positions-table .cmx-pdf-shift-qty,
 .positions-table .cmx-pdf-shift-unit {
 	display: inline-block;
 	position: relative;
 	left: 50px;
+	z-index: 2;
 	white-space: nowrap;
 }
 .positions-table th.col-unit-price,
