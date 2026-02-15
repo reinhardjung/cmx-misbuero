@@ -148,6 +148,57 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_date_to_ts')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_decimal')) {
+	function cmx_cockpit_parse_decimal(string $raw): float {
+		$raw = \trim($raw);
+		if ($raw === '') {
+			return 0.0;
+		}
+		$txt = \str_replace(["\xc2\xa0", ' '], '', $raw);
+		$txt = \preg_replace('/[^0-9,.\-]/', '', $txt);
+		if (!\is_string($txt) || $txt === '') {
+			return 0.0;
+		}
+		if (\strpos($txt, ',') !== false && \strpos($txt, '.') !== false) {
+			$txt = \str_replace("'", '', $txt);
+			$txt = \str_replace(',', '.', \str_replace('.', '', $txt));
+		} elseif (\strpos($txt, ',') !== false) {
+			$txt = \str_replace(',', '.', $txt);
+		} else {
+			$txt = \str_replace("'", '', $txt);
+		}
+		return \is_numeric($txt) ? (float) $txt : 0.0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
+	function cmx_cockpit_beleg_amount_tooltip(int $post_id): string {
+		$total = null;
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+			$calc = (array) cmxbu_get_beleg_positionen_calc($post_id);
+			if (isset($calc['total']) && \is_numeric($calc['total'])) {
+				$total = (float) $calc['total'];
+			}
+		}
+
+		$override_raw = \trim((string) \get_post_meta($post_id, '_cmx_beleg_summe_override', true));
+		if ($override_raw !== '') {
+			$total = cmx_cockpit_parse_decimal($override_raw);
+		}
+
+		if ($total === null) {
+			return '';
+		}
+
+		$formatted = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+			? (string) cmx_format_swiss_number((float) $total, 2)
+			: \number_format((float) $total, 2, '.', "'");
+
+		return 'Betrag: CHF ' . $formatted;
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) {
 	function cmx_cockpit_faellige_rechnungen_data(): array {
 		static $cache = null;
@@ -251,19 +302,21 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				$title = '#' . $post_id;
 			}
 
-			$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
+				$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
+				$amount_tooltip = cmx_cockpit_beleg_amount_tooltip($post_id);
 
-			$rows[] = [
-				'id'       => $post_id,
+				$rows[] = [
+					'id'       => $post_id,
 				'title'    => $title,
 				'kontakt'  => (string) ($kontakt_data['name'] ?? ''),
 				'kontakt_url' => (string) ($kontakt_data['url'] ?? ''),
 				'due_sort' => $due_sort,
-				'due_ts'   => $due_ts,
-				'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
-				'edit_url' => (string) \get_edit_post_link($post_id, ''),
-			];
-		}
+					'due_ts'   => $due_ts,
+					'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
+					'edit_url' => (string) \get_edit_post_link($post_id, ''),
+					'amount_tooltip' => $amount_tooltip,
+				];
+			}
 
 		\usort($rows, static function (array $a, array $b): int {
 			$cmp = ((int) ($a['due_sort'] ?? PHP_INT_MAX)) <=> ((int) ($b['due_sort'] ?? PHP_INT_MAX));
@@ -329,17 +382,19 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		$post_id = (int) ($row['id'] ?? 0);
 			$title   = (string) ($row['title'] ?? ('#' . $post_id));
 			$due     = (string) ($row['due_date'] ?? '');
-			$kontakt = (string) ($row['kontakt'] ?? '');
-			$kontakt_url = (string) ($row['kontakt_url'] ?? '');
-			$edit    = (string) ($row['edit_url'] ?? '');
+				$kontakt = (string) ($row['kontakt'] ?? '');
+				$kontakt_url = (string) ($row['kontakt_url'] ?? '');
+				$edit    = (string) ($row['edit_url'] ?? '');
+				$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
 
-		echo '<tr>';
-		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;">';
-		if ($edit !== '') {
-			echo '<a href="' . \esc_url($edit) . '">' . \esc_html($title) . '</a>';
-		} else {
-			echo \esc_html($title);
-		}
+			echo '<tr>';
+			echo '<td style="padding:4px 10px 4px 0;vertical-align:top;">';
+			if ($edit !== '') {
+				$title_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+				echo '<a href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
+			} else {
+				echo \esc_html($title);
+			}
 		echo '</td>';
 		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">' . \esc_html($due) . '</td>';
 			echo '<td style="padding:4px 0;vertical-align:top;">';
