@@ -322,6 +322,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	echo '<th style="text-align:left;padding:0 0 6px 0;">Rechnung</th>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;">Fällig am</th>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;">Kontakt</th>';
+	// echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
+	echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
 	echo '</tr></thead><tbody>';
 	foreach ($items as $row) {
 		$post_id = (int) ($row['id'] ?? 0);
@@ -345,10 +347,17 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				echo '<a href="' . \esc_url($kontakt_url) . '">' . \esc_html($kontakt) . '</a>';
 			} else {
 				echo \esc_html($kontakt);
+				}
+				echo '</td>';
+			echo '<td style="padding:4px 0;vertical-align:top;text-align:center;">';
+			if ($post_id > 0) {
+				echo '<button type="button" class="cmx-faellig-mark-paid" data-beleg="' . (int) $post_id . '" title="Als bezahlt markieren" aria-label="Als bezahlt markieren" style="cursor:pointer;border:0;background:transparent;padding:0;line-height:1;">';
+				echo '<span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span>';
+				echo '</button>';
 			}
 			echo '</td>';
-			echo '</tr>';
-		}
+				echo '</tr>';
+			}
 	echo '</tbody></table>';
 
 	if ($total > \count($items)) {
@@ -366,6 +375,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	if ($list_url === '') {
 		return;
 	}
+	$paid_nonce = \wp_create_nonce('cmx_mark_paid');
+	$ajax_url = \admin_url('admin-ajax.php');
 	?>
 	<script>
 	(function(){
@@ -379,6 +390,43 @@ function cmx_render_rechnungen_faellig_widget(): void {
 			e.preventDefault();
 			e.stopPropagation();
 			window.location.href = <?php echo \wp_json_encode($list_url); ?>;
+		});
+
+		document.addEventListener('click', function(e){
+			var btn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-mark-paid') : null;
+			if (!btn) return;
+			e.preventDefault();
+			e.stopPropagation();
+
+			var belegId = parseInt(btn.getAttribute('data-beleg') || '0', 10);
+			if (!belegId || btn.dataset.loading === '1') return;
+
+			btn.dataset.loading = '1';
+			btn.disabled = true;
+
+			var body = new URLSearchParams();
+			body.set('action', 'cmx_mark_beleg_paid');
+			body.set('post_id', String(belegId));
+			body.set('_ajax_nonce', <?php echo \wp_json_encode($paid_nonce); ?>);
+
+			fetch(<?php echo \wp_json_encode($ajax_url); ?>, {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+				body: body.toString()
+			}).then(function(resp){
+				return resp.json();
+			}).then(function(resp){
+				if (resp && resp.success) {
+					window.location.reload();
+					return;
+				}
+				throw new Error((resp && resp.data) ? String(resp.data) : 'Fehler beim Speichern.');
+			}).catch(function(err){
+				alert(err && err.message ? err.message : 'Fehler beim Speichern.');
+				btn.dataset.loading = '';
+				btn.disabled = false;
+			});
 		});
 	})();
 	</script>
