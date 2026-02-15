@@ -100,6 +100,123 @@ function cmx_admin_unlink_tel_numbers(): void {
 	<?php
 }
 
+add_action('admin_footer', __NAMESPACE__ . '\\cmx_admin_label_placeholder_fill');
+function cmx_admin_label_placeholder_fill(): void {
+	?>
+	<script>
+	(function(){
+		if (window.__cmxLabelPlaceholderFillBound) return;
+		window.__cmxLabelPlaceholderFillBound = true;
+
+		const blockedInputTypes = new Set([
+			'checkbox','radio','button','submit','reset','file','hidden','image'
+		]);
+
+		function findControlForLabel(label){
+			if (!label) return null;
+			if (label.control) return label.control;
+
+			const forId = label.getAttribute('for');
+			if (forId) {
+				const byId = document.getElementById(forId);
+				if (byId) return byId;
+			}
+			return label.querySelector('input, textarea');
+		}
+
+		function canFill(el){
+			if (!el || !el.tagName) return false;
+			const tag = el.tagName.toLowerCase();
+			if (tag !== 'input' && tag !== 'textarea') return false;
+			if (el.disabled || el.readOnly) return false;
+
+			if (tag === 'input') {
+				const type = (el.getAttribute('type') || 'text').toLowerCase();
+				if (blockedInputTypes.has(type)) return false;
+			}
+
+			const placeholder = (el.getAttribute('placeholder') || '').trim();
+			if (!placeholder) return false;
+
+			return (el.value || '').trim() === '';
+		}
+
+		function fillControl(el){
+			if (!canFill(el)) return;
+			const placeholder = (el.getAttribute('placeholder') || '').trim();
+			if (!placeholder) return;
+
+			el.value = placeholder;
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			el.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+
+		function findControlFromHeaderCell(th){
+			if (!th || !th.closest) return null;
+			const tr = th.closest('tr');
+			if (!tr) return null;
+			const td = tr.querySelector('td');
+			if (!td) return null;
+			return td.querySelector('input, textarea');
+		}
+
+		function findControlFromRow(el){
+			if (!el || !el.closest) return null;
+			const tr = el.closest('tr');
+			if (!tr) return null;
+			const td = tr.querySelector('td');
+			if (!td) return null;
+			return td.querySelector('input, textarea');
+		}
+
+		function fillFromLabel(label){
+			if (!label) return;
+			const control = findControlForLabel(label);
+			fillControl(control);
+		}
+
+		document.addEventListener('click', function(e){
+			const rawTarget = e.target;
+			const target = (rawTarget && rawTarget.nodeType === 3) ? rawTarget.parentElement : rawTarget;
+			if (!target || !target.closest) return;
+
+			if (target.closest('input, textarea, select, button, a')) return;
+
+			let label = target.closest('label');
+			if (!label) {
+				const th = target.closest('th');
+				if (th) label = th.querySelector('label[for]');
+			}
+			if (label) {
+				fillFromLabel(label);
+				return;
+			}
+
+			const th = target.closest('th');
+			if (th) {
+				fillControl(findControlFromHeaderCell(th));
+				return;
+			}
+
+			fillControl(findControlFromRow(target));
+		}, true);
+	})();
+	</script>
+	<?php
+}
+
+add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_placeholder_click_cursor');
+function cmx_admin_placeholder_click_cursor(): void {
+	?>
+	<style id="cmx-placeholder-click-cursor">
+		form .form-table th label[for],
+		form .form-table th {
+			cursor: pointer;
+		}
+	</style>
+	<?php
+}
+
 
 add_action('admin_head', __NAMESPACE__ . '\\inject_styles');
 function inject_styles(): void {

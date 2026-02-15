@@ -123,6 +123,7 @@ function cmx_field_text(array $args): void {
 	$ph  = $args['placeholder'] ?? '';
 
 	echo '<input type="text" class="regular-text"
+		id="'.esc_attr($key).'"
 		name="'.CMX_SETTINGS_MAIN.'['.$key.']"
 		value="'.esc_attr($val).'"
 		placeholder="'.esc_attr($ph).'">';

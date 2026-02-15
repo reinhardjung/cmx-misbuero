@@ -280,3 +280,52 @@ function cmx_get_active_bank(): ?array {
 
 	return null;
 }
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_get_das_bin_ich_company_name')) {
+	function cmx_get_das_bin_ich_company_name(): string {
+		$posts = \get_posts([
+			'post_type' => ['kontakte', 'kontakt', 'contact'],
+			'post_status' => ['publish', 'private'],
+			'posts_per_page' => 1,
+			'tax_query' => [
+				'relation' => 'OR',
+				['taxonomy' => 'kontakte_kategorien', 'field' => 'slug', 'terms' => ['das-bin-ich', 'ich']],
+				['taxonomy' => 'kontakte_kategorien', 'field' => 'name', 'terms' => ['Das bin ich']],
+			],
+			'no_found_rows' => true,
+			'suppress_filters' => true,
+		]);
+
+		if (empty($posts) || empty($posts[0])) {
+			return '';
+		}
+
+		$post = $posts[0];
+		$company = trim((string) \get_post_meta((int) $post->ID, '_company', true));
+		if ($company === '') {
+			$company = trim((string) ($post->post_title ?? ''));
+		}
+
+		return $company;
+	}
+}
+
+\add_filter('pre_update_option_cmx_einstellungen', function ($new, $old) {
+	if (!\is_array($new)) {
+		return $new;
+	}
+
+	$company = cmx_get_das_bin_ich_company_name();
+	if ($company === '') {
+		return $new;
+	}
+
+	foreach (['rev_recipient', 'zkb_recipient', 'ubs_recipient', 'migros_recipient', 'eisen_recipient'] as $key) {
+		$current = isset($new[$key]) ? trim((string) $new[$key]) : '';
+		if ($current === '') {
+			$new[$key] = $company;
+		}
+	}
+
+	return $new;
+}, 20, 2);
