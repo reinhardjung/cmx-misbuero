@@ -88,11 +88,29 @@ function cmx_fetch_lieferanten_ids_unified(string $post_type): array {
 function cmx_artikel_lieferanten_list_url_unified(): string {
 	$kontakt_pt = cmx_first_existing_kontakt_cpt_unified();
 	if (!$kontakt_pt) return '';
+	$term_id = 0;
+	$taxq = cmx_taxq_kontakte_kategorien_lieferant_unified();
+	if (\is_array($taxq) && !empty($taxq['taxonomy']) && \is_object_in_taxonomy($kontakt_pt, (string)$taxq['taxonomy'])) {
+		$field = (string)($taxq['field'] ?? '');
+		$terms = (array)($taxq['terms'] ?? []);
+		$first = $terms ? \reset($terms) : '';
+		if ($field === 'term_id' || \is_numeric($first)) {
+			$term_id = (int)$first;
+		} elseif ($field === 'slug' && \is_string($first) && $first !== '') {
+			$term = \get_term_by('slug', (string)$first, (string)$taxq['taxonomy']);
+			if ($term && !\is_wp_error($term)) $term_id = (int)$term->term_id;
+		}
+	}
+	$args = [
+		'post_type'             => $kontakt_pt,
+		'cmx_filter_lieferant'  => '1',
+	];
+	if ($term_id > 0) {
+		// Macht in der Kontakte-Liste den aktiven Dropdown-Filter sichtbar.
+		$args['filter_kundenkategorie'] = $term_id;
+	}
 	return \add_query_arg(
-		[
-			'post_type'             => $kontakt_pt,
-			'cmx_filter_lieferant'  => '1',
-		],
+		$args,
 		\admin_url('edit.php')
 	);
 }
@@ -132,6 +150,58 @@ function cmx_artikel_lieferanten_list_url_unified(): string {
 		}
 	}
 }, 20);
+\add_action('admin_notices', function() {
+	if (!\is_admin()) return;
+	$post_type = isset($_GET['post_type']) ? \sanitize_text_field(\wp_unslash($_GET['post_type'])) : '';
+	if (!\in_array($post_type, cmx_kontakt_candidates_unified(), true)) return;
+	$flag = isset($_GET['cmx_filter_lieferant']) ? \sanitize_text_field(\wp_unslash($_GET['cmx_filter_lieferant'])) : '';
+	$cat_raw = isset($_GET['filter_kundenkategorie']) ? \sanitize_text_field(\wp_unslash($_GET['filter_kundenkategorie'])) : '';
+	$stufen_raw = isset($_GET['filter_stufen']) ? \sanitize_text_field(\wp_unslash($_GET['filter_stufen'])) : '';
+	$type_raw = isset($_GET['filter_kontakt_type']) ? \sanitize_text_field(\wp_unslash($_GET['filter_kontakt_type'])) : '';
+	if ($flag !== '1' && $cat_raw === '' && $stufen_raw === '' && $type_raw === '') return;
+
+	$active = [];
+	if ($flag === '1') $active[] = 'Lieferanten';
+
+	$term_name = static function(string $taxonomy, string $raw): string {
+		if ($taxonomy === '' || !\taxonomy_exists($taxonomy) || $raw === '') return '';
+		$term = \get_term((int)$raw, $taxonomy);
+		if ($term && !\is_wp_error($term)) return (string)$term->name;
+		return '';
+	};
+	$find_tax = static function(array $candidates): string {
+		foreach ($candidates as $tax) {
+			if (\taxonomy_exists((string)$tax)) return (string)$tax;
+		}
+		return '';
+	};
+
+	if ($cat_raw !== '') {
+		$cat_tax = '';
+		$cat_taxq = cmx_taxq_kontakte_kategorien_lieferant_unified();
+		if (\is_array($cat_taxq) && !empty($cat_taxq['taxonomy'])) $cat_tax = (string)$cat_taxq['taxonomy'];
+		if ($cat_tax === '') $cat_tax = $find_tax(['kontakte_kategorien','kontakte_kategorie','kundenkategorie','kontakt_kategorie']);
+		$cat_name = $term_name($cat_tax, $cat_raw);
+		$active[] = 'Kategorie: ' . ($cat_name !== '' ? $cat_name : '#' . (int)$cat_raw);
+	}
+
+	if ($stufen_raw !== '') {
+		$stufen_tax = $find_tax(['stufen','kontakte_stufen','kontakt_stufen']);
+		$stufen_name = $term_name($stufen_tax, $stufen_raw);
+		$active[] = 'Stufe: ' . ($stufen_name !== '' ? $stufen_name : '#' . (int)$stufen_raw);
+	}
+
+	if ($type_raw !== '') {
+		$type_tax = $find_tax(['kontakt_type','kundenart']);
+		$type_name = $term_name($type_tax, $type_raw);
+		$active[] = 'Typ: ' . ($type_name !== '' ? $type_name : '#' . (int)$type_raw);
+	}
+
+	if (empty($active)) return;
+
+	$reset = \remove_query_arg(['cmx_filter_lieferant', 'filter_kundenkategorie', 'filter_stufen', 'filter_kontakt_type', 'paged']);
+	echo '<div class="notice notice-info is-dismissible"><p><strong>Aktiver Filter:</strong> ' . \esc_html(\implode(' | ', $active)) . '. <a href="' . \esc_url($reset) . '">Filter aufheben</a></p></div>';
+});
 
 /* ============================================================================
  * 2) Metabox "Lieferanten" + Save (CPT "artikel")
@@ -140,7 +210,7 @@ function cmx_artikel_lieferanten_list_url_unified(): string {
 	$title = 'Lieferanten';
 	$link = cmx_artikel_lieferanten_list_url_unified();
 	if ($link !== '') {
-		$title = '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">Lieferanten</a>';
+		$title = '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="font-size:14px;font-weight:700;line-height:1.3;color:#2271b1;text-decoration:underline;cursor:pointer;">Lieferanten</a>';
 	}
 	\add_meta_box('cmx_artikel_lieferanten', $title, __NAMESPACE__.'\\cmx_artikel_lieferanten_box_html_unified', 'artikel', 'normal', 'default');
 });
