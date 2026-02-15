@@ -482,7 +482,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<?php if ($show_sku): ?>
 					<th class="col-sku">SKU</th>
 				<?php endif; ?>
-				<th>Artikel</th>
+				<th style="width:100%">Artikel</th>
 				<th class="col-num col-qty">
 					<?php if ($show_unit_column): ?>
 						<span class="cmx-pdf-shift-qty">Menge</span>
