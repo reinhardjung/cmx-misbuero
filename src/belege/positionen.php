@@ -637,7 +637,7 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 		echo '<table class="widefat striped" id="cmx-positionen-table">
 				<thead><tr>
 					<th><a href="/wp-admin/edit.php?post_type=artikel" target="_blank" rel="noopener noreferrer">Artikel</a></th>
-					<th>&nbsp;&nbsp;Menge</th>
+					<th class="cmx-pos-qty-head"><span class="cmx-pos-qty-head-menge">&nbsp;Menge</span><span class="cmx-pos-qty-head-einheit">&nbsp;Einheit</span></th>
 					<th>&nbsp;&nbsp;Einzelpreis</th>
 					<th>&nbsp;&nbsp;Rabatt</th>
 					<th style="text-align:right;">Gesamt</th>
@@ -1989,9 +1989,19 @@ function cmx_beleg_positionen_js() {
 				#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
 					#cmx-positionen-table th:first-child,
 					#cmx-positionen-table td:first-child{ padding-right:20px; }
+					#cmx-positionen-table th.cmx-pos-qty-head,
 					#cmx-positionen-table td.cmx-pos-qty-cell{
 						white-space:nowrap;
 						min-width:220px;
+					}
+					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-menge{
+						display:inline-block;
+						width:90px;
+					}
+					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-einheit{
+						display:inline-block;
+						margin-left:6px;
+						width:120px;
 					}
 					#cmx-positionen-table td.cmx-pos-qty-cell .cmx-einheit-select{
 						margin-left:6px;
