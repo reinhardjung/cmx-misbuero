@@ -160,15 +160,6 @@ function cmx_admin_label_placeholder_fill(): void {
 			return td.querySelector('input, textarea');
 		}
 
-		function findControlFromRow(el){
-			if (!el || !el.closest) return null;
-			const tr = el.closest('tr');
-			if (!tr) return null;
-			const td = tr.querySelector('td');
-			if (!td) return null;
-			return td.querySelector('input, textarea');
-		}
-
 		function fillFromLabel(label){
 			if (!label) return;
 			const control = findControlForLabel(label);
@@ -195,10 +186,7 @@ function cmx_admin_label_placeholder_fill(): void {
 			const th = target.closest('th');
 			if (th) {
 				fillControl(findControlFromHeaderCell(th));
-				return;
 			}
-
-			fillControl(findControlFromRow(target));
 		}, true);
 	})();
 	</script>

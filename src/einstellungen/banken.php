@@ -35,6 +35,10 @@ function cmx_section_eisen_desc(): void {
  * ------------------------------------------------------------ */
 add_action('admin_init', __NAMESPACE__ . '\\cmx_register_banken_tab');
 function cmx_register_banken_tab(): void {
+	$recipient_placeholder = cmx_get_das_bin_ich_company_name();
+	if ($recipient_placeholder === '') {
+		$recipient_placeholder = 'Dein Firmenname';
+	}
 
 	/* ========== REVOLUT ========== */
 	$page = 'cmx_tab_banken__rev';
@@ -53,7 +57,7 @@ function cmx_register_banken_tab(): void {
 
 	add_settings_field('rev_recipient', 'Empfänger',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_rev',
-		['key' => 'rev_recipient', 'placeholder' => 'Dein Firmenname']
+		['key' => 'rev_recipient', 'placeholder' => $recipient_placeholder]
 	);
 
 	add_settings_field('rev_iban', 'IBAN',
@@ -88,7 +92,7 @@ function cmx_register_banken_tab(): void {
 
 	add_settings_field('zkb_recipient', 'Empfänger',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_zkb',
-		['key' => 'zkb_recipient', 'placeholder' => 'Dein Firmenname']
+		['key' => 'zkb_recipient', 'placeholder' => $recipient_placeholder]
 	);
 
 	add_settings_field('zkb_iban', 'IBAN',
@@ -122,7 +126,7 @@ function cmx_register_banken_tab(): void {
 
 	add_settings_field('ubs_recipient', 'Empfänger',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_ubs',
-		['key' => 'ubs_recipient', 'placeholder' => 'Dein Firmenname']
+		['key' => 'ubs_recipient', 'placeholder' => $recipient_placeholder]
 	);
 
 	add_settings_field('ubs_iban', 'IBAN',
@@ -156,7 +160,7 @@ function cmx_register_banken_tab(): void {
 
 	add_settings_field('migros_recipient', 'Empfänger',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_migros',
-		['key' => 'migros_recipient', 'placeholder' => 'Dein Firmenname']
+		['key' => 'migros_recipient', 'placeholder' => $recipient_placeholder]
 	);
 
 	add_settings_field('migros_iban', 'IBAN',
@@ -190,7 +194,7 @@ function cmx_register_banken_tab(): void {
 
 	add_settings_field('eisen_recipient', 'Empfänger',
 		__NAMESPACE__ . '\\cmx_field_text', $page, 'cmx_sec_banken_eisen',
-		['key' => 'eisen_recipient', 'placeholder' => 'Dein Firmenname']
+		['key' => 'eisen_recipient', 'placeholder' => $recipient_placeholder]
 	);
 
 	add_settings_field('eisen_iban', 'IBAN',
@@ -281,8 +285,8 @@ function cmx_get_active_bank(): ?array {
 	return null;
 }
 
-if (!function_exists(__NAMESPACE__ . '\\cmx_get_das_bin_ich_company_name')) {
-	function cmx_get_das_bin_ich_company_name(): string {
+	if (!function_exists(__NAMESPACE__ . '\\cmx_get_das_bin_ich_company_name')) {
+		function cmx_get_das_bin_ich_company_name(): string {
 		$posts = \get_posts([
 			'post_type' => ['kontakte', 'kontakt', 'contact'],
 			'post_status' => ['publish', 'private'],
@@ -296,36 +300,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_get_das_bin_ich_company_name')) {
 			'suppress_filters' => true,
 		]);
 
-		if (empty($posts) || empty($posts[0])) {
-			return '';
-		}
+			if (empty($posts) || empty($posts[0])) {
+				return '';
+			}
 
-		$post = $posts[0];
-		$company = trim((string) \get_post_meta((int) $post->ID, '_company', true));
-		if ($company === '') {
+			$post = $posts[0];
 			$company = trim((string) ($post->post_title ?? ''));
-		}
+			if ($company === '') {
+				$company = trim((string) \get_post_meta((int) $post->ID, '_company', true));
+			}
 
 		return $company;
 	}
 }
-
-\add_filter('pre_update_option_cmx_einstellungen', function ($new, $old) {
-	if (!\is_array($new)) {
-		return $new;
-	}
-
-	$company = cmx_get_das_bin_ich_company_name();
-	if ($company === '') {
-		return $new;
-	}
-
-	foreach (['rev_recipient', 'zkb_recipient', 'ubs_recipient', 'migros_recipient', 'eisen_recipient'] as $key) {
-		$current = isset($new[$key]) ? trim((string) $new[$key]) : '';
-		if ($current === '') {
-			$new[$key] = $company;
-		}
-	}
-
-	return $new;
-}, 20, 2);
