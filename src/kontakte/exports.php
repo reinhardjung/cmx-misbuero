@@ -31,10 +31,6 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.
 	unset($args['paged'],$args['action'],$args['action2'],$args['_wpnonce'],$args['_wp_http_referer'],$args['orderby'],$args['order']);
 	$args['action'] = 'cmx_export_kontakte_list';
 
-	// Aktuelle Listen-URL als ref (damit alle Filter 1:1 übernommen werden)
-	$current_url = (is_ssl() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? '');
-	$args['ref']  = rawurlencode($current_url);
-
 	$url  = \wp_nonce_url(\add_query_arg($args, \admin_url('admin-post.php')), 'cmx_export_kontakte_list');
 	$link = '<a href="' . esc_url($url) . '">exportieren</a>';
 
@@ -45,61 +41,70 @@ if (!defined(__NAMESPACE__.'\\CMX_LIEFER_META_LAND'))      define(__NAMESPACE__.
 	return $new;
 });
 
-/* ===== Export-Handler: nur publish, Filter exakt aus ref/Request ===== */
+/* ===== Export-Handler: markierte ODER gefilterte Kontakte ===== */
 \add_action('admin_post_cmx_export_kontakte_list', function(){
 	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
 	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_kontakte_list')) \wp_die('Ungültige Anfrage.');
 
-	/* A) Markierte Kontakte priorisieren */
+	/* A) Markierte Kontakte */
 	$selected_ids = isset($_REQUEST['post']) ? array_filter(array_map('intval',(array)$_REQUEST['post'])) : [];
 
-	/* D) Basis-Query: nur publish */
 	$qv = [
 		'post_type'      => 'kontakte',
 		'posts_per_page' => -1,
-		'post_status'    => 'publish',
 		'fields'         => 'ids',
+		'no_found_rows'  => true,
 		'orderby'        => 'ID',
 		'order'          => 'ASC',
 	];
 
-	/* B) Filterquelle: bevorzugt ref (komplette Listen-URL), sonst Request */
-	$ref_qs=[]; $ref=$_REQUEST['ref']??'';
-	if($ref!==''){ $parts=\wp_parse_url(rawurldecode($ref)); if(!empty($parts['query'])) parse_str($parts['query'],$ref_qs); }
-	$src = $ref_qs ?: $_REQUEST;
+	/* A priorisiert: bei Auswahl nur markierte Kontakte exportieren */
+	if($selected_ids){
+		$qv['post__in'] = $selected_ids;
+		$qv['orderby'] = 'post__in';
+		$qv['post_status'] = 'any';
+	} else {
+		/* B) Ohne Auswahl: aktuelle Filter anwenden */
+		$post_status = isset($_REQUEST['post_status']) ? sanitize_key((string) $_REQUEST['post_status']) : '';
+		if ($post_status !== '' && $post_status !== 'all') {
+			$qv['post_status'] = $post_status;
+		} else {
+			$qv['post_status'] = ['publish', 'future', 'draft', 'pending', 'private'];
+		}
 
-	/* B) Standardfilter */
-	foreach(['s','author','m'] as $k){ $v=$src[$k]??''; if($v!=='' && $v!=='0' && $v!=='-1') $qv[$k]=$v; }
+		foreach(['s','author','m'] as $k){
+			$v = $_REQUEST[$k] ?? '';
+			if ($v !== '' && $v !== '0' && $v !== '-1') $qv[$k] = $v;
+		}
 
-	/* B) Taxonomie-Filter (query_var, name, UND filter_*) – inkl. Arrays */
-	$tax_query=[]; $taxos=\get_object_taxonomies('kontakte','objects');
-	foreach($taxos as $tax){
-		$candidates = array_values(array_unique(array_filter([
-			$tax->query_var ?? '',
-			$tax->name,
-			'filter_' . ($tax->name ?? ''),
-			(isset($tax->query_var) && $tax->query_var!=='') ? ('filter_'.$tax->query_var) : '',
-		])));
-		$val=null;
-		foreach($candidates as $param){
-			if(!array_key_exists($param,$src)) continue;
-			$tmp=$src[$param];
-			if(is_array($tmp)){
-				$tmp=array_values(array_filter($tmp,static fn($v)=>$v!==''&&$v!=='0'&&$v!=='-1'));
-				if($tmp){ $val=$tmp; break; }
-			}else{
-				if($tmp!==''&&$tmp!=='0'&&$tmp!=='-1'){ $val=$tmp; break; }
+		/* Taxonomie-Filter (query_var, name, UND filter_*) – inkl. Arrays */
+		$tax_query = [];
+		$taxos = \get_object_taxonomies('kontakte','objects');
+		foreach($taxos as $tax){
+			$candidates = array_values(array_unique(array_filter([
+				$tax->query_var ?? '',
+				$tax->name,
+				'filter_' . ($tax->name ?? ''),
+				(isset($tax->query_var) && $tax->query_var!=='') ? ('filter_'.$tax->query_var) : '',
+			])));
+			$val = null;
+			foreach($candidates as $param){
+				if(!array_key_exists($param, $_REQUEST)) continue;
+				$tmp = $_REQUEST[$param];
+				if(is_array($tmp)){
+					$tmp = array_values(array_filter($tmp, static fn($x)=>$x!==''&&$x!=='0'&&$x!=='-1'));
+					if($tmp){ $val = $tmp; break; }
+				}else{
+					if($tmp!==''&&$tmp!=='0'&&$tmp!=='-1'){ $val = $tmp; break; }
+				}
+			}
+			if($val!==null){
+				$field = is_array($val) ? (is_numeric(reset($val)) ? 'term_id' : 'slug') : (is_numeric($val) ? 'term_id' : 'slug');
+				$tax_query[] = ['taxonomy'=>$tax->name,'field'=>$field,'terms'=>is_array($val)?$val:[$val]];
 			}
 		}
-		if($val!==null){
-			$field = is_array($val) ? (is_numeric(reset($val)) ? 'term_id' : 'slug') : (is_numeric($val) ? 'term_id' : 'slug');
-			$tax_query[] = ['taxonomy'=>$tax->name,'field'=>$field,'terms'=>is_array($val)?$val:[$val]];
-		}
+		if($tax_query) $qv['tax_query'] = array_merge(['relation'=>'AND'],$tax_query);
 	}
-	if($tax_query) $qv['tax_query'] = array_merge(['relation'=>'AND'],$tax_query);
-
-	/* A) Markierungen vor Filtern */
-	if($selected_ids){ $qv['post__in']=$selected_ids; $qv['orderby']='post__in'; }
 
 	$q = new \WP_Query($qv);
 	$post_ids = $q->posts;
@@ -346,7 +351,6 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 	if (($_GET['post_type'] ?? '') !== 'kontakte') return;
 	$action = esc_js(\admin_url('admin-post.php'));
 	$nonce  = esc_js(\wp_create_nonce('cmx_export_kontakte_list'));
-	$ref    = esc_js((is_ssl() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? ''));
 	?>
 	<script>
 	document.addEventListener('DOMContentLoaded',function(){
@@ -361,8 +365,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 				const f=document.createElement('form');
 				f.method='POST'; f.action='<?php echo $action; ?>';
 				f.innerHTML='<input type="hidden" name="action" value="cmx_export_kontakte_list">'+
-				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">'+
-				            '<input type="hidden" name="ref" value="'+encodeURIComponent('<?php echo $ref; ?>')+'">';
+				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">';
 				checked.forEach(id=>{
 					const h=document.createElement('input');
 					h.type='hidden'; h.name='post[]'; h.value=String(id);
