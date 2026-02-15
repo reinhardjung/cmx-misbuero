@@ -41,12 +41,15 @@ foreach ($positions as $row) {
 $show_position_index = true;
 $show_sku = false;
 $show_discount = false;
+$show_unit_column = false;
 $discount_sum = 0.0;
 $positions_sum = 0.0;
 foreach ($positions as $row) {
 	if ((string)($row['row_type'] ?? 'position') === 'abschnitt') continue;
 	$sku_val = trim((string)($row['article_number'] ?? ''));
 	if ($sku_val !== '') $show_sku = true;
+	$unit_val = trim((string)($row['unit'] ?? ''));
+	if ($unit_val !== '') $show_unit_column = true;
 	$qty = (float)($row['qty'] ?? 0);
 	$unit_price = (float)($row['unit_price'] ?? 0);
 	$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
@@ -81,7 +84,7 @@ $col_count = ($show_position_index ? 1 : 0)
 	+ ($show_sku ? 1 : 0)
 	+ 1
 	+ 1
-	+ 1
+	+ ($show_unit_column ? 1 : 0)
 	+ ($show_unit_price ? 1 : 0)
 	+ ($show_discount ? 1 : 0)
 	+ ($show_line_total ? 1 : 0);
@@ -483,8 +486,16 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 						<th class="col-sku">SKU</th>
 					<?php endif; ?>
 					<th>Artikel</th>
-					<th class="col-num col-qty"><span class="cmx-pdf-shift-qty">Menge</span></th>
-					<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
+					<th class="col-num col-qty">
+						<?php if ($show_unit_column): ?>
+							<span class="cmx-pdf-shift-qty">Menge</span>
+						<?php else: ?>
+							Menge
+						<?php endif; ?>
+					</th>
+					<?php if ($show_unit_column): ?>
+						<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
+					<?php endif; ?>
 					<?php if ($show_unit_price): ?>
 						<th class="col-num col-unit-price">Einzelpreis</th>
 					<?php endif; ?>
@@ -558,8 +569,16 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 								<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
 							<?php endif; ?>
 						</td>
-						<td class="text-right col-qty"><span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span></td>
-						<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
+						<td class="text-right col-qty">
+							<?php if ($show_unit_column): ?>
+								<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
+							<?php else: ?>
+								<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+							<?php endif; ?>
+						</td>
+						<?php if ($show_unit_column): ?>
+							<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
+						<?php endif; ?>
 						<?php if ($show_unit_price): ?>
 							<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>
