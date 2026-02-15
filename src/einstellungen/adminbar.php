@@ -28,13 +28,26 @@ function cmx65_adminbar($wp_admin_bar) {
         }
     </style>';
 
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_name_id',
+	// 	'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
+	// 	'href'  => false,
+	// 	'meta'  => [
+	// 		'title'  => '',
+	// 		'class' => 'cmx-nohover',
+	// 	],
+	// ]);
+
+
+	// fixme rju 2026-02-15: Evtl. spöter zur eignen homePage springen?
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_name_id',
 		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
-		'href'  => false,
+		'href'  => 'https://misbuero.ch/',
 		'meta'  => [
-			'title'  => '',
-			'class' => 'cmx-nohover',
+			'title'  => __('Zur Mis Büro Homepage', 'textdomain'),
+			'target' => '_blank',
+			'rel'    => 'noopener',
 		],
 	]);
 
