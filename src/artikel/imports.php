@@ -5,6 +5,29 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 	define(__NAMESPACE__.'\\CMX_PT_ARTIKEL', 'artikel');
 }
 
+function cmx_import_find_existing_artikel_id_by_title(string $title): int {
+	global $wpdb;
+	$title = \trim($title);
+	if ($title === '') return 0;
+	$sql = $wpdb->prepare(
+		"SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_title = %s AND post_status <> 'trash' ORDER BY ID ASC LIMIT 1",
+		CMX_PT_ARTIKEL,
+		$title
+	);
+	$id = (int) $wpdb->get_var($sql);
+	return $id > 0 ? $id : 0;
+}
+
+function cmx_import_clear_lieferanten_meta(int $post_id): void {
+	foreach (\array_keys((array)\get_post_meta($post_id)) as $meta_key) {
+		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)$/', (string)$meta_key)) {
+			\delete_post_meta($post_id, $meta_key);
+		}
+	}
+	\delete_post_meta($post_id, '_cmx_art_lieferanten_count');
+	\delete_post_meta($post_id, '_cmx_art_lieferanten_liste');
+}
+
 /**
  * 1. Import-Link oben in der Liste einfügen
  */
@@ -45,18 +68,18 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 			<table class="form-table" role="presentation" style="margin-top:1em;">
 				<tbody>
 					<tr>
+						<th scope="row"><label for="cmx_update_mode">Existierende überschreiben?</label></th>
+						<td>
+							<label>
+								<input type="checkbox" id="cmx_update_mode" name="update_mode" value="1">
+								Ja, Artikel mit gleichem Namen aktualisieren
+							</label>
+						</td>
+					</tr>
+					<tr>
 						<th scope="row"><label for="cmx_csv_file">CSV-Datei</label></th>
 						<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv" required></td>
 					</tr>
-					<!-- <tr>
-						<th scope="row"><label for="cmx_update_mode">Update-Modus</label></th>
-						<td>
-							<label>
-								<input type="checkbox" id="cmx_update_mode" name="update_mode" value="1" checked>
-								Wenn <code>ID</code> vorhanden ist, bestehenden Artikel aktualisieren
-							</label>
-						</td>
-					</tr> -->
 				</tbody>
 			</table>
 
@@ -106,6 +129,13 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 		return;
 	}
 	$header = array_map('trim', $header);
+	$has_lieferanten_meta_in_csv = false;
+	foreach ($header as $h) {
+		if (\preg_match('/^meta__(?:_cmx_art_lieferant_\d+_(?:id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)|_cmx_art_lieferanten_count|_cmx_art_lieferanten_liste)$/', (string)$h)) {
+			$has_lieferanten_meta_in_csv = true;
+			break;
+		}
+	}
 
 	$imported = 0;
 	$updated  = 0;
@@ -116,36 +146,56 @@ if (!defined(__NAMESPACE__.'\\CMX_PT_ARTIKEL')) {
 		$row = @array_combine($header, $line);
 		if (!$row) continue;
 
-		$title = sanitize_text_field($row['post_title'] ?? '');
-		if (!$title) continue;
+		$title_raw = \trim((string)($row['post_title'] ?? ''));
+		if ($title_raw === '') continue;
+		$title = \sanitize_text_field($title_raw);
+		if ($title === '') continue;
 
 		$postarr = [
 			'post_type'   => CMX_PT_ARTIKEL,
 			'post_title'  => $title,
-			'post_name'   => sanitize_title($row['post_name'] ?? $title),
+			'post_name'   => sanitize_title(($row['post_slug'] ?? $row['post_name'] ?? $title)),
 			'post_status' => $row['post_status'] ?? 'publish',
 			'post_date'   => $row['post_date'] ?? current_time('mysql'),
 		];
 
 		$is_update = false;
-		if ($update_mode && !empty($row['ID'])) {
-			$postarr['ID'] = (int)$row['ID'];
-			$is_update = true;
+		if ($update_mode) {
+			$existing_id = cmx_import_find_existing_artikel_id_by_title($title);
+			if ($existing_id > 0) {
+				$postarr['ID'] = $existing_id;
+				$is_update = true;
+			}
 		}
 
 		$post_id = wp_insert_post($postarr, true);
 		if (is_wp_error($post_id)) continue;
 
+		if ($is_update && $has_lieferanten_meta_in_csv) {
+			cmx_import_clear_lieferanten_meta((int)$post_id);
+		}
+
 		foreach ($row as $key => $val) {
 			if (strpos($key, 'tax__') === 0) {
 				$tax = substr($key, 5);
-				if ($tax && $val) {
-					$terms = array_map('trim', explode(',', $val));
-					wp_set_object_terms($post_id, $terms, $tax, false);
+				if ($tax) {
+					$raw_terms = \trim((string)$val);
+					if ($raw_terms !== '') {
+						$terms = array_map('trim', explode(',', $raw_terms));
+						wp_set_object_terms($post_id, $terms, $tax, false);
+					} elseif ($is_update) {
+						wp_set_object_terms($post_id, [], $tax, false);
+					}
 				}
 			}
 			if (strpos($key, 'meta__') === 0) {
-				update_post_meta($post_id, substr($key, 6), $val);
+				$meta_key = substr($key, 6);
+				$meta_val = is_string($val) ? trim($val) : $val;
+				if ($meta_val === '') {
+					delete_post_meta($post_id, $meta_key);
+				} else {
+					update_post_meta($post_id, $meta_key, $meta_val);
+				}
 			}
 		}
 

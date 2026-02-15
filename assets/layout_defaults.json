@@ -1,7 +1,7 @@
 {
     "format": 1,
-    "exported_at": "2026-02-04T09:45:48+00:00",
-    "site_url": "https://misbuero.local/",
+    "exported_at": "2026-02-15T06:09:59+00:00",
+    "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
     "user": {
@@ -58,7 +58,7 @@
             "advanced": ""
         },
         "meta-box-order_projekte": {
-            "side": "cmx_savebox,cmx_save_metabox_layout,cmx_projekt_stammdaten,projekte_kategoriendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz,cmx_dokumente_box",
+            "side": "cmx_savebox,cmx_projekt_stammdaten,cmx_projekte_status_side,projekte_kategoriendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz,cmx_dokumente_box",
             "normal": "cmx_projekt_tasks",
             "advanced": ""
         },
@@ -71,7 +71,8 @@
             false
         ],
         "metaboxhidden_belege": [
-            "cmx_belege_mwst_box"
+            "cmx_beleg_anzahlungen",
+            "belege_zahlungsgrunddiv"
         ],
         "metaboxhidden_dashboard": [
             "dashboard_site_health",
