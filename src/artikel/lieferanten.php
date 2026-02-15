@@ -85,12 +85,64 @@ function cmx_fetch_lieferanten_ids_unified(string $post_type): array {
 	if (!$all) return [];
 	$out=[]; foreach ($all as $pid) if (cmx_is_lieferant_unified($pid)) $out[]=$pid; return $out;
 }
+function cmx_artikel_lieferanten_list_url_unified(): string {
+	$kontakt_pt = cmx_first_existing_kontakt_cpt_unified();
+	if (!$kontakt_pt) return '';
+	return \add_query_arg(
+		[
+			'post_type'             => $kontakt_pt,
+			'cmx_filter_lieferant'  => '1',
+		],
+		\admin_url('edit.php')
+	);
+}
+
+// Kontakte-Liste: Lieferantenfilter über robusten Spezial-Parameter erzwingen.
+\add_action('pre_get_posts', function($q) {
+	if (!\is_admin() || !$q instanceof \WP_Query || !$q->is_main_query()) return;
+	$post_type = (string) $q->get('post_type');
+	if ($post_type === '') return;
+	if (!\in_array($post_type, cmx_kontakt_candidates_unified(), true)) return;
+	$flag = isset($_GET['cmx_filter_lieferant']) ? \sanitize_text_field(\wp_unslash($_GET['cmx_filter_lieferant'])) : '';
+	if ($flag !== '1') return;
+
+	$lieferant_query = cmx_lieferanten_query_args_unified($post_type);
+
+	if (!empty($lieferant_query['tax_query']) && \is_array($lieferant_query['tax_query'])) {
+		$existing_tax = $q->get('tax_query');
+		$tax_queries = [];
+		if (\is_array($existing_tax) && !empty($existing_tax)) $tax_queries[] = $existing_tax;
+		$tax_queries[] = $lieferant_query['tax_query'];
+		if (\count($tax_queries) === 1) {
+			$q->set('tax_query', $tax_queries[0]);
+		} else {
+			$q->set('tax_query', \array_merge(['relation' => 'AND'], $tax_queries));
+		}
+	}
+
+	if (!empty($lieferant_query['meta_query']) && \is_array($lieferant_query['meta_query'])) {
+		$existing_meta = $q->get('meta_query');
+		$meta_queries = [];
+		if (\is_array($existing_meta) && !empty($existing_meta)) $meta_queries[] = $existing_meta;
+		$meta_queries[] = $lieferant_query['meta_query'];
+		if (\count($meta_queries) === 1) {
+			$q->set('meta_query', $meta_queries[0]);
+		} else {
+			$q->set('meta_query', \array_merge(['relation' => 'AND'], $meta_queries));
+		}
+	}
+}, 20);
 
 /* ============================================================================
  * 2) Metabox "Lieferanten" + Save (CPT "artikel")
  * ========================================================================== */
 \add_action('add_meta_boxes', function(){
-	\add_meta_box('cmx_artikel_lieferanten','Lieferanten',__NAMESPACE__.'\\cmx_artikel_lieferanten_box_html_unified','artikel','normal','default');
+	$title = 'Lieferanten';
+	$link = cmx_artikel_lieferanten_list_url_unified();
+	if ($link !== '') {
+		$title = '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">Lieferanten</a>';
+	}
+	\add_meta_box('cmx_artikel_lieferanten', $title, __NAMESPACE__.'\\cmx_artikel_lieferanten_box_html_unified', 'artikel', 'normal', 'default');
 });
 function cmx_normalize_url_for_label_unified(string $url): string { $u=\trim($url); if($u==='')return''; if(!\preg_match('~^https?://~i',$u))$u='https://'.$u; return \filter_var($u,\FILTER_VALIDATE_URL)?$u:''; }
 function cmx_parse_swiss_decimal_unified(string $raw): ?float {
@@ -265,8 +317,6 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			'suppress_filters'=>true
 		]);
 	}
-	$list_href = $kontakt_pt ? \add_query_arg(['post_type'=>$kontakt_pt],\admin_url('edit.php')) : '';
-
 	echo '<style>
 	#cmx-artikel-lieferanten-table th,#cmx-artikel-lieferanten-table td{vertical-align:middle}
 	#cmx-artikel-lieferanten-table .col-lieferant{width:24%}
@@ -293,7 +343,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	.cmx-lief-actions{margin-top:8px}
 	</style>';
 
-	echo '<table class="widefat striped" id="cmx-artikel-lieferanten-table" data-kontakt-href="'.\esc_attr($list_href).'">';
+	echo '<table class="widefat striped" id="cmx-artikel-lieferanten-table">';
 	echo '<thead><tr>';
 	echo '<th class="col-lieferant">Name</th>';
 	echo '<th class="col-nr">Artikel-Nr</th>';
@@ -456,29 +506,6 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			sync();
 		});
 	}
-	function bindBoxTitleLink(){
-		var box=document.getElementById("cmx_artikel_lieferanten");
-		if(!box) return;
-		var table=box.querySelector("#cmx-artikel-lieferanten-table");
-		var href=table ? (table.getAttribute("data-kontakt-href")||"") : "";
-		if(!href) return;
-		var span=box.querySelector(".hndle > span") || box.querySelector(".hndle span");
-		if(!span || span.dataset.cmxLinked==="1") return;
-		var label=(span.textContent||"").trim() || "Lieferanten";
-		span.textContent="";
-		var link=document.createElement("a");
-		link.href=href;
-		link.target="_blank";
-		link.rel="noopener noreferrer";
-		link.textContent=label;
-		link.style.color="inherit";
-		link.style.textDecoration="none";
-		link.style.cursor="pointer";
-		link.addEventListener("click", function(e){ e.stopPropagation(); });
-		span.appendChild(link);
-		span.dataset.cmxLinked="1";
-	}
-
 	var tbody=document.querySelector("#cmx-artikel-lieferanten-table tbody");
 	var add=document.getElementById("cmx-artikel-lieferanten-add");
 	if(tbody && add){
@@ -524,7 +551,6 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	bindEkFormat(document);
 	bindSupplier(document);
 	bindUrl(document);
-	bindBoxTitleLink();
 })();
 </script>
 HTML;
