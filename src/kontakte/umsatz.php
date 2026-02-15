@@ -7,6 +7,78 @@ if (!\defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')) {
 	\define(__NAMESPACE__ . '\\CMX_PT_BELEGE', 'belege');
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_kategorie_taxonomy')) {
+	function cmx_kontakt_belege_kategorie_taxonomy(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy')) {
+			$tax = (string) cmx_belege_kategorie_taxonomy();
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+		foreach (['belege_kategorien', 'beleg_kategorie', 'beleg_kategorien'] as $tax) {
+			if (\taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_allowed_slugs')) {
+	function cmx_kontakt_belege_allowed_slugs(string $taxonomy): array {
+		if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+			return [];
+		}
+		$terms = \get_terms([
+			'taxonomy'   => $taxonomy,
+			'hide_empty' => false,
+		]);
+		if (\is_wp_error($terms) || !\is_array($terms)) {
+			return [];
+		}
+
+		$slugs = [];
+		foreach ($terms as $term) {
+			if (!($term instanceof \WP_Term)) {
+				continue;
+			}
+			$slug = \sanitize_title((string) $term->slug);
+			$name = \trim((string) $term->name);
+			$name_lc = \function_exists('mb_strtolower')
+				? \mb_strtolower($name, 'UTF-8')
+				: \strtolower($name);
+
+			$is_rechnung = $slug === 'rechnung'
+				|| $slug === 'rechnungen'
+				|| \strpos($slug, 'rechnung-') === 0
+				|| $name_lc === 'rechnung'
+				|| $name_lc === 'rechnungen';
+			$is_gutschrift = $slug === 'gutschrift'
+				|| $slug === 'gutschriften'
+				|| \strpos($slug, 'gutschrift-') === 0
+				|| $name_lc === 'gutschrift'
+				|| $name_lc === 'gutschriften';
+
+			if ($is_rechnung || $is_gutschrift) {
+				$slugs[] = $slug;
+			}
+		}
+		return \array_values(\array_unique(\array_filter($slugs)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_list_url')) {
+	function cmx_kontakt_belege_list_url(int $kontakt_id): string {
+		$args = [
+			'post_type' => CMX_PT_BELEGE,
+		];
+		if ($kontakt_id > 0) {
+			$args['cmx_kontakt_id'] = $kontakt_id;
+		}
+		return (string) \add_query_arg($args, \admin_url('edit.php'));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_parse_date_ts')) {
 	function cmx_kontakt_belege_parse_date_ts(string $raw): int {
 		$raw = \trim($raw);
@@ -179,7 +251,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 			];
 		}
 
-		$q = new \WP_Query([
+		$tax = cmx_kontakt_belege_kategorie_taxonomy();
+		$allowed_slugs = cmx_kontakt_belege_allowed_slugs($tax);
+		if ($tax !== '' && empty($allowed_slugs)) {
+			$cache[$kontakt_id] = ['sum' => 0.0, 'rows' => []];
+			return $cache[$kontakt_id];
+		}
+
+		$query_args = [
 			'post_type'               => CMX_PT_BELEGE,
 			'post_status'             => ['publish', 'private', 'draft', 'pending', 'future'],
 			'posts_per_page'          => -1,
@@ -190,7 +269,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 			'orderby'                 => 'date',
 			'order'                   => 'DESC',
 			'meta_query'              => [$meta_or],
-		]);
+		];
+		if ($tax !== '' && !empty($allowed_slugs)) {
+			$query_args['tax_query'] = [
+				[
+					'taxonomy' => $tax,
+					'field'    => 'slug',
+					'terms'    => $allowed_slugs,
+					'operator' => 'IN',
+				],
+			];
+		}
+
+		$q = new \WP_Query($query_args);
 
 		$sum = 0.0;
 		$rows = [];
@@ -264,8 +355,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			echo '<p><em>Kontakt nicht gefunden.</em></p>';
 			return;
 		}
-		$data = cmx_kontakt_belege_data($kontakt_id);
-		$rows = (array) ($data['rows'] ?? []);
+			$data = cmx_kontakt_belege_data($kontakt_id);
+			$rows = (array) ($data['rows'] ?? []);
+			$list_url = cmx_kontakt_belege_list_url($kontakt_id);
 
 			echo '<style>
 				#cmx_kontakt_belege_umsatz .cmx-kb-wrap{width:100%;max-height:320px;overflow:auto}
@@ -285,6 +377,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 
 		if (empty($rows)) {
 			echo '<p><em>Keine Belege für diesen Kontakt.</em></p>';
+			echo '<script>(function(){';
+			echo 'var box=document.getElementById("cmx_kontakt_belege_umsatz");';
+			echo 'if(!box){return;}';
+			echo 'var h=box.querySelector(".hndle, .postbox-header h2");';
+			echo 'if(!h){return;}';
+			echo 'h.style.cursor="pointer";';
+			echo 'h.addEventListener("click",function(e){';
+			echo 'if(e.target&&e.target.closest&&e.target.closest("a,button,input,select,textarea")){return;}';
+			echo 'e.preventDefault(); e.stopPropagation();';
+			echo 'window.location.href=' . \wp_json_encode($list_url) . ';';
+			echo '});';
+			echo '})();</script>';
 			return;
 		}
 
@@ -326,13 +430,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 				echo '</tr>';
 			}
 
-			echo '</tbody></table></div>';
+				echo '</tbody></table></div>';
 
-			$paid_nonce = \wp_create_nonce('cmx_mark_paid');
-			$ajax_url = \admin_url('admin-ajax.php');
-			echo '<script>(function(){';
-			echo 'var root=document.getElementById("cmx_kontakt_belege_umsatz"); if(!root){return;}';
-			echo 'root.addEventListener("dblclick", function(e){';
+				$paid_nonce = \wp_create_nonce('cmx_mark_paid');
+				$ajax_url = \admin_url('admin-ajax.php');
+				echo '<script>(function(){';
+				echo 'var box=document.getElementById("cmx_kontakt_belege_umsatz");';
+				echo 'if(box){var h=box.querySelector(".hndle, .postbox-header h2");if(h){h.style.cursor="pointer";h.addEventListener("click",function(e){if(e.target&&e.target.closest&&e.target.closest("a,button,input,select,textarea")){return;}e.preventDefault();e.stopPropagation();window.location.href=' . \wp_json_encode($list_url) . ';});}}';
+				echo 'var root=document.getElementById("cmx_kontakt_belege_umsatz"); if(!root){return;}';
+				echo 'root.addEventListener("dblclick", function(e){';
 			echo 'var el=e.target&&e.target.closest?e.target.closest(".cmx-kb-due-mark-paid[data-beleg]"):null;';
 			echo 'if(!el){return;}';
 			echo 'e.preventDefault(); e.stopPropagation();';
