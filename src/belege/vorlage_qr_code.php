@@ -237,9 +237,13 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 
     $additional_info = trim((string)($tpl['document']['subject'] ?? ''));
     if ($additional_info === '') {
+        // Nur im QR-Feld auf den Belegnamen fallen, wenn der Betreff leer ist.
+        $additional_info = trim((string)($tpl['document']['title'] ?? ''));
+    }
+    if ($additional_info === '') {
         $additional_info = trim((string)($tpl['document']['description'] ?? ''));
     }
-    $additional_info = trim(preg_replace('/\s+/', ' ', $additional_info));
+    $additional_info = trim((string) preg_replace('/\s+/', ' ', $additional_info));
     if ($additional_info !== '') {
         $additional_info = mb_substr($additional_info, 0, 140);
     }
@@ -495,14 +499,13 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $canvas->text($acc_x, $acc_y, $ref_print, $font, $body_size, [0, 0, 0], $page);
     }
 
-    // OPTIONAL: Zusätzliche Infos (hier Betreff)
-    $subject = trim((string) ($tpl['document']['subject'] ?? ''));
-    if ($subject !== '') {
+    // OPTIONAL: Zusätzliche Infos (Betreff, sonst Belegname)
+    if ($additional_info !== '') {
         // Zusätzliche Leerzeile vor "Zusätzliche Informationen"
         $acc_y += 7.1 * $mm;
         $canvas->text($acc_x, $acc_y, 'Zusätzliche Informationen', $fontBold, $label_size, [0, 0, 0], $page);
         $acc_y += 2.9 * $mm;
-        $canvas->text($acc_x, $acc_y, $subject, $font, $body_size, [0, 0, 0], $page);
+        $canvas->text($acc_x, $acc_y, $additional_info, $font, $body_size, [0, 0, 0], $page);
     }
 
     // Zahler rechts unter der Referenz (wie SIX-Muster)
