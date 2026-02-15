@@ -315,38 +315,33 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 }
 .positions-table th.col-qty,
 .positions-table td.col-qty {
-	width: 88px;
-	min-width: 88px;
+	width: 1%;
+	min-width: 1%;
 	white-space: nowrap;
-	position: relative;
-	z-index: 2;
 }
 .positions-table th.col-unit,
 .positions-table td.col-unit {
-	width: 88px;
-	min-width: 88px;
+	width: 1%;
+	min-width: 1%;
 	white-space: nowrap;
-	position: relative;
-	z-index: 1;
 }
 .positions-table .cmx-pdf-shift-qty,
 .positions-table .cmx-pdf-shift-unit {
 	display: inline-block;
 	position: relative;
-	left: 50px;
-	z-index: 2;
+	left: 0;
 	white-space: nowrap;
 }
 .positions-table th.col-unit-price,
 .positions-table td.col-unit-price {
-	width: 96px;
-	min-width: 96px;
+	width: 1%;
+	min-width: 1%;
 	white-space: nowrap;
 }
 .positions-table th.col-line-total,
 .positions-table td.col-line-total {
-	width: 96px;
-	min-width: 96px;
+	width: 1%;
+	min-width: 1%;
 	white-space: nowrap;
 }
 .positions-table th.col-num { text-align: right; padding-right: 8px; }
