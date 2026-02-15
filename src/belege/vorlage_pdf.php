@@ -582,6 +582,14 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			}
 
 			$artikel_id = (int)($r['artikel_id'] ?? 0);
+			$unit_data = \function_exists(__NAMESPACE__ . '\\cmx_beleg_resolve_position_unit')
+				? cmx_beleg_resolve_position_unit((array) $r, $artikel_id)
+				: [
+					'einheit_id' => (int) ($r['einheit_id'] ?? ($r['unit_id'] ?? 0)),
+					'unit'       => \sanitize_text_field((string) ($r['unit'] ?? ($r['einheit'] ?? ''))),
+				];
+			$unit      = (string) ($unit_data['unit'] ?? '');
+			$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
 
 			// C: Gespeicherten Titel bevorzugen; nur wenn leer, aus Artikel holen
 			$title_saved = $to_str($r['artikel_name'] ?? $r['item'] ?? $r['title'] ?? '');
@@ -630,9 +638,14 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 						$belegtext_raw = cmxbu_get_article_belegtext($artikel_id);
 					}
 				}
-			}
-			$belegtext_arr  = cmxbu_sanitize_note_html($belegtext_raw);
-			$belegtext_html = $belegtext_arr['html'];
+				}
+				if ($unit === '' && $einheit_id <= 0 && $artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_beleg_resolve_position_unit')) {
+					$unit_data = cmx_beleg_resolve_position_unit((array) $r, $artikel_id);
+					$unit = (string) ($unit_data['unit'] ?? '');
+					$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
+				}
+				$belegtext_arr  = cmxbu_sanitize_note_html($belegtext_raw);
+				$belegtext_html = $belegtext_arr['html'];
 
 			if (trim($rabatt_r) !== '') $out['any_discount'] = true;
 
@@ -674,6 +687,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 				'article_number'        => $artnr,
 				'title'                 => $title,
 				'qty'                   => $qty,
+				'unit'                  => $unit,
+				'einheit_id'            => $einheit_id,
 				'unit_price'            => round($uprice,(int)$opts['round_decimals']),
 				'line_total'            => $line_total,
 				'discount'              => $disc_display,
@@ -997,6 +1012,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					'article_number' => (string)($p['article_number'] ?? ''),
 					'item' => (string)($p['title'] ?? ''),
 					'qty' => (float)($p['qty'] ?? 0),
+					'unit' => (string)($p['unit'] ?? ''),
 					'unit_price' => (float)($p['unit_price'] ?? 0),
 					'line_total' => (float)($p['line_total'] ?? 0),
 					'discount' => (string)($p['discount'] ?? ''),

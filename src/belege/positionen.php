@@ -35,6 +35,185 @@ if (!function_exists(__NAMESPACE__ . '\cmx_get_artikel_nr')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomy')) {
+	function cmx_artikel_einheiten_taxonomy(): string {
+		$candidates = [];
+
+		$const = __NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN';
+		if (\defined($const)) {
+			$candidates[] = (string) \constant($const);
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_tax_einheiten')) {
+			$maybe = (string) cmx_tax_einheiten();
+			if ($maybe !== '') {
+				$candidates[] = $maybe;
+			}
+		}
+
+		$candidates = \array_merge($candidates, [
+			'artikel_einheit',
+			'artikel_einheiten',
+			'einheit',
+			'einheiten',
+		]);
+
+		foreach ($candidates as $tax) {
+			$tax = \sanitize_key((string) $tax);
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_options')) {
+	function cmx_artikel_einheiten_options(): array {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+
+		$cache = [];
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')
+			? cmx_artikel_einheiten_taxonomy()
+			: '';
+		if ($tax === '') {
+			return $cache;
+		}
+
+		$terms = \get_terms([
+			'taxonomy'   => $tax,
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		]);
+		if (\is_wp_error($terms) || !\is_array($terms)) {
+			return $cache;
+		}
+
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term) continue;
+			$name = \trim((string) ($term->name ?? ''));
+			if ($name === '') continue;
+			$cache[] = [
+				'id'   => (int) $term->term_id,
+				'name' => $name,
+			];
+		}
+
+		return $cache;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_default_einheit')) {
+	function cmx_artikel_default_einheit(int $artikel_id): array {
+		static $cache = [];
+		if (isset($cache[$artikel_id])) {
+			return $cache[$artikel_id];
+		}
+
+		$cache[$artikel_id] = ['id' => 0, 'name' => ''];
+		if ($artikel_id <= 0) {
+			return $cache[$artikel_id];
+		}
+
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')
+			? cmx_artikel_einheiten_taxonomy()
+			: '';
+		if ($tax === '') {
+			return $cache[$artikel_id];
+		}
+
+		$term_ids = \wp_get_post_terms($artikel_id, $tax, ['fields' => 'ids']);
+		if (\is_wp_error($term_ids) || empty($term_ids)) {
+			return $cache[$artikel_id];
+		}
+
+		$term_id = (int) ($term_ids[0] ?? 0);
+		if ($term_id <= 0) {
+			return $cache[$artikel_id];
+		}
+
+		$name = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_options')) {
+			foreach (cmx_artikel_einheiten_options() as $opt) {
+				if ((int) ($opt['id'] ?? 0) === $term_id) {
+					$name = (string) ($opt['name'] ?? '');
+					break;
+				}
+			}
+		}
+		if ($name === '') {
+			$term = \get_term($term_id, $tax);
+			if ($term && !\is_wp_error($term) && $term instanceof \WP_Term) {
+				$name = \trim((string) ($term->name ?? ''));
+			}
+		}
+
+		$cache[$artikel_id] = ['id' => $term_id, 'name' => $name];
+		return $cache[$artikel_id];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_resolve_position_unit')) {
+	function cmx_beleg_resolve_position_unit(array $row, int $artikel_id = 0): array {
+		static $map_cache = null;
+		if ($map_cache === null) {
+			$map_cache = ['by_id' => [], 'by_name' => []];
+			if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_options')) {
+				foreach (cmx_artikel_einheiten_options() as $opt) {
+					$id = (int) ($opt['id'] ?? 0);
+					$name = \trim((string) ($opt['name'] ?? ''));
+					if ($id <= 0 || $name === '') continue;
+					$map_cache['by_id'][$id] = $name;
+					$key = \function_exists('mb_strtolower')
+						? \mb_strtolower($name, 'UTF-8')
+						: \strtolower($name);
+					$map_cache['by_name'][$key] = $id;
+				}
+			}
+		}
+
+		$einheit_id_raw = $row['einheit_id'] ?? ($row['unit_id'] ?? 0);
+		$einheit_id = \is_numeric((string) $einheit_id_raw) ? (int) $einheit_id_raw : 0;
+		$unit = \sanitize_text_field((string) ($row['unit'] ?? ($row['einheit'] ?? '')));
+
+		if ($einheit_id > 0 && isset($map_cache['by_id'][$einheit_id])) {
+			$unit = (string) $map_cache['by_id'][$einheit_id];
+		}
+
+		if ($einheit_id <= 0 && $unit !== '') {
+			$key = \function_exists('mb_strtolower')
+				? \mb_strtolower($unit, 'UTF-8')
+				: \strtolower($unit);
+			if (isset($map_cache['by_name'][$key])) {
+				$einheit_id = (int) $map_cache['by_name'][$key];
+				$unit = (string) ($map_cache['by_id'][$einheit_id] ?? $unit);
+			}
+		}
+
+		if ($einheit_id <= 0 && $artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
+			$default = cmx_artikel_default_einheit($artikel_id);
+			$default_id = (int) ($default['id'] ?? 0);
+			if ($default_id > 0) {
+				$einheit_id = $default_id;
+				$unit = (string) ($default['name'] ?? '');
+			}
+		}
+
+		if ($einheit_id > 0 && $unit === '' && isset($map_cache['by_id'][$einheit_id])) {
+			$unit = (string) $map_cache['by_id'][$einheit_id];
+		}
+
+		return [
+			'einheit_id' => $einheit_id > 0 ? $einheit_id : 0,
+			'unit'       => $unit,
+		];
+	}
+}
+
 /* ---------------------------------
  * Taxonomie-Erkennung: Belege-Textbausteine
  * --------------------------------- */
@@ -390,14 +569,14 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 		$positionen = [];
 	}
 	echo '<div id="cmx-positionen-wrap">';
-	echo '<table class="widefat striped" id="cmx-positionen-table">
-			<thead><tr>
-				<th><a href="/wp-admin/edit.php?post_type=artikel" target="_blank" rel="noopener noreferrer">Artikel</a></th>
-				<th>&nbsp;&nbsp;Menge</th>
-				<th>&nbsp;&nbsp;Einzelpreis</th>
-				<th>&nbsp;&nbsp;Rabatt</th>
-				<th style="text-align:right;">Gesamt</th>
-				<th>zus&auml;tzliche Notiz</th>
+		echo '<table class="widefat striped" id="cmx-positionen-table">
+				<thead><tr>
+					<th><a href="/wp-admin/edit.php?post_type=artikel" target="_blank" rel="noopener noreferrer">Artikel</a></th>
+					<th>&nbsp;&nbsp;Menge</th>
+					<th>&nbsp;&nbsp;Einzelpreis</th>
+					<th>&nbsp;&nbsp;Rabatt</th>
+					<th style="text-align:right;">Gesamt</th>
+					<th>zus&auml;tzliche Notiz</th>
 				<th></th>
 			</tr></thead>
 			<tbody>';
@@ -450,6 +629,13 @@ function cmx_render_position_row($i, $pos) {
 
 	$menge        = (string)($pos['menge'] ?? '');
 	$preis        = (string)($pos['preis'] ?? '');
+	$unit_data    = \function_exists(__NAMESPACE__ . '\\cmx_beleg_resolve_position_unit')
+		? cmx_beleg_resolve_position_unit((array) $pos, $artikel_id)
+		: ['einheit_id' => 0, 'unit' => ''];
+	$einheit_id   = (int) ($unit_data['einheit_id'] ?? 0);
+	$einheiten    = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_options')
+		? cmx_artikel_einheiten_options()
+		: [];
 	$beschreibung = esc_textarea($pos['beschreibung'] ?? '');
 	$rabatt_raw   = trim((string)($pos['rabatt'] ?? ''));
 	$task_idx_raw = isset($pos['task_idx']) ? (string) $pos['task_idx'] : '';
@@ -484,8 +670,19 @@ function cmx_render_position_row($i, $pos) {
 	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
 	echo '</td>';
 
-	// negative Mengen zulassen (Komma/Punkt erlaubt)
-	echo '<td><input type="text" name="cmx_positionen['.$i.'][menge]" value="'.esc_attr($menge_display).'" style="width:90px"></td>';
+	// negative Mengen zulassen (Komma/Punkt erlaubt) + Einheit
+	echo '<td class="cmx-pos-qty-cell">';
+	echo '<input type="text" name="cmx_positionen['.$i.'][menge]" value="'.esc_attr($menge_display).'" style="width:90px">';
+	echo '<select name="cmx_positionen['.$i.'][einheit_id]" class="cmx-einheit-select" style="width:120px; margin-left:6px;">';
+	echo '<option value="">— auswählen —</option>';
+	foreach ($einheiten as $opt) {
+		$opt_id = (int) ($opt['id'] ?? 0);
+		if ($opt_id <= 0) continue;
+		$opt_name = (string) ($opt['name'] ?? '');
+		echo '<option value="' . $opt_id . '" ' . selected($einheit_id, $opt_id, false) . '>' . esc_html($opt_name) . '</option>';
+	}
+	echo '</select>';
+	echo '</td>';
 
 	// Preis als Text (Komma/Punkt erlaubt)
 	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.esc_attr($preis_display).'" style="width:100px"></td>';
@@ -568,12 +765,17 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			$beschreibung_raw = wp_unslash($beschreibung_raw);
 			$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
 			$beschreibung = trim($beschreibung_raw);
-				$task_idx_raw = isset($row['task_idx']) ? trim((string)$row['task_idx']) : '';
-				$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
-				$task_uid_raw = isset($row['task_uid']) ? (string)$row['task_uid'] : '';
-				$task_uid     = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
-				$task_projekt_id_raw = isset($row['task_projekt_id']) ? trim((string)$row['task_projekt_id']) : '';
-				$task_projekt_id     = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
+			$task_idx_raw = isset($row['task_idx']) ? trim((string)$row['task_idx']) : '';
+			$task_idx     = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+			$task_uid_raw = isset($row['task_uid']) ? (string)$row['task_uid'] : '';
+			$task_uid     = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+			$task_projekt_id_raw = isset($row['task_projekt_id']) ? trim((string)$row['task_projekt_id']) : '';
+			$task_projekt_id     = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
+			$unit_data = \function_exists(__NAMESPACE__ . '\\cmx_beleg_resolve_position_unit')
+				? cmx_beleg_resolve_position_unit($row, $artikel_id)
+				: ['einheit_id' => 0, 'unit' => ''];
+			$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
+			$unit       = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
 
 			// negative Mengen zulassen; nur 0 verwerfen
 			if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -582,14 +784,16 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			$clean[] = [
 				'artikel_id'   => $artikel_id,
 				'menge'        => $menge,
+				'einheit_id'   => $einheit_id,
+				'unit'         => $unit,
 				'preis'        => $preis,
 				'rabatt'       => $rabatt,
-					'beschreibung' => $beschreibung,
-					'task_idx'     => $task_idx,
-					'task_uid'     => $task_uid,
-					'task_projekt_id' => $task_projekt_id,
-				];
-			}
+				'beschreibung' => $beschreibung,
+				'task_idx'     => $task_idx,
+				'task_uid'     => $task_uid,
+				'task_projekt_id' => $task_projekt_id,
+			];
+		}
 
 	// Altdaten angleichen (können als JSON-String oder Array vorliegen)
 	$old_raw  = get_post_meta($post_id, '_cmx_beleg_positionen', true);
@@ -707,7 +911,14 @@ add_action('wp_ajax_cmx_get_artikel_vk', function() {
 	$artikel_id = isset($_POST['artikel_id']) ? (int) $_POST['artikel_id'] : 0;
 	if ($artikel_id <= 0) wp_send_json_error(['msg' => 'no_id'], 400);
 	$vk = get_post_meta($artikel_id, '_cmx_artikel_vk', true);
-	wp_send_json_success(['vk' => ($vk === '' || $vk === null) ? '' : (string)$vk]);
+	$default_unit = \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')
+		? cmx_artikel_default_einheit($artikel_id)
+		: ['id' => 0, 'name' => ''];
+	wp_send_json_success([
+		'vk'      => ($vk === '' || $vk === null) ? '' : (string) $vk,
+		'unit_id' => (int) ($default_unit['id'] ?? 0),
+		'unit'    => (string) ($default_unit['name'] ?? ''),
+	]);
 });
 
 /* ------------------------------
@@ -895,18 +1106,28 @@ function cmx_beleg_positionen_js() {
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
 		}
-		function escHtml(s){
-			return (s ?? '').toString()
-				.replace(/&/g,'&amp;')
-				.replace(/</g,'&lt;')
-				.replace(/>/g,'&gt;');
-		}
-			function nextRowIndex(){
-				let max = -1;
-				table.find('input[name^="cmx_positionen["], textarea[name^="cmx_positionen["]').each(function(){
-					const m = ((this.name || '') + '').match(/^cmx_positionen\[(\d+)\]/);
-				if (!m) return;
-				const idx = parseInt(m[1], 10);
+			function escHtml(s){
+				return (s ?? '').toString()
+					.replace(/&/g,'&amp;')
+					.replace(/</g,'&lt;')
+					.replace(/>/g,'&gt;');
+			}
+			function setRowUnitSelection($row, unitIdRaw){
+				const $unit = $row.find('select[name*="[einheit_id]"]').first();
+				if(!$unit.length) return;
+				const unitId = parseInt((unitIdRaw ?? '').toString(), 10);
+				if(!isNaN(unitId) && unitId > 0 && $unit.find('option[value="' + unitId + '"]').length){
+					$unit.val(String(unitId));
+				}else{
+					$unit.val('');
+				}
+			}
+				function nextRowIndex(){
+					let max = -1;
+					table.find('input[name^="cmx_positionen["], textarea[name^="cmx_positionen["], select[name^="cmx_positionen["]').each(function(){
+						const m = ((this.name || '') + '').match(/^cmx_positionen\[(\d+)\]/);
+					if (!m) return;
+					const idx = parseInt(m[1], 10);
 				if (!isNaN(idx) && idx > max) max = idx;
 				});
 				return max + 1;
@@ -1213,16 +1434,25 @@ function cmx_beleg_positionen_js() {
 				$discount.val('');
 				$desc.val(info);
 
-				if ($edit.length) {
+					if ($edit.length) {
+						if (artikelId > 0) {
+							$edit.attr('href', ARTICLE_EDIT_BASE + artikelId + '&action=edit');
+							$edit.css({ 'pointer-events':'auto', 'opacity':'1' });
+						} else {
+							$edit.removeAttr('href');
+							$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
+						}
+					}
 					if (artikelId > 0) {
-						$edit.attr('href', ARTICLE_EDIT_BASE + artikelId + '&action=edit');
-						$edit.css({ 'pointer-events':'auto', 'opacity':'1' });
+						$.post(AJAX_URL, { action:'cmx_get_artikel_vk', artikel_id: artikelId }, function(resp){
+							if (resp && resp.success && resp.data) {
+								setRowUnitSelection($row, resp.data.unit_id);
+							}
+						}, 'json');
 					} else {
-						$edit.removeAttr('href');
-						$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
+						setRowUnitSelection($row, 0);
 					}
 				}
-			}
 
 			function addPositionRow(prefill){
 				let i = nextRowIndex();
@@ -1240,17 +1470,18 @@ function cmx_beleg_positionen_js() {
 				}
 				let newRow = $template.clone();
 
-				newRow.find('input, textarea').each(function(){
-					let $el = $(this), name = $el.attr('name');
-						if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
-						if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
-						else if($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')){ $el.val(''); }
-						else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
-					else if($el.is('[name*="[menge]"]')){ $el.val(''); }
-					else if($el.is('[name*="[preis]"]')){ $el.val(''); }
-					else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
-					else if($el.is('textarea')){ $el.val('').removeData('cmx-text-suggest-ready'); } else { $el.val(''); }
-				});
+					newRow.find('input, textarea, select').each(function(){
+						let $el = $(this), name = $el.attr('name');
+							if(name) $el.attr('name', name.replace(/\[\d+\]/,'['+i+']'));
+							if($el.hasClass('cmx-artikel-id')){ $el.val(''); }
+							else if($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')){ $el.val(''); }
+							else if($el.hasClass('cmx-artikel-autocomplete')){ $el.val('').removeData('cmx-suggest-ready'); }
+						else if($el.hasClass('cmx-einheit-select')){ $el.val(''); }
+						else if($el.is('[name*="[menge]"]')){ $el.val(''); }
+						else if($el.is('[name*="[preis]"]')){ $el.val(''); }
+						else if($el.is('[name*="[rabatt]"]')){ $el.val(''); }
+						else if($el.is('textarea')){ $el.val('').removeData('cmx-text-suggest-ready'); } else { $el.val(''); }
+					});
 				newRow.find('.cmx-art-suggest').remove();
 				newRow.find('.cmx-pos-total').text('0,00');
 
@@ -1293,22 +1524,27 @@ function cmx_beleg_positionen_js() {
 						$edit.removeAttr('href');
 						$edit.css({ 'pointer-events':'none', 'opacity':'0.35' });
 					}
-					if ($qty.length) {
-						const qtyRaw = ($qty.val() ?? '').toString().trim();
-						if (qtyRaw === '') {
-							$qty.val(formatSwiss(1)).trigger('input');
-						}
-					}
-					if(it.id){
-						$.post(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_get_artikel_vk', artikel_id: it.id }, function(resp){
-							if(resp && resp.success && resp.data && resp.data.vk!==undefined){
-								$row.find('input[name*="[preis]"]').val(formatSwiss(parseNumberFlexible(resp.data.vk))).trigger('input');
+						if ($qty.length) {
+							const qtyRaw = ($qty.val() ?? '').toString().trim();
+							if (qtyRaw === '') {
+								$qty.val(formatSwiss(1)).trigger('input');
 							}
-						}, 'json');
-					}
-					setTimeout(function(){
-						$qty.focus().select();
-					}, 0);
+						}
+						if(it.id){
+							$.post(AJAX_URL, { action:'cmx_get_artikel_vk', artikel_id: it.id }, function(resp){
+								if(resp && resp.success && resp.data){
+									if(resp.data.vk!==undefined){
+										$row.find('input[name*="[preis]"]').val(formatSwiss(parseNumberFlexible(resp.data.vk))).trigger('input');
+									}
+									setRowUnitSelection($row, resp.data.unit_id);
+								}
+							}, 'json');
+						} else {
+							setRowUnitSelection($row, 0);
+						}
+						setTimeout(function(){
+							$qty.focus().select();
+						}, 0);
 				}
 				function doSearch(q){ fetchArtikel(q, (rows)=>{ nav.render(rows); }); }
 
@@ -1597,13 +1833,14 @@ function cmx_beleg_positionen_js() {
 						}
 					} else {
 						// Letzte normale Positionszeile: Inhalte leeren, damit kein zusätzlicher Platzhalter nötig ist
-						$row.find('input, textarea').each(function(){
-							const $el = $(this);
-							if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
-							else if ($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')) { $el.val(''); }
-							else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
-							else { $el.val(''); }
-						});
+							$row.find('input, textarea, select').each(function(){
+								const $el = $(this);
+								if ($el.hasClass('cmx-artikel-id')) { $el.val(''); }
+								else if ($el.hasClass('cmx-task-idx') || $el.hasClass('cmx-task-uid') || $el.hasClass('cmx-task-projekt-id')) { $el.val(''); }
+								else if ($el.hasClass('cmx-artikel-autocomplete')) { $el.val(''); }
+								else if ($el.hasClass('cmx-einheit-select')) { $el.val(''); }
+								else { $el.val(''); }
+							});
 						$row.find('.cmx-pos-total').text('0,00');
 					}
 				}
@@ -1657,12 +1894,21 @@ function cmx_beleg_positionen_js() {
 				.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
 				.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-			#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
-				#cmx-positionen-table th:first-child,
-				#cmx-positionen-table td:first-child{ padding-right:20px; }
-				#cmx-positionen-table td textarea { resize: vertical; }
-				#cmx-positionen-table td.cmx-pos-beschr-cell{
-					position:relative;
+				#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
+					#cmx-positionen-table th:first-child,
+					#cmx-positionen-table td:first-child{ padding-right:20px; }
+					#cmx-positionen-table td.cmx-pos-qty-cell{
+						white-space:nowrap;
+						min-width:220px;
+					}
+					#cmx-positionen-table td.cmx-pos-qty-cell .cmx-einheit-select{
+						margin-left:6px;
+						width:120px;
+						max-width:48%;
+					}
+					#cmx-positionen-table td textarea { resize: vertical; }
+					#cmx-positionen-table td.cmx-pos-beschr-cell{
+						position:relative;
 					padding-left:26px;
 				}
 				#cmx-positionen-table .cmx-textbaustein-edit{
@@ -1806,12 +2052,17 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$beschreibung_raw = wp_unslash($beschreibung_raw);
 		$beschreibung_raw = str_replace(["\r\n", "\r"], "\n", $beschreibung_raw);
 		$beschreibung = trim($beschreibung_raw);
-			$task_idx_raw = isset($r['task_idx']) ? trim((string)$r['task_idx']) : '';
-			$task_idx = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
-			$task_uid_raw = isset($r['task_uid']) ? (string)$r['task_uid'] : '';
-			$task_uid = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
-			$task_projekt_id_raw = isset($r['task_projekt_id']) ? trim((string)$r['task_projekt_id']) : '';
-			$task_projekt_id = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
+		$task_idx_raw = isset($r['task_idx']) ? trim((string)$r['task_idx']) : '';
+		$task_idx = ($task_idx_raw !== '' && is_numeric($task_idx_raw)) ? (int)$task_idx_raw : null;
+		$task_uid_raw = isset($r['task_uid']) ? (string)$r['task_uid'] : '';
+		$task_uid = (string)\preg_replace('/[^A-Za-z0-9_-]/', '', $task_uid_raw);
+		$task_projekt_id_raw = isset($r['task_projekt_id']) ? trim((string)$r['task_projekt_id']) : '';
+		$task_projekt_id = ($task_projekt_id_raw !== '' && is_numeric($task_projekt_id_raw)) ? (int)$task_projekt_id_raw : null;
+		$unit_data = \function_exists(__NAMESPACE__ . '\\cmx_beleg_resolve_position_unit')
+			? cmx_beleg_resolve_position_unit($r, $artikel_id)
+			: ['einheit_id' => 0, 'unit' => ''];
+		$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
+		$unit = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
@@ -1820,13 +2071,15 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$clean[] = [
 			'artikel_id'   => $artikel_id,
 			'menge'        => $menge,
+			'einheit_id'   => $einheit_id,
+			'unit'         => $unit,
 			'preis'        => $preis,
 			'rabatt'       => $rabatt,
-				'beschreibung' => $beschreibung,
-				'task_idx'     => $task_idx,
-				'task_uid'     => $task_uid,
-				'task_projekt_id' => $task_projekt_id,
-			];
+			'beschreibung' => $beschreibung,
+			'task_idx'     => $task_idx,
+			'task_uid'     => $task_uid,
+			'task_projekt_id' => $task_projekt_id,
+		];
 	}
 
 	$old = get_post_meta($post_id, '_cmx_beleg_positionen', true);

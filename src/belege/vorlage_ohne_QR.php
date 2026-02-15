@@ -81,6 +81,7 @@ $col_count = ($show_position_index ? 1 : 0)
 	+ ($show_sku ? 1 : 0)
 	+ 1
 	+ 1
+	+ 1
 	+ ($show_unit_price ? 1 : 0)
 	+ ($show_discount ? 1 : 0)
 	+ ($show_line_total ? 1 : 0);
@@ -288,6 +289,8 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
 		.positions-table tbody tr.cmx-pdf-pos-even { background: #f3f3f3; }
+		/* Avoid covering shifted qty text in zebra rows. */
+		.positions-table tbody tr.cmx-pdf-pos-even td.col-unit { background: transparent; }
 	.positions-table tbody td { vertical-align: top; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
@@ -302,19 +305,32 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 }
 .positions-table th.col-pos,
 .positions-table td.col-pos {
-	width: 38px;
-	min-width: 38px;
+	width: 8px;
+	min-width: 8px;
 	white-space: nowrap;
 }
 .positions-table th.col-sku,
 .positions-table td.col-sku {
-	width: 96px;
-	min-width: 96px;
+	width: 66px;
+	min-width: 66px;
 }
 .positions-table th.col-qty,
 .positions-table td.col-qty {
 	width: 88px;
 	min-width: 88px;
+	white-space: nowrap;
+}
+.positions-table th.col-unit,
+.positions-table td.col-unit {
+	width: 88px;
+	min-width: 88px;
+	white-space: nowrap;
+}
+.positions-table .cmx-pdf-shift-qty,
+.positions-table .cmx-pdf-shift-unit {
+	display: inline-block;
+	position: relative;
+	left: 50px;
 	white-space: nowrap;
 }
 .positions-table th.col-unit-price,
@@ -462,7 +478,8 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 						<th class="col-sku">SKU</th>
 					<?php endif; ?>
 					<th>Artikel</th>
-					<th class="col-num col-qty">Menge</th>
+					<th class="col-num col-qty"><span class="cmx-pdf-shift-qty">Menge</span></th>
+					<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
 					<?php if ($show_unit_price): ?>
 						<th class="col-num col-unit-price">Einzelpreis</th>
 					<?php endif; ?>
@@ -536,7 +553,8 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 								<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
 							<?php endif; ?>
 						</td>
-						<td class="text-right col-qty"><?= htmlspecialchars(trim($__fmt_num($qty) . ' ' . $unit), ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right col-qty"><span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span></td>
+						<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
 						<?php if ($show_unit_price): ?>
 							<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>

@@ -210,7 +210,7 @@ function cmx_artikel_lieferanten_list_url_unified(): string {
 	$title = 'Lieferanten';
 	$link = cmx_artikel_lieferanten_list_url_unified();
 	if ($link !== '') {
-		$title = '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="font-size:14px;font-weight:700;line-height:1.3;color:#2271b1;text-decoration:underline;cursor:pointer;">Lieferanten</a>';
+		$title = '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="font-size:14px;font-weight:700;line-height:1.3;color:#2271b1;text-decoration:none;cursor:pointer;">Lieferanten</a>';
 	}
 	\add_meta_box('cmx_artikel_lieferanten', $title, __NAMESPACE__.'\\cmx_artikel_lieferanten_box_html_unified', 'artikel', 'normal', 'default');
 });
