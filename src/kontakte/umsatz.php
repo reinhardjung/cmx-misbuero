@@ -62,6 +62,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_parse_decimal')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_due_label')) {
+	function cmx_kontakt_beleg_due_label(int $beleg_id): string {
+		$keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')) {
+			$keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG');
+		}
+		$keys = \array_merge($keys, [
+			'_cmx_beleg_faelligkeitsdatum',
+			'_cmx_beleg_faellig_am',
+			'cmx_beleg_faelligkeitsdatum',
+			'cmx_beleg_faellig_am',
+		]);
+
+		foreach (\array_values(\array_unique($keys)) as $key) {
+			$raw = \trim((string) \get_post_meta($beleg_id, $key, true));
+			if ($raw === '') {
+				continue;
+			}
+			$ts = cmx_kontakt_belege_parse_date_ts($raw);
+			if ($ts > 0) {
+				return \date_i18n('d.m.Y', $ts);
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_paid_label')) {
 	function cmx_kontakt_beleg_paid_label(int $beleg_id): array {
 		$paid_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
@@ -78,7 +106,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_paid_label')) {
 			if ($ts > 0) {
 				return [
 					'slug'  => 'bezahlt',
-					'label' => 'Bezahlt (' . \date_i18n('d.m.Y', $ts) . ')',
+					'label' => '' . \date_i18n('d.m.Y', $ts) . '',
 				];
 			}
 		}
@@ -183,14 +211,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 				$sum += cmx_kontakt_belege_parse_decimal($amount_label);
 			}
 
-			$rows[] = [
-				'id'         => $beleg_id,
-				'title'      => $title,
-				'edit_url'   => (string) \get_edit_post_link($beleg_id, ''),
-				'amount'     => $amount_label,
-				'state'      => cmx_kontakt_beleg_paid_label($beleg_id),
-			];
-		}
+				$rows[] = [
+					'id'         => $beleg_id,
+					'title'      => $title,
+					'edit_url'   => (string) \get_edit_post_link($beleg_id, ''),
+					'amount'     => $amount_label,
+					'state'      => cmx_kontakt_beleg_paid_label($beleg_id),
+					'due_label'  => cmx_kontakt_beleg_due_label($beleg_id),
+				];
+			}
 
 		$cache[$kontakt_id] = [
 			'sum'  => $sum,
@@ -216,7 +245,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 	$sum_label = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum, 2)
 		: \number_format($sum, 2, '.', "'");
-	$title = 'Belege (Umsatz ' . $sum_label . ')';
+	$title = 'Belege (' . $sum_label . ')';
 
 	\add_meta_box(
 		'cmx_kontakt_belege_umsatz',
@@ -248,8 +277,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			#cmx_kontakt_belege_umsatz .cmx-kb-beleg a{white-space:nowrap;display:inline-block;text-decoration:none}
 			#cmx_kontakt_belege_umsatz .cmx-kb-amount{white-space:nowrap;text-align:right}
 			#cmx_kontakt_belege_umsatz .cmx-kb-state{white-space:nowrap}
-			#cmx_kontakt_belege_umsatz .cmx-kb-open{color:#b32d2e;font-weight:600}
+			#cmx_kontakt_belege_umsatz .cmx-kb-open{font-weight:600}
 			#cmx_kontakt_belege_umsatz .cmx-kb-paid{color:#2f7d32;font-weight:600}
+			#cmx_kontakt_belege_umsatz .cmx-kb-due{display:block;color:#b32d2e;font-weight:600}
 		</style>';
 
 		if (empty($rows)) {
@@ -270,6 +300,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			$edit_url = (string) ($row['edit_url'] ?? '');
 			$amount = (string) ($row['amount'] ?? '');
 			$state = (array) ($row['state'] ?? []);
+			$due_label = (string) ($row['due_label'] ?? '');
 			$state_slug = (string) ($state['slug'] ?? 'offen');
 			$state_label = (string) ($state['label'] ?? 'Offen');
 			$state_class = $state_slug === 'bezahlt' ? 'cmx-kb-paid' : 'cmx-kb-open';
@@ -283,7 +314,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			}
 			echo '</td>';
 			echo '<td class="cmx-kb-amount">' . \esc_html($amount) . '</td>';
-			echo '<td class="cmx-kb-state ' . \esc_attr($state_class) . '">' . \esc_html($state_label) . '</td>';
+			echo '<td class="cmx-kb-state ' . \esc_attr($state_class) . '">';
+			if ($state_slug === 'bezahlt') {
+				echo \esc_html($state_label);
+			}
+			if ($state_slug !== 'bezahlt' && $due_label !== '') {
+				echo '<span class="cmx-kb-due">' . \esc_html($due_label) . '</span>';
+			}
+			echo '</td>';
 			echo '</tr>';
 		}
 
