@@ -137,7 +137,7 @@ function cmx_import_find_existing_projekt_id_by_title(string $title): int {
 		$postarr = [
 			'post_type'   => CMX_PT_PROJEKTE,
 			'post_title'  => $title,
-			'post_name'   => sanitize_title($row['post_name'] ?? $title),
+			'post_name'   => sanitize_title(($row['post_slug'] ?? $row['post_name'] ?? $title)),
 			'post_status' => $row['post_status'] ?? 'publish',
 			'post_date'   => $row['post_date'] ?? current_time('mysql'),
 		];
@@ -158,13 +158,24 @@ function cmx_import_find_existing_projekt_id_by_title(string $title): int {
 		foreach ($row as $key => $val) {
 			if (strpos($key, 'tax__') === 0) {
 				$tax = substr($key, 5);
-				if ($tax && $val !== '') {
-					$terms = array_map('trim', explode(',', $val));
-					wp_set_object_terms($post_id, $terms, $tax, false);
+				if ($tax) {
+					$raw_terms = trim((string) $val);
+					if ($raw_terms !== '') {
+						$terms = array_map('trim', explode(',', $raw_terms));
+						wp_set_object_terms($post_id, $terms, $tax, false);
+					} elseif ($is_update) {
+						wp_set_object_terms($post_id, [], $tax, false);
+					}
 				}
 			}
 			if (strpos($key, 'meta__') === 0) {
-				update_post_meta($post_id, substr($key, 6), $val);
+				$meta_key = substr($key, 6);
+				$meta_val = is_string($val) ? trim($val) : $val;
+				if ($meta_val === '') {
+					delete_post_meta($post_id, $meta_key);
+				} else {
+					update_post_meta($post_id, $meta_key, $meta_val);
+				}
 			}
 		}
 

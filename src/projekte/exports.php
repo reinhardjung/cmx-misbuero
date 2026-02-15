@@ -92,6 +92,18 @@ defined('ABSPATH') || die('Oxytocin!');
 			}
 		}
 
+		// Projektspezifischer Kunden-Filter
+		$kunde_filter = isset($_REQUEST['cmx_kunde_filter']) ? absint(wp_unslash($_REQUEST['cmx_kunde_filter'])) : 0;
+		if ($kunde_filter > 0) {
+			$kontakt_meta_key = defined('CMX_KONTAKT_META') ? CMX_KONTAKT_META : '_cmx_projekt_kontakt_id';
+			$query_vars['meta_query'][] = [
+				'key'     => $kontakt_meta_key,
+				'value'   => $kunde_filter,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		}
+
 		/* --- Taxonomie-Filter --- */
 		$tax_query = [];
 		$taxos = \get_object_taxonomies('projekte', 'objects');
@@ -109,6 +121,30 @@ defined('ABSPATH') || die('Oxytocin!');
 					'terms'    => [$val],
 				];
 				break;
+			}
+		}
+
+		// Projektspezifischer Status-Filter
+		$selected_status = isset($_REQUEST['cmx_status_filter']) ? sanitize_text_field(wp_unslash($_REQUEST['cmx_status_filter'])) : '';
+		if ($selected_status !== '' && $selected_status !== '0') {
+			$status_tax = '';
+			if (function_exists(__NAMESPACE__ . '\\cmx_projekte_detect_status_taxonomy')) {
+				$status_tax = (string) cmx_projekte_detect_status_taxonomy();
+			}
+			if ($status_tax === '') {
+				foreach (['projekte_status', 'projekt_status', 'status'] as $candidate) {
+					if (taxonomy_exists($candidate) && is_object_in_taxonomy('projekte', $candidate)) {
+						$status_tax = $candidate;
+						break;
+					}
+				}
+			}
+			if ($status_tax !== '' && taxonomy_exists($status_tax) && is_object_in_taxonomy('projekte', $status_tax)) {
+				$tax_query[] = [
+					'taxonomy' => $status_tax,
+					'field'    => 'slug',
+					'terms'    => [$selected_status],
+				];
 			}
 		}
 		if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
