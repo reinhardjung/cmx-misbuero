@@ -52,67 +52,77 @@
 		$selected_ids = array_filter(array_map('intval', (array) $_REQUEST['post']));
 	}
 
-	/* === D) Immer nur publish === */
 	$query_vars = [
 		'post_type'      => 'artikel',
 		'posts_per_page' => -1,
-		'post_status'    => 'publish',
 		'fields'         => 'ids',
+		'no_found_rows'  => true,
 		'orderby'        => 'ID',
 		'order'          => 'ASC',
 	];
 
-	/* === B) Filter aus URL erkennen === */
-	$has_filter = false;
-
-	foreach (['s','author','m'] as $f) {
-		$val = $_REQUEST[$f] ?? '';
-		if ($val !== '' && $val !== '0' && $val !== '-1') {
-			$query_vars[$f] = $val;
-			$has_filter = true;
-		}
-	}
-
-	// Taxonomien
-	$tax_query = [];
-	$taxos = \get_object_taxonomies('artikel', 'objects');
-	foreach ($taxos as $tax) {
-		$val = $_REQUEST[$tax->name] ?? '';
-		if ($val !== '' && $val !== '0') {
-			$tax_query[] = [
-				'taxonomy' => $tax->name,
-				'field'    => is_numeric($val) ? 'term_id' : 'slug',
-				'terms'    => [$val],
-			];
-			$has_filter = true;
-		}
-	}
-	if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
-
-	// cmx_lieferant (Taxonomie oder Meta)
-	$cmx_lieferant = $_REQUEST['cmx_lieferant'] ?? '';
-	if ($cmx_lieferant !== '' && $cmx_lieferant !== '0') {
-		$has_filter = true;
-		if (\taxonomy_exists('cmx_lieferant')) {
-			$query_vars['tax_query'][] = [
-				'taxonomy' => 'cmx_lieferant',
-				'field'    => is_numeric($cmx_lieferant) ? 'term_id' : 'slug',
-				'terms'    => [$cmx_lieferant],
-			];
-		} else {
-			$query_vars['meta_query'][] = [
-				'key'     => 'cmx_lieferant',
-				'value'   => $cmx_lieferant,
-				'compare' => '=',
-			];
-		}
-	}
-
-	/* === A priorisiert (Markierungen vor Filter) === */
+	/* === A priorisiert: bei Auswahl nur markierte Artikel exportieren === */
 	if ($selected_ids) {
 		$query_vars['post__in'] = $selected_ids;
 		$query_vars['orderby']  = 'post__in';
+		$query_vars['post_status'] = 'any';
+	} else {
+		/* === B) Ohne Auswahl: aktuelle Filter anwenden === */
+		$post_status = isset($_REQUEST['post_status']) ? sanitize_key((string) $_REQUEST['post_status']) : '';
+		if ($post_status !== '' && $post_status !== 'all') {
+			$query_vars['post_status'] = $post_status;
+		} else {
+			$query_vars['post_status'] = ['publish', 'future', 'draft', 'pending', 'private'];
+		}
+
+		foreach (['s', 'author', 'm'] as $f) {
+			$val = $_REQUEST[$f] ?? '';
+			if ($val !== '' && $val !== '0' && $val !== '-1') {
+				$query_vars[$f] = $val;
+			}
+		}
+
+		// Taxonomien
+		$tax_query = [];
+		$taxos = \get_object_taxonomies('artikel', 'objects');
+		foreach ($taxos as $tax) {
+			$keys = [];
+			if (!empty($tax->query_var) && is_string($tax->query_var)) $keys[] = $tax->query_var;
+			$keys[] = $tax->name;
+			$keys = array_values(array_unique(array_filter($keys)));
+			foreach ($keys as $key) {
+				$val = $_REQUEST[$key] ?? '';
+				if ($val === '' || $val === '0' || $val === '-1') continue;
+				$tax_query[] = [
+					'taxonomy' => $tax->name,
+					'field'    => is_numeric($val) ? 'term_id' : 'slug',
+					'terms'    => [$val],
+				];
+				break;
+			}
+		}
+		if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
+
+		// cmx_lieferant (Taxonomie oder Meta)
+		$cmx_lieferant = $_REQUEST['cmx_lieferant'] ?? '';
+		if ($cmx_lieferant !== '' && $cmx_lieferant !== '0' && $cmx_lieferant !== '-1') {
+			if (\taxonomy_exists('cmx_lieferant')) {
+				$query_vars['tax_query'][] = [
+					'taxonomy' => 'cmx_lieferant',
+					'field'    => is_numeric($cmx_lieferant) ? 'term_id' : 'slug',
+					'terms'    => [$cmx_lieferant],
+				];
+			} else {
+				$query_vars['meta_query'][] = [
+					'key'     => 'cmx_lieferant',
+					'value'   => $cmx_lieferant,
+					'compare' => '=',
+				];
+			}
+		}
 	}
+
+	$taxos = \get_object_taxonomies('artikel', 'objects');
 
 	/* === Query === */
 	$q = new \WP_Query($query_vars);
@@ -211,8 +221,7 @@
 				const f=document.createElement('form');
 				f.method='POST';f.action='<?php echo $action; ?>';
 				f.innerHTML='<input type="hidden" name="action" value="cmx_export_artikel_list">'+
-				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">'+
-				            '<input type="hidden" name="post_status" value="publish">';
+				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">';
 				checked.forEach(id=>{
 					const h=document.createElement('input');
 					h.type='hidden';h.name='post[]';h.value=id;
