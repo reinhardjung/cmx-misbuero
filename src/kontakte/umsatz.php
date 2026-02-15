@@ -224,6 +224,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_amount_label')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_zahlungsgrund_label')) {
+	function cmx_kontakt_beleg_zahlungsgrund_label(int $beleg_id): string {
+		$tax = '';
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_tax')) {
+			$tax = (string) cmx_beleg_zahlungsgrund_tax();
+		}
+		if ($tax === '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_taxonomy')) {
+			$tax = (string) cmx_beleg_zahlungsgrund_taxonomy();
+		}
+		if ($tax === '') {
+			$candidates = [];
+			if (\defined(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND')) {
+				$candidates[] = (string) \constant(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSGRUND');
+			}
+			$candidates[] = 'belege_zahlungsgrund';
+			$candidates[] = 'belege_zahlungsgruende';
+			$candidates[] = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+				? (string) cmx_tax_key('belege', 'zahlungsgrund')
+				: 'belege_zahlungsgrund';
+
+			foreach (\array_values(\array_unique(\array_filter($candidates))) as $candidate) {
+				if (\taxonomy_exists($candidate)) {
+					$tax = (string) $candidate;
+					break;
+				}
+			}
+		}
+
+		if ($tax === '') {
+			return '';
+		}
+
+		$names = \wp_get_post_terms($beleg_id, $tax, ['fields' => 'names']);
+		if (\is_wp_error($names) || !\is_array($names)) {
+			return '';
+		}
+
+		$clean = [];
+		foreach ($names as $name) {
+			$name = \trim((string) $name);
+			if ($name !== '') {
+				$clean[] = $name;
+			}
+		}
+		$clean = \array_values(\array_unique($clean));
+
+		return empty($clean) ? '' : \implode(', ', $clean);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 	function cmx_kontakt_belege_data(int $kontakt_id): array {
 		static $cache = [];
@@ -302,15 +353,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 				$sum += cmx_kontakt_belege_parse_decimal($amount_label);
 			}
 
-				$rows[] = [
-					'id'         => $beleg_id,
-					'title'      => $title,
-					'edit_url'   => (string) \get_edit_post_link($beleg_id, ''),
-					'amount'     => $amount_label,
-					'state'      => cmx_kontakt_beleg_paid_label($beleg_id),
-					'due_label'  => cmx_kontakt_beleg_due_label($beleg_id),
-				];
-			}
+					$rows[] = [
+						'id'         => $beleg_id,
+						'title'      => $title,
+						'edit_url'   => (string) \get_edit_post_link($beleg_id, ''),
+						'amount'     => $amount_label,
+						'state'      => cmx_kontakt_beleg_paid_label($beleg_id),
+						'zahlungsgrund' => cmx_kontakt_beleg_zahlungsgrund_label($beleg_id),
+						'due_label'  => cmx_kontakt_beleg_due_label($beleg_id),
+					];
+				}
 
 		$cache[$kontakt_id] = [
 			'sum'  => $sum,
@@ -408,6 +460,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			$edit_url = (string) ($row['edit_url'] ?? '');
 			$amount = (string) ($row['amount'] ?? '');
 			$state = (array) ($row['state'] ?? []);
+			$zahlungsgrund = (string) ($row['zahlungsgrund'] ?? '');
 			$due_label = (string) ($row['due_label'] ?? '');
 			$state_slug = (string) ($state['slug'] ?? 'offen');
 			$state_label = (string) ($state['label'] ?? 'Offen');
@@ -416,7 +469,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			echo '<tr>';
 			echo '<td class="cmx-kb-beleg">';
 			if ($edit_url !== '') {
-				echo '<a href="' . \esc_url($edit_url) . '">' . \esc_html($title) . '</a>';
+				$tooltip_text = $zahlungsgrund !== '' ? ('Zahlungsgrund: ' . $zahlungsgrund) : 'Zahlungsgrund: Kein Zahlungsgrund';
+				$link_title_attr = ' title="' . \esc_attr($tooltip_text) . '"';
+				echo '<a href="' . \esc_url($edit_url) . '"' . $link_title_attr . '>' . \esc_html($title) . '</a>';
 			} else {
 				echo \esc_html($title);
 			}
