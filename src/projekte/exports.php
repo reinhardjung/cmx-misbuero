@@ -2,7 +2,7 @@
 /**
  * Projekte-Export (Listen-Ansicht) – wie "Artikel"-Export
  * - Fügt "exportieren"-Link in der Projekte-Liste ein
- * - Exportiert markierte, gefilterte oder alle (publish) Projekte als CSV (UTF-8 BOM, Semikolon)
+ * - Exportiert markierte oder gefilterte Projekte als CSV (UTF-8 BOM, Semikolon)
  * - Nimmt alle Metas dynamisch auf (meta__*) + alle Taxonomien (tax__*)
  */
 
@@ -49,7 +49,7 @@ defined('ABSPATH') || die('Oxytocin!');
 
 /* =========================================================
  * 2) Export-Handler
- *    - Priorität: Markierte > Gefilterte > Alle (publish)
+ *    - Priorität: Markierte > Gefilterte
  * ========================================================= */
 \add_action('admin_post_cmx_export_projekte_list', function () {
 	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
@@ -61,47 +61,60 @@ defined('ABSPATH') || die('Oxytocin!');
 		$selected_ids = array_filter(array_map('intval', (array) $_REQUEST['post']));
 	}
 
-	/* --- D) Immer nur publish --- */
+	/* --- Basis-Query --- */
 	$query_vars = [
 		'post_type'      => 'projekte',
 		'posts_per_page' => -1,
-		'post_status'    => 'publish',
 		'fields'         => 'ids',
+		'no_found_rows'  => true,
 		'orderby'        => 'ID',
 		'order'          => 'ASC',
 	];
 
-	/* --- B) Standard-Filter aus URL --- */
-	$has_filter = false;
-	foreach (['s','author','m'] as $f) {
-		$val = $_REQUEST[$f] ?? '';
-		if ($val !== '' && $val !== '0' && $val !== '-1') {
-			$query_vars[$f] = $val;
-			$has_filter = true;
-		}
-	}
-
-	/* --- Taxonomie-Filter --- */
-	$tax_query = [];
-	$taxos = \get_object_taxonomies('projekte', 'objects');
-	foreach ($taxos as $tax) {
-		$val = $_REQUEST[$tax->name] ?? '';
-		if ($val !== '' && $val !== '0') {
-			$tax_query[] = [
-				'taxonomy' => $tax->name,
-				'field'    => is_numeric($val) ? 'term_id' : 'slug',
-				'terms'    => [$val],
-			];
-			$has_filter = true;
-		}
-	}
-	if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
-
-	/* --- A priorisiert --- */
+	/* --- A priorisiert: bei Auswahl nur markierte Projekte --- */
 	if ($selected_ids) {
 		$query_vars['post__in'] = $selected_ids;
 		$query_vars['orderby']  = 'post__in';
+		$query_vars['post_status'] = 'any';
+	} else {
+		/* --- B) Ohne Auswahl: aktuelle Filter anwenden --- */
+		$post_status = isset($_REQUEST['post_status']) ? sanitize_key((string) $_REQUEST['post_status']) : '';
+		if ($post_status !== '' && $post_status !== 'all') {
+			$query_vars['post_status'] = $post_status;
+		} else {
+			$query_vars['post_status'] = ['publish', 'future', 'draft', 'pending', 'private'];
+		}
+
+		foreach (['s', 'author', 'm'] as $f) {
+			$val = $_REQUEST[$f] ?? '';
+			if ($val !== '' && $val !== '0' && $val !== '-1') {
+				$query_vars[$f] = $val;
+			}
+		}
+
+		/* --- Taxonomie-Filter --- */
+		$tax_query = [];
+		$taxos = \get_object_taxonomies('projekte', 'objects');
+		foreach ($taxos as $tax) {
+			$keys = [];
+			if (!empty($tax->query_var) && is_string($tax->query_var)) $keys[] = $tax->query_var;
+			$keys[] = $tax->name;
+			$keys = array_values(array_unique(array_filter($keys)));
+			foreach ($keys as $key) {
+				$val = $_REQUEST[$key] ?? '';
+				if ($val === '' || $val === '0' || $val === '-1') continue;
+				$tax_query[] = [
+					'taxonomy' => $tax->name,
+					'field'    => is_numeric($val) ? 'term_id' : 'slug',
+					'terms'    => [$val],
+				];
+				break;
+			}
+		}
+		if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
 	}
+
+	$taxos = \get_object_taxonomies('projekte', 'objects');
 
 	/* --- Query --- */
 	$q = new \WP_Query($query_vars);
@@ -201,8 +214,7 @@ defined('ABSPATH') || die('Oxytocin!');
 				const f=document.createElement('form');
 				f.method='POST';f.action='<?php echo $action; ?>';
 				f.innerHTML='<input type="hidden" name="action" value="cmx_export_projekte_list">'+
-				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">'+
-				            '<input type="hidden" name="post_status" value="publish">';
+				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">';
 				checked.forEach(id=>{
 					const h=document.createElement('input');
 					h.type='hidden';h.name='post[]';h.value=id;
