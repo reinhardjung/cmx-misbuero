@@ -633,10 +633,17 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 	} elseif (!is_array($positionen)) {
 		$positionen = [];
 	}
+	$artikel_list_url = \add_query_arg(
+		[
+			'post_type'      => 'artikel',
+			'cmx_verkaufbar' => '1',
+		],
+		\admin_url('edit.php')
+	);
 	echo '<div id="cmx-positionen-wrap">';
 		echo '<table class="widefat striped" id="cmx-positionen-table">
 				<thead><tr>
-					<th><a href="/wp-admin/edit.php?post_type=artikel" target="_blank" rel="noopener noreferrer">Artikel</a></th>
+					<th><a href="' . esc_url($artikel_list_url) . '" target="_blank" rel="noopener noreferrer">Artikel</a></th>
 					<th class="cmx-pos-qty-head"><span class="cmx-pos-qty-head-menge">&nbsp;Menge</span><span class="cmx-pos-qty-head-einheit">&nbsp;Einheit</span></th>
 					<th>&nbsp;&nbsp;Einzelpreis</th>
 					<th>&nbsp;&nbsp;Rabatt</th>
