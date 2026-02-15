@@ -89,6 +89,34 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_due_raw')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_kontakt_data')) {
+	function cmx_cockpit_beleg_kontakt_data(int $post_id): array {
+		$meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+			: '_cmx_beleg_kontakt_id';
+		$keys = \array_values(\array_unique(\array_filter([$meta_key, \ltrim($meta_key, '_')])));
+
+		$kontakt_id = 0;
+		foreach ($keys as $key) {
+			$val = (int) \get_post_meta($post_id, $key, true);
+			if ($val > 0) {
+				$kontakt_id = $val;
+				break;
+			}
+		}
+		if ($kontakt_id <= 0) {
+			return ['name' => '', 'url' => ''];
+		}
+
+		$name = \trim((string) \get_the_title($kontakt_id));
+		if ($name === '') {
+			$name = '#' . $kontakt_id;
+		}
+		$url = (string) \get_edit_post_link($kontakt_id, '');
+		return ['name' => $name, 'url' => $url];
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_date_to_ts')) {
 	function cmx_cockpit_parse_date_to_ts(string $raw): int {
 		$raw = \trim($raw);
@@ -223,9 +251,13 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				$title = '#' . $post_id;
 			}
 
+			$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
+
 			$rows[] = [
 				'id'       => $post_id,
 				'title'    => $title,
+				'kontakt'  => (string) ($kontakt_data['name'] ?? ''),
+				'kontakt_url' => (string) ($kontakt_data['url'] ?? ''),
 				'due_sort' => $due_sort,
 				'due_ts'   => $due_ts,
 				'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
@@ -279,39 +311,48 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	$data = cmx_cockpit_faellige_rechnungen_data();
 	$total = (int) ($data['total'] ?? 0);
 	$items = (array) ($data['items'] ?? []);
-	$list_url = (string) ($data['list_url'] ?? '');
 
 	if ($total <= 0) {
 		echo '<p>Keine fälligen / offenen Rechnungen</p>';
 		return;
 	}
 
-	echo '<ul style="margin:0; padding-left:18px;">';
+	echo '<table style="width:100%;border-collapse:collapse;">';
+	echo '<thead><tr>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;">Rechnung</th>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;">Fällig am</th>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;">Kontakt</th>';
+	echo '</tr></thead><tbody>';
 	foreach ($items as $row) {
 		$post_id = (int) ($row['id'] ?? 0);
-		$title   = (string) ($row['title'] ?? ('#' . $post_id));
-		$due     = (string) ($row['due_date'] ?? '');
-		$edit    = (string) ($row['edit_url'] ?? '');
+			$title   = (string) ($row['title'] ?? ('#' . $post_id));
+			$due     = (string) ($row['due_date'] ?? '');
+			$kontakt = (string) ($row['kontakt'] ?? '');
+			$kontakt_url = (string) ($row['kontakt_url'] ?? '');
+			$edit    = (string) ($row['edit_url'] ?? '');
 
-		echo '<li style="margin:0 0 6px 0;">';
+		echo '<tr>';
+		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;">';
 		if ($edit !== '') {
 			echo '<a href="' . \esc_url($edit) . '">' . \esc_html($title) . '</a>';
 		} else {
 			echo \esc_html($title);
 		}
-		if ($due !== '') {
-			// echo ' <span style="color:#666;">(fällig: ' . \esc_html($due) . ')</span>';
-			echo ' <span style="color:#666;">(' . \esc_html($due) . ')</span>';
+		echo '</td>';
+		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">' . \esc_html($due) . '</td>';
+			echo '<td style="padding:4px 0;vertical-align:top;">';
+			if ($kontakt !== '' && $kontakt_url !== '') {
+				echo '<a href="' . \esc_url($kontakt_url) . '">' . \esc_html($kontakt) . '</a>';
+			} else {
+				echo \esc_html($kontakt);
+			}
+			echo '</td>';
+			echo '</tr>';
 		}
-		echo '</li>';
-	}
-	echo '</ul>';
+	echo '</tbody></table>';
 
 	if ($total > \count($items)) {
 		echo '<p style="margin:8px 0 0; color:#666;">+' . \esc_html((string) ($total - \count($items))) . ' weitere.</p>';
-	}
-	if ($list_url !== '') {
-		echo '<p style="margin:8px 0 0;"><a href="' . \esc_url($list_url) . '">Alle offenen Rechnungen anzeigen</a></p>';
 	}
 }
 
