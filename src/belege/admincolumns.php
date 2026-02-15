@@ -17,14 +17,16 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 	}
 
 	$post_type = $q->get('post_type');
-	if ((is_array($post_type) && !in_array('belege', $post_type, true)) || ($post_type !== 'belege')) {
+	if (
+		(is_array($post_type) && !in_array('belege', $post_type, true))
+		|| (!is_array($post_type) && $post_type !== 'belege')
+	) {
 		return;
 	}
 
 	// ---- Parameter einsammeln (sanitizen) ----
 	$kontakt_id   = isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0;
 	$proj_id      = isset($_GET['cmx_proj_id']) ? (int) $_GET['cmx_proj_id'] : 0;
-	$paid_filter  = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
 
 	// Kategorie (Taxonomie kann belege_kategorien oder beleg_kategorie heißen)
 	$tax = '';
@@ -75,58 +77,6 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 					'type'    => 'NUMERIC',
 				],
 			];
-		}
-	}
-
-	// Bezahlt-Filter
-	if ($paid_filter === 'bezahlt' || $paid_filter === 'offen') {
-		$paid_key     = defined(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT') ? CMX_BELEG_META_BEZAHLT : '_cmx_beleg_bezahlt_am';
-		$paid_key_alt = ltrim($paid_key, '_'); // falls ohne Unterstrich gespeichert
-
-		if ($paid_filter === 'bezahlt') {
-			$meta_query[] = [
-				'relation' => 'OR',
-				[
-					'key'     => $paid_key,
-					'value'   => '',
-					'compare' => '!=',
-				],
-				[
-					'key'     => $paid_key_alt,
-					'value'   => '',
-					'compare' => '!=',
-				],
-			];
-			$q->set('meta_key', $paid_key);
-		} else { // offen
-			$meta_query[] = [
-				'relation' => 'AND',
-				[
-					'relation' => 'OR',
-					[
-						'key'     => $paid_key,
-						'compare' => 'NOT EXISTS',
-					],
-					[
-						'key'     => $paid_key,
-						'value'   => '',
-						'compare' => '=',
-					],
-				],
-				[
-					'relation' => 'OR',
-					[
-						'key'     => $paid_key_alt,
-						'compare' => 'NOT EXISTS',
-					],
-					[
-						'key'     => $paid_key_alt,
-						'value'   => '',
-						'compare' => '=',
-					],
-				],
-			];
-			$q->set('meta_key', $paid_key);
 		}
 	}
 
