@@ -35,8 +35,14 @@ if (!function_exists(__NAMESPACE__ . '\cmx_get_artikel_nr')) {
 	}
 }
 
-if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomy')) {
-	function cmx_artikel_einheiten_taxonomy(): string {
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomies')) {
+	function cmx_artikel_einheiten_taxonomies(): array {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+
+		$cache = [];
 		$candidates = [];
 
 		$const = __NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN';
@@ -59,12 +65,24 @@ if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomy')) {
 
 		foreach ($candidates as $tax) {
 			$tax = \sanitize_key((string) $tax);
-			if ($tax !== '' && \taxonomy_exists($tax)) {
-				return $tax;
+			if ($tax === '' || !\taxonomy_exists($tax)) {
+				continue;
+			}
+			if (!\in_array($tax, $cache, true)) {
+				$cache[] = $tax;
 			}
 		}
 
-		return '';
+		return $cache;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomy')) {
+	function cmx_artikel_einheiten_taxonomy(): string {
+		$taxes = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomies')
+			? cmx_artikel_einheiten_taxonomies()
+			: [];
+		return (string) ($taxes[0] ?? '');
 	}
 }
 
@@ -76,34 +94,64 @@ if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_options')) {
 		}
 
 		$cache = [];
-		$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')
-			? cmx_artikel_einheiten_taxonomy()
-			: '';
-		if ($tax === '') {
+		$taxes = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomies')
+			? cmx_artikel_einheiten_taxonomies()
+			: [];
+		if (empty($taxes)) {
 			return $cache;
 		}
 
-		$terms = \get_terms([
-			'taxonomy'   => $tax,
-			'hide_empty' => false,
-			'orderby'    => 'name',
-			'order'      => 'ASC',
-		]);
-		if (\is_wp_error($terms) || !\is_array($terms)) {
-			return $cache;
+		$seen = [];
+		foreach ($taxes as $tax) {
+			$terms = \get_terms([
+				'taxonomy'   => $tax,
+				'hide_empty' => false,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+			]);
+			if (\is_wp_error($terms) || !\is_array($terms)) {
+				continue;
+			}
+
+			foreach ($terms as $term) {
+				if (!$term instanceof \WP_Term) continue;
+				$term_id = (int) ($term->term_id ?? 0);
+				if ($term_id <= 0 || isset($seen[$term_id])) continue;
+				$name = \trim((string) ($term->name ?? ''));
+				if ($name === '') continue;
+				$cache[] = [
+					'id'   => $term_id,
+					'name' => $name,
+				];
+				$seen[$term_id] = true;
+			}
 		}
 
-		foreach ($terms as $term) {
-			if (!$term instanceof \WP_Term) continue;
-			$name = \trim((string) ($term->name ?? ''));
-			if ($name === '') continue;
-			$cache[] = [
-				'id'   => (int) $term->term_id,
-				'name' => $name,
-			];
-		}
+		\usort($cache, static function(array $a, array $b): int {
+			return \strnatcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+		});
 
 		return $cache;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheit_name_by_id')) {
+	function cmx_artikel_einheit_name_by_id(int $term_id): string {
+		if ($term_id <= 0) return '';
+
+		$taxes = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomies')
+			? cmx_artikel_einheiten_taxonomies()
+			: [];
+		foreach ($taxes as $tax) {
+			$term = \get_term($term_id, $tax);
+			if ($term && !\is_wp_error($term) && $term instanceof \WP_Term) {
+				$name = \trim((string) ($term->name ?? ''));
+				if ($name !== '') {
+					return $name;
+				}
+			}
+		}
+		return '';
 	}
 }
 
@@ -119,19 +167,24 @@ if (!function_exists(__NAMESPACE__ . '\cmx_artikel_default_einheit')) {
 			return $cache[$artikel_id];
 		}
 
-		$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')
-			? cmx_artikel_einheiten_taxonomy()
-			: '';
-		if ($tax === '') {
+		$taxes = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomies')
+			? cmx_artikel_einheiten_taxonomies()
+			: [];
+		if (empty($taxes)) {
 			return $cache[$artikel_id];
 		}
 
-		$term_ids = \wp_get_post_terms($artikel_id, $tax, ['fields' => 'ids']);
-		if (\is_wp_error($term_ids) || empty($term_ids)) {
-			return $cache[$artikel_id];
+		$term_id = 0;
+		foreach ($taxes as $tax) {
+			$term_ids = \wp_get_post_terms($artikel_id, $tax, ['fields' => 'ids']);
+			if (\is_wp_error($term_ids) || empty($term_ids)) {
+				continue;
+			}
+			$term_id = (int) ($term_ids[0] ?? 0);
+			if ($term_id > 0) {
+				break;
+			}
 		}
-
-		$term_id = (int) ($term_ids[0] ?? 0);
 		if ($term_id <= 0) {
 			return $cache[$artikel_id];
 		}
@@ -145,11 +198,8 @@ if (!function_exists(__NAMESPACE__ . '\cmx_artikel_default_einheit')) {
 				}
 			}
 		}
-		if ($name === '') {
-			$term = \get_term($term_id, $tax);
-			if ($term && !\is_wp_error($term) && $term instanceof \WP_Term) {
-				$name = \trim((string) ($term->name ?? ''));
-			}
+		if ($name === '' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheit_name_by_id')) {
+			$name = cmx_artikel_einheit_name_by_id($term_id);
 		}
 
 		$cache[$artikel_id] = ['id' => $term_id, 'name' => $name];
@@ -176,6 +226,11 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_resolve_position_unit')) {
 			}
 		}
 
+		$has_unit_fields = \array_key_exists('einheit_id', $row)
+			|| \array_key_exists('unit_id', $row)
+			|| \array_key_exists('unit', $row)
+			|| \array_key_exists('einheit', $row);
+
 		$einheit_id_raw = $row['einheit_id'] ?? ($row['unit_id'] ?? 0);
 		$einheit_id = \is_numeric((string) $einheit_id_raw) ? (int) $einheit_id_raw : 0;
 		$unit = \sanitize_text_field((string) ($row['unit'] ?? ($row['einheit'] ?? '')));
@@ -194,7 +249,14 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_resolve_position_unit')) {
 			}
 		}
 
-		if ($einheit_id <= 0 && $artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
+		// Nur dann auf Artikel-Default zurückfallen, wenn in der Zeile keinerlei Einheit-Daten vorhanden sind.
+		// So bleibt eine bewusst leere Auswahl ("— auswählen —") erhalten.
+		if (
+			$einheit_id <= 0
+			&& !$has_unit_fields
+			&& $artikel_id > 0
+			&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')
+		) {
 			$default = cmx_artikel_default_einheit($artikel_id);
 			$default_id = (int) ($default['id'] ?? 0);
 			if ($default_id > 0) {
@@ -203,9 +265,12 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_resolve_position_unit')) {
 			}
 		}
 
-		if ($einheit_id > 0 && $unit === '' && isset($map_cache['by_id'][$einheit_id])) {
-			$unit = (string) $map_cache['by_id'][$einheit_id];
-		}
+			if ($einheit_id > 0 && $unit === '' && isset($map_cache['by_id'][$einheit_id])) {
+				$unit = (string) $map_cache['by_id'][$einheit_id];
+			}
+			if ($einheit_id > 0 && $unit === '' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheit_name_by_id')) {
+				$unit = (string) cmx_artikel_einheit_name_by_id($einheit_id);
+			}
 
 		return [
 			'einheit_id' => $einheit_id > 0 ? $einheit_id : 0,
@@ -777,6 +842,11 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
 			$unit       = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
 
+			// Wenn Artikel gewählt ist, leere Menge als 1 übernehmen.
+			if ($artikel_id > 0 && \trim($menge_raw) === '' && $menge == 0.0) {
+				$menge = 1.0;
+			}
+
 			// negative Mengen zulassen; nur 0 verwerfen
 			if ($artikel_id <= 0 || $menge == 0.0) continue;
 			if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
@@ -1121,6 +1191,20 @@ function cmx_beleg_positionen_js() {
 				}else{
 					$unit.val('');
 				}
+			}
+			function reindexPositionRows(){
+				const fieldSelector = 'input[name^="cmx_positionen["], textarea[name^="cmx_positionen["], select[name^="cmx_positionen["]';
+				table.children('tr').each(function(rowIndex){
+					$(this).find(fieldSelector).each(function(){
+						const $el = $(this);
+						const oldName = ($el.attr('name') || '').toString();
+						if (!oldName) return;
+						const newName = oldName.replace(/^cmx_positionen\[\d+\]/, 'cmx_positionen[' + rowIndex + ']');
+						if (newName !== oldName) {
+							$el.attr('name', newName);
+						}
+					});
+				});
 			}
 				function nextRowIndex(){
 					let max = -1;
@@ -1699,6 +1783,7 @@ function cmx_beleg_positionen_js() {
 		});
 
 				table.on('cmx_positionen_rows_changed', function(){
+					reindexPositionRows();
 					initArtikelSuggest(table);
 					initTextbausteinSuggest(table);
 					refreshSortable();
@@ -1851,7 +1936,14 @@ function cmx_beleg_positionen_js() {
 			});
 
 		// Initial
+		reindexPositionRows();
 		recalcAll();
+		const $postForm = table.closest('form#post');
+		if ($postForm.length) {
+			$postForm.on('submit', function(){
+				reindexPositionRows();
+			});
+		}
 	});
 	</script>
 		<style>
@@ -2042,7 +2134,8 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		}
 		$artikel_id   = isset($r['artikel_id']) ? (int)$r['artikel_id'] : 0;
 
-		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($r['menge'] ?? ''));
+		$menge_raw    = (string)($r['menge'] ?? '');
+		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
 		$preis        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($r['preis'] ?? ''));
 
 		$rabatt_raw   = isset($r['rabatt']) ? (string)$r['rabatt'] : '';
@@ -2063,6 +2156,11 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 			: ['einheit_id' => 0, 'unit' => ''];
 		$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
 		$unit = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
+
+		// Wenn Artikel gewählt ist, leere Menge als 1 übernehmen.
+		if ($artikel_id > 0 && \trim($menge_raw) === '' && $menge == 0.0) {
+			$menge = 1.0;
+		}
 
 		// negative Mengen zulassen; nur 0 verwerfen
 		if ($artikel_id <= 0 || $menge == 0.0) continue;
