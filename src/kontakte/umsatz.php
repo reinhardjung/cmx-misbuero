@@ -267,20 +267,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 		$data = cmx_kontakt_belege_data($kontakt_id);
 		$rows = (array) ($data['rows'] ?? []);
 
-		echo '<style>
-			#cmx_kontakt_belege_umsatz .cmx-kb-wrap{width:100%;max-height:320px;overflow:auto}
-			#cmx_kontakt_belege_umsatz .cmx-kb-table{width:100%!important;min-width:100%;border-collapse:collapse;table-layout:auto}
-			#cmx_kontakt_belege_umsatz .cmx-kb-table th,#cmx_kontakt_belege_umsatz .cmx-kb-table td{padding:4px 2px;vertical-align:top}
-			#cmx_kontakt_belege_umsatz .cmx-kb-table thead th{font-size:11px;color:#555;border-bottom:1px solid #e2e2e2;text-align:left}
-			#cmx_kontakt_belege_umsatz .cmx-kb-table tbody tr+tr td{border-top:1px solid #f0f0f0}
-			#cmx_kontakt_belege_umsatz .cmx-kb-beleg{white-space:nowrap}
-			#cmx_kontakt_belege_umsatz .cmx-kb-beleg a{white-space:nowrap;display:inline-block;text-decoration:none}
-			#cmx_kontakt_belege_umsatz .cmx-kb-amount{white-space:nowrap;text-align:right}
-			#cmx_kontakt_belege_umsatz .cmx-kb-state{white-space:nowrap}
-			#cmx_kontakt_belege_umsatz .cmx-kb-open{font-weight:600}
-			#cmx_kontakt_belege_umsatz .cmx-kb-paid{color:#2f7d32;font-weight:600}
-			#cmx_kontakt_belege_umsatz .cmx-kb-due{display:block;color:#b32d2e;font-weight:600}
-		</style>';
+			echo '<style>
+				#cmx_kontakt_belege_umsatz .cmx-kb-wrap{width:100%;max-height:320px;overflow:auto}
+				#cmx_kontakt_belege_umsatz .cmx-kb-table{width:100%!important;min-width:100%;border-collapse:collapse;table-layout:auto}
+				#cmx_kontakt_belege_umsatz .cmx-kb-table th,#cmx_kontakt_belege_umsatz .cmx-kb-table td{padding:4px 2px;vertical-align:top}
+				#cmx_kontakt_belege_umsatz .cmx-kb-table thead th{font-size:11px;color:#555;border-bottom:1px solid #e2e2e2;text-align:left}
+				#cmx_kontakt_belege_umsatz .cmx-kb-table tbody tr+tr td{border-top:1px solid #f0f0f0}
+				#cmx_kontakt_belege_umsatz .cmx-kb-beleg{white-space:nowrap}
+				#cmx_kontakt_belege_umsatz .cmx-kb-beleg a{white-space:nowrap;display:inline-block;text-decoration:none}
+				#cmx_kontakt_belege_umsatz .cmx-kb-amount{white-space:nowrap;text-align:right}
+				#cmx_kontakt_belege_umsatz .cmx-kb-state{white-space:nowrap}
+				#cmx_kontakt_belege_umsatz .cmx-kb-open{font-weight:600}
+				#cmx_kontakt_belege_umsatz .cmx-kb-paid{color:#2f7d32;font-weight:600}
+				#cmx_kontakt_belege_umsatz .cmx-kb-due{display:block;color:#b32d2e;font-weight:600;cursor:pointer}
+				#cmx_kontakt_belege_umsatz .cmx-kb-due.is-loading{opacity:.5;pointer-events:none}
+			</style>';
 
 		if (empty($rows)) {
 			echo '<p><em>Keine Belege für diesen Kontakt.</em></p>';
@@ -314,17 +315,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			}
 			echo '</td>';
 			echo '<td class="cmx-kb-amount">' . \esc_html($amount) . '</td>';
-			echo '<td class="cmx-kb-state ' . \esc_attr($state_class) . '">';
-			if ($state_slug === 'bezahlt') {
-				echo \esc_html($state_label);
+				echo '<td class="cmx-kb-state ' . \esc_attr($state_class) . '">';
+				if ($state_slug === 'bezahlt') {
+					echo \esc_html($state_label);
+				}
+				if ($state_slug !== 'bezahlt' && $due_label !== '') {
+					echo '<span class="cmx-kb-due cmx-kb-due-mark-paid" data-beleg="' . (int) $beleg_id . '" title="Doppelklick: als bezahlt markieren">' . \esc_html($due_label) . '</span>';
+				}
+				echo '</td>';
+				echo '</tr>';
 			}
-			if ($state_slug !== 'bezahlt' && $due_label !== '') {
-				echo '<span class="cmx-kb-due">' . \esc_html($due_label) . '</span>';
-			}
-			echo '</td>';
-			echo '</tr>';
-		}
 
-		echo '</tbody></table></div>';
+			echo '</tbody></table></div>';
+
+			$paid_nonce = \wp_create_nonce('cmx_mark_paid');
+			$ajax_url = \admin_url('admin-ajax.php');
+			echo '<script>(function(){';
+			echo 'var root=document.getElementById("cmx_kontakt_belege_umsatz"); if(!root){return;}';
+			echo 'root.addEventListener("dblclick", function(e){';
+			echo 'var el=e.target&&e.target.closest?e.target.closest(".cmx-kb-due-mark-paid[data-beleg]"):null;';
+			echo 'if(!el){return;}';
+			echo 'e.preventDefault(); e.stopPropagation();';
+			echo 'if(el.classList.contains("is-loading")){return;}';
+			echo 'var belegId=parseInt(el.getAttribute("data-beleg")||"0",10);';
+			echo 'if(!belegId){return;}';
+			echo 'el.classList.add("is-loading");';
+			echo 'var body=new URLSearchParams();';
+			echo 'body.set("action","cmx_mark_beleg_paid");';
+			echo 'body.set("post_id", String(belegId));';
+			echo 'body.set("_ajax_nonce", ' . \wp_json_encode($paid_nonce) . ');';
+			echo 'fetch(' . \wp_json_encode($ajax_url) . ',{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8"},body:body.toString()})';
+			echo '.then(function(resp){return resp.json();})';
+			echo '.then(function(resp){if(resp&&resp.success){window.location.reload();return;}throw new Error((resp&&resp.data)?String(resp.data):"Fehler beim Speichern.");})';
+			echo '.catch(function(err){alert(err&&err.message?err.message:"Fehler beim Speichern."); el.classList.remove("is-loading");});';
+			echo '});';
+			echo '})();</script>';
+		}
 	}
-}
