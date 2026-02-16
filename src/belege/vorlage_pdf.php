@@ -733,6 +733,9 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 				$tax   = round($tax, (int)$opts['round_decimals']);
 				$gross = round($gross, (int)$opts['round_decimals']);
 			}
+
+			// Nur den Totalbetrag auf 5 Rappen runden (CH-Rundung).
+			$gross = $round_5rp($gross);
 		}
 
 		$out['net']        = $net;
@@ -943,6 +946,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					$net = round($net, 2);
 					$tax = round($tax, 2);
 					$gross = round($gross, 2);
+					// Nur den Totalbetrag auf 5 Rappen runden (CH-Rundung).
+					$gross = $round_5rp($gross);
 				}
 				$calc['subtotal'] = $net;
 				$calc['total'] = $gross;

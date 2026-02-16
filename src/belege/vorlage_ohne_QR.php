@@ -595,14 +595,13 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<table class="totals-table" border="0">
 					<?php
 					$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-					$is_brutto_total = !empty($totals['is_brutto']);
-					if ($is_brutto_total && $mwst_rate > 0.0) {
+					$show_mwst_row = ($mwst_rate > 0.0 && !$is_lieferantenrechnung);
+					if ($show_mwst_row) {
 						$round_5rp = static function(float $amount): float {
 							if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
 							return round($amount * 20) / 20;
 						};
-						$rounded_brutto_total = $round_5rp((float)($totals['total'] ?? 0.0));
-						$totals['total'] = $rounded_brutto_total;
+						$totals['total'] = $round_5rp((float)($totals['total'] ?? 0.0));
 					}
 					$mwst_amount = round((float)($totals['tax_amount'] ?? 0), 2);
 					$mwst_rate_pct = $mwst_rate * 100;
@@ -617,9 +616,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 								? (float)$tpl['document']['manual_total']
 								: (float)($totals['subtotal'] ?? 0));
 					}
-					$show_subtotal_row = ($show_discount && $discount_sum > 0.0)
-						|| ($mwst_rate > 0.0)
-						|| $manual_total_defined;
+					$show_subtotal_row = $show_mwst_row;
 				?>
 				<?php if ($show_subtotal_row): ?>
 					<tr>
@@ -628,7 +625,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 						</td>
 					</tr>
 				<?php endif; ?>
-			<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
+			<?php if ($show_mwst_row): ?>
 				<tr>
 					<td colspan="<?= $col_count; ?>" class="text-right">
 					<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
