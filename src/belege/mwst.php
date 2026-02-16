@@ -37,7 +37,9 @@ function cmx_belege_render_mwst_metabox($post) {
     wp_nonce_field('cmx_belege_mwst_save', 'cmx_belege_mwst_nonce');
 
     $opts_general = (array) get_option('cmx_einstellungen', []);
-    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+    $is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+        ? cmx_belege_is_mwst_pflichtig($opts_general)
+        : !empty($opts_general['mwst_pflichtig']);
     $default_is_brutto = !empty($opts_general['belege_default_is_brutto']) ? '1' : '0';
     $default_mwst_term_id = isset($opts_general['belege_default_mwst_term']) ? (int) $opts_general['belege_default_mwst_term'] : 0;
 
@@ -150,7 +152,9 @@ add_action('admin_footer', function () {
     $screen = function_exists('get_current_screen') ? get_current_screen() : null;
     if (!$screen || $screen->post_type !== 'belege') return;
     $opts_general = (array) get_option('cmx_einstellungen', []);
-    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+    $is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+        ? cmx_belege_is_mwst_pflichtig($opts_general)
+        : !empty($opts_general['mwst_pflichtig']);
     ?>
     <script>
     (function(){
@@ -206,7 +210,9 @@ add_action('save_post_belege', function($post_id) {
     if (!current_user_can('edit_post', $post_id)) return;
 
     $opts_general = (array) get_option('cmx_einstellungen', []);
-    $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+    $is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+        ? cmx_belege_is_mwst_pflichtig($opts_general)
+        : !empty($opts_general['mwst_pflichtig']);
 
     if ($mwst_nonce_ok) {
         if ($is_mwst_pflichtig) {

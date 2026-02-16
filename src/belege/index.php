@@ -13,6 +13,27 @@ function cmx_belege_kategorie_taxonomy(): ?string {
 	return null;
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')) {
+	function cmx_belege_is_mwst_pflichtig(array $opts_general): bool {
+		if (array_key_exists('mwst_pflichtig', $opts_general)) {
+			return !empty($opts_general['mwst_pflichtig']);
+		}
+		return !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_get_mwst_exempt_note_html')) {
+	function cmx_belege_get_mwst_exempt_note_html(array $opts_general): string {
+		if (array_key_exists('mwst_exempt_note_html', $opts_general)) {
+			return trim((string) $opts_general['mwst_exempt_note_html']);
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')) {
+			return (string) cmx_mwst_exempt_default_note_html();
+		}
+		return '';
+	}
+}
+
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],

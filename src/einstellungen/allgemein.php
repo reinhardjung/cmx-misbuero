@@ -30,7 +30,9 @@ function cmx_register_general_tab(): void {
 				]);
 				$opts = \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 				$val = $opts['mwst_nummer'] ?? '';
-				$checked = !empty($opts['mwst_pflichtig']) || !empty($opts['mwstpflichtig']) || !empty($opts['mwst_pfl']);
+				$checked = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+					? cmx_belege_is_mwst_pflichtig((array) $opts)
+					: !empty($opts['mwst_pflichtig']);
 				$mwst_exempt_note = isset($opts['mwst_exempt_note_html']) ? (string) $opts['mwst_exempt_note_html'] : '';
 				$mwst_exempt_note_with_link = \function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')
 					? cmx_mwst_exempt_default_note_html()

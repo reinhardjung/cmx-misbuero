@@ -871,7 +871,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 
 		// Daten
 		$opts_general = (array) get_option('cmx_einstellungen', []);
-		$is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+		$is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+			? cmx_belege_is_mwst_pflichtig($opts_general)
+			: !empty($opts_general['mwst_pflichtig']);
 
 		$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
 		$mwst_term_id = (int)get_post_meta($post_id, '_cmx_beleg_mwst_term', true);

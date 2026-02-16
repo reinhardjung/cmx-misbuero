@@ -298,9 +298,9 @@ function cmxbu_get_beleg_amount_display(int $post_id): string {
 
 	$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
 	$opts_general = (array) get_option('cmx_einstellungen', []);
-	$is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig'])
-		|| !empty($opts_general['mwst_pfl'])
-		|| !empty($opts_general['mwstpflichtig']);
+	$is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+		? cmx_belege_is_mwst_pflichtig($opts_general)
+		: !empty($opts_general['mwst_pflichtig']);
 	if (!$is_mwst_pflichtig) {
 		$mwst_rate = 0.0;
 		$is_brutto = false;
