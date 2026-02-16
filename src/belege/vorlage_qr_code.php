@@ -72,6 +72,275 @@ function cmx_qr_split_street_house(string $line): array
 }
 
 /**
+ * Einheitliche Zeilen-Normalisierung fuer QR-Felder.
+ */
+function cmx_qr_normalize_line(string $line): string
+{
+    $line = (string) \preg_replace('/\s+/u', ' ', $line);
+    return \trim($line);
+}
+
+/**
+ * Vergleichsschluessel (ohne Akzente, lowercase) fuer Textvergleiche.
+ */
+function cmx_qr_text_key(string $value): string
+{
+    $value = cmx_qr_normalize_line($value);
+    if (\function_exists('remove_accents')) {
+        $value = (string) \remove_accents($value);
+    }
+    return \strtolower($value);
+}
+
+/**
+ * IBAN fuer den QR-Payload normalisieren (ohne Leerzeichen/Sonderzeichen).
+ */
+function cmx_qr_normalize_iban(string $iban): string
+{
+    $iban = (string) \preg_replace('/[^A-Za-z0-9]/', '', $iban);
+    return \strtoupper($iban);
+}
+
+/**
+ * Land (Slug/Name/Code) in ISO2-Code umwandeln.
+ */
+function cmx_qr_country_to_iso2(string $country, string $fallback = 'CH'): string
+{
+    $fallback = \strtoupper(\trim($fallback));
+    if (!\preg_match('/^[A-Z]{2}$/', $fallback)) {
+        $fallback = 'CH';
+    }
+
+    $country = cmx_qr_normalize_line($country);
+    if ($country === '') {
+        return $fallback;
+    }
+
+    if (\preg_match('/^[A-Za-z]{2}$/', $country)) {
+        return \strtoupper($country);
+    }
+
+    $map = [
+        'schweiz'            => 'CH',
+        'switzerland'        => 'CH',
+        'suisse'             => 'CH',
+        'svizzera'           => 'CH',
+        'liechtenstein'      => 'LI',
+        'deutschland'        => 'DE',
+        'germany'            => 'DE',
+        'oesterreich'        => 'AT',
+        'osterreich'         => 'AT',
+        'austria'            => 'AT',
+        'frankreich'         => 'FR',
+        'france'             => 'FR',
+        'italien'            => 'IT',
+        'italy'              => 'IT',
+        'amerika'            => 'US',
+        'usa'                => 'US',
+        'united states'      => 'US',
+        'vereinigte staaten' => 'US',
+    ];
+
+    $key = cmx_qr_text_key($country);
+    return $map[$key] ?? $fallback;
+}
+
+/**
+ * Zeilen wie "CH-8049 Zuerich" oder "8049 Zuerich" lesen.
+ *
+ * @return array{0:string,1:string,2:string} [plz, city, country_iso2]
+ */
+function cmx_qr_parse_plz_city_line(string $line): array
+{
+    $line = cmx_qr_normalize_line($line);
+    if ($line === '') {
+        return ['', '', ''];
+    }
+
+    if (\preg_match('/^([A-Za-z]{2})\s*-\s*(\d{4,5})\s+(.+)$/u', $line, $m)) {
+        return [\trim($m[2]), cmx_qr_normalize_line($m[3]), \strtoupper($m[1])];
+    }
+    if (\preg_match('/^([A-Za-z]{2})\s+(\d{4,5})\s+(.+)$/u', $line, $m)) {
+        return [\trim($m[2]), cmx_qr_normalize_line($m[3]), \strtoupper($m[1])];
+    }
+    if (\preg_match('/^(\d{4,5})\s+(.+)$/u', $line, $m)) {
+        return [\trim($m[1]), cmx_qr_normalize_line($m[2]), ''];
+    }
+
+    return ['', '', ''];
+}
+
+/**
+ * Debitor fuer QR-Payload strikt strukturiert (SIX, Typ S) aufbauen.
+ *
+ * @return array{
+ *   name:string,
+ *   street:string,
+ *   house_no:string,
+ *   plz:string,
+ *   ort:string,
+ *   country:string,
+ *   display_lines:array<int,string>
+ * }
+ */
+function cmx_qr_build_debtor_structured_address(int $post_id, int $debitor_id): array
+{
+    $name     = '';
+    $name2    = '';
+    $street   = '';
+    $house_no = '';
+    $plz      = '';
+    $ort      = '';
+    $country  = '';
+
+    if ($debitor_id > 0) {
+        $company = (string) (\get_post_meta($debitor_id, '_company', true) ?: \get_the_title($debitor_id));
+        $company = cmx_qr_normalize_line($company);
+        if (cmx_qr_text_key($company) === 'firmenname fehlt') {
+            $company = '';
+        }
+
+        $vorname = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_kontakte_vorname', true));
+        $nachname = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_kontakte_nachname', true));
+        $full_name = cmx_qr_normalize_line($vorname . ' ' . $nachname);
+
+        if ($company !== '') {
+            $name = $company;
+            if ($full_name !== '' && cmx_qr_text_key($full_name) !== cmx_qr_text_key($company)) {
+                $name2 = $full_name;
+            }
+        } elseif ($full_name !== '') {
+            $name = $full_name;
+        }
+
+        $street_line = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_rechnung_strasse', true));
+        [$street, $house_no] = cmx_qr_split_street_house($street_line);
+        $plz = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_rechnung_plz', true));
+        $ort = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_rechnung_ort', true));
+
+        $country_meta = cmx_qr_normalize_line((string) \get_post_meta($debitor_id, '_cmx_rechnung_land', true));
+        if ($country_meta !== '') {
+            $country = cmx_qr_country_to_iso2($country_meta, 'CH');
+        }
+    }
+
+    $deb_raw = (string) \get_post_meta($post_id, '_cmx_beleg_kontakt_addr', true);
+    $raw_lines = \preg_split('~[\r\n]+~', $deb_raw);
+    $lines = [];
+    if (\is_array($raw_lines)) {
+        foreach ($raw_lines as $raw_line) {
+            $line = cmx_qr_normalize_line((string) $raw_line);
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+    }
+
+    if ($name === '' && isset($lines[0])) {
+        $name = $lines[0];
+    }
+
+    $zip_city_index = -1;
+    $zip_from_line = '';
+    $city_from_line = '';
+    $country_from_zip = '';
+    for ($i = \count($lines) - 1; $i >= 0; $i--) {
+        [$zip_tmp, $city_tmp, $country_tmp] = cmx_qr_parse_plz_city_line($lines[$i]);
+        if ($zip_tmp !== '' || $city_tmp !== '') {
+            $zip_city_index = $i;
+            $zip_from_line = $zip_tmp;
+            $city_from_line = $city_tmp;
+            $country_from_zip = $country_tmp;
+            break;
+        }
+    }
+
+    if ($plz === '' && $zip_from_line !== '') {
+        $plz = $zip_from_line;
+    }
+    if ($ort === '' && $city_from_line !== '') {
+        $ort = $city_from_line;
+    }
+    if ($country === '' && $country_from_zip !== '') {
+        $country = $country_from_zip;
+    }
+
+    $country_from_line = '';
+    for ($i = \count($lines) - 1; $i >= 0; $i--) {
+        if (\preg_match('/^[A-Za-z]{2}$/', $lines[$i])) {
+            $country_from_line = \strtoupper($lines[$i]);
+            break;
+        }
+    }
+    if ($country === '' && $country_from_line !== '') {
+        $country = $country_from_line;
+    }
+
+    $non_zip_lines = [];
+    for ($i = 1; $i < \count($lines); $i++) {
+        if ($i === $zip_city_index) {
+            continue;
+        }
+        if (\preg_match('/^[A-Za-z]{2}$/', $lines[$i])) {
+            continue;
+        }
+        $non_zip_lines[] = $lines[$i];
+    }
+
+    if ($street === '' && !empty($non_zip_lines)) {
+        $street_candidate = $non_zip_lines[\count($non_zip_lines) - 1];
+        [$street, $house_no] = cmx_qr_split_street_house($street_candidate);
+    }
+
+    if ($name2 === '' && \count($non_zip_lines) >= 2) {
+        $line2_candidate = $non_zip_lines[0];
+        $street_key = cmx_qr_text_key(\trim($street . ' ' . $house_no));
+        if ($line2_candidate !== '' && cmx_qr_text_key($line2_candidate) !== cmx_qr_text_key($name) && cmx_qr_text_key($line2_candidate) !== $street_key) {
+            $name2 = $line2_candidate;
+        }
+    }
+
+    if ($country === '') {
+        $country = 'CH';
+    } else {
+        $country = cmx_qr_country_to_iso2($country, 'CH');
+    }
+
+    $street_line = \trim($street . ($house_no !== '' ? ' ' . $house_no : ''));
+    $city_line = \trim($plz . ' ' . $ort);
+    if ($city_line !== '' && $country !== '') {
+        $city_line = $country . '-' . $city_line;
+    } elseif ($city_line === '' && $country !== '') {
+        $city_line = $country;
+    }
+
+    $display_lines = [];
+    foreach ([$name, $name2, $street_line, $city_line] as $line) {
+        $line = cmx_qr_normalize_line($line);
+        if ($line !== '') {
+            $display_lines[] = $line;
+        }
+    }
+    if (empty($display_lines)) {
+        $display_lines = $lines;
+    }
+
+    if ($name === '' && !empty($display_lines)) {
+        $name = $display_lines[0];
+    }
+
+    return [
+        'name' => cmx_qr_normalize_line($name),
+        'street' => cmx_qr_normalize_line($street),
+        'house_no' => cmx_qr_normalize_line($house_no),
+        'plz' => cmx_qr_normalize_line($plz),
+        'ort' => cmx_qr_normalize_line($ort),
+        'country' => $country,
+        'display_lines' => $display_lines,
+    ];
+}
+
+/**
  * Mod10-rekursiv Prüfziffer für eine 26-stellige QRR-Basis berechnen.
  */
 function cmx_qr_mod10_recursive_check_digit(string $base26): string
@@ -192,15 +461,21 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * 2) Beträge & Adressen
      * ---------------------------------------------------------------- */
     $bank_iban = trim((string) ($tpl['bank']['iban'] ?? ''));
-    $iban = ($ref_mode === 'QRR') ? $qr_iban : $bank_iban;
-    if ($iban === '') {
-        $iban = $qr_iban;
+    $iban_raw = ($ref_mode === 'QRR') ? $qr_iban : $bank_iban;
+    if ($iban_raw === '') {
+        $iban_raw = $qr_iban;
     }
 
+    $iban = cmx_qr_normalize_iban($iban_raw);
     if ($iban === '') {
         // Ohne IBAN kein QR-Code auf dem Beleg
         return;
     }
+    $iban_print = trim($iban_raw);
+    if ($iban_print === '') {
+        $iban_print = $iban;
+    }
+
     $amount = (float) ($tpl['document']['total'] ?? 0);
     // EMV braucht Punkt, KEINE Tausendertrennzeichen
     $betrag_emv = number_format($amount, 2, '.', '');
@@ -210,30 +485,23 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $w = $tpl['document']['currency'] ?: 'CHF';
 
     // Creditor (du)
-    $cr_name = (string) ($tpl['me']['company'] ?? '');
-    $cr_str  = (string) ($tpl['me']['strasse'] ?? '');
-    $cr_plz  = (string) ($tpl['me']['plz'] ?? '');
-    $cr_ort  = (string) ($tpl['me']['ort'] ?? '');
+    $cr_name = cmx_qr_normalize_line((string) ($tpl['me']['company'] ?? ''));
+    $cr_str  = cmx_qr_normalize_line((string) ($tpl['me']['strasse'] ?? ''));
+    $cr_plz  = cmx_qr_normalize_line((string) ($tpl['me']['plz'] ?? ''));
+    $cr_ort  = cmx_qr_normalize_line((string) ($tpl['me']['ort'] ?? ''));
+    $cr_country = cmx_qr_country_to_iso2((string) ($tpl['me']['land_code'] ?? $tpl['me']['land'] ?? ''), 'CH');
     $cr_zip  = trim($cr_plz . ' ' . $cr_ort);
     [$cr_street, $cr_house_no] = cmx_qr_split_street_house($cr_str);
 
-    // Debitor-Adresse aus Beleg
-    $deb_raw = (string) \get_post_meta($post_id, '_cmx_beleg_kontakt_addr', true);
-    $deb     = array_values(array_filter(array_map('trim', preg_split('~[\r\n]+~', $deb_raw))));
-    $db_1    = $deb[0] ?? '';
-    $db_2    = $deb[1] ?? '';
-    $db_3    = $deb[2] ?? '';
-    $db_plz  = '';
-    $db_ort  = '';
-    $db_country = 'CH';
-
-    if ($db_3 !== '' && preg_match('/^(?:[A-Z]{2}-)?(\d{4,5})\s+(.+)$/', $db_3, $m)) {
-        $db_plz = $m[1];
-        $db_ort = $m[2];
-    } else {
-        $db_ort = $db_3;
-    }
-    [$db_street, $db_house_no] = cmx_qr_split_street_house($db_2);
+    // Debitor-Adresse strikt strukturiert fuer SIX-Payload.
+    $debtor = cmx_qr_build_debtor_structured_address($post_id, $debitor_id);
+    $db_name = $debtor['name'];
+    $db_street = $debtor['street'];
+    $db_house_no = $debtor['house_no'];
+    $db_plz = $debtor['plz'];
+    $db_ort = $debtor['ort'];
+    $db_country = $debtor['country'];
+    $db_display_lines = $debtor['display_lines'];
 
     $additional_info = trim((string)($tpl['document']['subject'] ?? ''));
     if ($additional_info === '') {
@@ -245,7 +513,9 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     }
     $additional_info = trim((string) preg_replace('/\s+/', ' ', $additional_info));
     if ($additional_info !== '') {
-        $additional_info = mb_substr($additional_info, 0, 140);
+        $additional_info = \function_exists('mb_substr')
+            ? mb_substr($additional_info, 0, 140)
+            : substr($additional_info, 0, 140);
     }
 
     /** ----------------------------------------------------------------
@@ -259,13 +529,13 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         '0200',                 // Version
         '1',                    // Codierung
         $iban,                  // IBAN
-        'S',                    // Struktur (S = combined)
+        'S',                    // Strukturierte Adresse
         $cr_name,
         $cr_street,
         $cr_house_no,
         $cr_plz,
         $cr_ort,
-        'CH',
+        $cr_country,
         '',                     // Ult. Creditor Address Type
         '',                     // Ult. Creditor Name
         '',                     // Ult. Creditor Street
@@ -276,7 +546,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $betrag_emv,            // Betrag
         $w,
         'S',                    // Debtor Address Type
-        $db_1,
+        $db_name,
         $db_street,
         $db_house_no,
         $db_plz,
@@ -412,7 +682,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $canvas->text($x, $y, 'Konto / Zahlbar an', $fontBold, $label_size, [0, 0, 0], $page);
     $y += 2.9 * $mm;
 
-    foreach ([$iban, $cr_name, $cr_str, $cr_zip] as $line) {
+    foreach ([$iban_print, $cr_name, $cr_str, $cr_zip] as $line) {
         if ($line !== '') {
             $canvas->text($x, $y, $line, $font, $body_size, [0, 0, 0], $page);
             $y += 2.8 * $mm;
@@ -443,7 +713,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $canvas->text($x, $y, 'Zahlbar durch', $fontBold, $label_size, [0, 0, 0], $page);
     $y += 2.9 * $mm;
 
-    foreach ([$db_1, $db_2, $db_3] as $line) {
+    foreach ($db_display_lines as $line) {
         if ($line !== '') {
             $canvas->text($x, $y, $line, $font, $body_size, [0, 0, 0], $page);
             $y += 2.8 * $mm;
@@ -485,7 +755,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $canvas->text($acc_x, $acc_y, 'Konto / Zahlbar an', $fontBold, $label_size, [0, 0, 0], $page);
     $acc_y += 2.9 * $mm;
 
-    foreach ([$iban, $cr_name, $cr_str, $cr_zip] as $line) {
+    foreach ([$iban_print, $cr_name, $cr_str, $cr_zip] as $line) {
         if ($line !== '') {
             $canvas->text($acc_x, $acc_y, $line, $font, $body_size, [0, 0, 0], $page);
             $acc_y += 2.8 * $mm;
@@ -516,7 +786,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $canvas->text($pay_x, $pay_y, 'Zahlbar durch', $fontBold, $label_size, [0, 0, 0], $page);
     $pay_y += 2.9 * $mm;
 
-    foreach ([$db_1, $db_2, $db_3] as $line) {
+    foreach ($db_display_lines as $line) {
         if ($line !== '') {
             $canvas->text($pay_x, $pay_y, $line, $font, $body_size, [0, 0, 0], $page);
             $pay_y += 2.8 * $mm;
