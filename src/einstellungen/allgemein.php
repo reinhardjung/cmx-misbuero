@@ -3,6 +3,12 @@
 /**
  * Tab: Allgemein
  */
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')) {
+	function cmx_mwst_exempt_default_note_html(): string {
+		return 'Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG';
+	}
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_general_tab');
 function cmx_register_general_tab(): void {
 
@@ -25,6 +31,12 @@ function cmx_register_general_tab(): void {
 				$opts = \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 				$val = $opts['mwst_nummer'] ?? '';
 				$checked = !empty($opts['mwst_pflichtig']) || !empty($opts['mwstpflichtig']) || !empty($opts['mwst_pfl']);
+				$mwst_exempt_note = isset($opts['mwst_exempt_note_html']) ? \wp_strip_all_tags((string) $opts['mwst_exempt_note_html']) : '';
+				if (\trim($mwst_exempt_note) === '') {
+					$mwst_exempt_note = \function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')
+						? cmx_mwst_exempt_default_note_html()
+						: 'Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG';
+				}
 				$default_is_brutto = !empty($opts['belege_default_is_brutto']);
 				$default_mwst_term = isset($opts['belege_default_mwst_term']) ? (int) $opts['belege_default_mwst_term'] : 0;
 				$mwst_terms = \get_terms([
@@ -56,16 +68,24 @@ function cmx_register_general_tab(): void {
 				echo '</select>';
 				echo '</div>';
 
+				echo '<div id="cmx-mwst-exempt-wrap" style="margin-top:10px;'.($checked ? 'display:none;' : '').'">';
+				echo '<label for="cmx-mwst-exempt-note" style="display:block;margin-bottom:4px;">Hinweis bei nicht MwSt-pflichtig</label>';
+				echo '<input type="text" id="cmx-mwst-exempt-note" class="regular-text" style="max-width:640px;width:100%;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_exempt_note_html]" value="'.\esc_attr($mwst_exempt_note).'" placeholder="Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG">';
+				echo '<p class="description">Wird in PDFs angezeigt, wenn MwSt-pflichtig = Nein.</p>';
+				echo '</div>';
+
 				echo '<script>
 				(function(){
 					const cb = document.querySelector("input[type=checkbox][name=\''.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_pflichtig]\']");
 					const numWrap = document.getElementById("cmx-mwst-num-wrap");
 					const defaultsWrap = document.getElementById("cmx-mwst-defaults-wrap");
+					const exemptWrap = document.getElementById("cmx-mwst-exempt-wrap");
 					if (!cb) return;
 					function sync(){
 						const show = cb.checked;
 						if (numWrap) numWrap.style.display = show ? "" : "none";
 						if (defaultsWrap) defaultsWrap.style.display = show ? "" : "none";
+						if (exemptWrap) exemptWrap.style.display = show ? "none" : "";
 					}
 					cb.addEventListener("change", sync);
 					sync();
