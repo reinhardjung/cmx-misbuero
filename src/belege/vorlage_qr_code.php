@@ -515,19 +515,47 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     $db_country = $debtor['country'];
     $db_display_lines = $debtor['display_lines'];
 
-    $additional_info = trim((string)($tpl['document']['subject'] ?? ''));
-    if ($additional_info === '') {
-        // Nur im QR-Feld auf den Belegnamen fallen, wenn der Betreff leer ist.
-        $additional_info = trim((string)($tpl['document']['title'] ?? ''));
+    // Zusätzliche Informationen:
+    // - Erste Zeile immer mit Belegtitel
+    // - Betreff (falls vorhanden) in die nächste Zeile
+    $beleg_line = cmx_qr_normalize_line((string) ($tpl['document']['title'] ?? ''));
+    $subject_line = cmx_qr_normalize_line((string) ($tpl['document']['subject'] ?? ''));
+    $description_line = cmx_qr_normalize_line((string) ($tpl['document']['description'] ?? ''));
+
+    $additional_info_lines = [];
+    if ($beleg_line !== '') {
+        $additional_info_lines[] = $beleg_line;
     }
-    if ($additional_info === '') {
-        $additional_info = trim((string)($tpl['document']['description'] ?? ''));
+    if ($subject_line !== '') {
+        $is_duplicate_subject = ($beleg_line !== '' && cmx_qr_text_key($subject_line) === cmx_qr_text_key($beleg_line));
+        if (!$is_duplicate_subject) {
+            $additional_info_lines[] = $subject_line;
+        }
+    } elseif ($description_line !== '' && $beleg_line === '') {
+        // Fallback nur, wenn weder Belegtitel noch Betreff vorhanden sind.
+        $additional_info_lines[] = $description_line;
     }
-    $additional_info = trim((string) preg_replace('/\s+/', ' ', $additional_info));
+
+    // SIX-Payload bleibt einzeilig; fuer den Druck behalten wir die einzelnen Zeilen.
+    $additional_info = trim((string) preg_replace('/\s+/', ' ', implode(' | ', $additional_info_lines)));
     if ($additional_info !== '') {
         $additional_info = \function_exists('mb_substr')
             ? mb_substr($additional_info, 0, 140)
             : substr($additional_info, 0, 140);
+    }
+    $additional_info_print_lines = [];
+    if (!empty($additional_info_lines)) {
+        foreach ($additional_info_lines as $line) {
+            $line = cmx_qr_normalize_line((string) $line);
+            if ($line !== '') {
+                $additional_info_print_lines[] = $line;
+            }
+        }
+        if (\count($additional_info_print_lines) > 2) {
+            $additional_info_print_lines = \array_slice($additional_info_print_lines, 0, 2);
+        }
+    } elseif ($additional_info !== '') {
+        $additional_info_print_lines[] = $additional_info;
     }
 
     /** ----------------------------------------------------------------
@@ -794,13 +822,16 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $canvas->text($acc_x, $acc_y, $ref_print, $font, $body_size, [0, 0, 0], $page);
     }
 
-    // OPTIONAL: Zusätzliche Infos (Betreff, sonst Belegname)
-    if ($additional_info !== '') {
+    // Zusätzliche Infos (erste Zeile: Beleg, zweite Zeile: Betreff)
+    if (!empty($additional_info_print_lines)) {
         // Zusätzliche Leerzeile vor "Zusätzliche Informationen"
         $acc_y += 7.1 * $mm;
         $canvas->text($acc_x, $acc_y, 'Zusätzliche Informationen', $fontBold, $label_size, [0, 0, 0], $page);
         $acc_y += 2.9 * $mm;
-        $canvas->text($acc_x, $acc_y, $additional_info, $font, $body_size, [0, 0, 0], $page);
+        foreach ($additional_info_print_lines as $info_line) {
+            $canvas->text($acc_x, $acc_y, $info_line, $font, $body_size, [0, 0, 0], $page);
+            $acc_y += 2.8 * $mm;
+        }
     }
 
     // Zahler rechts unter der Referenz (wie SIX-Muster)

@@ -582,27 +582,63 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_task_refs_map_for_meta')) {
  * ------------------------------ */
 if (!function_exists(__NAMESPACE__ . '\cmx_norm_decimal')) {
 	function cmx_norm_decimal($val){
-		$s = (string)$val;
-		// Tausendertrennzeichen entfernen
-		$s = str_replace([" ", "'"], '', $s);
+		$s = trim((string) $val);
+		// Tausendertrennzeichen entfernen (inkl. NBSP)
+		$s = str_replace(["\xc2\xa0", " ", "'"], '', $s);
+		// Nur Ziffern und Dezimal/Sign-Zeichen behalten (entfernt z. B. typografische Apostrophe).
+		$s = (string) preg_replace('/[^\d,\.\+\-]/u', '', $s);
+		if ($s === '' || $s === '+' || $s === '-') {
+			return '0';
+		}
+		$sign = '';
+		if ($s[0] === '+' || $s[0] === '-') {
+			$sign = $s[0];
+			$s = (string) substr($s, 1);
+		}
+		$s = str_replace(['+', '-'], '', $s);
+		if ($s === '') {
+			return '0';
+		}
 		$hasComma = strpos($s, ',') !== false;
 		$hasDot   = strpos($s, '.') !== false;
 
 		if ($hasComma && $hasDot) {
-			// Das LETZTE Vorkommen bestimmt das Dezimaltrennzeichen
+			// Letztes Trennzeichen ist das Dezimaltrennzeichen.
 			if (strrpos($s, ',') > strrpos($s, '.')) {
-				// Komma ist Dezimal → Punkte sind Tausender
 				$s = str_replace('.', '', $s);
 				$s = str_replace(',', '.', $s);
 			} else {
-				// Punkt ist Dezimal → Kommas sind Tausender
 				$s = str_replace(',', '', $s);
 			}
-		} else {
-			// Nur Komma vorhanden → als Dezimalpunkt behandeln
-			$s = str_replace(',', '.', $s);
+			return $sign . $s;
 		}
-		return $s;
+
+		// Nur ein Trennzeichen-Typ vorhanden.
+		if ($hasComma || $hasDot) {
+			$sep = $hasComma ? ',' : '.';
+			$parts = explode($sep, $s);
+			$leftPart = $parts[0] ?? '';
+			$leftDigits = ltrim($leftPart, '+-');
+
+			// Mehrere gleiche Trennzeichen: als Tausendertrennzeichen interpretieren.
+			if (count($parts) > 2) {
+				$s = implode('', $parts);
+			} elseif (count($parts) === 2) {
+				$rightPart = $parts[1];
+				$looksThousands = preg_match('/^\d{3}$/', $rightPart) && preg_match('/^\d{1,3}$/', $leftDigits);
+				if ($looksThousands) {
+					// Beispiel: 1.000 oder 12,345
+					$s = $leftPart . $rightPart;
+				} elseif ($sep === ',') {
+					// Dezimalkomma -> Punkt
+					$s = $leftPart . '.' . $rightPart;
+				}
+			} elseif ($sep === ',') {
+				$s = str_replace(',', '.', $s);
+			}
+		}
+
+		return $sign . $s;
 	}
 }
 
@@ -1130,10 +1166,20 @@ function cmx_beleg_positionen_js() {
 		let taskPickerSeq = 0;
 		let dragMode = 'row';
 
-		// ROBUSTER Parser: akzeptiert 1'234.56, 1'234,56, 1234,56, 1234.56
+		// ROBUSTER Parser: akzeptiert u. a. 1'234.56, 1'234,56, 1.234,56, 1,234.56, 1.000
 		function parseNumberFlexible(val){
 			if(typeof val!=='string') val=(val??'').toString();
 			let s = val.replace(/\s+/g,'').replace(/'/g,'');
+			// Nur numerische Zeichen/Separatoren behalten (entfernt z. B. typografische Apostrophe).
+			s = s.replace(/[^\d,.\-+]/g, '');
+			if(!s || s==='+' || s==='-') return 0;
+			let sign = 1;
+			if(s.charAt(0)==='-' || s.charAt(0)==='+'){
+				sign = s.charAt(0)==='-' ? -1 : 1;
+				s = s.slice(1);
+			}
+			s = s.replace(/[+-]/g, '');
+			if(!s) return 0;
 			const hasComma = s.indexOf(',')>-1, hasDot = s.indexOf('.')>-1;
 			if(hasComma && hasDot){
 				if(s.lastIndexOf(',') > s.lastIndexOf('.')){
@@ -1143,12 +1189,29 @@ function cmx_beleg_positionen_js() {
 					// Punkt ist Dezimal → Kommas sind Tausender
 					s = s.replace(/,/g,'');
 				}
-			}else{
-				// Nur Komma vorhanden → als Dezimal interpretieren
-				s = s.replace(/,/g,'.');
+			}else if(hasComma || hasDot){
+				const sep = hasComma ? ',' : '.';
+				const parts = s.split(sep);
+				const left = parts[0] || '';
+				const leftDigits = left.replace(/^[+-]/, '');
+				if(parts.length > 2){
+					// z. B. 1.234.567 oder 1,234,567
+					s = parts.join('');
+				}else if(parts.length === 2){
+					const right = parts[1] || '';
+					const looksThousands = /^\d{3}$/.test(right) && /^\d{1,3}$/.test(leftDigits);
+					if(looksThousands){
+						// z. B. 1.000 oder 12,345
+						s = left + right;
+					}else if(sep === ','){
+						s = left + '.' + right;
+					}
+				}else if(sep === ','){
+					s = s.replace(/,/g,'.');
+				}
 			}
 			const n = parseFloat(s);
-			return isNaN(n)?0:n;
+			return isNaN(n)?0:(sign*n);
 		}
 
 		function parseRabattOnSubtotal(subtotal, rabattRaw){
@@ -1767,6 +1830,22 @@ function cmx_beleg_positionen_js() {
 
 		/* ========= Eingabe-Events ========= */
 		const selectorMRP = 'input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]';
+		table.on('keydown', selectorMRP, function(e){
+			if (e.key !== 'Enter') return;
+			e.preventDefault();
+			const $el = $(this);
+			$el.trigger('blur');
+			const $row = $el.closest('tr');
+			const $inputs = $row.find(selectorMRP).filter(':visible');
+			const idx = $inputs.index(this);
+			if (idx > -1 && idx < $inputs.length - 1) {
+				setTimeout(function(){
+					const $next = $inputs.eq(idx + 1);
+					$next.trigger('focus');
+					try { $next[0].select(); } catch (err) {}
+				}, 0);
+			}
+		});
 		table.on('focus', selectorMRP, function(){ const el=this; setTimeout(()=>{ try{ el.select(); }catch(e){} }, 0); });
 		table.on('mouseup', selectorMRP, function(e){ e.preventDefault(); });
 

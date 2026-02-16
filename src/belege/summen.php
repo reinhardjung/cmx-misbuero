@@ -51,9 +51,24 @@ function cmx_has_positionen_data(array $positionen): bool {
 /** ===== Helper (nur definieren, wenn nicht vorhanden) ===== */
 if (!function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
 	function cmx_norm_decimal(string $val): string {
-		$s = str_replace([" ", "'"], '', (string)$val);
+		$s = trim((string) $val);
+		$s = str_replace(["\xc2\xa0", " ", "'"], '', $s);
+		$s = (string) preg_replace('/[^\d,\.\+\-]/u', '', $s);
+		if ($s === '' || $s === '+' || $s === '-') {
+			return '0';
+		}
+		$sign = '';
+		if ($s[0] === '+' || $s[0] === '-') {
+			$sign = $s[0];
+			$s = (string) substr($s, 1);
+		}
+		$s = str_replace(['+', '-'], '', $s);
+		if ($s === '') {
+			return '0';
+		}
 		$hasC = strpos($s, ',') !== false;
 		$hasD = strpos($s, '.') !== false;
+
 		if ($hasC && $hasD) {
 			if (strrpos($s, ',') > strrpos($s, '.')) {
 				$s = str_replace('.', '', $s);
@@ -61,10 +76,31 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
 			} else {
 				$s = str_replace(',', '', $s);
 			}
-		} else {
-			$s = str_replace(',', '.', $s);
+			return $sign . $s;
 		}
-		return $s;
+
+		if ($hasC || $hasD) {
+			$sep = $hasC ? ',' : '.';
+			$parts = explode($sep, $s);
+			$leftPart = $parts[0] ?? '';
+			$leftDigits = ltrim($leftPart, '+-');
+
+			if (count($parts) > 2) {
+				$s = implode('', $parts);
+			} elseif (count($parts) === 2) {
+				$rightPart = $parts[1];
+				$looksThousands = preg_match('/^\d{3}$/', $rightPart) && preg_match('/^\d{1,3}$/', $leftDigits);
+				if ($looksThousands) {
+					$s = $leftPart . $rightPart;
+				} elseif ($sep === ',') {
+					$s = $leftPart . '.' . $rightPart;
+				}
+			} elseif ($sep === ',') {
+				$s = str_replace(',', '.', $s);
+			}
+		}
+
+		return $sign . $s;
 	}
 }
 if (!function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) {
@@ -199,6 +235,15 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 		function toNumber(v){
 			if (typeof v !== 'string') v = (v ?? '').toString();
 			let s = v.replace(/\s+/g,'').replace(/'/g,'');
+			s = s.replace(/[^\d,.\-+]/g,'');
+			if (!s || s === '+' || s === '-') return 0;
+			let sign = 1;
+			if (s.charAt(0) === '-' || s.charAt(0) === '+') {
+				sign = (s.charAt(0) === '-') ? -1 : 1;
+				s = s.slice(1);
+			}
+			s = s.replace(/[+-]/g,'');
+			if (!s) return 0;
 			const hasC = s.indexOf(',')>-1, hasD = s.indexOf('.')>-1;
 			if (hasC && hasD){
 				if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
@@ -206,11 +251,27 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 				} else {
 					s = s.replace(/,/g,'');
 				}
-			} else {
-				s = s.replace(/,/g,'.');
+			} else if (hasC || hasD) {
+				const sep = hasC ? ',' : '.';
+				const parts = s.split(sep);
+				const left = parts[0] || '';
+				const leftDigits = left.replace(/^[+-]/, '');
+				if (parts.length > 2) {
+					s = parts.join('');
+				} else if (parts.length === 2) {
+					const right = parts[1] || '';
+					const looksThousands = /^\d{3}$/.test(right) && /^\d{1,3}$/.test(leftDigits);
+					if (looksThousands) {
+						s = left + right;
+					} else if (sep === ',') {
+						s = left + '.' + right;
+					}
+				} else if (sep === ',') {
+					s = s.replace(/,/g,'.');
+				}
 			}
 			const n = parseFloat(s);
-			return isNaN(n) ? 0 : n;
+			return isNaN(n) ? 0 : (sign * n);
 		}
 		function formatCH(n){
 			const parts = (Number(n)||0).toFixed(2).split('.');
