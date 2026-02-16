@@ -48,17 +48,17 @@ function cmx_register_general_tab(): void {
 				}
 
 				echo '<div id="cmx-mwst-num-wrap" style="margin-top:8px;'.($checked ? '' : 'display:none;').'">';
-				echo '<label for="cmx-mwst-nummer" style="display:block;margin-bottom:4px;">MWST‑Nr</label>';
+				echo '<label for="cmx-mwst-nummer" style="display:block;margin-bottom:4px;margin-top:20px;">MWST‑Nr</label>';
 				echo '<input type="text" id="cmx-mwst-nummer" class="regular-text" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_nummer]" value="'.\esc_attr($val).'" placeholder="CHE-123.456.789 MWST">';
 				echo '</div>';
 
 				echo '<div id="cmx-mwst-defaults-wrap" style="margin-top:10px;'.($checked ? '' : 'display:none;').'">';
-				echo '<label style="display:block;margin-bottom:4px;"><strong>Default für neue Belege</strong></label>';
+				echo '<label style="display:block;margin-bottom:4px;margin-top:20px;"><strong>Vorlage für neue Belege</strong></label>';
 				echo '<label style="display:block;margin-bottom:6px;">';
 				echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_is_brutto]" value="0">';
 				echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_is_brutto]" value="1" '.\checked($default_is_brutto, true, false).'> Brutto (inkl.) / Netto (ohne MWST)';
 				echo '</label>';
-				echo '<label for="cmx-default-mwst-term" style="display:block;margin-bottom:4px;">MWST‑Satz</label>';
+				echo '<label for="cmx-default-mwst-term" style="display:block;margin-bottom:4px;margin-top:20px;">MWST‑Satz</label>';
 				echo '<select id="cmx-default-mwst-term" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_mwst_term]" style="width:100%;max-width:320px;">';
 				echo '<option value="">— auswählen —</option>';
 				foreach ($mwst_terms as $term) {
@@ -69,7 +69,7 @@ function cmx_register_general_tab(): void {
 				echo '</div>';
 
 				echo '<div id="cmx-mwst-exempt-wrap" style="margin-top:10px;'.($checked ? 'display:none;' : '').'">';
-				echo '<label for="cmx-mwst-exempt-note" style="display:block;margin-bottom:4px;">Hinweis bei nicht MwSt-pflichtig</label>';
+				// echo '<label for="cmx-mwst-exempt-note" style="display:block;margin-bottom:4px;">Hinweis bei nicht MwSt-pflichtig</label>';
 				echo '<input type="text" id="cmx-mwst-exempt-note" class="regular-text" style="max-width:640px;width:100%;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_exempt_note_html]" value="'.\esc_attr($mwst_exempt_note).'" placeholder="Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG">';
 				echo '<p class="description">Wird in PDFs angezeigt, wenn MwSt-pflichtig = Nein.</p>';
 				echo '</div>';
