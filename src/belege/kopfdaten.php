@@ -1327,11 +1327,97 @@ add_filter('redirect_post_location', function (string $location, int $post_id): 
 	return $edit_link ? $edit_link : $location;
 }, 10, 2);
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_has_tax_slug')) {
+	function cmx_beleg_has_tax_slug(int $post_id, array $allowed_slugs): bool {
+		$post = \get_post($post_id);
+		if (!$post || $post->post_type !== 'belege') {
+			return false;
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if ($tax === '') {
+			return false;
+		}
+		$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+		if (\is_wp_error($slugs) || empty($slugs)) {
+			return false;
+		}
+		foreach ((array) $slugs as $slug) {
+			if (\in_array((string) $slug, $allowed_slugs, true)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_get_delete_redirect_rechnung_id')) {
+	function cmx_beleg_get_delete_redirect_rechnung_id(int $post_id): int {
+		$post = \get_post($post_id);
+		if (!$post || $post->post_type !== 'belege') {
+			return 0;
+		}
+		// Redirect nur, wenn ein Lieferschein gelöscht wird.
+		if (!cmx_beleg_has_tax_slug($post_id, ['lieferschein', 'lieferscheine'])) {
+			return 0;
+		}
+		$rechnung_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+		if ($rechnung_id <= 0) {
+			return 0;
+		}
+		$rechnung_post = \get_post($rechnung_id);
+		if (!$rechnung_post || $rechnung_post->post_type !== 'belege' || $rechnung_post->post_status === 'trash') {
+			return 0;
+		}
+		// Falls Kategorie nicht sauber gesetzt ist, trotzdem auf den verknüpften Beleg gehen.
+		return $rechnung_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_capture_delete_redirect_target')) {
+	function cmx_beleg_capture_delete_redirect_target(int $post_id): void {
+		if (!\is_admin()) {
+			return;
+		}
+		$rechnung_id = cmx_beleg_get_delete_redirect_rechnung_id($post_id);
+		if ($rechnung_id <= 0) {
+			return;
+		}
+		if (!\current_user_can('edit_post', $rechnung_id)) {
+			return;
+		}
+		$GLOBALS['cmx_belege_delete_redirect_id'] = $rechnung_id;
+	}
+}
+
+// Nach dem Löschen/Trash eines verknüpften Lieferscheins direkt zur Rechnung springen.
+\add_filter('wp_redirect', function (string $location, int $status): string {
+	if (empty($GLOBALS['cmx_belege_delete_redirect_id'])) {
+		return $location;
+	}
+	$request_uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+	$path = (string) \parse_url($request_uri, PHP_URL_PATH);
+	if (\basename($path) !== 'post.php') {
+		return $location;
+	}
+	$action = isset($_REQUEST['action']) ? \sanitize_key((string) \wp_unslash($_REQUEST['action'])) : '';
+	if (!\in_array($action, ['trash', 'delete'], true)) {
+		return $location;
+	}
+	$rechnung_id = (int) $GLOBALS['cmx_belege_delete_redirect_id'];
+	unset($GLOBALS['cmx_belege_delete_redirect_id']);
+	if ($rechnung_id <= 0) {
+		return $location;
+	}
+	$edit_link = \get_edit_post_link($rechnung_id, '');
+	return $edit_link ?: $location;
+}, 10, 2);
+
 add_action('before_delete_post', function (int $post_id) {
 	$post = \get_post($post_id);
 	if (!$post || $post->post_type !== 'belege') {
 		return;
 	}
+	cmx_beleg_capture_delete_redirect_target($post_id);
 
 	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
 	if ($from_id > 0) {
@@ -1349,6 +1435,7 @@ add_action('trashed_post', function (int $post_id) {
 	if (!$post || $post->post_type !== 'belege') {
 		return;
 	}
+	cmx_beleg_capture_delete_redirect_target($post_id);
 
 	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
 	if ($from_id > 0) {
