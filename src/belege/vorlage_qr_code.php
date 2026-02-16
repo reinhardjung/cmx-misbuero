@@ -429,10 +429,14 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * ---------------------------------------------------------------- */
     $qr_enabled = !empty($tpl['qr']['enabled']);
     $qr_iban    = trim((string)($tpl['qr']['iban'] ?? $tpl['bank']['qr_iban'] ?? ''));
+    $bank_iban  = trim((string)($tpl['bank']['iban'] ?? ''));
     $doc_type   = strtolower(trim((string)($tpl['document']['type'] ?? '')));
     $richtung   = strtolower(trim((string)($tpl['document']['richtung'] ?? '')));
+    if ($richtung === '') {
+        $richtung = 'ausgang';
+    }
 
-    if (!$qr_enabled || $qr_iban === '' || $doc_type !== 'rechnung' || $richtung !== 'ausgang') {
+    if (!$qr_enabled || $doc_type !== 'rechnung' || $richtung !== 'ausgang') {
         return;
     }
 
@@ -460,21 +464,29 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     /** ----------------------------------------------------------------
      * 2) Beträge & Adressen
      * ---------------------------------------------------------------- */
-    $bank_iban = trim((string) ($tpl['bank']['iban'] ?? ''));
-    $iban_raw = ($ref_mode === 'QRR') ? $qr_iban : $bank_iban;
-    if ($iban_raw === '') {
-        $iban_raw = $qr_iban;
+    $qr_iban_norm = cmx_qr_normalize_iban($qr_iban);
+    $bank_iban_norm = cmx_qr_normalize_iban($bank_iban);
+
+    // QRR braucht zwingend eine QR-IBAN. Wenn diese fehlt, auf NON degradieren.
+    if ($ref_mode === 'QRR' && $qr_iban_norm === '') {
+        $ref_mode = 'NON';
+        $ref_value = '';
+        $ref_print = '';
     }
 
-    $iban = cmx_qr_normalize_iban($iban_raw);
+    if ($ref_mode === 'QRR') {
+        $iban = $qr_iban_norm;
+        $iban_print = $qr_iban !== '' ? $qr_iban : $qr_iban_norm;
+    } else {
+        $iban = ($bank_iban_norm !== '') ? $bank_iban_norm : $qr_iban_norm;
+        $iban_print = $bank_iban !== '' ? $bank_iban : (($qr_iban !== '') ? $qr_iban : $iban);
+    }
+
     if ($iban === '') {
         // Ohne IBAN kein QR-Code auf dem Beleg
         return;
     }
-    $iban_print = trim($iban_raw);
-    if ($iban_print === '') {
-        $iban_print = $iban;
-    }
+    $iban_print = trim((string) $iban_print);
 
     $amount = (float) ($tpl['document']['total'] ?? 0);
     // EMV braucht Punkt, KEINE Tausendertrennzeichen
@@ -577,8 +589,21 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
 				$writer   = new PngWriter();
 				$qrResult = $writer->write($qr);
 
-				$tmp = \wp_tempnam('cmx_qr');
-				\file_put_contents($tmp, $qrResult->getString());
+				$tmp = '';
+				if (\function_exists('\\wp_tempnam')) {
+						$tmp = (string) \wp_tempnam('cmx_qr');
+				}
+				if ($tmp === '') {
+						$tmp = (string) \tempnam(\sys_get_temp_dir(), 'cmx_qr_');
+				}
+				if ($tmp === '' || $tmp === false) {
+						throw new \RuntimeException('Temp-Datei für QR konnte nicht erstellt werden.');
+				}
+
+				$written = @\file_put_contents($tmp, $qrResult->getString());
+				if ($written === false) {
+						throw new \RuntimeException('QR-Bild konnte nicht in Temp-Datei geschrieben werden.');
+				}
 
 		} catch (\Throwable $e) {
 				\error_log('[CMX QR] Fehler beim QR-Code: ' . $e->getMessage());
