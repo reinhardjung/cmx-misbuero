@@ -63,11 +63,11 @@ foreach ($positions as $row) {
 }
 $opts_general      = (array) get_option('cmx_einstellungen', []);
 $is_mwst_pflichtig = !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']) || !empty($opts_general['mwst_pflichtig']);
-$mwst_exempt_note_text = trim((string) wp_strip_all_tags((string)($opts_general['mwst_exempt_note_html'] ?? '')));
-if ($mwst_exempt_note_text === '') {
-	$mwst_exempt_note_text = function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')
+$mwst_exempt_note_html = trim((string)($opts_general['mwst_exempt_note_html'] ?? ''));
+if ($mwst_exempt_note_html === '') {
+	$mwst_exempt_note_html = function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')
 		? (string) cmx_mwst_exempt_default_note_html()
-		: 'Nicht mehrwertsteuerpflichtig gemäss Art. 10 Abs. 2 lit. a MWSTG';
+		: 'Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>';
 }
 $beleg_subject = trim((string)($tpl['document']['subject'] ?? ''));
 $beleg_description = trim((string)($tpl['document']['description'] ?? ''));
@@ -653,7 +653,7 @@ $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'F�
 		<?php endif; ?>
 	<?php elseif (!$is_lieferantenrechnung): ?>
 		<div class="mwst-note">
-			<?= htmlspecialchars($mwst_exempt_note_text, ENT_QUOTES, 'UTF-8'); ?>
+			<?= $mwst_exempt_note_html; ?>
 		</div>
 	<?php endif; ?>
 
