@@ -13,7 +13,7 @@ function cmx_starts_with(string $haystack, string $needle): bool {
 
 /**
  * Liefert den korrekten INI-Wert anhand des Keys:
- *   mail_angebot      → (E-Mails, Offerte)
+ *   mail_offerte      → (E-Mails, Offerte)
  *   belegfuss_rechnung → (Belegfuss, Rechnung)
  */
 // var_dump(get_option('cmx_belege')['belegfuss_rechnung']); exit;
@@ -200,7 +200,7 @@ add_action('admin_init', function() {
 	};
 
 	$tabs = [
-		'angebot'      => 'Offerte',
+		'offerte'      => 'Offerte',
 		'gutschrift'   => 'Gutschrift',
 		'lieferschein' => 'Lieferschein',
 		'rechnung'     => 'Rechnung'
@@ -243,7 +243,7 @@ add_filter('pre_update_option_cmx_belege', function($new, $old) {
 		'c5' => 'c5_left',
 		'c4' => 'c4_left',
 	];
-	foreach (['angebot', 'gutschrift', 'lieferschein', 'rechnung'] as $type) {
+	foreach (['offerte', 'gutschrift', 'lieferschein', 'rechnung'] as $type) {
 		$key = 'briefbogen_' . $type;
 		$val = strtolower(trim((string)($new[$key] ?? 'dl_left')));
 		if (isset($legacy_map[$val])) {

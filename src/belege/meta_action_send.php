@@ -109,7 +109,7 @@ function cmxbu_handle_beleg_send(): void {
 	[, $beleg_slug] = cmx_get_beleg_type($post);
 	$beleg_label = [
 		'rechnung'     => 'Rechnung',
-		'angebot'      => 'Offerte',
+		'offerte'      => 'Offerte',
 		'lieferschein' => 'Lieferschein',
 		'gutschrift'   => 'Gutschrift',
 	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');
@@ -295,13 +295,26 @@ function cmxbu_get_beleg_amount_display(int $post_id): string {
 		$mwst = cmxbu_get_mwst_term_data($mwst_term_id);
 		$mwst_rate = (float)($mwst['rate'] ?? 0.0);
 	}
+	$beleg_type = '';
+	if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+		$post = get_post($post_id);
+		if ($post instanceof \WP_Post) {
+			[, $beleg_type] = cmx_get_beleg_type($post);
+		}
+	}
+	if ($beleg_type !== '' && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_effective_type')) {
+		$beleg_type = (string) cmxbu_get_beleg_pdf_effective_type($post_id, (string) $beleg_type);
+	}
 
 	$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
 	$opts_general = (array) get_option('cmx_einstellungen', []);
 	$is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
 		? cmx_belege_is_mwst_pflichtig($opts_general)
 		: !empty($opts_general['mwst_pflichtig']);
-	if (!$is_mwst_pflichtig) {
+	$mwst_allowed_for_type = \function_exists(__NAMESPACE__ . '\\cmx_belege_allows_mwst_for_type')
+		? cmx_belege_allows_mwst_for_type((string) $beleg_type, $opts_general)
+		: $is_mwst_pflichtig;
+	if (!$mwst_allowed_for_type) {
 		$mwst_rate = 0.0;
 		$is_brutto = false;
 	}

@@ -34,6 +34,22 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_belege_get_mwst_exempt_note_html')) 
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_is_supplier_document_type')) {
+	function cmx_belege_is_supplier_document_type(string $beleg_type): bool {
+		$type = strtolower(trim($beleg_type));
+		return in_array($type, ['lieferantenrechnung', 'lieferantenquittung'], true);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_allows_mwst_for_type')) {
+	function cmx_belege_allows_mwst_for_type(string $beleg_type, array $opts_general): bool {
+		if (cmx_belege_is_mwst_pflichtig($opts_general)) {
+			return true;
+		}
+		return cmx_belege_is_supplier_document_type($beleg_type);
+	}
+}
+
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],

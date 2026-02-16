@@ -77,7 +77,7 @@ $is_ausgang = ($richtung === 'ausgang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 $is_gutschrift = ($beleg_type === 'gutschrift');
-$is_offerte = in_array($beleg_type, ['offerte', 'angebot'], true);
+$is_offerte = ($beleg_type === 'offerte');
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -597,7 +597,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 			<table class="totals-table" border="0">
 				<?php
 				$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-				$show_mwst_row = ($mwst_rate > 0.0 && !$is_lieferantenrechnung);
+				$show_mwst_row = ($mwst_rate > 0.0);
 				if ($show_mwst_row) {
 					$round_5rp = static function(float $amount): float {
 						if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);

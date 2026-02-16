@@ -77,7 +77,7 @@ $is_ausgang = ($richtung === 'ausgang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 $is_gutschrift = ($beleg_type === 'gutschrift');
-$is_offerte = in_array($beleg_type, ['offerte', 'angebot'], true);
+$is_offerte = ($beleg_type === 'offerte');
 
 if ($is_lieferschein) {
 	$show_discount = false;
@@ -600,7 +600,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<table class="totals-table" border="0">
 					<?php
 					$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-					$show_mwst_row = ($mwst_rate > 0.0 && !$is_lieferantenrechnung);
+					$show_mwst_row = ($mwst_rate > 0.0);
 					if ($show_mwst_row) {
 						$round_5rp = static function(float $amount): float {
 							if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
@@ -638,27 +638,27 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 					<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
 				</td>
 			</tr>
-		<?php endif; ?>
-		<tr class="total-row">
-			<td colspan="<?= $col_count; ?>" class="text-right">
-				<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
-			</td>
-		</tr>
-	</table>
-	<?php if ($is_mwst_pflichtig && !$is_lieferantenrechnung): ?>
-		<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
-		<?php if ($mwst_nr !== ''): ?>
-			<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
-		<?php endif; ?>
-	<?php elseif (!$is_lieferantenrechnung): ?>
-		<div class="mwst-note">
-			<?= $mwst_exempt_note_html; ?>
-		</div>
-	<?php endif; ?>
+			<?php endif; ?>
+			<tr class="total-row">
+				<td colspan="<?= $col_count; ?>" class="text-right">
+					<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
+				</td>
+			</tr>
+			</table>
+			<?php if ($is_mwst_pflichtig && !$is_lieferantenrechnung): ?>
+				<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
+				<?php if ($mwst_nr !== ''): ?>
+					<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
+				<?php endif; ?>
+			<?php elseif (!$is_lieferantenrechnung): ?>
+				<div class="mwst-note">
+					<?= $mwst_exempt_note_html; ?>
+				</div>
+			<?php endif; ?>
 
-	<?php endif; ?>
+			<?php endif; ?>
 
-	<?php if (!$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+		<?php if (!$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
 		$anz_base_total = (float)($totals['total'] ?? 0);
 		$anzahlungen_sum = 0.0;

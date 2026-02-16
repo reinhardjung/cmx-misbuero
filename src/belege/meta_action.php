@@ -32,7 +32,7 @@ function cmx_get_beleg_type(\WP_Post $post): array {
 
 function cmxbu_get_beleg_pdf_type_override(int $post_id, string $default_type): string {
 	$override = (string) \get_post_meta($post_id, '_cmx_beleg_pdf_type', true);
-	if ($override !== '' && in_array($override, ['rechnung', 'angebot', 'lieferschein'], true) && $default_type !== 'gutschrift') {
+	if ($override !== '' && in_array($override, ['rechnung', 'offerte', 'lieferschein'], true) && $default_type !== 'gutschrift') {
 		return $override;
 	}
 	return $default_type;
@@ -67,7 +67,7 @@ function cmxbu_get_beleg_pdf_effective_type(int $post_id, string $type): string 
 }
 
 function cmxbu_beleg_type_filename_slug(string $type): string {
-	return ($type === 'angebot') ? 'offerte' : $type;
+	return $type;
 }
 
 /**

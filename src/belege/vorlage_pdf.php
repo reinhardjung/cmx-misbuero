@@ -167,14 +167,8 @@ function cmx_get_belegfuss(string $key): string {
 
 function cmx_get_beleg_briefbogen(string $beleg_type): string {
 	$beleg_type = strtolower(trim($beleg_type));
-	$key_map = [
-		'angebot' => 'angebot',
-		'offerte' => 'angebot',
-		'gutschrift' => 'gutschrift',
-		'lieferschein' => 'lieferschein',
-		'rechnung' => 'rechnung',
-	];
-	$type_key = $key_map[$beleg_type] ?? 'rechnung';
+	// Alle Dokumenttypen ausser Lieferschein nutzen den Rechnungs-Briefbogen.
+	$type_key = ($beleg_type === 'lieferschein') ? 'lieferschein' : 'rechnung';
 	$option_key = 'briefbogen_' . $type_key;
 	$options = (array) get_option('cmx_belege', []);
 	$selected = strtolower(trim((string)($options[$option_key] ?? 'dl_left')));
@@ -744,32 +738,49 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		$out['subtotal']   = $net;
 		$out['total']      = $gross;
 
-		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
-			[, $beleg_type] = cmx_get_beleg_type(get_post($post_id));
-			if (strtolower((string)$beleg_type) === 'lieferantenrechnung') {
-				$has_positions = false;
-				foreach ($rows as $row) {
-					if (!is_array($row)) continue;
-					if (\sanitize_key((string)($row['typ'] ?? '')) === 'abschnitt') continue;
-					$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
-					$qty = $to_float($row['menge'] ?? $row['qty'] ?? 0);
-					$price = $to_float($row['preis'] ?? $row['unit_price'] ?? 0);
-					$total = $to_float($row['line_total'] ?? 0);
-					if ($item !== '' || $qty > 0 || $price > 0 || $total > 0) {
-						$has_positions = true;
-						break;
-					}
-				}
-				$override = (string) get_post_meta($post_id, '_cmx_beleg_summe_override', true);
-				if (!$has_positions && $override !== '') {
-					$ov = $to_float($override);
-					$out['subtotal'] = $ov;
-					$out['total'] = $ov;
-					$out['net'] = $ov;
-					$out['gross'] = $ov;
-					$out['tax_amount'] = 0.0;
-				}
+		$has_positions = false;
+		foreach ($rows as $row) {
+			if (!is_array($row)) continue;
+			if (\sanitize_key((string)($row['typ'] ?? '')) === 'abschnitt') continue;
+			$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
+			$qty = $to_float($row['menge'] ?? $row['qty'] ?? 0);
+			$price = $to_float($row['preis'] ?? $row['unit_price'] ?? 0);
+			$total = $to_float($row['line_total'] ?? 0);
+			if ($item !== '' || $qty > 0 || $price > 0 || $total > 0) {
+				$has_positions = true;
+				break;
 			}
+		}
+		$override = (string) get_post_meta($post_id, '_cmx_beleg_summe_override', true);
+		if (!$has_positions && $override !== '') {
+			$ov = $to_float($override);
+			$rate = max(0.0, (float)$opts['tax_rate']);
+			$isBruttoOverride = !empty($opts['is_brutto']);
+			$net = $ov;
+			$gross = $ov;
+			$tax = 0.0;
+			if ($rate > 0.0) {
+				if ($isBruttoOverride) {
+					$gross = $round_5rp($ov);
+					$net = $gross / (1 + $rate);
+					$tax = $gross - $net;
+				} else {
+					$net = $ov;
+					$tax = $net * $rate;
+					$gross = $net + $tax;
+				}
+				if (!empty($opts['round_totals'])) {
+					$net = round($net, (int)$opts['round_decimals']);
+					$tax = round($tax, (int)$opts['round_decimals']);
+					$gross = round($gross, (int)$opts['round_decimals']);
+				}
+				$gross = $round_5rp($gross);
+			}
+			$out['subtotal'] = $net;
+			$out['total'] = $gross;
+			$out['net'] = $net;
+			$out['gross'] = $gross;
+			$out['tax_amount'] = round($tax, (int)$opts['round_decimals']);
 		}
 		return $out;
 	}
@@ -809,7 +820,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			if (!is_wp_error($slugs) && !empty($slugs)) { $beleg_type=(string)$slugs[0]; break; }
 		}
 		$override_type = (string) get_post_meta($post_id, '_cmx_beleg_pdf_type', true);
-		if ($override_type !== '' && in_array($override_type, ['rechnung', 'angebot', 'lieferschein'], true) && $beleg_type !== 'gutschrift') {
+		if ($override_type !== '' && in_array($override_type, ['rechnung', 'offerte', 'lieferschein'], true) && $beleg_type !== 'gutschrift') {
 			$beleg_type = $override_type;
 		}
 		$beleg_type = apply_filters('cmx_beleg_pdf_type', $beleg_type, $post_id);
@@ -835,7 +846,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		// Dateinamen
 		$title_raw=(string)get_the_title($post_id);
 		$title_safe = ($title_raw !== '') ? $title_raw : (string)$post_id;
-		$file_type = ($beleg_type === 'angebot') ? 'offerte' : $beleg_type;
+		$file_type = $beleg_type;
 		$basename=sanitize_title($title_safe.'_'.$file_type);
 		$html_path=$base_dir.$basename.'.html';  // wird am Ende gelöscht
 		$pdf_path =$base_dir.$basename.'.pdf';
@@ -858,7 +869,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$type_map = [
 			'rechnung'             => 'Rechnung',
 			'quittung'             => 'Quittung',
-			'angebot'              => 'Offerte',
+			'offerte'              => 'Offerte',
 			'lieferantenrechnung'  => 'Lieferantenrechnung',
 			'lieferantenquittung'  => 'Lieferantenquittung',
 			'gutschrift'           => 'Gutschrift',
@@ -874,12 +885,15 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
 			? cmx_belege_is_mwst_pflichtig($opts_general)
 			: !empty($opts_general['mwst_pflichtig']);
+		$mwst_allowed_for_type = \function_exists(__NAMESPACE__ . '\\cmx_belege_allows_mwst_for_type')
+			? cmx_belege_allows_mwst_for_type((string)$beleg_type, $opts_general)
+			: $is_mwst_pflichtig;
 
 		$is_brutto = get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
 		$mwst_term_id = (int)get_post_meta($post_id, '_cmx_beleg_mwst_term', true);
 		$mwst = cmxbu_get_mwst_term_data($mwst_term_id);
 
-		if (!$is_mwst_pflichtig) {
+		if (!$mwst_allowed_for_type) {
 			$mwst['rate'] = 0.0;
 			$is_brutto = false;
 		}

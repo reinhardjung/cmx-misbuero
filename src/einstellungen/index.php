@@ -61,7 +61,7 @@ function cmx_get_subtabs(string $tab): array {
 
 	if ($tab === 'belege') {
 		return [
-			'angebot'      => 'Offerte',
+			'offerte'      => 'Offerte',
 			'gutschrift'   => 'Gutschrift',
 			'lieferschein' => 'Lieferschein',
 			'rechnung'     => 'Rechnung',
