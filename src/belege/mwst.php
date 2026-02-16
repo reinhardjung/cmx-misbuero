@@ -38,10 +38,23 @@ function cmx_belege_render_mwst_metabox($post) {
 
     $opts_general = (array) get_option('cmx_einstellungen', []);
     $is_mwst_pflichtig = !empty($opts_general['mwst_pflichtig']) || !empty($opts_general['mwst_pfl']) || !empty($opts_general['mwstpflichtig']);
+    $default_is_brutto = !empty($opts_general['belege_default_is_brutto']) ? '1' : '0';
+    $default_mwst_term_id = isset($opts_general['belege_default_mwst_term']) ? (int) $opts_general['belege_default_mwst_term'] : 0;
 
     // Werte laden
     $is_brutto = get_post_meta($post->ID, '_cmx_beleg_is_brutto', true);
     $mwst_term_id = get_post_meta($post->ID, '_cmx_beleg_mwst_term', true);
+    $is_new_autodraft = ($post instanceof \WP_Post) && ((string) $post->post_status === 'auto-draft');
+    if ($is_new_autodraft) {
+        if ($is_brutto === '') {
+            $is_brutto = $default_is_brutto;
+        }
+        if ($mwst_term_id === '' || $mwst_term_id === null) {
+            $mwst_term_id = $default_mwst_term_id > 0 ? (string) $default_mwst_term_id : '';
+        }
+    }
+
+    $mwst_term_id = (int) $mwst_term_id;
     // Taxonomie-Terme laden
     $terme = get_terms([
         'taxonomy'   => 'belege_mwst',

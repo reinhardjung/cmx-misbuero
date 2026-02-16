@@ -14,31 +14,63 @@ function cmx_register_general_tab(): void {
 	);
 
 	// MwSt-Pflicht Checkbox
-	\add_settings_field(
-		'mwst_pflichtig',
-		'MwSt-pflichtig?',
-		function () {
-			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
-				'key'   => 'mwst_pflichtig',
-				'label' => 'Ja, MwSt wird ausgewiesen',
-			]);
-			$opts = \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
-			$val = $opts['mwst_nummer'] ?? '';
-			$checked = !empty($opts['mwst_pflichtig']) || !empty($opts['mwstpflichtig']) || !empty($opts['mwst_pfl']);
-			echo '<div id="cmx-mwst-num-wrap" style="margin-top:8px;'.($checked ? '' : 'display:none;').'">';
-			echo '<label for="cmx-mwst-nummer" style="display:block;margin-bottom:4px;">MWST‑Nr</label>';
-			echo '<input type="text" id="cmx-mwst-nummer" class="regular-text" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_nummer]" value="'.\esc_attr($val).'" placeholder="CHE-123.456.789 MWST">';
-			echo '</div>';
-			echo '<script>
-			(function(){
-				const cb = document.querySelector("input[type=checkbox][name=\''.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_pflichtig]\']");
-				const wrap = document.getElementById("cmx-mwst-num-wrap");
-				if (!cb || !wrap) return;
-				function sync(){ wrap.style.display = cb.checked ? "" : "none"; }
-				cb.addEventListener("change", sync);
-				sync();
-			})();
-			</script>';
+		\add_settings_field(
+			'mwst_pflichtig',
+			'MwSt-pflichtig?',
+			function () {
+				\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+					'key'   => 'mwst_pflichtig',
+					'label' => 'Ja, MwSt wird ausgewiesen',
+				]);
+				$opts = \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+				$val = $opts['mwst_nummer'] ?? '';
+				$checked = !empty($opts['mwst_pflichtig']) || !empty($opts['mwstpflichtig']) || !empty($opts['mwst_pfl']);
+				$default_is_brutto = !empty($opts['belege_default_is_brutto']);
+				$default_mwst_term = isset($opts['belege_default_mwst_term']) ? (int) $opts['belege_default_mwst_term'] : 0;
+				$mwst_terms = \get_terms([
+					'taxonomy'   => 'belege_mwst',
+					'hide_empty' => false,
+				]);
+				if (\is_wp_error($mwst_terms)) {
+					$mwst_terms = [];
+				}
+
+				echo '<div id="cmx-mwst-num-wrap" style="margin-top:8px;'.($checked ? '' : 'display:none;').'">';
+				echo '<label for="cmx-mwst-nummer" style="display:block;margin-bottom:4px;">MWST‑Nr</label>';
+				echo '<input type="text" id="cmx-mwst-nummer" class="regular-text" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_nummer]" value="'.\esc_attr($val).'" placeholder="CHE-123.456.789 MWST">';
+				echo '</div>';
+
+				echo '<div id="cmx-mwst-defaults-wrap" style="margin-top:10px;'.($checked ? '' : 'display:none;').'">';
+				echo '<label style="display:block;margin-bottom:4px;"><strong>Default für neue Belege</strong></label>';
+				echo '<label style="display:block;margin-bottom:6px;">';
+				echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_is_brutto]" value="0">';
+				echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_is_brutto]" value="1" '.\checked($default_is_brutto, true, false).'> Brutto (inkl.) / Netto (ohne MWST)';
+				echo '</label>';
+				echo '<label for="cmx-default-mwst-term" style="display:block;margin-bottom:4px;">MWST‑Satz</label>';
+				echo '<select id="cmx-default-mwst-term" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_default_mwst_term]" style="width:100%;max-width:320px;">';
+				echo '<option value="">— auswählen —</option>';
+				foreach ($mwst_terms as $term) {
+					$term_id = (int) ($term->term_id ?? 0);
+					echo '<option value="'.\esc_attr((string) $term_id).'" '.\selected($default_mwst_term, $term_id, false).'>'.\esc_html((string) ($term->name ?? '')).'</option>';
+				}
+				echo '</select>';
+				echo '</div>';
+
+				echo '<script>
+				(function(){
+					const cb = document.querySelector("input[type=checkbox][name=\''.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[mwst_pflichtig]\']");
+					const numWrap = document.getElementById("cmx-mwst-num-wrap");
+					const defaultsWrap = document.getElementById("cmx-mwst-defaults-wrap");
+					if (!cb) return;
+					function sync(){
+						const show = cb.checked;
+						if (numWrap) numWrap.style.display = show ? "" : "none";
+						if (defaultsWrap) defaultsWrap.style.display = show ? "" : "none";
+					}
+					cb.addEventListener("change", sync);
+					sync();
+				})();
+				</script>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
