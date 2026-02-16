@@ -591,24 +591,35 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		<?php endif; ?>
 	</div>
 
-		<?php if (!$is_lieferschein): ?>
-			<table class="totals-table" border="0">
-				<?php
-				$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
-				$mwst_amount = (float)($totals['tax_amount'] ?? 0);
-				$mwst_rate_pct = $mwst_rate * 100;
-				$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
-				$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
-					&& $tpl['document']['manual_total'] !== null
-					&& $tpl['document']['manual_total'] !== '';
-				$subtotal_value = $has_positions
-					? (float)$positions_sum
-					: ($manual_total_defined
-						? (float)$tpl['document']['manual_total']
-						: (float)($totals['subtotal'] ?? 0));
-				$show_subtotal_row = ($show_discount && $discount_sum > 0.0)
-					|| ($mwst_rate > 0.0)
-					|| $manual_total_defined;
+			<?php if (!$is_lieferschein): ?>
+				<table class="totals-table" border="0">
+					<?php
+					$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+					$is_brutto_total = !empty($totals['is_brutto']);
+					if ($is_brutto_total && $mwst_rate > 0.0) {
+						$round_5rp = static function(float $amount): float {
+							if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
+							return round($amount * 20) / 20;
+						};
+						$rounded_brutto_total = $round_5rp((float)($totals['total'] ?? 0.0));
+						$totals['total'] = $rounded_brutto_total;
+					}
+					$mwst_amount = round((float)($totals['tax_amount'] ?? 0), 2);
+					$mwst_rate_pct = $mwst_rate * 100;
+					$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+					$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
+						&& $tpl['document']['manual_total'] !== null
+						&& $tpl['document']['manual_total'] !== '';
+					if (!isset($subtotal_value)) {
+						$subtotal_value = $has_positions
+							? (float)$positions_sum
+							: ($manual_total_defined
+								? (float)$tpl['document']['manual_total']
+								: (float)($totals['subtotal'] ?? 0));
+					}
+					$show_subtotal_row = ($show_discount && $discount_sum > 0.0)
+						|| ($mwst_rate > 0.0)
+						|| $manual_total_defined;
 				?>
 				<?php if ($show_subtotal_row): ?>
 					<tr>
@@ -617,13 +628,6 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 						</td>
 					</tr>
 				<?php endif; ?>
-			<?php if ($show_discount && $discount_sum > 0.0): ?>
-				<tr>
-					<td colspan="<?= $col_count; ?>" class="text-right">
-						Rabatt <?= htmlspecialchars($__fmt_num((float)$discount_sum), ENT_QUOTES, 'UTF-8'); ?>
-					</td>
-				</tr>
-			<?php endif; ?>
 			<?php if ($mwst_rate > 0 && !$is_lieferantenrechnung): ?>
 				<tr>
 					<td colspan="<?= $col_count; ?>" class="text-right">

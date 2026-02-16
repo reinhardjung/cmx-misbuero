@@ -1,8 +1,5 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-use Dompdf\Dompdf;
-use Dompdf\Options;
-
 /* ===== Link „export“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
@@ -92,206 +89,42 @@ function cmxbu_belege_export_collect_ids(): array {
 	return $q->posts;
 }
 
-/* ===== Export-Handler ===== */
-\add_action('admin_post_cmx_export_belege_list', function(){
-	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
-	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_belege_list')) \wp_die('Ungültige Anfrage.');
+function cmxbu_belege_export_site_prefix(): string {
+	$host = strtolower((string) \wp_parse_url(\home_url('/'), PHP_URL_HOST));
+	if ($host === '') return 'misbuero';
 
-	$post_ids = cmxbu_belege_export_collect_ids();
-
-	cmxbu_stream_belege_csv_from_ids($post_ids);
-});
-
-/* ===== CSV Link ===== */
-\add_action('admin_post_cmx_export_belege_list_csv', function(){
-	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
-	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_belege_list_csv')) \wp_die('Ungültige Anfrage.');
-	$post_ids = cmxbu_belege_export_collect_ids();
-	cmxbu_stream_belege_csv_from_ids($post_ids);
-});
-
-/* ===== PDF Link ===== */
-\add_action('admin_post_cmx_export_belege_list_pdf', function(){
-	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
-	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_belege_list_pdf')) \wp_die('Ungültige Anfrage.');
-
-	$post_ids = cmxbu_belege_export_collect_ids();
-
-	$options = new Options();
-	$options->set('isRemoteEnabled', true);
-	$dom = new Dompdf($options);
-
-	$rows_html = '';
-	foreach ($post_ids as $pid) {
-		$post = \get_post($pid);
-		if (!$post) continue;
-
-		$belegnr = (string) $post->post_title;
-		$belegdatum = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum', true);
-		if ($belegdatum === '') {
-			$belegdatum = \get_date_from_gmt(\gmdate('Y-m-d H:i:s', strtotime($post->post_date_gmt)), 'Y-m-d');
+	$prefix = '';
+	$suffix = '.misbuero.ch';
+	if (str_ends_with($host, $suffix)) {
+		$left = substr($host, 0, -strlen($suffix));
+		if ($left !== '') {
+			$parts = array_values(array_filter(explode('.', $left)));
+			if ($parts) $prefix = (string) end($parts);
 		}
-
-		$kontakt_label = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') ? CMX_BELEG_META_KONTAKT_LABEL : '_cmx_beleg_kontakt_label', true);
-		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
-		$kunde = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
-
-		$belegtyp = '';
-		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
-			[, $belegtyp] = cmx_get_beleg_type($post);
-		}
-		if ($belegtyp === '') {
-			$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy') ? cmx_belege_taxonomy() : '';
-			if ($tax && \taxonomy_exists($tax)) {
-				$terms = \wp_get_post_terms($pid, $tax, ['fields' => 'slugs']);
-				if (!\is_wp_error($terms) && !empty($terms)) $belegtyp = (string)$terms[0];
-			}
-		}
-
-		$total = 0.0;
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-			$calc = cmxbu_get_beleg_positionen_calc($pid);
-			$total = (float)($calc['total'] ?? 0);
-			$has_positions = cmxbu_beleg_has_positions($calc);
-			if (!$has_positions) {
-				$override = (string) \get_post_meta($pid, '_cmx_beleg_summe_override', true);
-				if ($override !== '') {
-					$total = (float) cmx_norm_decimal($override);
-				}
-			}
-		}
-		$total_str = number_format((float)$total, 2, ',', "'");
-
-		$rows_html .= '<tr>'
-			.'<td>'.\esc_html($belegnr).'</td>'
-			.'<td>'.\esc_html($belegtyp).'</td>'
-			.'<td>'.\esc_html($belegdatum).'</td>'
-			.'<td>'.\esc_html($kunde).'</td>'
-			.'<td style="text-align:right;">'.\esc_html($total_str).'</td>'
-			.'</tr>';
 	}
 
-	$html = '<!doctype html><html><head><meta charset="utf-8"><style>
-		body{font-family:DejaVu Sans, Arial, sans-serif;font-size:11px;color:#111}
-		h1{font-size:14px;margin:0 0 8px 0}
-		table{width:100%;border-collapse:collapse}
-		th,td{border:1px solid #ddd;padding:6px}
-		th{background:#f3f4f6;text-align:left}
-	</style></head><body>
-	<h1>Belege Export</h1>
-	<table>
-	<thead><tr>
-	<th>Belegnummer</th><th>Belegtyp</th><th>Datum</th><th>Kunde</th><th>Total</th>
-	</tr></thead><tbody>'.$rows_html.'</tbody></table>
-	</body></html>';
-
-	$dom->loadHtml($html, 'UTF-8');
-	$dom->setPaper('A4', 'portrait');
-	$dom->render();
-
-	$filename = 'belege-export-'.\gmdate('Ymd-His').'.pdf';
-	header('Content-Type: application/pdf');
-	header('Content-Disposition: attachment; filename="'.$filename.'"');
-	echo $dom->output();
-	exit;
-});
-
-/* ===== CSV ===== */
-function cmxbu_beleg_has_positions(array $calc): bool {
-	if (empty($calc['positionen']) || !is_array($calc['positionen'])) return false;
-	foreach ($calc['positionen'] as $row) {
-		if (!is_array($row)) continue;
-		if (($row['row_type'] ?? '') === 'abschnitt') continue;
-		$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
-		$qty = (float)($row['qty'] ?? 0);
-		$unit_price = (float)($row['unit_price'] ?? 0);
-		$line_total = (float)($row['line_total'] ?? 0);
-		if ($item !== '' || $qty > 0 || $unit_price > 0 || $line_total > 0) return true;
+	if ($prefix === '') {
+		$parts = array_values(array_filter(explode('.', $host)));
+		$prefix = (string)($parts[0] ?? 'misbuero');
 	}
-	return false;
+
+	$prefix = strtolower(trim((string) preg_replace('~[^a-z0-9_-]+~', '-', $prefix), '-_'));
+	return $prefix !== '' ? $prefix : 'misbuero';
 }
 
-function cmxbu_stream_belege_csv_from_ids(array $ids): void {
-	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
-	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
-
-	header('Content-Type: text/csv; charset=UTF-8');
-	header('Content-Disposition: attachment; filename="belege-export-'.\gmdate('Ymd-His').'.csv"');
-	header('Pragma: no-cache'); header('Expires: 0');
-
-	$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
-
-	$headers = [
-		'ID',
-		'Belegnummer',
-		'Belegtyp',
-		'Belegdatum',
-		'Faelligkeitsdatum',
-		'Betreff',
-		'Kunde',
-		'Total',
-		'Waehrung',
-	];
-	fputcsv($fh, $headers, ';');
-
-	foreach ($ids as $pid) {
-		$post = \get_post($pid);
-		if (!$post) continue;
-
-		$belegnr = (string) $post->post_title;
-		$belegdatum = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum', true);
-		if ($belegdatum === '') {
-			$belegdatum = \get_date_from_gmt(\gmdate('Y-m-d H:i:s', strtotime($post->post_date_gmt)), 'Y-m-d');
-		}
-		$faellig = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG') ? CMX_BELEG_META_FAELLIG : '_cmx_beleg_faelligkeitsdatum', true);
-		$betreff = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') ? CMX_BELEG_META_BETREFF : '_cmx_beleg_betreff', true);
-
-		$kontakt_label = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') ? CMX_BELEG_META_KONTAKT_LABEL : '_cmx_beleg_kontakt_label', true);
-		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
-		$kunde = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
-
-		$belegtyp = '';
-		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
-			[, $belegtyp] = cmx_get_beleg_type($post);
-		}
-		if ($belegtyp === '') {
-			$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy') ? cmx_belege_taxonomy() : '';
-			if ($tax && \taxonomy_exists($tax)) {
-				$terms = \wp_get_post_terms($pid, $tax, ['fields' => 'slugs']);
-				if (!\is_wp_error($terms) && !empty($terms)) $belegtyp = (string)$terms[0];
-			}
-		}
-
-		$waehrung = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_WAEHRUNG') ? CMX_BELEG_META_WAEHRUNG : '_cmx_beleg_waehrung', true);
-		if ($waehrung === '') $waehrung = 'CHF';
-
-		$total = 0.0;
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-			$calc = cmxbu_get_beleg_positionen_calc($pid);
-			$total = (float)($calc['total'] ?? 0);
-			$has_positions = cmxbu_beleg_has_positions($calc);
-			if (!$has_positions) {
-				$override = (string) \get_post_meta($pid, '_cmx_beleg_summe_override', true);
-				if ($override !== '') {
-					$total = (float) cmx_norm_decimal($override);
-				}
-			}
-		}
-		$total_str = number_format((float)$total, 2, ',', '');
-
-		$row = [
-			$pid,
-			$belegnr,
-			$belegtyp,
-			$belegdatum,
-			$faellig,
-			$betreff,
-			$kunde,
-			$total_str,
-			$waehrung,
-		];
-		fputcsv($fh, $row, ';');
+function cmxbu_belege_export_now_stamp(): string {
+	if (function_exists('wp_date')) {
+		return (string) \wp_date('Ymd-His');
 	}
-	fclose($fh);
-	exit;
+	return (string) \date_i18n('Ymd-His');
 }
+
+function cmxbu_belege_export_filename(string $ext): string {
+	$ext = strtolower(trim($ext, ". \t\n\r\0\x0B"));
+	if ($ext === '') $ext = 'dat';
+	return cmxbu_belege_export_site_prefix() . '-belege-export-' . cmxbu_belege_export_now_stamp() . '.' . $ext;
+}
+
+require_once __DIR__ . '/exports_CSV.php';
+require_once __DIR__ . '/exports_pdf.php';
+require_once __DIR__ . '/exports_zip.php';

@@ -32,6 +32,12 @@ function cmxbu_handle_beleg_download(): void {
 		cmxbu_log_beleg_view($post_id);
 	}
 
+	// Für Bearbeiter vor Auslieferung neu generieren, damit Berechnungs-/Layout-Updates
+	// sofort sichtbar sind (z. B. neue Rundungsregeln).
+	if (\current_user_can('edit_post', $post_id) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+		cmxbu_generate_document_on_save($post_id, $post, true);
+	}
+
 	// PDF-Pfade berechnen
 	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 

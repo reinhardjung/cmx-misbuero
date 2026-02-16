@@ -537,6 +537,12 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			return is_numeric($v) ? (float)$v : 0.0;
 		};
 		$to_str = static function($v): string { return is_string($v) ? $v : ''; };
+		$round_5rp = static function(float $amount): float {
+			if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) {
+				return (float) cmx_round_5rp($amount);
+			}
+			return round($amount * 20) / 20;
+		};
 
 		$out = [
 			'positionen'=>[],
@@ -713,7 +719,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 
 		if ($rate > 0) {
 			if ($isBrutto) {
-				$gross = $out['subtotal'];
+				$gross = $round_5rp((float)$out['subtotal']);
 				$net   = $gross / (1 + $rate);
 				$tax   = $gross - $net;
 			} else {
@@ -731,7 +737,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 
 		$out['net']        = $net;
 		$out['gross']      = $gross;
-		$out['tax_amount'] = $tax;
+		$out['tax_amount'] = round($tax, (int)$opts['round_decimals']);
 		$out['subtotal']   = $net;
 		$out['total']      = $gross;
 
@@ -898,6 +904,12 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		}
 		$manual_total_value = null;
 		if (!$has_positions) {
+			$round_5rp = static function(float $amount): float {
+				if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) {
+					return (float) cmx_round_5rp($amount);
+				}
+				return round($amount * 20) / 20;
+			};
 			$override = '';
 			$posted_post_id = 0;
 			if (isset($_POST['post_ID'])) {
@@ -920,7 +932,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				$tax = 0.0;
 				if ($rate > 0.0) {
 					if ($is_brutto) {
-						$gross = $ov;
+						$gross = $round_5rp($ov);
 						$net = $gross / (1 + $rate);
 						$tax = $gross - $net;
 					} else {
@@ -936,7 +948,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				$calc['total'] = $gross;
 				$calc['net'] = $net;
 				$calc['gross'] = $gross;
-				$calc['tax_amount'] = $tax;
+				$calc['tax_amount'] = round($tax, 2);
 			}
 		}
 		$anzahlungen_raw = get_post_meta($post_id, defined(__NAMESPACE__.'\\CMX_BELEG_META_ANZAHLUNGEN') ? CMX_BELEG_META_ANZAHLUNGEN : '_cmx_beleg_anzahlungen', true);

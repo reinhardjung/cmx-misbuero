@@ -44,6 +44,11 @@ function cmxbu_handle_beleg_send(): void {
 	}
 	$beleg_id = (string) ($post->post_title ?? '');
 
+	// Für Bearbeiter vor dem Versand neu generieren, damit aktuelle Berechnung/Layout gilt.
+	if (\current_user_can('edit_post', $post_id) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+		cmxbu_generate_document_on_save($post_id, $post, true);
+	}
+
 	// PDF-Pfade
 	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 	if (!is_file($pdf_abs_path)) {
