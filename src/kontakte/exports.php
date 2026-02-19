@@ -164,9 +164,12 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 		\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
 		while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
 
-		header('Content-Type: text/csv; charset=UTF-8');
-		header('Content-Disposition: attachment; filename="kontakte-export-'.\gmdate('Ymd-His').'.csv"');
-		header('Pragma: no-cache'); header('Expires: 0');
+			$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_filename')
+				? (string) cmx_export_filename('kontakte-export', 'csv')
+				: ('kontakte-export-' . \gmdate('Ymd-His') . '.csv');
+			header('Content-Type: text/csv; charset=UTF-8');
+			header('Content-Disposition: attachment; filename="' . $filename . '"');
+			header('Pragma: no-cache'); header('Expires: 0');
 
 		$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
 

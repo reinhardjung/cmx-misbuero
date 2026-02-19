@@ -141,9 +141,11 @@
 	$meta_headers = array_map(fn($k) => 'meta__'.$k, array_keys($meta_keys));
 	$headers = array_merge($base_headers, $meta_headers, $tax_headers);
 
-	$filename = 'artikel-export-' . \gmdate('Ymd-His') . '.csv';
-	header('Content-Type: text/csv; charset=UTF-8');
-	header('Content-Disposition: attachment; filename="'.$filename.'"');
+		$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_filename')
+			? (string) cmx_export_filename('artikel-export', 'csv')
+			: ('artikel-export-' . \gmdate('Ymd-His') . '.csv');
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="'.$filename.'"');
 	header('Pragma: no-cache');
 	header('Expires: 0');
 

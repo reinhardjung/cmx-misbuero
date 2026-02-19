@@ -170,9 +170,11 @@ defined('ABSPATH') || die('Oxytocin!');
 	$headers = array_merge($base_headers, $meta_headers, $tax_headers);
 
 	/* --- CSV ausgeben --- */
-	$filename = 'projekte-export-' . \gmdate('Ymd-His') . '.csv';
-	header('Content-Type: text/csv; charset=UTF-8');
-	header('Content-Disposition: attachment; filename="'.$filename.'"');
+		$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_filename')
+			? (string) cmx_export_filename('projekte-export', 'csv')
+			: ('projekte-export-' . \gmdate('Ymd-His') . '.csv');
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="'.$filename.'"');
 	header('Pragma: no-cache');
 	header('Expires: 0');
 

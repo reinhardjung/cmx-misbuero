@@ -185,6 +185,111 @@ function cmx_no_umlaute(string $text): string {
 	return strtr($text, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue','Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue','ß' => 'ss',]);
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_slugify')) {
+	function cmx_export_slugify(string $value, string $fallback = 'misbuero'): string {
+		$value = \strtolower(\trim($value));
+		$value = (string) \preg_replace('~[^a-z0-9_-]+~', '-', $value);
+		$value = \trim($value, '-_');
+		if ($value === '') {
+			$value = \strtolower(\trim($fallback));
+			$value = (string) \preg_replace('~[^a-z0-9_-]+~', '-', $value);
+			$value = \trim($value, '-_');
+		}
+		return $value !== '' ? $value : 'misbuero';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_host_prefix')) {
+	function cmx_export_host_prefix(): string {
+		$host = \strtolower((string) \wp_parse_url(\home_url('/'), PHP_URL_HOST));
+		if ($host === '') return '';
+
+		$prefix = '';
+		$suffix = '.misbuero.ch';
+		if (\str_ends_with($host, $suffix)) {
+			$left = \substr($host, 0, -\strlen($suffix));
+			if ($left !== '') {
+				$parts = \array_values(\array_filter(\explode('.', $left)));
+				if (!empty($parts)) {
+					$prefix = (string) \end($parts);
+				}
+			}
+		}
+		if ($prefix === '') {
+			$parts = \array_values(\array_filter(\explode('.', $host)));
+			$prefix = (string) ($parts[0] ?? '');
+		}
+		if (\in_array($prefix, ['www', 'localhost'], true)) {
+			$prefix = '';
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+			? cmx_export_slugify($prefix, '')
+			: $prefix;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_user_prefix')) {
+	function cmx_export_user_prefix(): string {
+		$user = \wp_get_current_user();
+		if (!$user || !($user instanceof \WP_User) || !(int) $user->ID) {
+			return '';
+		}
+
+		$raw = (string) ($user->user_login ?? '');
+		if ($raw === '') $raw = (string) ($user->display_name ?? '');
+		return \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+			? cmx_export_slugify($raw, '')
+			: $raw;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_actor_prefix')) {
+	function cmx_export_actor_prefix(): string {
+		$host_prefix = \function_exists(__NAMESPACE__ . '\\cmx_export_host_prefix')
+			? cmx_export_host_prefix()
+			: '';
+		$user_prefix = \function_exists(__NAMESPACE__ . '\\cmx_export_user_prefix')
+			? cmx_export_user_prefix()
+			: '';
+
+		if ($host_prefix !== '' && $user_prefix !== '' && $host_prefix !== $user_prefix) {
+			return $host_prefix . '-' . $user_prefix;
+		}
+		if ($host_prefix !== '') return $host_prefix;
+		if ($user_prefix !== '') return $user_prefix;
+		return 'misbuero';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')) {
+	function cmx_export_now_stamp(): string {
+		if (\function_exists('wp_date')) {
+			return (string) \wp_date('Ymd-His');
+		}
+		return (string) \date_i18n('Ymd-His');
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_export_filename')) {
+	function cmx_export_filename(string $base, string $ext = 'csv'): string {
+		$base = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+			? cmx_export_slugify($base, 'export')
+			: 'export';
+		$ext = \strtolower(\trim($ext, ". \t\n\r\0\x0B"));
+		if ($ext === '') $ext = 'dat';
+
+		$prefix = \function_exists(__NAMESPACE__ . '\\cmx_export_actor_prefix')
+			? cmx_export_actor_prefix()
+			: 'misbuero';
+		$stamp = \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
+			? cmx_export_now_stamp()
+			: (string) \gmdate('Ymd-His');
+
+		return $prefix . '-' . $base . '-' . $stamp . '.' . $ext;
+	}
+}
+
 
 /**
  * Holt Wert(e) aus globales.ini (Section + Key), case-insensitiv.

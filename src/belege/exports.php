@@ -122,6 +122,9 @@ function cmxbu_belege_export_now_stamp(): string {
 function cmxbu_belege_export_filename(string $ext): string {
 	$ext = strtolower(trim($ext, ". \t\n\r\0\x0B"));
 	if ($ext === '') $ext = 'dat';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_export_filename')) {
+		return (string) cmx_export_filename('belege-export', $ext);
+	}
 	return cmxbu_belege_export_site_prefix() . '-belege-export-' . cmxbu_belege_export_now_stamp() . '.' . $ext;
 }
 
