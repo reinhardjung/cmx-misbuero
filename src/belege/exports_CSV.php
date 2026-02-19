@@ -65,6 +65,17 @@ function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): st
 	return (string) $terms[0];
 }
 
+function cmxbu_beleg_export_date_sort_key(string $date_ymd): int {
+	$date_ymd = \trim($date_ymd);
+	if ($date_ymd === '') return 0;
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')) {
+		$date_ymd = (string) cmxbu_belege_export_normalize_date($date_ymd);
+	}
+	if (!\preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_ymd)) return 0;
+	$ts = \strtotime($date_ymd . ' 00:00:00');
+	return $ts ? (int) $ts : 0;
+}
+
 function cmxbu_beleg_export_to_float($raw): float {
 	if ($raw === null) return 0.0;
 	if (\is_int($raw) || \is_float($raw)) return (float) $raw;
@@ -168,9 +179,15 @@ function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
 	return \in_array($type, ['rechnung', 'quittung', 'gutschrift'], true);
 }
 
-function cmxbu_beleg_export_is_paid_or_partial(string $status): bool {
+function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_am = ''): bool {
 	$status = \sanitize_key($status);
-	return \in_array($status, ['bezahlt', 'teilbezahlt'], true);
+	if (\in_array($status, ['bezahlt', 'teilbezahlt'], true)) {
+		return true;
+	}
+	$bezahlt_am = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')
+		? (string) cmxbu_belege_export_normalize_date($bezahlt_am)
+		: \trim($bezahlt_am);
+	return $bezahlt_am !== '';
 }
 
 function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''): string {
@@ -263,25 +280,27 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 		'Ausgaben',
 	];
 	fputcsv($fh, $headers, ';');
+	$export_rows = [];
+	$seq = 0;
 
 	foreach ($ids as $pid) {
 		$post = \get_post($pid);
 		if (!$post) continue;
-		$status = \sanitize_key((string) \get_post_meta(
-			$pid,
-			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
-			true
-		));
-		if (!cmxbu_beleg_export_is_paid_or_partial($status)) {
-			continue;
-		}
-
-		$belegnr = (string) $post->post_title;
 		$bezahlt_am = (string) \get_post_meta(
 			$pid,
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am',
 			true
 		);
+		$status = \sanitize_key((string) \get_post_meta(
+			$pid,
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
+			true
+		));
+		if (!cmxbu_beleg_export_is_paid_or_partial($status, $bezahlt_am)) {
+			continue;
+		}
+
+		$belegnr = (string) $post->post_title;
 
 		$kontakt_label = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') ? CMX_BELEG_META_KONTAKT_LABEL : '_cmx_beleg_kontakt_label', true);
 		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
@@ -363,7 +382,11 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 						cmxbu_beleg_export_format_money($partial_einnahmen),
 						cmxbu_beleg_export_format_money($partial_ausgaben),
 					];
-					fputcsv($fh, $partial_row, ';');
+					$export_rows[] = [
+						'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_date),
+						'sort_seq' => $seq++,
+						'row' => $partial_row,
+					];
 				}
 				continue;
 			}
@@ -382,6 +405,26 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 			cmxbu_beleg_export_format_money($einnahmen),
 			cmxbu_beleg_export_format_money($ausgaben),
 		];
+		$export_rows[] = [
+			'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
+			'sort_seq' => $seq++,
+			'row' => $row,
+		];
+	}
+
+	if (\count($export_rows) > 1) {
+		\usort($export_rows, static function (array $a, array $b): int {
+			$ats = (int) ($a['sort_ts'] ?? 0);
+			$bts = (int) ($b['sort_ts'] ?? 0);
+			if ($ats !== $bts) return $bts <=> $ats; // newest first
+			$aseq = (int) ($a['sort_seq'] ?? 0);
+			$bseq = (int) ($b['sort_seq'] ?? 0);
+			return $aseq <=> $bseq;
+		});
+	}
+
+	foreach ($export_rows as $entry) {
+		$row = (array) ($entry['row'] ?? []);
 		fputcsv($fh, $row, ';');
 	}
 	fclose($fh);

@@ -445,13 +445,25 @@ function cmxbu_belege_export_now_stamp(): string {
 	return (string) \date_i18n('Ymd-His');
 }
 
+function cmxbu_belege_export_range_stamp(): string {
+	$range = cmxbu_belege_export_requested_date_range();
+	$from = \preg_replace('/[^0-9]/', '', (string) ($range['from'] ?? ''));
+	$to   = \preg_replace('/[^0-9]/', '', (string) ($range['to'] ?? ''));
+
+	if ($from !== '' && $to !== '') {
+		if ($from === $to) return $from;
+		return $from . '-' . $to;
+	}
+
+	return cmxbu_belege_export_now_stamp();
+}
+
 function cmxbu_belege_export_filename(string $ext): string {
 	$ext = strtolower(trim($ext, ". \t\n\r\0\x0B"));
 	if ($ext === '') $ext = 'dat';
-	if (\function_exists(__NAMESPACE__ . '\\cmx_export_filename')) {
-		return (string) cmx_export_filename('belege-export', $ext);
-	}
-	return cmxbu_belege_export_site_prefix() . '-belege-export-' . cmxbu_belege_export_now_stamp() . '.' . $ext;
+	$prefix = cmxbu_belege_export_site_prefix();
+	$base = $prefix . '-belege-' . cmxbu_belege_export_range_stamp();
+	return $base . '.' . $ext;
 }
 
 require_once __DIR__ . '/exports_CSV.php';
