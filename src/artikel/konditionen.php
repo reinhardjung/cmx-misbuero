@@ -1,7 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 
-/* ===== Neue Meta-Felder: Aufwand & Mehrwert ===== */
+/* ===== Neue Meta-Felder: Aufwand ===== */
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND', '_cmx_artikel_aufwand');
 }
@@ -22,13 +22,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$waehrung    = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
 	$ek          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_EK, '');
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
-	$mehrwert    = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MEHRWERT, '');
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
 	$marge       = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MARGE, '');
 	$verkaufbar  = (bool) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, false);
 	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
 	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
-	$mehrwert_display = ($mehrwert === '' || $mehrwert === null) ? '' : cmx_format_swiss_number($mehrwert, 2);
 	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
 	$marge_display    = ($marge === '' || $marge === null) ? '' : cmx_format_swiss_number($marge, 2);
 
@@ -95,12 +93,6 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		<input type="text" inputmode="decimal" id="cmx_artikel_aufwand" name="cmx_artikel_aufwand" value="' . esc_attr($aufwand_display) . '">
 	</div>';
 
-	// Mehrwert
-	echo '<div class="cmx-f cmx-f--xs">
-		<label for="cmx_artikel_mehrwert">Mehrwert</label>
-		<input type="text" inputmode="decimal" id="cmx_artikel_mehrwert" name="cmx_artikel_mehrwert" value="' . esc_attr($mehrwert_display) . '">
-	</div>';
-
 	// Verkaufspreis
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_vk">Verkaufspreis</label>
@@ -119,16 +111,15 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	echo '</div>';
 
-	// Kalkulation mit "Lock", wenn VK manuell geändert wurde – und Mehrwert entsprechend anpassen
+	// Kalkulation:
+	// A/F: EK + Aufwand => VK
+	// E:   Wenn VK manuell geändert wird, bleibt EK und Aufwand wird auf (VK - EK) gesetzt.
 	echo '<script>
 	document.addEventListener("DOMContentLoaded", function(){
 		const ek  = document.getElementById("cmx_artikel_ek");
 		const aw  = document.getElementById("cmx_artikel_aufwand");
-		const mw  = document.getElementById("cmx_artikel_mehrwert");
 		const vk  = document.getElementById("cmx_artikel_vk");
 		const mg  = document.getElementById("cmx_artikel_marge");
-
-		let vkLocked = false; // true, sobald VK manuell verändert wurde
 
 		function num(v){
 			let s = (v ?? "0").toString().trim();
@@ -160,9 +151,15 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		}
 
 		function recalcVK(){
-			if (vkLocked) { recalcMargin(); return; }
-			const v = num(ek?.value) + num(aw?.value) + num(mw?.value);
+			const v = num(ek?.value) + num(aw?.value);
 			if (vk) vk.value = formatCH(v);
+			recalcMargin();
+		}
+
+		function syncAufwandFromVK(){
+			if (!aw || !vk) { recalcMargin(); return; }
+			const newAw = num(vk.value) - num(ek?.value);
+			aw.value = formatCH(newAw);
 			recalcMargin();
 		}
 
@@ -178,52 +175,54 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			el.addEventListener("click", function(){ this.select(); });
 		}
 
-		// VK "Lock" + Mehrwert an VK anpassen: mw = max(0, VK - EK - Aufwand)
+		// VK manuell: Aufwand wird entsprechend angepasst (EK bleibt).
 		["input","change","keydown","paste"].forEach(evt=>{
-			vk?.addEventListener(evt, ()=>{
-				vkLocked = true;
-				if (mw) {
-					const newMw = num(vk.value) - num(ek?.value) - num(aw?.value);
-					mw.value = formatCH(newMw < 0 ? 0 : newMw);
-				}
-				recalcMargin();
-			}, {passive:true});
+			vk?.addEventListener(evt, syncAufwandFromVK, {passive:true});
 		});
 
-		// Auto-Berechnung, solange VK nicht gelockt ist
+		// EK/Aufwand geändert: VK neu berechnen.
 		["input","change"].forEach(evt=>{
 			ek?.addEventListener(evt, recalcVK, {passive:true});
 			aw?.addEventListener(evt, recalcVK, {passive:true});
-			mw?.addEventListener(evt, recalcVK, {passive:true});
 		});
 
 		// Alle numerischen Felder automatisch selektieren bei Fokus
-		[ek, aw, mw, vk, mg].forEach(enableAutoSelect);
-		[ek, aw, mw, vk, mg].forEach(el => {
+		[ek, aw, vk, mg].forEach(enableAutoSelect);
+		[ek, aw, vk, mg].forEach(el => {
 			if (!el) return;
 			if (el.value !== "") el.value = formatCH(num(el.value));
 		});
-		[ek, aw, mw, vk].forEach(el => {
+		[ek, aw, vk].forEach(el => {
 			if (!el) return;
 			el.addEventListener("blur", function(){
 				const raw = (this.value ?? "").toString().trim();
 				if (raw === "") return;
 				this.value = formatCH(num(raw));
 				if (this === vk) {
-					recalcMargin();
+					syncAufwandFromVK();
 					return;
 				}
 				recalcVK();
 			});
 		});
 
-		recalcVK(); // Initial
+		// Initialzustand:
+		// Wenn bereits manuell ein VK existiert, der nicht EK+Aufwand entspricht,
+		// Aufwand daran angleichen; sonst VK aus EK+Aufwand berechnen.
+		const hasVk = vk && ((vk.value ?? "").toString().trim() !== "");
+		const delta = hasVk ? Math.abs(num(vk.value) - (num(ek?.value) + num(aw?.value))) : 0;
+		if (hasVk && delta > 0.005) {
+			syncAufwandFromVK();
+		} else {
+			recalcVK();
+		}
 	});
 	</script>';
 }
 
-// Save-Handler: VK NICHT neu berechnen, wenn manuell vergeben
-// UND: Wenn VK manuell angepasst wurde, MEHRWERT = max(0, VK − EK − Aufwand) setzen.
+// Save-Handler:
+// A/F: EK+Aufwand berechnet VK.
+// E:   Wenn VK manuell vom Auto-Wert abweicht, wird Aufwand auf (VK - EK) angepasst.
 // ZUSÄTZLICH: Artikel-Nr. (SKU) und Währung speichern.
 \add_action('save_post_artikel', function (int $post_id, \WP_Post $post) {
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -234,7 +233,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	$in        = static fn($k, $d = '') => $_POST[$k] ?? $d;
 	$norm      = static fn($v) => cmx_parse_number((string) $v);
-	$is_valid  = static fn($v) => \is_finite($v) && $v >= 0;
+	$is_finite = static fn($v) => \is_finite($v);
 
 	// --- SKU & Währung speichern ---
 	$sku = \sanitize_text_field($in('cmx_artikel_sku', ''));
@@ -248,92 +247,37 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	\update_post_meta($post_id, CMX_ARTIKEL_META_WAEHRUNGEN, $waehrung);
 	// --- Ende SKU & Währung ---
 
-	$ek        = $norm($in('cmx_artikel_ek', ''));
-	$aufwand   = $norm($in('cmx_artikel_aufwand', ''));
-	$mehrwertP = $norm($in('cmx_artikel_mehrwert', ''));
+	$ek = \round($norm($in('cmx_artikel_ek', '')), 2);
+	if (!$is_finite($ek) || $ek < 0) $ek = 0.00;
 
-	$vk_post_s = $in('cmx_artikel_vk', '');
-	$vk_post   = ($vk_post_s === '') ? null : \round($norm($vk_post_s), 2);
+	$aufwand = \round($norm($in('cmx_artikel_aufwand', '')), 2);
+	if (!$is_finite($aufwand)) $aufwand = 0.00;
 
-	$inputs_valid = $is_valid($ek) && $is_valid($aufwand) && $is_valid($mehrwertP);
-	$vk_auto      = $inputs_valid ? \round($ek + $aufwand + $mehrwertP, 2) : null;
+	$vk_post_s = (string) $in('cmx_artikel_vk', '');
+	$vk_post = ($vk_post_s === '') ? null : \round($norm($vk_post_s), 2);
+	if ($vk_post !== null && (!$is_finite($vk_post) || $vk_post < 0)) {
+		$vk_post = 0.00;
+	}
 
-	$lock_key     = '_cmx_artikel_vk_lock'; // 1 = manuell, 0/absent = auto
-	$locked       = (int) \get_post_meta($post_id, $lock_key, true) === 1;
-	$epsilon      = 0.005;
+	$vk_auto = \round($ek + $aufwand, 2);
+	$epsilon = 0.005;
+	$manual_vk = ($vk_post !== null && \abs($vk_post - $vk_auto) > $epsilon);
 
-	$should_update_vk   = false;
-	$override_mehrwert  = false;
-	$vk                 = null;
-	$mehrwert_to_save   = $mehrwertP; // default: was vom Formular kam
-	$lock               = $locked ? 1 : 0;
-
-	// 1) Manuelle VK-Eingabe schlägt Auto-Berechnung
-	if ($vk_post !== null && ($vk_auto === null || \abs($vk_post - $vk_auto) > $epsilon)) {
-		$vk   = $vk_post;
-		$lock = 1;
-		$should_update_vk  = true;
-
-		$calcMw = $vk - $ek - $aufwand;
-		$mehrwert_to_save = $is_valid($calcMw) ? \round($calcMw, 2) : 0.00;
-		$override_mehrwert = true;
-
-	// 2) Bereits gelockt
-	} elseif ($locked) {
-		if ($vk_post !== null) {
-			$vk   = $vk_post;
-			$should_update_vk  = true;
-
-			$calcMw = $vk - $ek - $aufwand;
-			$mehrwert_to_save = $is_valid($calcMw) ? \round($calcMw, 2) : 0.00;
-			$override_mehrwert = true;
-		} else {
-			$vk = \get_post_meta($post_id, CMX_ARTIKEL_META_VK, true);
-			$vk = ($vk === '' || $vk === null) ? null : (float) $vk;
-			$should_update_vk = false;
-		}
-
-	// 3) Auto-Berechnung NICHT korrekt -> Werte beibehalten
-	} elseif ($vk_auto === null || !\is_finite($vk_auto) || $vk_auto < 0) {
-		$vk = \get_post_meta($post_id, CMX_ARTIKEL_META_VK, true);
-		$vk = ($vk === '' || $vk === null) ? null : (float) $vk;
-		$should_update_vk = false;
-
-	// 4) Auto-Berechnung korrekt -> übernehmen
+	if ($manual_vk && $vk_post !== null) {
+		$vk = $vk_post;
+		$aufwand = \round($vk - $ek, 2);
+		if (!$is_finite($aufwand)) $aufwand = 0.00;
 	} else {
-		$vk   = $vk_auto;
-		$lock = 0;
-		$should_update_vk  = true;
-		// Mehrwert bleibt wie gepostet
+		$vk = \round($ek + $aufwand, 2);
 	}
+	if (!$is_finite($vk) || $vk < 0) $vk = 0.00;
 
-	// EK / Aufwand speichern (ungültige als 0.00)
-	\update_post_meta($post_id, CMX_ARTIKEL_META_EK,       $is_valid($ek) ? \round($ek, 2) : 0.00);
-	\update_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND,  $is_valid($aufwand) ? \round($aufwand, 2) : 0.00);
-
-	// Mehrwert speichern
-	if (!$override_mehrwert) {
-		$mehrwert_to_save = $is_valid($mehrwertP) ? \round($mehrwertP, 2) : 0.00;
-	}
-	\update_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT, $mehrwert_to_save);
-
-	// VK aktualisieren, wenn notwendig
-	if ($should_update_vk && $vk !== null && $is_valid($vk)) {
-		\update_post_meta($post_id, CMX_ARTIKEL_META_VK, \round($vk, 2));
-	}
-
-	// Marge berechnen (falls möglich)
-	$vk_for_margin = $vk;
-	if ($vk_for_margin === null) {
-		$vk_for_margin = \get_post_meta($post_id, CMX_ARTIKEL_META_VK, true);
-		$vk_for_margin = ($vk_for_margin === '' || $vk_for_margin === null) ? null : (float) $vk_for_margin;
-	}
-	if ($vk_for_margin !== null && $is_valid($vk_for_margin) && $is_valid($ek)) {
-		\update_post_meta($post_id, CMX_ARTIKEL_META_MARGE, \round($vk_for_margin - (float) $ek, 2));
-	}
-
-	// Lock-Status
-	\update_post_meta($post_id, $lock_key, (int) $lock);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_EK, $ek);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, $aufwand);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_VK, $vk);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_MARGE, \round($vk - $ek, 2));
+	\delete_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT);
+	\delete_post_meta($post_id, '_cmx_artikel_vk_lock');
 
 	\update_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, isset($_POST['cmx_artikel_verkaufbar']) ? 1 : 0);
 
