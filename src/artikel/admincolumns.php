@@ -214,15 +214,15 @@ function cmx_lieferanten_args(): array {
 		case 'verkaufbar':
 			$is_sellable = cmx_artikel_is_verkaufbar($post_id);
 			echo $is_sellable
-				? '<span class="dashicons dashicons-yes-alt" title="Verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Verkaufbar</span>'
-				: '<span class="dashicons dashicons-no-alt" title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>';
+				? '<span title="Verkaufbar" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Verkaufbar</span>'
+				: '<span title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>';
 			break;
 
 		case 'katalog':
 			$in_catalog = cmx_artikel_is_katalog_sichtbar($post_id);
 			echo $in_catalog
-				? '<span class="dashicons dashicons-yes-alt" title="Im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Im Katalog</span>'
-				: '<span class="dashicons dashicons-no-alt" title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>';
+				? '<span title="Im Katalog" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Im Katalog</span>'
+				: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>';
 			break;
 
 		case 'hersteller_url':
