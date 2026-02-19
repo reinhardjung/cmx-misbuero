@@ -97,6 +97,11 @@ function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
 	return \in_array($type, ['rechnung', 'quittung', 'gutschrift'], true);
 }
 
+function cmxbu_beleg_export_is_paid_or_partial(string $status): bool {
+	$status = \sanitize_key($status);
+	return \in_array($status, ['bezahlt', 'teilbezahlt'], true);
+}
+
 function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''): string {
 	$type = $raw_type !== '' ? $raw_type : cmxbu_beleg_export_raw_type($post);
 	if ($type !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_effective_type')) {
@@ -191,6 +196,14 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	foreach ($ids as $pid) {
 		$post = \get_post($pid);
 		if (!$post) continue;
+		$status = \sanitize_key((string) \get_post_meta(
+			$pid,
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
+			true
+		));
+		if (!cmxbu_beleg_export_is_paid_or_partial($status)) {
+			continue;
+		}
 
 		$belegnr = (string) $post->post_title;
 		$bezahlt_am = (string) \get_post_meta(
