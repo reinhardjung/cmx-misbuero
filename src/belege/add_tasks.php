@@ -1,7 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
- * Übernimmt offene (nicht abgerechnete) Projekt-Tasks als Belegpositionen,
+ * Übernimmt offene (nicht abgerechnete) und verrechenbare Projekt-Tasks als Belegpositionen,
  * wenn beim Anlegen eines Belegs ein Projekt ausgewählt wurde.
  */
 
@@ -118,7 +118,7 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		unset($task_row);
 		\error_log("[CMX] Beleg {$post_id}: ".count($import_result['positionen'])." Task-Positionen ergänzt (Projekt {$projekt_id}).");
 	} else {
-		\error_log("[CMX] Beleg {$post_id}: keine neuen Tasks importiert. Tasks gesamt={$import_result['total']}, abgerechnet={$import_result['skipped_done']}, ohne Art/Dauer={$import_result['skipped_empty']}, ohne Preis={$import_result['skipped_no_price']}.");
+		\error_log("[CMX] Beleg {$post_id}: keine neuen Tasks importiert. Tasks gesamt={$import_result['total']}, nicht verrechenbar={$import_result['skipped_non_billable']}, abgerechnet={$import_result['skipped_done']}, ohne Art/Dauer={$import_result['skipped_empty']}, ohne Preis={$import_result['skipped_no_price']}.");
 	}
 
 	if ($project_tasks_changed) {
@@ -323,7 +323,7 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
  */
 function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks, int $projekt_id = 0): array {
 	$positionen = [];
-	$total = $skipped_done = $skipped_empty = $skipped_no_price = 0;
+	$total = $skipped_non_billable = $skipped_done = $skipped_empty = $skipped_no_price = 0;
 	$imported = false;
 	$imported_keys = [];
 	$imported_uids = [];
@@ -344,6 +344,11 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks, int $
 		$t['uid'] = $uid;
 
 		$total++;
+		$is_billable = \array_key_exists('verrechenbar', $t)
+			? (\function_exists(__NAMESPACE__ . '\\cmxbu_truthy') ? cmxbu_truthy($t['verrechenbar']) : !empty($t['verrechenbar']))
+			: true;
+		if (!$is_billable) { $skipped_non_billable++; continue; }
+
 		$flag = $t['abgerechnet'] ?? '';
 		$is_done = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
 			? cmxbu_truthy($flag)
@@ -386,6 +391,7 @@ function cmxbu_collect_task_positionen(array &$tasks, array &$artikel_vks, int $
 		'positionen'      => $positionen,
 		'imported'        => $imported,
 		'total'           => $total,
+		'skipped_non_billable' => $skipped_non_billable,
 		'skipped_done'    => $skipped_done,
 		'skipped_empty'   => $skipped_empty,
 		'skipped_no_price'=> $skipped_no_price,

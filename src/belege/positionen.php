@@ -453,6 +453,10 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 
 			foreach ($tasks as $idx => $task) {
 				if (!\is_array($task)) continue;
+				$is_billable = \array_key_exists('verrechenbar', $task)
+					? cmx_beleg_truthy($task['verrechenbar'])
+					: true;
+				if (!$is_billable) continue;
 				if (cmx_beleg_truthy($task['abgerechnet'] ?? 0)) continue;
 
 				$artikel_id = (int) ($task['artikel_id'] ?? 0);

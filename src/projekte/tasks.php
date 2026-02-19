@@ -2,7 +2,7 @@
 
 /**
  * Aufgaben / Tätigkeiten (wiederholbare Zeilen)
- * Felder pro Zeile: Datum, Uhrzeit, Dauer (h), Artikel (CPT artikel), Info
+ * Felder pro Zeile: Datum, Uhrzeit, Dauer (h), Artikel (CPT artikel), Verrechenbar, Info
  */
 
 const CMX_PROJEKT_TASK_META = '_cmx_projekt_tasks';
@@ -66,6 +66,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_format_swiss_number')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy')) {
+	function cmx_projekt_truthy($value): bool {
+		if ($value === true) return true;
+		if ($value === 1 || $value === '1') return true;
+		$s = \strtolower(\trim((string) $value));
+		return \in_array($s, ['true', 'yes', 'on'], true);
+	}
+}
+
 // Metabox registrieren
 \add_action('add_meta_boxes', function() {
 	foreach (CMX_TASK_POST_TYPES as $post_type) {
@@ -114,7 +123,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 
 	// Mindestens eine leere Zeile anzeigen
 	if (empty($tasks)) {
-		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'info'=>''];
+		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
 	echo '<div id="cmx-projekt-tasks" style="display:flex;flex-direction:column;gap:8px;">';
@@ -202,6 +211,12 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 					formatDauerInput(dauerInput);
 				}
 				rowEl.querySelector('select[name*="[artikel_id]"]').value = data?.artikel_id || '';
+				const verrechenbarInput = rowEl.querySelector('input[name*="[verrechenbar]"]');
+				if (verrechenbarInput && data && Object.prototype.hasOwnProperty.call(data, 'verrechenbar')) {
+					const raw = data.verrechenbar;
+					const isOff = raw === 0 || raw === '0' || raw === false || raw === 'false' || raw === 'off' || raw === 'no';
+					verrechenbarInput.checked = !isOff;
+				}
 				rowEl.querySelector('textarea[name*="[info]"]').value = data?.info || '';
 				const uidInput = rowEl.querySelector('input[name*="[uid]"]');
 				if (uidInput && !uidInput.value) {
@@ -264,7 +279,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		</script>
 
 	<script type="text/template" id="cmx-task-template">
-		<?php cmx_render_task_row('__INDEX__', ['datum'=>'','zeit'=>'','dauer'=>'','artikel_id'=>'','info'=>''], $artikel_options, true); ?>
+		<?php cmx_render_task_row('__INDEX__', ['datum'=>'','zeit'=>'','dauer'=>'','artikel_id'=>'','verrechenbar'=>1,'info'=>''], $artikel_options, true); ?>
 	</script>
 	<?php
 }
@@ -289,6 +304,9 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	}
 	$art_id = (int) ($row['artikel_id'] ?? 0);
 	$info   = esc_textarea($row['info'] ?? '');
+	$is_verrechenbar = \array_key_exists('verrechenbar', $row)
+		? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($row['verrechenbar']) : !empty($row['verrechenbar']))
+		: true;
 	$task_uid_raw = (string) ($row['uid'] ?? '');
 	$task_uid = '';
 	if (!$is_template) {
@@ -318,6 +336,8 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	}
 	echo '</select></label>';
 
+	$verrechenbar_checked = $is_verrechenbar ? 'checked' : '';
+	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechenbar</span><input type="hidden" name="cmx_tasks['.$name_base.'][verrechenbar]" value="0"><input type="checkbox" name="cmx_tasks['.$name_base.'][verrechenbar]" value="1" '.$verrechenbar_checked.' style="margin:6px 0 0 6px;"> </label>';
 	$checked = !empty($row['abgerechnet']) ? 'checked' : '';
 	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
 	echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
@@ -373,6 +393,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
 				'zeit'       => $zeit,
 				'dauer'      => $dauer,
 				'artikel_id' => $art_id,
+				'verrechenbar' => \array_key_exists('verrechenbar', $row) ? (!empty($row['verrechenbar']) ? 1 : 0) : 1,
 				'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
 				'info'       => $info,
 			];
