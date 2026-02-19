@@ -218,7 +218,8 @@ function cmx_normalize_url_for_label_unified(string $url): string { $u=\trim($ur
 function cmx_parse_swiss_decimal_unified(string $raw): ?float {
 	$s = \trim($raw);
 	if ($s === '') return null;
-	$s = \str_replace(["\xc2\xa0", ' ', "'"], '', $s);
+	$s = (string) \preg_replace('/[\x{00A0}\x{202F}\s]+/u', '', $s);
+	$s = \str_replace(["'", "’", "‘", "`", "´", "′"], '', $s);
 	$has_comma = \strpos($s, ',') !== false;
 	$has_dot = \strpos($s, '.') !== false;
 	if ($has_comma && $has_dot) {
@@ -361,6 +362,7 @@ function cmx_artikel_save_lieferanten_rows_unified(int $post_id, array $rows): v
 }
 function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	\wp_nonce_field('cmx_artikel_lieferanten_save_unified','cmx_artikel_lieferanten_nonce_unified');
+	echo '<input type="hidden" name="cmx_artikel_lieferanten_payload" value="1">';
 	$normalized_rows = cmx_artikel_load_lieferanten_rows_unified((int)$post->ID);
 	if (empty($normalized_rows)) {
 		$normalized_rows[] = [
@@ -462,7 +464,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 (function(){
 	function parseNumber(v){
 		if(typeof v!=="string") v=(v??"").toString();
-		var s=v.replace(/\s+/g,"").replace(/'/g,"");
+		var s=v.replace(/[\s\u00A0\u202F]+/g,"").replace(/['’‘`´′]/g,"");
 		var hasComma=s.indexOf(",")>-1, hasDot=s.indexOf(".")>-1;
 		if(hasComma && hasDot){
 			if(s.lastIndexOf(",")>s.lastIndexOf(".")){ s=s.replace(/\./g,"").replace(/,/g,"."); }
@@ -631,6 +633,7 @@ HTML;
 	if ($post->post_type !== 'artikel') return;
 	if (!\current_user_can('edit_post', $post_id)) return;
 	if (!isset($_POST['cmx_artikel_lieferanten_nonce_unified']) || !\wp_verify_nonce($_POST['cmx_artikel_lieferanten_nonce_unified'], 'cmx_artikel_lieferanten_save_unified')) return;
+	if (!isset($_POST['cmx_artikel_lieferanten_payload'])) return;
 
 	$kontakt_pt   = cmx_first_existing_kontakt_cpt_unified();
 	$allowed_ids  = $kontakt_pt ? cmx_fetch_lieferanten_ids_unified($kontakt_pt) : [];
@@ -677,8 +680,6 @@ HTML;
 		$ek_first_raw = (string)($first['ek'] ?? '');
 		if ($ek_first_raw !== '' && \is_numeric($ek_first_raw)) {
 			\update_post_meta($post_id, CMX_ARTIKEL_META_EK, \number_format((float)$ek_first_raw, 2, '.', ''));
-		} else {
-			\delete_post_meta($post_id, CMX_ARTIKEL_META_EK);
 		}
 	} else {
 		\update_post_meta($post_id, CMX_ARTIKEL_META_LIEFERANT_ID, 0);
@@ -686,7 +687,6 @@ HTML;
 		\update_post_meta($post_id, CMX_ARTIKEL_META_BEZUGSQUELLE, '');
 		\update_post_meta($post_id, CMX_ARTIKEL_META_LIEFERZEIT, 0);
 		\update_post_meta($post_id, CMX_ARTIKEL_META_LAGERBESTAND, 0);
-		\delete_post_meta($post_id, CMX_ARTIKEL_META_EK);
 	}
 }, 10, 2);
 

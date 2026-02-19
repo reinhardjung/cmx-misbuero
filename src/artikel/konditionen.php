@@ -20,6 +20,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	if (!isset($_POST['cmx_artikel_nonce'])) {
 		\wp_nonce_field('cmx_artikel_save', 'cmx_artikel_nonce');
 	}
+	echo '<input type="hidden" name="cmx_artikel_konditionen_payload" value="1">';
 
 	$sku         = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SKU, '');
 	$waehrung    = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
@@ -35,6 +36,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
 	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
 	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
+	$vk_hidden_value  = ($vk === '' || $vk === null) ? '' : (string) \round(cmx_parse_number($vk), 2);
 	$marge_display    = ($marge === '' || $marge === null) ? '' : cmx_format_swiss_number($marge, 2);
 
 	$sel_einheit = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_EINHEITEN);
@@ -104,6 +106,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_vk">Verkaufspreis</label>
 		<input type="text" inputmode="decimal" id="cmx_artikel_vk" name="cmx_artikel_vk" value="' . esc_attr($vk_display) . '">
+		<input type="hidden" id="cmx_artikel_vk_prev" name="cmx_artikel_vk_prev" value="' . esc_attr($vk_hidden_value) . '">
 	</div>';
 
 	// Marge
@@ -113,6 +116,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	</div>';
 
 	echo '<div class="cmx-check">
+		<input type="hidden" name="cmx_artikel_verkaufbar_present" value="1">
+		<input type="hidden" name="cmx_artikel_katalog_present" value="1">
 		<label><input type="checkbox" name="cmx_artikel_verkaufbar" value="1" ' . checked($verkaufbar, true, false) . '> verkaufbar</label>
 		<label><input type="checkbox" name="cmx_artikel_katalog" value="1" ' . checked($katalog, true, false) . '> Katalog</label>
 	</div>';
@@ -128,11 +133,12 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		const aw  = document.getElementById("cmx_artikel_aufwand");
 		const vk  = document.getElementById("cmx_artikel_vk");
 		const mg  = document.getElementById("cmx_artikel_marge");
+		const vkPrev = document.getElementById("cmx_artikel_vk_prev");
 
 		function num(v){
 			let s = (v ?? "0").toString().trim();
 			if (s === "") return 0;
-			s = s.replace(/\s+/g, "").replace(/\'/g, "");
+			s = s.replace(/[\s\u00A0\u202F]+/g, "").replace(/[\u0027’‘`´′]/g, "");
 			const hasComma = s.indexOf(",") > -1;
 			const hasDot = s.indexOf(".") > -1;
 			if (hasComma && hasDot) {
@@ -177,6 +183,23 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			mg.value = formatCH(margin);
 		}
 
+		function ensureVkBeforeSubmit(){
+			if (!vk) return;
+			const rawVk = (vk.value ?? "").toString().trim();
+			if (rawVk !== "") return;
+			const hasEk = (ek?.value ?? "").toString().trim() !== "";
+			const hasAw = (aw?.value ?? "").toString().trim() !== "";
+			if (!hasEk && !hasAw) return;
+			recalcVK();
+		}
+
+		function syncVkPrev(){
+			if (!vkPrev || !vk) return;
+			const raw = (vk.value ?? "").toString().trim();
+			if (raw === "") return;
+			vkPrev.value = (Math.round(num(raw) * 100) / 100).toFixed(2);
+		}
+
 		function enableAutoSelect(el) {
 			if (!el) return;
 			el.addEventListener("focus", function(){ this.select(); });
@@ -205,13 +228,21 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			el.addEventListener("blur", function(){
 				const raw = (this.value ?? "").toString().trim();
 				if (raw === "") return;
-				this.value = formatCH(num(raw));
-				if (this === vk) {
-					syncAufwandFromVK();
-					return;
-				}
+					this.value = formatCH(num(raw));
+					if (this === vk) {
+						syncAufwandFromVK();
+						syncVkPrev();
+						return;
+					}
 				recalcVK();
+				syncVkPrev();
 			});
+		});
+
+		const postForm = document.getElementById("post");
+		postForm?.addEventListener("submit", function(){
+			ensureVkBeforeSubmit();
+			syncVkPrev();
 		});
 
 		// Initialzustand:
@@ -224,6 +255,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		} else {
 			recalcVK();
 		}
+		syncVkPrev();
 	});
 	</script>';
 }
@@ -238,61 +270,100 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	if ($post->post_type !== 'artikel') return;
 	if (!\current_user_can('edit_post', $post_id)) return;
 	if (!isset($_POST['cmx_artikel_nonce']) || !\wp_verify_nonce($_POST['cmx_artikel_nonce'], 'cmx_artikel_save')) return;
+	if (!isset($_POST['cmx_artikel_konditionen_payload'])) return;
 
 	$in        = static fn($k, $d = '') => $_POST[$k] ?? $d;
 	$norm      = static fn($v) => cmx_parse_number((string) $v);
 	$is_finite = static fn($v) => \is_finite($v);
+	$has       = static fn($k) => \array_key_exists($k, $_POST);
 
 	// --- SKU & Währung speichern ---
-	$sku = \sanitize_text_field($in('cmx_artikel_sku', ''));
-	\update_post_meta($post_id, CMX_ARTIKEL_META_SKU, $sku);
-
-	$waehrung = \strtoupper(\sanitize_text_field($in('cmx_artikel_waehrung', 'CHF')));
-	$allowed  = ['CHF', 'EUR', 'USD'];
-	if (!\in_array($waehrung, $allowed, true)) {
-		$waehrung = 'CHF';
+	if ($has('cmx_artikel_sku')) {
+		$sku = \sanitize_text_field($in('cmx_artikel_sku', ''));
+		\update_post_meta($post_id, CMX_ARTIKEL_META_SKU, $sku);
 	}
-	\update_post_meta($post_id, CMX_ARTIKEL_META_WAEHRUNGEN, $waehrung);
+
+	if ($has('cmx_artikel_waehrung')) {
+		$waehrung = \strtoupper(\sanitize_text_field($in('cmx_artikel_waehrung', 'CHF')));
+		$allowed  = ['CHF', 'EUR', 'USD'];
+		if (!\in_array($waehrung, $allowed, true)) {
+			$waehrung = 'CHF';
+		}
+		\update_post_meta($post_id, CMX_ARTIKEL_META_WAEHRUNGEN, $waehrung);
+	}
 	// --- Ende SKU & Währung ---
 
-	$ek = \round($norm($in('cmx_artikel_ek', '')), 2);
-	if (!$is_finite($ek) || $ek < 0) $ek = 0.00;
+	$has_ek      = $has('cmx_artikel_ek');
+	$has_aufwand = $has('cmx_artikel_aufwand');
+	$has_vk      = $has('cmx_artikel_vk');
+	if ($has_ek || $has_aufwand || $has_vk) {
+		$current_ek      = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_EK, true)), 2);
+		$current_aufwand = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, true)), 2);
+		$current_vk      = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_VK, true)), 2);
+		$posted_prev_vk  = $has('cmx_artikel_vk_prev')
+			? \round($norm((string) $in('cmx_artikel_vk_prev', '')), 2)
+			: $current_vk;
+		if (!$is_finite($posted_prev_vk) || $posted_prev_vk < 0) {
+			$posted_prev_vk = $current_vk;
+		}
 
-	$aufwand = \round($norm($in('cmx_artikel_aufwand', '')), 2);
-	if (!$is_finite($aufwand)) $aufwand = 0.00;
+		$ek = $has_ek ? \round($norm($in('cmx_artikel_ek', '')), 2) : $current_ek;
+		if (!$is_finite($ek) || $ek < 0) $ek = 0.00;
 
-	$vk_post_s = (string) $in('cmx_artikel_vk', '');
-	$vk_post = ($vk_post_s === '') ? null : \round($norm($vk_post_s), 2);
-	if ($vk_post !== null && (!$is_finite($vk_post) || $vk_post < 0)) {
-		$vk_post = 0.00;
-	}
-
-	$vk_auto = \round($ek + $aufwand, 2);
-	$epsilon = 0.005;
-	$manual_vk = ($vk_post !== null && \abs($vk_post - $vk_auto) > $epsilon);
-
-	if ($manual_vk && $vk_post !== null) {
-		$vk = $vk_post;
-		$aufwand = \round($vk - $ek, 2);
+		$aufwand = $has_aufwand ? \round($norm($in('cmx_artikel_aufwand', '')), 2) : $current_aufwand;
 		if (!$is_finite($aufwand)) $aufwand = 0.00;
-	} else {
-		$vk = \round($ek + $aufwand, 2);
-	}
-	if (!$is_finite($vk) || $vk < 0) $vk = 0.00;
 
-	\update_post_meta($post_id, CMX_ARTIKEL_META_EK, $ek);
-	\update_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, $aufwand);
-	\update_post_meta($post_id, CMX_ARTIKEL_META_VK, $vk);
-	\update_post_meta($post_id, CMX_ARTIKEL_META_MARGE, \round($vk - $ek, 2));
-	\delete_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT);
-	\delete_post_meta($post_id, '_cmx_artikel_vk_lock');
+		$vk_post = null;
+		if ($has_vk) {
+			$vk_post_s = (string) $in('cmx_artikel_vk', '');
+			$vk_post_raw = \html_entity_decode(\trim($vk_post_s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+			if ($vk_post_raw === '') {
+				$vk_post = $posted_prev_vk;
+			} else {
+				$vk_post = \round($norm($vk_post_raw), 2);
+				$looks_numeric = \preg_match('/\d/u', $vk_post_raw) === 1;
+				if ((!$is_finite($vk_post) || $vk_post < 0) || ($vk_post === 0.0 && $looks_numeric && $posted_prev_vk > 0)) {
+					$vk_post = $posted_prev_vk;
+				}
+			}
+		}
+
+		$vk_auto = \round($ek + $aufwand, 2);
+		$epsilon = 0.005;
+		$manual_vk = ($vk_post !== null && \abs($vk_post - $vk_auto) > $epsilon);
+
+		if ($manual_vk && $vk_post !== null) {
+			$vk = $vk_post;
+			$aufwand = \round($vk - $ek, 2);
+			if (!$is_finite($aufwand)) $aufwand = 0.00;
+		} else {
+			$vk = \round($ek + $aufwand, 2);
+		}
+		if ($has_vk && $vk === 0.0 && $posted_prev_vk > 0) {
+			$vk = $posted_prev_vk;
+			$aufwand = \round($vk - $ek, 2);
+			if (!$is_finite($aufwand)) $aufwand = 0.00;
+		}
+		if (!$is_finite($vk) || $vk < 0) $vk = 0.00;
+
+		\update_post_meta($post_id, CMX_ARTIKEL_META_EK, $ek);
+		\update_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, $aufwand);
+		\update_post_meta($post_id, CMX_ARTIKEL_META_VK, $vk);
+		\update_post_meta($post_id, CMX_ARTIKEL_META_MARGE, \round($vk - $ek, 2));
+		\delete_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT);
+		\delete_post_meta($post_id, '_cmx_artikel_vk_lock');
+	}
 
 	// Kompatibilität zur bestehenden Datenlogik:
 	// 1 = NICHT verkaufbar, 0 = verkaufbar.
-	\update_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, isset($_POST['cmx_artikel_verkaufbar']) ? 0 : 1);
-	\update_post_meta($post_id, CMX_ARTIKEL_META_KATALOG, isset($_POST['cmx_artikel_katalog']) ? 1 : 0);
+	if ($has('cmx_artikel_verkaufbar_present')) {
+		\update_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, isset($_POST['cmx_artikel_verkaufbar']) ? 0 : 1);
+	}
+	if ($has('cmx_artikel_katalog_present')) {
+		\update_post_meta($post_id, CMX_ARTIKEL_META_KATALOG, isset($_POST['cmx_artikel_katalog']) ? 1 : 0);
+	}
 
-	if (\taxonomy_exists(TAX_ARTIKEL_EINHEITEN)) {
+	if (\taxonomy_exists(TAX_ARTIKEL_EINHEITEN) && $has('cmx_artikel_einheit')) {
 		$einheit_id = (int) $in('cmx_artikel_einheit', 0);
 		\wp_set_post_terms($post_id, $einheit_id ? [$einheit_id] : [], TAX_ARTIKEL_EINHEITEN, false);
 	}

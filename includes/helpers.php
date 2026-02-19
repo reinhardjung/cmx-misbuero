@@ -357,7 +357,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_parse_number')) {
 		$s = trim((string) $value);
 		if ($s === '') return 0.0;
 
-		$s = str_replace(["\xc2\xa0", ' ', "'"], '', $s);
+		// Entferne normale/geschützte/schmale Leerzeichen und verschiedene Apostroph-Zeichen.
+		$s = (string) preg_replace('/[\x{00A0}\x{202F}\s]+/u', '', $s);
+		$s = str_replace(["'", "’", "‘", "`", "´", "′"], '', $s);
 		$has_comma = strpos($s, ',') !== false;
 		$has_dot = strpos($s, '.') !== false;
 

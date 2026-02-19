@@ -90,6 +90,7 @@ function cmx_artikel_farbe_side_box(\WP_Post $post): void {
 	}
 
 	echo '<div class="cmx-art-side">';
+	echo '<input type="hidden" name="cmx_artikel_farbe_payload" value="1">';
 	if (empty($terms)) {
 		echo '<p><em>Keine Farben definiert.</em></p>';
 	} else {
@@ -117,6 +118,7 @@ function cmx_artikel_marke_side_box(\WP_Post $post): void {
 	$sel_id = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_MARKEN);
 	$terms  = cmx_get_terms_safe(TAX_ARTIKEL_MARKEN);
 
+	echo '<input type="hidden" name="cmx_artikel_marke_payload" value="1">';
 	echo '<p><label for="cmx_artikel_marke"><strong>Marke auswählen</strong></label><br>';
 	echo '<select id="cmx_artikel_marke" name="cmx_artikel_marke" class="widefat">';
 	echo '<option value="0">— auswählen —</option>';
@@ -141,7 +143,7 @@ function cmx_artikel_marke_side_box(\WP_Post $post): void {
 	$in = fn($k, $d='') => ($_POST[$k] ?? $d);
 
 	// Farben (Mehrfach)
-	if (\taxonomy_exists(TAX_ARTIKEL_FARBEN)) {
+	if (\taxonomy_exists(TAX_ARTIKEL_FARBEN) && isset($_POST['cmx_artikel_farbe_payload'])) {
 		$ids = array_map('intval', (array)($in('cmx_artikel_farbe_ids', [])));
 		if (empty($ids) && isset($_POST['cmx_artikel_farben_csv'])) {
 			$ids = cmx_csv_ids_to_array((string)$in('cmx_artikel_farben_csv', ''));
@@ -151,7 +153,7 @@ function cmx_artikel_marke_side_box(\WP_Post $post): void {
 	}
 
 	// Marke (Single)
-	if (\taxonomy_exists(TAX_ARTIKEL_MARKEN)) {
+	if (\taxonomy_exists(TAX_ARTIKEL_MARKEN) && isset($_POST['cmx_artikel_marke_payload'])) {
 		$marke_id = (int) $in('cmx_artikel_marke', 0);
 		\wp_set_post_terms($post_id, $marke_id ? [$marke_id] : [], TAX_ARTIKEL_MARKEN, false);
 	}
