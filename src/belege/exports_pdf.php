@@ -47,19 +47,34 @@ use Dompdf\Options;
 	};
 	$range_from = $fmt_date((string) ($range['from'] ?? ''));
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
-	$range_line = 'Zeitraum: ' . $preset_label . ' | Von: ' . $range_from . ' | Bis: ' . $range_to;
-	// MwSt-Spalten (6,7,8) bewusst deutlich schmaler als Standardspalten (>=30% kleiner).
-	$col_widths = [10, 9, 8, 13, 10, 11, 4.2, 4.2, 4.2, 13, 13.4];
+	$range_line_html = 'Zeitraum: <strong>' . \esc_html($preset_label) . '</strong> | Von: <strong>' . \esc_html($range_from) . '</strong> | Bis: <strong>' . \esc_html($range_to) . '</strong>';
+	// Kontakt deutlich breiter (+20% ggü. bisherigem Layout), MwSt-Spalten deutlich schmaler.
+	$col_widths = [9, 8, 7, 20, 8, 9, 2, 2, 2, 16.5, 16.5];
+	$col_classes = [
+		'col-belegnummer',
+		'col-bezahlt-am',
+		'col-belegtyp',
+		'col-kontakt',
+		'col-zahlungsart',
+		'col-zahlungsgrund',
+		'col-mwst-satz',
+		'col-mwst',
+		'col-vorsteuer',
+		'col-einnahmen',
+		'col-ausgaben',
+	];
 	$colgroup_html = '';
 	foreach ($headers as $idx => $head) {
 		$width = (float) ($col_widths[$idx] ?? 9);
-		$colgroup_html .= '<col style="width:' . \esc_attr((string) $width) . '%">';
+		$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
+		$colgroup_html .= '<col class="' . \esc_attr($class) . '" style="width:' . \esc_attr((string) $width) . '%">';
 	}
 
 	$header_html = '';
 	foreach ($headers as $idx => $head) {
+		$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
 		$align = ($idx >= 6) ? ' style="text-align:right;"' : '';
-		$header_html .= '<th' . $align . '>' . \esc_html((string) $head) . '</th>';
+		$header_html .= '<th class="' . \esc_attr($class) . '"' . $align . '>' . \esc_html((string) $head) . '</th>';
 	}
 
 	$rows_html = '';
@@ -67,8 +82,9 @@ use Dompdf\Options;
 		$cells_html = '';
 		foreach ($headers as $idx => $head) {
 			$val = (string) ($row[$idx] ?? '');
+			$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
 			$align = ($idx >= 6) ? ' style="text-align:right;"' : '';
-			$cells_html .= '<td' . $align . '>' . \esc_html($val) . '</td>';
+			$cells_html .= '<td class="' . \esc_attr($class) . '"' . $align . '>' . \esc_html($val) . '</td>';
 		}
 		$rows_html .= '<tr>' . $cells_html . '</tr>';
 	}
@@ -86,13 +102,18 @@ use Dompdf\Options;
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
 		table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
 		th,td{padding:6px;border:0}
-		thead th{font-weight:700;background:#eceff1;text-align:left;white-space:nowrap}
+		thead th{font-weight:700;background:#eceff1;text-align:left;white-space:normal}
 		tbody td{word-wrap:break-word;border-top:1px solid #edf0f2}
 		tbody tr:nth-child(odd) td{background:#f7f8fa}
 		tbody tr:nth-child(even) td{background:#ffffff}
+		thead th.col-mwst-satz, thead th.col-mwst, thead th.col-vorsteuer{font-size:8px}
+		col.col-mwst-satz, col.col-mwst, col.col-vorsteuer{width:2% !important}
+		col.col-kontakt{width:20% !important}
+		th.col-kontakt, td.col-kontakt{width:20% !important}
+		td.col-kontakt{font-size:9.2px}
 	</style></head><body>
 	<div class="doc-header">
-		<div class="doc-header-title">Milchbüchli<span class="doc-header-subtitle">'.\esc_html($range_line).'</span></div>
+		<div class="doc-header-title">Milchbüchli<span class="doc-header-subtitle">'.$range_line_html.'</span></div>
 		<div class="doc-header-logo">'.$branding_logo_html.'</div>
 	</div>
 	<table>
