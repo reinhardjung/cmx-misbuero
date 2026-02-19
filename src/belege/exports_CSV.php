@@ -48,14 +48,21 @@ function cmxbu_beleg_export_meta_float(int $post_id, string $meta_key): float {
 function cmxbu_beleg_export_format_money(float $value): string {
 	$rounded = \round((float) $value, 2);
 	if (\abs($rounded) < 0.00001) return '';
-	return \number_format($rounded, 2, ',', '');
+	if (\function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')) {
+		return (string) cmx_format_swiss_number($rounded, 2);
+	}
+	return \number_format($rounded, 2, '.', "'");
 }
 
 function cmxbu_beleg_export_format_percent(float $rate_decimal): string {
 	$pct = (float) $rate_decimal * 100;
 	if ($pct <= 0) return '';
-	$txt = \number_format($pct, 2, ',', '');
-	return \rtrim(\rtrim($txt, '0'), ',');
+	if (\function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')) {
+		$txt = (string) cmx_format_swiss_number($pct, 2);
+	} else {
+		$txt = \number_format($pct, 2, '.', "'");
+	}
+	return \rtrim(\rtrim($txt, '0'), '.');
 }
 
 function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): string {
@@ -262,33 +269,27 @@ function cmxbu_beleg_export_calc(int $post_id, float $mwst_rate, bool $is_brutto
 	];
 }
 
-function cmxbu_stream_belege_csv_from_ids(array $ids): void {
-	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
-	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
-	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
-		? (array) cmxbu_belege_export_requested_date_range()
-		: ['from' => '', 'to' => ''];
-
-	header('Content-Type: text/csv; charset=UTF-8');
-	header('Content-Disposition: attachment; filename="'.cmxbu_belege_export_filename('csv').'"');
-	header('Pragma: no-cache'); header('Expires: 0');
-
-	$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
-
-	$headers = [
+function cmxbu_beleg_export_headers(): array {
+	return [
 		'Belegnummer',
 		'Bezahlt am',
 		'Belegtyp',
 		'Kontakt',
 		'Zahlungsart',
 		'Zahlungsgrund',
-		'MwStsatz',
+		'MwSt-Satz',
 		'MwSt',
 		'Vorsteuer',
 		'Einnahmen',
 		'Ausgaben',
 	];
-	fputcsv($fh, $headers, ';');
+}
+
+function cmxbu_beleg_export_rows_from_ids(array $ids): array {
+	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
+		? (array) cmxbu_belege_export_requested_date_range()
+		: ['from' => '', 'to' => ''];
+
 	$export_rows = [];
 	$seq = 0;
 
@@ -444,8 +445,26 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 		});
 	}
 
+	$rows = [];
 	foreach ($export_rows as $entry) {
-		$row = (array) ($entry['row'] ?? []);
+		$rows[] = (array) ($entry['row'] ?? []);
+	}
+	return $rows;
+}
+
+function cmxbu_stream_belege_csv_from_ids(array $ids): void {
+	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
+	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
+
+	header('Content-Type: text/csv; charset=UTF-8');
+	header('Content-Disposition: attachment; filename="'.cmxbu_belege_export_filename('csv').'"');
+	header('Pragma: no-cache'); header('Expires: 0');
+
+	$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
+	$headers = cmxbu_beleg_export_headers();
+	fputcsv($fh, $headers, ';');
+	$rows = cmxbu_beleg_export_rows_from_ids($ids);
+	foreach ($rows as $row) {
 		fputcsv($fh, $row, ';');
 	}
 	fclose($fh);

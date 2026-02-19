@@ -18,80 +18,92 @@ use Dompdf\Options;
 	$branding_logo_html = $branding_logo !== ''
 		? '<img class="header-logo" src="'.\esc_url($branding_logo).'" alt="Das bin ich Logo">'
 		: '';
+	$headers = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_headers')
+		? cmxbu_beleg_export_headers()
+		: [
+			'Belegnummer','Bezahlt am','Belegtyp','Kontakt','Zahlungsart',
+			'Zahlungsgrund','MwSt-Satz','MwSt','Vorsteuer','Einnahmen','Ausgaben'
+		];
+	$rows = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
+		? cmxbu_beleg_export_rows_from_ids($post_ids)
+		: [];
+	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
+		? (array) cmxbu_belege_export_requested_date_range()
+		: ['from' => '', 'to' => ''];
+	$preset_key = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_preset')
+		? (string) cmxbu_belege_export_requested_preset()
+		: 'benutzerdefiniert';
+	$presets = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_presets')
+		? (array) cmxbu_belege_export_presets()
+		: [];
+	$preset_label = (string) ($presets[$preset_key] ?? 'Benutzerdefiniert');
+	$fmt_date = static function(string $ymd): string {
+		$ymd = \trim($ymd);
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) {
+			$ts = \strtotime($ymd . ' 00:00:00');
+			if ($ts) return \date('d.m.Y', $ts);
+		}
+		return $ymd;
+	};
+	$range_from = $fmt_date((string) ($range['from'] ?? ''));
+	$range_to = $fmt_date((string) ($range['to'] ?? ''));
+	$range_line = 'Zeitraum: ' . $preset_label . ' | Von: ' . $range_from . ' | Bis: ' . $range_to;
+	// MwSt-Spalten (6,7,8) bewusst deutlich schmaler als Standardspalten (>=30% kleiner).
+	$col_widths = [10, 9, 8, 13, 10, 11, 4.2, 4.2, 4.2, 13, 13.4];
+	$colgroup_html = '';
+	foreach ($headers as $idx => $head) {
+		$width = (float) ($col_widths[$idx] ?? 9);
+		$colgroup_html .= '<col style="width:' . \esc_attr((string) $width) . '%">';
+	}
+
+	$header_html = '';
+	foreach ($headers as $idx => $head) {
+		$align = ($idx >= 6) ? ' style="text-align:right;"' : '';
+		$header_html .= '<th' . $align . '>' . \esc_html((string) $head) . '</th>';
+	}
 
 	$rows_html = '';
-	foreach ($post_ids as $pid) {
-		$post = \get_post($pid);
-		if (!$post) continue;
-
-		$belegnr = (string) $post->post_title;
-		$belegdatum = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum', true);
-		if ($belegdatum === '') {
-			$belegdatum = \get_date_from_gmt((string) $post->post_date_gmt, 'Y-m-d');
+	foreach ($rows as $row) {
+		$cells_html = '';
+		foreach ($headers as $idx => $head) {
+			$val = (string) ($row[$idx] ?? '');
+			$align = ($idx >= 6) ? ' style="text-align:right;"' : '';
+			$cells_html .= '<td' . $align . '>' . \esc_html($val) . '</td>';
 		}
-
-		$kontakt_label = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') ? CMX_BELEG_META_KONTAKT_LABEL : '_cmx_beleg_kontakt_label', true);
-		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
-		$kunde = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
-
-		$belegtyp = '';
-		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
-			[, $belegtyp] = cmx_get_beleg_type($post);
-		}
-		if ($belegtyp === '') {
-			$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy') ? cmx_belege_taxonomy() : '';
-			if ($tax && \taxonomy_exists($tax)) {
-				$terms = \wp_get_post_terms($pid, $tax, ['fields' => 'slugs']);
-				if (!\is_wp_error($terms) && !empty($terms)) $belegtyp = (string)$terms[0];
-			}
-		}
-
-		$total = 0.0;
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-			$calc = cmxbu_get_beleg_positionen_calc($pid);
-			$total = (float)($calc['total'] ?? 0);
-			$has_positions = cmxbu_beleg_has_positions($calc);
-			if (!$has_positions) {
-				$override = (string) \get_post_meta($pid, '_cmx_beleg_summe_override', true);
-				if ($override !== '') {
-					$total = (float) cmx_norm_decimal($override);
-				}
-			}
-		}
-		$total_str = number_format((float)$total, 2, ',', "'");
-
-		$rows_html .= '<tr>'
-			.'<td>'.\esc_html($belegnr).'</td>'
-			.'<td>'.\esc_html($belegtyp).'</td>'
-			.'<td>'.\esc_html($belegdatum).'</td>'
-			.'<td>'.\esc_html($kunde).'</td>'
-			.'<td style="text-align:right;">'.\esc_html($total_str).'</td>'
-			.'</tr>';
+		$rows_html .= '<tr>' . $cells_html . '</tr>';
+	}
+	if ($rows_html === '') {
+		$rows_html = '<tr><td colspan="' . (int) \count($headers) . '">Keine Daten im gewählten Zeitraum.</td></tr>';
 	}
 
 	$html = '<!doctype html><html><head><meta charset="utf-8"><style>
-		body{font-family:DejaVu Sans, Arial, sans-serif;font-size:11px;color:#111}
+		body{font-family:DejaVu Sans, Arial, sans-serif;font-size:9px;color:#111}
 		.doc-header{margin:0 0 10px 0}
 		.doc-header-title{float:left;font-size:18px;font-weight:700;line-height:1.2}
+		.doc-header-title .doc-header-subtitle{display:block;font-size:10px;font-weight:400;color:#444;margin-top:3px}
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
-		table{width:100%;border-collapse:collapse}
-		th,td{border:1px solid #ddd;padding:6px}
-		th{background:#f3f4f6;text-align:left}
+		table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+		th,td{padding:6px;border:0}
+		thead th{font-weight:700;background:#eceff1;text-align:left;white-space:nowrap}
+		tbody td{word-wrap:break-word;border-top:1px solid #edf0f2}
+		tbody tr:nth-child(odd) td{background:#f7f8fa}
+		tbody tr:nth-child(even) td{background:#ffffff}
 	</style></head><body>
 	<div class="doc-header">
-		<div class="doc-header-title">Milchbüchli</div>
+		<div class="doc-header-title">Milchbüchli<span class="doc-header-subtitle">'.\esc_html($range_line).'</span></div>
 		<div class="doc-header-logo">'.$branding_logo_html.'</div>
 	</div>
 	<table>
+	<colgroup>'.$colgroup_html.'</colgroup>
 	<thead><tr>
-	<th>Belegnummer</th><th>Belegtyp</th><th>Datum</th><th>Kunde</th><th>Total</th>
+	'.$header_html.'
 	</tr></thead><tbody>'.$rows_html.'</tbody></table>
 	</body></html>';
 
 	$dom->loadHtml($html, 'UTF-8');
-	$dom->setPaper('A4', 'portrait');
+	$dom->setPaper('A4', 'landscape');
 	$dom->render();
 
 	$filename = cmxbu_belege_export_filename('pdf');
