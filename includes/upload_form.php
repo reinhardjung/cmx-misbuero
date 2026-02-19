@@ -794,7 +794,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		$ts = current_time( 'timestamp' );
 		$stamp = wp_date( 'ymd-His', $ts );
 		$post_title = $stamp;
-		$year = wp_date( 'Y', $ts );
+		$year = function_exists( __NAMESPACE__ . '\\cmx_get_beleg_upload_year' )
+			? (int) cmx_get_beleg_upload_year( 0 )
+			: (int) wp_date( 'Y', $ts );
 		$upload_filter = function( array $dirs ) use ( $year ) : array {
 			$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
 			$url  = content_url( '/uploads/misbuero/' . $year . '/belege' );

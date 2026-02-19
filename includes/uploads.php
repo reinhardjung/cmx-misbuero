@@ -18,6 +18,63 @@ function cmx_get_beleg_upload_stamp(): string {
 	return $stamp;
 }
 
+function cmx_beleg_extract_year_from_date_value($raw): int {
+	$value = \trim((string) $raw);
+	if ($value === '') {
+		return 0;
+	}
+
+	$year = 0;
+	if (\preg_match('/^\d{4}$/', $value)) {
+		$year = (int) $value;
+	} elseif (\preg_match('/^(\d{4})[-\/\.]\d{1,2}[-\/\.]\d{1,2}$/', $value, $m)) {
+		$year = (int) $m[1];
+	} elseif (\preg_match('/^\d{1,2}[-\/\.]\d{1,2}[-\/\.](\d{4})$/', $value, $m)) {
+		$year = (int) $m[1];
+	} else {
+		$ts = \strtotime($value);
+		if ($ts !== false) {
+			$year = (int) \wp_date('Y', $ts);
+		} elseif (\preg_match('/\b(19\d{2}|20\d{2}|21\d{2}|22\d{2})\b/', $value, $m)) {
+			$year = (int) $m[1];
+		}
+	}
+
+	return ($year >= 1900 && $year <= 2200) ? $year : 0;
+}
+
+function cmx_get_beleg_upload_year(int $post_id = 0): int {
+	$default_year = (int) \wp_date('Y');
+
+	$candidates = [];
+	foreach (['cmx_beleg_rng_datum', 'beleg_datum'] as $key) {
+		if (!isset($_POST[$key])) continue;
+		$candidates[] = \sanitize_text_field((string) \wp_unslash($_POST[$key]));
+	}
+
+	if ($post_id > 0) {
+		foreach (['_cmx_beleg_rng_datum', 'beleg_datum', '_cmx_rechnungsdatum', '_invoice_date', '_date'] as $meta_key) {
+			$candidates[] = (string) \get_post_meta($post_id, $meta_key, true);
+		}
+		$post = \get_post($post_id);
+		if ($post instanceof \WP_Post) {
+			$candidates[] = (string) ($post->post_date ?? '');
+			$candidates[] = (string) ($post->post_date_gmt ?? '');
+		}
+	}
+
+	foreach ($candidates as $candidate) {
+		$year = \function_exists(__NAMESPACE__ . '\\cmx_beleg_extract_year_from_date_value')
+			? cmx_beleg_extract_year_from_date_value($candidate)
+			: 0;
+		if ($year > 0) {
+			return $year;
+		}
+	}
+
+	return $default_year;
+}
+
 function cmx_belege_upload_dir(int $year): array {
 	$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
 	$url  = content_url('/uploads/misbuero/' . $year . '/belege');
@@ -49,7 +106,9 @@ function cmx_belege_next_suffix(string $dir, string $prefix): int {
 		return $dirs;
 	}
 
-	$year = wp_date('Y');
+	$year = \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_upload_year')
+		? cmx_get_beleg_upload_year(0)
+		: (int) wp_date('Y');
 	[$base, $url] = cmx_belege_upload_dir((int) $year);
 	$dirs['path']    = $base;
 	$dirs['basedir'] = $base;
@@ -113,7 +172,9 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 		if ($post_slug !== '' && $post_slug !== $prefix) {
 			$prefixes[] = $post_slug;
 		}
-	$year = wp_date('Y');
+		$year = \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_upload_year')
+			? cmx_get_beleg_upload_year((int) $post->ID)
+			: (int) wp_date('Y');
 		[$dir_base] = cmx_belege_upload_dir((int) $year);
 		foreach ($prefixes as $scan_prefix) {
 			$found = [];
@@ -351,11 +412,13 @@ function cmx_belege_upload_file(): void {
 	require_once ABSPATH . 'wp-admin/includes/media.php';
 	require_once ABSPATH . 'wp-admin/includes/image.php';
 
-	$year = wp_date('Y');
 	$post = get_post($post_id);
 	if (!$post) {
 		wp_send_json_error(['message' => 'bad_post'], 400);
 	}
+	$year = \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_upload_year')
+		? cmx_get_beleg_upload_year($post_id)
+		: (int) wp_date('Y');
 	$post_title = $post->post_title;
 	if ($post_title === '' || $post->post_status === 'auto-draft') {
 		$post_title = wp_date('ymd-His');
