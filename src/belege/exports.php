@@ -70,7 +70,7 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 		case 'diesen_monat':
 			return [
 				'from' => $now->modify('first day of this month')->format('Y-m-d'),
-				'to' => $today,
+				'to' => $now->modify('last day of this month')->format('Y-m-d'),
 			];
 		case 'letzten_monat':
 			return [
@@ -82,9 +82,10 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 			$month = (int) $now->format('n');
 			$q_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
 			$q_start = $now->setDate($year, $q_start_month, 1);
+			$q_end = $q_start->modify('+2 months')->modify('last day of this month');
 			return [
 				'from' => $q_start->format('Y-m-d'),
-				'to' => $today,
+				'to' => $q_end->format('Y-m-d'),
 			];
 		case 'letztes_quartal':
 			$year = (int) $now->format('Y');
@@ -101,7 +102,7 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 			$year = (int) $now->format('Y');
 			return [
 				'from' => \sprintf('%04d-01-01', $year),
-				'to' => $today,
+				'to' => \sprintf('%04d-12-31', $year),
 			];
 		case 'letztes_jahr':
 			$year = ((int) $now->format('Y')) - 1;
@@ -341,7 +342,7 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 					break;
 				case 'diesen_monat':
 					from = ymd(new Date(y, m, 1));
-					to = ymd(now);
+					to = ymd(new Date(y, m + 1, 0));
 					break;
 				case 'letzten_monat':
 					from = ymd(new Date(y, m - 1, 1));
@@ -350,7 +351,7 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 				case 'dieses_quartal':
 					var qStartMonth = Math.floor(m / 3) * 3;
 					from = ymd(new Date(y, qStartMonth, 1));
-					to = ymd(now);
+					to = ymd(new Date(y, qStartMonth + 3, 0));
 					break;
 				case 'letztes_quartal':
 					var thisQStartMonth = Math.floor(m / 3) * 3;
@@ -362,7 +363,7 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 					break;
 				case 'dieses_jahr':
 					from = y + '-01-01';
-					to = ymd(now);
+					to = y + '-12-31';
 					break;
 				case 'letztes_jahr':
 					from = (y - 1) + '-01-01';
