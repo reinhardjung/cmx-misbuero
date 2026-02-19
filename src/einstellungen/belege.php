@@ -219,16 +219,6 @@ add_action('admin_init', function() {
 
 		$add($page, "sec_{$sub}", 'Belegfuss',   "belegfuss_{$sub}", 4);
 		$add($page, "sec_{$sub}", 'E-Mail Text', "mail_{$sub}",      8);
-		add_settings_field(
-			"briefbogen_{$sub}",
-			'Briefbogen',
-			__NAMESPACE__ . '\\cmx_field_select_briefbogen',
-			$page,
-			"sec_{$sub}",
-			[
-				'key' => "briefbogen_{$sub}",
-			]
-		);
 	}
 });
 
@@ -245,6 +235,12 @@ add_filter('pre_update_option_cmx_belege', function($new, $old) {
 	];
 	foreach (['offerte', 'gutschrift', 'lieferschein', 'rechnung'] as $type) {
 		$key = 'briefbogen_' . $type;
+		if (!array_key_exists($key, $new)) {
+			if (is_array($old) && array_key_exists($key, $old)) {
+				$new[$key] = $old[$key];
+			}
+			continue;
+		}
 		$val = strtolower(trim((string)($new[$key] ?? 'dl_left')));
 		if (isset($legacy_map[$val])) {
 			$val = $legacy_map[$val];

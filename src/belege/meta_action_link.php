@@ -23,6 +23,6 @@ function cmxbu_render_beleg_download_metabox_with_copy(\WP_Post $post): void {
 
 	// Download-Button
 	// echo '<a href="' . \esc_url($download_url) . '" target="_blank" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download"style="color:#a42c24; border:#a42c24 solid 1px;">download</a>';
-	echo '<a href="' . esc_url($download_url) . '" target="_blank" rel="noopener noreferrer" title="Download als PDF" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download" style="color:#a42c24; border:#a42c24 solid 1px;" aria-label="Download als PDF"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
+	echo '<a href="' . esc_url($download_url) . '" target="_blank" rel="noopener noreferrer" title="Anzeigen als PDF (DL/C5/C4)" class="button button-secondary alignright cmx-btn-transparent cmx-btn-download" style="color:#a42c24; border:#a42c24 solid 1px;" aria-label="Anzeigen als (PDF DL/C5/C4)"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
 
 }
