@@ -1,38 +1,173 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+function cmxbu_belege_export_normalize_ref(string $raw_ref): string {
+	$fallback = \admin_url('edit.php?post_type=belege');
+	$ref = \trim(\rawurldecode($raw_ref));
+	if ($ref === '') return $fallback;
+
+	$ref = (string) \remove_query_arg(['cmx_export', 'cmx_export_error'], $ref);
+	return (string) \wp_validate_redirect($ref, $fallback);
+}
+
+function cmxbu_belege_export_current_list_ref(): string {
+	$scheme = \is_ssl() ? 'https://' : 'http://';
+	$host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+	$uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+	$current = $scheme . $host . $uri;
+	return cmxbu_belege_export_normalize_ref($current);
+}
+
+function cmxbu_belege_export_request_ref(): string {
+	$raw = (string) ($_REQUEST['ref'] ?? '');
+	if ($raw !== '') {
+		return cmxbu_belege_export_normalize_ref($raw);
+	}
+	return cmxbu_belege_export_current_list_ref();
+}
+
+function cmxbu_belege_export_normalize_date(string $raw_date): string {
+	$raw_date = \trim($raw_date);
+	if (!\preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw_date)) return '';
+	[$y, $m, $d] = \array_map('intval', \explode('-', $raw_date));
+	if (!\checkdate($m, $d, $y)) return '';
+	return \sprintf('%04d-%02d-%02d', $y, $m, $d);
+}
+
+function cmxbu_belege_export_requested_date_range(): array {
+	$from = cmxbu_belege_export_normalize_date((string) ($_REQUEST['cmx_export_date_from'] ?? ''));
+	$to   = cmxbu_belege_export_normalize_date((string) ($_REQUEST['cmx_export_date_to'] ?? ''));
+
+	if ($from !== '' && $to !== '' && $from > $to) {
+		[$from, $to] = [$to, $from];
+	}
+
+	return ['from' => $from, 'to' => $to];
+}
+
+function cmxbu_belege_export_require_date_range_or_redirect(): array {
+	$range = cmxbu_belege_export_requested_date_range();
+	if ($range['from'] !== '' && $range['to'] !== '') return $range;
+
+	$args = [
+		'post_type' => 'belege',
+		'cmx_export' => 1,
+		'cmx_export_error' => 'missing_range',
+		'ref' => cmxbu_belege_export_request_ref(),
+	];
+	if ($range['from'] !== '') $args['cmx_export_date_from'] = $range['from'];
+	if ($range['to'] !== '') $args['cmx_export_date_to'] = $range['to'];
+
+	$target = \add_query_arg($args, \admin_url('edit.php'));
+	\wp_safe_redirect($target);
+	exit;
+}
+
+function cmxbu_belege_export_verify_nonce(string $specific_action): bool {
+	$nonce = (string) ($_REQUEST['_wpnonce'] ?? '');
+	if ($nonce === '') return false;
+	if (\wp_verify_nonce($nonce, 'cmx_export_belege_range')) return true;
+	return \wp_verify_nonce($nonce, $specific_action);
+}
+
+function cmxbu_belege_export_post_date(int $post_id): string {
+	$belegdatum = (string) \get_post_meta(
+		$post_id,
+		\defined(__NAMESPACE__.'\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum',
+		true
+	);
+	if ($belegdatum === '') {
+		$post = \get_post($post_id);
+		if (!$post) return '';
+		$belegdatum = \get_date_from_gmt((string) $post->post_date_gmt, 'Y-m-d');
+		if ($belegdatum === '') {
+			$belegdatum = \mysql2date('Y-m-d', (string) $post->post_date, false);
+		}
+	}
+	return cmxbu_belege_export_normalize_date($belegdatum);
+}
+
 /* ===== Link „export“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
 
-	$args = $_GET ?? [];
-	unset($args['paged'],$args['action'],$args['action2'],$args['_wpnonce'],$args['_wp_http_referer'],$args['orderby'],$args['order']);
-	$args['action'] = 'cmx_export_belege_list';
-
-	$current_url = (is_ssl() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['REQUEST_URI'] ?? '');
-	$args['ref']  = rawurlencode($current_url);
-
-	$base_args = $args;
-	$base_args['action'] = 'cmx_export_belege_list';
-	$url  = \wp_nonce_url(\add_query_arg($base_args, \admin_url('admin-post.php')), 'cmx_export_belege_list');
-	$link = '<a href="' . esc_url($url) . '">exportieren (zip)</a>';
-
-	$pdf_args = $args;
-	$pdf_args['action'] = 'cmx_export_belege_list_pdf';
-	$pdf_url = \wp_nonce_url(\add_query_arg($pdf_args, \admin_url('admin-post.php')), 'cmx_export_belege_list_pdf');
-	$pdf_link = '<a href="' . esc_url($pdf_url) . '">(pdf)</a>';
-
-	$csv_args = $args;
-	$csv_args['action'] = 'cmx_export_belege_list_csv';
-	$csv_url = \wp_nonce_url(\add_query_arg($csv_args, \admin_url('admin-post.php')), 'cmx_export_belege_list_csv');
-	$csv_link = '<a href="' . esc_url($csv_url) . '">(csv)</a>';
-
-	$links = $link . ' ' . $pdf_link . ' ' . $csv_link;
+	$url = \add_query_arg([
+		'post_type'   => 'belege',
+		'cmx_export'  => 1,
+		'ref'         => cmxbu_belege_export_current_list_ref(),
+	], \admin_url('edit.php'));
+	$links = '<a href="' . \esc_url($url) . '">exportieren</a>';
 
 	$new = []; $inserted=false;
 	foreach ($views as $key=>$html){ $new[$key]=$html; if ($key==='trash'&&!$inserted){$new['cmx_export_belege_list']=$links;$inserted=true;}}
 	if(!$inserted){foreach($new as $key=>$html){if($key==='all'&&!$inserted){$new['cmx_export_belege_list']=$links;$inserted=true;}}}
 	if(!$inserted)$new['cmx_export_belege_list']=$links;
 	return $new;
+});
+
+/* ===== Export-Formular (Datum von/bis) in der Listenansicht ===== */
+\add_action('all_admin_notices', function () {
+	global $typenow;
+	if ($typenow !== 'belege' || empty($_GET['cmx_export'])) return;
+	if (!\current_user_can('edit_posts')) return;
+
+	$range = cmxbu_belege_export_requested_date_range();
+	$ref = cmxbu_belege_export_request_ref();
+	$cancel_url = cmxbu_belege_export_normalize_ref($ref);
+	$has_error = !empty($_GET['cmx_export_error']);
+	?>
+	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
+		<h2>Belege Export</h2>
+		<p>Wähle <code>Datum von</code> und <code>Datum bis</code>. Erst danach kann exportiert werden.</p>
+		<?php if ($has_error): ?>
+			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
+		<?php endif; ?>
+
+		<form method="post" action="<?php echo \esc_url(\admin_url('admin-post.php')); ?>" id="cmx-belege-export-form">
+			<?php \wp_nonce_field('cmx_export_belege_range'); ?>
+			<input type="hidden" name="ref" value="<?php echo \esc_attr($ref); ?>">
+
+			<table class="form-table" role="presentation" style="margin-top:1em;">
+				<tbody>
+					<tr>
+						<th scope="row"><label for="cmx_export_date_from">Datum von</label></th>
+						<td><input type="date" id="cmx_export_date_from" name="cmx_export_date_from" value="<?php echo \esc_attr($range['from']); ?>" required></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cmx_export_date_to">Datum bis</label></th>
+						<td><input type="date" id="cmx_export_date_to" name="cmx_export_date_to" value="<?php echo \esc_attr($range['to']); ?>" required></td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p class="submit">
+				<button type="submit" name="action" value="cmx_export_belege_list" class="button button-primary">Exportieren ZIP</button>
+				<button type="submit" name="action" value="cmx_export_belege_list_pdf" class="button">Exportieren PDF</button>
+				<button type="submit" name="action" value="cmx_export_belege_list_csv" class="button">Exportieren CSV</button>
+				<a href="<?php echo \esc_url($cancel_url); ?>" class="button">Abbrechen</a>
+			</p>
+		</form>
+	</div>
+	<script>
+	(function(){
+		var form = document.getElementById('cmx-belege-export-form');
+		if (!form) return;
+		form.addEventListener('submit', function () {
+			var stale = form.querySelectorAll('input[data-cmx-selected="1"]');
+			for (var i = 0; i < stale.length; i++) stale[i].remove();
+
+			var checked = document.querySelectorAll('#the-list input[name="post[]"]:checked');
+			for (var j = 0; j < checked.length; j++) {
+				var hid = document.createElement('input');
+				hid.type = 'hidden';
+				hid.name = 'post[]';
+				hid.value = checked[j].value;
+				hid.setAttribute('data-cmx-selected', '1');
+				form.appendChild(hid);
+			}
+		});
+	})();
+	</script>
+	<?php
 });
 
 /* ===== IDs sammeln ===== */
@@ -86,7 +221,20 @@ function cmxbu_belege_export_collect_ids(): array {
 	if($selected_ids){ $qv['post__in']=$selected_ids; $qv['orderby']='post__in'; }
 
 	$q = new \WP_Query($qv);
-	return $q->posts;
+	$post_ids = \array_map('intval', (array) $q->posts);
+
+	$range = cmxbu_belege_export_requested_date_range();
+	if ($range['from'] === '' || $range['to'] === '') return $post_ids;
+
+	$filtered = [];
+	foreach ($post_ids as $post_id) {
+		$belegdatum = cmxbu_belege_export_post_date($post_id);
+		if ($belegdatum === '') continue;
+		if ($belegdatum < $range['from']) continue;
+		if ($belegdatum > $range['to']) continue;
+		$filtered[] = $post_id;
+	}
+	return $filtered;
 }
 
 function cmxbu_belege_export_site_prefix(): string {

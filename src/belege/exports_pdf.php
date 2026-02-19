@@ -6,7 +6,8 @@ use Dompdf\Options;
 /* ===== PDF Link ===== */
 \add_action('admin_post_cmx_export_belege_list_pdf', function(){
 	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
-	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_belege_list_pdf')) \wp_die('Ungültige Anfrage.');
+	if (!cmxbu_belege_export_verify_nonce('cmx_export_belege_list_pdf')) \wp_die('Ungültige Anfrage.');
+	cmxbu_belege_export_require_date_range_or_redirect();
 
 	$post_ids = cmxbu_belege_export_collect_ids();
 
