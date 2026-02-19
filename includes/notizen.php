@@ -92,6 +92,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_decode_legacy_raw')) {
+		/**
+		 * Legacy-Notizen robust dekodieren (JSON/serialisiert, auch doppelt serialisiert).
+		 * @param mixed $raw
+		 * @return mixed
+		 */
+		function cmx_notizen_decode_legacy_raw($raw) {
+			$value = $raw;
+			for ($i = 0; $i < 3; $i++) {
+				if (!\is_string($value)) {
+					break;
+				}
+				$trim = \trim($value);
+				if ($trim === '') {
+					break;
+				}
+
+				$first = $trim[0] ?? '';
+				if ($first === '[' || $first === '{') {
+					$decoded = \json_decode($trim, true);
+					if (\json_last_error() === JSON_ERROR_NONE) {
+						$value = $decoded;
+						continue;
+					}
+				}
+
+				if (\function_exists('is_serialized') && \is_serialized($trim)) {
+					$decoded = @\maybe_unserialize($trim);
+					if ($decoded !== $value) {
+						$value = $decoded;
+						continue;
+					}
+				}
+				break;
+			}
+			return $value;
+		}
+	}
+
 	/**
 	 * @return array<int, array{datum:string,zeit:string,text:string}>
 	 */
@@ -109,8 +148,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 			}
 		}
 
+		$raw = cmx_notizen_decode_legacy_raw($raw);
+
 		$rows = [];
 		if (\is_array($raw)) {
+			$is_single_row = isset($raw['datum']) || isset($raw['date']) || isset($raw['zeit']) || isset($raw['time']) || isset($raw['text']) || isset($raw['notiz']) || isset($raw['note']) || isset($raw['info']);
+			if ($is_single_row) {
+				$raw = [$raw];
+			}
 			foreach ($raw as $row) {
 				$norm = cmx_notizen_normalize_row($row);
 				if ($norm !== null) {

@@ -1,11 +1,12 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
- * Aufgaben / Tätigkeiten für Projekte (wiederholbare Zeilen)
+ * Aufgaben / Tätigkeiten (wiederholbare Zeilen)
  * Felder pro Zeile: Datum, Uhrzeit, Dauer (h), Artikel (CPT artikel), Info
  */
 
 const CMX_PROJEKT_TASK_META = '_cmx_projekt_tasks';
+const CMX_TASK_POST_TYPES   = ['projekte', 'kontakte', 'artikel'];
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')) {
 	function cmx_projekt_task_uid($raw = ''): string {
@@ -67,14 +68,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_format_swiss_number')) {
 
 // Metabox registrieren
 \add_action('add_meta_boxes', function() {
-	\add_meta_box(
-		'cmx_projekt_tasks',
-		'Tätigkeiten',
-		__NAMESPACE__ . '\\cmx_render_projekt_tasks_box',
-		'projekte',
-		'normal',
-		'default'
-	);
+	foreach (CMX_TASK_POST_TYPES as $post_type) {
+		\add_meta_box(
+			'cmx_projekt_tasks',
+			'Tätigkeiten',
+			__NAMESPACE__ . '\\cmx_render_projekt_tasks_box',
+			$post_type,
+			'normal',
+			'default'
+		);
+	}
 });
 
 /**
@@ -324,60 +327,66 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '</div>';
 }
 
-// Speichern
-\add_action('save_post_projekte', function($post_id, $post, $update) {
-	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-	if (!\current_user_can('edit_post', $post_id)) return;
-	if (empty($_POST['cmx_projekt_tasks_nonce']) || !\wp_verify_nonce($_POST['cmx_projekt_tasks_nonce'], 'cmx_projekt_tasks_nonce')) return;
+if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
+	function cmx_save_tasks_metabox($post_id, $post, $update): void {
+		if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+		if (!\current_user_can('edit_post', $post_id)) return;
+		if (empty($_POST['cmx_projekt_tasks_nonce']) || !\wp_verify_nonce($_POST['cmx_projekt_tasks_nonce'], 'cmx_projekt_tasks_nonce')) return;
 
-	$rows = $_POST['cmx_tasks'] ?? [];
-	if (!is_array($rows)) $rows = [];
-	$seen_uids = [];
+		$rows = $_POST['cmx_tasks'] ?? [];
+		if (!is_array($rows)) $rows = [];
+		$seen_uids = [];
 
-	$clean = [];
-	foreach ($rows as $row) {
-		if (!is_array($row)) continue;
-		$uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
-			? cmx_projekt_task_uid($row['uid'] ?? '')
-			: (string) ($row['uid'] ?? '');
-		while ($uid === '' || isset($seen_uids[$uid])) {
+		$clean = [];
+		foreach ($rows as $row) {
+			if (!is_array($row)) continue;
 			$uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
-				? cmx_projekt_task_uid('')
-				: ('tsk_' . \uniqid());
+				? cmx_projekt_task_uid($row['uid'] ?? '')
+				: (string) ($row['uid'] ?? '');
+			while ($uid === '' || isset($seen_uids[$uid])) {
+				$uid = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')
+					? cmx_projekt_task_uid('')
+					: ('tsk_' . \uniqid());
+			}
+			$seen_uids[$uid] = true;
+			$datum  = sanitize_text_field($row['datum'] ?? '');
+			$zeit   = sanitize_text_field($row['zeit'] ?? '');
+			$dauer_raw = sanitize_text_field($row['dauer'] ?? '');
+			$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
+				? cmx_projekt_decimal_normalize($dauer_raw)
+				: '';
+			$dauer  = ($dauer_raw === '' || $dauer_norm === '') ? '' : \number_format((float) $dauer_norm, 2, '.', '');
+			$art_id = (int) ($row['artikel_id'] ?? 0);
+			$info   = sanitize_textarea_field($row['info'] ?? '');
+
+			// ignorieren, wenn alles leer
+			if ($datum === '' && $zeit === '' && $dauer === '' && $art_id === 0 && $info === '') continue;
+
+			// Default: aktuelles Datum, falls keins gesetzt
+			if ($datum === '') {
+				$datum = current_time('Y-m-d');
+			}
+
+			$clean[] = [
+				'uid'        => $uid,
+				'datum'      => $datum,
+				'zeit'       => $zeit,
+				'dauer'      => $dauer,
+				'artikel_id' => $art_id,
+				'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
+				'info'       => $info,
+			];
 		}
-		$seen_uids[$uid] = true;
-		$datum  = sanitize_text_field($row['datum'] ?? '');
-		$zeit   = sanitize_text_field($row['zeit'] ?? '');
-		$dauer_raw = sanitize_text_field($row['dauer'] ?? '');
-		$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
-			? cmx_projekt_decimal_normalize($dauer_raw)
-			: '';
-		$dauer  = ($dauer_raw === '' || $dauer_norm === '') ? '' : \number_format((float) $dauer_norm, 2, '.', '');
-		$art_id = (int) ($row['artikel_id'] ?? 0);
-		$info   = sanitize_textarea_field($row['info'] ?? '');
 
-		// ignorieren, wenn alles leer
-		if ($datum === '' && $zeit === '' && $dauer === '' && $art_id === 0 && $info === '') continue;
-
-		// Default: aktuelles Datum, falls keins gesetzt
-		if ($datum === '') {
-			$datum = current_time('Y-m-d');
+		if (empty($clean)) {
+			\delete_post_meta($post_id, CMX_PROJEKT_TASK_META);
+		} else {
+			\update_post_meta($post_id, CMX_PROJEKT_TASK_META, $clean);
 		}
-
-		$clean[] = [
-			'uid'        => $uid,
-			'datum'      => $datum,
-			'zeit'       => $zeit,
-			'dauer'      => $dauer,
-			'artikel_id' => $art_id,
-			'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
-			'info'       => $info,
-		];
 	}
+}
 
-	if (empty($clean)) {
-		\delete_post_meta($post_id, CMX_PROJEKT_TASK_META);
-	} else {
-		\update_post_meta($post_id, CMX_PROJEKT_TASK_META, $clean);
-	}
-}, 10, 3);
+// Speichern für Projekte, Kontakte und Artikel.
+foreach (CMX_TASK_POST_TYPES as $cmx_task_post_type) {
+	\add_action('save_post_' . $cmx_task_post_type, __NAMESPACE__ . '\\cmx_save_tasks_metabox', 10, 3);
+}
