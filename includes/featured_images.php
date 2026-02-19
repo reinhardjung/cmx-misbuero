@@ -4,8 +4,8 @@ defined('ABSPATH') || exit;
 
 /**
  * Lokale Bildverwaltung ohne Mediathek:
- * - Ablage: /wp-content/uploads/misbuero/bilder/
- * - Dateiname: {post_title}_{post_id}.ext
+ * - Ablage: /wp-content/uploads/misbuero/bilder/{post_type}/
+ * - Dateiname: {post_title}.ext (kleinbuchstaben)
  * - Überschreiben bestehender Dateien
  * - Cache-Busting via ?v=filemtime
  * - Kontakte: Label "Logo" oder (bei _cmx_privat=1) "Foto"
@@ -34,6 +34,14 @@ function cmx_local_base_path(): string {
 function cmx_local_base_url(): string {
 	$u = wp_get_upload_dir();
 	return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR;
+}
+
+/** Ziel-Unterordner je CPT */
+function cmx_local_image_subdir_for_post_type(string $post_type): string {
+	$post_type = strtolower(trim($post_type));
+	if ($post_type === 'kontakte') return 'kontakte';
+	if ($post_type === 'artikel') return 'artikel';
+	return sanitize_title($post_type);
 }
 
 /** Edit-Form darf Dateien senden */
@@ -143,14 +151,19 @@ add_action('save_post', function($post_id, $post) {
 	// Zielverzeichnis sicherstellen
 	$base_dir = cmx_local_base_path();
 	$base_url = cmx_local_base_url();
+	$type_subdir = cmx_local_image_subdir_for_post_type($pt);
+	if ($type_subdir !== '') {
+		$base_dir = wp_normalize_path($base_dir . '/' . $type_subdir);
+		$base_url = rtrim($base_url, '/') . '/' . rawurlencode($type_subdir);
+	}
 	if (!is_dir($base_dir)) {
 		wp_mkdir_p($base_dir);
 	}
 
-	// Dateiname: {post_title}_{post_id}.ext
-	$title_slug = sanitize_title(get_the_title($post) ?: $pt);
+	// Dateiname: {post_title}.ext (kleinbuchstaben)
+	$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: $pt));
 	$ext        = '.' . strtolower($check['ext']); // z.B. ".jpg"
-	$basename   = $title_slug . '_' . (int)$post_id;
+	$basename   = $title_slug !== '' ? $title_slug : strtolower((string) $pt);
 	$target     = wp_normalize_path($base_dir . '/' . $basename . $ext);
 
 	// Existierende Varianten mit gleichem Basenamen entfernen (erzwingt Überschreiben)

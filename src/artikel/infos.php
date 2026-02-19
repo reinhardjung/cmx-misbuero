@@ -7,7 +7,7 @@
  * - Bezugsquelle wird aus bekannten Metafeldern gelesen:
  *     _cmx_bezugsquelle_url, _cmx_bezugsquelle, _cmx_artikel_bezugsquelle, _cmx_artikel_bild_url
  *   (per Filter erweiterbar: 'cmx_li_source_fields')
- * - Speicher: /wp-content/uploads/misbuero/bilder/{post_title}_{post_id}.ext (+ Cache-Busting ?v=filemtime)
+ * - Speicher: /wp-content/uploads/misbuero/bilder/artikel/{post_title}.ext (+ Cache-Busting ?v=filemtime)
  * - NEU: Produkt-/Artikelbeschreibung aus der Bezugsquelle (og:description / twitter:description / meta description / JSON-LD) in den Editor schreiben – nur wenn leer
  */
 
@@ -20,13 +20,13 @@ if (!defined(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR')) {
 if (!\function_exists(__NAMESPACE__.'\\cmx_li_base_path')) {
 	function cmx_li_base_path(): string {
 		$u = wp_get_upload_dir();
-		return wp_normalize_path($u['basedir'] . CMX_LOCAL_IMG_SUBDIR);
+		return wp_normalize_path($u['basedir'] . CMX_LOCAL_IMG_SUBDIR . '/artikel');
 	}
 }
 if (!\function_exists(__NAMESPACE__.'\\cmx_li_base_url')) {
 	function cmx_li_base_url(): string {
 		$u = wp_get_upload_dir();
-		return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR;
+		return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR . '/artikel';
 	}
 }
 
@@ -102,9 +102,9 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 		}
 	}
 
-	// Ziel-Dateinamen vorbereiten
-	$title_slug = sanitize_title(get_the_title($post) ?: 'artikel');
-	$basename   = $title_slug . '_' . (int) $post_id;
+	// Ziel-Dateinamen vorbereiten: {post_title}.ext (kleinbuchstaben)
+	$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: 'artikel'));
+	$basename   = $title_slug !== '' ? $title_slug : 'artikel';
 
 	// 1) MANUELLER UPLOAD?
 	if (!empty($_FILES['cmx_li_file']) && !empty($_FILES['cmx_li_file']['name'])) {
