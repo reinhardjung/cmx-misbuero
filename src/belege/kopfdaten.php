@@ -892,22 +892,30 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 			function makeNavigator(inputEl, listEl, chooseCb){
 				let active=-1, items=[];
+				function closeList(){ listEl.style.display="none"; listEl.innerHTML=""; active=-1; }
 				function render(arr){
 					items=arr||[];
-					if(!items.length){listEl.style.display="none"; listEl.innerHTML=""; active=-1; return;}
+					if(!items.length){ closeList(); return; }
 					listEl.innerHTML = items.map((it,i)=>`<li data-index="${i}">${esc(it.title)}</li>`).join("");
 					listEl.style.display="block"; active=-1;
 				}
 				function move(d){ if(!items.length) return; active=(active+d+items.length)%items.length; [...listEl.children].forEach((li,i)=>li.classList.toggle("active",i===active)); }
-				function choose(i){ if(i<0||i>=items.length) return; chooseCb(items[i]); listEl.style.display="none"; listEl.innerHTML=""; active=-1; }
+				function choose(i){ if(i<0||i>=items.length) return; chooseCb(items[i]); closeList(); }
 				listEl.addEventListener("mousedown",(e)=>{ const li=e.target.closest("li"); if(!li) return; e.preventDefault(); choose(parseInt(li.dataset.index,10)); });
 				inputEl.addEventListener("keydown",(e)=>{
 					if(listEl.style.display!=="block"&&(e.key==="ArrowDown"||e.key==="ArrowUp")) return;
 					if(e.key==="ArrowDown"){e.preventDefault();move(1);} else if(e.key==="ArrowUp"){e.preventDefault();move(-1);}
 					else if(e.key==="Enter"){ if(active>-1){e.preventDefault();choose(active);} }
-					else if(e.key==="Escape"){ listEl.style.display="none"; listEl.innerHTML=""; active=-1; }
+					else if(e.key==="Escape"){ closeList(); }
 				});
-				document.addEventListener("click",(e)=>{ if(!listEl.contains(e.target)&&e.target!==inputEl){ listEl.style.display="none"; listEl.innerHTML=""; active=-1; }});
+				inputEl.addEventListener("blur",()=>{
+					window.setTimeout(()=>{
+						const ae = document.activeElement;
+						if(ae===inputEl || listEl.contains(ae)) return;
+						closeList();
+					}, 120);
+				});
+				document.addEventListener("click",(e)=>{ if(!listEl.contains(e.target)&&e.target!==inputEl){ closeList(); }});
 				return {render, reset:()=>{items=[];active=-1;}};
 			}
 
@@ -1009,10 +1017,11 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				pI.addEventListener("input",()=>{
 					pH.value=""; if(pT) clearTimeout(pT);
 					const q=pI.value.trim();
+					if(q.length===0){ pSearch(""); return; }
 					if(q.length<2){ pL.style.display="none"; pL.innerHTML=""; projNav.reset(); return; }
 					pT=setTimeout(()=>pSearch(q),200);
 				});
-				// NEU: Focus/Click → komplette Liste mit "zuletzt genutzt zuerst"
+				// Focus/Click → komplette Liste mit "zuletzt genutzt zuerst"
 				pI.addEventListener("focus", ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 				pI.addEventListener("click",  ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 			}
@@ -1057,10 +1066,11 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				kI.addEventListener("input",()=>{
 					kH.value=""; if(kT) clearTimeout(kT);
 					const q=kI.value.trim();
+					if(q.length===0){ kSearch(""); return; }
 					if(q.length<2){ kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); return; }
 					kT=setTimeout(()=>kSearch(q),200);
 				});
-				// NEU: Focus/Click → komplette Kontaktliste (zuletzt geändert)
+				// Focus/Click → komplette Kontaktliste (zuletzt geändert)
 				kI.addEventListener("focus", ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 				kI.addEventListener("click",  ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 			}
