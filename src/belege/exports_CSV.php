@@ -136,6 +136,108 @@ function cmxbu_beleg_export_ucfirst(string $text): string {
 	return \strtoupper(\substr($text, 0, 1)) . \substr($text, 1);
 }
 
+function cmxbu_beleg_export_paid_date_key_from_display(string $display_date): string {
+	$display_date = \trim($display_date);
+	if ($display_date === '') return '';
+
+	if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $display_date, $m)) {
+		$d = (int) $m[1];
+		$mo = (int) $m[2];
+		$y = (int) $m[3];
+		if (\checkdate($mo, $d, $y)) {
+			return \sprintf('%04d-%02d-%02d', $y, $mo, $d);
+		}
+	}
+
+	return cmxbu_beleg_export_normalize_any_date($display_date);
+}
+
+function cmxbu_beleg_export_paid_date_timestamp_from_display(string $display_date): int {
+	$display_date = \str_replace("\xC2\xA0", ' ', (string) $display_date);
+	$display_date = \trim($display_date);
+	if ($display_date === '') return 0;
+
+	if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $display_date, $m)) {
+		$d = (int) $m[1];
+		$mo = (int) $m[2];
+		$y = (int) $m[3];
+		if (\checkdate($mo, $d, $y)) {
+			$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
+			return $ts ? (int) $ts : 0;
+		}
+	}
+
+	$normalized = cmxbu_beleg_export_paid_date_key_from_display($display_date);
+	if ($normalized === '') return 0;
+	$ts = \strtotime($normalized . ' 00:00:00');
+	return $ts ? (int) $ts : 0;
+}
+
+function cmxbu_beleg_export_sort_plain_rows_by_paid_date(array $rows): array {
+	if (\count($rows) <= 1) return $rows;
+
+	$indexed = [];
+	foreach ($rows as $idx => $row) {
+		$row = (array) $row;
+		$raw_date = (string) ($row[1] ?? '');
+		$sort_ts = cmxbu_beleg_export_paid_date_timestamp_from_display($raw_date);
+		$indexed[] = [
+			'idx' => (int) $idx,
+			'sort_ts' => $sort_ts,
+			'row' => $row,
+		];
+	}
+
+	\usort($indexed, static function (array $a, array $b): int {
+		$ats = (int) ($a['sort_ts'] ?? 0);
+		$bts = (int) ($b['sort_ts'] ?? 0);
+		if ($ats !== $bts) return $bts <=> $ats; // newest first
+
+		$ai = (int) ($a['idx'] ?? 0);
+		$bi = (int) ($b['idx'] ?? 0);
+		return $ai <=> $bi; // stable fallback
+	});
+
+	$sorted = [];
+	foreach ($indexed as $entry) {
+		$sorted[] = (array) ($entry['row'] ?? []);
+	}
+	return $sorted;
+}
+
+function cmxbu_beleg_export_sort_context_rows_by_paid_date(array $items): array {
+	if (\count($items) <= 1) return $items;
+
+	$indexed = [];
+	foreach ($items as $idx => $item) {
+		$item = (array) $item;
+		$row = (array) ($item['row'] ?? []);
+		$raw_date = (string) ($row[1] ?? '');
+		$sort_ts = cmxbu_beleg_export_paid_date_timestamp_from_display($raw_date);
+		$indexed[] = [
+			'idx' => (int) $idx,
+			'sort_ts' => $sort_ts,
+			'item' => $item,
+		];
+	}
+
+	\usort($indexed, static function (array $a, array $b): int {
+		$ats = (int) ($a['sort_ts'] ?? 0);
+		$bts = (int) ($b['sort_ts'] ?? 0);
+		if ($ats !== $bts) return $bts <=> $ats; // newest first
+
+		$ai = (int) ($a['idx'] ?? 0);
+		$bi = (int) ($b['idx'] ?? 0);
+		return $ai <=> $bi; // stable fallback
+	});
+
+	$sorted = [];
+	foreach ($indexed as $entry) {
+		$sorted[] = (array) ($entry['item'] ?? []);
+	}
+	return $sorted;
+}
+
 function cmxbu_beleg_export_to_float($raw): float {
 	if ($raw === null) return 0.0;
 	if (\is_int($raw) || \is_float($raw)) return (float) $raw;
@@ -431,6 +533,8 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 
 					$partial_date = (string) ($partial['datum'] ?? '');
 					if ($partial_date === '') continue;
+					$partial_sort_date = cmxbu_beleg_export_normalize_any_date($partial_date);
+					if ($partial_sort_date === '') continue;
 					if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($partial_date, $range)) {
 						continue;
 					}
@@ -454,7 +558,8 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 							cmxbu_beleg_export_format_money($partial_ausgaben),
 						];
 						$export_rows[] = [
-							'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_date),
+							'sort_date' => $partial_sort_date,
+							'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_sort_date),
 							'sort_seq' => $seq++,
 							'post_id' => (int) $pid,
 							'row' => $partial_row,
@@ -483,8 +588,13 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
 				continue;
 			}
+			$paid_sort_date = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
+			if ($paid_sort_date === '') {
+				continue;
+			}
 			$export_rows[] = [
-				'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
+				'sort_date' => $paid_sort_date,
+				'sort_ts' => cmxbu_beleg_export_date_sort_key($paid_sort_date),
 				'sort_seq' => $seq++,
 				'post_id' => (int) $pid,
 				'row' => $row,
@@ -493,19 +603,29 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 
 	if (\count($export_rows) > 1) {
 		\usort($export_rows, static function (array $a, array $b): int {
-			$arow = (array) ($a['row'] ?? []);
-			$brow = (array) ($b['row'] ?? []);
-			$adate = cmxbu_beleg_export_normalize_any_date((string) ($arow[1] ?? ''));
-			$bdate = cmxbu_beleg_export_normalize_any_date((string) ($brow[1] ?? ''));
-			if ($adate === '') {
-				$ats = (int) ($a['sort_ts'] ?? 0);
-				$adate = $ats > 0 ? \date('Y-m-d', $ats) : '0000-00-00';
+			$adate = (string) ($a['sort_date'] ?? '');
+			$bdate = (string) ($b['sort_date'] ?? '');
+			if ($adate !== '' || $bdate !== '') {
+				if ($adate === '') return 1;
+				if ($bdate === '') return -1;
+				if ($adate !== $bdate) return \strcmp($bdate, $adate); // newest date first
 			}
-			if ($bdate === '') {
-				$bts = (int) ($b['sort_ts'] ?? 0);
-				$bdate = $bts > 0 ? \date('Y-m-d', $bts) : '0000-00-00';
+
+			$ats = (int) ($a['sort_ts'] ?? 0);
+			$bts = (int) ($b['sort_ts'] ?? 0);
+
+			if ($ats <= 0 || $bts <= 0) {
+				$arow = (array) ($a['row'] ?? []);
+				$brow = (array) ($b['row'] ?? []);
+				if ($ats <= 0) {
+					$ats = cmxbu_beleg_export_date_timestamp((string) ($arow[1] ?? ''));
+				}
+				if ($bts <= 0) {
+					$bts = cmxbu_beleg_export_date_timestamp((string) ($brow[1] ?? ''));
+				}
 			}
-			if ($adate !== $bdate) return \strcmp($bdate, $adate); // newest first
+
+			if ($ats !== $bts) return $bts <=> $ats; // newest first
 			$aseq = (int) ($a['sort_seq'] ?? 0);
 			$bseq = (int) ($b['sort_seq'] ?? 0);
 			return $bseq <=> $aseq;
@@ -539,6 +659,7 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	$headers = cmxbu_beleg_export_headers();
 	fputcsv($fh, $headers, ';');
 	$rows = cmxbu_beleg_export_rows_from_ids($ids);
+	$rows = cmxbu_beleg_export_sort_plain_rows_by_paid_date($rows);
 	foreach ($rows as $row) {
 		fputcsv($fh, $row, ';');
 	}

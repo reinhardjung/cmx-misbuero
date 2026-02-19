@@ -33,6 +33,33 @@ function cmxbu_belege_export_normalize_date(string $raw_date): string {
 	return \sprintf('%04d-%02d-%02d', $y, $m, $d);
 }
 
+function cmxbu_belege_export_normalize_payment_date(string $raw_date): string {
+	$raw_date = \trim($raw_date);
+	if ($raw_date === '') return '';
+
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_any_date')) {
+		$normalized = (string) cmxbu_beleg_export_normalize_any_date($raw_date);
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
+			return $normalized;
+		}
+	}
+
+	$normalized = cmxbu_belege_export_normalize_date($raw_date);
+	if ($normalized !== '') return $normalized;
+
+	if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/', $raw_date, $m)) {
+		$d = (int) $m[1];
+		$mo = (int) $m[2];
+		$y = (int) $m[3];
+		if (\checkdate($mo, $d, $y)) {
+			return \sprintf('%04d-%02d-%02d', $y, $mo, $d);
+		}
+	}
+
+	$ts = \strtotime($raw_date);
+	return $ts ? \date('Y-m-d', $ts) : '';
+}
+
 function cmxbu_belege_export_presets(): array {
 	return [
 		'heute' => 'Heute (heute bis heute)',
@@ -181,7 +208,7 @@ function cmxbu_belege_export_paid_date(int $post_id): string {
 		? CMX_BELEG_META_BEZAHLT_AM
 		: '_cmx_beleg_bezahlt_am';
 	$raw = (string) \get_post_meta($post_id, $meta_key, true);
-	return cmxbu_belege_export_normalize_date($raw);
+	return cmxbu_belege_export_normalize_payment_date($raw);
 }
 
 function cmxbu_belege_export_partial_payment_dates(int $post_id): array {
@@ -205,7 +232,7 @@ function cmxbu_belege_export_partial_payment_dates(int $post_id): array {
 	$dates = [];
 	foreach ($raw as $row) {
 		if (!\is_array($row)) continue;
-		$datum = cmxbu_belege_export_normalize_date((string) ($row['datum'] ?? ''));
+		$datum = cmxbu_belege_export_normalize_payment_date((string) ($row['datum'] ?? ''));
 		if ($datum === '') continue;
 		$dates[$datum] = true;
 	}
@@ -220,7 +247,7 @@ function cmxbu_belege_export_has_payment_date(int $post_id): bool {
 }
 
 function cmxbu_belege_export_date_in_range(string $date_ymd, array $range): bool {
-	$date_ymd = cmxbu_belege_export_normalize_date($date_ymd);
+	$date_ymd = cmxbu_belege_export_normalize_payment_date($date_ymd);
 	if ($date_ymd === '') return false;
 	$from = (string) ($range['from'] ?? '');
 	$to = (string) ($range['to'] ?? '');

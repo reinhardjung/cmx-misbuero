@@ -15,18 +15,12 @@ use Dompdf\Options;
 	$options->set('isRemoteEnabled', true);
 	$dom = new Dompdf($options);
 	$branding_logo = \function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo') ? (string) cmx_get_branding_logo() : '';
-	$branding_logo_html = $branding_logo !== ''
-		? '<img class="header-logo" src="'.\esc_url($branding_logo).'" alt="Das bin ich Logo">'
-		: '';
-	$headers = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_headers')
-		? cmxbu_beleg_export_headers()
-		: [
-			'Belegnummer','Bezahlt am','Belegtyp','Kontakt','Zahlungsart',
-			'Zahlungsgrund','MwSt-Satz','MwSt','Vorsteuer','Einnahmen','Ausgaben'
-		];
 	$row_items = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
 		? cmxbu_beleg_export_rows_from_ids($post_ids, true)
 		: [];
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_sort_context_rows_by_paid_date')) {
+		$row_items = cmxbu_beleg_export_sort_context_rows_by_paid_date((array) $row_items);
+	}
 	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
 		? (array) cmxbu_belege_export_requested_date_range()
 		: ['from' => '', 'to' => ''];
@@ -47,39 +41,7 @@ use Dompdf\Options;
 	};
 	$range_from = $fmt_date((string) ($range['from'] ?? ''));
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
-	$range_line_html = 'Zeitraum: <strong>' . \esc_html($preset_label) . '</strong> | Von: <strong>' . \esc_html($range_from) . '</strong> | Bis: <strong>' . \esc_html($range_to) . '</strong>';
-	$table_headers = \array_merge([''], $headers);
-	// Erste Spalte: klickbarer [pdf]-Link, Belegnummer breiter + nowrap, Kontakt etwas kleiner.
-	$col_widths = [0.05, 11.9, 8, 7, 16, 8, 9, 2, 2, 2, 14.25, 18.3];
-	$col_classes = [
-		'col-open',
-		'col-belegnummer',
-		'col-bezahlt-am',
-		'col-belegtyp',
-		'col-kontakt',
-		'col-zahlungsart',
-		'col-zahlungsgrund',
-		'col-mwst-satz',
-		'col-mwst',
-		'col-vorsteuer',
-		'col-einnahmen',
-		'col-ausgaben',
-	];
-	$colgroup_html = '';
-	foreach ($table_headers as $idx => $head) {
-		$width = (float) ($col_widths[$idx] ?? 9);
-		$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
-		$colgroup_html .= '<col class="' . \esc_attr($class) . '" style="width:' . \esc_attr((string) $width) . '%">';
-	}
-
-	$header_html = '';
-	foreach ($table_headers as $idx => $head) {
-		$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
-		$align = ($idx >= 7) ? ' style="text-align:right;"' : (($idx === 0) ? ' style="text-align:center;"' : '');
-		$header_html .= '<th class="' . \esc_attr($class) . '"' . $align . '>' . \esc_html((string) $head) . '</th>';
-	}
-
-	$rows_html = '';
+	$render_rows = [];
 	$token_cache = [];
 	$upload_cache = [];
 	$ucfirst_utf8 = static function (string $text): string {
@@ -124,38 +86,42 @@ use Dompdf\Options;
 		}
 
 		$display_row = \array_merge([''], $row);
-		$cells_html = '';
-		foreach ($table_headers as $idx => $head) {
-			$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
-			$align = ($idx >= 7) ? ' style="text-align:right;"' : (($idx === 0) ? ' style="text-align:center;"' : '');
+		$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
+		$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
+		$open_content = $icon_target !== ''
+			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[pdf]</span></a>'
+			: '';
 
-				if ($idx === 0) {
-					$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
-					$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
-						$icon_html = $icon_target !== ''
-							? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[pdf]</span></a>'
-							: '';
-					$cells_html .= '<td class="' . \esc_attr($class) . '"' . $align . '>' . $icon_html . '</td>';
-					continue;
-			}
-
-				$val = (string) ($display_row[$idx] ?? '');
-				if ($class === 'col-belegtyp') {
-					$val = $ucfirst_utf8($val);
-				}
-				$cell_html = \esc_html($val);
-			if ($idx === 1 && $val !== '' && $pdf_url !== '') {
-				$cell_html = '<a class="beleg-link" href="' . \esc_url($pdf_url) . '" target="_blank" rel="noopener noreferrer" title="Beleg als PDF anzeigen">' . \esc_html($val) . '</a>';
-			}
-			$cells_html .= '<td class="' . \esc_attr($class) . '"' . $align . '>' . $cell_html . '</td>';
+		$belegnummer = (string) ($display_row[1] ?? '');
+		$belegnummer_content = \esc_html($belegnummer);
+		if ($belegnummer !== '' && $pdf_url !== '') {
+			$belegnummer_content = '<a class="beleg-link" href="' . \esc_url($pdf_url) . '" target="_blank" rel="noopener noreferrer" title="Beleg als PDF anzeigen">' . \esc_html($belegnummer) . '</a>';
 		}
-		$rows_html .= '<tr>' . $cells_html . '</tr>';
-	}
-	if ($rows_html === '') {
-		$rows_html = '<tr><td colspan="' . (int) \count($table_headers) . '">Keine Daten im gewählten Zeitraum.</td></tr>';
-	}
 
-	$html = '<!doctype html><html><head><meta charset="utf-8"><style>
+		$belegtyp = $ucfirst_utf8((string) ($display_row[3] ?? ''));
+
+		$render_rows[] = [
+			'open' => $open_content,
+			'belegnummer' => $belegnummer_content,
+			'bezahlt_am' => \esc_html((string) ($display_row[2] ?? '')),
+			'belegtyp' => \esc_html($belegtyp),
+			'kontakt' => \esc_html((string) ($display_row[4] ?? '')),
+			'zahlungsart' => \esc_html((string) ($display_row[5] ?? '')),
+			'zahlungsgrund' => \esc_html((string) ($display_row[6] ?? '')),
+			'mwst_satz' => \esc_html((string) ($display_row[7] ?? '')),
+			'mwst' => \esc_html((string) ($display_row[8] ?? '')),
+			'vorsteuer' => \esc_html((string) ($display_row[9] ?? '')),
+			'einnahmen' => \esc_html((string) ($display_row[10] ?? '')),
+			'ausgaben' => \esc_html((string) ($display_row[11] ?? '')),
+		];
+	}
+	ob_start();
+	?>
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
 		body{font-family:DejaVu Sans, Arial, sans-serif;font-size:9px;color:#111}
 		.doc-header{margin:0 0 10px 0}
 		.doc-header-title{float:left;font-size:18px;font-weight:700;line-height:1.2}
@@ -163,35 +129,83 @@ use Dompdf\Options;
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
-		table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
-		th,td{padding:6px;border:0}
-		thead th{font-weight:700;background:transparent;text-align:left;white-space:normal}
-		tbody td{word-wrap:break-word;border-top:1px solid #edf0f2}
+		table{width:100%;border-collapse:collapse;table-layout:auto}
+		th,td{padding:6px;border:1px solid #d9dde3}
+		thead th{font-weight:700;background:#f3f4f6;text-align:left;white-space:normal}
+		tbody td{word-wrap:break-word}
 		tbody tr:nth-child(odd) td{background:transparent}
 		tbody tr:nth-child(even) td{background:#f7f8fa}
 		thead th.col-mwst-satz, thead th.col-mwst, thead th.col-vorsteuer{font-size:8px}
-		col.col-mwst-satz, col.col-mwst, col.col-vorsteuer{width:2% !important}
-		col.col-kontakt{width:16% !important}
 		th.col-kontakt, td.col-kontakt{width:16% !important}
-		col.col-open{width:8px !important}
-		col.col-belegnummer{width:11.9% !important}
 		th.col-belegnummer, td.col-belegnummer{white-space:nowrap}
 		td.col-kontakt{font-size:9.2px}
-		th.col-open, td.col-open{text-align:center;width:8px !important;min-width:8px !important;max-width:8px !important;padding-left:0 !important;padding-right:0 !important;white-space:nowrap;overflow:hidden}
+		th.col-open, td.col-open{text-align:center}
 		.pdf-icon-link{display:inline-block;text-decoration:none;line-height:1}
-		.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:6px;line-height:1;white-space:nowrap;letter-spacing:-0.5px;transform:scaleX(0.55);transform-origin:center center}
+		.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:8px;line-height:1;white-space:nowrap}
 		.beleg-link{color:#111;text-decoration:underline}
-		</style></head><body>
+	</style>
+</head>
+<body>
 	<div class="doc-header">
-		<div class="doc-header-title">Milchbüchli<span class="doc-header-subtitle">'.$range_line_html.'</span></div>
-		<div class="doc-header-logo">'.$branding_logo_html.'</div>
+		<div class="doc-header-title">
+			Milchbüchli
+			<span class="doc-header-subtitle">
+				Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
+			</span>
+		</div>
+		<div class="doc-header-logo">
+			<?php if ($branding_logo !== ''): ?>
+				<img class="header-logo" src="<?= \esc_url($branding_logo); ?>" alt="Das bin ich Logo">
+			<?php endif; ?>
+		</div>
 	</div>
+
 	<table>
-	<colgroup>'.$colgroup_html.'</colgroup>
-	<thead><tr>
-	'.$header_html.'
-	</tr></thead><tbody>'.$rows_html.'</tbody></table>
-	</body></html>';
+		<thead>
+			<tr>
+				<th class="col-open" style="text-align:center;width:20px;"></th>
+				<th class="" style="width:1%;">Belegnummer</th>
+				<th class="col-bezahlt-am" style="width:8%;">Bezahlt am</th>
+				<th class="col-belegtyp" style="width:7%;">Belegtyp</th>
+				<th class="col-kontakt" style="width:16%;">Kontakt</th>
+				<th class="col-zahlungsart" style="width:8%;">Zahlungsart</th>
+				<th class="col-zahlungsgrund" style="width:9%;">Zahlungsgrund</th>
+				<th class="col-mwst-satz" style="text-align:right;width:2%;">MwSt</th>
+				<th class="col-mwst" style="text-align:right;width:2%;">MwSt</th>
+				<th class="col-vorsteuer" style="text-align:right;width:2%;">Vorsteuer</th>
+				<th class="col-einnahmen" style="text-align:right;width:14.25%;">Einnahmen</th>
+				<th class="col-ausgaben" style="text-align:right;width:17.25%;">Ausgaben</th>
+			</tr>
+		</thead>
+		<tbody>
+			<?php if (empty($render_rows)): ?>
+				<tr>
+					<td colspan="12">Keine Daten im gewählten Zeitraum.</td>
+				</tr>
+				<?php else: ?>
+					<?php foreach ($render_rows as $row_view): ?>
+						<tr>
+							<td class="col-open" style="text-align:center;width:20px;"><?= (string) ($row_view['open'] ?? ''); ?></td>
+							<td class="col-belegnummer" style="width:11.5%;"><?= (string) ($row_view['belegnummer'] ?? ''); ?></td>
+							<td class="col-bezahlt-am" style="width:8%;"><?= (string) ($row_view['bezahlt_am'] ?? ''); ?></td>
+							<td class="col-belegtyp" style="width:7%;"><?= (string) ($row_view['belegtyp'] ?? ''); ?></td>
+							<td class="col-kontakt" style="width:16%;"><?= (string) ($row_view['kontakt'] ?? ''); ?></td>
+							<td class="col-zahlungsart" style="width:8%;"><?= (string) ($row_view['zahlungsart'] ?? ''); ?></td>
+							<td class="col-zahlungsgrund" style="width:9%;"><?= (string) ($row_view['zahlungsgrund'] ?? ''); ?></td>
+							<td class="col-mwst-satz" style="text-align:right;width:2%;"><?= (string) ($row_view['mwst_satz'] ?? ''); ?></td>
+							<td class="col-mwst" style="text-align:right;width:2%;"><?= (string) ($row_view['mwst'] ?? ''); ?></td>
+							<td class="col-vorsteuer" style="text-align:right;width:2%;"><?= (string) ($row_view['vorsteuer'] ?? ''); ?></td>
+							<td class="col-einnahmen" style="text-align:right;width:14.25%;"><?= (string) ($row_view['einnahmen'] ?? ''); ?></td>
+							<td class="col-ausgaben" style="text-align:right;width:17.25%;"><?= (string) ($row_view['ausgaben'] ?? ''); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				<?php endif; ?>
+		</tbody>
+	</table>
+</body>
+</html>
+	<?php
+	$html = (string) \ob_get_clean();
 
 	$dom->loadHtml($html, 'UTF-8');
 	$dom->setPaper('A4', 'landscape');
