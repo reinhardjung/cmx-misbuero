@@ -116,8 +116,8 @@ function cmxbu_belege_export_post_date(int $post_id): string {
 	$has_error = !empty($_GET['cmx_export_error']);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
-		<h2>Belege Export</h2>
-		<p>Wähle <code>Datum von</code> und <code>Datum bis</code>. Erst danach kann exportiert werden.</p>
+		<h2>Belege Export als Milchbüchli</h2>
+		<p>Wähle <code>Datum von</code> und <code>Datum bis</code>. Erst danach kann das Milchbüchli exportiert werden.</p>
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
 		<?php endif; ?>
