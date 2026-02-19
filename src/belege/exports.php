@@ -33,9 +33,97 @@ function cmxbu_belege_export_normalize_date(string $raw_date): string {
 	return \sprintf('%04d-%02d-%02d', $y, $m, $d);
 }
 
+function cmxbu_belege_export_presets(): array {
+	return [
+		'heute' => 'Heute (heute bis heute)',
+		'diesen_monat' => 'Diesen Monat',
+		'letzten_monat' => 'Letzten Monat',
+		'dieses_quartal' => 'Dieses Quartal',
+		'letztes_quartal' => 'Letztes Quartal',
+		'dieses_jahr' => 'Dieses Jahr',
+		'letztes_jahr' => 'Letztes Jahr',
+		'benutzerdefiniert' => 'Benutzerdefiniert',
+	];
+}
+
+function cmxbu_belege_export_requested_preset(): string {
+	$preset = \sanitize_key((string) ($_REQUEST['cmx_export_range_preset'] ?? ''));
+	$presets = cmxbu_belege_export_presets();
+	if ($preset !== '' && isset($presets[$preset])) return $preset;
+	return 'heute';
+}
+
+function cmxbu_belege_export_now_datetime(): \DateTimeImmutable {
+	if (\function_exists('wp_timezone')) {
+		return new \DateTimeImmutable('now', \wp_timezone());
+	}
+	return new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+}
+
+function cmxbu_belege_export_range_from_preset(string $preset): array {
+	$now = cmxbu_belege_export_now_datetime();
+	$today = $now->format('Y-m-d');
+
+	switch ($preset) {
+		case 'heute':
+			return ['from' => $today, 'to' => $today];
+		case 'diesen_monat':
+			return [
+				'from' => $now->modify('first day of this month')->format('Y-m-d'),
+				'to' => $today,
+			];
+		case 'letzten_monat':
+			return [
+				'from' => $now->modify('first day of last month')->format('Y-m-d'),
+				'to' => $now->modify('last day of last month')->format('Y-m-d'),
+			];
+		case 'dieses_quartal':
+			$year = (int) $now->format('Y');
+			$month = (int) $now->format('n');
+			$q_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+			$q_start = $now->setDate($year, $q_start_month, 1);
+			return [
+				'from' => $q_start->format('Y-m-d'),
+				'to' => $today,
+			];
+		case 'letztes_quartal':
+			$year = (int) $now->format('Y');
+			$month = (int) $now->format('n');
+			$q_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+			$current_q_start = $now->setDate($year, $q_start_month, 1);
+			$last_q_start = $current_q_start->modify('-3 months');
+			$last_q_end = $current_q_start->modify('-1 day');
+			return [
+				'from' => $last_q_start->format('Y-m-d'),
+				'to' => $last_q_end->format('Y-m-d'),
+			];
+		case 'dieses_jahr':
+			$year = (int) $now->format('Y');
+			return [
+				'from' => \sprintf('%04d-01-01', $year),
+				'to' => $today,
+			];
+		case 'letztes_jahr':
+			$year = ((int) $now->format('Y')) - 1;
+			return [
+				'from' => \sprintf('%04d-01-01', $year),
+				'to' => \sprintf('%04d-12-31', $year),
+			];
+		default:
+			return ['from' => '', 'to' => ''];
+	}
+}
+
 function cmxbu_belege_export_requested_date_range(): array {
 	$from = cmxbu_belege_export_normalize_date((string) ($_REQUEST['cmx_export_date_from'] ?? ''));
 	$to   = cmxbu_belege_export_normalize_date((string) ($_REQUEST['cmx_export_date_to'] ?? ''));
+
+	if ($from === '' || $to === '') {
+		$preset = cmxbu_belege_export_requested_preset();
+		$preset_range = cmxbu_belege_export_range_from_preset($preset);
+		if ($from === '') $from = $preset_range['from'];
+		if ($to === '') $to = $preset_range['to'];
+	}
 
 	if ($from !== '' && $to !== '' && $from > $to) {
 		[$from, $to] = [$to, $from];
@@ -53,6 +141,7 @@ function cmxbu_belege_export_require_date_range_or_redirect(): array {
 		'cmx_export' => 1,
 		'cmx_export_error' => 'missing_range',
 		'ref' => cmxbu_belege_export_request_ref(),
+		'cmx_export_range_preset' => cmxbu_belege_export_requested_preset(),
 	];
 	if ($range['from'] !== '') $args['cmx_export_date_from'] = $range['from'];
 	if ($range['to'] !== '') $args['cmx_export_date_to'] = $range['to'];
@@ -111,6 +200,8 @@ function cmxbu_belege_export_post_date(int $post_id): string {
 	if (!\current_user_can('edit_posts')) return;
 
 	$range = cmxbu_belege_export_requested_date_range();
+	$preset = cmxbu_belege_export_requested_preset();
+	$presets = cmxbu_belege_export_presets();
 	$ref = cmxbu_belege_export_request_ref();
 	$cancel_url = cmxbu_belege_export_normalize_ref($ref);
 	$has_error = !empty($_GET['cmx_export_error']);
@@ -128,6 +219,16 @@ function cmxbu_belege_export_post_date(int $post_id): string {
 
 			<table class="form-table" role="presentation" style="margin-top:1em;">
 				<tbody>
+					<tr>
+						<th scope="row"><label for="cmx_export_range_preset">Zeitraum</label></th>
+						<td>
+							<select id="cmx_export_range_preset" name="cmx_export_range_preset">
+								<?php foreach ($presets as $value => $label): ?>
+									<option value="<?php echo \esc_attr($value); ?>" <?php selected($preset, $value); ?>><?php echo \esc_html($label); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</td>
+					</tr>
 					<tr>
 						<th scope="row"><label for="cmx_export_date_from">Datum von</label></th>
 						<td><input type="date" id="cmx_export_date_from" name="cmx_export_date_from" value="<?php echo \esc_attr($range['from']); ?>" required></td>
@@ -151,6 +252,83 @@ function cmxbu_belege_export_post_date(int $post_id): string {
 	(function(){
 		var form = document.getElementById('cmx-belege-export-form');
 		if (!form) return;
+		var preset = document.getElementById('cmx_export_range_preset');
+		var fromField = document.getElementById('cmx_export_date_from');
+		var toField = document.getElementById('cmx_export_date_to');
+
+		function pad2(n){ return (n < 10 ? '0' : '') + n; }
+		function ymd(date){
+			return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+		}
+		function applyPreset(value){
+			if (!fromField || !toField) return;
+			var now = new Date();
+			var from = '';
+			var to = '';
+			var y = now.getFullYear();
+			var m = now.getMonth();
+
+			switch (value) {
+				case 'heute':
+					from = ymd(now);
+					to = ymd(now);
+					break;
+				case 'diesen_monat':
+					from = ymd(new Date(y, m, 1));
+					to = ymd(now);
+					break;
+				case 'letzten_monat':
+					from = ymd(new Date(y, m - 1, 1));
+					to = ymd(new Date(y, m, 0));
+					break;
+				case 'dieses_quartal':
+					var qStartMonth = Math.floor(m / 3) * 3;
+					from = ymd(new Date(y, qStartMonth, 1));
+					to = ymd(now);
+					break;
+				case 'letztes_quartal':
+					var thisQStartMonth = Math.floor(m / 3) * 3;
+					var thisQStart = new Date(y, thisQStartMonth, 1);
+					var lastQStart = new Date(thisQStart.getFullYear(), thisQStart.getMonth() - 3, 1);
+					var lastQEnd = new Date(thisQStart.getFullYear(), thisQStart.getMonth(), 0);
+					from = ymd(lastQStart);
+					to = ymd(lastQEnd);
+					break;
+				case 'dieses_jahr':
+					from = y + '-01-01';
+					to = ymd(now);
+					break;
+				case 'letztes_jahr':
+					from = (y - 1) + '-01-01';
+					to = (y - 1) + '-12-31';
+					break;
+				default:
+					return;
+			}
+			if (from) fromField.value = from;
+			if (to) toField.value = to;
+		}
+
+		if (preset) {
+			preset.addEventListener('change', function () {
+				if (preset.value === 'benutzerdefiniert') return;
+				applyPreset(preset.value);
+			});
+		}
+
+		function markCustomIfManual(){
+			if (!preset) return;
+			if (preset.value !== 'benutzerdefiniert') {
+				preset.value = 'benutzerdefiniert';
+			}
+		}
+		if (fromField) fromField.addEventListener('change', markCustomIfManual);
+		if (toField) toField.addEventListener('change', markCustomIfManual);
+
+		if (preset && preset.value !== 'benutzerdefiniert' && ((!fromField || !fromField.value) || (!toField || !toField.value))) {
+			applyPreset(preset.value);
+		}
+
 		form.addEventListener('submit', function () {
 			var stale = form.querySelectorAll('input[data-cmx-selected="1"]');
 			for (var i = 0; i < stale.length; i++) stale[i].remove();
