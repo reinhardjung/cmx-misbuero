@@ -36,6 +36,23 @@ function cmx_beleg_status_options(): array {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')) {
+	function cmx_belege_default_due_days(array $opts = []): int {
+		if (empty($opts)) {
+			$opts = (array) \get_option('cmx_einstellungen', []);
+		}
+		$raw = isset($opts['belege_faelligkeit_tage']) ? (string) $opts['belege_faelligkeit_tage'] : '';
+		$days = ($raw === '') ? 30 : (int) $raw;
+		if ($days < 0) {
+			$days = 0;
+		}
+		if ($days > 3650) {
+			$days = 3650;
+		}
+		return $days;
+	}
+}
+
 function cmx_beleg_zahlungsart_tax(): ?string {
 	foreach (['belege_zahlungsarten', 'belege_zahlungsart'] as $tax) {
 		if (\taxonomy_exists($tax)) return $tax;
@@ -163,14 +180,12 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$bezahlt  = \get_post_meta($post->ID, CMX_BELEG_META_BEZAHLT_AM, true);
 	$bez_valid = ($bezahlt && \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $bezahlt));
 	$opts_general = (array) \get_option('cmx_einstellungen', []);
+	$default_due_days = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')
+		? cmx_belege_default_due_days($opts_general)
+		: 30;
 	$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
 		? cmx_belege_uses_leistungszeitraum($opts_general)
 		: !empty($opts_general['belege_use_leistungszeitraum']);
-
-	// Fälligkeitsdatum Standard: heute + 30 Tage, falls leer
-	if ($faellig === '' || $faellig === null) {
-		$faellig = \gmdate('Y-m-d', strtotime('+30 days'));
-	}
 
 	// Aktueller Monat als Default, wenn leer
 	if ($use_leistungszeitraum && !$leistMon) {
@@ -264,6 +279,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'var ltdy=document.getElementById("cmx_f_today"), l10=document.getElementById("cmx_f_10"), l14=document.getElementById("cmx_f_14"), l30=document.getElementById("cmx_f_30"), lend=document.getElementById("cmx_f_end");';
 	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
 	echo 'var lblL=document.getElementById("cmx_leistungs_label"),selL=document.getElementById("cmx_beleg_leistungsmonat");';
+	echo 'var defaultDueDays=' . (int) $default_due_days . ';';
 
 	// helpers
 	echo 'function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}';
@@ -272,9 +288,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'function nextMonthVal(){var d=new Date(),m=d.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
 	echo 'function addDays(n){var b=baseDate(); b.setDate(b.getDate()+n); return fmt(b);}';
+	echo 'function applyDefaultDueFromInvoice(force){if(!inpR||!inpF)return;if(!force&&(inpF.value||"")!=="")return;var n=parseInt(defaultDueDays,10);if(isNaN(n)||n<0)n=0;var b=baseDate();b.setDate(b.getDate()+n);inpF.value=fmt(b);}';
 
 	// Rechnungsdatum -> heute
-	echo 'if(lblR&&inpR){lblR.addEventListener("click",function(e){e.preventDefault();inpR.value=today();});}';
+	echo 'if(lblR&&inpR){lblR.addEventListener("click",function(e){e.preventDefault();inpR.value=today();applyDefaultDueFromInvoice(true);});}';
+	echo 'if(inpR&&inpF){inpR.addEventListener("change",function(){applyDefaultDueFromInvoice(true);});inpR.addEventListener("input",function(){applyDefaultDueFromInvoice(true);});}';
 
 	// Fällig am: heute / +10 / +14 / +30 Tage / Monatsende (stopPropagation verhindert Label-Bubble)
 	echo 'if(ltdy&&inpF){ltdy.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=today();});}';
@@ -372,11 +390,11 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	// Fälligkeitsdatum
 	$fae = isset($_POST['cmx_beleg_faelligkeitsdatum']) ? \sanitize_text_field($_POST['cmx_beleg_faelligkeitsdatum']) : '';
-	if (!$fae || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $fae)) {
-		// Default: +30 Tage, wenn kein gültiges Datum geliefert
-		$fae = \gmdate('Y-m-d', strtotime('+30 days'));
+	if ($fae && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $fae)) {
+		\update_post_meta($post_id, CMX_BELEG_META_FAELLIG, $fae);
+	} else {
+		\delete_post_meta($post_id, CMX_BELEG_META_FAELLIG);
 	}
-	\update_post_meta($post_id, CMX_BELEG_META_FAELLIG, $fae);
 
 	// Leistungszeitraum (Monat 01..12)
 	$opts_general = (array) \get_option('cmx_einstellungen', []);

@@ -123,6 +123,26 @@ function cmx_register_general_tab(): void {
 		'cmx_sec_general'
 	);
 
+	\add_settings_field(
+		'belege_faelligkeit_tage',
+		'Fälligkeitsfrist (Tage)',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$raw = isset($opts['belege_faelligkeit_tage']) ? (string) $opts['belege_faelligkeit_tage'] : '';
+			$days = ($raw === '') ? 30 : (int) $raw;
+			if ($days < 0) {
+				$days = 0;
+			}
+			if ($days > 3650) {
+				$days = 3650;
+			}
+			echo '<input type="number" min="0" max="3650" step="1" style="width:120px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_tage]" value="'.\esc_attr((string) $days).'">';
+			echo '<p class="description">Standard für "Fällig am" in Belegen. Beim Setzen des Belegdatums wird das Fälligkeitsdatum auf Belegdatum + diese Tage gesetzt.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
 	\register_setting(
 		'cmx_einstellungen',
 		'mis_buero_openai_key',

@@ -872,9 +872,11 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 
 		$menge_raw    = isset($row['menge']) ? (string)$row['menge'] : '';
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
+		$menge        = (float) \round($menge, 2);
 
 		$preis_raw    = isset($row['preis']) ? (string)$row['preis'] : '';
 		$preis        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($preis_raw);
+		$preis        = (float) \round($preis, 2);
 
 		$rabatt_raw   = isset($row['rabatt']) ? (string)$row['rabatt'] : '';
 		$rabatt       = sanitize_text_field($rabatt_raw);
@@ -2372,7 +2374,9 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 
 		$menge_raw    = (string)($r['menge'] ?? '');
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
+		$menge        = (float) \round($menge, 2);
 		$preis        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($r['preis'] ?? ''));
+		$preis        = (float) \round($preis, 2);
 
 		$rabatt_raw   = isset($r['rabatt']) ? (string)$r['rabatt'] : '';
 		$rabatt       = sanitize_text_field($rabatt_raw);

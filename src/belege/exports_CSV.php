@@ -115,7 +115,8 @@ function cmxbu_beleg_export_partial_payments(int $post_id, ?string $zahlungsart_
 			? cmxbu_belege_export_normalize_date($datum_raw)
 			: \trim($datum_raw);
 		$betrag = (float) \abs(cmxbu_beleg_export_to_float($row['betrag'] ?? 0));
-		if ($datum === '' && $betrag <= 0.0) continue;
+		if ($datum === '') continue;
+		if ($betrag <= 0.0) continue;
 
 		$zahlungsart_raw = \trim((string) ($row['zahlungsart'] ?? ''));
 		$zahlungsart = $zahlungsart_raw;
@@ -179,15 +180,20 @@ function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
 	return \in_array($type, ['rechnung', 'quittung', 'gutschrift'], true);
 }
 
-function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_am = ''): bool {
+function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_am = '', int $post_id = 0): bool {
 	$status = \sanitize_key($status);
-	if (\in_array($status, ['bezahlt', 'teilbezahlt'], true)) {
-		return true;
-	}
 	$bezahlt_am = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')
 		? (string) cmxbu_belege_export_normalize_date($bezahlt_am)
 		: \trim($bezahlt_am);
-	return $bezahlt_am !== '';
+	if ($bezahlt_am !== '') {
+		return true;
+	}
+
+	if ($post_id > 0 && \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_partial_payment_dates')) {
+		return !empty(cmxbu_belege_export_partial_payment_dates($post_id));
+	}
+
+	return false;
 }
 
 function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''): string {
@@ -291,12 +297,15 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am',
 			true
 		);
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')) {
+			$bezahlt_am = (string) cmxbu_belege_export_normalize_date($bezahlt_am);
+		}
 		$status = \sanitize_key((string) \get_post_meta(
 			$pid,
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
 			true
 		));
-		if (!cmxbu_beleg_export_is_paid_or_partial($status, $bezahlt_am)) {
+		if (!cmxbu_beleg_export_is_paid_or_partial($status, $bezahlt_am, $pid)) {
 			continue;
 		}
 
@@ -362,7 +371,7 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 					if ($partial_amount <= 0.0) continue;
 
 					$partial_date = (string) ($partial['datum'] ?? '');
-					if ($partial_date === '') $partial_date = $bezahlt_am;
+					if ($partial_date === '') continue;
 					$partial_art = (string) ($partial['zahlungsart'] ?? '');
 					if ($partial_art === '') $partial_art = $zahlungsart;
 
@@ -388,6 +397,9 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 						'row' => $partial_row,
 					];
 				}
+				continue;
+			}
+			if ($bezahlt_am === '') {
 				continue;
 			}
 		}

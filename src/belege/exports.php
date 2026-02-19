@@ -175,6 +175,49 @@ function cmxbu_belege_export_post_date(int $post_id): string {
 	return cmxbu_belege_export_normalize_date($belegdatum);
 }
 
+function cmxbu_belege_export_paid_date(int $post_id): string {
+	$meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+		? CMX_BELEG_META_BEZAHLT_AM
+		: '_cmx_beleg_bezahlt_am';
+	$raw = (string) \get_post_meta($post_id, $meta_key, true);
+	return cmxbu_belege_export_normalize_date($raw);
+}
+
+function cmxbu_belege_export_partial_payment_dates(int $post_id): array {
+	$meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN')
+		? CMX_BELEG_META_ANZAHLUNGEN
+		: '_cmx_beleg_anzahlungen';
+	$raw = \get_post_meta($post_id, $meta_key, true);
+	if (empty($raw)) return [];
+
+	if (\is_string($raw)) {
+		$decoded = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
+			$raw = $decoded;
+		} else {
+			$maybe = @\maybe_unserialize($raw);
+			$raw = \is_array($maybe) ? $maybe : [];
+		}
+	}
+	if (!\is_array($raw)) return [];
+
+	$dates = [];
+	foreach ($raw as $row) {
+		if (!\is_array($row)) continue;
+		$datum = cmxbu_belege_export_normalize_date((string) ($row['datum'] ?? ''));
+		if ($datum === '') continue;
+		$dates[$datum] = true;
+	}
+
+	return \array_keys($dates);
+}
+
+function cmxbu_belege_export_has_payment_date(int $post_id): bool {
+	if (cmxbu_belege_export_paid_date($post_id) !== '') return true;
+	$partial_dates = cmxbu_belege_export_partial_payment_dates($post_id);
+	return !empty($partial_dates);
+}
+
 /* ===== Link „export“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
@@ -400,6 +443,13 @@ function cmxbu_belege_export_collect_ids(): array {
 
 	$q = new \WP_Query($qv);
 	$post_ids = \array_map('intval', (array) $q->posts);
+
+	$payment_filtered = [];
+	foreach ($post_ids as $post_id) {
+		if (!cmxbu_belege_export_has_payment_date($post_id)) continue;
+		$payment_filtered[] = $post_id;
+	}
+	$post_ids = $payment_filtered;
 
 	$range = cmxbu_belege_export_requested_date_range();
 	if ($range['from'] === '' || $range['to'] === '') return $post_ids;

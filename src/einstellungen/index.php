@@ -217,6 +217,22 @@ function cmx_render_settings_page(): void {
  * SANITIZER: IMMER GENAU 1 BANK
  * ------------------------------------------------------------ */
 add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
+	$new = \is_array($new) ? $new : [];
+	$normalize_due_days = static function(array $data): array {
+		if (!\array_key_exists('belege_faelligkeit_tage', $data)) {
+			return $data;
+		}
+		$days = (int) $data['belege_faelligkeit_tage'];
+		if ($days < 0) {
+			$days = 0;
+		}
+		if ($days > 3650) {
+			$days = 3650;
+		}
+		$data['belege_faelligkeit_tage'] = $days;
+		return $data;
+	};
+	$new = $normalize_due_days($new);
 
 	$bank_keys = [
 		'rev_enabled',

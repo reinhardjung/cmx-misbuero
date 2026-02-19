@@ -427,3 +427,115 @@ add_action('admin_head', function () {
 	</script>
 	<?php
 });
+
+add_action('admin_footer', function (): void {
+	if (!\function_exists('get_current_screen')) {
+		return;
+	}
+	$screen = \get_current_screen();
+	if (!$screen || $screen->base !== 'post' || !\in_array((string) $screen->post_type, ['artikel', 'belege'], true)) {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		if (window.__cmxMaxTwoDecimalsBound) return;
+		window.__cmxMaxTwoDecimalsBound = true;
+
+		const disallowedTypes = new Set([
+			'date','datetime-local','time','month','week',
+			'checkbox','radio','hidden','button','submit','reset','file'
+		]);
+		const decimalHints = /(menge|preis|betrag|summe|total|subtotal|mwst|tax|vk|ek|aufwand|marge|rabatt|qty|anzahl|rate|prozent|percent)/i;
+
+		function keyOf(el){
+			return [
+				el.name || '',
+				el.id || '',
+				(typeof el.className === 'string' ? el.className : '')
+			].join(' ').toLowerCase();
+		}
+
+		function isDecimalField(el){
+			if (!el || el.tagName !== 'INPUT') return false;
+			const type = (el.getAttribute('type') || 'text').toLowerCase();
+			if (disallowedTypes.has(type)) return false;
+			if (type === 'number') return true;
+			if ((el.inputMode || '').toLowerCase() === 'decimal') return true;
+			return decimalHints.test(keyOf(el));
+		}
+
+		function clampString(raw){
+			let s = String(raw == null ? '' : raw);
+			if (s === '') return s;
+
+			let suffix = '';
+			const pct = s.match(/\s*%$/);
+			if (pct) {
+				suffix = pct[0];
+				s = s.slice(0, -suffix.length);
+			}
+
+			const lastComma = s.lastIndexOf(',');
+			const lastDot = s.lastIndexOf('.');
+			const idx = Math.max(lastComma, lastDot);
+			if (idx < 0) return String(raw);
+
+			const before = s.slice(0, idx + 1);
+			const after  = s.slice(idx + 1);
+			const m = after.match(/^(\d+)(.*)$/);
+			if (!m) return String(raw);
+
+			const digits = m[1];
+			const rest = m[2] || '';
+			if (digits.length <= 2) return String(raw);
+
+			return before + digits.slice(0, 2) + rest + suffix;
+		}
+
+		function enforce(el){
+			if (!isDecimalField(el)) return;
+			if ((el.getAttribute('type') || '').toLowerCase() === 'number') {
+				const step = (el.getAttribute('step') || '').trim();
+				if (step === '' || step.toLowerCase() === 'any') {
+					el.setAttribute('step', '0.01');
+				}
+			}
+			const v = String(el.value == null ? '' : el.value);
+			if (v === '') return;
+			const clamped = clampString(v);
+			if (clamped !== v) {
+				el.value = clamped;
+			}
+		}
+
+		document.addEventListener('input', function(e){
+			const el = e.target;
+			if (!(el instanceof HTMLInputElement)) return;
+			enforce(el);
+		}, true);
+
+		document.addEventListener('blur', function(e){
+			const el = e.target;
+			if (!(el instanceof HTMLInputElement)) return;
+			enforce(el);
+		}, true);
+
+		document.querySelectorAll('input').forEach(function(el){
+			if (!(el instanceof HTMLInputElement)) return;
+			enforce(el);
+		});
+
+		const form = document.getElementById('post');
+		if (form) {
+			form.addEventListener('submit', function(){
+				form.querySelectorAll('input').forEach(function(el){
+					if (!(el instanceof HTMLInputElement)) return;
+					enforce(el);
+				});
+			});
+		}
+	})();
+	</script>
+	<?php
+});

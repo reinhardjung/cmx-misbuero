@@ -1023,6 +1023,21 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$qr_payment_iban = $qr_iban;
 		}
 // var_dump($dates['currency']); exit;
+		$doc_date = '';
+		$doc_due  = '';
+		if (!empty($dates['date_invoice'])) {
+			$ts = \strtotime((string) $dates['date_invoice']);
+			if ($ts) {
+				$doc_date = \date('d.m.Y', $ts);
+			}
+		}
+		if (!empty($dates['date_due'])) {
+			$ts = \strtotime((string) $dates['date_due']);
+			if ($ts) {
+				$doc_due = \date('d.m.Y', $ts);
+			}
+		}
+
 		// Platzhalter für Vorlage
 		$tpl = [
 			'branding' => ['logo' => $branding_logo, 'website' => $opts['website'] ?? ''],
@@ -1033,8 +1048,8 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'richtung' => (string) get_post_meta($post_id, '_cmx_beleg_richtung', true),
 				'number' => $title_safe,
 				'title' => $doc_label . ' ' . $title_safe,
-				'date' => date('d.m.Y', strtotime($dates['date_invoice'])),
-				'due' => date('d.m.Y', strtotime($dates['date_due'])),
+				'date' => $doc_date,
+				'due' => $doc_due,
 				'currency' => $dates['currency'],
 				'period' => $dates['period'],
 				'subtotal' => $calc['subtotal'],
