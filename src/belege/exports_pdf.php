@@ -163,18 +163,18 @@ use Dompdf\Options;
 	<table>
 		<thead>
 			<tr>
-				<th class="col-open" style="text-align:center;width:20px;"></th>
-				<th class="" style="width:1%;">Belegnummer</th>
-				<th class="col-bezahlt-am" style="width:8%;">Bezahlt am</th>
-				<th class="col-belegtyp" style="width:7%;">Belegtyp</th>
-				<th class="col-kontakt" style="width:16%;">Kontakt</th>
-				<th class="col-zahlungsart" style="width:8%;">Zahlungsart</th>
-				<th class="col-zahlungsgrund" style="width:9%;">Zahlungsgrund</th>
-				<th class="col-mwst-satz" style="text-align:right;width:2%;">MwSt</th>
-				<th class="col-mwst" style="text-align:right;width:2%;">MwSt</th>
-				<th class="col-vorsteuer" style="text-align:right;width:2%;">Vorsteuer</th>
-				<th class="col-einnahmen" style="text-align:right;width:14.25%;">Einnahmen</th>
-				<th class="col-ausgaben" style="text-align:right;width:17.25%;">Ausgaben</th>
+				<th style="text-align:center;width:20px;"></th>
+				<th style="width:80px;">Belegnummer</th>
+				<th style="width:60px">Bezahlt am</th>
+				<th style="width:70px;">Belegtyp</th>
+				<th style="">Kontakt</th>
+				<th style="width:80px">Zahlungsart</th>
+				<th style="width:80px;">Zahlungsgrund</th>
+				<th style="text-align:center;width:50px;">Satz</th>
+				<th style="text-align:center;width:50px;">MwSt</th>
+				<th style="text-align:center;width:50px">Vorsteuer</th>
+				<th style="text-align:right;width:100px;">Einnahmen</th>
+				<th style="text-align:right;width:100px;">Ausgaben</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -185,18 +185,18 @@ use Dompdf\Options;
 				<?php else: ?>
 					<?php foreach ($render_rows as $row_view): ?>
 						<tr>
-							<td class="col-open" style="text-align:center;width:20px;"><?= (string) ($row_view['open'] ?? ''); ?></td>
-							<td class="col-belegnummer" style="width:11.5%;"><?= (string) ($row_view['belegnummer'] ?? ''); ?></td>
-							<td class="col-bezahlt-am" style="width:8%;"><?= (string) ($row_view['bezahlt_am'] ?? ''); ?></td>
-							<td class="col-belegtyp" style="width:7%;"><?= (string) ($row_view['belegtyp'] ?? ''); ?></td>
-							<td class="col-kontakt" style="width:16%;"><?= (string) ($row_view['kontakt'] ?? ''); ?></td>
-							<td class="col-zahlungsart" style="width:8%;"><?= (string) ($row_view['zahlungsart'] ?? ''); ?></td>
-							<td class="col-zahlungsgrund" style="width:9%;"><?= (string) ($row_view['zahlungsgrund'] ?? ''); ?></td>
-							<td class="col-mwst-satz" style="text-align:right;width:2%;"><?= (string) ($row_view['mwst_satz'] ?? ''); ?></td>
-							<td class="col-mwst" style="text-align:right;width:2%;"><?= (string) ($row_view['mwst'] ?? ''); ?></td>
-							<td class="col-vorsteuer" style="text-align:right;width:2%;"><?= (string) ($row_view['vorsteuer'] ?? ''); ?></td>
-							<td class="col-einnahmen" style="text-align:right;width:14.25%;"><?= (string) ($row_view['einnahmen'] ?? ''); ?></td>
-							<td class="col-ausgaben" style="text-align:right;width:17.25%;"><?= (string) ($row_view['ausgaben'] ?? ''); ?></td>
+							<td style="text-align:center;"><?= $row_view['open']; ?></td>
+							<td><?= $row_view['belegnummer']; ?></td>
+							<td><?= $row_view['bezahlt_am']; ?></td>
+							<td><?= $row_view['belegtyp']; ?></td>
+							<td><?= $row_view['kontakt']; ?></td>
+							<td><?= $row_view['zahlungsart']; ?></td>
+							<td><?= $row_view['zahlungsgrund']; ?></td>
+							<td style="text-align:right;"><?= $row_view['mwst_satz']; ?></td>
+							<td style="text-align:right;"><?= $row_view['mwst']; ?></td>
+							<td style="text-align:right;"><?= $row_view['vorsteuer']; ?></td>
+							<td style="text-align:right;"><?= $row_view['einnahmen']; ?></td>
+							<td style="text-align:right;"><?= $row_view['ausgaben']; ?></td>
 						</tr>
 					<?php endforeach; ?>
 				<?php endif; ?>
