@@ -1572,6 +1572,43 @@ function cmx_beleg_positionen_js() {
 				return keys;
 			}
 
+			function isPositionRowEmpty($row){
+				if(!$row || !$row.length) return false;
+				if($row.hasClass('cmx-pos-row-abschnitt')) return false;
+
+				const artikelIdRaw = ($row.find('.cmx-artikel-id').first().val() || '').toString().trim();
+				const artikelId = parseInt(artikelIdRaw, 10);
+				if(!isNaN(artikelId) && artikelId > 0) return false;
+
+				const fieldSelectors = [
+					'.cmx-artikel-autocomplete',
+					'input[name*="[menge]"]',
+					'input[name*="[preis]"]',
+					'input[name*="[rabatt]"]',
+					'.cmx-einheit-select',
+					'textarea[name*="[beschreibung]"]',
+					'.cmx-task-idx',
+					'.cmx-task-uid',
+					'.cmx-task-projekt-id'
+				];
+				for(let i = 0; i < fieldSelectors.length; i++){
+					const val = ($row.find(fieldSelectors[i]).first().val() || '').toString().trim();
+					if(val !== '') return false;
+				}
+				return true;
+			}
+
+			function removeEmptyPositionRows(){
+				let removed = 0;
+				table.find('tr.cmx-pos-row').each(function(){
+					const $row = $(this);
+					if(!isPositionRowEmpty($row)) return;
+					$row.remove();
+					removed++;
+				});
+				return removed;
+			}
+
 			function autoImportTasksFromSource(sourceType, sourceId){
 				const st = (sourceType === 'kontakte') ? 'kontakte' : 'projekte';
 				const sid = parseInt((sourceId ?? '').toString(), 10);
@@ -1579,6 +1616,7 @@ function cmx_beleg_positionen_js() {
 
 				fetchOffeneTasks('', function(rows){
 					if (!Array.isArray(rows) || !rows.length) return;
+					const removed = removeEmptyPositionRows();
 					const existing = collectExistingTaskRefKeys();
 					let added = 0;
 					rows.forEach(function(task){
@@ -1591,10 +1629,10 @@ function cmx_beleg_positionen_js() {
 							if (key) existing.add(key);
 						}
 					});
-					if (added > 0) {
-						$('#cmx_tasks_prefilled_js').val('1');
-						$('#cmx_tasks_prefill_source_type').val(st);
-						$('#cmx_tasks_prefill_source_id').val(String(sid));
+					$('#cmx_tasks_prefilled_js').val('1');
+					$('#cmx_tasks_prefill_source_type').val(st);
+					$('#cmx_tasks_prefill_source_id').val(String(sid));
+					if (added > 0 || removed > 0) {
 						table.trigger('cmx_positionen_rows_changed');
 					}
 				}, st, sid);
