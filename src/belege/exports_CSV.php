@@ -23,6 +23,146 @@ function cmxbu_beleg_has_positions(array $calc): bool {
 	return false;
 }
 
+function cmxbu_beleg_positions_line_sum(array $calc): float {
+	$sum = 0.0;
+	if (empty($calc['positionen']) || !\is_array($calc['positionen'])) return 0.0;
+	foreach ($calc['positionen'] as $row) {
+		if (!\is_array($row)) continue;
+		if (($row['row_type'] ?? '') === 'abschnitt') continue;
+		$sum += (float)($row['line_total'] ?? 0.0);
+	}
+	return (float) $sum;
+}
+
+function cmxbu_beleg_export_meta_float(int $post_id, string $meta_key): float {
+	$raw = (string) \get_post_meta($post_id, $meta_key, true);
+	if ($raw === '') return 0.0;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
+		return (float) cmx_norm_decimal($raw);
+	}
+	$raw = \str_replace(["'", ' '], '', $raw);
+	$raw = \str_replace(',', '.', $raw);
+	return \is_numeric($raw) ? (float) $raw : 0.0;
+}
+
+function cmxbu_beleg_export_format_money(float $value): string {
+	$rounded = \round((float) $value, 2);
+	if (\abs($rounded) < 0.00001) return '';
+	return \number_format($rounded, 2, ',', '');
+}
+
+function cmxbu_beleg_export_format_percent(float $rate_decimal): string {
+	$pct = (float) $rate_decimal * 100;
+	if ($pct <= 0) return '';
+	$txt = \number_format($pct, 2, ',', '');
+	return \rtrim(\rtrim($txt, '0'), ',');
+}
+
+function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): string {
+	if (!$taxonomy || !\taxonomy_exists($taxonomy)) return '';
+	$terms = \wp_get_post_terms($post_id, $taxonomy, ['fields' => 'names']);
+	if (\is_wp_error($terms) || empty($terms[0])) return '';
+	return (string) $terms[0];
+}
+
+function cmxbu_beleg_export_raw_type(\WP_Post $post): string {
+	$type = '';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+		[, $type] = cmx_get_beleg_type($post);
+	}
+	if ($type === '' && \function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')) {
+		$tax = (string) cmx_belege_taxonomy();
+		if ($tax !== '' && \taxonomy_exists($tax)) {
+			$terms = \wp_get_post_terms((int) $post->ID, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($terms) && !empty($terms[0])) {
+				$type = (string) $terms[0];
+			}
+		}
+	}
+	return \strtolower(\trim((string) $type));
+}
+
+function cmxbu_beleg_export_normalize_type(string $type): string {
+	$type = \strtolower(\sanitize_key($type));
+	$map = [
+		'rechnungen' => 'rechnung',
+		'quittungen' => 'quittung',
+		'gutschriften' => 'gutschrift',
+	];
+	return $map[$type] ?? $type;
+}
+
+function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
+	$type = cmxbu_beleg_export_normalize_type($type);
+	return \in_array($type, ['rechnung', 'quittung', 'gutschrift'], true);
+}
+
+function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''): string {
+	$type = $raw_type !== '' ? $raw_type : cmxbu_beleg_export_raw_type($post);
+	if ($type !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_effective_type')) {
+		$type = (string) cmxbu_get_beleg_pdf_effective_type((int) $post->ID, $type);
+	}
+	return \strtolower(\trim((string) $type));
+}
+
+function cmxbu_beleg_export_mwst_context(int $post_id, string $effective_type): array {
+	$opts_general = (array) \get_option('cmx_einstellungen', []);
+	$is_brutto = \get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
+
+	$mwst_rate = 0.0;
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_mwst_term_data')) {
+		$mwst_term_id = (int) \get_post_meta($post_id, '_cmx_beleg_mwst_term', true);
+		$mwst_data = (array) cmxbu_get_mwst_term_data($mwst_term_id);
+		$mwst_rate = (float) ($mwst_data['rate'] ?? 0.0);
+	}
+
+	$mwst_allowed = \function_exists(__NAMESPACE__ . '\\cmx_belege_allows_mwst_for_type')
+		? cmx_belege_allows_mwst_for_type((string) $effective_type, $opts_general)
+		: (\function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+			? cmx_belege_is_mwst_pflichtig($opts_general)
+			: !empty($opts_general['mwst_pflichtig']));
+
+	if (!$mwst_allowed) {
+		$mwst_rate = 0.0;
+		$is_brutto = false;
+	}
+
+	return [
+		'rate' => max(0.0, (float) $mwst_rate),
+		'is_brutto' => (bool) $is_brutto,
+	];
+}
+
+function cmxbu_beleg_export_calc(int $post_id, float $mwst_rate, bool $is_brutto): array {
+	$calc = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')
+		? (array) cmxbu_get_beleg_positionen_calc($post_id, [
+			'round_decimals' => 2,
+			'round_lines' => true,
+			'round_totals' => true,
+			'tax_rate' => $mwst_rate,
+			'is_brutto' => $is_brutto,
+		])
+		: [];
+
+	$has_positions = cmxbu_beleg_has_positions($calc);
+	$line_sum = cmxbu_beleg_positions_line_sum($calc);
+	$manual_total = cmxbu_beleg_export_meta_float($post_id, '_cmx_beleg_summe_override');
+	$has_manual_total = ((string) \get_post_meta($post_id, '_cmx_beleg_summe_override', true) !== '');
+
+	$subtotal_base = $has_positions
+		? $line_sum
+		: ($has_manual_total
+			? $manual_total
+			: (float) ($is_brutto ? ($calc['gross'] ?? 0.0) : ($calc['subtotal'] ?? 0.0)));
+
+	return [
+		'tax_amount' => (float) ($calc['tax_amount'] ?? 0.0),
+		'total' => (float) ($calc['total'] ?? 0.0),
+		'subtotal_base' => (float) $subtotal_base,
+		'is_brutto' => (bool) $is_brutto,
+	];
+}
+
 function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
 	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
@@ -34,15 +174,17 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
 
 	$headers = [
-		'ID',
 		'Belegnummer',
+		'Bezahlt am',
 		'Belegtyp',
-		'Belegdatum',
-		'Faelligkeitsdatum',
-		'Betreff',
-		'Kunde',
-		'Total',
-		'Waehrung',
+		'Kontakt',
+		'Zahlungsart',
+		'Zahlungsgrund',
+		'MwStsatz',
+		'MwSt',
+		'Vorsteuer',
+		'Einnahmen',
+		'Ausgaben',
 	];
 	fputcsv($fh, $headers, ';');
 
@@ -51,56 +193,76 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 		if (!$post) continue;
 
 		$belegnr = (string) $post->post_title;
-		$belegdatum = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum', true);
-		if ($belegdatum === '') {
-			$belegdatum = \get_date_from_gmt((string) $post->post_date_gmt, 'Y-m-d');
-		}
-		$faellig = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG') ? CMX_BELEG_META_FAELLIG : '_cmx_beleg_faelligkeitsdatum', true);
-		$betreff = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') ? CMX_BELEG_META_BETREFF : '_cmx_beleg_betreff', true);
+		$bezahlt_am = (string) \get_post_meta(
+			$pid,
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am',
+			true
+		);
 
 		$kontakt_label = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') ? CMX_BELEG_META_KONTAKT_LABEL : '_cmx_beleg_kontakt_label', true);
 		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
-		$kunde = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
+		$kontakt = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
 
-		$belegtyp = '';
-		if (function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
-			[, $belegtyp] = cmx_get_beleg_type($post);
+		$raw_type = cmxbu_beleg_export_raw_type($post);
+		$belegtyp = cmxbu_beleg_export_normalize_type($raw_type);
+		if (!cmxbu_beleg_export_is_allowed_base_type($belegtyp)) {
+			continue;
 		}
-		if ($belegtyp === '') {
-			$tax = function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy') ? cmx_belege_taxonomy() : '';
-			if ($tax && \taxonomy_exists($tax)) {
-				$terms = \wp_get_post_terms($pid, $tax, ['fields' => 'slugs']);
-				if (!\is_wp_error($terms) && !empty($terms)) $belegtyp = (string)$terms[0];
-			}
+		$effective_type = cmxbu_beleg_export_effective_type($post, $raw_type);
+		$richtung = \sanitize_key((string) \get_post_meta(
+			$pid,
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung',
+			true
+		));
+		if ($richtung === 'ausgabe') {
+			$richtung = 'eingang';
 		}
 
-		$waehrung = (string) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_WAEHRUNG') ? CMX_BELEG_META_WAEHRUNG : '_cmx_beleg_waehrung', true);
-		if ($waehrung === '') $waehrung = 'CHF';
+		$zahlungsart_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')
+			? cmx_beleg_zahlungsart_tax()
+			: null;
+		$zahlungsgrund_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_tax')
+			? cmx_beleg_zahlungsgrund_tax()
+			: null;
+		$zahlungsart = cmxbu_beleg_export_first_term_name($pid, $zahlungsart_tax);
+		$zahlungsgrund = cmxbu_beleg_export_first_term_name($pid, $zahlungsgrund_tax);
 
-		$total = 0.0;
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
-			$calc = cmxbu_get_beleg_positionen_calc($pid);
-			$total = (float)($calc['total'] ?? 0);
-			$has_positions = cmxbu_beleg_has_positions($calc);
-			if (!$has_positions) {
-				$override = (string) \get_post_meta($pid, '_cmx_beleg_summe_override', true);
-				if ($override !== '') {
-					$total = (float) cmx_norm_decimal($override);
-				}
-			}
+		$mwst_ctx = cmxbu_beleg_export_mwst_context($pid, $effective_type);
+		$mwst_rate = (float) ($mwst_ctx['rate'] ?? 0.0);
+		$is_brutto = !empty($mwst_ctx['is_brutto']);
+		$calc = cmxbu_beleg_export_calc($pid, $mwst_rate, $is_brutto);
+
+		$tax_amount = max(0.0, (float) ($calc['tax_amount'] ?? 0.0));
+		$total = (float) ($calc['total'] ?? 0.0);
+		$subtotal_base = (float) ($calc['subtotal_base'] ?? 0.0);
+
+		$is_outgoing_invoice = ($richtung === 'ausgang')
+			&& \in_array($belegtyp, ['rechnung', 'quittung'], true);
+		$is_supplier_invoice = ($richtung === 'eingang')
+			&& \in_array($belegtyp, ['rechnung', 'quittung'], true);
+
+		$mwst = $is_outgoing_invoice ? $tax_amount : 0.0;
+		$vorsteuer = $is_supplier_invoice ? $tax_amount : 0.0;
+
+		$einnahmen = 0.0;
+		if ($is_outgoing_invoice) {
+			$einnahmen = $is_brutto ? ($subtotal_base - $mwst) : $subtotal_base;
 		}
-		$total_str = number_format((float)$total, 2, ',', '');
+
+		$ausgaben = $is_supplier_invoice ? $total : 0.0;
 
 		$row = [
-			$pid,
 			$belegnr,
+			$bezahlt_am,
 			$belegtyp,
-			$belegdatum,
-			$faellig,
-			$betreff,
-			$kunde,
-			$total_str,
-			$waehrung,
+			$kontakt,
+			$zahlungsart,
+			$zahlungsgrund,
+			cmxbu_beleg_export_format_percent($mwst_rate),
+			cmxbu_beleg_export_format_money($mwst),
+			cmxbu_beleg_export_format_money($vorsteuer),
+			cmxbu_beleg_export_format_money($einnahmen),
+			cmxbu_beleg_export_format_money($ausgaben),
 		];
 		fputcsv($fh, $row, ';');
 	}
