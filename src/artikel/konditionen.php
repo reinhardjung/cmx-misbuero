@@ -8,6 +8,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MEHRWERT')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MEHRWERT', '_cmx_artikel_mehrwert');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG', '_cmx_artikel_katalog');
+}
 
 \add_action('add_meta_boxes', function () {
 	\add_meta_box('cmx_artikel_waehrung_preise', 'Konditionen', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
@@ -24,7 +27,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
 	$marge       = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MARGE, '');
-	$verkaufbar  = (bool) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, false);
+	$not_verkaufbar = (int) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, 0) === 1;
+	$verkaufbar     = !$not_verkaufbar;
+	$katalog_raw    = (string) \get_post_meta($post->ID, CMX_ARTIKEL_META_KATALOG, true);
+	$katalog_exists = \metadata_exists('post', $post->ID, CMX_ARTIKEL_META_KATALOG);
+	$katalog        = !$katalog_exists || $katalog_raw === '' || (int) $katalog_raw === 1;
 	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
 	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
 	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
@@ -45,7 +52,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-f input[type="number"],
 		.cmx-price-row .cmx-f input[type="text"],
 		.cmx-price-row .cmx-f select{width:100%}
-		.cmx-price-row .cmx-check{display:flex;align-items:center;margin-left:8px;white-space:nowrap;flex:1 1 160px}
+		.cmx-price-row .cmx-check{display:flex;align-items:center;gap:14px;margin-left:8px;white-space:nowrap;flex:1 1 300px}
 		@media (max-width: 1200px){
 			.cmx-price-row{gap:10px}
 			.cmx-price-row .cmx-f{max-width:100%}
@@ -106,7 +113,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	</div>';
 
 	echo '<div class="cmx-check">
-		<label><input type="checkbox" name="cmx_artikel_verkaufbar" value="1" ' . checked($verkaufbar, true, false) . '> NICHT verkaufbar</label>
+		<label><input type="checkbox" name="cmx_artikel_verkaufbar" value="1" ' . checked($verkaufbar, true, false) . '> verkaufbar</label>
+		<label><input type="checkbox" name="cmx_artikel_katalog" value="1" ' . checked($katalog, true, false) . '> Katalog</label>
 	</div>';
 
 	echo '</div>';
@@ -279,7 +287,10 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	\delete_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT);
 	\delete_post_meta($post_id, '_cmx_artikel_vk_lock');
 
-	\update_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, isset($_POST['cmx_artikel_verkaufbar']) ? 1 : 0);
+	// Kompatibilität zur bestehenden Datenlogik:
+	// 1 = NICHT verkaufbar, 0 = verkaufbar.
+	\update_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, isset($_POST['cmx_artikel_verkaufbar']) ? 0 : 1);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_KATALOG, isset($_POST['cmx_artikel_katalog']) ? 1 : 0);
 
 	if (\taxonomy_exists(TAX_ARTIKEL_EINHEITEN)) {
 		$einheit_id = (int) $in('cmx_artikel_einheit', 0);
@@ -290,6 +301,6 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 \add_action('admin_head', function() {
 	$screen = \get_current_screen();
 	if ($screen && $screen->post_type === 'artikel') {
-		echo '<style>label:has(input[name="cmx_artikel_verkaufbar"]) { position:relative; top:-5px; }</style>';
+		echo '<style>label:has(input[name="cmx_artikel_verkaufbar"]), label:has(input[name="cmx_artikel_katalog"]) { position:relative; top:-5px; }</style>';
 	}
 });

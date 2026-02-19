@@ -22,19 +22,60 @@ function cmx_render_artikel_tabelle($atts = [], $content = ''): string {
 	$verkaufbar_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_VERKAUFBAR')
 		? CMX_ARTIKEL_META_VERKAUFBAR
 		: '_cmx_artikel_verkaufbar';
+	$katalog_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_KATALOG')
+		? CMX_ARTIKEL_META_KATALOG
+		: '_cmx_artikel_katalog';
 
-	// nur verkaufbare Artikel:
-	// Checkbox-Logik: 1 = NICHT verkaufbar, 0/nicht gesetzt = verkaufbar
+	// Nur verkaufbare Artikel UND nur sichtbare Katalog-Artikel:
+	// Verkaufbar-Altlogik: 1 = NICHT verkaufbar, 0/nicht gesetzt = verkaufbar.
+	// Katalog-Logik: 1/nicht gesetzt = im Katalog sichtbar.
 	$meta_query = [
-		'relation' => 'OR',
+		'relation' => 'AND',
 		[
-			'key'     => $verkaufbar_key,
-			'compare' => 'NOT EXISTS',
+			'relation' => 'OR',
+			[
+				'key'     => $verkaufbar_key,
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'key'     => $verkaufbar_key,
+				'value'   => '',
+				'compare' => '=',
+			],
+			[
+				'key'     => $verkaufbar_key,
+				'value'   => '0',
+				'compare' => '=',
+			],
+			[
+				'key'     => $verkaufbar_key,
+				'value'   => 0,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			],
 		],
 		[
-			'key'     => $verkaufbar_key,
-			'value'   => '0',
-			'compare' => '=',
+			'relation' => 'OR',
+			[
+				'key'     => $katalog_key,
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'key'     => $katalog_key,
+				'value'   => '',
+				'compare' => '=',
+			],
+			[
+				'key'     => $katalog_key,
+				'value'   => '1',
+				'compare' => '=',
+			],
+			[
+				'key'     => $katalog_key,
+				'value'   => 1,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			],
 		],
 	];
 

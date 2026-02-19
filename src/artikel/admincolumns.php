@@ -9,8 +9,21 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK'))             \define(__NA
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK'))             \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK', '_cmx_artikel_vk');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MARGE'))          \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MARGE', '_cmx_artikel_marge');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR'))     \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR', '_cmx_artikel_verkaufbar');
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG'))        \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG', '_cmx_artikel_katalog');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE', '_cmx_artikel_bezugsquelle_url');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID', '_cmx_artikel_lieferant_id');
+
+function cmx_artikel_is_verkaufbar(int $post_id): bool {
+	return (int) \get_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, true) !== 1;
+}
+
+function cmx_artikel_is_katalog_sichtbar(int $post_id): bool {
+	if (!\metadata_exists('post', $post_id, CMX_ARTIKEL_META_KATALOG)) {
+		return true;
+	}
+	$raw = (string) \get_post_meta($post_id, CMX_ARTIKEL_META_KATALOG, true);
+	return $raw === '' || (int) $raw === 1;
+}
 
 /* =========================================================
  * Helpers: Taxonomie-Ermittlung + Kontakte + Lieferantenliste
@@ -90,6 +103,7 @@ function cmx_lieferanten_args(): array {
 	$new['ek']             = 'EK';
 	$new['marge']          = 'Marge';
 	$new['verkaufbar']     = 'Verkaufbar';
+	$new['katalog']        = 'Katalog';
 	$new['hersteller_url'] = 'URL';
 	$new['featimg']        = 'Bild';
 	return $new;
@@ -198,10 +212,17 @@ function cmx_lieferanten_args(): array {
 			break;
 
 		case 'verkaufbar':
-			$not_sellable = (int) \get_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, true) === 1;
-			echo $not_sellable
-				? '<span class="dashicons dashicons-no-alt" title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>'
-				: '';
+			$is_sellable = cmx_artikel_is_verkaufbar($post_id);
+			echo $is_sellable
+				? '<span class="dashicons dashicons-yes-alt" title="Verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Verkaufbar</span>'
+				: '<span class="dashicons dashicons-no-alt" title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>';
+			break;
+
+		case 'katalog':
+			$in_catalog = cmx_artikel_is_katalog_sichtbar($post_id);
+			echo $in_catalog
+				? '<span class="dashicons dashicons-yes-alt" title="Im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Im Katalog</span>'
+				: '<span class="dashicons dashicons-no-alt" title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>';
 			break;
 
 		case 'hersteller_url':
@@ -241,6 +262,7 @@ function cmx_lieferanten_args(): array {
 	$cols['ek']             = 'ek';
 	$cols['marge']          = 'marge';
 	$cols['verkaufbar']     = 'verkaufbar';
+	$cols['katalog']        = 'katalog';
 	$cols['hersteller_url'] = 'hersteller_url';
 	$cols['featimg']        = 'featimg';
 	return $cols;
@@ -296,6 +318,7 @@ function cmx_lieferanten_args(): array {
 	$lieferanten = \get_posts(cmx_lieferanten_args());
 	$current = isset($_GET['cmx_lieferant']) ? (string)$_GET['cmx_lieferant'] : '0';
 	$current_verkaufbar = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
+	$current_katalog = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
 
 	echo '<label class="screen-reader-text" for="cmx_lieferant">Lieferant filtern</label>';
 	echo '<select name="cmx_lieferant" id="cmx_lieferant">';
@@ -321,6 +344,13 @@ function cmx_lieferanten_args(): array {
 	echo '<option value="0"' . selected($current_verkaufbar, '0', false) . '>Alle Verkaufbarkeit</option>';
 	echo '<option value="1"' . selected($current_verkaufbar, '1', false) . '>Nur verkaufbar</option>';
 	echo '<option value="2"' . selected($current_verkaufbar, '2', false) . '>Nur NICHT verkaufbar</option>';
+	echo '</select>';
+
+	echo '<label class="screen-reader-text" for="cmx_katalog">Katalog filtern</label>';
+	echo '<select name="cmx_katalog" id="cmx_katalog">';
+	echo '<option value="0"' . selected($current_katalog, '0', false) . '>Alle Katalogstatus</option>';
+	echo '<option value="1"' . selected($current_katalog, '1', false) . '>Nur im Katalog</option>';
+	echo '<option value="2"' . selected($current_katalog, '2', false) . '>Nur NICHT im Katalog</option>';
 	echo '</select>';
 }, 10, 2);
 
@@ -363,6 +393,7 @@ function cmx_lieferanten_args(): array {
 	$has_lieferant   = ($lieferant_raw !== '0'); // nur wenn explizit -1 oder >0
 	$lieferant_id    = absint($lieferant_raw);
 	$verkaufbar_raw  = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
+	$katalog_raw     = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
 
 	/* ---- Nur dann tax_query bauen, wenn wirklich ein Tax-Filter gesetzt ist ---- */
 	if (!empty($active_tax_filters)) {
@@ -479,6 +510,50 @@ function cmx_lieferanten_args(): array {
 		$q->set('meta_query', $meta_query);
 	}
 
+	/* ---- Katalogsichtbarkeit nur setzen, wenn explizit gefiltert wurde ---- */
+	if ($katalog_raw === '1' || $katalog_raw === '2') {
+		$meta_key   = CMX_ARTIKEL_META_KATALOG;
+		$meta_query = (array) $q->get('meta_query');
+
+		if ($katalog_raw === '2') {
+			$meta_query[] = [
+				'key'     => $meta_key,
+				'value'   => 0,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		} else {
+			$meta_query[] = [
+				'relation' => 'OR',
+				[
+					'key'     => $meta_key,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $meta_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $meta_key,
+					'value'   => '1',
+					'compare' => '=',
+				],
+				[
+					'key'     => $meta_key,
+					'value'   => 1,
+					'compare' => '=',
+					'type'    => 'NUMERIC',
+				],
+			];
+		}
+
+		if (!isset($meta_query['relation'])) {
+			$meta_query = array_merge(['relation' => 'AND'], $meta_query);
+		}
+		$q->set('meta_query', $meta_query);
+	}
+
 	/* ---- Sortierung (beeinflusst keine Filter) ---- */
 	$orderby = $q->get('orderby');
 
@@ -546,7 +621,7 @@ function cmx_lieferanten_args(): array {
 		$clauses['orderby'] = "COALESCE(MIN(p_lief.post_title), '') {$order}, {$wpdb->posts}.ID {$order}";
 	}
 
-	// Verkaufbar sortieren (0/leer zuerst, 1 = NICHT verkaufbar)
+	// Verkaufbar sortieren (kompatible Altlogik: 0/leer = verkaufbar, 1 = NICHT verkaufbar)
 	if ($q->get('orderby') === 'verkaufbar') {
 		$meta_key = CMX_ARTIKEL_META_VERKAUFBAR;
 		if (strpos($clauses['join'], 'pm_verk.post_id') === false) {
@@ -557,6 +632,20 @@ function cmx_lieferanten_args(): array {
 			$clauses['groupby'] = "{$wpdb->posts}.ID";
 		}
 		$clauses['orderby'] = "CAST(COALESCE(NULLIF(pm_verk.meta_value, ''), '0') AS UNSIGNED) {$order}, {$wpdb->posts}.post_title {$order}";
+	}
+
+	// Katalog sortieren (Default: im Katalog, wenn Meta fehlt)
+	if ($q->get('orderby') === 'katalog') {
+		$meta_key = CMX_ARTIKEL_META_KATALOG;
+		if (strpos($clauses['join'], 'pm_kat.post_id') === false) {
+			$clauses['join'] .= " LEFT JOIN {$wpdb->postmeta} pm_kat ON ({$wpdb->posts}.ID = pm_kat.post_id AND pm_kat.meta_key = '{$meta_key}')";
+		}
+		$order = (strtoupper($q->get('order')) === 'DESC') ? 'DESC' : 'ASC';
+		if (empty($clauses['groupby'])) {
+			$clauses['groupby'] = "{$wpdb->posts}.ID";
+		}
+		$visibility_case = "CASE WHEN pm_kat.meta_id IS NULL OR pm_kat.meta_value = '' OR CAST(pm_kat.meta_value AS UNSIGNED) = 1 THEN 0 ELSE 1 END";
+		$clauses['orderby'] = "{$visibility_case} {$order}, {$wpdb->posts}.post_title {$order}";
 	}
 
 	// SKU: Sekundärsortierung nach Titel ergänzen (stabil)

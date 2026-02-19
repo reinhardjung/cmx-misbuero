@@ -94,10 +94,14 @@
 		$meta_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
 	}
 
-	// Gleiche Filterung/Sortierung wie im Katalog (nur verkaufbare Artikel, Titel A–Z)
+	// Gleiche Filterung/Sortierung wie im Katalog
+	// (nur verkaufbare und im Katalog sichtbare Artikel, Titel A–Z)
 	$verkaufbar_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_VERKAUFBAR')
 		? CMX_ARTIKEL_META_VERKAUFBAR
 		: '_cmx_artikel_verkaufbar';
+	$katalog_key = \defined(__NAMESPACE__.'\\CMX_ARTIKEL_META_KATALOG')
+		? CMX_ARTIKEL_META_KATALOG
+		: '_cmx_artikel_katalog';
 
 	$q = new \WP_Query([
 		'post_type'      => 'artikel',
@@ -108,15 +112,52 @@
 		'meta_key'       => $meta_key,
 		'fields'         => 'ids',
 		'meta_query'     => [
-			'relation' => 'OR',
+			'relation' => 'AND',
 			[
-				'key'     => $verkaufbar_key,
-				'compare' => 'NOT EXISTS',
+				'relation' => 'OR',
+				[
+					'key'     => $verkaufbar_key,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $verkaufbar_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $verkaufbar_key,
+					'value'   => '0',
+					'compare' => '=',
+				],
+				[
+					'key'     => $verkaufbar_key,
+					'value'   => 0,
+					'compare' => '=',
+					'type'    => 'NUMERIC',
+				],
 			],
 			[
-				'key'     => $verkaufbar_key,
-				'value'   => '0',
-				'compare' => '=',
+				'relation' => 'OR',
+				[
+					'key'     => $katalog_key,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => $katalog_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $katalog_key,
+					'value'   => '1',
+					'compare' => '=',
+				],
+				[
+					'key'     => $katalog_key,
+					'value'   => 1,
+					'compare' => '=',
+					'type'    => 'NUMERIC',
+				],
 			],
 		],
 	]);

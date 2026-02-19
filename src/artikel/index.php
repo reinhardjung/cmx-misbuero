@@ -33,7 +33,7 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 
 // Define: Const 4 @ll CPT Fields
-cmx_define_meta_constants(basename(__DIR__), 'sku,ek,vk,marge,waehrungen,verkaufbar,lieferant,lieferzeit,lieferant_nr,bezugsquelle,lagerbestand');
+cmx_define_meta_constants(basename(__DIR__), 'sku,ek,vk,marge,waehrungen,verkaufbar,katalog,lieferant,lieferzeit,lieferant_nr,bezugsquelle,lagerbestand');
 
 
 // Include: @ll metaboxes
