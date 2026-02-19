@@ -44,6 +44,65 @@ function cmx_local_image_subdir_for_post_type(string $post_type): string {
 	return sanitize_title($post_type);
 }
 
+/** Dateibasenamen aus Post-Titel ableiten */
+function cmx_local_image_basename_for_post(\WP_Post $post): string {
+	$post_type = strtolower((string)($post->post_type ?? ''));
+	$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: $post_type));
+	return $title_slug !== '' ? $title_slug : ($post_type !== '' ? $post_type : 'bild');
+}
+
+/** Bestehende Datei auf aktuellen Post-Titel umbenennen */
+function cmx_local_image_sync_filename_with_title(int $post_id, \WP_Post $post, string $meta_base): void {
+	$current_path = (string) get_post_meta($post_id, $meta_base . '_path', true);
+	if ($current_path === '' || !is_file($current_path)) {
+		return;
+	}
+
+	$post_type = strtolower((string)($post->post_type ?? ''));
+	$type_subdir = cmx_local_image_subdir_for_post_type($post_type);
+	$base_dir = cmx_local_base_path();
+	$base_url = cmx_local_base_url();
+	if ($type_subdir !== '') {
+		$base_dir = wp_normalize_path($base_dir . '/' . $type_subdir);
+		$base_url = rtrim($base_url, '/') . '/' . rawurlencode($type_subdir);
+	}
+	if (!is_dir($base_dir)) {
+		wp_mkdir_p($base_dir);
+	}
+
+	$ext = strtolower((string) pathinfo($current_path, PATHINFO_EXTENSION));
+	if ($ext === '') {
+		return;
+	}
+	$basename = cmx_local_image_basename_for_post($post);
+	$target = wp_normalize_path($base_dir . '/' . $basename . '.' . $ext);
+	$current_norm = wp_normalize_path($current_path);
+
+	if ($current_norm !== $target) {
+		if (is_file($target)) {
+			@unlink($target);
+		}
+		$moved = @rename($current_norm, $target);
+		if (!$moved) {
+			$moved = @copy($current_norm, $target);
+			if ($moved) {
+				@unlink($current_norm);
+			}
+		}
+		if (!$moved) {
+			return;
+		}
+		@chmod($target, 0644);
+		$current_norm = $target;
+	}
+
+	$version = @filemtime($current_norm) ?: time();
+	$url = $base_url . '/' . rawurlencode($basename . '.' . $ext) . '?v=' . $version;
+	update_post_meta($post_id, $meta_base . '_path', $current_norm);
+	update_post_meta($post_id, $meta_base . '_url', $url);
+	clean_post_cache($post_id);
+}
+
 /** Edit-Form darf Dateien senden */
 add_action('post_edit_form_tag', function () {
 	echo ' enctype="multipart/form-data"';
@@ -127,6 +186,7 @@ add_action('save_post', function($post_id, $post) {
 
 	// Kein neuer Upload?
 	if (empty($_FILES['cmx_local_image_file']) || empty($_FILES['cmx_local_image_file']['name'])) {
+		cmx_local_image_sync_filename_with_title($post_id, $post, $metaB);
 		return;
 	}
 
@@ -161,7 +221,7 @@ add_action('save_post', function($post_id, $post) {
 	}
 
 	// Dateiname: {post_title}.ext (kleinbuchstaben)
-	$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: $pt));
+	$title_slug = cmx_local_image_basename_for_post($post);
 	$ext        = '.' . strtolower($check['ext']); // z.B. ".jpg"
 	$basename   = $title_slug !== '' ? $title_slug : strtolower((string) $pt);
 	$target     = wp_normalize_path($base_dir . '/' . $basename . $ext);

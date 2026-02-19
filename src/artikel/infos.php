@@ -30,6 +30,62 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_base_url')) {
 	}
 }
 
+/** Dateibasenamen aus Post-Titel ableiten */
+if (!\function_exists(__NAMESPACE__.'\\cmx_li_basename_for_post')) {
+	function cmx_li_basename_for_post(\WP_Post $post): string {
+		$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: 'artikel'));
+		return $title_slug !== '' ? $title_slug : 'artikel';
+	}
+}
+
+/** Bestehende Artikelbild-Datei auf aktuellen Titel umbenennen */
+if (!\function_exists(__NAMESPACE__.'\\cmx_li_sync_filename_with_title')) {
+	function cmx_li_sync_filename_with_title(int $post_id, \WP_Post $post, string $meta_base): void {
+		$current_path = (string) get_post_meta($post_id, $meta_base . '_path', true);
+		if ($current_path === '' || !is_file($current_path)) {
+			return;
+		}
+
+		$base_dir = cmx_li_base_path();
+		$base_url = cmx_li_base_url();
+		if (!is_dir($base_dir)) {
+			wp_mkdir_p($base_dir);
+		}
+
+		$ext = strtolower((string) pathinfo($current_path, PATHINFO_EXTENSION));
+		if ($ext === '') {
+			return;
+		}
+		$basename = cmx_li_basename_for_post($post);
+		$target = wp_normalize_path($base_dir . '/' . $basename . '.' . $ext);
+		$current_norm = wp_normalize_path($current_path);
+
+		if ($current_norm !== $target) {
+			if (is_file($target)) {
+				@unlink($target);
+			}
+			$moved = @rename($current_norm, $target);
+			if (!$moved) {
+				$moved = @copy($current_norm, $target);
+				if ($moved) {
+					@unlink($current_norm);
+				}
+			}
+			if (!$moved) {
+				return;
+			}
+			@chmod($target, 0644);
+			$current_norm = $target;
+		}
+
+		$version = @filemtime($current_norm) ?: time();
+		$url = $base_url . '/' . rawurlencode($basename . '.' . $ext) . '?v=' . $version;
+		update_post_meta($post_id, $meta_base . '_path', $current_norm);
+		update_post_meta($post_id, $meta_base . '_url', $url);
+		clean_post_cache($post_id);
+	}
+}
+
 /** Edit-Form darf Dateien senden */
 add_action('post_edit_form_tag', function () {
 	echo ' enctype="multipart/form-data"';
@@ -103,8 +159,7 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 	}
 
 	// Ziel-Dateinamen vorbereiten: {post_title}.ext (kleinbuchstaben)
-	$title_slug = strtolower((string) sanitize_title(get_the_title($post) ?: 'artikel'));
-	$basename   = $title_slug !== '' ? $title_slug : 'artikel';
+	$basename   = cmx_li_basename_for_post($post);
 
 	// 1) MANUELLER UPLOAD?
 	if (!empty($_FILES['cmx_li_file']) && !empty($_FILES['cmx_li_file']['name'])) {
@@ -127,6 +182,9 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 		// }
 		return; // manuell hat Vorrang
 	}
+
+	// 1b) Kein Upload: vorhandene Datei an geänderten Titel anpassen
+	cmx_li_sync_filename_with_title($post_id, $post, $meta_base);
 
 	// 2) KEIN Upload: Versuche AUTOMATISCH von Bezugsquelle zu laden
 	$source_url = cmx_li_find_source_url($post_id);
