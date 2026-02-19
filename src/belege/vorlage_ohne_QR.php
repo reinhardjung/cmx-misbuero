@@ -449,10 +449,13 @@ $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'F�
 						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
 					</tr>
 				<?php endif; ?>
-				<tr>
-					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['period'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
-				</tr>
+				<?php $period_value = trim((string)($tpl['document']['period'] ?? '')); ?>
+				<?php if ($period_value !== ''): ?>
+					<tr>
+						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($period_value, ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endif; ?>
 			</table>
 		</div>
 		<div class="recipient-window">

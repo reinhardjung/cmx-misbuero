@@ -33,11 +33,28 @@ function cmx_render_support_tab(): void {
 		$subject = sanitize_text_field($_POST['support_subjet'] ?? '');
 		$body    = wp_kses_post($_POST['support_description'] ?? '');
 
+		$from_email = sanitize_email((string) $current_user->user_email);
+		$from_name  = trim((string) $current_user->display_name);
+		if ($from_name === '') {
+			$from_name = trim((string) $current_user->user_firstname . ' ' . (string) $current_user->user_lastname);
+		}
+		if ($from_name === '') {
+			$from_name = (string) $current_user->user_login;
+		}
+		$from_name = trim((string) preg_replace('/[\r\n]+/', ' ', $from_name));
+
 		$headers = [
 			'Content-Type: text/html; charset=UTF-8',
-			'From: ' . $current_user->user_firstname . ' <' . $current_user->user_email . '>',
-			'Reply-To: CLOUD Meister - Support <' . $support_mail . '>',
 		];
+		if (is_email($from_email)) {
+			if ($from_name !== '') {
+				$headers[] = 'From: ' . $from_name . ' <' . $from_email . '>';
+				$headers[] = 'Reply-To: ' . $from_name . ' <' . $from_email . '>';
+			} else {
+				$headers[] = 'From: ' . $from_email;
+				$headers[] = 'Reply-To: ' . $from_email;
+			}
+		}
 
 		$attachments = [];
 		if (!empty($_FILES['support_file']['name'])) {

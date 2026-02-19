@@ -20,10 +20,10 @@ function cmx_register_general_tab(): void {
 	);
 
 	// MwSt-Pflicht Checkbox
-		\add_settings_field(
-			'mwst_pflichtig',
-			'MwSt-pflichtig?',
-			function () {
+	\add_settings_field(
+		'mwst_pflichtig',
+		'MwSt-pflichtig?',
+		function () {
 				\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
 					'key'   => 'mwst_pflichtig',
 					'label' => 'Ja, MwSt wird ausgewiesen',
@@ -99,6 +99,25 @@ function cmx_register_general_tab(): void {
 					sync();
 				})();
 				</script>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'belege_use_leistungszeitraum',
+		'Leistungszeitraum nutzen',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$enabled = \array_key_exists('belege_use_leistungszeitraum', $opts)
+				? !empty($opts['belege_use_leistungszeitraum'])
+				: true;
+			echo '<label>';
+			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_leistungszeitraum]" value="0">';
+			echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_leistungszeitraum]" value="1" '.\checked($enabled, true, false).'> ';
+			echo 'Leistungszeitraum in Belegen verwenden';
+			echo '</label>';
+			// echo '<p class="description">Steuert das Feld "Leistungszeitraum (nächster Monat)" in der Beleg-Metabox "Konditionen" und die Anzeige im PDF.</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'

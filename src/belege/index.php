@@ -22,6 +22,15 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')) {
+	function cmx_belege_uses_leistungszeitraum(array $opts_general): bool {
+		if (array_key_exists('belege_use_leistungszeitraum', $opts_general)) {
+			return !empty($opts_general['belege_use_leistungszeitraum']);
+		}
+		return true;
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_belege_get_mwst_exempt_note_html')) {
 	function cmx_belege_get_mwst_exempt_note_html(array $opts_general): string {
 		if (array_key_exists('mwst_exempt_note_html', $opts_general)) {

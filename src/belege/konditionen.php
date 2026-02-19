@@ -162,6 +162,10 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$leistMon = \get_post_meta($post->ID, CMX_BELEG_META_LEISTUNGSMONAT, true);
 	$bezahlt  = \get_post_meta($post->ID, CMX_BELEG_META_BEZAHLT_AM, true);
 	$bez_valid = ($bezahlt && \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $bezahlt));
+	$opts_general = (array) \get_option('cmx_einstellungen', []);
+	$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
+		? cmx_belege_uses_leistungszeitraum($opts_general)
+		: !empty($opts_general['belege_use_leistungszeitraum']);
 
 	// Fälligkeitsdatum Standard: heute + 30 Tage, falls leer
 	if ($faellig === '' || $faellig === null) {
@@ -169,7 +173,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	}
 
 	// Aktueller Monat als Default, wenn leer
-	if (!$leistMon) {
+	if ($use_leistungszeitraum && !$leistMon) {
 		$ts = \current_time('timestamp');
 		$leistMon = \gmdate('m', $ts);
 	}
@@ -203,14 +207,16 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo '</p>';
 
 	// Leistungszeitraum (Monat) – Label klickbar => nächster Monat
-	echo '<p style="margin:8px 0 12px;">';
-	echo '<label for="cmx_beleg_leistungsmonat" id="cmx_leistungs_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Leistungszeitraum</strong> <small style="color:#666;">(nächster Monat)</small></label>';
-	echo '<select name="cmx_beleg_leistungsmonat" id="cmx_beleg_leistungsmonat" style="width:100%;">';
-	foreach ($monate as $val => $label) {
-		echo '<option value="' . \esc_attr($val) . '"' . \selected($leistMon, $val, false) . '>' . \esc_html($label) . '</option>';
+	if ($use_leistungszeitraum) {
+		echo '<p style="margin:8px 0 12px;">';
+		echo '<label for="cmx_beleg_leistungsmonat" id="cmx_leistungs_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Leistungszeitraum</strong> <small style="color:#666;">(nächster Monat)</small></label>';
+		echo '<select name="cmx_beleg_leistungsmonat" id="cmx_beleg_leistungsmonat" style="width:100%;">';
+		foreach ($monate as $val => $label) {
+			echo '<option value="' . \esc_attr($val) . '"' . \selected($leistMon, $val, false) . '>' . \esc_html($label) . '</option>';
+		}
+		echo '</select>';
+		echo '</p>';
 	}
-	echo '</select>';
-	echo '</p>';
 
 	/* ===== Bestehende Währungs-Logik (unverändert) ===== */
 	$currencies = cmx_get_artikel_waehrungen();
@@ -373,11 +379,17 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	\update_post_meta($post_id, CMX_BELEG_META_FAELLIG, $fae);
 
 	// Leistungszeitraum (Monat 01..12)
-	$lm = isset($_POST['cmx_beleg_leistungsmonat']) ? \sanitize_text_field($_POST['cmx_beleg_leistungsmonat']) : '';
-	if ($lm && \preg_match('/^(0[1-9]|1[0-2])$/', $lm)) {
-		\update_post_meta($post_id, CMX_BELEG_META_LEISTUNGSMONAT, $lm);
-	} else {
-		\delete_post_meta($post_id, CMX_BELEG_META_LEISTUNGSMONAT);
+	$opts_general = (array) \get_option('cmx_einstellungen', []);
+	$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
+		? cmx_belege_uses_leistungszeitraum($opts_general)
+		: !empty($opts_general['belege_use_leistungszeitraum']);
+	if ($use_leistungszeitraum) {
+		$lm = isset($_POST['cmx_beleg_leistungsmonat']) ? \sanitize_text_field($_POST['cmx_beleg_leistungsmonat']) : '';
+		if ($lm && \preg_match('/^(0[1-9]|1[0-2])$/', $lm)) {
+			\update_post_meta($post_id, CMX_BELEG_META_LEISTUNGSMONAT, $lm);
+		} else {
+			\delete_post_meta($post_id, CMX_BELEG_META_LEISTUNGSMONAT);
+		}
 	}
 
 	// ===== Bestehende Währungs-Speicherung (unverändert) =====

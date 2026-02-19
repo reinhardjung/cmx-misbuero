@@ -273,6 +273,13 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact')) {
 		];
 
 		$period = $monate[$period_num] ?? '';
+		$opts_general = (array) get_option('cmx_einstellungen', []);
+		$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
+			? cmx_belege_uses_leistungszeitraum($opts_general)
+			: !empty($opts_general['belege_use_leistungszeitraum']);
+		if (!$use_leistungszeitraum) {
+			$period = '';
+		}
 
 		$waehrung = cmxbu_first_meta($post_id, ['_cmx_beleg_waehrung']);
 

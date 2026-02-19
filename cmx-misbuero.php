@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 2.19.1450
+ * Version: 2.19.2124
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -126,20 +126,81 @@ function cmx_check_and_create_subdomain_admin() {
 
 
 
-	// Absender-Adresse dynamisch setzen
-	add_filter('wp_mail_from', function($email) use ($sub) {
-			return $sub . '@misbuero.ch';
-	});
+	$resolve_mail_sender = static function () use ($sub): array {
+		$current_user = wp_get_current_user();
 
-	// Absender-Name dynamisch setzen
-	add_filter('wp_mail_from_name', function($name) use ($sub) {
-			return 'Mis Buero - ' . ucfirst($sub);
-	});
+		$email = '';
+		$name  = '';
+
+		if ($current_user instanceof \WP_User && $current_user->exists()) {
+			$user_email = sanitize_email((string) $current_user->user_email);
+			if (is_email($user_email)) {
+				$email = $user_email;
+			}
+
+			$name = trim((string) $current_user->display_name);
+			if ($name === '') {
+				$full = trim((string) $current_user->user_firstname . ' ' . (string) $current_user->user_lastname);
+				if ($full !== '') {
+					$name = $full;
+				}
+			}
+			if ($name === '') {
+				$name = (string) $current_user->user_login;
+			}
+		}
+
+		if ($email === '') {
+			$fallback = sanitize_email($sub . '@misbuero.ch');
+			if (is_email($fallback)) {
+				$email = $fallback;
+			} else {
+				$admin = sanitize_email((string) get_option('admin_email'));
+				if (is_email($admin)) {
+					$email = $admin;
+				}
+			}
+		}
+
+		if ($name === '') {
+			$name = 'Mis Buero - ' . ucfirst($sub);
+		}
+
+		return [
+			'email' => (string) $email,
+			'name'  => (string) $name,
+		];
+	};
+
+	$is_beleg_send_context = static function (): bool {
+		return (($GLOBALS['cmx_mail_context'] ?? '') === 'beleg_send');
+	};
+
+	// Absender-Adresse pro eingeloggtem WP-User setzen (spät, damit wir gewinnen)
+	add_filter('wp_mail_from', function($email) use ($resolve_mail_sender, $is_beleg_send_context) {
+		if ($is_beleg_send_context()) {
+			return $email;
+		}
+		$sender = $resolve_mail_sender();
+		return $sender['email'] !== '' ? $sender['email'] : $email;
+	}, PHP_INT_MAX);
+
+	// Absender-Name pro eingeloggtem WP-User setzen (spät, damit wir gewinnen)
+	add_filter('wp_mail_from_name', function($name) use ($resolve_mail_sender, $is_beleg_send_context) {
+		if ($is_beleg_send_context()) {
+			return $name;
+		}
+		$sender = $resolve_mail_sender();
+		return $sender['name'] !== '' ? $sender['name'] : $name;
+	}, PHP_INT_MAX);
 
 	update_option('blogname', 'Mis Buero – ' . $sub);
 	// update_option('blogdescription', 'Der neue Untertitel der Website');
 
-	add_filter('wp_mail', function($args) use ($sub) {
+	add_filter('wp_mail', function($args) use ($resolve_mail_sender, $is_beleg_send_context) {
+			if ($is_beleg_send_context()) {
+				return $args;
+			}
 
 			$headers = $args['headers'] ?? [];
 
@@ -147,13 +208,54 @@ function cmx_check_and_create_subdomain_admin() {
 					$headers = preg_split('/\r\n|\r|\n/', $headers);
 			}
 
-			// $headers[] = 'Reply-To: ' . $sub . '@misbuero.ch';
-			$headers[] = 'Reply-To: ' .get_user_meta( get_current_user_id(),'cmx_mail_backup',true);
+			$sender = $resolve_mail_sender();
+			if (!empty($sender['email'])) {
+				$headers = array_values(array_filter((array) $headers, static function ($h): bool {
+					$line = (string) $h;
+					return stripos($line, 'Reply-To:') !== 0 && stripos($line, 'From:') !== 0;
+				}));
+				$safe_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) $sender['name']));
+				if ($safe_name !== '') {
+					$headers[] = 'From: ' . $safe_name . ' <' . $sender['email'] . '>';
+					$headers[] = 'Reply-To: ' . $safe_name . ' <' . $sender['email'] . '>';
+				} else {
+					$headers[] = 'From: ' . $sender['email'];
+					$headers[] = 'Reply-To: ' . $sender['email'];
+				}
+			}
 
 			$args['headers'] = $headers;
 
 			return $args;
-	});
+	}, PHP_INT_MAX);
+
+	// Letzte Instanz: PHPMailer selbst überschreiben (falls SMTP-Plugins vorher From setzen)
+	add_action('phpmailer_init', function($phpmailer) use ($resolve_mail_sender, $is_beleg_send_context): void {
+		if ($is_beleg_send_context()) {
+			return;
+		}
+		if (!$phpmailer instanceof \PHPMailer\PHPMailer\PHPMailer) {
+			return;
+		}
+		$sender = $resolve_mail_sender();
+		$email = sanitize_email((string) ($sender['email'] ?? ''));
+		if (!is_email($email)) {
+			return;
+		}
+		$name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+
+		try {
+			$phpmailer->setFrom($email, $name, false);
+		} catch (\Throwable $e) {
+			$phpmailer->From = $email;
+			if ($name !== '') {
+				$phpmailer->FromName = $name;
+			}
+		}
+		$phpmailer->Sender = $email;
+		$phpmailer->clearReplyTos();
+		$phpmailer->addReplyTo($email, $name);
+	}, PHP_INT_MAX);
 
 
 	// Falls Subdomain ungültig → abbrechen
