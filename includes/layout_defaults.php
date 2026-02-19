@@ -64,7 +64,7 @@ function cmx_layout_defaults_builtin(): array {
 
 		'meta-box-order_artikel' => [
 			'side' => 'cmx_savebox,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_farbe_side,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_dokumente_box',
-			'normal' => 'cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_artikel_belegtext,cmx_projekt_tasks,cmx_artikel_internenotizen',
+			'normal' => 'cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_artikel_belegtext,cmx_artikel_internenotizen',
 			'advanced' => '',
 		],
 		'meta-box-order_ausgaben' => [

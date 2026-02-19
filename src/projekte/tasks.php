@@ -6,7 +6,7 @@
  */
 
 const CMX_PROJEKT_TASK_META = '_cmx_projekt_tasks';
-const CMX_TASK_POST_TYPES   = ['projekte', 'kontakte', 'artikel'];
+const CMX_TASK_POST_TYPES   = ['projekte', 'kontakte'];
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')) {
 	function cmx_projekt_task_uid($raw = ''): string {
