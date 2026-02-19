@@ -285,7 +285,7 @@ function cmxbu_beleg_export_headers(): array {
 	];
 }
 
-function cmxbu_beleg_export_rows_from_ids(array $ids): array {
+function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false): array {
 	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
 		? (array) cmxbu_belege_export_requested_date_range()
 		: ['from' => '', 'to' => ''];
@@ -398,11 +398,12 @@ function cmxbu_beleg_export_rows_from_ids(array $ids): array {
 						cmxbu_beleg_export_format_money($partial_einnahmen),
 						cmxbu_beleg_export_format_money($partial_ausgaben),
 					];
-					$export_rows[] = [
-						'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_date),
-						'sort_seq' => $seq++,
-						'row' => $partial_row,
-					];
+						$export_rows[] = [
+							'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_date),
+							'sort_seq' => $seq++,
+							'post_id' => (int) $pid,
+							'row' => $partial_row,
+						];
 				}
 				continue;
 			}
@@ -427,12 +428,13 @@ function cmxbu_beleg_export_rows_from_ids(array $ids): array {
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
 			continue;
 		}
-		$export_rows[] = [
-			'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
-			'sort_seq' => $seq++,
-			'row' => $row,
-		];
-	}
+			$export_rows[] = [
+				'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
+				'sort_seq' => $seq++,
+				'post_id' => (int) $pid,
+				'row' => $row,
+			];
+		}
 
 	if (\count($export_rows) > 1) {
 		\usort($export_rows, static function (array $a, array $b): int {
@@ -445,11 +447,19 @@ function cmxbu_beleg_export_rows_from_ids(array $ids): array {
 		});
 	}
 
-	$rows = [];
+	$result = [];
 	foreach ($export_rows as $entry) {
-		$rows[] = (array) ($entry['row'] ?? []);
+		$row = (array) ($entry['row'] ?? []);
+		if ($with_context) {
+			$result[] = [
+				'post_id' => (int) ($entry['post_id'] ?? 0),
+				'row' => $row,
+			];
+			continue;
+		}
+		$result[] = $row;
 	}
-	return $rows;
+	return $result;
 }
 
 function cmxbu_stream_belege_csv_from_ids(array $ids): void {

@@ -203,6 +203,48 @@ function cmxbu_collect_beleg_upload_attachment_ids(int $post_id): array {
 	return \array_values(\array_unique($ids));
 }
 
+function cmxbu_get_beleg_primary_upload_abs_path(int $post_id): string {
+	$post_id = (int) $post_id;
+	if ($post_id <= 0) {
+		return '';
+	}
+
+	$uploads = (array) \get_post_meta($post_id, cmxbu_beleg_uploads_meta_key(), true);
+	foreach ($uploads as $entry) {
+		$abs_path = '';
+		if (\is_numeric($entry)) {
+			$abs_path = (string) \get_attached_file((int) $entry);
+		} else {
+			$abs_path = cmxbu_beleg_rel_upload_to_abs((string) $entry);
+		}
+		if ($abs_path === '' || !\is_file($abs_path)) {
+			continue;
+		}
+		if (!cmxbu_is_beleg_archive_abs_path($abs_path)) {
+			continue;
+		}
+		return $abs_path;
+	}
+
+	$legacy_url = (string) \get_post_meta($post_id, 'datei_url', true);
+	if ($legacy_url !== '') {
+		$legacy_path = \wp_parse_url($legacy_url, \PHP_URL_PATH);
+		if (\is_string($legacy_path) && $legacy_path !== '') {
+			$uploads_marker = '/uploads/';
+			$marker_pos = \strpos($legacy_path, $uploads_marker);
+			if ($marker_pos !== false) {
+				$rel = (string) \substr($legacy_path, $marker_pos + \strlen($uploads_marker));
+				$abs_path = cmxbu_beleg_rel_upload_to_abs($rel);
+				if ($abs_path !== '' && \is_file($abs_path) && cmxbu_is_beleg_archive_abs_path($abs_path)) {
+					return $abs_path;
+				}
+			}
+		}
+	}
+
+	return '';
+}
+
 function cmxbu_collect_beleg_archive_paths(int $post_id, \WP_Post $post): array {
 	$paths = [];
 
