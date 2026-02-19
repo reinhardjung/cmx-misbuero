@@ -105,6 +105,32 @@ function cmxbu_resolve_task_import_source_from_meta(int $post_id): array {
 	return ['id' => 0, 'type' => ''];
 }
 
+function cmxbu_collect_task_refs_from_rows(array $rows, int $source_id = 0): array {
+	$uids = [];
+	$idx = [];
+	foreach ($rows as $row) {
+		if (!\is_array($row)) continue;
+		$task_uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid')
+			? cmxbu_normalize_task_uid($row['task_uid'] ?? '')
+			: (string) ($row['task_uid'] ?? '');
+		$task_idx_raw = isset($row['task_idx']) ? (string) $row['task_idx'] : '';
+		$task_idx = ($task_idx_raw !== '' && \is_numeric($task_idx_raw)) ? (int) $task_idx_raw : null;
+		if ($task_uid === '' && $task_idx === null) continue;
+
+		$row_source_raw = isset($row['task_projekt_id']) ? (string) $row['task_projekt_id'] : '';
+		$row_source_id = ($row_source_raw !== '' && \is_numeric($row_source_raw)) ? (int) $row_source_raw : 0;
+		if ($source_id > 0 && $row_source_id > 0 && $row_source_id !== $source_id) continue;
+
+		if ($task_uid !== '') $uids[$task_uid] = true;
+		if ($task_idx !== null) $idx[$task_idx] = true;
+	}
+
+	return [
+		'uids' => \array_keys($uids),
+		'idx'  => \array_map('intval', \array_keys($idx)),
+	];
+}
+
 function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
@@ -129,6 +155,31 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		\update_post_meta($post_id, '_cmx_beleg_projekt_id', $source_id);
 	} elseif ($source_type === 'kontakte') {
 		\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $source_id);
+	}
+
+	$prefilled_js_raw = isset($_POST['cmx_tasks_prefilled_js']) ? \wp_unslash($_POST['cmx_tasks_prefilled_js']) : '';
+	$prefilled_js = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
+		? cmxbu_truthy($prefilled_js_raw)
+		: (\trim((string) $prefilled_js_raw) === '1');
+	$prefill_source_type = isset($_POST['cmx_tasks_prefill_source_type']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_tasks_prefill_source_type'])) : '';
+	$prefill_source_id = isset($_POST['cmx_tasks_prefill_source_id']) ? (int) \wp_unslash($_POST['cmx_tasks_prefill_source_id']) : 0;
+	$js_source_matches = $prefill_source_type === $source_type && $prefill_source_id === $source_id;
+	if ($prefilled_js && $js_source_matches) {
+		$posted_rows = (isset($_POST['cmx_positionen']) && \is_array($_POST['cmx_positionen']))
+			? \wp_unslash($_POST['cmx_positionen'])
+			: [];
+		if (!\is_array($posted_rows)) $posted_rows = [];
+		$refs = \function_exists(__NAMESPACE__ . '\\cmxbu_collect_task_refs_from_rows')
+			? cmxbu_collect_task_refs_from_rows($posted_rows, $source_id)
+			: ['uids' => [], 'idx' => []];
+		$uids = \is_array($refs['uids'] ?? null) ? $refs['uids'] : [];
+		$idx  = \is_array($refs['idx'] ?? null) ? $refs['idx'] : [];
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $source_id);
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_type', $source_type);
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', \wp_json_encode(\array_values($idx)));
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \wp_json_encode(\array_values($uids)));
+		\error_log("[CMX] Beleg {$post_id}: JS-Übernahme aktiv, kein Server-Doppelimport ({$source_label} {$source_id}).");
+		return;
 	}
 
 	// Tasks der Quelle laden

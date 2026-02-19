@@ -850,6 +850,9 @@ echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'
 	echo '    <input type="text" id="cmx_projekt_search" name="cmx_projekt_search" autocomplete="off" value="'.\esc_attr($display_proj).'" placeholder="Projekt suchen...">';
 	echo '    <input type="hidden" id="cmx_projekt_id" name="cmx_projekt_id" value="'.\esc_attr((string)$projekt_id).'">';
 	echo '    <input type="hidden" id="cmx_projekt_selected" name="cmx_projekt_selected" value="0">';
+	echo '    <input type="hidden" id="cmx_tasks_prefilled_js" name="cmx_tasks_prefilled_js" value="0">';
+	echo '    <input type="hidden" id="cmx_tasks_prefill_source_type" name="cmx_tasks_prefill_source_type" value="">';
+	echo '    <input type="hidden" id="cmx_tasks_prefill_source_id" name="cmx_tasks_prefill_source_id" value="0">';
 	echo '    <button type="button" class="button button-small" id="cmx_projekt_clear" title="Auswahl löschen">X</button>';
 	echo '  </div>';
 	echo '  <ul id="cmx_projekt_suggest" style="display:none"></ul>';
@@ -946,10 +949,24 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				const projNav=makeNavigator(pI,pL,chooseProject);
 				function isManual(el){ return !!el && String(el.value||"0")==="1"; }
 				function isEmpty(val){ return !val || String(val).trim()===""; }
+				function resetTaskPrefillState(){
+					const jsFlag=document.getElementById("cmx_tasks_prefilled_js");
+					const srcType=document.getElementById("cmx_tasks_prefill_source_type");
+					const srcId=document.getElementById("cmx_tasks_prefill_source_id");
+					if(jsFlag){ jsFlag.value="0"; }
+					if(srcType){ srcType.value=""; }
+					if(srcId){ srcId.value="0"; }
+				}
 
 				function chooseProject(it){
+					resetTaskPrefillState();
 					pI.value=it.title||""; pH.value=it.id||""; pI.focus();
 					if(pS){ pS.value="1"; }
+					try {
+						document.dispatchEvent(new CustomEvent("cmx:task-source-change", {
+							detail: { sourceType: "projekte", sourceId: parseInt(it.id || 0, 10) || 0 }
+						}));
+					} catch(err) {}
 					if(it.kontakt_id){
 					const kI=document.getElementById("cmx_kontakt_search");
 					const kH=document.getElementById("cmx_kontakt_id");
@@ -999,7 +1016,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				pI.addEventListener("focus", ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 				pI.addEventListener("click",  ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
 			}
-			if(pC){ pC.addEventListener("click",()=>{ pI.value=""; pH.value=""; if(pS){ pS.value="1"; } pL.style.display="none"; pL.innerHTML=""; projNav.reset(); pI.focus(); }); }
+			if(pC){ pC.addEventListener("click",()=>{ resetTaskPrefillState(); pI.value=""; pH.value=""; if(pS){ pS.value="1"; } pL.style.display="none"; pL.innerHTML=""; projNav.reset(); pI.focus(); }); }
 
 			/* --- Kontakte --- */
 			const kI=document.getElementById("cmx_kontakt_search");
@@ -1012,8 +1029,22 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			const kontNav=makeNavigator(kI,kL,chooseKontakt);
 
 			function chooseKontakt(it){
+				const projektRaw = pH && pH.value ? pH.value : "";
+				const projektId = parseInt(projektRaw, 10);
+				const hasProjektSource = !isNaN(projektId) && projektId > 0;
+				if(!hasProjektSource){
+					resetTaskPrefillState();
+				}
 				if(kS){ kS.value="1"; }
 				kI.value=it.title||""; kH.value=it.id||""; if(kA){kA.value=it.addr||"";} kI.focus();
+				if(hasProjektSource){
+					return;
+				}
+				try {
+					document.dispatchEvent(new CustomEvent("cmx:task-source-change", {
+						detail: { sourceType: "kontakte", sourceId: parseInt(it.id || 0, 10) || 0 }
+					}));
+				} catch(err) {}
 			}
 			function kSearch(q){
 				const url="'.\esc_js($ajax_url).'?action=cmx_search_kontakte&_ajax_nonce='.\esc_js($ajax_nonce_kont).'&q="+encodeURIComponent(q);
@@ -1033,7 +1064,14 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				kI.addEventListener("focus", ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 				kI.addEventListener("click",  ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 			}
-			if(kC){ kC.addEventListener("click",()=>{ kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus(); }); }
+			if(kC){ kC.addEventListener("click",()=>{
+				const projektRaw = pH && pH.value ? pH.value : "";
+				const projektId = parseInt(projektRaw, 10);
+				if(isNaN(projektId) || projektId <= 0){
+					resetTaskPrefillState();
+				}
+				kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus();
+			}); }
 		})();
 	</script>';
 

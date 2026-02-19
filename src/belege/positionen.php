@@ -412,22 +412,26 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_truthy')) {
 }
 
 if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
-	function cmx_beleg_open_task_items(int $projekt_id = 0, string $search = '', int $limit = 150): array {
+	function cmx_beleg_open_task_items(int $source_id = 0, string $search = '', int $limit = 150, string $source_type = 'projekte'): array {
 		$limit = max(1, min(500, (int) $limit));
 		$search = \trim((string) $search);
 		$search_lc = $search !== ''
 			? (\function_exists('mb_strtolower') ? \mb_strtolower($search, 'UTF-8') : \strtolower($search))
 			: '';
+		$source_type = \sanitize_key((string) $source_type);
+		if (!\in_array($source_type, ['projekte', 'kontakte'], true)) {
+			$source_type = 'projekte';
+		}
 
-		$projekt_ids = [];
-		if ($projekt_id > 0) {
-			$post = \get_post($projekt_id);
-			if ($post && $post->post_type === 'projekte' && $post->post_status !== 'trash') {
-				$projekt_ids[] = (int) $projekt_id;
+		$source_ids = [];
+		if ($source_id > 0) {
+			$post = \get_post($source_id);
+			if ($post && $post->post_type === $source_type && $post->post_status !== 'trash') {
+				$source_ids[] = (int) $source_id;
 			}
 		} else {
 			$q = new \WP_Query([
-				'post_type'      => 'projekte',
+				'post_type'      => $source_type,
 				'post_status'    => ['publish', 'draft', 'pending', 'future', 'private'],
 				'posts_per_page' => 200,
 				'orderby'        => 'modified',
@@ -435,18 +439,18 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 				'fields'         => 'ids',
 				'no_found_rows'  => true,
 			]);
-			$projekt_ids = \array_map('intval', (array) ($q->posts ?? []));
+			$source_ids = \array_map('intval', (array) ($q->posts ?? []));
 			\wp_reset_postdata();
 		}
-		if (empty($projekt_ids)) return [];
+		if (empty($source_ids)) return [];
 
 		$items = [];
 		$vk_cache = [];
 		$vk_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
 
-		foreach ($projekt_ids as $pid) {
-			$projekt_title = (string) \get_the_title($pid);
-			if ($projekt_title === '') $projekt_title = '#' . $pid;
+		foreach ($source_ids as $pid) {
+			$source_title = (string) \get_the_title($pid);
+			if ($source_title === '') $source_title = '#' . $pid;
 
 			$tasks = cmx_beleg_meta_array($pid, '_cmx_projekt_tasks');
 			if (empty($tasks)) continue;
@@ -483,14 +487,16 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 				$uid   = (string) \preg_replace('/[^A-Za-z0-9_-]/', '', (string) ($task['uid'] ?? ''));
 
 				if ($search_lc !== '') {
-					$hay = $projekt_title . ' ' . $artikel_label . ' ' . $info . ' ' . $datum . ' ' . $zeit;
+					$hay = $source_title . ' ' . $artikel_label . ' ' . $info . ' ' . $datum . ' ' . $zeit;
 					$hay_lc = \function_exists('mb_strtolower') ? \mb_strtolower($hay, 'UTF-8') : \strtolower($hay);
 					if (\strpos($hay_lc, $search_lc) === false) continue;
 				}
 
 				$items[] = [
+					'source_type'   => $source_type,
+					'source_id'     => (int) $pid,
 					'projekt_id'    => (int) $pid,
-					'projekt_title' => $projekt_title,
+					'projekt_title' => $source_title,
 					'task_idx'      => (int) $idx,
 					'task_uid'      => $uid,
 					'artikel_id'    => (int) $artikel_id,
@@ -1138,9 +1144,14 @@ add_action('wp_ajax_cmx_search_beleg_tasks', function() {
 	if (!\current_user_can('edit_posts')) \wp_send_json_error(['msg' => 'forbidden'], 403);
 
 	$term = isset($_GET['term']) ? \sanitize_text_field(\wp_unslash($_GET['term'])) : '';
-	$projekt_id = isset($_GET['projekt_id']) ? (int) $_GET['projekt_id'] : 0;
+	$source_type = isset($_GET['source_type']) ? \sanitize_key((string) $_GET['source_type']) : 'projekte';
+	$source_id = isset($_GET['source_id']) ? (int) $_GET['source_id'] : 0;
+	$projekt_id = isset($_GET['projekt_id']) ? (int) $_GET['projekt_id'] : 0; // Legacy/Fallback
+	if ($source_id <= 0) {
+		$source_id = $projekt_id;
+	}
 	$items = \function_exists(__NAMESPACE__ . '\\cmx_beleg_open_task_items')
-		? cmx_beleg_open_task_items($projekt_id, $term, 150)
+		? cmx_beleg_open_task_items($source_id, $term, 150, $source_type)
 		: [];
 	\wp_send_json($items);
 });
@@ -1498,17 +1509,104 @@ function cmx_beleg_positionen_js() {
 				return isNaN(id) ? 0 : id;
 			}
 
-			function fetchOffeneTasks(term, cb){
+			function currentKontaktId(){
+				const raw = ($('#cmx_kontakt_id').val() || '').toString().trim();
+				const id = parseInt(raw, 10);
+				return isNaN(id) ? 0 : id;
+			}
+
+			function fetchOffeneTasks(term, cb, sourceType, sourceId){
+				let st = (sourceType === 'kontakte') ? 'kontakte' : 'projekte';
+				let sid = parseInt((sourceId ?? '').toString(), 10);
+				const explicitSourceType = sourceType === 'kontakte' || sourceType === 'projekte';
+				if (!explicitSourceType) {
+					const pid = currentProjektId();
+					if (pid > 0) {
+						st = 'projekte';
+						sid = pid;
+					} else {
+						const kid = currentKontaktId();
+						if (kid > 0) {
+							st = 'kontakte';
+							sid = kid;
+						}
+					}
+				} else if (isNaN(sid) || sid <= 0) {
+					sid = (st === 'kontakte') ? currentKontaktId() : currentProjektId();
+				}
 				$.getJSON(AJAX_URL, {
 					action: 'cmx_search_beleg_tasks',
 					term: term || '',
-					projekt_id: currentProjektId()
+					projekt_id: st === 'projekte' ? sid : 0,
+					source_type: st,
+					source_id: sid
 				}, function(data){
 					cb(Array.isArray(data) ? data : []);
 				}).fail(function(){
 					cb([]);
 				});
 			}
+
+			function buildTaskRefKey(sourceId, uidRaw, idxRaw){
+				const sid = parseInt((sourceId ?? '').toString(), 10);
+				if (isNaN(sid) || sid <= 0) return '';
+				const uid = (uidRaw || '').toString().replace(/[^A-Za-z0-9_-]/g, '');
+				if (uid) return 'u:' + sid + ':' + uid;
+				const idx = parseInt((idxRaw ?? '').toString(), 10);
+				if (!isNaN(idx)) return 'i:' + sid + ':' + idx;
+				return '';
+			}
+
+			function collectExistingTaskRefKeys(){
+				const keys = new Set();
+				table.find('tr.cmx-pos-row').each(function(){
+					const $row = $(this);
+					const sourceRaw = ($row.find('.cmx-task-projekt-id').first().val() || '').toString().trim();
+					const sourceId = parseInt(sourceRaw, 10);
+					if (isNaN(sourceId) || sourceId <= 0) return;
+					const uid = ($row.find('.cmx-task-uid').first().val() || '').toString();
+					const idx = ($row.find('.cmx-task-idx').first().val() || '').toString();
+					const key = buildTaskRefKey(sourceId, uid, idx);
+					if (key) keys.add(key);
+				});
+				return keys;
+			}
+
+			function autoImportTasksFromSource(sourceType, sourceId){
+				const st = (sourceType === 'kontakte') ? 'kontakte' : 'projekte';
+				const sid = parseInt((sourceId ?? '').toString(), 10);
+				if (isNaN(sid) || sid <= 0) return;
+
+				fetchOffeneTasks('', function(rows){
+					if (!Array.isArray(rows) || !rows.length) return;
+					const existing = collectExistingTaskRefKeys();
+					let added = 0;
+					rows.forEach(function(task){
+						const taskSourceId = parseInt((task && task.projekt_id !== undefined ? task.projekt_id : sid).toString(), 10);
+						const key = buildTaskRefKey(taskSourceId, task ? task.task_uid : '', task ? task.task_idx : '');
+						if (key && existing.has(key)) return;
+						const $row = addPositionRow(task || {});
+						if ($row.length) {
+							added++;
+							if (key) existing.add(key);
+						}
+					});
+					if (added > 0) {
+						$('#cmx_tasks_prefilled_js').val('1');
+						$('#cmx_tasks_prefill_source_type').val(st);
+						$('#cmx_tasks_prefill_source_id').val(String(sid));
+						table.trigger('cmx_positionen_rows_changed');
+					}
+				}, st, sid);
+			}
+
+			document.addEventListener('cmx:task-source-change', function(ev){
+				const detail = ev && ev.detail ? ev.detail : {};
+				const sourceType = detail.sourceType === 'kontakte' ? 'kontakte' : 'projekte';
+				const sourceId = parseInt((detail.sourceId ?? '').toString(), 10);
+				if (isNaN(sourceId) || sourceId <= 0) return;
+				autoImportTasksFromSource(sourceType, sourceId);
+			});
 
 			function taskPickerClose(){
 				taskPickerItems = [];
