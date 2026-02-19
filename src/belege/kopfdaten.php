@@ -869,6 +869,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	echo '  <div class="cmx-input-row">';
 	echo '    <input type="text" id="cmx_kontakt_search" name="cmx_kontakt_search" autocomplete="off" value="'.\esc_attr($display_kontakt).'" placeholder="Kontakt suchen...">';
 	echo '    <input type="hidden" id="cmx_kontakt_id" name="cmx_kontakt_id" value="'.\esc_attr((string)$kontakt_id).'">';
+	echo '    <input type="hidden" id="cmx_kontakt_selected" name="cmx_kontakt_selected" value="0">';
 	echo '    <button type="button" class="button button-small" id="cmx_kontakt_clear" title="Auswahl löschen">X</button>';
 	echo '  </div>';
 	echo '  <ul id="cmx_kontakt_suggest" style="display:none"></ul>';
@@ -1003,6 +1004,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			/* --- Kontakte --- */
 			const kI=document.getElementById("cmx_kontakt_search");
 			const kH=document.getElementById("cmx_kontakt_id");
+			const kS=document.getElementById("cmx_kontakt_selected");
 			const kL=document.getElementById("cmx_kontakt_suggest");
 			const kC=document.getElementById("cmx_kontakt_clear");
 			const kA=document.getElementById("cmx_kontakt_addr");
@@ -1010,6 +1012,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			const kontNav=makeNavigator(kI,kL,chooseKontakt);
 
 			function chooseKontakt(it){
+				if(kS){ kS.value="1"; }
 				kI.value=it.title||""; kH.value=it.id||""; if(kA){kA.value=it.addr||"";} kI.focus();
 			}
 			function kSearch(q){
@@ -1030,7 +1033,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				kI.addEventListener("focus", ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 				kI.addEventListener("click",  ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 			}
-			if(kC){ kC.addEventListener("click",()=>{ kI.value=""; kH.value=""; if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus(); }); }
+			if(kC){ kC.addEventListener("click",()=>{ kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus(); }); }
 		})();
 	</script>';
 

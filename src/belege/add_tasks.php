@@ -1,8 +1,8 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
- * Übernimmt offene (nicht abgerechnete) und verrechenbare Projekt-Tasks als Belegpositionen,
- * wenn beim Anlegen eines Belegs ein Projekt ausgewählt wurde.
+ * Übernimmt offene (nicht abgerechnete) und verrechenbare Tasks als Belegpositionen,
+ * wenn beim Anlegen eines Belegs ein Projekt oder Kontakt ausgewählt wurde.
  */
 
 \add_action('save_post_belege', __NAMESPACE__ . '\\cmxbu_add_tasks_to_beleg', 2, 3);
@@ -49,31 +49,91 @@ function cmxbu_create_task_uid(): string {
 	return 'tsk_' . \substr($seed, 0, 64);
 }
 
+function cmxbu_task_source_label(string $source_type): string {
+	return $source_type === 'kontakte' ? 'Kontakt' : 'Projekt';
+}
+
+function cmxbu_detect_task_import_source_from_request(): array {
+	$project_selection_raw = isset($_POST['cmx_projekt_selected']) ? \wp_unslash($_POST['cmx_projekt_selected']) : '';
+	$project_selection_made = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
+		? cmxbu_truthy($project_selection_raw)
+		: (\trim((string) $project_selection_raw) === '1');
+	$projekt_id = isset($_POST['cmx_projekt_id']) ? (int) $_POST['cmx_projekt_id'] : 0;
+	if ($project_selection_made && $projekt_id > 0) {
+		return ['id' => $projekt_id, 'type' => 'projekte'];
+	}
+
+	$kontakt_selection_raw = isset($_POST['cmx_kontakt_selected']) ? \wp_unslash($_POST['cmx_kontakt_selected']) : '';
+	$kontakt_selection_made = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
+		? cmxbu_truthy($kontakt_selection_raw)
+		: (\trim((string) $kontakt_selection_raw) === '1');
+	$kontakt_id = isset($_POST['cmx_kontakt_id']) ? (int) $_POST['cmx_kontakt_id'] : 0;
+	if ($kontakt_selection_made && $kontakt_id > 0) {
+		return ['id' => $kontakt_id, 'type' => 'kontakte'];
+	}
+
+	return ['id' => 0, 'type' => ''];
+}
+
+function cmxbu_resolve_task_import_source_from_meta(int $post_id): array {
+	$source_id = (int) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
+	$source_type = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_type', true));
+	if ($source_id > 0) {
+		if ($source_type === '') {
+			$post_type = (string) \get_post_type($source_id);
+			if ($post_type === 'projekte' || $post_type === 'kontakte') {
+				$source_type = $post_type;
+			}
+		}
+		if ($source_type === '') {
+			$source_type = 'projekte';
+		}
+		return ['id' => $source_id, 'type' => $source_type];
+	}
+
+	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
+	if ($projekt_id <= 0 && \function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
+		foreach (cmx_meta_projekt_ids() as $key) {
+			$projekt_id = (int) \get_post_meta($post_id, $key, true);
+			if ($projekt_id > 0) break;
+		}
+	}
+	if ($projekt_id > 0) {
+		return ['id' => $projekt_id, 'type' => 'projekte'];
+	}
+
+	return ['id' => 0, 'type' => ''];
+}
+
 function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
 	if ($post->post_status === 'auto-draft') return;
 
-	// Import nur dann auslösen, wenn im Formular aktiv eine Projektauswahl gemacht wurde.
-	$selection_raw = isset($_POST['cmx_projekt_selected']) ? \wp_unslash($_POST['cmx_projekt_selected']) : '';
-	$project_selection_made = \function_exists(__NAMESPACE__ . '\\cmxbu_truthy')
-		? cmxbu_truthy($selection_raw)
-		: (\trim((string) $selection_raw) === '1');
-	if (!$project_selection_made) return;
-
-	// Projekt-ID nur aus der aktuellen Formularauswahl übernehmen.
-	$projekt_id = isset($_POST['cmx_projekt_id']) ? (int) $_POST['cmx_projekt_id'] : 0;
-	if ($projekt_id <= 0) return;
+	$source = \function_exists(__NAMESPACE__ . '\\cmxbu_detect_task_import_source_from_request')
+		? cmxbu_detect_task_import_source_from_request()
+		: ['id' => 0, 'type' => ''];
+	$source_id = (int) ($source['id'] ?? 0);
+	$source_type = (string) ($source['type'] ?? '');
+	if ($source_id <= 0 || ($source_type !== 'projekte' && $source_type !== 'kontakte')) return;
+	$source_label = \function_exists(__NAMESPACE__ . '\\cmxbu_task_source_label')
+		? cmxbu_task_source_label($source_type)
+		: 'Projekt';
 
 	// Debug: Protokolliere Importversuch (einmal pro Save)
-	\error_log("[CMX] Beleg {$post_id}: versuche Tasks von Projekt {$projekt_id} zu importieren.");
+	\error_log("[CMX] Beleg {$post_id}: versuche Tasks von {$source_label} {$source_id} zu importieren.");
 
-	// Projekt-ID ggf. persistieren
-	\update_post_meta($post_id, '_cmx_beleg_projekt_id', $projekt_id);
+	// Quelle (für spätere Sync/Bezahlt-Hooks) persistieren.
+	\update_post_meta($post_id, '_cmx_beleg_tasks_imported_type', $source_type);
+	if ($source_type === 'projekte') {
+		\update_post_meta($post_id, '_cmx_beleg_projekt_id', $source_id);
+	} elseif ($source_type === 'kontakte') {
+		\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $source_id);
+	}
 
-	// Tasks des Projekts laden
+	// Tasks der Quelle laden
 	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
-		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		? cmxbu_meta_array($source_id, '_cmx_projekt_tasks')
 		: [];
 	if (empty($tasks)) {
 		\error_log("[CMX] Beleg {$post_id}: keine Tasks gefunden.");
@@ -87,7 +147,7 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		? cmxbu_meta_array($post_id, '_cmx_beleg_positionen')
 		: [];
 
-	$import_result = cmxbu_collect_task_positionen($tasks, $artikel_vks, $projekt_id);
+	$import_result = cmxbu_collect_task_positionen($tasks, $artikel_vks, $source_id);
 	$positionen = array_merge($positionen, $import_result['positionen']);
 
 	$project_tasks_changed = !empty($import_result['uids_assigned']);
@@ -96,10 +156,10 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		$_POST['cmx_positionen'] = $positionen;
 		// In Request einspeisen, damit andere Hooks (z. B. positionen.php) die Daten wie gewohnt speichern
 		\update_post_meta($post_id, '_cmx_beleg_positionen', wp_json_encode($positionen));
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $projekt_id);
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $source_id);
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', wp_json_encode($import_result['imported_keys']));
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', wp_json_encode($import_result['imported_uids']));
-		// Tasks im Projekt sofort als abgerechnet markieren, damit sie nicht erneut importiert werden
+		// Tasks in der Quelle sofort als abgerechnet markieren, damit sie nicht erneut importiert werden
 		$uid_set = [];
 		foreach (($import_result['imported_uids'] ?? []) as $uid) {
 			$uid = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_task_uid') ? cmxbu_normalize_task_uid($uid) : (string) $uid;
@@ -116,18 +176,18 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 			}
 		}
 		unset($task_row);
-		\error_log("[CMX] Beleg {$post_id}: ".count($import_result['positionen'])." Task-Positionen ergänzt (Projekt {$projekt_id}).");
+		\error_log("[CMX] Beleg {$post_id}: ".count($import_result['positionen'])." Task-Positionen ergänzt ({$source_label} {$source_id}).");
 	} else {
 		\error_log("[CMX] Beleg {$post_id}: keine neuen Tasks importiert. Tasks gesamt={$import_result['total']}, nicht verrechenbar={$import_result['skipped_non_billable']}, abgerechnet={$import_result['skipped_done']}, ohne Art/Dauer={$import_result['skipped_empty']}, ohne Preis={$import_result['skipped_no_price']}.");
 	}
 
 	if ($project_tasks_changed) {
-		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
+		\update_post_meta($source_id, '_cmx_projekt_tasks', $tasks);
 	}
 }
 
 /**
- * Wenn Beleg bezahlt wurde, markiere alle Tasks des zugeordneten Projekts als abgerechnet.
+ * Wenn Beleg bezahlt wurde, markiere alle importierten Tasks der Quelle als abgerechnet.
  */
 function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $update): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -152,18 +212,18 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 	if (!is_array($imported_uids)) $imported_uids = [];
 	if (empty($imported_keys) && empty($imported_uids)) return;
 
-	// Projekt-ID ermitteln
-	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
-	if ($projekt_id <= 0 && function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
-		foreach (cmx_meta_projekt_ids() as $key) {
-			$projekt_id = (int) \get_post_meta($post_id, $key, true);
-			if ($projekt_id > 0) break;
-		}
-	}
-	if ($projekt_id <= 0) return;
+	$source = \function_exists(__NAMESPACE__ . '\\cmxbu_resolve_task_import_source_from_meta')
+		? cmxbu_resolve_task_import_source_from_meta($post_id)
+		: ['id' => 0, 'type' => ''];
+	$source_id = (int) ($source['id'] ?? 0);
+	$source_type = (string) ($source['type'] ?? '');
+	if ($source_id <= 0 || ($source_type !== 'projekte' && $source_type !== 'kontakte')) return;
+	$source_label = \function_exists(__NAMESPACE__ . '\\cmxbu_task_source_label')
+		? cmxbu_task_source_label($source_type)
+		: 'Projekt';
 
 	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
-		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		? cmxbu_meta_array($source_id, '_cmx_projekt_tasks')
 		: [];
 
 	if (empty($tasks)) return;
@@ -196,8 +256,8 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 	unset($task_row);
 
 	if ($updated) {
-		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
-		\error_log("[CMX] Beleg {$post_id}: Projekt-Tasks von {$projekt_id} als abgerechnet markiert (Beleg bezahlt am {$paid_date}).");
+		\update_post_meta($source_id, '_cmx_projekt_tasks', $tasks);
+		\error_log("[CMX] Beleg {$post_id}: {$source_label}-Tasks von {$source_id} als abgerechnet markiert (Beleg bezahlt am {$paid_date}).");
 	}
 }
 
@@ -222,17 +282,15 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 	if (!is_array($imported_uids)) $imported_uids = [];
 	if (empty($imported_keys) && empty($imported_uids)) return;
 
-	$projekt_id = (int) \get_post_meta($post_id, '_cmx_beleg_projekt_id', true);
-	if ($projekt_id <= 0 && function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
-		foreach (cmx_meta_projekt_ids() as $key) {
-			$projekt_id = (int) \get_post_meta($post_id, $key, true);
-			if ($projekt_id > 0) break;
-		}
-	}
-	if ($projekt_id <= 0) return;
+	$source = \function_exists(__NAMESPACE__ . '\\cmxbu_resolve_task_import_source_from_meta')
+		? cmxbu_resolve_task_import_source_from_meta($post_id)
+		: ['id' => 0, 'type' => ''];
+	$source_id = (int) ($source['id'] ?? 0);
+	$source_type = (string) ($source['type'] ?? '');
+	if ($source_id <= 0 || ($source_type !== 'projekte' && $source_type !== 'kontakte')) return;
 
 	$tasks = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_array')
-		? cmxbu_meta_array($projekt_id, '_cmx_projekt_tasks')
+		? cmxbu_meta_array($source_id, '_cmx_projekt_tasks')
 		: [];
 	if (empty($tasks)) return;
 
@@ -314,7 +372,7 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 	unset($task_row);
 
 	if ($updated || $tasks_uid_migrated) {
-		\update_post_meta($projekt_id, '_cmx_projekt_tasks', $tasks);
+		\update_post_meta($source_id, '_cmx_projekt_tasks', $tasks);
 	}
 }
 
