@@ -72,19 +72,14 @@ function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): st
 	return (string) $terms[0];
 }
 
-function cmxbu_beleg_export_date_sort_key(string $date_ymd): int {
-	return cmxbu_beleg_export_date_timestamp($date_ymd);
-}
-
-function cmxbu_beleg_export_date_timestamp(string $raw_date): int {
+function cmxbu_beleg_export_normalize_any_date(string $raw_date): string {
 	$raw_date = \trim($raw_date);
-	if ($raw_date === '') return 0;
+	if ($raw_date === '') return '';
 
 	if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')) {
 		$normalized = (string) cmxbu_belege_export_normalize_date($raw_date);
 		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
-			$ts = \strtotime($normalized . ' 00:00:00');
-			if ($ts) return (int) $ts;
+			return $normalized;
 		}
 	}
 
@@ -93,8 +88,7 @@ function cmxbu_beleg_export_date_timestamp(string $raw_date): int {
 		$mo = (int) $m[2];
 		$y = (int) $m[3];
 		if (\checkdate($mo, $d, $y)) {
-			$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
-			if ($ts) return (int) $ts;
+			return \sprintf('%04d-%02d-%02d', $y, $mo, $d);
 		}
 	}
 
@@ -103,20 +97,43 @@ function cmxbu_beleg_export_date_timestamp(string $raw_date): int {
 		$mo = (int) $m[2];
 		$d = (int) $m[3];
 		if (\checkdate($mo, $d, $y)) {
-			$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
-			if ($ts) return (int) $ts;
+			return \sprintf('%04d-%02d-%02d', $y, $mo, $d);
 		}
 	}
 
 	$ts = \strtotime($raw_date);
+	return $ts ? \date('Y-m-d', $ts) : '';
+}
+
+function cmxbu_beleg_export_date_sort_key(string $date_ymd): int {
+	return cmxbu_beleg_export_date_timestamp($date_ymd);
+}
+
+function cmxbu_beleg_export_date_timestamp(string $raw_date): int {
+	$raw_date = \trim($raw_date);
+	if ($raw_date === '') return 0;
+	$normalized = cmxbu_beleg_export_normalize_any_date($raw_date);
+	if ($normalized === '') return 0;
+	$ts = \strtotime($normalized . ' 00:00:00');
 	return $ts ? (int) $ts : 0;
 }
 
 function cmxbu_beleg_export_format_date_display(string $date_ymd): string {
-	$date_ymd = \trim($date_ymd);
-	if ($date_ymd === '') return '';
-	$ts = cmxbu_beleg_export_date_timestamp($date_ymd);
-	return $ts ? \date('d.m.Y', $ts) : $date_ymd;
+	$raw = \trim($date_ymd);
+	if ($raw === '') return '';
+	$normalized = cmxbu_beleg_export_normalize_any_date($raw);
+	if ($normalized === '') return $raw;
+	$ts = \strtotime($normalized . ' 00:00:00');
+	return $ts ? \date('d.m.Y', $ts) : $raw;
+}
+
+function cmxbu_beleg_export_ucfirst(string $text): string {
+	$text = (string) $text;
+	if ($text === '') return '';
+	if (\function_exists('mb_substr') && \function_exists('mb_strtoupper')) {
+		return \mb_strtoupper(\mb_substr($text, 0, 1, 'UTF-8'), 'UTF-8') . \mb_substr($text, 1, null, 'UTF-8');
+	}
+	return \strtoupper(\substr($text, 0, 1)) . \substr($text, 1);
 }
 
 function cmxbu_beleg_export_to_float($raw): float {
@@ -154,9 +171,7 @@ function cmxbu_beleg_export_partial_payments(int $post_id, ?string $zahlungsart_
 	foreach ($raw as $row) {
 		if (!\is_array($row)) continue;
 		$datum_raw = (string) ($row['datum'] ?? '');
-		$datum = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')
-			? cmxbu_belege_export_normalize_date($datum_raw)
-			: \trim($datum_raw);
+		$datum = cmxbu_beleg_export_normalize_any_date($datum_raw);
 		$betrag = (float) \abs(cmxbu_beleg_export_to_float($row['betrag'] ?? 0));
 		if ($datum === '') continue;
 		if ($betrag <= 0.0) continue;
@@ -225,11 +240,16 @@ function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
 
 function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_am = '', int $post_id = 0): bool {
 	$status = \sanitize_key($status);
-	$bezahlt_am = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')
-		? (string) cmxbu_belege_export_normalize_date($bezahlt_am)
-		: \trim($bezahlt_am);
+	$bezahlt_am = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
 	if ($bezahlt_am !== '') {
 		return true;
+	}
+
+	if ($post_id > 0 && $status === 'teilbezahlt') {
+		$partials = cmxbu_beleg_export_partial_payments($post_id, null);
+		if (!empty($partials)) {
+			return true;
+		}
 	}
 
 	if ($post_id > 0 && \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_partial_payment_dates')) {
@@ -337,9 +357,7 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am',
 			true
 		);
-		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')) {
-			$bezahlt_am = (string) cmxbu_belege_export_normalize_date($bezahlt_am);
-		}
+		$bezahlt_am = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
 		$status = \sanitize_key((string) \get_post_meta(
 			$pid,
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
@@ -355,12 +373,13 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		$kontakt_id = (int) \get_post_meta($pid, \defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') ? CMX_BELEG_META_KONTAKT_ID : '_cmx_beleg_kontakt_id', true);
 		$kontakt = $kontakt_label !== '' ? $kontakt_label : ($kontakt_id ? (\get_the_title($kontakt_id) ?: '') : '');
 
-		$raw_type = cmxbu_beleg_export_raw_type($post);
-		$belegtyp = cmxbu_beleg_export_normalize_type($raw_type);
-		if (!cmxbu_beleg_export_is_allowed_base_type($belegtyp)) {
-			continue;
-		}
-		$effective_type = cmxbu_beleg_export_effective_type($post, $raw_type);
+			$raw_type = cmxbu_beleg_export_raw_type($post);
+			$belegtyp = cmxbu_beleg_export_normalize_type($raw_type);
+			if (!cmxbu_beleg_export_is_allowed_base_type($belegtyp)) {
+				continue;
+			}
+			$belegtyp_display = cmxbu_beleg_export_ucfirst($belegtyp);
+			$effective_type = cmxbu_beleg_export_effective_type($post, $raw_type);
 		$richtung = \sanitize_key((string) \get_post_meta(
 			$pid,
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung',
@@ -424,7 +443,7 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 						$partial_row = [
 							$belegnr,
 							cmxbu_beleg_export_format_date_display($partial_date),
-							$belegtyp,
+							$belegtyp_display,
 						$kontakt,
 						$partial_art,
 						$zahlungsgrund,
@@ -448,12 +467,12 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			}
 		}
 
-			$row = [
-				$belegnr,
-				cmxbu_beleg_export_format_date_display($bezahlt_am),
-				$belegtyp,
-				$kontakt,
-				$zahlungsart,
+				$row = [
+					$belegnr,
+					cmxbu_beleg_export_format_date_display($bezahlt_am),
+					$belegtyp_display,
+					$kontakt,
+					$zahlungsart,
 			$zahlungsgrund,
 			cmxbu_beleg_export_format_percent($mwst_rate),
 			cmxbu_beleg_export_format_money($mwst),
@@ -474,12 +493,22 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 
 	if (\count($export_rows) > 1) {
 		\usort($export_rows, static function (array $a, array $b): int {
-			$ats = (int) ($a['sort_ts'] ?? 0);
-			$bts = (int) ($b['sort_ts'] ?? 0);
-			if ($ats !== $bts) return $bts <=> $ats; // newest first
+			$arow = (array) ($a['row'] ?? []);
+			$brow = (array) ($b['row'] ?? []);
+			$adate = cmxbu_beleg_export_normalize_any_date((string) ($arow[1] ?? ''));
+			$bdate = cmxbu_beleg_export_normalize_any_date((string) ($brow[1] ?? ''));
+			if ($adate === '') {
+				$ats = (int) ($a['sort_ts'] ?? 0);
+				$adate = $ats > 0 ? \date('Y-m-d', $ats) : '0000-00-00';
+			}
+			if ($bdate === '') {
+				$bts = (int) ($b['sort_ts'] ?? 0);
+				$bdate = $bts > 0 ? \date('Y-m-d', $bts) : '0000-00-00';
+			}
+			if ($adate !== $bdate) return \strcmp($bdate, $adate); // newest first
 			$aseq = (int) ($a['sort_seq'] ?? 0);
 			$bseq = (int) ($b['sort_seq'] ?? 0);
-			return $aseq <=> $bseq;
+			return $bseq <=> $aseq;
 		});
 	}
 

@@ -49,8 +49,8 @@ use Dompdf\Options;
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
 	$range_line_html = 'Zeitraum: <strong>' . \esc_html($preset_label) . '</strong> | Von: <strong>' . \esc_html($range_from) . '</strong> | Bis: <strong>' . \esc_html($range_to) . '</strong>';
 	$table_headers = \array_merge([''], $headers);
-	// Erste Spalte: Upload-PDF-Link, Belegnummer breiter + nowrap, Kontakt etwas kleiner.
-	$col_widths = [2, 11.5, 8, 7, 16, 8, 9, 2, 2, 2, 14.25, 17.25];
+	// Erste Spalte: klickbarer [pdf]-Link, Belegnummer breiter + nowrap, Kontakt etwas kleiner.
+	$col_widths = [0.05, 11.9, 8, 7, 16, 8, 9, 2, 2, 2, 14.25, 18.3];
 	$col_classes = [
 		'col-open',
 		'col-belegnummer',
@@ -129,14 +129,14 @@ use Dompdf\Options;
 			$class = (string) ($col_classes[$idx] ?? ('col-' . $idx));
 			$align = ($idx >= 7) ? ' style="text-align:right;"' : (($idx === 0) ? ' style="text-align:center;"' : '');
 
-			if ($idx === 0) {
-				$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
-				$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
-				$icon_html = $icon_target !== ''
-					? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-icon-badge">PDF</span></a>'
-					: '';
-				$cells_html .= '<td class="' . \esc_attr($class) . '"' . $align . '>' . $icon_html . '</td>';
-				continue;
+				if ($idx === 0) {
+					$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
+					$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
+						$icon_html = $icon_target !== ''
+							? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[pdf]</span></a>'
+							: '';
+					$cells_html .= '<td class="' . \esc_attr($class) . '"' . $align . '>' . $icon_html . '</td>';
+					continue;
 			}
 
 				$val = (string) ($display_row[$idx] ?? '');
@@ -173,12 +173,13 @@ use Dompdf\Options;
 		col.col-mwst-satz, col.col-mwst, col.col-vorsteuer{width:2% !important}
 		col.col-kontakt{width:16% !important}
 		th.col-kontakt, td.col-kontakt{width:16% !important}
-		col.col-belegnummer{width:11.5% !important}
+		col.col-open{width:8px !important}
+		col.col-belegnummer{width:11.9% !important}
 		th.col-belegnummer, td.col-belegnummer{white-space:nowrap}
 		td.col-kontakt{font-size:9.2px}
-		th.col-open, td.col-open{text-align:center}
-		.pdf-icon-link{display:inline-block;text-decoration:none}
-		.pdf-icon-badge{display:inline-block;border:1px solid #a42c24;color:#a42c24;border-radius:3px;padding:1px 4px;font-size:8px;line-height:1.2;font-weight:700}
+		th.col-open, td.col-open{text-align:center;width:8px !important;min-width:8px !important;max-width:8px !important;padding-left:0 !important;padding-right:0 !important;white-space:nowrap;overflow:hidden}
+		.pdf-icon-link{display:inline-block;text-decoration:none;line-height:1}
+		.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:6px;line-height:1;white-space:nowrap;letter-spacing:-0.5px;transform:scaleX(0.55);transform-origin:center center}
 		.beleg-link{color:#111;text-decoration:underline}
 		</style></head><body>
 	<div class="doc-header">
