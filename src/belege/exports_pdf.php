@@ -48,9 +48,9 @@ use Dompdf\Options;
 	$range_from = $fmt_date((string) ($range['from'] ?? ''));
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
 	$range_line_html = 'Zeitraum: <strong>' . \esc_html($preset_label) . '</strong> | Von: <strong>' . \esc_html($range_from) . '</strong> | Bis: <strong>' . \esc_html($range_to) . '</strong>';
-	$table_headers = \array_merge(['PDF'], $headers);
+	$table_headers = \array_merge([''], $headers);
 	// Erste Spalte: Upload-PDF-Link, Belegnummer breiter + nowrap, Kontakt etwas kleiner.
-	$col_widths = [3, 11.5, 8, 7, 16, 8, 9, 2, 2, 2, 14.25, 17.25];
+	$col_widths = [2, 11.5, 8, 7, 16, 8, 9, 2, 2, 2, 14.25, 17.25];
 	$col_classes = [
 		'col-open',
 		'col-belegnummer',
