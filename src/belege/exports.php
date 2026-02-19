@@ -218,6 +218,29 @@ function cmxbu_belege_export_has_payment_date(int $post_id): bool {
 	return !empty($partial_dates);
 }
 
+function cmxbu_belege_export_date_in_range(string $date_ymd, array $range): bool {
+	$date_ymd = cmxbu_belege_export_normalize_date($date_ymd);
+	if ($date_ymd === '') return false;
+	$from = (string) ($range['from'] ?? '');
+	$to = (string) ($range['to'] ?? '');
+	if ($from === '' || $to === '') return true;
+	return ($date_ymd >= $from && $date_ymd <= $to);
+}
+
+function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): bool {
+	$paid_date = cmxbu_belege_export_paid_date($post_id);
+	if (cmxbu_belege_export_date_in_range($paid_date, $range)) {
+		return true;
+	}
+	$partial_dates = cmxbu_belege_export_partial_payment_dates($post_id);
+	foreach ($partial_dates as $partial_date) {
+		if (cmxbu_belege_export_date_in_range((string) $partial_date, $range)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /* ===== Link „export“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
@@ -394,6 +417,7 @@ function cmxbu_belege_export_has_payment_date(int $post_id): bool {
 /* ===== IDs sammeln ===== */
 function cmxbu_belege_export_collect_ids(): array {
 	$selected_ids = isset($_REQUEST['post']) ? array_filter(array_map('intval',(array)$_REQUEST['post'])) : [];
+	$range = cmxbu_belege_export_requested_date_range();
 
 	$qv = [
 		'post_type'      => 'belege',
@@ -447,22 +471,12 @@ function cmxbu_belege_export_collect_ids(): array {
 	$payment_filtered = [];
 	foreach ($post_ids as $post_id) {
 		if (!cmxbu_belege_export_has_payment_date($post_id)) continue;
+		if (!cmxbu_belege_export_has_payment_in_range($post_id, $range)) continue;
 		$payment_filtered[] = $post_id;
 	}
 	$post_ids = $payment_filtered;
 
-	$range = cmxbu_belege_export_requested_date_range();
-	if ($range['from'] === '' || $range['to'] === '') return $post_ids;
-
-	$filtered = [];
-	foreach ($post_ids as $post_id) {
-		$belegdatum = cmxbu_belege_export_post_date($post_id);
-		if ($belegdatum === '') continue;
-		if ($belegdatum < $range['from']) continue;
-		if ($belegdatum > $range['to']) continue;
-		$filtered[] = $post_id;
-	}
-	return $filtered;
+	return $post_ids;
 }
 
 function cmxbu_belege_export_site_prefix(): string {

@@ -265,6 +265,9 @@ function cmxbu_beleg_export_calc(int $post_id, float $mwst_rate, bool $is_brutto
 function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
 	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
+	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
+		? (array) cmxbu_belege_export_requested_date_range()
+		: ['from' => '', 'to' => ''];
 
 	header('Content-Type: text/csv; charset=UTF-8');
 	header('Content-Disposition: attachment; filename="'.cmxbu_belege_export_filename('csv').'"');
@@ -372,6 +375,9 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 
 					$partial_date = (string) ($partial['datum'] ?? '');
 					if ($partial_date === '') continue;
+					if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($partial_date, $range)) {
+						continue;
+					}
 					$partial_art = (string) ($partial['zahlungsart'] ?? '');
 					if ($partial_art === '') $partial_art = $zahlungsart;
 
@@ -417,6 +423,9 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 			cmxbu_beleg_export_format_money($einnahmen),
 			cmxbu_beleg_export_format_money($ausgaben),
 		];
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
+			continue;
+		}
 		$export_rows[] = [
 			'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
 			'sort_seq' => $seq++,
