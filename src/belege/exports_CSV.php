@@ -65,6 +65,77 @@ function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): st
 	return (string) $terms[0];
 }
 
+function cmxbu_beleg_export_to_float($raw): float {
+	if ($raw === null) return 0.0;
+	if (\is_int($raw) || \is_float($raw)) return (float) $raw;
+	$txt = \trim((string) $raw);
+	if ($txt === '') return 0.0;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
+		return (float) cmx_norm_decimal($txt);
+	}
+	$txt = \str_replace(["'", ' '], '', $txt);
+	$txt = \str_replace(',', '.', $txt);
+	return \is_numeric($txt) ? (float) $txt : 0.0;
+}
+
+function cmxbu_beleg_export_partial_payments(int $post_id, ?string $zahlungsart_tax): array {
+	$meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN')
+		? CMX_BELEG_META_ANZAHLUNGEN
+		: '_cmx_beleg_anzahlungen';
+	$raw = \get_post_meta($post_id, $meta_key, true);
+	if (empty($raw)) return [];
+
+	if (\is_string($raw)) {
+		$decoded = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
+			$raw = $decoded;
+		} else {
+			$maybe = @\maybe_unserialize($raw);
+			$raw = \is_array($maybe) ? $maybe : [];
+		}
+	}
+	if (!\is_array($raw)) return [];
+
+	$rows = [];
+	foreach ($raw as $row) {
+		if (!\is_array($row)) continue;
+		$datum_raw = (string) ($row['datum'] ?? '');
+		$datum = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')
+			? cmxbu_belege_export_normalize_date($datum_raw)
+			: \trim($datum_raw);
+		$betrag = (float) \abs(cmxbu_beleg_export_to_float($row['betrag'] ?? 0));
+		if ($datum === '' && $betrag <= 0.0) continue;
+
+		$zahlungsart_raw = \trim((string) ($row['zahlungsart'] ?? ''));
+		$zahlungsart = $zahlungsart_raw;
+		if ($zahlungsart_raw !== '' && $zahlungsart_tax && \taxonomy_exists($zahlungsart_tax) && \is_numeric($zahlungsart_raw)) {
+			$term = \get_term((int) $zahlungsart_raw, $zahlungsart_tax);
+			if ($term instanceof \WP_Term && !\is_wp_error($term)) {
+				$zahlungsart = (string) $term->name;
+			}
+		}
+
+		$rows[] = [
+			'datum' => $datum,
+			'betrag' => $betrag,
+			'zahlungsart' => $zahlungsart,
+		];
+	}
+
+	if (\count($rows) > 1) {
+		\usort($rows, static function (array $a, array $b): int {
+			$ad = (string) ($a['datum'] ?? '');
+			$bd = (string) ($b['datum'] ?? '');
+			if ($ad === $bd) return 0;
+			if ($ad === '') return 1;
+			if ($bd === '') return -1;
+			return \strcmp($ad, $bd);
+		});
+	}
+
+	return $rows;
+}
+
 function cmxbu_beleg_export_raw_type(\WP_Post $post): string {
 	$type = '';
 	if (\function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
@@ -263,6 +334,40 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 		}
 
 		$ausgaben = $is_supplier_invoice ? $total : 0.0;
+
+		if ($status === 'teilbezahlt') {
+			$partials = cmxbu_beleg_export_partial_payments($pid, $zahlungsart_tax);
+			if (!empty($partials)) {
+				foreach ($partials as $partial) {
+					$partial_amount = (float) \abs((float) ($partial['betrag'] ?? 0.0));
+					if ($partial_amount <= 0.0) continue;
+
+					$partial_date = (string) ($partial['datum'] ?? '');
+					if ($partial_date === '') $partial_date = $bezahlt_am;
+					$partial_art = (string) ($partial['zahlungsart'] ?? '');
+					if ($partial_art === '') $partial_art = $zahlungsart;
+
+					$partial_einnahmen = $is_outgoing_invoice ? $partial_amount : 0.0;
+					$partial_ausgaben = $is_supplier_invoice ? $partial_amount : 0.0;
+
+					$partial_row = [
+						$belegnr,
+						$partial_date,
+						$belegtyp,
+						$kontakt,
+						$partial_art,
+						$zahlungsgrund,
+						cmxbu_beleg_export_format_percent($mwst_rate),
+						'',
+						'',
+						cmxbu_beleg_export_format_money($partial_einnahmen),
+						cmxbu_beleg_export_format_money($partial_ausgaben),
+					];
+					fputcsv($fh, $partial_row, ';');
+				}
+				continue;
+			}
+		}
 
 		$row = [
 			$belegnr,
