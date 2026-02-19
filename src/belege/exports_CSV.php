@@ -73,14 +73,50 @@ function cmxbu_beleg_export_first_term_name(int $post_id, ?string $taxonomy): st
 }
 
 function cmxbu_beleg_export_date_sort_key(string $date_ymd): int {
-	$date_ymd = \trim($date_ymd);
-	if ($date_ymd === '') return 0;
+	return cmxbu_beleg_export_date_timestamp($date_ymd);
+}
+
+function cmxbu_beleg_export_date_timestamp(string $raw_date): int {
+	$raw_date = \trim($raw_date);
+	if ($raw_date === '') return 0;
+
 	if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_normalize_date')) {
-		$date_ymd = (string) cmxbu_belege_export_normalize_date($date_ymd);
+		$normalized = (string) cmxbu_belege_export_normalize_date($raw_date);
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
+			$ts = \strtotime($normalized . ' 00:00:00');
+			if ($ts) return (int) $ts;
+		}
 	}
-	if (!\preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_ymd)) return 0;
-	$ts = \strtotime($date_ymd . ' 00:00:00');
+
+	if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/', $raw_date, $m)) {
+		$d = (int) $m[1];
+		$mo = (int) $m[2];
+		$y = (int) $m[3];
+		if (\checkdate($mo, $d, $y)) {
+			$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
+			if ($ts) return (int) $ts;
+		}
+	}
+
+	if (\preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $raw_date, $m)) {
+		$y = (int) $m[1];
+		$mo = (int) $m[2];
+		$d = (int) $m[3];
+		if (\checkdate($mo, $d, $y)) {
+			$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
+			if ($ts) return (int) $ts;
+		}
+	}
+
+	$ts = \strtotime($raw_date);
 	return $ts ? (int) $ts : 0;
+}
+
+function cmxbu_beleg_export_format_date_display(string $date_ymd): string {
+	$date_ymd = \trim($date_ymd);
+	if ($date_ymd === '') return '';
+	$ts = cmxbu_beleg_export_date_timestamp($date_ymd);
+	return $ts ? \date('d.m.Y', $ts) : $date_ymd;
 }
 
 function cmxbu_beleg_export_to_float($raw): float {
@@ -367,10 +403,10 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 
 		$ausgaben = $is_supplier_invoice ? $total : 0.0;
 
-		if ($status === 'teilbezahlt') {
-			$partials = cmxbu_beleg_export_partial_payments($pid, $zahlungsart_tax);
-			if (!empty($partials)) {
-				foreach ($partials as $partial) {
+			if ($status === 'teilbezahlt') {
+				$partials = cmxbu_beleg_export_partial_payments($pid, $zahlungsart_tax);
+				if (!empty($partials)) {
+					foreach ($partials as $partial) {
 					$partial_amount = (float) \abs((float) ($partial['betrag'] ?? 0.0));
 					if ($partial_amount <= 0.0) continue;
 
@@ -382,42 +418,42 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 					$partial_art = (string) ($partial['zahlungsart'] ?? '');
 					if ($partial_art === '') $partial_art = $zahlungsart;
 
-					$partial_einnahmen = $is_outgoing_invoice ? $partial_amount : 0.0;
-					$partial_ausgaben = $is_supplier_invoice ? $partial_amount : 0.0;
+						$partial_einnahmen = $is_outgoing_invoice ? $partial_amount : 0.0;
+						$partial_ausgaben = $is_supplier_invoice ? $partial_amount : 0.0;
 
-					$partial_row = [
-						$belegnr,
-						$partial_date,
-						$belegtyp,
+						$partial_row = [
+							$belegnr,
+							cmxbu_beleg_export_format_date_display($partial_date),
+							$belegtyp,
 						$kontakt,
 						$partial_art,
 						$zahlungsgrund,
 						cmxbu_beleg_export_format_percent($mwst_rate),
 						'',
 						'',
-						cmxbu_beleg_export_format_money($partial_einnahmen),
-						cmxbu_beleg_export_format_money($partial_ausgaben),
-					];
+							cmxbu_beleg_export_format_money($partial_einnahmen),
+							cmxbu_beleg_export_format_money($partial_ausgaben),
+						];
 						$export_rows[] = [
 							'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_date),
 							'sort_seq' => $seq++,
 							'post_id' => (int) $pid,
 							'row' => $partial_row,
 						];
+					}
+					continue;
 				}
-				continue;
-			}
 			if ($bezahlt_am === '') {
 				continue;
 			}
 		}
 
-		$row = [
-			$belegnr,
-			$bezahlt_am,
-			$belegtyp,
-			$kontakt,
-			$zahlungsart,
+			$row = [
+				$belegnr,
+				cmxbu_beleg_export_format_date_display($bezahlt_am),
+				$belegtyp,
+				$kontakt,
+				$zahlungsart,
 			$zahlungsgrund,
 			cmxbu_beleg_export_format_percent($mwst_rate),
 			cmxbu_beleg_export_format_money($mwst),
@@ -425,9 +461,9 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			cmxbu_beleg_export_format_money($einnahmen),
 			cmxbu_beleg_export_format_money($ausgaben),
 		];
-		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
-			continue;
-		}
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
+				continue;
+			}
 			$export_rows[] = [
 				'sort_ts' => cmxbu_beleg_export_date_sort_key($bezahlt_am),
 				'sort_seq' => $seq++,

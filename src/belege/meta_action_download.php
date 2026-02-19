@@ -32,11 +32,29 @@ function cmxbu_handle_beleg_download(): void {
 		cmxbu_log_beleg_view($post_id);
 	}
 
-	// PDF-Pfade berechnen
-	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+	$source = \sanitize_key((string) ($_GET['quelle'] ?? ($_GET['source'] ?? '')));
+	$is_upload_view = ($source === 'upload');
+	$file_abs_path = '';
+	$content_type = 'application/pdf';
 
-	if (!is_file($pdf_abs_path)) {
-		\wp_die('PDF nicht gefunden.');
+	if ($is_upload_view) {
+		$file_abs_path = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_primary_upload_abs_path')
+			? (string) cmxbu_get_beleg_primary_upload_abs_path($post_id)
+			: '';
+		if (!\is_file($file_abs_path)) {
+			\wp_die('Upload-Beleg nicht gefunden.');
+		}
+		$mime_info = \wp_check_filetype(\basename($file_abs_path));
+		$content_type = (string) ($mime_info['type'] ?? '');
+		if ($content_type === '') {
+			$content_type = 'application/octet-stream';
+		}
+	} else {
+		[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+		if (!\is_file($pdf_abs_path)) {
+			\wp_die('PDF nicht gefunden.');
+		}
+		$file_abs_path = $pdf_abs_path;
 	}
 
 	// Output-Puffer leeren
@@ -45,11 +63,11 @@ function cmxbu_handle_beleg_download(): void {
 	}
 
 	\nocache_headers();
-	header('Content-Type: application/pdf');
-	header('Content-Disposition: inline; filename="' . basename($pdf_abs_path) . '"');
-	header('Content-Length: ' . filesize($pdf_abs_path));
+	header('Content-Type: ' . $content_type);
+	header('Content-Disposition: inline; filename="' . \basename($file_abs_path) . '"');
+	header('Content-Length: ' . \filesize($file_abs_path));
 
-	readfile($pdf_abs_path);
+	\readfile($file_abs_path);
 	exit;
 }
 \add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_handle_beleg_download');
