@@ -297,8 +297,14 @@ use Dompdf\Options;
 
 	<table>
 	<tr>
+		<td colspan="12" class="line-row-cell"></td>
+	</tr>
+	</table>
+<br>
+	<table>
+	<tr>
 		<td></td>
-		<td style="text-align:right;width:50px;"><strong>Summe</strong></td>
+		<td style="text-align:right;width:50px;"><strong>Ergebnis</strong></td>
 		<td style="text-align:right;width:100px;"><strong><?= $sum_diff_display; ?></strong></td>
 	</tr>
 	</table>
