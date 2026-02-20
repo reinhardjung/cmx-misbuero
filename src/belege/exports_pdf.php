@@ -205,8 +205,8 @@ use Dompdf\Options;
 	<table>
 	<tr>
 		<td></td>
-		<td style="text-align:right;width:90px;">Gut</td>
-		<td style="text-align:right;width:90px;">schlacht</td>
+		<td style="text-align:right;width:90px;">xxx</td>
+		<td style="text-align:right;width:90px;">yyy</td>
 	</tr>
 	</table>
 </body>
