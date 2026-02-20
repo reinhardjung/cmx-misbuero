@@ -517,10 +517,7 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		$mwst = $is_outgoing_invoice ? $tax_amount : 0.0;
 		$vorsteuer = $is_supplier_invoice ? $tax_amount : 0.0;
 
-		$einnahmen = 0.0;
-		if ($is_outgoing_invoice) {
-			$einnahmen = $is_brutto ? ($subtotal_base - $mwst) : $subtotal_base;
-		}
+		$einnahmen = $is_outgoing_invoice ? $total : 0.0;
 
 		$ausgaben = $is_supplier_invoice ? $total : 0.0;
 
@@ -538,25 +535,29 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 					if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($partial_date, $range)) {
 						continue;
 					}
-					$partial_art = (string) ($partial['zahlungsart'] ?? '');
-					if ($partial_art === '') $partial_art = $zahlungsart;
+						$partial_art = (string) ($partial['zahlungsart'] ?? '');
+						if ($partial_art === '') $partial_art = $zahlungsart;
 
-						$partial_einnahmen = $is_outgoing_invoice ? $partial_amount : 0.0;
-						$partial_ausgaben = $is_supplier_invoice ? $partial_amount : 0.0;
+							$partial_einnahmen = $is_outgoing_invoice ? $total : 0.0;
+							$partial_ausgaben = $is_supplier_invoice ? $total : 0.0;
+							$partial_ratio = $total > 0.0 ? ($partial_amount / $total) : 0.0;
+							$partial_tax_amount = max(0.0, (float) $tax_amount * (float) $partial_ratio);
+							$partial_mwst = $is_outgoing_invoice ? $partial_tax_amount : 0.0;
+							$partial_vorsteuer = $is_supplier_invoice ? $partial_tax_amount : 0.0;
 
-						$partial_row = [
-							$belegnr,
-							cmxbu_beleg_export_format_date_display($partial_date),
-							$belegtyp_display,
+							$partial_row = [
+								$belegnr,
+								cmxbu_beleg_export_format_date_display($partial_date),
+								$belegtyp_display,
 						$kontakt,
-						$partial_art,
-						$zahlungsgrund,
-						cmxbu_beleg_export_format_percent($mwst_rate),
-						'',
-						'',
-							cmxbu_beleg_export_format_money($partial_einnahmen),
-							cmxbu_beleg_export_format_money($partial_ausgaben),
-						];
+							$partial_art,
+							$zahlungsgrund,
+							cmxbu_beleg_export_format_percent($mwst_rate),
+							cmxbu_beleg_export_format_money($partial_mwst),
+							cmxbu_beleg_export_format_money($partial_vorsteuer),
+								cmxbu_beleg_export_format_money($partial_einnahmen),
+								cmxbu_beleg_export_format_money($partial_ausgaben),
+							];
 						$export_rows[] = [
 							'sort_date' => $partial_sort_date,
 							'sort_ts' => cmxbu_beleg_export_date_sort_key($partial_sort_date),

@@ -66,6 +66,24 @@ use Dompdf\Options;
 		$txt = \str_replace(',', '.', $txt);
 		return \is_numeric($txt) ? (float) $txt : 0.0;
 	};
+	$paid_date_to_ts = static function (string $display_date): int {
+		$display_date = \trim(\str_replace("\xC2\xA0", ' ', $display_date));
+		if ($display_date === '') return 0;
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_paid_date_timestamp_from_display')) {
+			return (int) cmxbu_beleg_export_paid_date_timestamp_from_display($display_date);
+		}
+		if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $display_date, $m)) {
+			$d = (int) $m[1];
+			$mo = (int) $m[2];
+			$y = (int) $m[3];
+			if (\checkdate($mo, $d, $y)) {
+				$ts = \strtotime(\sprintf('%04d-%02d-%02d 00:00:00', $y, $mo, $d));
+				return $ts ? (int) $ts : 0;
+			}
+		}
+		$ts = \strtotime($display_date);
+		return $ts ? (int) $ts : 0;
+	};
 	foreach ((array) $row_items as $item) {
 		$post_id = 0;
 		$row = [];
@@ -120,6 +138,8 @@ use Dompdf\Options;
 		$belegtyp = $ucfirst_utf8((string) ($display_row[3] ?? ''));
 
 		$render_rows[] = [
+			'row_idx' => \count($render_rows),
+			'paid_ts' => $paid_date_to_ts((string) ($display_row[2] ?? '')),
 			'open' => $open_content,
 			'belegnummer' => $belegnummer_content,
 			'bezahlt_am' => \esc_html((string) ($display_row[2] ?? '')),
@@ -133,6 +153,16 @@ use Dompdf\Options;
 			'einnahmen' => \esc_html((string) ($display_row[10] ?? '')),
 			'ausgaben' => \esc_html((string) ($display_row[11] ?? '')),
 		];
+	}
+	if (\count($render_rows) > 1) {
+		\usort($render_rows, static function (array $a, array $b): int {
+			$ats = (int) ($a['paid_ts'] ?? 0);
+			$bts = (int) ($b['paid_ts'] ?? 0);
+			if ($ats !== $bts) return $bts <=> $ats; // newest paid date first
+			$ai = (int) ($a['row_idx'] ?? 0);
+			$bi = (int) ($b['row_idx'] ?? 0);
+			return $ai <=> $bi;
+		});
 	}
 	$sum_einnahmen_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
 		? (string) cmxbu_beleg_export_format_money($sum_einnahmen)
@@ -259,14 +289,24 @@ use Dompdf\Options;
 
 	<table>
 	<tr>
-		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>Gewinn&nbsp;&nbsp;&nbsp;<?= $sum_diff_display; ?></strong></td>
+		<td style="text-align:right;width:200px;"><strong>Summe&nbsp;&nbsp;&nbsp;<?= $sum_diff_display; ?></strong></td>
+	</tr>
+	</table>
+	<table>
+	<tr>
+		<td style="text-align:right;width:200px;">XXX</td>
+	</tr>
+	</table>
+	<table>
+	<tr>
+		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>ZZZ</strong></td>
 	</tr>
 	</table>
 
 </body>
 </html>
 
-	<?php
+<?php
 	$html = (string) \ob_get_clean();
 
 	$dom->loadHtml($html, 'UTF-8');
