@@ -42,6 +42,8 @@ use Dompdf\Options;
 	$range_from = $fmt_date((string) ($range['from'] ?? ''));
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
 	$render_rows = [];
+	$sum_mwst = 0.0;
+	$sum_vorsteuer = 0.0;
 	$sum_einnahmen = 0.0;
 	$sum_ausgaben = 0.0;
 	$token_cache = [];
@@ -98,6 +100,8 @@ use Dompdf\Options;
 		}
 
 		$display_row = \array_merge([''], $row);
+		$sum_mwst += $to_float($display_row[8] ?? 0);
+		$sum_vorsteuer += $to_float($display_row[9] ?? 0);
 		$sum_einnahmen += $to_float($display_row[10] ?? 0);
 		$sum_ausgaben += $to_float($display_row[11] ?? 0);
 		$is_ausgabe_row = $to_float($display_row[11] ?? 0) > 0.0;
@@ -136,6 +140,12 @@ use Dompdf\Options;
 	$sum_ausgaben_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
 		? (string) cmxbu_beleg_export_format_money($sum_ausgaben)
 		: \number_format((float) \round($sum_ausgaben, 2), 2, '.', "'");
+	$sum_mwst_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+		? (string) cmxbu_beleg_export_format_money($sum_mwst)
+		: \number_format((float) \round($sum_mwst, 2), 2, '.', "'");
+	$sum_vorsteuer_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+		? (string) cmxbu_beleg_export_format_money($sum_vorsteuer)
+		: \number_format((float) \round($sum_vorsteuer, 2), 2, '.', "'");
 	$sum_diff = (float) $sum_einnahmen - (float) $sum_ausgaben;
 	$sum_diff_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum_diff, 2)
@@ -240,6 +250,8 @@ use Dompdf\Options;
 	<table>
 	<tr>
 		<td></td>
+		<td style="text-align:right;width:50px;"><strong><?= $sum_mwst_display; ?></strong></td>
+		<td style="text-align:right;width:50px;"><strong><?= $sum_vorsteuer_display; ?></strong></td>
 		<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
 		<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
 	</tr>
@@ -247,7 +259,7 @@ use Dompdf\Options;
 
 	<table>
 	<tr>
-		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>Gewinn <?= $sum_diff_display; ?></strong></td>
+		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>Gewinn&nbsp;&nbsp;&nbsp;<?= $sum_diff_display; ?></strong></td>
 	</tr>
 	</table>
 
