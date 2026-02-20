@@ -42,6 +42,8 @@ use Dompdf\Options;
 	$range_from = $fmt_date((string) ($range['from'] ?? ''));
 	$range_to = $fmt_date((string) ($range['to'] ?? ''));
 	$render_rows = [];
+	$sum_einnahmen = 0.0;
+	$sum_ausgaben = 0.0;
 	$token_cache = [];
 	$upload_cache = [];
 	$ucfirst_utf8 = static function (string $text): string {
@@ -51,6 +53,16 @@ use Dompdf\Options;
 			return \mb_strtoupper(\mb_substr($text, 0, 1, 'UTF-8'), 'UTF-8') . \mb_substr($text, 1, null, 'UTF-8');
 		}
 		return \strtoupper(\substr($text, 0, 1)) . \substr($text, 1);
+	};
+	$to_float = static function ($value): float {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_to_float')) {
+			return (float) cmxbu_beleg_export_to_float($value);
+		}
+		$txt = \trim((string) $value);
+		if ($txt === '') return 0.0;
+		$txt = \str_replace(["'", ' '], '', $txt);
+		$txt = \str_replace(',', '.', $txt);
+		return \is_numeric($txt) ? (float) $txt : 0.0;
 	};
 	foreach ((array) $row_items as $item) {
 		$post_id = 0;
@@ -86,6 +98,8 @@ use Dompdf\Options;
 		}
 
 		$display_row = \array_merge([''], $row);
+		$sum_einnahmen += $to_float($display_row[10] ?? 0);
+		$sum_ausgaben += $to_float($display_row[11] ?? 0);
 		$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
 		$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
 		$open_content = $icon_target !== ''
@@ -115,6 +129,12 @@ use Dompdf\Options;
 			'ausgaben' => \esc_html((string) ($display_row[11] ?? '')),
 		];
 	}
+	$sum_einnahmen_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+		? (string) cmxbu_beleg_export_format_money($sum_einnahmen)
+		: \number_format((float) \round($sum_einnahmen, 2), 2, '.', "'");
+	$sum_ausgaben_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+		? (string) cmxbu_beleg_export_format_money($sum_ausgaben)
+		: \number_format((float) \round($sum_ausgaben, 2), 2, '.', "'");
 	ob_start();
 	?>
 <!doctype html>
@@ -129,9 +149,10 @@ use Dompdf\Options;
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
-		table{width:100%;border-collapse:collapse;table-layout:auto}
-		th,td{padding:6px;border:1px solid #d9dde3}
-		thead th{font-weight:700;background:#f3f4f6;text-align:left;white-space:normal}
+			table{width:100%;border-collapse:collapse;table-layout:auto}
+			th,td{padding:6px;border:none}
+			thead th{font-weight:700;background:transparent;text-align:left;white-space:normal}
+			.line-row-cell{padding:0 !important;height:1px;line-height:1px;font-size:0;background:#000;border:none !important}
 		tbody td{word-wrap:break-word}
 		tbody tr:nth-child(odd) td{background:transparent}
 		tbody tr:nth-child(even) td{background:#f7f8fa}
@@ -160,10 +181,10 @@ use Dompdf\Options;
 		</div>
 	</div>
 
-	<table>
-		<thead>
-			<tr>
-				<th style="text-align:center;width:20px;"></th>
+		<table>
+			<thead>
+				<tr>
+					<th style="text-align:center;width:20px;"></th>
 				<th style="width:80px;">Belegnummer</th>
 				<th style="width:60px">Bezahlt am</th>
 				<th style="width:70px;">Belegtyp</th>
@@ -173,11 +194,14 @@ use Dompdf\Options;
 				<th style="text-align:center;width:50px;">Satz</th>
 				<th style="text-align:center;width:50px;">MwSt</th>
 				<th style="text-align:center;width:50px">Vorsteuer</th>
-				<th style="text-align:right;width:90px;">Einnahmen</th>
-				<th style="text-align:right;width:90px;">Ausgaben</th>
-			</tr>
-		</thead>
-		<tbody>
+					<th style="text-align:right;width:90px;">Einnahmen</th>
+					<th style="text-align:right;width:90px;">Ausgaben</th>
+				</tr>
+				<tr>
+					<th colspan="12" class="line-row-cell"></th>
+				</tr>
+			</thead>
+			<tbody>
 			<?php if (empty($render_rows)): ?>
 				<tr>
 					<td colspan="12">Keine Daten im gewählten Zeitraum.</td>
@@ -199,15 +223,24 @@ use Dompdf\Options;
 							<td style="text-align:right;"><?= $row_view['ausgaben']; ?></td>
 						</tr>
 					<?php endforeach; ?>
-				<?php endif; ?>
-		</tbody>
-	</table>
+					<?php endif; ?>
+			</tbody>
+			<tfoot>
+				<tr>
+					<td colspan="12" class="line-row-cell"></td>
+				</tr>
+			</tfoot>
+		</table>
 	<table>
-	<tr>
-		<td></td>
-		<td style="text-align:right;width:90px;">xxx</td>
-		<td style="text-align:right;width:90px;">yyy</td>
-	</tr>
+		<tr>
+			<td></td>
+			<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
+			<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
+		</tr>
+		<tr>
+			<td></td>
+			<td colspan="2" style="text-align:center;"><strong>xyz</strong></td>
+		</tr>
 	</table>
 </body>
 </html>
