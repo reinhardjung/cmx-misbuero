@@ -250,8 +250,8 @@ use Dompdf\Options;
 	<table>
 	<tr>
 		<td></td>
-		<td style="text-align:right;width:50px;"><strong><?= $sum_mwst_display; ?></strong></td>
-		<td style="text-align:right;width:50px;"><strong><?= $sum_vorsteuer_display; ?></strong></td>
+		<td style="text-align:right;width:50px;"><?= $sum_mwst_display; ?></td>
+		<td style="text-align:right;width:50px;"><?= $sum_vorsteuer_display; ?></td>
 		<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
 		<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
 	</tr>
