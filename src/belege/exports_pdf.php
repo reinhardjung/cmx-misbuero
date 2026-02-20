@@ -169,12 +169,12 @@ use Dompdf\Options;
 				<th style="width:70px;">Belegtyp</th>
 				<th style="">Kontakt</th>
 				<th style="width:80px">Zahlungsart</th>
-				<th style="width:80px;">Zahlungsgrund</th>
+				<th style="width:90px;">Zahlungsgrund</th>
 				<th style="text-align:center;width:50px;">Satz</th>
 				<th style="text-align:center;width:50px;">MwSt</th>
 				<th style="text-align:center;width:50px">Vorsteuer</th>
-				<th style="text-align:right;width:100px;">Einnahmen</th>
-				<th style="text-align:right;width:100px;">Ausgaben</th>
+				<th style="text-align:right;width:90px;">Einnahmen</th>
+				<th style="text-align:right;width:90px;">Ausgaben</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -201,6 +201,13 @@ use Dompdf\Options;
 					<?php endforeach; ?>
 				<?php endif; ?>
 		</tbody>
+	</table>
+	<table>
+	<tr>
+		<td></td>
+		<td style="text-align:right;width:90px;">Gut</td>
+		<td style="text-align:right;width:90px;">schlacht</td>
+	</tr>
 	</table>
 </body>
 </html>
