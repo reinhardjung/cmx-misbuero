@@ -108,7 +108,7 @@ use Dompdf\Options;
 		$icon_target = ($is_ausgabe_row && $upload_url !== '') ? $upload_url : '';
 		$icon_title = 'Upload-Dokument anzeigen';
 		$open_content = $icon_target !== ''
-			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[pdf]</span></a>'
+			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[*]</span></a>'
 			: '';
 
 		$belegnummer = (string) ($display_row[1] ?? '');
