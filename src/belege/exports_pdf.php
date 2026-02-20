@@ -180,6 +180,14 @@ use Dompdf\Options;
 	$sum_diff_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum_diff, 2)
 		: \number_format((float) \round($sum_diff, 2), 2, '.', "'");
+	$sum_xxx = (float) $sum_mwst - (float) $sum_vorsteuer;
+	$sum_xxx_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+		? (string) cmx_format_swiss_number($sum_xxx, 2)
+		: \number_format((float) \round($sum_xxx, 2), 2, '.', "'");
+	$sum_zzz = (float) $sum_diff - (float) $sum_xxx;
+	$sum_zzz_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+		? (string) cmx_format_swiss_number($sum_zzz, 2)
+		: \number_format((float) \round($sum_zzz, 2), 2, '.', "'");
 	ob_start();
 	?>
 <!doctype html>
@@ -289,17 +297,25 @@ use Dompdf\Options;
 
 	<table>
 	<tr>
-		<td style="text-align:right;width:200px;"><strong>Summe&nbsp;&nbsp;&nbsp;<?= $sum_diff_display; ?></strong></td>
+		<td></td>
+		<td style="text-align:right;width:50px;"><strong>Summe</strong></td>
+		<td style="text-align:right;width:100px;"><strong><?= $sum_diff_display; ?></strong></td>
 	</tr>
 	</table>
+
 	<table>
 	<tr>
-		<td style="text-align:right;width:200px;">XXX</td>
+		<td></td>
+		<td style="text-align:right;width:50px;">Märlistüür</td>
+		<td style="text-align:right;width:100px;"><?= $sum_xxx_display; ?></td>
 	</tr>
 	</table>
+
 	<table>
 	<tr>
-		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>ZZZ</strong></td>
+		<td></td>
+		<td style="text-align:right;width:50px;border-bottom:3px double #000;"><strong>Gewinn</strong></td>
+		<td style="text-align:right;width:100px;border-bottom:3px double #000;"><strong><?= $sum_zzz_display; ?></strong></td>
 	</tr>
 	</table>
 
