@@ -212,8 +212,11 @@ function cmxbu_beleg_export_sort_context_rows_by_paid_date(array $items): array 
 	foreach ($items as $idx => $item) {
 		$item = (array) $item;
 		$row = (array) ($item['row'] ?? []);
-		$raw_date = (string) ($row[1] ?? '');
-		$sort_ts = cmxbu_beleg_export_paid_date_timestamp_from_display($raw_date);
+		$sort_ts = (int) ($item['sort_ts'] ?? 0);
+		if ($sort_ts <= 0) {
+			$raw_date = (string) ($row[1] ?? '');
+			$sort_ts = cmxbu_beleg_export_paid_date_timestamp_from_display($raw_date);
+		}
 		$indexed[] = [
 			'idx' => (int) $idx,
 			'sort_ts' => $sort_ts,
@@ -639,6 +642,8 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		if ($with_context) {
 			$result[] = [
 				'post_id' => (int) ($entry['post_id'] ?? 0),
+				'sort_ts' => (int) ($entry['sort_ts'] ?? 0),
+				'sort_seq' => (int) ($entry['sort_seq'] ?? 0),
 				'row' => $row,
 			];
 			continue;
@@ -660,7 +665,6 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	$headers = cmxbu_beleg_export_headers();
 	fputcsv($fh, $headers, ';');
 	$rows = cmxbu_beleg_export_rows_from_ids($ids);
-	$rows = cmxbu_beleg_export_sort_plain_rows_by_paid_date($rows);
 	foreach ($rows as $row) {
 		fputcsv($fh, $row, ';');
 	}

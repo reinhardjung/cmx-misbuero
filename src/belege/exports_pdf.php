@@ -86,10 +86,14 @@ use Dompdf\Options;
 	};
 	foreach ((array) $row_items as $item) {
 		$post_id = 0;
+		$context_sort_ts = 0;
+		$context_sort_seq = 0;
 		$row = [];
 		if (\is_array($item) && \array_key_exists('row', $item)) {
 			$row = (array) ($item['row'] ?? []);
 			$post_id = (int) ($item['post_id'] ?? 0);
+			$context_sort_ts = (int) ($item['sort_ts'] ?? 0);
+			$context_sort_seq = (int) ($item['sort_seq'] ?? 0);
 		} else {
 			$row = (array) $item;
 		}
@@ -126,7 +130,7 @@ use Dompdf\Options;
 		$icon_target = ($is_ausgabe_row && $upload_url !== '') ? $upload_url : '';
 		$icon_title = 'Upload-Dokument anzeigen';
 		$open_content = $icon_target !== ''
-			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[*]</span></a>'
+			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[PDF]</span></a>'
 			: '';
 
 		$belegnummer = (string) ($display_row[1] ?? '');
@@ -136,10 +140,14 @@ use Dompdf\Options;
 		}
 
 		$belegtyp = $ucfirst_utf8((string) ($display_row[3] ?? ''));
+		$paid_ts = $context_sort_ts > 0
+			? $context_sort_ts
+			: $paid_date_to_ts((string) ($display_row[2] ?? ''));
 
 		$render_rows[] = [
 			'row_idx' => \count($render_rows),
-			'paid_ts' => $paid_date_to_ts((string) ($display_row[2] ?? '')),
+			'paid_ts' => $paid_ts,
+			'sort_seq' => $context_sort_seq,
 			'open' => $open_content,
 			'belegnummer' => $belegnummer_content,
 			'bezahlt_am' => \esc_html((string) ($display_row[2] ?? '')),
@@ -154,16 +162,19 @@ use Dompdf\Options;
 			'ausgaben' => \esc_html((string) ($display_row[11] ?? '')),
 		];
 	}
-	if (\count($render_rows) > 1) {
-		\usort($render_rows, static function (array $a, array $b): int {
-			$ats = (int) ($a['paid_ts'] ?? 0);
-			$bts = (int) ($b['paid_ts'] ?? 0);
-			if ($ats !== $bts) return $bts <=> $ats; // newest paid date first
-			$ai = (int) ($a['row_idx'] ?? 0);
-			$bi = (int) ($b['row_idx'] ?? 0);
-			return $ai <=> $bi;
-		});
-	}
+		if (\count($render_rows) > 1) {
+			\usort($render_rows, static function (array $a, array $b): int {
+				$ats = (int) ($a['paid_ts'] ?? 0);
+				$bts = (int) ($b['paid_ts'] ?? 0);
+				if ($ats !== $bts) return $bts <=> $ats; // newest paid date first
+				$aseq = (int) ($a['sort_seq'] ?? 0);
+				$bseq = (int) ($b['sort_seq'] ?? 0);
+				if ($aseq !== $bseq) return $bseq <=> $aseq;
+				$ai = (int) ($a['row_idx'] ?? 0);
+				$bi = (int) ($b['row_idx'] ?? 0);
+				return $ai <=> $bi;
+			});
+		}
 	$sum_einnahmen_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
 		? (string) cmxbu_beleg_export_format_money($sum_einnahmen)
 		: \number_format((float) \round($sum_einnahmen, 2), 2, '.', "'");
