@@ -100,8 +100,9 @@ use Dompdf\Options;
 		$display_row = \array_merge([''], $row);
 		$sum_einnahmen += $to_float($display_row[10] ?? 0);
 		$sum_ausgaben += $to_float($display_row[11] ?? 0);
-		$icon_target = $upload_url !== '' ? $upload_url : $pdf_url;
-		$icon_title = $upload_url !== '' ? 'Upload-Beleg anzeigen' : 'Beleg als PDF anzeigen';
+		$is_ausgabe_row = $to_float($display_row[11] ?? 0) > 0.0;
+		$icon_target = ($is_ausgabe_row && $upload_url !== '') ? $upload_url : '';
+		$icon_title = 'Upload-Dokument anzeigen';
 		$open_content = $icon_target !== ''
 			? '<a class="pdf-icon-link" href="' . \esc_url($icon_target) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($icon_title) . '"><span class="pdf-link-text">[pdf]</span></a>'
 			: '';
@@ -135,6 +136,10 @@ use Dompdf\Options;
 	$sum_ausgaben_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
 		? (string) cmxbu_beleg_export_format_money($sum_ausgaben)
 		: \number_format((float) \round($sum_ausgaben, 2), 2, '.', "'");
+	$sum_diff = (float) $sum_einnahmen - (float) $sum_ausgaben;
+	$sum_diff_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+		? (string) cmx_format_swiss_number($sum_diff, 2)
+		: \number_format((float) \round($sum_diff, 2), 2, '.', "'");
 	ob_start();
 	?>
 <!doctype html>
@@ -183,8 +188,8 @@ use Dompdf\Options;
 
 		<table>
 			<thead>
-				<tr>
-					<th style="text-align:center;width:20px;"></th>
+			<tr>
+				<th style="text-align:center;width:20px;"></th>
 				<th style="width:80px;">Belegnummer</th>
 				<th style="width:60px">Bezahlt am</th>
 				<th style="width:70px;">Belegtyp</th>
@@ -194,12 +199,12 @@ use Dompdf\Options;
 				<th style="text-align:center;width:50px;">Satz</th>
 				<th style="text-align:center;width:50px;">MwSt</th>
 				<th style="text-align:center;width:50px">Vorsteuer</th>
-					<th style="text-align:right;width:90px;">Einnahmen</th>
-					<th style="text-align:right;width:90px;">Ausgaben</th>
-				</tr>
-				<tr>
-					<th colspan="12" class="line-row-cell"></th>
-				</tr>
+				<th style="text-align:right;width:90px;">Einnahmen</th>
+				<th style="text-align:right;width:90px;">Ausgaben</th>
+			</tr>
+			<tr>
+				<th colspan="12" class="line-row-cell"></th>
+			</tr>
 			</thead>
 			<tbody>
 			<?php if (empty($render_rows)): ?>
@@ -231,19 +236,24 @@ use Dompdf\Options;
 				</tr>
 			</tfoot>
 		</table>
+
 	<table>
-		<tr>
-			<td></td>
-			<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
-			<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
-		</tr>
-		<tr>
-			<td></td>
-			<td colspan="2" style="text-align:center;"><strong>xyz</strong></td>
-		</tr>
+	<tr>
+		<td></td>
+		<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
+		<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
+	</tr>
 	</table>
+
+	<table>
+	<tr>
+		<td style="text-align:right;width:200px;border-bottom:3px double #000;"><strong>Gewinn <?= $sum_diff_display; ?></strong></td>
+	</tr>
+	</table>
+
 </body>
 </html>
+
 	<?php
 	$html = (string) \ob_get_clean();
 
