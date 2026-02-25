@@ -5,6 +5,7 @@ include_once 'ac_kontakte.php';
 include_once 'ac_kategorie.php';
 include_once 'ac_konditionen.php';
 include_once 'ac_summe.php';
+include_once 'ac_actions.php';
 
 /**
  * Zentraler Filter-Handler für die Belege-Liste.
