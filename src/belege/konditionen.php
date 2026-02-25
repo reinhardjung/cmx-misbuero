@@ -269,7 +269,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	/* ===== NEU: Bezahlt am (am Ende der Metabox) ===== */
 	echo '<p style="margin:8px 0 0;">';
-	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(heute)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">unbezahlt</a></label>';
+	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(<span id="cmx_bezahlt_today" style="text-decoration:none; cursor:pointer;">heute</span> <span id="cmx_bezahlt_rng" style="text-decoration:none; cursor:pointer;">&nbsp;&nbsp;Beleg</span>)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">unbezahlt</a></label>';
 	echo '<input type="date" name="cmx_beleg_bezahlt_am" id="cmx_beleg_bezahlt_am" style="width:100%;" value="' . \esc_attr($bezahlt) . '">';
 
 	// Inline-JS: sauberes Event-Handling inkl. "heute" vor 10/14/30/Monatsende
@@ -277,13 +277,14 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'var lblR=document.getElementById("cmx_rng_label"),inpR=document.getElementById("cmx_beleg_rng_datum");';
 	echo 'var inpF=document.getElementById("cmx_beleg_faelligkeitsdatum");';
 	echo 'var ltdy=document.getElementById("cmx_f_today"), l10=document.getElementById("cmx_f_10"), l14=document.getElementById("cmx_f_14"), l30=document.getElementById("cmx_f_30"), lend=document.getElementById("cmx_f_end");';
-	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
+	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBToday=document.getElementById("cmx_bezahlt_today"),btnBRng=document.getElementById("cmx_bezahlt_rng"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
 	echo 'var lblL=document.getElementById("cmx_leistungs_label"),selL=document.getElementById("cmx_beleg_leistungsmonat");';
 	echo 'var defaultDueDays=' . (int) $default_due_days . ';';
 
 	// helpers
 	echo 'function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}';
 	echo 'function today(){return fmt(new Date());}';
+	echo 'function isYmd(v){return /^\\d{4}-\\d{2}-\\d{2}$/.test(v||"");}';
 	echo 'function monthEnd(){var d=new Date(),y=d.getFullYear(),m=d.getMonth()+1;var last=new Date(y,m,0);return y+"-"+pad(m)+"-"+pad(last.getDate());}';
 	echo 'function nextMonthVal(){var d=new Date(),m=d.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
@@ -302,7 +303,9 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'if(lend&&inpF){lend.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=monthEnd();});}';
 
 	// Bezahlt am -> heute
-	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){if(e.target&&e.target.id==="cmx_bezahlt_clear"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){var tid=(e.target&&e.target.id)?e.target.id:"";if(tid==="cmx_bezahlt_clear"||tid==="cmx_bezahlt_today"||tid==="cmx_bezahlt_rng"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(btnBToday&&inpB){btnBToday.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(btnBRng&&inpB){btnBRng.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();var rngVal=(inpR&&isYmd(inpR.value))?inpR.value:"";if(rngVal===""){return;}inpB.value=rngVal;inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 	echo 'if(btnBClear&&inpB){btnBClear.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value="";var sel=document.getElementById("cmx_beleg_status");if(sel){sel.value="offen";sel.dispatchEvent(new Event("change",{bubbles:true}));}inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 
 	// Leistungszeitraum -> nächster Monat
