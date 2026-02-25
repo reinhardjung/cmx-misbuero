@@ -15,20 +15,20 @@ function register_scheme(): void {
 }
 
 add_filter('admin_footer_text', __NAMESPACE__ . '\\cmx_admin_footer_text');
-function cmx_admin_footer_text(string $text): string {
+function cmx_admin_footer_text(?string $text): string {
 	return 'Managend by <a href="https://misbuero.ch/" target="_blank" rel="noopener noreferrer">Mis Büro</a>';
 }
 
 add_filter('update_footer', __NAMESPACE__ . '\\cmx_admin_footer_version', 11);
-function cmx_admin_footer_version(string $text): string {
+function cmx_admin_footer_version(?string $text): string {
 	$plugin_file = __DIR__ . '/../cmx-misbuero.php';
 	if (!is_readable($plugin_file)) {
-		return $text;
+		return (string) $text;
 	}
 	$data = get_file_data($plugin_file, ['Version' => 'Version'], 'plugin');
 	$version = isset($data['Version']) ? trim((string) $data['Version']) : '';
 	if ($version === '') {
-		return $text;
+		return (string) $text;
 	}
 	return '<span class="cmx-admin-version" translate="no">Version ' . esc_html($version) . '</span>';
 }

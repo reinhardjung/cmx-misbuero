@@ -143,107 +143,22 @@ function cmxbu_handle_beleg_send(): void {
 	// var_dump($message); exit;
 	// cmx_get_belegfuss($beleg_type);
 	$headers = ['Content-Type: text/html; charset=UTF-8'];
-	$current_user = \wp_get_current_user();
-	$from_email = 'mailer@misbuero.ch';
-	$from_name = 'Mis Büro';
-	$reply_to_email = '';
-	$reply_to_name = '';
-	$reply_to_source = '';
-	$reply_to_post_id = 0;
-	if ($current_user instanceof \WP_User && $current_user->exists()) {
-		$username = \trim((string) $current_user->user_login);
-		if ($username !== '') {
-			$from_name = $username . ' - Mis Büro';
-		}
-	}
-	$me_contact_reply = \function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact_reply_to')
-		? (array) cmxbu_get_me_contact_reply_to($from_email)
-		: [];
-	$me_reply_email = \sanitize_email((string) ($me_contact_reply['email'] ?? ''));
-	if (\is_email($me_reply_email)) {
-		$reply_to_email = $me_reply_email;
-		$reply_to_name = \trim((string) ($me_contact_reply['name'] ?? ''));
-		if ($reply_to_name === '') {
-			$reply_to_name = $from_name;
-		}
-		$reply_to_source = (string) ($me_contact_reply['source'] ?? 'me_contact');
-		$reply_to_post_id = (int) ($me_contact_reply['post_id'] ?? 0);
-	}
-
-	$safe_from_name = \trim((string) \preg_replace('/[\r\n]+/', ' ', $from_name));
-	$safe_reply_to_name = \trim((string) \preg_replace('/[\r\n]+/', ' ', $reply_to_name));
-	if ($safe_from_name !== '') {
-		$headers[] = 'From: ' . $safe_from_name . ' <' . $from_email . '>';
-	} else {
-		$headers[] = 'From: ' . $from_email;
-	}
-	if ($reply_to_email !== '') {
-		if ($safe_reply_to_name !== '') {
-			$headers[] = 'Reply-To: ' . $safe_reply_to_name . ' <' . $reply_to_email . '>';
-		} else {
-			$headers[] = 'Reply-To: ' . $reply_to_email;
-		}
-	}
-
-	$force_mailer = static function ($phpmailer) use ($from_email, $safe_from_name, $reply_to_email, $safe_reply_to_name): void {
-		if (!$phpmailer instanceof \PHPMailer\PHPMailer\PHPMailer) {
-			return;
-		}
-
-		try {
-			$phpmailer->setFrom($from_email, $safe_from_name, false);
-		} catch (\Throwable $e) {
-			$phpmailer->From = $from_email;
-			if ($safe_from_name !== '') {
-				$phpmailer->FromName = $safe_from_name;
-			}
-		}
-
-		$phpmailer->Sender = $from_email;
-		$phpmailer->clearReplyTos();
-		if ($reply_to_email !== '') {
-			$phpmailer->addReplyTo($reply_to_email, $safe_reply_to_name);
-		}
-	};
-
-	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-		cmxbu_log('MAIL: sender', [
-			'post_id' => $post_id,
-			'from_email' => $from_email,
-			'from_name' => $safe_from_name,
-			'reply_to_email' => $reply_to_email,
-			'reply_to_name' => $safe_reply_to_name,
-			'reply_to_source' => $reply_to_source,
-			'reply_to_post_id' => $reply_to_post_id,
-		]);
-	}
 	$message = cmxbu_prepare_belegmail_html($message);
-
-	$sent = false;
-	\add_action('phpmailer_init', $force_mailer, PHP_INT_MAX);
-	$GLOBALS['cmx_mail_context'] = 'beleg_send';
+	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
+	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+	$GLOBALS['cmx_force_current_user_mail_sender'] = true;
 	try {
 		$sent = \wp_mail($to, $subject, $message, $headers);
 	} finally {
-		\remove_action('phpmailer_init', $force_mailer, PHP_INT_MAX);
-		if (($GLOBALS['cmx_mail_context'] ?? '') === 'beleg_send') {
-			unset($GLOBALS['cmx_mail_context']);
+		if ($had_sender_override) {
+			$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
+		} else {
+			unset($GLOBALS['cmx_force_current_user_mail_sender']);
 		}
 	}
 
 	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-		cmxbu_log('MAIL: result', [
-			'post_id' => $post_id,
-			'sent' => (bool) $sent,
-			'to' => (string) $to,
-			'subject' => (string) $subject,
-			'from_email' => $from_email,
-			'from_name' => $safe_from_name,
-			'reply_to_email' => $reply_to_email,
-			'reply_to_name' => $safe_reply_to_name,
-			'reply_to_source' => $reply_to_source,
-			'reply_to_post_id' => $reply_to_post_id,
-		]);
+		cmxbu_log('MAIL: result', ['post_id' => $post_id, 'sent' => (bool) $sent, 'to' => (string) $to, 'subject' => (string) $subject]);
 	}
 
 	if (!$sent) {
@@ -353,6 +268,39 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {
 			}
 		}
 		return $existing;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
+	function cmxbu_get_contact_primary_email(int $post_id): string {
+		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+		if (\is_array($bundle)) {
+			$candidate = \sanitize_email((string) ($bundle['email'][1]['value'] ?? ''));
+			if (\is_email($candidate)) {
+				return $candidate;
+			}
+		}
+
+		$direct = \sanitize_email((string) \get_post_meta($post_id, '_cmx_email_1', true));
+		if (\is_email($direct)) {
+			return $direct;
+		}
+
+		$fallback_keys = (array) \apply_filters('cmx_kontakte_email1_meta_keys', [
+			'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
+		]);
+		foreach ($fallback_keys as $key) {
+			$key = \trim((string) $key);
+			if ($key === '') {
+				continue;
+			}
+			$candidate = \sanitize_email((string) \get_post_meta($post_id, $key, true));
+			if (\is_email($candidate)) {
+				return $candidate;
+			}
+		}
+
+		return '';
 	}
 }
 
@@ -475,6 +423,18 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact_reply_to')) {
 		$from_email = \sanitize_email($from_email);
 		foreach ($posts as $post) {
 			$post_id = (int) $post->ID;
+			$primary_email = \function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')
+				? \sanitize_email(cmxbu_get_contact_primary_email($post_id))
+				: '';
+			if (\is_email($primary_email) && ($from_email === '' || \strcasecmp($primary_email, $from_email) !== 0)) {
+				return [
+					'email' => $primary_email,
+					'name' => \trim((string) $post->post_title),
+					'post_id' => $post_id,
+					'source' => 'das_bin_ich_primary_email',
+				];
+			}
+
 			$emails = \function_exists(__NAMESPACE__ . '\\cmxbu_collect_contact_reply_emails')
 				? cmxbu_collect_contact_reply_emails($post_id)
 				: [];

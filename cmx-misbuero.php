@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 2.20.238
+ * Version: 2.25.2301
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -125,50 +125,208 @@ function cmx_check_and_create_subdomain_admin() {
 	$sub = $parts[0]; // "kunde"
 
 
+	$smtp_mail_settings = static function (): array {
+		$host = \defined('CMX_SMTP_HOST') ? \trim((string) CMX_SMTP_HOST) : '';
+		$user = \defined('CMX_SMTP_USER') ? \trim((string) CMX_SMTP_USER) : '';
+		$pass = \defined('CMX_SMTP_PASS') ? (string) CMX_SMTP_PASS : '';
+		$port = \defined('CMX_SMTP_PORT') ? (int) CMX_SMTP_PORT : 587;
+		if ($port <= 0) {
+			$port = 587;
+		}
+		$secure = \defined('CMX_SMTP_SECURE') ? \strtolower(\trim((string) CMX_SMTP_SECURE)) : 'tls';
+		if (!\in_array($secure, ['tls', 'ssl', ''], true)) {
+			$secure = 'tls';
+		}
 
-	$resolve_mail_sender = static function () use ($sub): array {
+		$from_email = \defined('CMX_MAIL_FROM_EMAIL') ? \sanitize_email((string) CMX_MAIL_FROM_EMAIL) : '';
+		if (!\is_email($from_email)) {
+			$from_email = '';
+		}
+		$from_name = \defined('CMX_MAIL_FROM_NAME') ? \trim((string) CMX_MAIL_FROM_NAME) : '';
+
+		return [
+			'host' => $host,
+			'user' => $user,
+			'pass' => $pass,
+			'port' => $port,
+			'secure' => $secure,
+			'from_email' => $from_email,
+			'from_name' => $from_name,
+			'enabled' => ($host !== '' && $user !== '' && $pass !== ''),
+		];
+	};
+
+
+	$resolve_mail_sender = static function () use ($sub, $smtp_mail_settings): array {
 		$current_user = wp_get_current_user();
+		$smtp = $smtp_mail_settings();
 
-		$email = '';
-		$name  = '';
-
+		$current_user_email = '';
+		$current_user_name = '';
+		$current_user_login = '';
+		$me_contact_email = '';
+		$me_contact_name = '';
+		$site_host = (string) \wp_parse_url(\home_url('/'), \PHP_URL_HOST);
+		$site_host = \strtolower((string) \preg_replace('~^www\.~i', '', \trim($site_host)));
+		$site_labels = \array_values(\array_filter(\explode('.', $site_host), static function ($part): bool {
+			return $part !== '';
+		}));
+		$site_root_domain = $site_host;
+		if (\count($site_labels) >= 2) {
+			$site_root_domain = $site_labels[\count($site_labels) - 2] . '.' . $site_labels[\count($site_labels) - 1];
+		}
 		if ($current_user instanceof \WP_User && $current_user->exists()) {
 			$user_email = sanitize_email((string) $current_user->user_email);
 			if (is_email($user_email)) {
-				$email = $user_email;
+				$current_user_email = $user_email;
 			}
-
-			$name = trim((string) $current_user->display_name);
-			if ($name === '') {
-				$full = trim((string) $current_user->user_firstname . ' ' . (string) $current_user->user_lastname);
-				if ($full !== '') {
-					$name = $full;
+			$current_user_login = \sanitize_user((string) $current_user->user_login, true);
+			$current_user_login = \strtolower(\trim($current_user_login));
+			$current_user_name = \trim((string) $current_user->display_name);
+			if ($current_user_name === '') {
+				$full_name = \trim((string) $current_user->user_firstname . ' ' . (string) $current_user->user_lastname);
+				if ($full_name !== '') {
+					$current_user_name = $full_name;
 				}
 			}
-			if ($name === '') {
-				$name = (string) $current_user->user_login;
+			if ($current_user_name === '') {
+				$current_user_name = \trim((string) $current_user->user_login);
 			}
 		}
 
-		if ($email === '') {
-			$fallback = sanitize_email($sub . '@misbuero.ch');
+		$base_from_email = '';
+		if ($smtp['from_email'] !== '') {
+			$base_from_email = (string) $smtp['from_email'];
+		}
+
+		if ($base_from_email === '' && !empty($smtp['enabled'])) {
+			$smtp_user_email = sanitize_email((string) ($smtp['user'] ?? ''));
+			if (is_email($smtp_user_email)) {
+				$base_from_email = $smtp_user_email;
+			}
+		}
+
+		if ($base_from_email === '') {
+			$fallback_domain = $site_root_domain !== '' ? $site_root_domain : $site_host;
+			$fallback = $fallback_domain !== '' ? sanitize_email('no-reply@' . $fallback_domain) : '';
 			if (is_email($fallback)) {
-				$email = $fallback;
+				$base_from_email = $fallback;
 			} else {
 				$admin = sanitize_email((string) get_option('admin_email'));
 				if (is_email($admin)) {
-					$email = $admin;
+					$base_from_email = $admin;
 				}
+			}
+		}
+
+		if ($base_from_email === '' && $current_user_email !== '') {
+			$base_from_email = $current_user_email;
+		}
+
+		$name = '';
+		if ($smtp['from_name'] !== '') {
+			$name = (string) $smtp['from_name'];
+		}
+
+		if ($name === '') {
+			$site_name = trim((string) get_option('blogname'));
+			if ($site_name === '') {
+				$site_name = trim((string) get_bloginfo('name'));
+			}
+			if ($site_name !== '') {
+				$customer_from_site = (string) preg_replace('/^\s*mis\s*b(?:u|ue|ü)ro\s*[-–:]\s*/iu', '', $site_name);
+				$customer_from_site = trim((string) preg_replace('/\s+/', ' ', (string) $customer_from_site));
+				if ($customer_from_site === '') {
+					$customer_from_site = $site_name;
+				}
+				$name = 'Mis Büro - ' . $customer_from_site;
 			}
 		}
 
 		if ($name === '') {
-			$name = 'Mis Buero - ' . ucfirst($sub);
+			$customer = trim((string) preg_replace('/[-_]+/', ' ', (string) $sub));
+			$customer = trim((string) preg_replace('/\s+/', ' ', (string) $customer));
+			if ($customer !== '' && strcasecmp($customer, 'checkCheck123') !== 0) {
+				$name = 'Mis Büro - ' . $customer;
+			} else {
+				$name = 'Mis Büro - CMX';
+			}
 		}
 
+		$force_current_user_sender = !empty($GLOBALS['cmx_force_current_user_mail_sender']);
+		if ($force_current_user_sender && \function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact_reply_to')) {
+			$me_contact = (array) cmxbu_get_me_contact_reply_to('');
+			$candidate_email = \sanitize_email((string) ($me_contact['email'] ?? ''));
+			if (\is_email($candidate_email)) {
+				$me_contact_email = $candidate_email;
+				$me_contact_name = \trim((string) ($me_contact['name'] ?? ''));
+			}
+		}
+		$from_email = $base_from_email;
+		$from_domain = \strtolower((string) \substr((string) \strrchr((string) $base_from_email, '@'), 1));
+		$username_sender_email = '';
+		if ($current_user_login !== '' && $site_root_domain !== '') {
+			$username_sender_email = \sanitize_email($current_user_login . '@' . $site_root_domain);
+		}
+		$force_username_from = ($force_current_user_sender && \is_email($username_sender_email));
+		$preferred_sender_email = $current_user_email;
+		if ($force_username_from) {
+			$preferred_sender_email = $username_sender_email;
+		}
+		$user_domain = \strtolower((string) \substr((string) \strrchr((string) $preferred_sender_email, '@'), 1));
+		$from_labels = \array_values(\array_filter(\explode('.', $from_domain), static function ($part): bool {
+			return $part !== '';
+		}));
+		$user_labels = \array_values(\array_filter(\explode('.', $user_domain), static function ($part): bool {
+			return $part !== '';
+		}));
+		$from_root_domain = (\count($from_labels) >= 2)
+			? ($from_labels[\count($from_labels) - 2] . '.' . $from_labels[\count($from_labels) - 1])
+			: $from_domain;
+		$user_root_domain = (\count($user_labels) >= 2)
+			? ($user_labels[\count($user_labels) - 2] . '.' . $user_labels[\count($user_labels) - 1])
+			: $user_domain;
+		$can_use_user_email_as_from = (
+			$preferred_sender_email !== ''
+				&& (
+					$force_username_from
+					||
+					($from_domain !== '' && $user_domain !== '' && $from_domain === $user_domain)
+					|| ($from_root_domain !== '' && $user_root_domain !== '' && $from_root_domain === $user_root_domain)
+				)
+		);
+		if ($can_use_user_email_as_from) {
+			$from_email = $preferred_sender_email;
+		} elseif ($from_email === '' && $preferred_sender_email !== '') {
+			// Letzter Fallback, falls keine Basis-Adresse ermittelt werden konnte.
+			$from_email = $preferred_sender_email;
+		}
+
+		if (!is_email($from_email)) {
+			$from_email = $base_from_email;
+		}
+		$reply_to_email = $from_email;
+		$reply_to_name = $name;
+		if ($force_current_user_sender) {
+			// Für Belegversand: "Das bin ich" primär, sonst aktueller User.
+			$preferred_reply_email = $me_contact_email !== '' ? $me_contact_email : $current_user_email;
+			$preferred_reply_name = $me_contact_name !== '' ? $me_contact_name : $current_user_name;
+			if (\is_email($preferred_reply_email)) {
+				$reply_to_email = $preferred_reply_email;
+				if ($preferred_reply_name !== '') {
+					$reply_to_name = $preferred_reply_name;
+				}
+			}
+		}
+
+		$envelope_email = is_email($base_from_email) ? $base_from_email : $from_email;
+
 		return [
-			'email' => (string) $email,
+			'email' => (string) $from_email,
 			'name'  => (string) $name,
+			'reply_to_email' => (string) $reply_to_email,
+			'reply_to_name' => (string) $reply_to_name,
+			'envelope_email' => (string) $envelope_email,
 		];
 	};
 
@@ -209,18 +367,29 @@ function cmx_check_and_create_subdomain_admin() {
 			}
 
 			$sender = $resolve_mail_sender();
-			if (!empty($sender['email'])) {
+			$from_email = sanitize_email((string) ($sender['email'] ?? ''));
+			$reply_to_email = sanitize_email((string) ($sender['reply_to_email'] ?? ''));
+			$from_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+			$reply_to_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['reply_to_name'] ?? '')));
+
+			if (is_email($from_email)) {
 				$headers = array_values(array_filter((array) $headers, static function ($h): bool {
 					$line = (string) $h;
 					return stripos($line, 'Reply-To:') !== 0 && stripos($line, 'From:') !== 0;
 				}));
-				$safe_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) $sender['name']));
-				if ($safe_name !== '') {
-					$headers[] = 'From: ' . $safe_name . ' <' . $sender['email'] . '>';
-					$headers[] = 'Reply-To: ' . $safe_name . ' <' . $sender['email'] . '>';
+
+				if ($from_name !== '') {
+					$headers[] = 'From: ' . $from_name . ' <' . $from_email . '>';
 				} else {
-					$headers[] = 'From: ' . $sender['email'];
-					$headers[] = 'Reply-To: ' . $sender['email'];
+					$headers[] = 'From: ' . $from_email;
+				}
+
+				if (is_email($reply_to_email)) {
+					if ($reply_to_name !== '') {
+						$headers[] = 'Reply-To: ' . $reply_to_name . ' <' . $reply_to_email . '>';
+					} else {
+						$headers[] = 'Reply-To: ' . $reply_to_email;
+					}
 				}
 			}
 
@@ -230,7 +399,7 @@ function cmx_check_and_create_subdomain_admin() {
 	}, PHP_INT_MAX);
 
 	// Letzte Instanz: PHPMailer selbst überschreiben (falls SMTP-Plugins vorher From setzen)
-	add_action('phpmailer_init', function($phpmailer) use ($resolve_mail_sender, $is_beleg_send_context): void {
+	add_action('phpmailer_init', function($phpmailer) use ($resolve_mail_sender, $smtp_mail_settings, $is_beleg_send_context): void {
 		if ($is_beleg_send_context()) {
 			return;
 		}
@@ -238,23 +407,43 @@ function cmx_check_and_create_subdomain_admin() {
 			return;
 		}
 		$sender = $resolve_mail_sender();
-		$email = sanitize_email((string) ($sender['email'] ?? ''));
-		if (!is_email($email)) {
+		$from_email = sanitize_email((string) ($sender['email'] ?? ''));
+		if (!is_email($from_email)) {
 			return;
 		}
-		$name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+		$from_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+		$reply_to_email = sanitize_email((string) ($sender['reply_to_email'] ?? ''));
+		$reply_to_name = trim((string) preg_replace('/[\r\n]+/', ' ', (string) ($sender['reply_to_name'] ?? '')));
+		$envelope_email = sanitize_email((string) ($sender['envelope_email'] ?? ''));
+		if (!is_email($envelope_email)) {
+			$envelope_email = $from_email;
+		}
+		$smtp = $smtp_mail_settings();
+
+		if (!empty($smtp['enabled'])) {
+			$phpmailer->isSMTP();
+			$phpmailer->Host = (string) $smtp['host'];
+			$phpmailer->Port = (int) $smtp['port'];
+			$phpmailer->SMTPAuth = true;
+			$phpmailer->Username = (string) $smtp['user'];
+			$phpmailer->Password = (string) $smtp['pass'];
+			$phpmailer->SMTPAutoTLS = true;
+			$phpmailer->SMTPSecure = (string) $smtp['secure'];
+		}
 
 		try {
-			$phpmailer->setFrom($email, $name, false);
+			$phpmailer->setFrom($from_email, $from_name, false);
 		} catch (\Throwable $e) {
-			$phpmailer->From = $email;
-			if ($name !== '') {
-				$phpmailer->FromName = $name;
+			$phpmailer->From = $from_email;
+			if ($from_name !== '') {
+				$phpmailer->FromName = $from_name;
 			}
 		}
-		$phpmailer->Sender = $email;
+		$phpmailer->Sender = $envelope_email;
 		$phpmailer->clearReplyTos();
-		$phpmailer->addReplyTo($email, $name);
+		if (is_email($reply_to_email)) {
+			$phpmailer->addReplyTo($reply_to_email, $reply_to_name);
+		}
 	}, PHP_INT_MAX);
 
 
