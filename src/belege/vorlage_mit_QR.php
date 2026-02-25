@@ -131,7 +131,7 @@ $footer_has_tags = $footer_block !== wp_strip_all_tags($footer_block);
 $footer_html = '';
 if ($footer_block !== '') {
 	$footer_html = $footer_has_tags
-		? wp_kses($footer_block, ['br' => [], 'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []], 'strong' => [], 'em' => [], 'b' => [], 'i' => []])
+		? wp_kses($footer_block, ['br' => [], 'p' => [], 'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []], 'strong' => [], 'em' => [], 'b' => [], 'i' => []])
 		: nl2br(esc_html($footer_block));
 }
 
