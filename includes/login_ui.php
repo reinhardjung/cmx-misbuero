@@ -19,6 +19,8 @@ function cmx_login_layout_enqueue() {
     $login_color = CMX_LOGIN_COLOR;
     $login_focus_color = CMX_LOGIN_FOCUS_COLOR;
     $login_logo_url = CMX_LOGIN_LOGO_URL;
+    $login_icon_see_url = \esc_url(\plugins_url('../assets/see.png', __FILE__));
+    $login_icon_hide_url = \esc_url(\plugins_url('../assets/hide.png', __FILE__));
 
     $css = <<<CSS
 .language-switcher,
@@ -81,6 +83,56 @@ function cmx_login_layout_enqueue() {
 #login form p.submit #wp-submit:hover {
     background-color: {$login_focus_color} !important;
     border-color: {$login_focus_color} !important;
+}
+
+#login form .wp-hide-pw .dashicons {
+    display: block;
+    width: 42px;
+    height: 28px;
+    min-width: 42px;
+    min-height: 28px;
+    margin: 0;
+    line-height: 0;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+}
+
+#login form .wp-pwd input[type=password],
+#login form .wp-pwd input[type=text] {
+    padding-right: 50px !important;
+}
+
+#login form .wp-pwd .button.wp-hide-pw {
+    position: absolute;
+    right: -5px !important;
+    top: 50% !important;
+    transform: translateY(-75%) !important;
+    width: 54px !important;
+    min-width: 54px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#login form .wp-hide-pw .dashicons:before {
+    content: "" !important;
+    display: none !important;
+}
+
+#login form .wp-hide-pw .dashicons-visibility {
+    background-image: url('{$login_icon_see_url}');
+}
+
+#login form .wp-hide-pw .dashicons-hidden {
+    background-image: url('{$login_icon_hide_url}');
 }
 CSS;
 
