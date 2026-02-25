@@ -10,6 +10,20 @@ const CMX_SETTINGS_MAIN  = 'cmx_einstellungen';
 const CMX_SETTINGS_BELEG = 'cmx_belege';
 
 /* ------------------------------------------------------------
+ * EDITOR DEFAULT: AUF EINSTELLUNGSSEITEN IMMER VISUELL
+ * ------------------------------------------------------------ */
+\add_filter('wp_default_editor', function (string $default): string {
+	if (!\is_admin()) {
+		return $default;
+	}
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page === CMX_SETTINGS_SLUG) {
+		return 'tinymce';
+	}
+	return $default;
+}, 20);
+
+/* ------------------------------------------------------------
  * INCLUDE FILES – jetzt korrekt, da Konstanten bereis existieren
  * ------------------------------------------------------------ */
 require_once 'allgemein.php';

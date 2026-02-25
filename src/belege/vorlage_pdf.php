@@ -156,12 +156,41 @@ function cmx_get_branding_logo(): string
 
 
 function cmx_get_belegfuss(string $key): string {
-	$key = 'belegfuss_' . strtolower(trim($key));
-	$options = get_option('cmx_belege', []); // var_dump($options['belegfuss_rechnung']); exit;
+	$slug = strtolower(trim($key));
+	$options = (array) get_option('cmx_belege', []);
 
-	if (isset($options[$key]) && is_string($options[$key])) {
-		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
+	$read = static function (array $opts, string $option_key): string {
+		if (!isset($opts[$option_key]) || !is_string($opts[$option_key])) {
+			return '';
+		}
+		return trim((string) $opts[$option_key]);
+	};
+
+	$value = $read($options, 'belegfuss_' . $slug);
+	if ($value !== '') {
+		return $value;
 	}
+
+	$fallback_map = [
+		'rechnungen' => 'rechnung',
+		'quittung' => 'rechnung',
+		'quittungen' => 'rechnung',
+		'lieferantenrechnung' => 'rechnung',
+		'lieferantenrechnungen' => 'rechnung',
+		'lieferantenquittung' => 'rechnung',
+		'lieferantenquittungen' => 'rechnung',
+		'offerten' => 'offerte',
+		'lieferscheine' => 'lieferschein',
+		'gutschriften' => 'gutschrift',
+	];
+	$fallback_slug = (string) ($fallback_map[$slug] ?? 'rechnung');
+	if ($fallback_slug !== '' && $fallback_slug !== $slug) {
+		$value = $read($options, 'belegfuss_' . $fallback_slug);
+		if ($value !== '') {
+			return $value;
+		}
+	}
+
 	return '';
 }
 

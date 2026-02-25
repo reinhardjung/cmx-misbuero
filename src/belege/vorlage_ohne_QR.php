@@ -126,17 +126,32 @@ $footer_key = 'belegfuss_' . $beleg_type;
 $footer_block = function_exists(__NAMESPACE__ . '\\cmx_get_belegfuss')
 	? (string) cmx_get_belegfuss($beleg_type)
 	: (string)($opts_belege[$footer_key] ?? '');
-if (!$is_ausgang) {
-	$footer_block = '';
-}
 $footer_block = str_replace(["\r\n", "\r"], "\n", $footer_block);
 $footer_has_br = stripos($footer_block, '<br') !== false;
 $footer_has_tags = $footer_block !== wp_strip_all_tags($footer_block);
+$footer_allowed_html = function_exists(__NAMESPACE__ . '\\cmxbu_kses_allow')
+	? (array) cmxbu_kses_allow()
+	: [
+		'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []],
+		'br' => [], 'em' => [], 'i' => [], 'strong' => [], 'b' => [], 'u' => [],
+		'p' => ['style' => []], 'ul' => [], 'ol' => [], 'li' => [], 'code' => [], 'pre' => [],
+		'span' => ['style' => []],
+	];
 $footer_html = '';
 if ($footer_block !== '') {
-	$footer_html = $footer_has_tags
-		? wp_kses($footer_block, ['br' => [], 'p' => [], 'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []], 'strong' => [], 'em' => [], 'b' => [], 'i' => []])
-		: nl2br(esc_html($footer_block));
+	if ($footer_has_tags) {
+		$footer_html = wp_kses($footer_block, $footer_allowed_html);
+		$has_explicit_breaks = (
+			stripos($footer_html, '<br') !== false
+			|| stripos($footer_html, '<p') !== false
+			|| stripos($footer_html, '<li') !== false
+		);
+		if (!$has_explicit_breaks && strpos($footer_html, "\n") !== false) {
+			$footer_html = nl2br($footer_html);
+		}
+	} else {
+		$footer_html = nl2br(esc_html($footer_block));
+	}
 }
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
