@@ -183,20 +183,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		$zeit  = \esc_attr((string) ($row['zeit'] ?? ''));
 		$text  = \esc_textarea((string) ($row['text'] ?? ''));
 
-		echo '<div class="cmx-intern-notiz-row" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;">';
-		echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:160px;">';
-		echo '<span style="display:flex;align-items:center;gap:6px;">Datum <a href="#" class="cmx-notiz-heute" style="color:#d63638;text-decoration:none;">heute</a></span>';
+		echo '<div class="cmx-intern-notiz-row">';
+		echo '<div class="cmx-intern-notiz-main">';
+		echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="4" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
+		echo '</div>';
+
+		echo '<div class="cmx-intern-notiz-side">';
+		echo '<label class="cmx-intern-notiz-label">';
+		echo '<span class="cmx-intern-notiz-label-inline">Datum <a href="#" class="cmx-notiz-heute">heute</a></span>';
 		echo '<input type="date" name="cmx_intern_notizen_rows[' . $name_index . '][datum]" value="' . $datum . '" />';
 		echo '</label>';
 
-		echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:130px;">';
-		echo '<span style="display:flex;align-items:center;gap:6px;">Uhrzeit <a href="#" class="cmx-notiz-jetzt" style="color:#d63638;text-decoration:none;">jetzt</a></span>';
+		echo '<label class="cmx-intern-notiz-label">';
+		echo '<span class="cmx-intern-notiz-label-inline">Uhrzeit <a href="#" class="cmx-notiz-jetzt">jetzt</a></span>';
 		echo '<input type="time" name="cmx_intern_notizen_rows[' . $name_index . '][zeit]" value="' . $zeit . '" />';
 		echo '</label>';
-
-		echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
-		echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 auto;"><span>Notiz</span><textarea rows="3" style="width:100%;" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
-		echo '<button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen" style="margin-top:22px;color:#a00;font-size:18px;line-height:1;">x</button>';
+		echo '<p class="cmx-intern-notiz-remove-wrap"><button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen">x</button></p>';
 		echo '</div>';
 		echo '</div>';
 	}
@@ -216,12 +218,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 
 		\wp_nonce_field('cmx_intern_notizen_save', 'cmx_intern_notizen_nonce');
 		echo '<p style="margin:0 0 8px;">' . \esc_html__('Nur intern sichtbar. Zur Historie etc.', 'cmx') . '</p>';
-		echo '<div id="cmx-intern-notizen-list" style="display:flex;flex-direction:column;gap:8px;">';
+		echo '<style>';
+		echo '#cmx-intern-notizen-list{display:flex;flex-direction:column;gap:8px;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-main{min-width:0;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label{display:flex;flex-direction:column;gap:4px;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label-inline{display:flex;align-items:center;gap:6px;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-side{display:flex;flex-direction:column;gap:8px;}';
+		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:120px;}';
+		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-remove-wrap{margin:0;text-align:right;}';
+		echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}';
+		echo '#cmx-intern-notizen-actions{display:flex;justify-content:flex-end;margin-top:10px;}';
+		echo '#cmx-intern-notizen-actions .button{min-width:220px;text-align:center;}';
+		echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-actions{justify-content:flex-start;}#cmx-intern-notizen-actions .button{min-width:0;}}';
+		echo '</style>';
+		echo '<div id="cmx-intern-notizen-list">';
 		foreach ($rows as $idx => $row) {
 			cmx_notizen_render_row((int) $idx, $row, false);
 		}
 		echo '</div>';
-		echo '<p style="margin-top:10px;"><button type="button" class="button" id="cmx-intern-notizen-add">+ Zeile hinzufuegen</button></p>';
+		echo '<div id="cmx-intern-notizen-actions"><button type="button" class="button" id="cmx-intern-notizen-add">' . \esc_html__('Notiz hinzufügen', 'cmx') . '</button></div>';
 		?>
 		<script type="text/template" id="cmx-intern-notizen-template">
 			<?php cmx_notizen_render_row('__INDEX__', ['datum' => '', 'zeit' => '', 'text' => ''], true); ?>
