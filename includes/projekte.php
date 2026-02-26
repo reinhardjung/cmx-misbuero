@@ -372,16 +372,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_projekt_zuordnungen_metabox'
 		];
 
 		if (!$style_printed) {
-			$style_printed = true;
-			echo '<style>
-				.cmx-zuordnungen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
-				.cmx-zuordnungen-card{border:1px solid #dcdcde;border-radius:4px;background:#fff;padding:10px;}
-				.cmx-zuordnungen-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 0;font-weight:600;}
-				.cmx-zuordnungen-count{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 6px;border-radius:999px;background:#f0f0f1;font-size:12px;text-align:center;}
-				.cmx-zuordnungen-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;}
-				.cmx-zuordnungen-empty{margin:0;color:#646970;font-style:italic;}
-			</style>';
-		}
+				$style_printed = true;
+					echo '<style>
+						.cmx-zuordnungen-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+						.cmx-zuordnungen-card{border:1px solid #dcdcde;border-radius:4px;background:#fff;padding:10px;}
+						.cmx-zuordnungen-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 0;font-weight:600;}
+						.cmx-zuordnungen-count{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 6px;border-radius:999px;background:#f0f0f1;font-size:12px;text-align:center;}
+						.cmx-zuordnungen-list{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;}
+						.cmx-zuordnungen-empty{margin:0;color:#646970;font-style:italic;}
+						@media (max-width:1200px){.cmx-zuordnungen-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+						@media (max-width:900px){.cmx-zuordnungen-grid{grid-template-columns:1fr;}.cmx-zuordnungen-list{grid-template-columns:1fr;}}
+					</style>';
+			}
 
 		echo '<div class="cmx-zuordnungen-grid">';
 		foreach ($modules as $module_type => $label) {
