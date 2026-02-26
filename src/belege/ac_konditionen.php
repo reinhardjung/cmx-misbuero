@@ -30,6 +30,36 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_taxonomy')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_taxonomy')) {
+	function cmx_beleg_zahlungsart_taxonomy(): string {
+		$candidates = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')) {
+			$resolved = (string) cmx_beleg_zahlungsart_tax();
+			if ($resolved !== '') {
+				$candidates[] = $resolved;
+			}
+		}
+		if (\defined(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSART')) {
+			$candidates[] = (string) \constant(__NAMESPACE__ . '\\TAX_BELEGE_ZAHLUNGSART');
+		}
+		$candidates[] = 'belege_zahlungsarten';
+		$candidates[] = 'belege_zahlungsart';
+		$candidates[] = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('belege', 'zahlungsarten')
+			: 'belege_zahlungsarten';
+		$candidates[] = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('belege', 'zahlungsart')
+			: 'belege_zahlungsart';
+
+		foreach (\array_unique(\array_filter($candidates)) as $tax) {
+			if (\taxonomy_exists($tax)) {
+				return (string) $tax;
+			}
+		}
+		return '';
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_first_word')) {
 	function cmx_beleg_admin_first_word(string $label): string {
 		$label = \trim($label);
@@ -154,6 +184,9 @@ add_filter('query_vars', function(array $vars){
 	if (!in_array('cmx_zahlungsgrundfilter', $vars, true)) {
 		$vars[] = 'cmx_zahlungsgrundfilter';
 	}
+	if (!in_array('cmx_zahlungsartfilter', $vars, true)) {
+		$vars[] = 'cmx_zahlungsartfilter';
+	}
 	return $vars;
 });
 
@@ -245,6 +278,7 @@ $add_columns = function(array $columns){
 		'beleg_datum'   => __('Datum des Beleges', 'cmx'),
 		'beleg_faellig' => __('Fällig am', 'cmx'),
 		'beleg_bezahlt' => __('Bezahlt am', 'cmx'),
+		'beleg_zahlungsart' => __('Zahlungsart', 'cmx'),
 		'beleg_zahlungsgrund' => __('Zahlungsgrund', 'cmx'),
 	];
 	if ($show_category_col) {
@@ -306,32 +340,59 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			}
 			echo \implode(', ', $links);
 			break;
-		case 'beleg_datum':
-			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_DATUM, true) );
-			break;
-		case 'beleg_faellig':
-			cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_FAELLIG, true) );
-			break;
-	case 'beleg_bezahlt':
-		$val = get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true);
-		if ($val) {
-			cmx_echo_date($val);
-		} else {
-			// Button zum Setzen auf heute – nur für abrechenbare Kategorien
-			$show_btn = false;
-			$type_slug = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_slug')
-				? (string) cmx_beleg_admin_kategorie_slug($post_id)
-				: '';
-			$allowed = ['rechnung','lieferantenrechnung','gutschrift','quittung','quittungen'];
-			if ($type_slug && in_array(strtolower($type_slug), $allowed, true)) {
-				$show_btn = true;
-			}
+			case 'beleg_datum':
+				cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_DATUM, true) );
+				break;
+			case 'beleg_faellig':
+				cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_FAELLIG, true) );
+				break;
+			case 'beleg_bezahlt':
+				$val = get_post_meta($post_id, CMX_BELEG_META_BEZAHLT, true);
+				if ($val) {
+					cmx_echo_date($val);
+				} else {
+					// Button zum Setzen auf heute – nur für abrechenbare Kategorien
+					$show_btn = false;
+					$type_slug = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_slug')
+						? (string) cmx_beleg_admin_kategorie_slug($post_id)
+						: '';
+					$allowed = ['rechnung','lieferantenrechnung','gutschrift','quittung','quittungen'];
+					if ($type_slug && in_array(strtolower($type_slug), $allowed, true)) {
+						$show_btn = true;
+					}
 
-			if ($show_btn) {
-				echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlen</a>';
-			}
-		}
-		break;
+					if ($show_btn) {
+						echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlen</a>';
+					}
+				}
+				break;
+			case 'beleg_zahlungsart':
+				$tax = cmx_beleg_zahlungsart_taxonomy();
+				if ($tax === '') {
+					echo '';
+					break;
+				}
+				$terms = \wp_get_post_terms($post_id, $tax, ['orderby' => 'name', 'order' => 'ASC']);
+				if (\is_wp_error($terms) || empty($terms)) {
+					echo '';
+					break;
+				}
+				$links = [];
+				foreach ($terms as $term) {
+					if (!($term instanceof \WP_Term)) {
+						continue;
+					}
+					$url = \add_query_arg(
+						[
+							'post_type' => CMX_PT_BELEGE,
+							'cmx_zahlungsartfilter' => (string) $term->slug,
+						],
+						\admin_url('edit.php')
+					);
+					$links[] = '<a href="' . \esc_url($url) . '">' . \esc_html((string) $term->name) . '</a>';
+				}
+				echo \implode(', ', $links);
+				break;
 			case 'beleg_zahlungsgrund':
 				$tax = cmx_beleg_zahlungsgrund_taxonomy();
 				if ($tax === '') {
@@ -391,7 +452,6 @@ add_filter('manage_edit-' . CMX_PT_BELEGE . '_sortable_columns', function(array 
 	$columns['beleg_bezahlt'] = 'beleg_bezahlt';
 	$columns['cmx_belege_kategorie'] = 'beleg_kategorie_custom';
 	$columns['beleg_richtung'] = 'beleg_richtung';
-	$columns['beleg_zahlungsgrund'] = 'beleg_zahlungsgrund';
 	return $columns;
 }, 10);
 
@@ -400,6 +460,7 @@ add_action('restrict_manage_posts', function($post_type){
 	if ($post_type !== CMX_PT_BELEGE) return;
 	$selected = isset($_GET['cmx_bezahlfilter']) ? sanitize_text_field($_GET['cmx_bezahlfilter']) : '';
 	$dir_selected = isset($_GET['cmx_richtungfilter']) ? sanitize_key($_GET['cmx_richtungfilter']) : '';
+	$za_selected = isset($_GET['cmx_zahlungsartfilter']) ? sanitize_text_field($_GET['cmx_zahlungsartfilter']) : '';
 	$zg_selected = isset($_GET['cmx_zahlungsgrundfilter']) ? sanitize_text_field($_GET['cmx_zahlungsgrundfilter']) : '';
 	$cat_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
 		? cmx_beleg_admin_kategorie_taxonomy()
@@ -460,6 +521,27 @@ add_action('restrict_manage_posts', function($post_type){
 		}
 	echo '</select>';
 
+	$za_tax = cmx_beleg_zahlungsart_taxonomy();
+	if ($za_tax !== '') {
+		$za_terms = \get_terms([
+			'taxonomy'   => $za_tax,
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		]);
+		if (!\is_wp_error($za_terms)) {
+			echo '<select name="cmx_zahlungsartfilter" id="cmx_zahlungsartfilter" class="postform">';
+				echo '<option value="">' . esc_html__('Alle Zahlungsarten', 'cmx') . '</option>';
+				foreach ($za_terms as $term) {
+					if (!isset($term->slug, $term->name)) {
+						continue;
+					}
+					echo '<option value="' . esc_attr((string) $term->slug) . '" ' . selected($za_selected, (string) $term->slug, false) . '>' . esc_html((string) $term->name) . '</option>';
+				}
+			echo '</select>';
+		}
+	}
+
 	$zg_tax = cmx_beleg_zahlungsgrund_taxonomy();
 	if ($zg_tax !== '') {
 		$zg_terms = \get_terms([
@@ -509,6 +591,13 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	}
 	$zg_filter = sanitize_title((string) $zg_filter);
 	$q->set('cmx_zahlungsgrundfilter', $zg_filter);
+
+	$za_filter = $q->get('cmx_zahlungsartfilter');
+	if ($za_filter === null || $za_filter === '') {
+		$za_filter = isset($_GET['cmx_zahlungsartfilter']) ? sanitize_text_field($_GET['cmx_zahlungsartfilter']) : '';
+	}
+	$za_filter = sanitize_title((string) $za_filter);
+	$q->set('cmx_zahlungsartfilter', $za_filter);
 
 	$paid_keys = array_values(array_unique([
 		CMX_BELEG_META_BEZAHLT,              // typischer Key mit Unterstrich
@@ -567,6 +656,15 @@ add_action('pre_get_posts', function(\WP_Query $q){
 		$tax_query['relation'] = 'AND';
 	}
 	$zg_tax = cmx_beleg_zahlungsgrund_taxonomy();
+	$za_tax = cmx_beleg_zahlungsart_taxonomy();
+	if ($za_tax !== '' && $za_filter !== '') {
+		$tax_query[] = [
+			'taxonomy' => $za_tax,
+			'field'    => 'slug',
+			'terms'    => [$za_filter],
+			'operator' => 'IN',
+		];
+	}
 	if ($zg_tax !== '' && $zg_filter !== '') {
 		$tax_query[] = [
 			'taxonomy' => $zg_tax,
@@ -580,28 +678,25 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	}
 
 	// Sortierung
-		switch ($q->get('orderby')) {
-			case 'beleg_datum':
-				$q->set('meta_key', CMX_BELEG_META_DATUM);
-				$q->set('orderby', 'meta_value');
-				break;
+	switch ($q->get('orderby')) {
+		case 'beleg_datum':
+			$q->set('meta_key', CMX_BELEG_META_DATUM);
+			$q->set('orderby', 'meta_value');
+			break;
 		case 'beleg_faellig':
 			$q->set('meta_key', CMX_BELEG_META_FAELLIG);
 			$q->set('orderby', 'meta_value');
 			break;
-			case 'beleg_bezahlt':
-				// Immer custom sort, damit unbezahlte (ohne Meta) nicht rausfallen
-				$q->set('orderby', 'beleg_bezahlt_custom');
-				break;
-			case 'beleg_kategorie_custom':
-				$q->set('orderby', 'beleg_kategorie_custom');
-				break;
-			case 'beleg_richtung':
-				$q->set('meta_key', '_cmx_beleg_richtung');
-				$q->set('orderby', 'meta_value');
-				break;
-		case 'beleg_zahlungsgrund':
-			$q->set('orderby', 'beleg_zahlungsgrund_custom');
+		case 'beleg_bezahlt':
+			// Immer custom sort, damit unbezahlte (ohne Meta) nicht rausfallen
+			$q->set('orderby', 'beleg_bezahlt_custom');
+			break;
+		case 'beleg_kategorie_custom':
+			$q->set('orderby', 'beleg_kategorie_custom');
+			break;
+		case 'beleg_richtung':
+			$q->set('meta_key', '_cmx_beleg_richtung');
+			$q->set('orderby', 'meta_value');
 			break;
 	}
 }, 50);
@@ -612,7 +707,7 @@ add_filter('posts_clauses', function($clauses, \WP_Query $q){
 	$pt = $q->get('post_type');
 	if ($pt !== CMX_PT_BELEGE && (!is_array($pt) || !in_array(CMX_PT_BELEGE, $pt, true))) return $clauses;
 	$orderby = (string) $q->get('orderby');
-	if ($orderby !== 'beleg_bezahlt_custom' && $orderby !== 'beleg_zahlungsgrund_custom' && $orderby !== 'beleg_kategorie_custom') return $clauses;
+	if ($orderby !== 'beleg_bezahlt_custom' && $orderby !== 'beleg_kategorie_custom') return $clauses;
 
 	$order = strtoupper($q->get('order')) === 'DESC' ? 'DESC' : 'ASC';
 	global $wpdb;
@@ -655,28 +750,6 @@ add_filter('posts_clauses', function($clauses, \WP_Query $q){
 		$clauses['orderby'] = "MIN(COALESCE(cmxcat_term.name,'')) {$order}, {$wpdb->posts}.post_date {$order}";
 		return $clauses;
 	}
-
-	$zg_tax = cmx_beleg_zahlungsgrund_taxonomy();
-	if ($zg_tax === '') {
-		return $clauses;
-	}
-	$zg_tax_sql = esc_sql($zg_tax);
-	if (strpos($clauses['join'], 'cmxzg_rel') === false) {
-		$clauses['join'] .= " LEFT JOIN {$wpdb->term_relationships} AS cmxzg_rel ON cmxzg_rel.object_id = {$wpdb->posts}.ID";
-	}
-	if (strpos($clauses['join'], 'cmxzg_tax') === false) {
-		$clauses['join'] .= " LEFT JOIN {$wpdb->term_taxonomy} AS cmxzg_tax ON cmxzg_tax.term_taxonomy_id = cmxzg_rel.term_taxonomy_id AND cmxzg_tax.taxonomy = '{$zg_tax_sql}'";
-	}
-	if (strpos($clauses['join'], 'cmxzg_term') === false) {
-		$clauses['join'] .= " LEFT JOIN {$wpdb->terms} AS cmxzg_term ON cmxzg_term.term_id = cmxzg_tax.term_id";
-	}
-
-	if (trim((string) ($clauses['groupby'] ?? '')) === '') {
-		$clauses['groupby'] = "{$wpdb->posts}.ID";
-	} elseif (strpos((string) $clauses['groupby'], "{$wpdb->posts}.ID") === false) {
-		$clauses['groupby'] .= ", {$wpdb->posts}.ID";
-	}
-	$clauses['orderby'] = "MIN(COALESCE(cmxzg_term.name,'')) {$order}, {$wpdb->posts}.post_date {$order}";
 
 	return $clauses;
 }, 20, 2);
