@@ -52,22 +52,23 @@ $add_action_columns = static function (array $columns): array {
 
 	\wp_enqueue_style('dashicons');
 
-	echo '<style>
-		.wp-list-table th.column-cmx_beleg_pdf_action {
-			width: 48px;
-			text-align: center;
-		}
-		.wp-list-table td.column-cmx_beleg_pdf_action {
-			text-align: center;
-			vertical-align: middle;
-		}
-		.cmx-beleg-action-icon {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			text-decoration: none;
-			min-height: 20px;
-		}
+		echo '<style>
+			.wp-list-table th.column-cmx_beleg_pdf_action {
+				width: 48px;
+				text-align: center;
+			}
+			.wp-list-table td.column-cmx_beleg_pdf_action {
+				text-align: center;
+				vertical-align: top;
+			}
+			.cmx-beleg-action-icon {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				text-decoration: none;
+				min-height: 20px;
+				vertical-align: top;
+			}
 		.cmx-beleg-action-icon .dashicons {
 			width: 18px;
 			height: 18px;
