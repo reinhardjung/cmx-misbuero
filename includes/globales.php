@@ -107,34 +107,42 @@ function cmx_remove_published_link(array $views): array {
 
 
 /**
- * Beim ersten manuellen Speichern eines "belege" den Status auf "publish" erzwingen.
+ * Erzwingt für alle Custom Post Types den Status "publish".
+ * Entwürfe/Pending/Geplant/Privat werden beim Speichern auf "publish" gesetzt.
  */
-add_filter('wp_insert_post_data', __NAMESPACE__ . '\\cmx_force_belege_publish_on_first_save', 99, 2);
-function cmx_force_belege_publish_on_first_save(array $data, array $postarr): array {
-	$post_type = $data['post_type'] ?? '';
-	if ($post_type !== 'belege') {
+add_filter('wp_insert_post_data', __NAMESPACE__ . '\\cmx_force_cpt_publish_status', 99, 2);
+function cmx_force_cpt_publish_status(array $data, array $postarr): array {
+	$post_type = (string) ($data['post_type'] ?? '');
+	if ($post_type === '' || \post_type_exists($post_type) === false) {
 		return $data;
 	}
 
-	$status = $data['post_status'] ?? '';
-	if (in_array($status, ['trash', 'inherit'], true)) {
+	$builtin = ['post', 'page', 'attachment', 'revision', 'nav_menu_item'];
+	if (\in_array($post_type, $builtin, true)) {
+		return $data;
+	}
+
+	$status = (string) ($data['post_status'] ?? '');
+	if ($status === '' || \in_array($status, ['publish', 'trash', 'inherit', 'auto-draft'], true)) {
+		return $data;
+	}
+
+	if (!\in_array($status, ['draft', 'pending', 'future', 'private'], true)) {
 		return $data;
 	}
 
 	$post_id = isset($postarr['ID']) ? (int) $postarr['ID'] : 0;
-	if ($post_id <= 0) {
+	if ($post_id > 0 && (\wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id))) {
 		return $data;
 	}
 
-	$prev = get_post($post_id);
-	if (!$prev || $prev->post_status !== 'auto-draft') {
+	$post_type_obj = \get_post_type_object($post_type);
+	$publish_cap = (string) (($post_type_obj && isset($post_type_obj->cap->publish_posts)) ? $post_type_obj->cap->publish_posts : 'publish_posts');
+	if ($publish_cap !== '' && !\current_user_can($publish_cap)) {
 		return $data;
 	}
 
-	if ($status !== 'publish') {
-		$data['post_status'] = 'publish';
-	}
-
+	$data['post_status'] = 'publish';
 	return $data;
 }
 
