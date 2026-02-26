@@ -303,3 +303,131 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 		\update_post_meta($post_id, $meta_key, $clean);
 	}
 }, 10, 2);
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_zu_projekt_find_assigned_post_ids')) {
+	/**
+	 * @return array<int,int>
+	 */
+	function cmx_zu_projekt_find_assigned_post_ids(int $projekt_id, string $post_type): array {
+		$projekt_id = (int) $projekt_id;
+		if ($projekt_id <= 0 || !\in_array($post_type, cmx_zu_projekt_supported_post_types(), true)) {
+			return [];
+		}
+
+		$meta_keys = [];
+		$meta_keys[] = (string) cmx_zu_projekt_meta_key($post_type);
+		foreach (cmx_zu_projekt_legacy_meta_keys($post_type) as $legacy_key) {
+			$legacy_key = (string) $legacy_key;
+			if ($legacy_key !== '') {
+				$meta_keys[] = $legacy_key;
+			}
+		}
+		$meta_keys = \array_values(\array_unique(\array_filter($meta_keys)));
+		if (empty($meta_keys)) {
+			return [];
+		}
+
+		global $wpdb;
+		$in_placeholders = \implode(', ', \array_fill(0, \count($meta_keys), '%s'));
+		$params = \array_merge(
+			[$post_type],
+			$meta_keys,
+			[(string) $projekt_id, '%i:' . $projekt_id . ';%', '%"' . $projekt_id . '"%']
+		);
+
+		$sql = "
+			SELECT DISTINCT p.ID
+			FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
+			WHERE p.post_type = %s
+			  AND p.post_status <> 'trash'
+			  AND pm.meta_key IN ({$in_placeholders})
+			  AND (
+				pm.meta_value = %s
+				OR pm.meta_value LIKE %s
+				OR pm.meta_value LIKE %s
+			  )
+			ORDER BY p.post_title ASC, p.ID ASC
+		";
+
+		$prepared = $wpdb->prepare($sql, ...$params);
+		$ids = $prepared ? (array) $wpdb->get_col($prepared) : [];
+		$ids = \array_values(\array_unique(\array_filter(\array_map('intval', $ids), static function ($id): bool {
+			return $id > 0;
+		})));
+
+		return $ids;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_projekt_zuordnungen_metabox')) {
+	function cmx_render_projekt_zuordnungen_metabox(\WP_Post $post): void {
+		static $style_printed = false;
+
+		$modules = [
+			'kontakte'  => 'Kontakte',
+			'artikel'   => 'Artikel',
+			'belege'    => 'Belege',
+			'dokumente' => 'Dokumente',
+		];
+
+		if (!$style_printed) {
+			$style_printed = true;
+			echo '<style>
+				.cmx-zuordnungen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+				.cmx-zuordnungen-card{border:1px solid #dcdcde;border-radius:4px;background:#fff;padding:10px;}
+				.cmx-zuordnungen-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 0;font-weight:600;}
+				.cmx-zuordnungen-count{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 6px;border-radius:999px;background:#f0f0f1;font-size:12px;text-align:center;}
+				.cmx-zuordnungen-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;}
+				.cmx-zuordnungen-empty{margin:0;color:#646970;font-style:italic;}
+			</style>';
+		}
+
+		echo '<div class="cmx-zuordnungen-grid">';
+		foreach ($modules as $module_type => $label) {
+			$ids = cmx_zu_projekt_find_assigned_post_ids((int) $post->ID, $module_type);
+			echo '<section class="cmx-zuordnungen-card">';
+			echo '<div class="cmx-zuordnungen-head"><span>' . \esc_html($label) . '</span><span class="cmx-zuordnungen-count">' . (int) \count($ids) . '</span></div>';
+
+			if (empty($ids)) {
+				echo '<p class="cmx-zuordnungen-empty">Keine Zuordnungen</p>';
+				echo '</section>';
+				continue;
+			}
+
+			echo '<ul class="cmx-zuordnungen-list">';
+			foreach ($ids as $id) {
+				$id = (int) $id;
+				if ($id <= 0 || !\get_post_status($id)) {
+					continue;
+				}
+				$title = (string) \get_the_title($id);
+				if ($title === '') {
+					$title = '#' . $id;
+				}
+				$edit_link = \get_edit_post_link($id, '');
+				echo '<li>';
+				if ($edit_link) {
+					echo '<a href="' . \esc_url($edit_link) . '">' . \esc_html($title) . '</a>';
+				} else {
+					echo '<span>' . \esc_html($title) . '</span>';
+				}
+				echo '</li>';
+			}
+			echo '</ul>';
+			echo '</section>';
+		}
+		echo '</div>';
+	}
+}
+
+\add_action('add_meta_boxes_projekte', function (): void {
+	\add_meta_box(
+		'cmx_projekt_zuordnungen',
+		'Zuordnungen',
+		__NAMESPACE__ . '\\cmx_render_projekt_zuordnungen_metabox',
+		'projekte',
+		'normal',
+		'high'
+	);
+});

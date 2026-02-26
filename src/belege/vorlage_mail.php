@@ -59,7 +59,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 						<td style="padding:24px 24px 8px 24px;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1f2933;">
 							<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>
 							<!--- <p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg ' . $beleg_label_esc . ' ist bereit zum download: <strong>' . $beleg_id_esc . '</strong></p> -->
-							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg ist bereit zum download.</p>
+							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst sie jetzt bequem als PDF herunterladen.</p>
 							<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;">
 								<tr>
 									<td bgcolor="#a42c24" style="border-radius:8px;">
