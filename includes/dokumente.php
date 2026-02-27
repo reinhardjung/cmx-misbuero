@@ -46,9 +46,10 @@ function cmx_dok_is_allowed_post_type(string $post_type): bool {
 
 \add_action('add_meta_boxes', function($post_type) {
 	if (!cmx_dok_is_allowed_post_type((string)$post_type)) return;
+	$box_title = ((string) $post_type === 'scanner') ? 'als Scan' : 'Dokumente';
 	\add_meta_box(
 		'cmx_dokumente_box',
-		'Dokumente',
+		$box_title,
 		__NAMESPACE__ . '\\cmx_render_dokumente_upload_box',
 		$post_type,
 		'side',

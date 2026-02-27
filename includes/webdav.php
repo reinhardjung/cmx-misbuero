@@ -40,6 +40,35 @@ function cmx_dav_render_empty_archive_message(string $message = 'Es wurden noch 
 		.'</body></html>';
 }
 
+/** Scanner-Share: bevorzugt den "Scanner"-Ordner, fällt auf Legacy "scanner" zurück. */
+function cmx_dav_scanner_share_path(): string {
+	$preferred = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
+	$legacy    = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
+
+	if (is_dir($preferred)) {
+		$real = realpath($preferred);
+		return $real !== false ? $real : $preferred;
+	}
+	if (is_dir($legacy)) {
+		$real = realpath($legacy);
+		return $real !== false ? $real : $legacy;
+	}
+
+	return $preferred;
+}
+
+/** Für /scanner mindestens Lese-/Schreibrechte am Ordner sicherstellen. */
+function cmx_dav_ensure_rw_dir_mode(string $dir): void {
+	if ($dir === '' || !is_dir($dir)) {
+		return;
+	}
+
+	if (!is_readable($dir) || !is_writable($dir)) {
+		@chmod($dir, 0775);
+		clearstatcache(true, $dir);
+	}
+}
+
 /** Ermittelt WebDAV-Konfiguration anhand des Request-Pfads. */
 function cmx_dav_get_route_config(string $path): ?array {
 	if (preg_match('#^/archiv(?:/|$)#', $path)) {
@@ -55,7 +84,7 @@ function cmx_dav_get_route_config(string $path): ?array {
 	if (preg_match('#^/scanner(?:/|$)#', $path)) {
 		return [
 			'base_uri'   => '/scanner',
-			'share_path' => WP_CONTENT_DIR . '/uploads/misbuero/scanner',
+			'share_path' => cmx_dav_scanner_share_path(),
 			'label'      => 'Scanner',
 			'read_only'  => false,
 			'ensure_dir' => true,
@@ -88,7 +117,11 @@ function cmx_dav_has_any_files(string $dir): bool {
 function cmx_dav_is_subpath(string $base, string $path): bool {
 	$base = rtrim(str_replace('\\','/',$base), '/') . '/';
 	$path = rtrim(str_replace('\\','/',$path), '/') . '/';
-	return str_starts_with($path, $base);
+	if (str_starts_with($path, $base)) {
+		return true;
+	}
+	// Fallback gegen Case-Mismatch (z.B. Scanner/scanner auf case-insensitive Volumes).
+	return str_starts_with(strtolower($path), strtolower($base));
 }
 /** Absolute URL aus Pfad erzeugen */
 function cmx_dav_abs_url(string $path): string {
@@ -134,6 +167,15 @@ add_action('init', function () {
 
 	if ($ensureDir && $sharePath !== '' && !is_dir($sharePath)) {
 		\wp_mkdir_p($sharePath);
+	}
+	if ($sharePath !== '' && is_dir($sharePath)) {
+		$resolved = realpath($sharePath);
+		if ($resolved !== false) {
+			$sharePath = $resolved;
+		}
+	}
+	if (!$readOnly) {
+		cmx_dav_ensure_rw_dir_mode($sharePath);
 	}
 
 	// Wenn das Ziel-Verzeichnis noch nicht existiert: leere Seite statt DAV-XML-Fehler.
@@ -288,7 +330,7 @@ add_action('init', function () {
 					continue;
 				}
 
-				@chmod($destAbs, 0644);
+				@chmod($destAbs, 0664);
 				$okCount++;
 			}
 

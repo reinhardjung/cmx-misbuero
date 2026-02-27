@@ -11,7 +11,7 @@ add_action('admin_head', function () {
  * mit sichtbarem „In den Papierkorb verschieben“-Link nach dem Speichern.
  */
 add_action('add_meta_boxes', function() {
-	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte','ausgaben'];
+	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte','ausgaben','scanner'];
 	$screen = get_current_screen();
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 
@@ -37,6 +37,7 @@ add_action('add_meta_boxes', function() {
 				'kassenbuch'  => 'Kassenbuch',
 				'dokumente'   => 'Dokument',
 				'projekte'    => 'Projekt',
+				'scanner'     => 'Scan',
 				'post'        => __('Beitrag', 'default'),
 				'page'        => __('Seite', 'default'),
 			];
@@ -428,7 +429,7 @@ add_action('admin_footer', function () {
 
 // Originale "Veröffentlichen"- und "Titelform"-Metaboxen für definierte CPTs entfernen
 add_action('add_meta_boxes', function () {
-	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte','ausgaben'];
+	$allowed = ['post', 'page', 'kontakte','artikel','belege','kassenbuch','dokumente','projekte','ausgaben','scanner'];
 	$screen  = function_exists('get_current_screen') ? get_current_screen() : null;
 	if (!$screen || !in_array($screen->post_type, $allowed, true)) return;
 
@@ -443,7 +444,7 @@ add_action('add_meta_boxes', function () {
 
 // Sicherheitshalber auch beim späteren Rendering (falls Plugins sie reaktivieren)
 add_action('do_meta_boxes', function ($post_type) {
-	$allowed = ['post', 'page', 'kontakte', 'belege'];
+	$allowed = ['post', 'page', 'kontakte', 'belege', 'scanner'];
 	if (!in_array($post_type, $allowed, true)) return;
 
 	remove_meta_box('submitdiv', $post_type, 'side');
