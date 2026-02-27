@@ -96,7 +96,7 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 	// echo '<p style="margin:0 0 8px;"><em>Zuordnung zu: ' . \esc_html($target_label) . '</em></p>';
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-scanner-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" name="' . \esc_attr($meta_key) . '" style="width:100%;" size="10">';
+	echo '<select id="' . \esc_attr($select_id) . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
 	echo '<option value="0">' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		echo '<option value="' . \esc_attr((string) $opt['id']) . '" ' . \selected($current, (int) $opt['id'], false) . '>' . \esc_html((string) $opt['label']) . '</option>';
@@ -231,7 +231,7 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 	$metaboxMapJson = \wp_json_encode(cmx_scanner_get_relation_metabox_ids());
 
 	echo '<label for="cmx_scanner_zuordnung_typ" class="screen-reader-text">Zuordnung</label>';
-	echo '<select id="cmx_scanner_zuordnung_typ" name="cmx_scanner_zuordnung_typ" style="width:100%;">';
+	echo '<select id="cmx_scanner_zuordnung_typ" name="cmx_scanner_zuordnung_typ" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;">';
 	echo '<option value="">- bitte wählen -</option>';
 	foreach (CMX_SCANNER_ZUORDNUNG_TYPES as $key => $label) {
 		echo '<option value="' . \esc_attr($key) . '" ' . \selected($current, $key, false) . '>' . \esc_html($label) . '</option>';
@@ -259,6 +259,17 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 								activeBox = box;
 							}
 						});
+						if (activeBox) {
+							activeBox.classList.remove("closed");
+							var inside = activeBox.querySelector(".inside");
+							if (inside) {
+								inside.style.display = "";
+							}
+							var toggles = activeBox.querySelectorAll(".handlediv, .hndle");
+							for (var ti = 0; ti < toggles.length; ti++) {
+								toggles[ti].setAttribute("aria-expanded", "true");
+							}
+						}
 						if (focusSearch && activeBox) {
 							var search = activeBox.querySelector(".cmx-scanner-rel-search");
 							if (search) {
@@ -273,6 +284,13 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 					};
 					select.addEventListener("change", function(){
 						window.cmxScannerToggleZuordnung(select.value || "", true);
+					});
+					document.addEventListener("click", function(e){
+						var trigger = e.target && e.target.closest ? e.target.closest(".postbox .handlediv, .postbox .hndle") : null;
+						if (!trigger) return;
+						setTimeout(function(){
+							window.cmxScannerToggleZuordnung(select.value || "", false);
+						}, 0);
 					});
 					window.cmxScannerToggleZuordnung(select.value || "", false);
 					setTimeout(function(){
