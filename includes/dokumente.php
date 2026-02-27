@@ -12,6 +12,30 @@ if (!\defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')) {
 	\define(__NAMESPACE__ . '\\CMX_DOK_SELF_META', '_cmx_dokumente_files');
 }
 
+function cmx_dok_upload_target_dir(string $post_type, int $year): array {
+	if ($post_type === 'scanner') {
+		$base = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
+		$url  = content_url('/uploads/misbuero/Scanner');
+	} else {
+		$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/dokumente';
+		$url  = content_url('/uploads/misbuero/' . $year . '/dokumente');
+	}
+	if (!\is_dir($base)) {
+		\wp_mkdir_p($base);
+	}
+	return [$base, $url];
+}
+
+function cmx_dok_sanitize_title_from_filename(string $filename): string {
+	$base = (string) \pathinfo($filename, \PATHINFO_FILENAME);
+	$base = \wp_strip_all_tags($base);
+	$base = \preg_replace('/[_\-]+/', ' ', $base);
+	$base = \preg_replace('/\s+/', ' ', (string) $base);
+	$base = \trim((string) $base);
+	$base = \sanitize_text_field($base);
+	return $base;
+}
+
 function cmx_dok_is_allowed_post_type(string $post_type): bool {
 	if ($post_type === 'dokumente') return true;
 	$obj = \get_post_type_object($post_type);
@@ -133,14 +157,18 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 				data: fd,
 				processData: false,
 				contentType: false,
-				success: function(resp){
-					if (resp && resp.success && resp.data) {
-						var label = resp.data.label || file.name;
-						if (resp.data.url) {
-							$row.html("<a target=\"_blank\" rel=\"noopener noreferrer\"></a>");
-							$row.find("a").attr("href", resp.data.url).text(label);
-						} else {
-							$row.text(label);
+					success: function(resp){
+						if (resp && resp.success && resp.data) {
+							var label = resp.data.label || file.name;
+							if (resp.data.title) {
+								$("#title").val(resp.data.title);
+								$("#title-prompt-text").addClass("screen-reader-text");
+							}
+							if (resp.data.url) {
+								$row.html("<a target=\"_blank\" rel=\"noopener noreferrer\"></a>");
+								$row.find("a").attr("href", resp.data.url).text(label);
+							} else {
+								$row.text(label);
 						}
 						var $pub = $("#publish");
 						if ($pub.length) {
@@ -214,6 +242,7 @@ function cmx_dokumente_upload_file(): void {
 		\wp_send_json_error(['message'=>'bad_post_type'], 400);
 	}
 	$is_dokumente = ($post_type === 'dokumente');
+	$scanner_title = '';
 
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
 		\wp_send_json_error(['message'=>'no_file'], 400);
@@ -223,6 +252,18 @@ function cmx_dokumente_upload_file(): void {
 	$ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
 	if (!in_array($ext, $allowed, true)) {
 		\wp_send_json_error(['message'=>'bad_type'], 400);
+	}
+
+	if ($post_type === 'scanner') {
+		$scanner_title = cmx_dok_sanitize_title_from_filename((string) ($_FILES['file']['name'] ?? ''));
+		if ($scanner_title === '') {
+			$scanner_title = \wp_date('ymd-His') . ' scanner';
+		}
+		\wp_update_post([
+			'ID'         => $post_id,
+			'post_title' => $scanner_title,
+			'post_name'  => \sanitize_title($scanner_title),
+		]);
 	}
 
 	require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -237,6 +278,9 @@ function cmx_dokumente_upload_file(): void {
 		$source_title = '';
 	}
 	$source_title = \trim($source_title);
+	if ($post_type === 'scanner' && $scanner_title !== '') {
+		$source_title = $scanner_title;
+	}
 	if (!$is_dokumente) {
 		$normalized_title = \strtolower($source_title);
 		$normalized_title = \str_replace(['_', ' '], '-', $normalized_title);
@@ -284,10 +328,8 @@ function cmx_dokumente_upload_file(): void {
 		}
 	}
 
-	$upload_filter = function($dirs) use ($year) {
-		$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/dokumente';
-		$url  = content_url('/uploads/misbuero/' . $year . '/dokumente');
-		if (!file_exists($base)) { \wp_mkdir_p($base); }
+	$upload_filter = function($dirs) use ($year, $post_type) {
+		[$base, $url] = cmx_dok_upload_target_dir((string) $post_type, (int) $year);
 		$dirs['path']   = $base;
 		$dirs['basedir']= $base;
 		$dirs['url']    = $url;
@@ -381,6 +423,7 @@ function cmx_dokumente_upload_file(): void {
 		'id'    => $doc_id,
 		'url'   => $file_url,
 		'label' => basename($rel) ?: $doc_title,
+		'title' => ($post_type === 'scanner' ? $scanner_title : ''),
 	]);
 }
 
