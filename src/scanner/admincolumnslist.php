@@ -459,12 +459,12 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 	foreach ($columns as $key => $label) {
 		$new[$key] = $label;
 		if ($key === 'title') {
-			$new['cmx_scanner_uploaded_at'] = 'Scan hochgeladen';
+			$new['cmx_scanner_uploaded_at'] = 'hochgeladen am';
 			$inserted = true;
 		}
 	}
 	if (!$inserted) {
-		$new['cmx_scanner_uploaded_at'] = 'Scan hochgeladen';
+		$new['cmx_scanner_uploaded_at'] = 'hochgeladen am';
 	}
 	return $new;
 };

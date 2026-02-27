@@ -44,14 +44,19 @@ function cmx_dav_render_empty_archive_message(string $message = 'Es wurden noch 
 function cmx_dav_scanner_share_path(): string {
 	$preferred = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
 	$legacy    = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
+	$candidates = [$preferred, $legacy];
 
-	if (is_dir($preferred)) {
-		$real = realpath($preferred);
-		return $real !== false ? $real : $preferred;
+	// Existierende + beschreibbare Variante zuerst.
+	foreach ($candidates as $candidate) {
+		if (!is_dir($candidate) || !is_writable($candidate)) continue;
+		$real = realpath($candidate);
+		return $real !== false ? $real : $candidate;
 	}
-	if (is_dir($legacy)) {
-		$real = realpath($legacy);
-		return $real !== false ? $real : $legacy;
+	// Sonst irgendeine bestehende Variante.
+	foreach ($candidates as $candidate) {
+		if (!is_dir($candidate)) continue;
+		$real = realpath($candidate);
+		return $real !== false ? $real : $candidate;
 	}
 
 	return $preferred;
@@ -67,11 +72,121 @@ function cmx_dav_ensure_rw_dir_mode(string $dir): void {
 		@chmod($dir, 0775);
 		clearstatcache(true, $dir);
 	}
+	if (!is_readable($dir) || !is_writable($dir)) {
+		// Letzter Fallback für lokale Umgebungen mit restriktiven Defaults.
+		@chmod($dir, 0777);
+		clearstatcache(true, $dir);
+	}
+}
+
+/** Lock-Ordner für WebDAV ermitteln (Live-tauglich mit OpenBasedir-Fallback). */
+function cmx_dav_lock_backend_path(string $sharePath): string {
+	$sharePath = rtrim((string) $sharePath, '/\\');
+	$base = dirname($sharePath);
+	if ($base === '' || $base === '.' || $base === DIRECTORY_SEPARATOR) {
+		$base = WP_CONTENT_DIR . '/uploads/misbuero';
+	}
+
+	$candidate = rtrim($base, '/\\') . '/.dav-locks';
+	if (!is_dir($candidate)) {
+		@wp_mkdir_p($candidate);
+	}
+	if (is_dir($candidate) && is_writable($candidate)) {
+		return $candidate;
+	}
+
+	$tmp = rtrim((string) \sys_get_temp_dir(), '/\\') . '/cmx-webdav-locks';
+	if (!is_dir($tmp)) {
+		@wp_mkdir_p($tmp);
+	}
+	return $tmp;
+}
+
+/** SQLite-Datei für WebDAV-PropertyStorage (Finder PROPPATCH) bestimmen. */
+function cmx_dav_property_db_path(string $sharePath): string {
+	$sharePath = rtrim((string) $sharePath, '/\\');
+	$base = dirname($sharePath);
+	if ($base === '' || $base === '.' || $base === DIRECTORY_SEPARATOR) {
+		$base = WP_CONTENT_DIR . '/uploads/misbuero';
+	}
+
+	$candidateDir = rtrim($base, '/\\');
+	if (!is_dir($candidateDir)) {
+		@wp_mkdir_p($candidateDir);
+	}
+	if (is_dir($candidateDir) && is_writable($candidateDir)) {
+		return $candidateDir . '/.dav-props.sqlite';
+	}
+
+	$tmpDir = rtrim((string) \sys_get_temp_dir(), '/\\');
+	if (!is_dir($tmpDir)) {
+		@wp_mkdir_p($tmpDir);
+	}
+	return $tmpDir . '/cmx-dav-props.sqlite';
+}
+
+/** Linux-only Cleanup für Finder-Metadateien. */
+function cmx_dav_should_cleanup_ds_store(): bool {
+	return \strtolower((string) (\PHP_OS_FAMILY ?? '')) === 'linux';
+}
+
+function cmx_dav_relative_from_base_uri(string $baseUri, string $path): string {
+	$base = '/' . \trim((string) $baseUri, '/');
+	$path = '/' . \ltrim((string) $path, '/');
+
+	if ($base === '/' || $base === '') {
+		return \ltrim($path, '/');
+	}
+	if (\strcasecmp($path, $base) === 0) {
+		return '';
+	}
+	$prefix = $base . '/';
+	if (\stripos($path, $prefix) === 0) {
+		return \ltrim((string) \substr($path, \strlen($prefix)), '/');
+	}
+	return \ltrim($path, '/');
+}
+
+function cmx_dav_cleanup_ds_store_in_dir(string $dir): int {
+	if ($dir === '' || !\is_dir($dir)) {
+		return 0;
+	}
+	$file = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . '.DS_Store';
+	if (\is_file($file)) {
+		return @\unlink($file) ? 1 : 0;
+	}
+	return 0;
+}
+
+function cmx_dav_cleanup_ds_store(string $sharePath, string $relativePath = ''): int {
+	if (!cmx_dav_should_cleanup_ds_store()) {
+		return 0;
+	}
+	$shareReal = \realpath($sharePath);
+	if ($shareReal === false || !\is_dir($shareReal)) {
+		return 0;
+	}
+
+	$deleted = cmx_dav_cleanup_ds_store_in_dir($shareReal);
+
+	$rel = \trim((string) $relativePath, '/');
+	if ($rel === '') {
+		return $deleted;
+	}
+
+	$candidate = rtrim($shareReal, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+	$targetDir = \is_dir($candidate) ? $candidate : \dirname($candidate);
+	$targetReal = \realpath($targetDir);
+	if ($targetReal !== false && \is_dir($targetReal) && cmx_dav_is_subpath($shareReal, $targetReal)) {
+		$deleted += cmx_dav_cleanup_ds_store_in_dir($targetReal);
+	}
+
+	return $deleted;
 }
 
 /** Ermittelt WebDAV-Konfiguration anhand des Request-Pfads. */
 function cmx_dav_get_route_config(string $path): ?array {
-	if (preg_match('#^/archiv(?:/|$)#', $path)) {
+	if (preg_match('#^/archiv(?:/|$)#i', $path)) {
 		return [
 			'base_uri'   => '/archiv',
 			'share_path' => WP_CONTENT_DIR . '/uploads/misbuero',
@@ -81,7 +196,7 @@ function cmx_dav_get_route_config(string $path): ?array {
 		];
 	}
 
-	if (preg_match('#^/scanner(?:/|$)#', $path)) {
+	if (preg_match('#^/scanner(?:/|$)#i', $path)) {
 		return [
 			'base_uri'   => '/scanner',
 			'share_path' => cmx_dav_scanner_share_path(),
@@ -177,6 +292,7 @@ add_action('init', function () {
 	if (!$readOnly) {
 		cmx_dav_ensure_rw_dir_mode($sharePath);
 	}
+	cmx_dav_cleanup_ds_store($sharePath, cmx_dav_relative_from_base_uri($baseUri, (string) $path));
 
 	// Wenn das Ziel-Verzeichnis noch nicht existiert: leere Seite statt DAV-XML-Fehler.
 	if (!is_dir($sharePath)) {
@@ -207,6 +323,48 @@ add_action('init', function () {
 		return $user && \wp_check_password($p, $user->user_pass, $user->ID);
 	});
 	$server->addPlugin(new DAV\Auth\Plugin($authBackend, 'WP WebDAV'));
+	$locksPath = cmx_dav_lock_backend_path($sharePath);
+	if ($locksPath !== '' && is_dir($locksPath) && is_writable($locksPath)) {
+		$server->addPlugin(new DAV\Locks\Plugin(new DAV\Locks\Backend\File($locksPath)));
+	}
+	// Mac Finder sendet PROPPATCH für eigene Metadaten. Ohne PropertyStorage gibt es oft 100004.
+	if (\class_exists(DAV\PropertyStorage\Plugin::class) && \interface_exists(DAV\PropertyStorage\Backend\BackendInterface::class)) {
+		$propertyBackend = null;
+		if (\class_exists('\\PDO') && \in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+			$propDb = cmx_dav_property_db_path($sharePath);
+			try {
+				$pdo = new \PDO('sqlite:' . $propDb);
+				$pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+				$pdo->exec('CREATE TABLE IF NOT EXISTS propertystorage (
+					id integer primary key asc,
+					path text,
+					name text,
+					valuetype integer,
+					value blob
+				)');
+				$pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS path_property ON propertystorage (path, name)');
+				$propertyBackend = new DAV\PropertyStorage\Backend\PDO($pdo);
+			} catch (\Throwable $e) {
+				$propertyBackend = null;
+			}
+		}
+
+		// Fallback ohne DB: Properties werden nicht persistiert, PROPPATCH liefert aber kein Finder-Fehlerfenster.
+		if ($propertyBackend === null) {
+			$propertyBackend = new class implements DAV\PropertyStorage\Backend\BackendInterface {
+				public function propFind($path, \Sabre\DAV\PropFind $propFind) {}
+				public function propPatch($path, \Sabre\DAV\PropPatch $propPatch) {
+					$propPatch->handleRemaining(static function (): bool {
+						return true;
+					});
+				}
+				public function delete($path) {}
+				public function move($source, $destination) {}
+			};
+		}
+
+		$server->addPlugin(new DAV\PropertyStorage\Plugin($propertyBackend));
+	}
 
 	// Read-only nur für /archiv erzwingen; /scanner bleibt read+write.
 	if ($readOnly) {
@@ -216,7 +374,38 @@ add_action('init', function () {
 				throw new DAV\Exception\MethodNotAllowed('Read-only');
 			}
 		});
-	}
+	} else {
+		$server->on('beforeMethod', function(HTTP\RequestInterface $r) use ($sharePath): void {
+			$writeMethods = ['PUT','POST','MKCOL','DELETE','MOVE','COPY','PROPPATCH','LOCK','UNLOCK','PATCH'];
+			if (!in_array($r->getMethod(), $writeMethods, true)) {
+				return;
+			}
+			if (!is_dir($sharePath) || !is_writable($sharePath)) {
+				throw new DAV\Exception\Forbidden('Scanner-Ordner ist nicht beschreibbar (Server-Rechte).');
+			}
+		});
+			$server->on('afterMethod:PUT', function(HTTP\RequestInterface $request) use ($sharePath): void {
+				$relPath = ltrim((string) $request->getPath(), '/');
+				$absPath = rtrim($sharePath, DIRECTORY_SEPARATOR) . ($relPath === '' ? '' : DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
+				$real = realpath($absPath);
+				if ($real && is_file($real) && cmx_dav_is_subpath($sharePath, $real)) {
+					@chmod($real, 0666);
+				}
+				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+			});
+			$server->on('afterMethod:MOVE', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
+				$relPath = ltrim((string) $request->getPath(), '/');
+				$absPath = rtrim($sharePath, DIRECTORY_SEPARATOR) . ($relPath === '' ? '' : DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
+				$real = realpath($absPath);
+				if ($real && is_file($real) && cmx_dav_is_subpath($sharePath, $real)) {
+					@chmod($real, 0666);
+				}
+				$destPath = (string) \parse_url((string) $request->getHeader('Destination'), \PHP_URL_PATH);
+				$destRel = cmx_dav_relative_from_base_uri($baseUri, $destPath);
+				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				cmx_dav_cleanup_ds_store($sharePath, $destRel);
+			});
+		}
 
 	// Browser-Upload nur für /scanner (multipart/form-data).
 	if (!$readOnly) {
@@ -330,7 +519,7 @@ add_action('init', function () {
 					continue;
 				}
 
-				@chmod($destAbs, 0664);
+				@chmod($destAbs, 0666);
 				$okCount++;
 			}
 
@@ -344,10 +533,11 @@ add_action('init', function () {
 				$msg = $firstError !== '' ? $firstError : 'Keine Datei ausgewählt.';
 			}
 
-			$redirectPath = cmx_dav_join_uri(rtrim((string)$server->getBaseUri(), '/'), $relPath) . '/';
-			$location = add_query_arg(
-				[
-					'upload' => $status,
+				$redirectPath = cmx_dav_join_uri(rtrim((string)$server->getBaseUri(), '/'), $relPath) . '/';
+				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				$location = add_query_arg(
+					[
+						'upload' => $status,
 					'msg'    => $msg,
 				],
 				$redirectPath
@@ -391,6 +581,7 @@ add_action('init', function () {
 	// Hübsche HTML-Indexseite für Collections + ZIP-Download
 	$server->on('method:GET', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $baseUri, $label, $readOnly) {
 		$relPath = trim($request->getPath(), '/'); // relativ zur BaseUri
+		cmx_dav_cleanup_ds_store($sharePath, $relPath);
 		$tree    = $server->tree;
 
 		$exists  = $tree->nodeExists($request->getPath());
@@ -601,6 +792,9 @@ add_action('init', function () {
 				$child = $item['node'];
 				$name  = $item['name'];
 				$isDir = $item['isDir'];
+				if (!$isDir && $name === '.DS_Store') {
+					continue;
+				}
 				$href  = cmx_dav_join_uri($base, $relPath, rawurlencode($name)) . ($isDir ? '/' : '') . (!$isDir && $sortQuery ? '' : $sortQuery);
 				$absHref = cmx_dav_abs_url($href);
 
