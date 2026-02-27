@@ -2,8 +2,8 @@
 
 
 // Define: Custom-Post-Type based on DIR
-register_post_type(basename(__DIR__), ['labels' => ['name' => 'Milchbüchli', 'singular_name' => 'Milchbüchli', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 40, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-backup', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+register_post_type(basename(__DIR__), ['labels' => ['name' => 'Digitale Post', 'singular_name' => 'Digitale Post', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+	'menu_position' => 40, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-cloud', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 
@@ -33,4 +33,4 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 
 // Include: @ll metaboxes
-// cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,qr-code,exports,imports,notizen,infos,dokumente,preview');
+cmx_require_files(__DIR__, 'zuordnung,zuordnung_kontakte,zuordnung_artikel,zuordnung_dokumente,zuordnung_projekte,zuordnung_belege');
