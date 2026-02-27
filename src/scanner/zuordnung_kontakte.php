@@ -3,9 +3,6 @@
 const CMX_SCANNER_REL_KONTAKTE_META = '_cmx_scanner_rel_kontakte_id';
 
 \add_action('add_meta_boxes_scanner', function (\WP_Post $post): void {
-	if (cmx_scanner_get_selected_zuordnung_type((int) $post->ID) !== 'kontakte') {
-		return;
-	}
 	\add_meta_box(
 		'cmx_scanner_rel_kontakte',
 		'Kontakt',
@@ -38,7 +35,7 @@ function cmx_scanner_render_rel_kontakte_metabox(\WP_Post $post): void {
 		return;
 	}
 
-	$selected_type = cmx_scanner_get_selected_zuordnung_type($post_id);
+	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
 	$value = isset($_POST[CMX_SCANNER_REL_KONTAKTE_META]) ? (int) $_POST[CMX_SCANNER_REL_KONTAKTE_META] : 0;
 	if ($selected_type !== 'kontakte' || $value <= 0 || \get_post_type($value) !== 'kontakte') {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META);

@@ -2,7 +2,7 @@
 
 
 // Define: Custom-Post-Type based on DIR
-register_post_type(basename(__DIR__), ['labels' => ['name' => 'Digitale Post', 'singular_name' => 'Digitale Post', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+register_post_type(basename(__DIR__), ['labels' => ['name' => 'Posteingang', 'singular_name' => 'Posteingang', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
 	'menu_position' => 40, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-cloud', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
