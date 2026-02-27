@@ -32,17 +32,32 @@ $add_action_columns = static function (array $columns): array {
 		$has_pdf = \is_file((string) $pdf_abs_path);
 	}
 
+	$has_upload = false;
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_primary_upload_abs_path')) {
+		$upload_abs_path = (string) cmxbu_get_beleg_primary_upload_abs_path($post_id);
+		$has_upload = \is_file($upload_abs_path);
+	}
+
 	$token = \function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token')
 		? (string) cmxbu_get_stable_token($post_id)
 		: '';
-	if ($token !== '') {
-		$download_url = \add_query_arg('beleg', $token, \home_url('/'));
-		echo '<a href="' . \esc_url($download_url) . '" target="_blank" rel="noopener noreferrer" title="Anzeigen als PDF (DL/C5/C4)" class="cmx-beleg-action-icon cmx-beleg-action-pdf" aria-label="Anzeigen als PDF (DL/C5/C4)"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></a>';
-		return;
+	$pdf_url = $token !== '' ? (string) \add_query_arg('beleg', $token, \home_url('/')) : '';
+	$upload_url = $token !== '' ? (string) \add_query_arg(['beleg' => $token, 'quelle' => 'upload'], \home_url('/')) : '';
+	$disabled_title = $has_pdf ? 'PDF nicht verfügbar' : 'PDF nicht vorhanden';
+
+	echo '<span class="cmx-beleg-action-icons">';
+	if ($upload_url !== '' && $has_upload) {
+		echo '<a href="' . \esc_url($upload_url) . '" target="_blank" rel="noopener noreferrer" title="Upload-Dokument anzeigen" class="cmx-beleg-action-icon cmx-beleg-action-upload" aria-label="Upload-Dokument anzeigen"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></a>';
+	} else {
+		echo '<span class="cmx-beleg-action-placeholder" aria-hidden="true"></span>';
 	}
 
-	$disabled_title = $has_pdf ? 'PDF nicht verfügbar' : 'PDF nicht vorhanden';
-	echo '<span class="cmx-beleg-action-icon cmx-beleg-action-disabled cmx-beleg-action-pdf" title="' . \esc_attr($disabled_title) . '"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></span>';
+	if ($pdf_url !== '' && $has_pdf) {
+		echo '<a href="' . \esc_url($pdf_url) . '" target="_blank" rel="noopener noreferrer" title="Anzeigen als PDF (DL/C5/C4)" class="cmx-beleg-action-icon cmx-beleg-action-pdf" aria-label="Anzeigen als PDF (DL/C5/C4)"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></a>';
+	} else {
+		echo '<span class="cmx-beleg-action-icon cmx-beleg-action-disabled cmx-beleg-action-pdf" title="' . \esc_attr($disabled_title) . '"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></span>';
+	}
+	echo '</span>';
 }, 20, 2);
 
 \add_action('admin_head-edit.php', function (): void {
@@ -54,12 +69,19 @@ $add_action_columns = static function (array $columns): array {
 
 		echo '<style>
 			.wp-list-table th.column-cmx_beleg_pdf_action {
-				width: 48px;
+				width: 74px;
 				text-align: center;
 			}
 			.wp-list-table td.column-cmx_beleg_pdf_action {
 				text-align: center;
 				vertical-align: top;
+			}
+			.cmx-beleg-action-icons {
+				display: inline-grid;
+				grid-template-columns: 18px 18px;
+				column-gap: 6px;
+				align-items: start;
+				justify-items: center;
 			}
 			.cmx-beleg-action-icon {
 				display: inline-flex;
@@ -75,11 +97,19 @@ $add_action_columns = static function (array $columns): array {
 			font-size: 18px;
 			line-height: 18px;
 		}
-		.cmx-beleg-action-pdf {
-			color: #a42c24;
-		}
-		.cmx-beleg-action-disabled {
-			opacity: 0.35;
-		}
-	</style>';
+			.cmx-beleg-action-pdf {
+				color: #a42c24;
+			}
+			.cmx-beleg-action-upload {
+				color: #2271b1;
+			}
+			.cmx-beleg-action-disabled {
+				opacity: 0.35;
+			}
+			.cmx-beleg-action-placeholder {
+				display: inline-block;
+				width: 18px;
+				height: 18px;
+			}
+		</style>';
 });
