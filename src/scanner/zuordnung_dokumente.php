@@ -14,14 +14,8 @@ const CMX_SCANNER_REL_DOKUMENTE_META = '_cmx_scanner_rel_dokumente_id';
 });
 
 function cmx_scanner_render_rel_dokumente_metabox(\WP_Post $post): void {
-	cmx_scanner_render_relation_select_box(
-		$post,
-		'dokumente',
-		CMX_SCANNER_REL_DOKUMENTE_META,
-		'cmx_scanner_rel_dokumente_save',
-		'cmx_scanner_rel_dokumente_nonce',
-		'Kein Dokument'
-	);
+	\wp_nonce_field('cmx_scanner_rel_dokumente_save', 'cmx_scanner_rel_dokumente_nonce');
+	echo '<p>' . \esc_html__('Bei Auswahl "Dokumente" wird automatisch ein neues Dokument erzeugt.', 'cmx') . '</p>';
 }
 
 \add_action('save_post_scanner', function (int $post_id): void {
@@ -36,10 +30,19 @@ function cmx_scanner_render_rel_dokumente_metabox(\WP_Post $post): void {
 	}
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
-	$value = isset($_POST[CMX_SCANNER_REL_DOKUMENTE_META]) ? (int) $_POST[CMX_SCANNER_REL_DOKUMENTE_META] : 0;
-	if ($selected_type !== 'dokumente' || $value <= 0 || \get_post_type($value) !== 'dokumente') {
+	if ($selected_type !== 'dokumente') {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_DOKUMENTE_META);
 		return;
 	}
-	\update_post_meta($post_id, CMX_SCANNER_REL_DOKUMENTE_META, $value);
+
+	// Bei "Dokumente" wird immer ein neues/zugehöriges Dokument aus dem Scanner
+	// erstellt und der Scanner danach finalisiert. Keine manuelle Fremd-Zuordnung.
+	\delete_post_meta($post_id, CMX_SCANNER_REL_DOKUMENTE_META);
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_ensure_doc_for_post')) {
+		cmx_scanner_ensure_doc_for_post($post_id);
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
+		cmx_scanner_mark_redirect_to_list_after_save($post_id);
+	}
 });
