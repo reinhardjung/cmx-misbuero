@@ -83,6 +83,10 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		if ($artikel_id > 0) {
 			cmx_scanner_link_docs_to_artikel($artikel_id, $doc_ids);
 		}
+		$projekt_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_projekte_id', true);
+		if ($projekt_id > 0) {
+			cmx_scanner_link_docs_to_projekte($projekt_id, $doc_ids);
+		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);
 
 		// Datei(en) robust vorab entfernen, auch wenn before_delete_post in diesem
@@ -255,6 +259,16 @@ function cmx_scanner_dok_artikel_rel_meta_key(): string {
 	return 'cmx_dokumente_artikel';
 }
 
+function cmx_scanner_dok_projekte_rel_meta_key(): string {
+	if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+		$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+		if (\is_array($map) && isset($map['projekte']) && \is_string($map['projekte']) && $map['projekte'] !== '') {
+			return $map['projekte'];
+		}
+	}
+	return 'cmx_dokumente_projekte';
+}
+
 function cmx_scanner_normalize_id_list($value): array {
 	$ids = [];
 	foreach ((array) $value as $item) {
@@ -349,6 +363,38 @@ function cmx_scanner_link_docs_to_artikel(int $artikel_id, array $doc_ids): void
 		$doc_artikel[] = $artikel_id;
 		$doc_artikel = \array_values(\array_unique($doc_artikel));
 		\update_post_meta($doc_id, $artikel_rel_meta_key, $doc_artikel);
+	}
+}
+
+function cmx_scanner_link_docs_to_projekte(int $projekt_id, array $doc_ids): void {
+	$doc_ids = cmx_scanner_normalize_id_list($doc_ids);
+	if ($projekt_id <= 0 || empty($doc_ids)) {
+		return;
+	}
+
+	if ((string) \get_post_type($projekt_id) !== 'projekte') {
+		return;
+	}
+
+	$uploads_meta_key = cmx_scanner_dok_uploads_meta_key();
+	$existing_uploads = cmx_scanner_normalize_id_list(\get_post_meta($projekt_id, $uploads_meta_key, true));
+	$merged_uploads = \array_values(\array_unique(\array_merge($existing_uploads, $doc_ids)));
+	if ($merged_uploads !== $existing_uploads) {
+		\update_post_meta($projekt_id, $uploads_meta_key, $merged_uploads);
+	}
+
+	$projekte_rel_meta_key = cmx_scanner_dok_projekte_rel_meta_key();
+	foreach ($doc_ids as $doc_id) {
+		if ((string) \get_post_type($doc_id) !== 'dokumente') {
+			continue;
+		}
+		$doc_projekte = cmx_scanner_normalize_id_list(\get_post_meta($doc_id, $projekte_rel_meta_key, true));
+		if (\in_array($projekt_id, $doc_projekte, true)) {
+			continue;
+		}
+		$doc_projekte[] = $projekt_id;
+		$doc_projekte = \array_values(\array_unique($doc_projekte));
+		\update_post_meta($doc_id, $projekte_rel_meta_key, $doc_projekte);
 	}
 }
 

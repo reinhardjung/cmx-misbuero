@@ -42,4 +42,18 @@ function cmx_scanner_render_rel_projekte_metabox(\WP_Post $post): void {
 		return;
 	}
 	\update_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META, $value);
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_ensure_doc_for_post')) {
+		cmx_scanner_ensure_doc_for_post($post_id);
+	}
+
+	$doc_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_doc_ids_for_post')
+		? cmx_scanner_get_doc_ids_for_post($post_id)
+		: [];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_projekte')) {
+		cmx_scanner_link_docs_to_projekte($value, $doc_ids);
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
+		cmx_scanner_mark_redirect_to_list_after_save($post_id);
+	}
 });
