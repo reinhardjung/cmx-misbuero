@@ -348,6 +348,22 @@ function cmx_dav_cleanup_ds_store(string $sharePath, string $relativePath = ''):
 	return $deleted;
 }
 
+/**
+ * Erzwingt direkten Scanner-Sync nach WebDAV-Schreibvorgängen.
+ */
+function cmx_dav_force_scanner_sync(string $baseUri): void {
+	$base = '/' . trim((string) $baseUri, '/');
+	if (strcasecmp($base, '/scanner') !== 0) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_sync_clear_fs_cache')) {
+		cmx_scanner_sync_clear_fs_cache();
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_sync_files_to_cpt')) {
+		cmx_scanner_sync_files_to_cpt();
+	}
+}
+
 /** Ermittelt WebDAV-Konfiguration anhand des Request-Pfads. */
 function cmx_dav_get_route_config(string $path): ?array {
 	$matchBaseUri = static function (string $requestPath, string $leaf): string {
@@ -524,6 +540,12 @@ add_action('init', function () {
 	}
 	if (!$readOnly) {
 		cmx_dav_ensure_rw_dir_mode($sharePath);
+		if (\function_exists('\\nocache_headers')) {
+			\nocache_headers();
+		}
+		@header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+		@header('Pragma: no-cache');
+		@header('Expires: 0');
 	}
 	cmx_dav_cleanup_ds_store($sharePath, cmx_dav_relative_from_base_uri($baseUri, (string) $path));
 
@@ -629,7 +651,7 @@ add_action('init', function () {
 				throw new DAV\Exception\Forbidden('Scanner-Ordner ist nicht beschreibbar (Server-Rechte).');
 			}
 		});
-			$server->on('afterMethod:PUT', function(HTTP\RequestInterface $request) use ($sharePath): void {
+			$server->on('afterMethod:PUT', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
 				$relPath = ltrim((string) $request->getPath(), '/');
 				$absPath = rtrim($sharePath, DIRECTORY_SEPARATOR) . ($relPath === '' ? '' : DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
 				$real = realpath($absPath);
@@ -637,6 +659,7 @@ add_action('init', function () {
 					@chmod($real, 0666);
 				}
 				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				cmx_dav_force_scanner_sync($baseUri);
 			});
 			$server->on('afterMethod:MOVE', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
 				$relPath = ltrim((string) $request->getPath(), '/');
@@ -649,6 +672,25 @@ add_action('init', function () {
 				$destRel = cmx_dav_relative_from_base_uri($baseUri, $destPath);
 				cmx_dav_cleanup_ds_store($sharePath, $relPath);
 				cmx_dav_cleanup_ds_store($sharePath, $destRel);
+				cmx_dav_force_scanner_sync($baseUri);
+			});
+			$server->on('afterMethod:DELETE', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
+				$relPath = ltrim((string) $request->getPath(), '/');
+				cmx_dav_cleanup_ds_store($sharePath, dirname($relPath));
+				cmx_dav_force_scanner_sync($baseUri);
+			});
+			$server->on('afterMethod:COPY', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
+				$relPath = ltrim((string) $request->getPath(), '/');
+				$destPath = (string) \parse_url((string) $request->getHeader('Destination'), \PHP_URL_PATH);
+				$destRel = cmx_dav_relative_from_base_uri($baseUri, $destPath);
+				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				cmx_dav_cleanup_ds_store($sharePath, $destRel);
+				cmx_dav_force_scanner_sync($baseUri);
+			});
+			$server->on('afterMethod:MKCOL', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
+				$relPath = ltrim((string) $request->getPath(), '/');
+				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				cmx_dav_force_scanner_sync($baseUri);
 			});
 		}
 
@@ -780,6 +822,9 @@ add_action('init', function () {
 
 				$redirectPath = cmx_dav_join_uri(rtrim((string)$server->getBaseUri(), '/'), $relPath) . '/';
 				cmx_dav_cleanup_ds_store($sharePath, $relPath);
+				if ($okCount > 0) {
+					cmx_dav_force_scanner_sync((string) $server->getBaseUri());
+				}
 				$location = add_query_arg(
 					[
 						'upload' => $status,
