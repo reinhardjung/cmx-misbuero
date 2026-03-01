@@ -529,21 +529,34 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 		}
 		$prev_map[$rel_type] = cmx_dok_int_list(\get_post_meta($post_id, $meta_key, true));
 		$new_map[$rel_type] = [];
-	}
 
-	if ($type !== '' && isset($ui_map[$type])) {
-		$cfg = $ui_map[$type];
-		$meta_key = (string) ($cfg['meta'] ?? '');
-		if ($meta_key !== '' && \array_key_exists($meta_key, $_POST)) {
-			$selected_id = (int) \wp_unslash((string) $_POST[$meta_key]);
-			if ($selected_id > 0) {
-				$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', (array) ($cfg['post_types'] ?? [])))));
-				$selected_post_type = (string) \get_post_type($selected_id);
-				if (\in_array($selected_post_type, $allowed_post_types, true)) {
-					$new_map[$type] = [$selected_id];
-				}
-			}
+		$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', (array) ($cfg['post_types'] ?? [])))));
+		if (empty($allowed_post_types) || !\array_key_exists($meta_key, $_POST)) {
+			continue;
 		}
+
+		$raw_value = $_POST[$meta_key];
+		$candidate_ids = [];
+		if (\is_array($raw_value)) {
+			foreach ($raw_value as $item) {
+				$candidate_ids[] = (int) \wp_unslash((string) $item);
+			}
+		} else {
+			$candidate_ids[] = (int) \wp_unslash((string) $raw_value);
+		}
+
+		$valid_ids = [];
+		foreach ($candidate_ids as $selected_id) {
+			if ($selected_id <= 0) {
+				continue;
+			}
+			$selected_post_type = (string) \get_post_type($selected_id);
+			if (!\in_array($selected_post_type, $allowed_post_types, true)) {
+				continue;
+			}
+			$valid_ids[] = $selected_id;
+		}
+		$new_map[$rel_type] = \array_values(\array_unique($valid_ids));
 	}
 
 	$uploads_meta_key = cmx_dok_uploads_meta_key();
