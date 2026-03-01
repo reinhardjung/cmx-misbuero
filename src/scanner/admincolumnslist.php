@@ -27,6 +27,16 @@ if (!\defined(__NAMESPACE__ . '\\CMX_SCANNER_SYNC_DOC_REL_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_SCANNER_SYNC_UPLOADED_TS_META')) {
 	\define(__NAMESPACE__ . '\\CMX_SCANNER_SYNC_UPLOADED_TS_META', '_cmx_scanner_uploaded_ts');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_SCANNER_SYNC_FS_SIG_META')) {
+	\define(__NAMESPACE__ . '\\CMX_SCANNER_SYNC_FS_SIG_META', '_cmx_scanner_fs_signature');
+}
+
+function cmx_scanner_sync_clear_fs_cache(string $path = ''): void {
+	@\clearstatcache(true);
+	if ($path !== '') {
+		@\clearstatcache(true, $path);
+	}
+}
 
 function cmx_scanner_sync_normalize_rel(string $rel): string {
 	return \strtolower(\ltrim(\str_replace('\\', '/', $rel), '/'));
@@ -332,6 +342,8 @@ function cmx_scanner_sync_canonical_rel_from_uploads_abs(string $abs, string $up
 }
 
 function cmx_scanner_sync_collect_files(): array {
+	cmx_scanner_sync_clear_fs_cache();
+
 	$upload_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
 	$root_configs = cmx_scanner_sync_collect_root_configs();
 
@@ -339,6 +351,7 @@ function cmx_scanner_sync_collect_files(): array {
 	foreach ($root_configs as $root_config) {
 		$root = isset($root_config['root']) ? (string) $root_config['root'] : '';
 		$prefix = isset($root_config['prefix']) ? (string) $root_config['prefix'] : '';
+		cmx_scanner_sync_clear_fs_cache($root);
 		if ($root === '' || !\is_dir($root)) {
 			continue;
 		}
@@ -352,15 +365,16 @@ function cmx_scanner_sync_collect_files(): array {
 			continue;
 		}
 
-			foreach ($iterator as $entry) {
-				if (!$entry instanceof \SplFileInfo || !$entry->isFile()) {
-					continue;
-				}
+				foreach ($iterator as $entry) {
+					if (!$entry instanceof \SplFileInfo || !$entry->isFile()) {
+						continue;
+					}
 
-				$abs = \wp_normalize_path((string) $entry->getPathname());
-				if ($abs === '') {
-					continue;
-				}
+					$abs = \wp_normalize_path((string) $entry->getPathname());
+					cmx_scanner_sync_clear_fs_cache($abs);
+					if ($abs === '') {
+						continue;
+					}
 
 				$base = (string) $entry->getBasename();
 					if ($base === '' || $base[0] === '.') {
@@ -389,6 +403,18 @@ function cmx_scanner_sync_collect_files(): array {
 
 	\ksort($result, \SORT_NATURAL | \SORT_FLAG_CASE);
 	return \array_values($result);
+}
+
+function cmx_scanner_sync_build_fs_signature(string $abs): string {
+	$abs = \wp_normalize_path($abs);
+	if ($abs === '' || !\is_file($abs)) {
+		return '';
+	}
+	cmx_scanner_sync_clear_fs_cache($abs);
+	$size = @\filesize($abs);
+	$mtime = @\filemtime($abs);
+	$inode = @\fileinode($abs);
+	return (string) $size . ':' . (string) $mtime . ':' . (string) $inode;
 }
 
 function cmx_scanner_sync_is_trashed_post(int $post_id): bool {
@@ -423,6 +449,7 @@ function cmx_scanner_sync_get_scanner_ids(): array {
 		'post_status'            => ['publish', 'draft', 'pending', 'private', 'future', 'trash'],
 		'posts_per_page'         => -1,
 		'fields'                 => 'ids',
+		'cache_results'          => false,
 		'no_found_rows'          => true,
 		'update_post_meta_cache' => false,
 		'update_post_term_cache' => false,
@@ -487,7 +514,11 @@ function cmx_scanner_sync_find_doc_by_rel(string $rel): int {
 			'post_status'    => ['publish', 'draft', 'pending', 'private', 'future'],
 			'posts_per_page' => 1,
 			'fields'         => 'ids',
+			'cache_results'  => false,
 			'no_found_rows'  => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'suppress_filters'       => true,
 			'meta_query'     => [[
 				'key'     => CMX_SCANNER_SYNC_DOC_FILE_META,
 				'value'   => $variant,
@@ -579,6 +610,8 @@ function cmx_scanner_sync_ensure_doc_link(int $scanner_id, string $rel, string $
 }
 
 function cmx_scanner_sync_files_to_cpt(): void {
+	cmx_scanner_sync_clear_fs_cache();
+
 	$files = cmx_scanner_sync_collect_files();
 
 	$existing_file_keys = [];
@@ -635,8 +668,16 @@ function cmx_scanner_sync_files_to_cpt(): void {
 		}
 
 		\update_post_meta($scanner_id, CMX_SCANNER_SYNC_SOURCE_REL_META, $rel);
-		$mtime = @\filemtime((string) ($file['abs'] ?? ''));
-		if (\is_int($mtime) && $mtime > 0) {
+		$abs_path = (string) ($file['abs'] ?? '');
+		$mtime = @\filemtime($abs_path);
+		$signature = cmx_scanner_sync_build_fs_signature($abs_path);
+		$stored_signature = (string) \get_post_meta($scanner_id, CMX_SCANNER_SYNC_FS_SIG_META, true);
+		if ($signature !== '') {
+			if ($signature !== $stored_signature) {
+				\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, (int) \current_time('timestamp'));
+				\update_post_meta($scanner_id, CMX_SCANNER_SYNC_FS_SIG_META, $signature);
+			}
+		} elseif (\is_int($mtime) && $mtime > 0) {
 			\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, $mtime);
 		}
 
