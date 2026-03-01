@@ -37,9 +37,29 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
 	$value = isset($_POST[CMX_SCANNER_REL_BELEGE_META]) ? (int) $_POST[CMX_SCANNER_REL_BELEGE_META] : 0;
-	if ($selected_type !== 'belege' || $value <= 0 || \get_post_type($value) !== 'belege') {
+	if ($selected_type !== 'belege') {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
 		return;
 	}
+
+	if ($value <= 0 || \get_post_type($value) !== 'belege') {
+		\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
+		return;
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_ensure_doc_for_post')) {
+		cmx_scanner_ensure_doc_for_post($post_id);
+	}
+
+	$doc_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_doc_ids_for_post')
+		? cmx_scanner_get_doc_ids_for_post($post_id)
+		: [];
+
 	\update_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META, $value);
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_belege')) {
+		cmx_scanner_link_docs_to_belege($value, $doc_ids);
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
+		cmx_scanner_mark_redirect_to_list_after_save($post_id);
+	}
 });

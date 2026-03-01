@@ -7,14 +7,21 @@ const CMX_DOK_REL_META = [
 	'kassenbuch' => 'cmx_dokumente_kassenbuch',
 	'belege'     => 'cmx_dokumente_belege',
 ];
-
 const CMX_DOK_ZUORDNUNG_TYP_META = '_cmx_dokumente_zuordnung_typ';
 const CMX_DOK_ZUORDNUNG_TYPES = [
-	'artikel'  => 'Artikel',
 	'kontakte' => 'Kontakte',
+	'artikel'  => 'Artikel',
 	'projekte' => 'Projekte',
 	'belege'   => 'Belege',
 ];
+
+function cmx_dok_default_zuordnung_type(): string {
+	if (\array_key_exists('belege', CMX_DOK_ZUORDNUNG_TYPES)) {
+		return 'belege';
+	}
+	$keys = \array_keys(CMX_DOK_ZUORDNUNG_TYPES);
+	return isset($keys[0]) ? (string) $keys[0] : '';
+}
 
 function cmx_dok_cpt_slug(): string {
 	return basename(__DIR__);
@@ -49,7 +56,7 @@ function cmx_dok_rel_ui_map(): array {
 	];
 }
 
-function cmx_dok_get_relation_metabox_ids(): array {
+function cmx_dok_relation_metabox_ids(): array {
 	return [
 		'artikel'  => 'cmx_dok_rel_artikel',
 		'kontakte' => 'cmx_dok_rel_kontakte',
@@ -71,20 +78,24 @@ function cmx_dok_get_rel_meta_keys(): array {
 }
 
 function cmx_dok_get_selected_zuordnung_type(int $post_id): string {
+	if ($post_id <= 0) {
+		return cmx_dok_default_zuordnung_type();
+	}
 	$type = (string) \get_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META, true);
-	return \array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES) ? $type : '';
+	if (\array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES)) {
+		return $type;
+	}
+	return cmx_dok_default_zuordnung_type();
 }
 
 function cmx_dok_get_requested_zuordnung_type(int $post_id = 0): string {
 	$type = isset($_POST['cmx_dok_zuordnung_typ'])
-		? \sanitize_key((string) $_POST['cmx_dok_zuordnung_typ'])
+		? \sanitize_key((string) \wp_unslash($_POST['cmx_dok_zuordnung_typ']))
 		: '';
-
 	if ($type === '' && $post_id > 0) {
 		$type = cmx_dok_get_selected_zuordnung_type($post_id);
 	}
-
-	return \array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES) ? $type : '';
+	return \array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES) ? $type : cmx_dok_default_zuordnung_type();
 }
 
 function cmx_dok_uploads_meta_key(): string {
@@ -338,6 +349,7 @@ function cmx_dok_render_relation_metabox(\WP_Post $post, string $target_type): v
 	if ($meta_key === '') {
 		return;
 	}
+
 	$empty_label = (string) ($cfg['empty'] ?? 'Kein Eintrag');
 	cmx_dok_render_relation_select_box($post, $target_type, $meta_key, $empty_label);
 }
@@ -345,11 +357,10 @@ function cmx_dok_render_relation_metabox(\WP_Post $post, string $target_type): v
 function cmx_dok_render_zuordnung_metabox(\WP_Post $post): void {
 	\wp_nonce_field('cmx_dok_zuordnung_save', 'cmx_dok_zuordnung_nonce');
 	$current = cmx_dok_get_selected_zuordnung_type((int) $post->ID);
-	$metabox_map_json = \wp_json_encode(cmx_dok_get_relation_metabox_ids());
+	$metabox_map_json = \wp_json_encode(cmx_dok_relation_metabox_ids());
 
 	echo '<label for="cmx_dok_zuordnung_typ" class="screen-reader-text">Zuordnung</label>';
 	echo '<select id="cmx_dok_zuordnung_typ" name="cmx_dok_zuordnung_typ" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;">';
-	echo '<option value="">- bitte waehlen -</option>';
 	foreach (CMX_DOK_ZUORDNUNG_TYPES as $key => $label) {
 		echo '<option value="' . \esc_attr($key) . '" ' . \selected($current, $key, false) . '>' . \esc_html($label) . '</option>';
 	}
@@ -430,13 +441,13 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 		return;
 	}
 
-	$ids = cmx_dok_get_relation_metabox_ids();
+	$ids = cmx_dok_relation_metabox_ids();
 	if (empty($ids)) {
 		return;
 	}
 
 	$post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
-	$selected = $post_id > 0 ? cmx_dok_get_selected_zuordnung_type($post_id) : '';
+	$selected = cmx_dok_get_selected_zuordnung_type($post_id);
 	$selected_box_id = ($selected !== '' && isset($ids[$selected])) ? (string) $ids[$selected] : '';
 
 	$selectors = [];
@@ -463,13 +474,14 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 		'default'
 	);
 
-	$box_ids = cmx_dok_get_relation_metabox_ids();
+	$metabox_ids = cmx_dok_relation_metabox_ids();
+
 	foreach (cmx_dok_rel_ui_map() as $type => $cfg) {
-		$box_id = (string) ($box_ids[$type] ?? '');
+		$box_id = (string) ($metabox_ids[$type] ?? '');
 		if ($box_id === '') {
 			continue;
 		}
-		$label = (string) ($cfg['label'] ?? ucfirst($type));
+		$label = (string) ($cfg['label'] ?? \ucfirst($type));
 		\add_meta_box(
 			$box_id,
 			$label,
@@ -506,7 +518,6 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 	} else {
 		\update_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META, $type);
 	}
-
 	$ui_map = cmx_dok_rel_ui_map();
 	$prev_map = [];
 	$new_map = [];
@@ -523,12 +534,14 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 	if ($type !== '' && isset($ui_map[$type])) {
 		$cfg = $ui_map[$type];
 		$meta_key = (string) ($cfg['meta'] ?? '');
-		$selected_id = $meta_key !== '' && isset($_POST[$meta_key]) ? (int) $_POST[$meta_key] : 0;
-		if ($selected_id > 0) {
-			$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', (array) ($cfg['post_types'] ?? [])))));
-			$selected_post_type = (string) \get_post_type($selected_id);
-			if (\in_array($selected_post_type, $allowed_post_types, true)) {
-				$new_map[$type] = [$selected_id];
+		if ($meta_key !== '' && \array_key_exists($meta_key, $_POST)) {
+			$selected_id = (int) \wp_unslash((string) $_POST[$meta_key]);
+			if ($selected_id > 0) {
+				$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', (array) ($cfg['post_types'] ?? [])))));
+				$selected_post_type = (string) \get_post_type($selected_id);
+				if (\in_array($selected_post_type, $allowed_post_types, true)) {
+					$new_map[$type] = [$selected_id];
+				}
 			}
 		}
 	}

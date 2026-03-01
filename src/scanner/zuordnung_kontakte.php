@@ -86,6 +86,13 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		return;
 	}
 
+	$request_method = \strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+	// Niemals im gleichen POST-Save-Request löschen, sonst fehlen Core später
+	// die Post-Daten und es entstehen Warnungen/Redirect-Probleme.
+	if ($request_method !== 'GET') {
+		return;
+	}
+
 	$pagenow = (string) ($GLOBALS['pagenow'] ?? '');
 	if ($pagenow === 'post.php') {
 		$editing_post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
@@ -133,6 +140,10 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		$projekt_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_projekte_id', true);
 		if ($projekt_id > 0) {
 			cmx_scanner_link_docs_to_projekte($projekt_id, $doc_ids);
+		}
+		$beleg_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_belege_id', true);
+		if ($beleg_id > 0) {
+			cmx_scanner_link_docs_to_belege($beleg_id, $doc_ids);
 		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);
 
@@ -315,6 +326,16 @@ function cmx_scanner_dok_projekte_rel_meta_key(): string {
 		}
 	}
 	return 'cmx_dokumente_projekte';
+}
+
+function cmx_scanner_dok_belege_rel_meta_key(): string {
+	if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+		$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+		if (\is_array($map) && isset($map['belege']) && \is_string($map['belege']) && $map['belege'] !== '') {
+			return $map['belege'];
+		}
+	}
+	return 'cmx_dokumente_belege';
 }
 
 function cmx_scanner_normalize_id_list($value): array {
@@ -510,6 +531,37 @@ function cmx_scanner_link_docs_to_projekte(int $projekt_id, array $doc_ids): voi
 		$doc_projekte[] = $projekt_id;
 		$doc_projekte = \array_values(\array_unique($doc_projekte));
 		\update_post_meta($doc_id, $projekte_rel_meta_key, $doc_projekte);
+	}
+}
+
+function cmx_scanner_link_docs_to_belege(int $beleg_id, array $doc_ids): void {
+	$doc_ids = cmx_scanner_normalize_id_list($doc_ids);
+	if ($beleg_id <= 0 || empty($doc_ids)) {
+		return;
+	}
+	if ((string) \get_post_type($beleg_id) !== 'belege') {
+		return;
+	}
+
+	$uploads_meta_key = cmx_scanner_dok_uploads_meta_key();
+	$existing_uploads = cmx_scanner_normalize_id_list(\get_post_meta($beleg_id, $uploads_meta_key, true));
+	$merged_uploads = \array_values(\array_unique(\array_merge($existing_uploads, $doc_ids)));
+	if ($merged_uploads !== $existing_uploads) {
+		\update_post_meta($beleg_id, $uploads_meta_key, $merged_uploads);
+	}
+
+	$belege_rel_meta_key = cmx_scanner_dok_belege_rel_meta_key();
+	foreach ($doc_ids as $doc_id) {
+		if ((string) \get_post_type($doc_id) !== 'dokumente') {
+			continue;
+		}
+		$doc_belege = cmx_scanner_normalize_id_list(\get_post_meta($doc_id, $belege_rel_meta_key, true));
+		if (\in_array($beleg_id, $doc_belege, true)) {
+			continue;
+		}
+		$doc_belege[] = $beleg_id;
+		$doc_belege = \array_values(\array_unique($doc_belege));
+		\update_post_meta($doc_id, $belege_rel_meta_key, $doc_belege);
 	}
 }
 
