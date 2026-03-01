@@ -37,8 +37,15 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
 	$value = isset($_POST[CMX_SCANNER_REL_BELEGE_META]) ? (int) $_POST[CMX_SCANNER_REL_BELEGE_META] : 0;
+	$has_submitted_value = \array_key_exists(CMX_SCANNER_REL_BELEGE_META, $_POST);
+	$is_touched = \function_exists(__NAMESPACE__ . '\\cmx_scanner_relation_was_touched')
+		? cmx_scanner_relation_was_touched(CMX_SCANNER_REL_BELEGE_META)
+		: false;
 	if ($selected_type !== 'belege') {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
+		return;
+	}
+	if (!$has_submitted_value || ($value <= 0 && !$is_touched)) {
 		return;
 	}
 

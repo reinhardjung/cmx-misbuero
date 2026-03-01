@@ -30,6 +30,17 @@ function cmx_scanner_get_requested_zuordnung_type(int $post_id = 0): string {
 	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : '';
 }
 
+function cmx_scanner_relation_was_touched(string $meta_key): bool {
+	if ($meta_key === '') {
+		return false;
+	}
+	if (!isset($_POST['cmx_scanner_rel_touched']) || !\is_array($_POST['cmx_scanner_rel_touched'])) {
+		return false;
+	}
+	$map = (array) $_POST['cmx_scanner_rel_touched'];
+	return isset($map[$meta_key]) && (int) $map[$meta_key] === 1;
+}
+
 function cmx_scanner_get_rel_meta_keys(): array {
 	return [
 		'kontakte'  => '_cmx_scanner_rel_kontakte_id',
@@ -86,18 +97,22 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 
 	\wp_nonce_field($nonce_action, $nonce_name);
 	$current = (int) \get_post_meta($post->ID, $meta_key, true);
+	$has_current = $current > 0;
 	$options = cmx_scanner_fetch_relation_options($target_type);
 	$target_label = CMX_SCANNER_ZUORDNUNG_TYPES[$target_type] ?? ucfirst($target_type);
 	$id_suffix = preg_replace('~[^a-z0-9_]+~', '_', strtolower($target_type . '_' . $meta_key));
 	$select_id = 'cmx_scanner_rel_select_' . $id_suffix;
 	$search_id = 'cmx_scanner_rel_search_' . $id_suffix;
 	$nohit_id  = 'cmx_scanner_rel_nohit_' . $id_suffix;
+	$touched_id = 'cmx_scanner_rel_touched_' . $id_suffix;
+	$touched_name = 'cmx_scanner_rel_touched[' . $meta_key . ']';
 
 	// echo '<p style="margin:0 0 8px;"><em>Zuordnung zu: ' . \esc_html($target_label) . '</em></p>';
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
+	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-scanner-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
-	echo '<option value="0">' . \esc_html($empty_label) . '</option>';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-scanner-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
+	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		echo '<option value="' . \esc_attr((string) $opt['id']) . '" ' . \selected($current, (int) $opt['id'], false) . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
@@ -109,16 +124,34 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 	}
 
 	static $printed_search_js = false;
-	if (!$printed_search_js) {
-		$printed_search_js = true;
-		echo '<script>
-		(function(){
-			if (window.cmxScannerRelSearchInit) return;
-			window.cmxScannerRelSearchInit = true;
+		if (!$printed_search_js) {
+			$printed_search_js = true;
+			echo '<script>
+			(function(){
+				if (window.cmxScannerRelSearchInit) return;
+				window.cmxScannerRelSearchInit = true;
 
-			var filter = function(input){
-				var selectId = input.getAttribute("data-target-select") || "";
-				var nohitId = input.getAttribute("data-target-nohit") || "";
+				var markTouched = function(select){
+					if (!select) return;
+					var touchedId = select.getAttribute("data-target-touched") || "";
+					if (!touchedId) return;
+					var touched = document.getElementById(touchedId);
+					if (!touched) return;
+					touched.value = "1";
+				};
+
+				var clearSelection = function(select){
+					if (!select) return;
+					for (var i = 0; i < select.options.length; i++) {
+						select.options[i].selected = false;
+					}
+					select.selectedIndex = -1;
+					markTouched(select);
+				};
+
+				var filter = function(input){
+					var selectId = input.getAttribute("data-target-select") || "";
+					var nohitId = input.getAttribute("data-target-nohit") || "";
 				var select = document.getElementById(selectId);
 				if (!select) return;
 				var nohit = nohitId ? document.getElementById(nohitId) : null;
@@ -147,18 +180,38 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 				}
 			};
 
-			document.addEventListener("input", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-search")) return;
-				filter(t);
-			});
+				document.addEventListener("input", function(e){
+					var t = e.target;
+					if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-search")) return;
+					filter(t);
+				});
 
-			document.addEventListener("keydown", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-search")) return;
-				if (e.key !== "ArrowDown") return;
-				var selectId = t.getAttribute("data-target-select") || "";
-				var select = document.getElementById(selectId);
+				document.addEventListener("change", function(e){
+					var t = e.target;
+					if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-select")) return;
+					markTouched(t);
+				});
+
+				document.addEventListener("keydown", function(e){
+					var t = e.target;
+					if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-search")) return;
+					if (e.key === "Escape") {
+						var selectId = t.getAttribute("data-target-select") || "";
+						var nohitId = t.getAttribute("data-target-nohit") || "";
+						var select = document.getElementById(selectId);
+						var nohit = nohitId ? document.getElementById(nohitId) : null;
+						e.preventDefault();
+						t.value = "";
+						filter(t);
+						clearSelection(select);
+						if (nohit) {
+							nohit.style.display = "none";
+						}
+						return;
+					}
+					if (e.key !== "ArrowDown") return;
+					var selectId = t.getAttribute("data-target-select") || "";
+					var select = document.getElementById(selectId);
 				if (!select) return;
 				e.preventDefault();
 				select.focus();
@@ -166,14 +219,41 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 					if (!select.options[i].hidden) {
 						select.options[i].selected = true;
 						break;
+						}
 					}
-				}
-			});
+				});
 
-			var boot = function(){
-				var inputs = document.querySelectorAll(".cmx-scanner-rel-search");
-				for (var i = 0; i < inputs.length; i++) {
-					filter(inputs[i]);
+				document.addEventListener("keydown", function(e){
+					var t = e.target;
+					if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-select")) return;
+					if (e.key !== "Escape") return;
+					e.preventDefault();
+					clearSelection(t);
+					var searchId = t.id ? t.id.replace("cmx_scanner_rel_select_", "cmx_scanner_rel_search_") : "";
+					var search = searchId ? document.getElementById(searchId) : null;
+					if (search) {
+						search.focus();
+					}
+				});
+
+				var boot = function(){
+					var selects = document.querySelectorAll(".cmx-scanner-rel-select[data-cmx-no-selection=\'1\']");
+					for (var si = 0; si < selects.length; si++) {
+						var select = selects[si];
+						var hasSelected = false;
+						for (var oi = 0; oi < select.options.length; oi++) {
+							if (select.options[oi].selected) {
+								hasSelected = true;
+								break;
+							}
+						}
+						if (hasSelected) {
+							select.selectedIndex = -1;
+						}
+					}
+					var inputs = document.querySelectorAll(".cmx-scanner-rel-search");
+					for (var i = 0; i < inputs.length; i++) {
+						filter(inputs[i]);
 				}
 			};
 			if (document.readyState === "loading") {
