@@ -31,7 +31,6 @@ function cmx_scanner_render_rel_dokumente_metabox(\WP_Post $post): void {
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
 	if ($selected_type !== 'dokumente') {
-		\delete_post_meta($post_id, CMX_SCANNER_REL_DOKUMENTE_META);
 		return;
 	}
 

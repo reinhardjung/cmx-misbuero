@@ -415,11 +415,4 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 	} else {
 		\update_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META, $type);
 	}
-
-	$rel_meta_keys = cmx_scanner_get_rel_meta_keys();
-	foreach ($rel_meta_keys as $key => $meta_key) {
-		if ($key !== $type) {
-			\delete_post_meta($post_id, $meta_key);
-		}
-	}
 }, 10, 2);

@@ -41,8 +41,7 @@ function cmx_scanner_render_rel_artikel_metabox(\WP_Post $post): void {
 	$is_touched = \function_exists(__NAMESPACE__ . '\\cmx_scanner_relation_was_touched')
 		? cmx_scanner_relation_was_touched(CMX_SCANNER_REL_ARTIKEL_META)
 		: false;
-	if ($selected_type !== 'artikel') {
-		\delete_post_meta($post_id, CMX_SCANNER_REL_ARTIKEL_META);
+	if ($selected_type !== 'artikel' && !$is_touched) {
 		return;
 	}
 	if (!$has_submitted_value || ($value <= 0 && !$is_touched)) {
