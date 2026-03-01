@@ -4,7 +4,7 @@ defined('ABSPATH') || exit;
 
 /**
  * Lokale Bildverwaltung ohne Mediathek:
- * - Ablage: /wp-content/uploads/misbuero/bilder/{post_type}/
+ * - Ablage: /wp-content/uploads/misbuero/archiv/bilder/{post_type}/
  * - Dateiname: {post_title}.ext (kleinbuchstaben)
  * - Überschreiben bestehender Dateien
  * - Cache-Busting via ?v=filemtime
@@ -14,7 +14,7 @@ defined('ABSPATH') || exit;
 
 /** Basis-Unterordner relativ zu uploads/ */
 if (!defined(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR')) {
-	define(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/bilder');
+	define(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/archiv/bilder');
 }
 
 /** CPT-Konfiguration */

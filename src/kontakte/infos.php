@@ -5,17 +5,71 @@ if (!defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_URL')) {
 	define(__NAMESPACE__ . '\\CMX_KONTAKTE_META_URL', 'cmx_kontakte_meta_url');
 }
 if (!defined(__NAMESPACE__ . '\\CMX_LOCAL_IMG_SUBDIR')) {
-	define(__NAMESPACE__ . '\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/bilder');
+	define(__NAMESPACE__ . '\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/archiv/bilder');
 }
 
 /** Upload-Basis */
 function cmx_local_base_path(): string {
 	$u = \wp_get_upload_dir();
-	return \wp_normalize_path($u['basedir'] . CMX_LOCAL_IMG_SUBDIR);
+	return \wp_normalize_path($u['basedir'] . CMX_LOCAL_IMG_SUBDIR . '/kontakte');
 }
 function cmx_local_base_url(): string {
 	$u = \wp_get_upload_dir();
-	return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR;
+	return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR . '/kontakte';
+}
+
+/**
+ * Migriert vorhandene Kontakt-Logos aus alten Pfaden nach /archiv/bilder/kontakte.
+ */
+function cmx_maybe_migrate_contact_logo_to_archiv_path(int $post_id): void {
+	$current_path = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_path', true);
+	if ($current_path === '') {
+		return;
+	}
+	$current_path = \wp_normalize_path($current_path);
+	if (!\is_file($current_path)) {
+		return;
+	}
+
+	$target_dir = \wp_normalize_path(cmx_local_base_path());
+	if ($target_dir === '' || $current_path === $target_dir || \strpos($current_path, $target_dir . '/') === 0) {
+		return;
+	}
+	if (!\is_dir($target_dir)) {
+		\wp_mkdir_p($target_dir);
+	}
+
+	$filename = \basename($current_path);
+	if ($filename === '') {
+		return;
+	}
+
+	$target = \wp_normalize_path(\trailingslashit($target_dir) . $filename);
+	if ($target === $current_path) {
+		return;
+	}
+	if (\is_file($target)) {
+		@unlink($target);
+	}
+
+	$moved = @rename($current_path, $target);
+	if (!$moved) {
+		$moved = @copy($current_path, $target);
+		if ($moved) {
+			@unlink($current_path);
+		}
+	}
+	if (!$moved || !\is_file($target)) {
+		return;
+	}
+
+	@chmod($target, 0644);
+	$ver = @filemtime($target) ?: time();
+	$url = \trailingslashit(cmx_local_base_url()) . rawurlencode($filename) . '?v=' . $ver;
+
+	\update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+	\update_post_meta($post_id, '_cmx_local_image_kontakte_url', $url);
+	\clean_post_cache($post_id);
 }
 
 /**
@@ -42,6 +96,7 @@ function cmx_has_local_logo(int $post_id): bool {
  */
 function cmx_fetch_logo_from_url(int $post_id, float $max_wait_seconds = 2.0) {
 	if ($post_id <= 0) return new \WP_Error('bad_post', 'Ungültige Post-ID');
+	cmx_maybe_migrate_contact_logo_to_archiv_path($post_id);
 
 	// Wenn bereits ein Logo existiert → fertig
 	if (cmx_has_local_logo($post_id)) {
@@ -102,6 +157,7 @@ function cmx_fetch_logo_from_url(int $post_id, float $max_wait_seconds = 2.0) {
 	if (\wp_is_post_revision($post_id)) return;
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
+	cmx_maybe_migrate_contact_logo_to_archiv_path((int) $post_id);
 
 	// Wenn im Request manuell gesetzt wurde → nichts tun
 	if (!empty($_POST['_cmx_local_image_kontakte_url']) ||

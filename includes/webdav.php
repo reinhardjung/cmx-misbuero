@@ -10,6 +10,112 @@ use Sabre\HTTP as HTTP;
 function cmx_dav_h($str) {
 	return htmlspecialchars((string)$str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+
+function cmx_dav_hidden_root_names_for_base_uri(string $baseUri): array {
+	$baseUri = '/' . trim((string) $baseUri, '/');
+	if (strcasecmp($baseUri, '/archiv') === 0) {
+		return ['scanner'];
+	}
+	if (strcasecmp($baseUri, '/scanner') === 0) {
+		return ['archiv'];
+	}
+	return [];
+}
+
+function cmx_dav_path_hits_hidden_root(string $path, array $hiddenRootNames): bool {
+	if (empty($hiddenRootNames)) {
+		return false;
+	}
+	$path = ltrim((string) $path, '/');
+	if ($path === '') {
+		return false;
+	}
+	$first = strtolower((string) strtok($path, '/'));
+	if ($first === '') {
+		return false;
+	}
+	$hidden = array_values(array_unique(array_filter(array_map(static function ($name): string {
+		return strtolower(trim((string) $name));
+	}, $hiddenRootNames), static function ($name): bool {
+		return $name !== '';
+	})));
+	return in_array($first, $hidden, true);
+}
+
+/**
+ * Root-Filter für WebDAV-Verzeichnisse:
+ * blendet definierte Namen nur auf Root-Ebene aus und macht sie unzugreifbar.
+ */
+class CmxDavRootFilteredDirectory extends DAV\FS\Directory {
+	/** @var string[] */
+	private array $hiddenRootNames;
+	private bool $isRootNode;
+
+	public function __construct(string $path, array $hiddenRootNames = [], bool $isRootNode = true) {
+		parent::__construct($path);
+		$this->hiddenRootNames = array_values(array_unique(array_filter(array_map(static function ($name): string {
+			return strtolower(trim((string) $name));
+		}, $hiddenRootNames), static function ($name): bool {
+			return $name !== '';
+		})));
+		$this->isRootNode = $isRootNode;
+	}
+
+	private function isHiddenAtRoot(string $name): bool {
+		if (!$this->isRootNode) {
+			return false;
+		}
+		$name = strtolower(trim((string) $name));
+		if ($name === '') {
+			return false;
+		}
+		return in_array($name, $this->hiddenRootNames, true);
+	}
+
+	public function getChildren(): array {
+		$out = [];
+		$iterator = new \FilesystemIterator(
+			$this->path,
+			\FilesystemIterator::CURRENT_AS_SELF | \FilesystemIterator::SKIP_DOTS
+		);
+
+		foreach ($iterator as $entry) {
+			$name = (string) $entry->getFilename();
+			if ($this->isHiddenAtRoot($name)) {
+				continue;
+			}
+			$fullPath = (string) ($this->path . '/' . $name);
+			if (\is_dir($fullPath)) {
+				$out[] = new self($fullPath, $this->hiddenRootNames, false);
+				continue;
+			}
+			$out[] = new DAV\FS\File($fullPath);
+		}
+
+		return $out;
+	}
+
+	public function getChild($name): DAV\INode {
+		$name = (string) $name;
+		if ($this->isHiddenAtRoot($name)) {
+			throw new DAV\Exception\NotFound('File not found');
+		}
+		$child = parent::getChild($name);
+		if ($child instanceof DAV\FS\Directory) {
+			return new self((string) ($this->path . '/' . $name), $this->hiddenRootNames, false);
+		}
+		return $child;
+	}
+
+	public function childExists($name): bool {
+		$name = (string) $name;
+		if ($this->isHiddenAtRoot($name)) {
+			return false;
+		}
+		return parent::childExists($name);
+	}
+}
+
 function cmx_dav_join_uri(...$parts) {
 	$uri = preg_replace('#/+#','/', implode('/', array_map(fn($p)=>trim((string)$p, '/'), $parts)));
 	return '/' . ltrim($uri, '/');
@@ -40,26 +146,84 @@ function cmx_dav_render_empty_archive_message(string $message = 'Es wurden noch 
 		.'</body></html>';
 }
 
-/** Scanner-Share: bevorzugt den "Scanner"-Ordner, fällt auf Legacy "scanner" zurück. */
+/** Scanner-Share: bevorzugt den lowercase-Ordner, fällt auf Legacy-Struktur zurück. */
 function cmx_dav_scanner_share_path(): string {
-	$preferred = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
-	$legacy    = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
-	$candidates = [$preferred, $legacy];
+	$preferred = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
+	$legacyUpper = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
+	$legacyCandidates = [$legacyUpper];
 
-	// Existierende + beschreibbare Variante zuerst.
-	foreach ($candidates as $candidate) {
+	// Bevorzugter Root immer zuerst: wenn er fehlt, wird er später angelegt.
+	if (!is_dir($preferred)) {
+		return $preferred;
+	}
+	if (is_writable($preferred)) {
+		$real = realpath($preferred);
+		return $real !== false ? $real : $preferred;
+	}
+
+	// Fallback nur, wenn der bevorzugte Ordner zwar existiert, aber nicht nutzbar ist.
+	foreach ($legacyCandidates as $candidate) {
 		if (!is_dir($candidate) || !is_writable($candidate)) continue;
 		$real = realpath($candidate);
 		return $real !== false ? $real : $candidate;
 	}
-	// Sonst irgendeine bestehende Variante.
-	foreach ($candidates as $candidate) {
+	foreach ($legacyCandidates as $candidate) {
 		if (!is_dir($candidate)) continue;
 		$real = realpath($candidate);
 		return $real !== false ? $real : $candidate;
 	}
 
 	return $preferred;
+}
+
+/** Archiv-Share: eigener Root neben /scanner, bewusst getrennt. */
+function cmx_dav_archiv_share_path(): string {
+	return WP_CONTENT_DIR . '/uploads/misbuero/archiv';
+}
+
+/**
+ * Räumt versehentlich angelegte leere Scanner-Ordner unter /archiv auf.
+ */
+function cmx_dav_cleanup_empty_archiv_scanner_dirs(string $archivPath): void {
+	$archivPath = rtrim((string) $archivPath, '/\\');
+	if ($archivPath === '' || !is_dir($archivPath)) {
+		return;
+	}
+
+	foreach (['scanner', 'Scanner'] as $name) {
+		$candidate = $archivPath . DIRECTORY_SEPARATOR . $name;
+		if (!is_dir($candidate)) {
+			continue;
+		}
+		$items = @scandir($candidate);
+		if (!is_array($items)) {
+			continue;
+		}
+		$entries = array_values(array_filter($items, static function ($entry): bool {
+			return $entry !== '.' && $entry !== '..';
+		}));
+		$allowedHidden = ['.ds_store', 'thumbs.db'];
+		foreach ($entries as $entry) {
+			$entryLower = strtolower((string) $entry);
+			$isMacGhost = str_starts_with((string) $entry, '._');
+			if ($isMacGhost || in_array($entryLower, $allowedHidden, true)) {
+				$hiddenPath = $candidate . DIRECTORY_SEPARATOR . $entry;
+				if (is_file($hiddenPath)) {
+					@unlink($hiddenPath);
+				}
+			}
+		}
+		$itemsAfter = @scandir($candidate);
+		if (is_array($itemsAfter)) {
+			$entries = array_values(array_filter($itemsAfter, static function ($entry): bool {
+				return $entry !== '.' && $entry !== '..';
+			}));
+		}
+		if (!empty($entries)) {
+			continue;
+		}
+		@rmdir($candidate);
+	}
 }
 
 /** Für /scanner mindestens Lese-/Schreibrechte am Ordner sicherstellen. */
@@ -186,19 +350,60 @@ function cmx_dav_cleanup_ds_store(string $sharePath, string $relativePath = ''):
 
 /** Ermittelt WebDAV-Konfiguration anhand des Request-Pfads. */
 function cmx_dav_get_route_config(string $path): ?array {
-	if (preg_match('#^/archiv(?:/|$)#i', $path)) {
+	$matchBaseUri = static function (string $requestPath, string $leaf): string {
+		$requestPath = '/' . ltrim((string) $requestPath, '/');
+		$leaf = strtolower(trim((string) $leaf));
+		if ($leaf === '') {
+			return '';
+		}
+
+		$requestSegments = array_values(array_filter(explode('/', trim($requestPath, '/')), static function ($seg): bool {
+			return (string) $seg !== '';
+		}));
+		$homePath = (string) \parse_url((string) \home_url('/'), \PHP_URL_PATH);
+		$homeSegments = array_values(array_filter(explode('/', trim($homePath, '/')), static function ($seg): bool {
+			return (string) $seg !== '';
+		}));
+
+		if (\count($requestSegments) < \count($homeSegments) + 1) {
+			return '';
+		}
+
+		$offset = 0;
+		foreach ($homeSegments as $segment) {
+			if (!isset($requestSegments[$offset]) || \strcasecmp((string) $requestSegments[$offset], (string) $segment) !== 0) {
+				return '';
+			}
+			$offset++;
+		}
+
+		if (isset($requestSegments[$offset]) && \strcasecmp((string) $requestSegments[$offset], 'index.php') === 0) {
+			$offset++;
+		}
+
+		if (!isset($requestSegments[$offset]) || \strcasecmp((string) $requestSegments[$offset], $leaf) !== 0) {
+			return '';
+		}
+
+		$baseSegments = \array_slice($requestSegments, 0, $offset + 1);
+		return '/' . \implode('/', $baseSegments);
+	};
+
+	$archivBaseUri = $matchBaseUri($path, 'archiv');
+	if ($archivBaseUri !== '') {
 		return [
-			'base_uri'   => '/archiv',
-			'share_path' => WP_CONTENT_DIR . '/uploads/misbuero',
+			'base_uri'   => $archivBaseUri,
+			'share_path' => cmx_dav_archiv_share_path(),
 			'label'      => 'Archiv',
 			'read_only'  => true,
-			'ensure_dir' => false,
+			'ensure_dir' => true,
 		];
 	}
 
-	if (preg_match('#^/scanner(?:/|$)#i', $path)) {
+	$scannerBaseUri = $matchBaseUri($path, 'scanner');
+	if ($scannerBaseUri !== '') {
 		return [
-			'base_uri'   => '/scanner',
+			'base_uri'   => $scannerBaseUri,
 			'share_path' => cmx_dav_scanner_share_path(),
 			'label'      => 'Scanner',
 			'read_only'  => false,
@@ -210,8 +415,14 @@ function cmx_dav_get_route_config(string $path): ?array {
 }
 
 /** Prüft rekursiv, ob im Archiv mindestens eine Datei existiert. */
-function cmx_dav_has_any_files(string $dir): bool {
+function cmx_dav_has_any_files(string $dir, array $excludeRootNames = []): bool {
 	if (!is_dir($dir)) return false;
+	$exclude = array_values(array_unique(array_filter(array_map(static function ($name): string {
+		return strtolower(trim((string) $name));
+	}, $excludeRootNames), static function ($name): bool {
+		return $name !== '';
+	})));
+	$baseNorm = rtrim(str_replace('\\', '/', (string) $dir), '/');
 	try {
 		$it = new \RecursiveIteratorIterator(
 			new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
@@ -219,6 +430,14 @@ function cmx_dav_has_any_files(string $dir): bool {
 		);
 		foreach ($it as $entry) {
 			if ($entry instanceof \SplFileInfo && $entry->isFile()) {
+				if (!empty($exclude)) {
+					$entryPath = str_replace('\\', '/', (string) $entry->getPathname());
+					$rel = ltrim((string) substr($entryPath, strlen($baseNorm)), '/');
+					$first = strtolower((string) strtok($rel, '/'));
+					if ($first !== '' && in_array($first, $exclude, true)) {
+						continue;
+					}
+				}
 				return true;
 			}
 		}
@@ -245,9 +464,14 @@ function cmx_dav_abs_url(string $path): string {
 	return $scheme . '://' . $host . $path;
 }
 /** Zip-Helfer (rekursiv) */
-function cmx_dav_zip_dir(string $source, \ZipArchive $zip, string $base): void {
+function cmx_dav_zip_dir(string $source, \ZipArchive $zip, string $base, array $excludeRootNames = []): void {
 	$source = rtrim($source, DIRECTORY_SEPARATOR);
 	$base   = rtrim($base, DIRECTORY_SEPARATOR);
+	$exclude = array_values(array_unique(array_filter(array_map(static function ($name): string {
+		return strtolower(trim((string) $name));
+	}, $excludeRootNames), static function ($name): bool {
+		return $name !== '';
+	})));
 
 	$iterator = new \RecursiveIteratorIterator(
 		new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
@@ -258,6 +482,12 @@ function cmx_dav_zip_dir(string $source, \ZipArchive $zip, string $base): void {
 		$absPath = $item->getPathname();
 		$relPath = ltrim(str_replace($base, '', $absPath), DIRECTORY_SEPARATOR);
 		$relPath = str_replace(DIRECTORY_SEPARATOR, '/', $relPath);
+		if (!empty($exclude)) {
+			$first = strtolower((string) strtok($relPath, '/'));
+			if ($first !== '' && in_array($first, $exclude, true)) {
+				continue;
+			}
+		}
 
 		if ($item->isDir()) {
 			$zip->addEmptyDir($relPath);
@@ -289,6 +519,9 @@ add_action('init', function () {
 			$sharePath = $resolved;
 		}
 	}
+	if ($readOnly) {
+		cmx_dav_cleanup_empty_archiv_scanner_dirs($sharePath);
+	}
 	if (!$readOnly) {
 		cmx_dav_ensure_rw_dir_mode($sharePath);
 	}
@@ -313,9 +546,21 @@ add_action('init', function () {
 
 	require_once plugin_dir_path(__FILE__) . '../vendor/autoload.php';
 
-	$root      = new DAV\FS\Directory($sharePath);
+	$hiddenRootNames = cmx_dav_hidden_root_names_for_base_uri($baseUri);
+	$root      = empty($hiddenRootNames)
+		? new DAV\FS\Directory($sharePath)
+		: new CmxDavRootFilteredDirectory($sharePath, $hiddenRootNames, true);
 	$server    = new DAV\Server($root);
 	$server->setBaseUri($baseUri); // bewusst ohne Slash am Ende
+
+	if (!empty($hiddenRootNames)) {
+		$server->on('beforeMethod', function(HTTP\RequestInterface $request) use ($hiddenRootNames): void {
+			if (!cmx_dav_path_hits_hidden_root((string) $request->getPath(), $hiddenRootNames)) {
+				return;
+			}
+			throw new DAV\Exception\NotFound('File not found');
+		});
+	}
 
 	// BasicAuth mit WP-Usern
 	$authBackend = new DAV\Auth\Backend\BasicCallBack(function($u,$p){
@@ -579,7 +824,7 @@ add_action('init', function () {
 	});
 
 	// Hübsche HTML-Indexseite für Collections + ZIP-Download
-	$server->on('method:GET', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $baseUri, $label, $readOnly) {
+	$server->on('method:GET', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $baseUri, $label, $readOnly, $hiddenRootNames) {
 		$relPath = trim($request->getPath(), '/'); // relativ zur BaseUri
 		cmx_dav_cleanup_ds_store($sharePath, $relPath);
 		$tree    = $server->tree;
@@ -629,20 +874,21 @@ add_action('init', function () {
 					$selected = array_values(array_filter(array_map('basename', array_map('strval', $selected))));
 				}
 
-				if ($selected) {
-					foreach ($selected as $fn) {
-						$full = $absDirReal . DIRECTORY_SEPARATOR . $fn;
-						$real = realpath($full);
+					if ($selected) {
+						foreach ($selected as $fn) {
+							$full = $absDirReal . DIRECTORY_SEPARATOR . $fn;
+							$real = realpath($full);
 						// nur reguläre Dateien derselben Ebene zulassen
 						if (!$real || !cmx_dav_is_subpath($absDirReal, $real) || !is_file($real)) {
 							continue;
+							}
+							$zip->addFile($real, $fn);
 						}
-						$zip->addFile($real, $fn);
+					} else {
+						// wie bisher: kompletter Ordner rekursiv
+						$zipExcludeRootNames = ($relPath === '') ? $hiddenRootNames : [];
+						cmx_dav_zip_dir($absDirReal, $zip, rtrim($absDirReal, DIRECTORY_SEPARATOR), $zipExcludeRootNames);
 					}
-				} else {
-					// wie bisher: kompletter Ordner rekursiv
-					cmx_dav_zip_dir($absDirReal, $zip, rtrim($absDirReal, DIRECTORY_SEPARATOR));
-				}
 
 					$zip->close();
 
@@ -669,7 +915,7 @@ add_action('init', function () {
 
 			if ($node instanceof DAV\ICollection) {
 				// Root-Archiv ohne Dateien: komplett leere Seite ausgeben.
-				if ($readOnly && $relPath === '' && !cmx_dav_has_any_files($sharePath)) {
+				if ($readOnly && $relPath === '' && !cmx_dav_has_any_files($sharePath, $hiddenRootNames)) {
 					$response->setStatus(200);
 					$response->setHeader('Content-Type', 'text/html; charset=UTF-8');
 					$response->setBody(cmx_dav_render_empty_archive_message('Es wurden noch keine Dateien abgelegt.', $label));

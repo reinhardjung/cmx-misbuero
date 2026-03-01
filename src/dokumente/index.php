@@ -36,6 +36,46 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMEN
 // Include: @ll metaboxes
 cmx_require_files(__DIR__,'modules,status,validity,admincolumns,features_image');
 
+/**
+ * Scanner-Eingangsdateien werden im CPT "scanner" verwaltet und
+ * sollen nicht in der Dokumente-Adminliste auftauchen.
+ */
+\add_action('pre_get_posts', function (\WP_Query $query): void {
+	if (!\is_admin() || !$query->is_main_query()) {
+		return;
+	}
+
+	$post_type = $query->get('post_type');
+	$is_dokumente_query = false;
+	if (\is_string($post_type)) {
+		$is_dokumente_query = ($post_type === 'dokumente');
+	} elseif (\is_array($post_type)) {
+		$is_dokumente_query = \in_array('dokumente', $post_type, true);
+	}
+	if (!$is_dokumente_query) {
+		return;
+	}
+
+	$meta_query = (array) $query->get('meta_query');
+	$meta_query[] = [
+		'relation' => 'OR',
+		[
+			'key'     => '_cmx_dokumente_file_path',
+			'compare' => 'NOT EXISTS',
+		],
+		[
+			'relation' => 'AND',
+			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/scanner/',        'compare' => 'NOT LIKE'],
+			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/Scanner/',        'compare' => 'NOT LIKE'],
+			['key' => '_cmx_dokumente_file_path', 'value' => 'scanner/',                 'compare' => 'NOT LIKE'],
+			['key' => '_cmx_dokumente_file_path', 'value' => 'Scanner/',                 'compare' => 'NOT LIKE'],
+			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/archiv/scanner/', 'compare' => 'NOT LIKE'],
+			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/archiv/Scanner/', 'compare' => 'NOT LIKE'],
+		],
+	];
+	$query->set('meta_query', $meta_query);
+}, 20);
+
 // Auto-Titel fuer Dokumente: YYMMDDHHMMSS beim Speichern, wenn leer
 \add_action('save_post_dokumente', function (int $post_id, \WP_Post $post) {
 	if ($post->post_type !== 'dokumente') return;

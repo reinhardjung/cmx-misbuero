@@ -182,8 +182,26 @@ function cmx_scanner_normalize_rel_path(string $rel): string {
 	return \strtolower(\ltrim(\str_replace('\\', '/', $rel), '/'));
 }
 
+function cmx_scanner_rel_suffix(string $rel): string {
+	$clean = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($clean === '') {
+		return '';
+	}
+
+	if (\preg_match('#^scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+	if (\preg_match('#^misbuero/scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+
+	return '';
+}
+
 function cmx_scanner_is_scanner_rel_path(string $rel): bool {
-	return \str_starts_with(cmx_scanner_normalize_rel_path($rel), 'misbuero/scanner/');
+	return cmx_scanner_rel_suffix($rel) !== '';
 }
 
 function cmx_scanner_archive_year_for_post(int $scanner_id): int {
@@ -206,7 +224,7 @@ function cmx_scanner_archive_target_dir(int $year): string {
 			return (string) $base;
 		}
 	}
-	$base = (string) (\WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/dokumente');
+	$base = (string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/dokumente');
 	if (!\is_dir($base)) {
 		\wp_mkdir_p($base);
 	}

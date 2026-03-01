@@ -32,8 +32,34 @@ function cmx_scanner_sync_normalize_rel(string $rel): string {
 	return \strtolower(\ltrim(\str_replace('\\', '/', $rel), '/'));
 }
 
+function cmx_scanner_sync_scanner_suffix(string $rel): string {
+	$clean = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($clean === '') {
+		return '';
+	}
+
+	if (\preg_match('#^scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+	if (\preg_match('#^misbuero/scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+	if (\preg_match('#^archiv/scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+	if (\preg_match('#^misbuero/archiv/scanner/(.+)$#i', $clean, $match) === 1) {
+		$suffix = \ltrim((string) ($match[1] ?? ''), '/');
+		return $suffix !== '' ? $suffix : '';
+	}
+
+	return '';
+}
+
 function cmx_scanner_sync_is_scanner_rel(string $rel): bool {
-	return \str_starts_with(cmx_scanner_sync_normalize_rel($rel), 'misbuero/scanner/');
+	return cmx_scanner_sync_scanner_suffix($rel) !== '';
 }
 
 function cmx_scanner_sync_collect_delete_rels(int $post_id): array {
@@ -84,16 +110,19 @@ function cmx_scanner_sync_delete_file_from_rel(string $rel): void {
 		return;
 	}
 
-	$normalized = cmx_scanner_sync_normalize_rel($rel);
-	$suffix = \substr($normalized, \strlen('misbuero/scanner/'));
-	if ($suffix === false || $suffix === '') {
+	$suffix = cmx_scanner_sync_scanner_suffix($rel);
+	if ($suffix === '') {
 		return;
 	}
 
 	$variants = [
 		$rel,
+		'scanner/' . $suffix,
 		'misbuero/scanner/' . $suffix,
 		'misbuero/Scanner/' . $suffix,
+		'archiv/scanner/' . $suffix,
+		'misbuero/archiv/scanner/' . $suffix,
+		'misbuero/archiv/Scanner/' . $suffix,
 	];
 
 	$uploads_base = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
@@ -112,17 +141,36 @@ function cmx_scanner_sync_rel_variants(string $rel): array {
 		return [];
 	}
 
-	$normalized = cmx_scanner_sync_normalize_rel($rel);
-	$suffix = \substr($normalized, \strlen('misbuero/scanner/'));
-	if ($suffix === false || $suffix === '') {
+	$suffix = cmx_scanner_sync_scanner_suffix($rel);
+	if ($suffix === '') {
 		return [];
 	}
 
 	return \array_values(\array_unique([
 		$rel,
+		'scanner/' . $suffix,
 		'misbuero/scanner/' . $suffix,
 		'misbuero/Scanner/' . $suffix,
+		'archiv/scanner/' . $suffix,
+		'misbuero/archiv/scanner/' . $suffix,
+		'misbuero/archiv/Scanner/' . $suffix,
 	]));
+}
+
+function cmx_scanner_sync_rel_variants_with_self(string $rel): array {
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '') {
+		return [];
+	}
+
+	$variants = cmx_scanner_sync_rel_variants($rel);
+	if (!\in_array($rel, $variants, true)) {
+		$variants[] = $rel;
+	}
+
+	return \array_values(\array_unique(\array_filter($variants, static function ($value): bool {
+		return \is_string($value) && $value !== '';
+	})));
 }
 
 function cmx_scanner_sync_find_first_existing_abs_by_rel(string $rel): string {
@@ -177,16 +225,120 @@ function cmx_scanner_sync_get_uploaded_ts(int $post_id): int {
 	return $fallback > 0 ? $fallback : 0;
 }
 
+function cmx_scanner_sync_collect_root_configs(): array {
+	$configs = [
+		[
+			'root'   => \function_exists(__NAMESPACE__ . '\\cmx_dav_scanner_share_path')
+				? \wp_normalize_path((string) cmx_dav_scanner_share_path())
+				: '',
+			'prefix' => 'misbuero/scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/scanner')),
+			'prefix' => 'misbuero/scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/Scanner')),
+			'prefix' => 'misbuero/scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/scanner')),
+			'prefix' => 'scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/Scanner')),
+			'prefix' => 'scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/scanner')),
+			'prefix' => 'misbuero/scanner',
+		],
+		[
+			'root'   => \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/Scanner')),
+			'prefix' => 'misbuero/scanner',
+		],
+	];
+
+	$dedup = [];
+	foreach ($configs as $config) {
+		$root = isset($config['root']) ? (string) $config['root'] : '';
+		$root = \rtrim(\str_replace('\\', '/', $root), '/');
+		if ($root === '') {
+			continue;
+		}
+		$key = \strtolower($root);
+		if (!isset($dedup[$key])) {
+			$dedup[$key] = [
+				'root'   => $root,
+				'prefix' => isset($config['prefix']) ? (string) $config['prefix'] : '',
+			];
+		}
+	}
+
+	return \array_values($dedup);
+}
+
+function cmx_scanner_sync_rel_from_abs_and_root(string $abs, string $root, string $prefix): string {
+	$abs = \wp_normalize_path($abs);
+	$root = \rtrim(\wp_normalize_path($root), '/');
+	$prefix = \trim(\str_replace('\\', '/', $prefix), '/');
+	if ($abs === '' || $root === '') {
+		return '';
+	}
+
+	$rootWithSlash = $root . '/';
+	if (\str_starts_with($abs, $rootWithSlash)) {
+		$suffix = (string) \substr($abs, \strlen($rootWithSlash));
+	} elseif (\str_starts_with(\strtolower($abs), \strtolower($rootWithSlash))) {
+		$suffix = (string) \substr($abs, \strlen($rootWithSlash));
+	} else {
+		return '';
+	}
+
+	$suffix = \ltrim(\str_replace('\\', '/', $suffix), '/');
+	if ($suffix === '') {
+		return '';
+	}
+
+	return $prefix === '' ? $suffix : ($prefix . '/' . $suffix);
+}
+
+function cmx_scanner_sync_canonical_rel_from_uploads_abs(string $abs, string $upload_root): string {
+	$abs = \wp_normalize_path((string) $abs);
+	$upload_root = \trailingslashit(\wp_normalize_path((string) $upload_root));
+	if ($abs === '' || $upload_root === '') {
+		return '';
+	}
+	if (!\str_starts_with($abs, $upload_root) && !\str_starts_with(\strtolower($abs), \strtolower($upload_root))) {
+		return '';
+	}
+
+	$rel = \ltrim((string) \substr($abs, \strlen($upload_root)), '/');
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '') {
+		return '';
+	}
+
+	if (\preg_match('#^(?:misbuero/)?scanner/(.+)$#i', $rel, $m) === 1) {
+		$suffix = \ltrim((string) ($m[1] ?? ''), '/');
+		return $suffix !== '' ? 'misbuero/scanner/' . $suffix : '';
+	}
+	if (\preg_match('#^(?:misbuero/)?archiv/scanner/(.+)$#i', $rel, $m) === 1) {
+		$suffix = \ltrim((string) ($m[1] ?? ''), '/');
+		return $suffix !== '' ? 'misbuero/scanner/' . $suffix : '';
+	}
+
+	return $rel;
+}
+
 function cmx_scanner_sync_collect_files(): array {
 	$upload_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-	$roots = [
-		\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/Scanner')),
-		\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/misbuero/scanner')),
-	];
-	$roots = \array_values(\array_unique($roots));
+	$root_configs = cmx_scanner_sync_collect_root_configs();
 
 	$result = [];
-	foreach ($roots as $root) {
+	foreach ($root_configs as $root_config) {
+		$root = isset($root_config['root']) ? (string) $root_config['root'] : '';
+		$prefix = isset($root_config['prefix']) ? (string) $root_config['prefix'] : '';
 		if ($root === '' || !\is_dir($root)) {
 			continue;
 		}
@@ -200,29 +352,32 @@ function cmx_scanner_sync_collect_files(): array {
 			continue;
 		}
 
-		foreach ($iterator as $entry) {
-			if (!$entry instanceof \SplFileInfo || !$entry->isFile()) {
-				continue;
-			}
+			foreach ($iterator as $entry) {
+				if (!$entry instanceof \SplFileInfo || !$entry->isFile()) {
+					continue;
+				}
 
-			$abs = \wp_normalize_path((string) $entry->getPathname());
-			if ($abs === '' || !\str_starts_with($abs, $upload_root)) {
-				continue;
-			}
+				$abs = \wp_normalize_path((string) $entry->getPathname());
+				if ($abs === '') {
+					continue;
+				}
 
-			$base = (string) $entry->getBasename();
-			if ($base === '' || $base[0] === '.') {
-				continue;
-			}
+				$base = (string) $entry->getBasename();
+					if ($base === '' || $base[0] === '.') {
+						continue;
+					}
 
-			$rel = \ltrim(\substr($abs, \strlen($upload_root)), '/');
-			if ($rel === '') {
-				continue;
-			}
+				$rel = cmx_scanner_sync_rel_from_abs_and_root($abs, $root, $prefix);
+				if ($rel === '') {
+					$rel = cmx_scanner_sync_canonical_rel_from_uploads_abs($abs, $upload_root);
+				}
+				if ($rel === '') {
+					continue;
+				}
 
-			$key = cmx_scanner_sync_normalize_rel($rel);
-			if ($key === '') {
-				continue;
+				$key = cmx_scanner_sync_normalize_rel($rel);
+				if ($key === '') {
+					continue;
 			}
 
 			$result[$key] = [
@@ -294,8 +449,8 @@ function cmx_scanner_sync_build_path_map(array $scanner_ids): array {
 		}
 
 		$source_rel = (string) \get_post_meta($scanner_id, CMX_SCANNER_SYNC_SOURCE_REL_META, true);
-		if ($source_rel !== '') {
-			$key = cmx_scanner_sync_normalize_rel($source_rel);
+		foreach (cmx_scanner_sync_rel_variants_with_self($source_rel) as $source_variant) {
+			$key = cmx_scanner_sync_normalize_rel($source_variant);
 			if ($key !== '' && !isset($map[$key])) {
 				$map[$key] = $scanner_id;
 			}
@@ -308,9 +463,11 @@ function cmx_scanner_sync_build_path_map(array $scanner_ids): array {
 			if ($file_rel === '') {
 				continue;
 			}
-			$key = cmx_scanner_sync_normalize_rel($file_rel);
-			if ($key !== '' && !isset($map[$key])) {
-				$map[$key] = $scanner_id;
+			foreach (cmx_scanner_sync_rel_variants_with_self($file_rel) as $file_variant) {
+				$key = cmx_scanner_sync_normalize_rel($file_variant);
+				if ($key !== '' && !isset($map[$key])) {
+					$map[$key] = $scanner_id;
+				}
 			}
 		}
 	}
@@ -319,12 +476,9 @@ function cmx_scanner_sync_build_path_map(array $scanner_ids): array {
 }
 
 function cmx_scanner_sync_find_doc_by_rel(string $rel): int {
-	$variants = [$rel];
-	if (\stripos($rel, 'misbuero/scanner/') === 0) {
-		$variants[] = 'misbuero/Scanner/' . \substr($rel, \strlen('misbuero/scanner/'));
-	}
-	if (\stripos($rel, 'misbuero/Scanner/') === 0) {
-		$variants[] = 'misbuero/scanner/' . \substr($rel, \strlen('misbuero/Scanner/'));
+	$variants = cmx_scanner_sync_rel_variants($rel);
+	if ($rel !== '' && !\in_array($rel, $variants, true)) {
+		$variants[] = $rel;
 	}
 
 	foreach (\array_values(\array_unique($variants)) as $variant) {
@@ -433,9 +587,11 @@ function cmx_scanner_sync_files_to_cpt(): void {
 		if ($rel === '') {
 			continue;
 		}
-		$key = cmx_scanner_sync_normalize_rel($rel);
-		if ($key !== '') {
-			$existing_file_keys[$key] = true;
+		foreach (cmx_scanner_sync_rel_variants_with_self($rel) as $variant) {
+			$key = cmx_scanner_sync_normalize_rel($variant);
+			if ($key !== '') {
+				$existing_file_keys[$key] = true;
+			}
 		}
 	}
 
@@ -494,7 +650,10 @@ function cmx_scanner_sync_files_to_cpt(): void {
 			]);
 		}
 
-		cmx_scanner_sync_ensure_doc_link($scanner_id, $rel, $title);
+		$auto_doc_links = (bool) \apply_filters('cmx_scanner_sync_auto_doc_links', false, $scanner_id, $rel, $title);
+		if ($auto_doc_links) {
+			cmx_scanner_sync_ensure_doc_link($scanner_id, $rel, $title);
+		}
 		$path_map[$key] = $scanner_id;
 	}
 }
@@ -541,6 +700,15 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 	</style>';
 });
 
+function cmx_scanner_sync_maybe_run_for_admin_list(): void {
+	static $didRun = false;
+	if ($didRun) {
+		return;
+	}
+	$didRun = true;
+	cmx_scanner_sync_files_to_cpt();
+}
+
 \add_action('load-edit.php', function (): void {
 	if (!\is_admin()) {
 		return;
@@ -548,7 +716,20 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== CMX_PT_SCANNER) {
 		return;
 	}
-	cmx_scanner_sync_files_to_cpt();
+	cmx_scanner_sync_maybe_run_for_admin_list();
+}, 8);
+
+\add_action('current_screen', function ($screen): void {
+	if (!$screen instanceof \WP_Screen) {
+		return;
+	}
+	if ((string) ($screen->base ?? '') !== 'edit') {
+		return;
+	}
+	if ((string) ($screen->post_type ?? '') !== CMX_PT_SCANNER) {
+		return;
+	}
+	cmx_scanner_sync_maybe_run_for_admin_list();
 }, 8);
 
 \add_action('before_delete_post', function (int $post_id): void {

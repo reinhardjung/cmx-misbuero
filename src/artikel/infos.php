@@ -7,13 +7,13 @@
  * - Bezugsquelle wird aus bekannten Metafeldern gelesen:
  *     _cmx_bezugsquelle_url, _cmx_bezugsquelle, _cmx_artikel_bezugsquelle, _cmx_artikel_bild_url
  *   (per Filter erweiterbar: 'cmx_li_source_fields')
- * - Speicher: /wp-content/uploads/misbuero/bilder/artikel/{post_title}.ext (+ Cache-Busting ?v=filemtime)
+ * - Speicher: /wp-content/uploads/misbuero/archiv/bilder/artikel/{post_title}.ext (+ Cache-Busting ?v=filemtime)
  * - NEU: Produkt-/Artikelbeschreibung aus der Bezugsquelle (og:description / twitter:description / meta description / JSON-LD) in den Editor schreiben – nur wenn leer
  */
 
 /** Ziel-Unterordner relativ zu uploads/ */
 if (!defined(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR')) {
-	define(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/bilder');
+	define(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR', '/misbuero/archiv/bilder');
 }
 
 /** Basis-Pfade/URLs */

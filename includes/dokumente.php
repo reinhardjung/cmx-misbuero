@@ -2,7 +2,7 @@
 
 /**
  * Dokumente-Metabox für alle CPTs (außer "dokumente")
- * Upload: PDF/PNG/JPG -> /archiv/{Jahr}/Dokumente/
+ * Upload: PDF/PNG/JPG -> /archiv/{jahr}/dokumente/
  */
 
 if (!\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')) {
@@ -14,11 +14,11 @@ if (!\defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')) {
 
 function cmx_dok_upload_target_dir(string $post_type, int $year): array {
 	if ($post_type === 'scanner') {
-		$base = WP_CONTENT_DIR . '/uploads/misbuero/Scanner';
-		$url  = content_url('/uploads/misbuero/Scanner');
+		$base = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
+		$url  = content_url('/uploads/misbuero/scanner');
 	} else {
-		$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/dokumente';
-		$url  = content_url('/uploads/misbuero/' . $year . '/dokumente');
+		$base = WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/dokumente';
+		$url  = content_url('/uploads/misbuero/archiv/' . $year . '/dokumente');
 	}
 	if (!\is_dir($base)) {
 		\wp_mkdir_p($base);
@@ -243,6 +243,7 @@ function cmx_dokumente_upload_file(): void {
 		\wp_send_json_error(['message'=>'bad_post_type'], 400);
 	}
 	$is_dokumente = ($post_type === 'dokumente');
+	$is_scanner = ($post_type === 'scanner');
 	$scanner_title = '';
 
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
@@ -318,7 +319,7 @@ function cmx_dokumente_upload_file(): void {
 	}
 
 	$doc_id = $post_id;
-	if (!$is_dokumente) {
+	if (!$is_dokumente && !$is_scanner) {
 		$doc_id = \wp_insert_post([
 			'post_type'   => 'dokumente',
 			'post_title'  => $doc_title,
@@ -359,7 +360,7 @@ function cmx_dokumente_upload_file(): void {
 		\remove_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
 		\remove_filter('intermediate_image_sizes', $no_sizes_filter_simple);
 		\remove_filter('upload_dir', $upload_filter);
-		if (!$is_dokumente) {
+		if (!$is_dokumente && !$is_scanner) {
 			\wp_delete_post($doc_id, true);
 		}
 		\wp_send_json_error(['message'=>'upload_failed'], 500);
@@ -396,6 +397,13 @@ function cmx_dokumente_upload_file(): void {
 		$existing = array_values(array_unique($existing));
 		\update_post_meta($doc_id, CMX_DOK_SELF_META, $existing);
 		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
+	} elseif ($is_scanner) {
+		// Scanner-Uploads bleiben im CPT "scanner" und erzeugen keinen Dokumente-Post.
+		\update_post_meta($post_id, '_cmx_scanner_source_rel', $rel);
+		$mtime = @\filemtime($uploaded['file']);
+		if (\is_int($mtime) && $mtime > 0) {
+			\update_post_meta($post_id, '_cmx_scanner_uploaded_ts', $mtime);
+		}
 	} else {
 		$rel_key = 'cmx_dokumente_rel_' . \sanitize_key($post_type);
 		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
@@ -421,10 +429,10 @@ function cmx_dokumente_upload_file(): void {
 	}
 
 	\wp_send_json_success([
-		'id'    => $doc_id,
+		'id'    => (int) $doc_id,
 		'url'   => $file_url,
 		'label' => basename($rel) ?: $doc_title,
-		'title' => ($post_type === 'scanner' ? $scanner_title : ''),
+		'title' => ($is_scanner ? $scanner_title : ''),
 	]);
 }
 
