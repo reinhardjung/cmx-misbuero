@@ -98,6 +98,101 @@ function cmx_dok_get_requested_zuordnung_type(int $post_id = 0): string {
 	return \array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES) ? $type : cmx_dok_default_zuordnung_type();
 }
 
+function cmx_dok_resolve_target_post_type(string $target_type): string {
+	$target_type = \sanitize_key($target_type);
+	if ($target_type === 'kontakte') {
+		if (\post_type_exists('kontakte')) {
+			return 'kontakte';
+		}
+		if (\post_type_exists('kontakt')) {
+			return 'kontakt';
+		}
+		return '';
+	}
+	return \post_type_exists($target_type) ? $target_type : '';
+}
+
+function cmx_dok_current_user_can_create_post_type(string $post_type): bool {
+	$obj = \get_post_type_object($post_type);
+	if (!$obj || !isset($obj->cap) || !\is_object($obj->cap)) {
+		return false;
+	}
+
+	$create_cap = isset($obj->cap->create_posts) && \is_string($obj->cap->create_posts) && $obj->cap->create_posts !== ''
+		? $obj->cap->create_posts
+		: (isset($obj->cap->edit_posts) && \is_string($obj->cap->edit_posts) ? $obj->cap->edit_posts : 'edit_posts');
+
+	return \current_user_can($create_cap);
+}
+
+function cmx_dok_default_target_title(int $doc_id, string $target_type): string {
+	$title = \trim((string) \get_the_title($doc_id));
+	if ($title !== '') {
+		return $title;
+	}
+
+	$labels = [
+		'kontakte' => 'Neuer Kontakt',
+		'artikel'  => 'Neuer Artikel',
+		'projekte' => 'Neues Projekt',
+		'belege'   => 'Neuer Beleg',
+	];
+
+	return (string) ($labels[$target_type] ?? 'Neuer Eintrag');
+}
+
+function cmx_dok_create_related_entry(int $doc_id, string $target_type): int {
+	$post_type = cmx_dok_resolve_target_post_type($target_type);
+	if ($doc_id <= 0 || $post_type === '') {
+		return 0;
+	}
+	if (!cmx_dok_current_user_can_create_post_type($post_type)) {
+		return 0;
+	}
+
+	$title = cmx_dok_default_target_title($doc_id, $target_type);
+	$inserted = \wp_insert_post([
+		'post_type'   => $post_type,
+		'post_title'  => $title,
+		'post_status' => 'draft',
+	], true);
+	if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+		return 0;
+	}
+
+	return (int) $inserted;
+}
+
+function cmx_dok_mark_redirect_to_target_edit_after_save(int $doc_id, int $target_id): void {
+	if ($doc_id <= 0 || $target_id <= 0) {
+		return;
+	}
+
+	if (!isset($GLOBALS['cmx_dok_redirect_to_target_map']) || !\is_array($GLOBALS['cmx_dok_redirect_to_target_map'])) {
+		$GLOBALS['cmx_dok_redirect_to_target_map'] = [];
+	}
+	$GLOBALS['cmx_dok_redirect_to_target_map'][(int) $doc_id] = (int) $target_id;
+
+	static $filter_added = false;
+	if (!$filter_added) {
+		$filter_added = true;
+		\add_filter('redirect_post_location', __NAMESPACE__ . '\\cmx_dok_redirect_to_target_edit_after_save', 99, 2);
+	}
+}
+
+function cmx_dok_redirect_to_target_edit_after_save(string $location, int $post_id): string {
+	$map = isset($GLOBALS['cmx_dok_redirect_to_target_map']) && \is_array($GLOBALS['cmx_dok_redirect_to_target_map'])
+		? $GLOBALS['cmx_dok_redirect_to_target_map']
+		: [];
+
+	$target_id = isset($map[$post_id]) ? (int) $map[$post_id] : 0;
+	if ($target_id > 0) {
+		return (string) \admin_url('post.php?post=' . $target_id . '&action=edit');
+	}
+
+	return $location;
+}
+
 function cmx_dok_uploads_meta_key(): string {
 	return \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
 		? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
@@ -240,16 +335,20 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 
 	$current_ids = cmx_dok_int_list(\get_post_meta($post->ID, $meta_key, true));
 	$current = !empty($current_ids) ? (int) $current_ids[0] : 0;
+	$has_current = $current > 0;
 	$options = cmx_dok_fetch_relation_options($target_type);
 	$id_suffix = \preg_replace('~[^a-z0-9_]+~', '_', \strtolower($target_type . '_' . $meta_key));
 	$select_id = 'cmx_dok_rel_select_' . $id_suffix;
 	$search_id = 'cmx_dok_rel_search_' . $id_suffix;
 	$nohit_id = 'cmx_dok_rel_nohit_' . $id_suffix;
+	$touched_id = 'cmx_dok_rel_touched_' . $id_suffix;
+	$touched_name = 'cmx_dok_rel_touched[' . $meta_key . ']';
 
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
+	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-dok-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
-	echo '<option value="0">' . \esc_html($empty_label) . '</option>';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
+	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		echo '<option value="' . \esc_attr((string) $opt['id']) . '" ' . \selected($current, (int) $opt['id'], false) . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
@@ -267,14 +366,32 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	$printed_search_js = true;
 
 	echo '<script>
-	(function(){
-		if (window.cmxDokRelSearchInit) return;
-		window.cmxDokRelSearchInit = true;
+		(function(){
+			if (window.cmxDokRelSearchInit) return;
+			window.cmxDokRelSearchInit = true;
 
-		var filter = function(input){
-			var selectId = input.getAttribute("data-target-select") || "";
-			var nohitId = input.getAttribute("data-target-nohit") || "";
-			var select = document.getElementById(selectId);
+			var markTouched = function(select){
+				if (!select) return;
+				var touchedId = select.getAttribute("data-target-touched") || "";
+				if (!touchedId) return;
+				var touched = document.getElementById(touchedId);
+				if (!touched) return;
+				touched.value = "1";
+			};
+
+			var clearSelection = function(select){
+				if (!select) return;
+				for (var i = 0; i < select.options.length; i++) {
+					select.options[i].selected = false;
+				}
+				select.selectedIndex = -1;
+				markTouched(select);
+			};
+
+			var filter = function(input){
+				var selectId = input.getAttribute("data-target-select") || "";
+				var nohitId = input.getAttribute("data-target-nohit") || "";
+				var select = document.getElementById(selectId);
 			if (!select) return;
 			var nohit = nohitId ? document.getElementById(nohitId) : null;
 			var term = (input.value || "").toLowerCase().trim();
@@ -302,18 +419,38 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			}
 		};
 
-		document.addEventListener("input", function(e){
-			var t = e.target;
-			if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
-			filter(t);
-		});
+			document.addEventListener("input", function(e){
+				var t = e.target;
+				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
+				filter(t);
+			});
 
-		document.addEventListener("keydown", function(e){
-			var t = e.target;
-			if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
-			if (e.key !== "ArrowDown") return;
-			var selectId = t.getAttribute("data-target-select") || "";
-			var select = document.getElementById(selectId);
+			document.addEventListener("change", function(e){
+				var t = e.target;
+				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-select")) return;
+				markTouched(t);
+			});
+
+			document.addEventListener("keydown", function(e){
+				var t = e.target;
+				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
+				if (e.key === "Escape") {
+					var selectId = t.getAttribute("data-target-select") || "";
+					var nohitId = t.getAttribute("data-target-nohit") || "";
+					var select = document.getElementById(selectId);
+					var nohit = nohitId ? document.getElementById(nohitId) : null;
+					e.preventDefault();
+					t.value = "";
+					filter(t);
+					clearSelection(select);
+					if (nohit) {
+						nohit.style.display = "none";
+					}
+					return;
+				}
+				if (e.key !== "ArrowDown") return;
+				var selectId = t.getAttribute("data-target-select") || "";
+				var select = document.getElementById(selectId);
 			if (!select) return;
 			e.preventDefault();
 			select.focus();
@@ -321,14 +458,41 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 				if (!select.options[i].hidden) {
 					select.options[i].selected = true;
 					break;
+					}
 				}
-			}
-		});
+			});
 
-		var boot = function(){
-			var inputs = document.querySelectorAll(".cmx-dok-rel-search");
-			for (var i = 0; i < inputs.length; i++) {
-				filter(inputs[i]);
+			document.addEventListener("keydown", function(e){
+				var t = e.target;
+				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-select")) return;
+				if (e.key !== "Escape") return;
+				e.preventDefault();
+				clearSelection(t);
+				var searchId = t.id ? t.id.replace("cmx_dok_rel_select_", "cmx_dok_rel_search_") : "";
+				var search = searchId ? document.getElementById(searchId) : null;
+				if (search) {
+					search.focus();
+				}
+			});
+
+			var boot = function(){
+				var selects = document.querySelectorAll(".cmx-dok-rel-select[data-cmx-no-selection=\'1\']");
+				for (var si = 0; si < selects.length; si++) {
+					var select = selects[si];
+					var hasSelected = false;
+					for (var oi = 0; oi < select.options.length; oi++) {
+						if (select.options[oi].selected) {
+							hasSelected = true;
+							break;
+						}
+					}
+					if (hasSelected) {
+						select.selectedIndex = -1;
+					}
+				}
+				var inputs = document.querySelectorAll(".cmx-dok-rel-search");
+				for (var i = 0; i < inputs.length; i++) {
+					filter(inputs[i]);
 			}
 		};
 		if (document.readyState === "loading") {
@@ -521,6 +685,11 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 	$ui_map = cmx_dok_rel_ui_map();
 	$prev_map = [];
 	$new_map = [];
+	$create_on_empty_map = [];
+	$touched_map = [];
+	if (isset($_POST['cmx_dok_rel_touched']) && \is_array($_POST['cmx_dok_rel_touched'])) {
+		$touched_map = (array) \wp_unslash($_POST['cmx_dok_rel_touched']);
+	}
 
 	foreach ($ui_map as $rel_type => $cfg) {
 		$meta_key = (string) ($cfg['meta'] ?? '');
@@ -537,12 +706,21 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 
 		$raw_value = $_POST[$meta_key];
 		$candidate_ids = [];
+		$has_empty_option = false;
 		if (\is_array($raw_value)) {
 			foreach ($raw_value as $item) {
-				$candidate_ids[] = (int) \wp_unslash((string) $item);
+				$value = (int) \wp_unslash((string) $item);
+				$candidate_ids[] = $value;
+				if ($value === 0) {
+					$has_empty_option = true;
+				}
 			}
 		} else {
-			$candidate_ids[] = (int) \wp_unslash((string) $raw_value);
+			$value = (int) \wp_unslash((string) $raw_value);
+			$candidate_ids[] = $value;
+			if ($value === 0) {
+				$has_empty_option = true;
+			}
 		}
 
 		$valid_ids = [];
@@ -557,6 +735,19 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 			$valid_ids[] = $selected_id;
 		}
 		$new_map[$rel_type] = \array_values(\array_unique($valid_ids));
+
+		$is_touched = isset($touched_map[$meta_key]) && (int) $touched_map[$meta_key] === 1;
+		if ($rel_type === $type && $is_touched && $has_empty_option && empty($new_map[$rel_type])) {
+			$create_on_empty_map[$rel_type] = true;
+		}
+	}
+
+	if ($type !== '' && !empty($create_on_empty_map[$type])) {
+		$new_target_id = cmx_dok_create_related_entry($post_id, $type);
+		if ($new_target_id > 0) {
+			$new_map[$type] = [$new_target_id];
+			cmx_dok_mark_redirect_to_target_edit_after_save($post_id, $new_target_id);
+		}
 	}
 
 	$uploads_meta_key = cmx_dok_uploads_meta_key();
