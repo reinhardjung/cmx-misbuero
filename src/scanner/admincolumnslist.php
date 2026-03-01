@@ -348,6 +348,37 @@ function cmx_scanner_sync_find_doc_by_rel(string $rel): int {
 	return 0;
 }
 
+function cmx_scanner_sync_has_existing_file_for_post(int $post_id, array $existing_file_keys): bool {
+	$rels = cmx_scanner_sync_collect_delete_rels($post_id);
+	foreach ($rels as $rel) {
+		$key = cmx_scanner_sync_normalize_rel((string) $rel);
+		if ($key !== '' && isset($existing_file_keys[$key])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function cmx_scanner_sync_delete_orphan_posts(array $scanner_ids, array $existing_file_keys): void {
+	foreach ($scanner_ids as $scanner_id) {
+		$scanner_id = (int) $scanner_id;
+		if ($scanner_id <= 0 || cmx_scanner_sync_is_trashed_post($scanner_id)) {
+			continue;
+		}
+
+		$rels = cmx_scanner_sync_collect_delete_rels($scanner_id);
+		if (empty($rels)) {
+			continue;
+		}
+
+		if (cmx_scanner_sync_has_existing_file_for_post($scanner_id, $existing_file_keys)) {
+			continue;
+		}
+
+		\wp_delete_post($scanner_id, true);
+	}
+}
+
 function cmx_scanner_sync_ensure_doc_link(int $scanner_id, string $rel, string $title): void {
 	$scanner_docs = (array) \get_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADS_META, true);
 	$scanner_docs = \array_values(\array_unique(\array_filter(\array_map('intval', $scanner_docs))));
@@ -395,6 +426,21 @@ function cmx_scanner_sync_ensure_doc_link(int $scanner_id, string $rel, string $
 
 function cmx_scanner_sync_files_to_cpt(): void {
 	$files = cmx_scanner_sync_collect_files();
+
+	$existing_file_keys = [];
+	foreach ($files as $file) {
+		$rel = (string) ($file['rel'] ?? '');
+		if ($rel === '') {
+			continue;
+		}
+		$key = cmx_scanner_sync_normalize_rel($rel);
+		if ($key !== '') {
+			$existing_file_keys[$key] = true;
+		}
+	}
+
+	$scanner_ids = cmx_scanner_sync_get_scanner_ids();
+	cmx_scanner_sync_delete_orphan_posts($scanner_ids, $existing_file_keys);
 	if (empty($files)) {
 		return;
 	}
