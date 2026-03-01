@@ -370,13 +370,17 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			if (window.cmxDokRelSearchInit) return;
 			window.cmxDokRelSearchInit = true;
 
-			var markTouched = function(select){
+			var setTouchState = function(select, state){
 				if (!select) return;
 				var touchedId = select.getAttribute("data-target-touched") || "";
 				if (!touchedId) return;
 				var touched = document.getElementById(touchedId);
 				if (!touched) return;
-				touched.value = "1";
+				touched.value = String(state || "0");
+			};
+
+			var markTouched = function(select){
+				setTouchState(select, "1");
 			};
 
 			var clearSelection = function(select){
@@ -385,7 +389,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 					select.options[i].selected = false;
 				}
 				select.selectedIndex = -1;
-				markTouched(select);
+				setTouchState(select, "2");
 			};
 
 			var filter = function(input){
