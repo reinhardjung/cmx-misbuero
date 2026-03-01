@@ -55,6 +55,19 @@ cmx_require_files(__DIR__,'modules,status,validity,admincolumns,features_image')
 	if (!$is_dokumente_query) {
 		return;
 	}
+	$post_status = $query->get('post_status');
+	$is_trash_view = false;
+	if (\is_string($post_status)) {
+		$is_trash_view = (\strtolower($post_status) === 'trash');
+	} elseif (\is_array($post_status)) {
+		$is_trash_view = \in_array('trash', \array_map('strtolower', \array_map('strval', $post_status)), true);
+	}
+	if (!$is_trash_view && isset($_GET['post_status']) && \is_string($_GET['post_status'])) {
+		$is_trash_view = (\strtolower((string) $_GET['post_status']) === 'trash');
+	}
+	if ($is_trash_view) {
+		return;
+	}
 
 	$meta_query = (array) $query->get('meta_query');
 	$meta_query[] = [
