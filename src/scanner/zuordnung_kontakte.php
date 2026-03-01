@@ -79,6 +79,10 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		if ($kontakt_id > 0) {
 			cmx_scanner_link_docs_to_kontakt($kontakt_id, $doc_ids);
 		}
+		$artikel_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_artikel_id', true);
+		if ($artikel_id > 0) {
+			cmx_scanner_link_docs_to_artikel($artikel_id, $doc_ids);
+		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);
 
 		// Datei(en) robust vorab entfernen, auch wenn before_delete_post in diesem
@@ -241,6 +245,16 @@ function cmx_scanner_dok_kontakt_rel_meta_key(): string {
 	return 'cmx_dokumente_kunden';
 }
 
+function cmx_scanner_dok_artikel_rel_meta_key(): string {
+	if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+		$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+		if (\is_array($map) && isset($map['artikel']) && \is_string($map['artikel']) && $map['artikel'] !== '') {
+			return $map['artikel'];
+		}
+	}
+	return 'cmx_dokumente_artikel';
+}
+
 function cmx_scanner_normalize_id_list($value): array {
 	$ids = [];
 	foreach ((array) $value as $item) {
@@ -303,6 +317,38 @@ function cmx_scanner_link_docs_to_kontakt(int $kontakt_id, array $doc_ids): void
 		$doc_kontakte[] = $kontakt_id;
 		$doc_kontakte = \array_values(\array_unique($doc_kontakte));
 		\update_post_meta($doc_id, $kontakt_rel_meta_key, $doc_kontakte);
+	}
+}
+
+function cmx_scanner_link_docs_to_artikel(int $artikel_id, array $doc_ids): void {
+	$doc_ids = cmx_scanner_normalize_id_list($doc_ids);
+	if ($artikel_id <= 0 || empty($doc_ids)) {
+		return;
+	}
+
+	if ((string) \get_post_type($artikel_id) !== 'artikel') {
+		return;
+	}
+
+	$uploads_meta_key = cmx_scanner_dok_uploads_meta_key();
+	$existing_uploads = cmx_scanner_normalize_id_list(\get_post_meta($artikel_id, $uploads_meta_key, true));
+	$merged_uploads = \array_values(\array_unique(\array_merge($existing_uploads, $doc_ids)));
+	if ($merged_uploads !== $existing_uploads) {
+		\update_post_meta($artikel_id, $uploads_meta_key, $merged_uploads);
+	}
+
+	$artikel_rel_meta_key = cmx_scanner_dok_artikel_rel_meta_key();
+	foreach ($doc_ids as $doc_id) {
+		if ((string) \get_post_type($doc_id) !== 'dokumente') {
+			continue;
+		}
+		$doc_artikel = cmx_scanner_normalize_id_list(\get_post_meta($doc_id, $artikel_rel_meta_key, true));
+		if (\in_array($artikel_id, $doc_artikel, true)) {
+			continue;
+		}
+		$doc_artikel[] = $artikel_id;
+		$doc_artikel = \array_values(\array_unique($doc_artikel));
+		\update_post_meta($doc_id, $artikel_rel_meta_key, $doc_artikel);
 	}
 }
 
