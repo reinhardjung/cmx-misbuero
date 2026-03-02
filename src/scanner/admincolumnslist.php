@@ -547,7 +547,7 @@ function cmx_scanner_sync_has_existing_file_for_post(int $post_id, array $existi
 function cmx_scanner_sync_delete_orphan_posts(array $scanner_ids, array $existing_file_keys): void {
 	foreach ($scanner_ids as $scanner_id) {
 		$scanner_id = (int) $scanner_id;
-		if ($scanner_id <= 0 || cmx_scanner_sync_is_trashed_post($scanner_id)) {
+		if ($scanner_id <= 0) {
 			continue;
 		}
 
