@@ -2,6 +2,9 @@
 
 const CMX_SCANNER_REL_KONTAKTE_META = '_cmx_scanner_rel_kontakte_id';
 const CMX_SCANNER_FINALIZE_DELETE_USER_META = '_cmx_scanner_finalize_delete_ids';
+if (!\defined(__NAMESPACE__ . '\\CMX_SCANNER_REL_BELEGE_AS_DOC_META')) {
+	\define(__NAMESPACE__ . '\\CMX_SCANNER_REL_BELEGE_AS_DOC_META', '_cmx_scanner_rel_belege_as_document');
+}
 
 function cmx_scanner_queue_finalize_delete_after_save(int $post_id): void {
 	if ($post_id <= 0) {
@@ -135,6 +138,11 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 			'projekte' => '_cmx_scanner_rel_projekte_id',
 			'belege'   => '_cmx_scanner_rel_belege_id',
 		];
+		$belege_as_document = \function_exists(__NAMESPACE__ . '\\cmx_scanner_belege_use_document_mode')
+			? cmx_scanner_belege_use_document_mode($delete_id)
+			: true;
+		$belege_upload_mode_has_rel = false;
+		$belege_upload_mode_success = false;
 		foreach ($relation_metas as $relation_type => $relation_meta_key) {
 			$relation_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_relation_ids')
 				? cmx_scanner_get_relation_ids($delete_id, (string) $relation_meta_key)
@@ -157,9 +165,19 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 					continue;
 				}
 				if ($relation_type === 'belege') {
-					cmx_scanner_link_docs_to_belege($relation_id, $doc_ids);
+					if ($belege_as_document) {
+						cmx_scanner_link_docs_to_belege($relation_id, $doc_ids);
+					} elseif (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_scan_to_beleg_upload')) {
+						$belege_upload_mode_has_rel = true;
+						if (cmx_scanner_link_scan_to_beleg_upload($delete_id, $relation_id)) {
+							$belege_upload_mode_success = true;
+						}
+					}
 				}
 			}
+		}
+		if (!$belege_as_document && $belege_upload_mode_has_rel && !$belege_upload_mode_success) {
+			continue;
 		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);
 
@@ -597,6 +615,157 @@ function cmx_scanner_link_docs_to_belege(int $beleg_id, array $doc_ids): void {
 		$doc_belege = \array_values(\array_unique($doc_belege));
 		\update_post_meta($doc_id, $belege_rel_meta_key, $doc_belege);
 	}
+}
+
+function cmx_scanner_belege_use_document_mode(int $scanner_id): bool {
+	if ($scanner_id <= 0) {
+		return true;
+	}
+
+	$raw = \get_post_meta($scanner_id, CMX_SCANNER_REL_BELEGE_AS_DOC_META, true);
+	if ($raw === '0' || $raw === 0) {
+		return false;
+	}
+	if ($raw === '1' || $raw === 1) {
+		return true;
+	}
+
+	// Rückwärtskompatibel: bestehende Scanner ohne explizite Einstellung
+	// bleiben im bisherigen Dokument-Modus.
+	return true;
+}
+
+function cmx_scanner_beleg_uploads_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+		: '_cmx_belege_uploads';
+}
+
+function cmx_scanner_source_rel_for_post(int $scanner_id): string {
+	if ($scanner_id <= 0) {
+		return '';
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_sync_get_source_rel_for_post')) {
+		$rel = (string) cmx_scanner_sync_get_source_rel_for_post($scanner_id);
+		if ($rel !== '') {
+			return \ltrim(\str_replace('\\', '/', $rel), '/');
+		}
+	}
+
+	$rel = (string) \get_post_meta($scanner_id, '_cmx_scanner_source_rel', true);
+	return \ltrim(\str_replace('\\', '/', $rel), '/');
+}
+
+function cmx_scanner_source_abs_for_rel(string $rel): string {
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '') {
+		return '';
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_sync_find_first_existing_abs_by_rel')) {
+		$resolved = (string) cmx_scanner_sync_find_first_existing_abs_by_rel($rel);
+		if ($resolved !== '') {
+			return \wp_normalize_path($resolved);
+		}
+	}
+
+	$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+	$candidate = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $rel));
+	if ($candidate !== '' && \str_starts_with($candidate, $uploads_root) && \is_file($candidate)) {
+		return $candidate;
+	}
+
+	return '';
+}
+
+function cmx_scanner_link_scan_to_beleg_upload(int $scanner_id, int $beleg_id): bool {
+	if ($scanner_id <= 0 || $beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+		return false;
+	}
+
+	$source_rel = cmx_scanner_source_rel_for_post($scanner_id);
+	if ($source_rel === '') {
+		return false;
+	}
+
+	$source_abs = cmx_scanner_source_abs_for_rel($source_rel);
+	if ($source_abs === '') {
+		return false;
+	}
+
+	$year = \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_upload_year')
+		? (int) cmx_get_beleg_upload_year($beleg_id)
+		: (int) \wp_date('Y');
+	if ($year <= 0) {
+		$year = (int) \wp_date('Y');
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_belege_upload_dir')) {
+		[$target_dir] = cmx_belege_upload_dir($year);
+	} else {
+		$target_dir = (string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/belege');
+		if (!\is_dir($target_dir)) {
+			@\wp_mkdir_p($target_dir);
+		}
+	}
+	if (!\is_dir($target_dir)) {
+		return false;
+	}
+
+	$prefix = (string) \get_post_meta($beleg_id, '_cmx_beleg_upload_prefix', true);
+	$prefix = \sanitize_title($prefix);
+	if ($prefix === '') {
+		$prefix = \sanitize_title((string) \get_the_title($beleg_id));
+		if ($prefix === '') {
+			$prefix = \wp_date('ymd-His');
+		}
+		\update_post_meta($beleg_id, '_cmx_beleg_upload_prefix', $prefix);
+	}
+
+	$ext = \strtolower((string) \pathinfo($source_abs, \PATHINFO_EXTENSION));
+	if ($ext === '') {
+		$ext = 'pdf';
+	}
+
+	$next = \function_exists(__NAMESPACE__ . '\\cmx_belege_next_suffix')
+		? \max(1, (int) cmx_belege_next_suffix($target_dir, $prefix))
+		: 1;
+	do {
+		$target_name = $prefix . '_upload_' . \str_pad((string) $next, 3, '0', \STR_PAD_LEFT) . '.' . $ext;
+		$next++;
+		$target_abs = \wp_normalize_path((string) (\rtrim($target_dir, '/\\') . DIRECTORY_SEPARATOR . $target_name));
+	} while (\is_file($target_abs));
+
+	$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+	if ($target_abs === '' || !\str_starts_with($target_abs, $uploads_root)) {
+		return false;
+	}
+
+	if (!@\copy($source_abs, $target_abs)) {
+		return false;
+	}
+	@\chmod($target_abs, 0666);
+
+	$target_rel = \ltrim((string) \substr($target_abs, \strlen($uploads_root)), '/');
+	if ($target_rel === '') {
+		return false;
+	}
+
+	$uploads_meta_key = cmx_scanner_beleg_uploads_meta_key();
+	$existing_uploads = (array) \get_post_meta($beleg_id, $uploads_meta_key, true);
+	$existing_uploads = \array_values(\array_filter($existing_uploads, static function ($value): bool {
+		return !($value === '' || $value === null);
+	}));
+	foreach ($existing_uploads as $existing) {
+		if ((string) $existing === $target_rel) {
+			return true;
+		}
+	}
+
+	$existing_uploads[] = $target_rel;
+	\update_post_meta($beleg_id, $uploads_meta_key, $existing_uploads);
+	return true;
 }
 
 \add_action('add_meta_boxes_scanner', function (\WP_Post $post): void {

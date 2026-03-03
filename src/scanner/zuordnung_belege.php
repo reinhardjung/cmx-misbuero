@@ -23,6 +23,14 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		'Kein Beleg',
 		true
 	);
+
+	$as_document = (string) \get_post_meta((int) $post->ID, CMX_SCANNER_REL_BELEGE_AS_DOC_META, true) === '1';
+	echo '<p style="margin:8px 0 0;">';
+	echo '<label for="cmx_scanner_rel_belege_as_document">';
+	echo '<input type="checkbox" id="cmx_scanner_rel_belege_as_document" name="cmx_scanner_rel_belege_as_document" value="1" ' . \checked($as_document, true, false) . ' /> ';
+	echo 'als Dokument';
+	echo '</label>';
+	echo '</p>';
 }
 
 \add_action('save_post_scanner', function (int $post_id): void {
@@ -56,6 +64,9 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		return;
 	}
 
+	$as_document = isset($_POST['cmx_scanner_rel_belege_as_document']) && (int) $_POST['cmx_scanner_rel_belege_as_document'] === 1;
+	\update_post_meta($post_id, CMX_SCANNER_REL_BELEGE_AS_DOC_META, $as_document ? '1' : '0');
+
 	$valid_ids = [];
 	foreach ($selected_ids as $selected_id) {
 		$selected_id = (int) $selected_id;
@@ -65,30 +76,34 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		$valid_ids[] = $selected_id;
 	}
 	$valid_ids = \array_values(\array_unique($valid_ids));
-	if (empty($valid_ids)) {
+	if (empty($valid_ids) && !$has_zero_value) {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
 		return;
 	}
 
-	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_ensure_doc_for_post')) {
-		cmx_scanner_ensure_doc_for_post($post_id);
+	if (empty($valid_ids) && $has_zero_value) {
+		$new_beleg_id = \function_exists(__NAMESPACE__ . '\\cmx_scanner_create_related_entry')
+			? (int) cmx_scanner_create_related_entry($post_id, 'belege')
+			: 0;
+		if ($new_beleg_id <= 0 || \get_post_type($new_beleg_id) !== 'belege') {
+			\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
+			return;
+		}
+		$valid_ids = [$new_beleg_id];
 	}
 
-	$doc_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_doc_ids_for_post')
-		? cmx_scanner_get_doc_ids_for_post($post_id)
-		: [];
+	if ($as_document && \function_exists(__NAMESPACE__ . '\\cmx_scanner_ensure_doc_for_post')) {
+		cmx_scanner_ensure_doc_for_post($post_id);
+	}
 
 	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_store_relation_ids')) {
 		cmx_scanner_store_relation_ids($post_id, CMX_SCANNER_REL_BELEGE_META, $valid_ids);
 	} else {
 		\update_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META, \count($valid_ids) === 1 ? (int) $valid_ids[0] : $valid_ids);
 	}
-	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_belege')) {
-		foreach ($valid_ids as $beleg_id) {
-			cmx_scanner_link_docs_to_belege((int) $beleg_id, $doc_ids);
-		}
-	}
-	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
-		cmx_scanner_mark_redirect_to_list_after_save($post_id);
+
+	$redirect_target_id = (int) \end($valid_ids);
+	if ($redirect_target_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_target_edit_after_save')) {
+		cmx_scanner_mark_redirect_to_target_edit_after_save($post_id, $redirect_target_id);
 	}
 });
