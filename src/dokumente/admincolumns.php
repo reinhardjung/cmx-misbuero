@@ -5,14 +5,13 @@
 		'cmx_status'     => 'Status',
 		'cmx_valid_from' => 'Gültig von',
 		'cmx_valid_to'   => 'Gültig bis',
-		'cmx_modules'    => 'Zugeordnete Module',
 		'cmx_cats'       => 'Kategorien',
-		'cmx_rel_k'      => 'K',
-		'cmx_rel_a'      => 'A',
-		'cmx_rel_b'      => 'B',
-		'cmx_rel_p'      => 'P',
+		'cmx_modules'    => '',
+		'cmx_rel_k'      => '<span title="Kontakte">K</span>',
+		'cmx_rel_a'      => '<span title="Artikel">A</span>',
+		'cmx_rel_b'      => '<span title="Belege">B</span>',
+		'cmx_rel_p'      => '<span title="Projekte">P</span>',
 	];
-	$preview = ['cmx_thumb' => 'Anhang'];
 
 	$new = [];
 	foreach ($cols as $key => $label) {
@@ -21,8 +20,6 @@
 			$new += $after_title;
 		}
 	}
-	// Vorschau am Ende anhängen
-	$new += $preview;
 	return $new;
 });
 
@@ -69,19 +66,6 @@
 	}
 
 	switch ($col) {
-		case 'cmx_thumb':
-			$local = get_post_meta($post_id, '_cmx_local_image_dokumente_url', true);
-			$thumb = get_the_post_thumbnail($post_id, [60,60], ['style'=>'width:60px;height:60px;object-fit:cover;']);
-			if ($local) {
-				// echo '<img src="'.esc_url($local).'" style="width:60px;height:60px;object-fit:cover;border:1px solid #ddd;padding:2px;background:#fff;" alt="" />';
-				echo ' <span class="dashicons dashicons-yes" title="Bild vorhanden"></span>';
-			} elseif ($thumb) {
-				echo $thumb;
-				echo ' <span class="dashicons dashicons-yes" title="Bild vorhanden"></span>';
-			} else {
-				echo '';
-			}
-			break;
 		case 'cmx_status':
 			$val = get_post_meta($post_id, CMX_DOK_STATUS_META, true);
 			$options = CMX_DOK_STATUS_OPTIONS ?? [];
@@ -135,11 +119,18 @@
 		return;
 	}
 
-	echo '<style>
-		.wp-list-table th.column-cmx_rel_k,
-		.wp-list-table th.column-cmx_rel_a,
-		.wp-list-table th.column-cmx_rel_b,
-		.wp-list-table th.column-cmx_rel_p {
+		echo '<style>
+			.wp-list-table th.column-cmx_modules {
+				width: 62px;
+				text-align: center;
+			}
+			.wp-list-table td.column-cmx_modules {
+				text-align: center;
+			}
+			.wp-list-table th.column-cmx_rel_k,
+			.wp-list-table th.column-cmx_rel_a,
+			.wp-list-table th.column-cmx_rel_b,
+			.wp-list-table th.column-cmx_rel_p {
 			width: 42px;
 			text-align: center;
 		}
