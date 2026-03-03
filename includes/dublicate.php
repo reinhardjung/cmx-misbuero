@@ -23,7 +23,71 @@ function cmx_dup_get_action_url(int $post_id): string {
 	);
 }
 
+function cmx_dup_document_upload_meta_blacklist(): array {
+	$keys = [
+		// Dokumente-Metabox-Verknüpfungen (Parent-CPT <-> Dokumente)
+		'_cmx_dokumente_uploads',
+		'_cmx_dokumente_files',
+		'_cmx_dokumente_file_path',
+		'_cmx_dokumente_attachment_id',
+		'_cmx_dokumente_zuordnung_typ',
+
+		// Belege-Uploads
+		'_cmx_belege_uploads',
+		'_cmx_beleg_upload_prefix',
+
+		// Scanner-Datei-Referenz (Upload)
+		'_cmx_scanner_source_rel',
+		'_cmx_scanner_uploaded_ts',
+		'_cmx_scanner_rel_dokumente_id',
+
+		// Dokumente-Relationen zu anderen CPTs
+		'cmx_dokumente_artikel',
+		'cmx_dokumente_kunden',
+		'cmx_dokumente_projekte',
+		'cmx_dokumente_belege',
+		'cmx_dokumente_kassenbuch',
+		'cmx_dokumente_buchhaltung',
+	];
+
+	$dyn_consts = [
+		__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META',
+		__NAMESPACE__ . '\\CMX_DOK_SELF_META',
+		__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META',
+	];
+	foreach ($dyn_consts as $const_name) {
+		if (\defined($const_name)) {
+			$meta_key = (string) \constant($const_name);
+			if ($meta_key !== '') {
+				$keys[] = $meta_key;
+			}
+		}
+	}
+
+	$rel_map_const = __NAMESPACE__ . '\\CMX_DOK_REL_META';
+	if (\defined($rel_map_const)) {
+		$rel_map = \constant($rel_map_const);
+		if (\is_array($rel_map)) {
+			foreach ($rel_map as $meta_key) {
+				$meta_key = (string) $meta_key;
+				if ($meta_key !== '') {
+					$keys[] = $meta_key;
+				}
+			}
+		}
+	}
+
+	$keys = \array_values(\array_unique(\array_filter(\array_map('strval', $keys), static function(string $key): bool {
+		return $key !== '';
+	})));
+	return $keys;
+}
+
 function cmx_dup_meta_blacklist(): array {
+	$doc_upload_blacklist = \function_exists(__NAMESPACE__ . '\\cmx_dup_document_upload_meta_blacklist')
+		? cmx_dup_document_upload_meta_blacklist()
+		: [];
+
 	return (array) apply_filters('cmx_duplicate_meta_blacklist', [
 		'_edit_lock',
 		'_edit_last',
@@ -31,6 +95,7 @@ function cmx_dup_meta_blacklist(): array {
 		'_cmx_beleg_qrr',       // QR-Referenz neu generieren
 		'_cmx_beleg_views',      // Aufrufe nicht übernehmen
 		'_cmx_beleg_views_log',  // Aufrufe-Log nicht übernehmen
+		...$doc_upload_blacklist,
 	]);
 }
 
