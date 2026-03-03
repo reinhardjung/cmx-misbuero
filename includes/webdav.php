@@ -1125,7 +1125,8 @@ add_action('init', function () {
 					$uploadNotice = '<div class="upload-notice '.($isOk ? 'is-ok' : 'is-err').'">'.cmx_dav_h((string)$q['msg']).'</div>';
 				}
 				$toolbarClass = $readOnly ? 'toolbar' : 'toolbar toolbar-upload';
-				$showSearch = (strcasecmp((string) $baseUri, '/archiv') === 0);
+				$baseLeaf = strtolower((string) basename(trim((string) $baseUri, '/')));
+				$showSearch = in_array($baseLeaf, ['archiv', 'scanner'], true);
 				$searchBar = $showSearch
 					? '<div class="head-search">'
 						. '<label for="cmx-dav-search" class="sr-only">Suche</label>'
@@ -1228,9 +1229,10 @@ add_action('init', function () {
 					. '</tr>';
 			}
 
-			$title = 'Mis Büro – ' . $label . ' ' . (empty($segments) ? '/' : implode('/', $segments).'/');
+				$title = 'Mis Büro – ' . $label . ' ' . (empty($segments) ? '/' : implode('/', $segments).'/');
+				$footerModeText = $readOnly ? 'nur lesen' : 'lesen, schreiben, löschen';
 
-			$html = '<!doctype html><html lang="de"><head><meta charset="utf-8">'
+				$html = '<!doctype html><html lang="de"><head><meta charset="utf-8">'
 				.'<meta name="viewport" content="width=device-width,initial-scale=1">'
 				.'<title>'.cmx_dav_h($title).'</title>'
 				.'<style>
@@ -1313,11 +1315,10 @@ add_action('init', function () {
 				.'<th><a href="'.$sortLink('size').'">Größe'.$arrow('size').'</a></th>'
 				.'<th><a href="'.$sortLink('mtime').'">Geändert'.$arrow('mtime').'</a></th>'
 				.'<th>Aktion</th>'
-				.'</tr></thead><tbody>'
-				.$rows
-				.'</tbody></table>'
-				// .'managed by S33S<a target="_blank" href="https://misbuero.ch/" class="link-misbuero">mis-buero.ch</a>'
-				.'&nbsp;&nbsp;&nbsp;('.cmx_dav_h((string)$fileCount).') managed by <a target="_blank" href="https://misbuero.ch/" class="link-misbuero">mis-buero.ch</a>'
+					.'</tr></thead><tbody>'
+					.$rows
+					.'</tbody></table>'
+					.'&nbsp;&nbsp;&nbsp;('.cmx_dav_h((string)$fileCount).') '.cmx_dav_h($footerModeText)
 
 
 				// Script: Clipboard + 3s Toast + Auswahl-Handling
@@ -1376,7 +1377,7 @@ add_action('init', function () {
 							// Standard: wenn keine Auswahl -> Formular nur mit zip=1 absenden (kompletter Ordner)
 						});
 
-						// Suche (nur /archiv): Zeilen live nach Name filtern
+						// Suche (/archiv und /scanner): Zeilen live nach Name filtern
 						var searchInput = document.getElementById("cmx-dav-search");
 						var searchMeta = document.getElementById("cmx-dav-search-meta");
 						if(searchInput){
