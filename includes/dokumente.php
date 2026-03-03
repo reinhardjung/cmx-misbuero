@@ -311,7 +311,9 @@ function cmx_dokumente_upload_file(): void {
 	}
 	$doc_title = $is_dokumente
 		? ($incoming_title !== '' ? $incoming_title : (string) $source_title)
-		: \wp_date('ymd-His');
+		: ($is_scanner
+			? \wp_date('ymd-His')
+			: ($incoming_title !== '' ? $incoming_title : ($source_title !== '' ? (string) $source_title : \wp_date('ymd-His'))));
 	if ($is_dokumente) {
 		if ($doc_title === '') {
 			$doc_title = \wp_date('ymd-His');
@@ -382,10 +384,10 @@ function cmx_dokumente_upload_file(): void {
 	\remove_filter('intermediate_image_sizes', $no_sizes_filter_simple);
 	\remove_filter('upload_dir', $upload_filter);
 
-	// Datei umbenennen: YYMMDD-HHMMSS_{PostTitelDesCPT}.ext (bei Upload aus anderem CPT)
+	// Datei umbenennen: {Dokument-Titel}.ext (Scanner bleibt Sonderfall mit Suffix).
 	$base_dir = dirname($uploaded['file']);
 	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
-	if ($post_type !== 'dokumente') {
+	if ($post_type === 'scanner') {
 		$new_base = \sanitize_file_name($doc_title . '_' . $source_title . '.' . $ext);
 	}
 	$new_base = \wp_unique_filename($base_dir, $new_base);
