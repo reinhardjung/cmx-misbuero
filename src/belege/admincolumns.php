@@ -100,3 +100,74 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$q->set('tax_query', $tax_query);
 	}
 }, 20);
+
+/**
+ * Oben-rechts-Suche in der Belege-Liste um Kontakt erweitern.
+ * Treffer, wenn Suchbegriff im Kontakt-Namen oder im gespeicherten Kontakt-Label vorkommt.
+ */
+add_filter('posts_search', function(string $search, \WP_Query $q): string {
+	if (!\is_admin() || !$q->is_main_query()) {
+		return $search;
+	}
+
+	$post_type = $q->get('post_type');
+	if (
+		(\is_array($post_type) && !\in_array('belege', $post_type, true))
+		|| (!\is_array($post_type) && $post_type !== 'belege')
+	) {
+		return $search;
+	}
+
+	$term = \trim((string) $q->get('s'));
+	if ($term === '') {
+		return $search;
+	}
+
+	global $wpdb;
+	$like = '%' . $wpdb->esc_like($term) . '%';
+	$kontakt_meta_id = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+		: '_cmx_beleg_kontakt_id';
+	$kontakt_meta_label = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL')
+		: '_cmx_beleg_kontakt_label';
+	$kontakt_post_type = \defined(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
+		: 'kontakte';
+
+	$contact_sql = $wpdb->prepare(
+		"(
+			EXISTS (
+				SELECT 1
+				FROM {$wpdb->postmeta} AS cmx_klabel
+				WHERE cmx_klabel.post_id = {$wpdb->posts}.ID
+					AND cmx_klabel.meta_key = %s
+					AND cmx_klabel.meta_value LIKE %s
+			)
+			OR EXISTS (
+				SELECT 1
+				FROM {$wpdb->postmeta} AS cmx_kid
+				INNER JOIN {$wpdb->posts} AS cmx_kpost
+					ON cmx_kpost.ID = CAST(cmx_kid.meta_value AS UNSIGNED)
+				WHERE cmx_kid.post_id = {$wpdb->posts}.ID
+					AND cmx_kid.meta_key = %s
+					AND cmx_kpost.post_type = %s
+					AND cmx_kpost.post_status <> 'trash'
+					AND cmx_kpost.post_title LIKE %s
+			)
+		)",
+		$kontakt_meta_label,
+		$like,
+		$kontakt_meta_id,
+		$kontakt_post_type,
+		$like
+	);
+
+	$search_sql = \trim((string) $search);
+	$search_sql = (string) \preg_replace('/^\s*AND\s*/i', '', $search_sql);
+	if ($search_sql === '') {
+		return " AND {$contact_sql} ";
+	}
+
+	return " AND (({$search_sql}) OR {$contact_sql}) ";
+}, 20, 2);

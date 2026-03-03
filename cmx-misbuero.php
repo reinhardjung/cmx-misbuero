@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.3.858
+ * Version: 3.3.942
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -52,6 +52,82 @@ define('CMX_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CMX_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CMX_DOMAIN', explode('.', parse_url(home_url(), PHP_URL_HOST))[0]);
 define('CMX_UPLOADS_MISBUERO', wp_get_upload_dir()['basedir'] . '/misbuero/');
+
+/**
+ * Bei bestehenden CPT-Beiträgen niemals einen leeren Titel speichern.
+ * Wenn kein neuer Titel übergeben wird, bleibt der bisherige Titel erhalten.
+ */
+\add_filter('wp_insert_post_data', static function (array $data, array $postarr, array $unsanitized_postarr, bool $update): array {
+	static $manual_title_by_post = [];
+
+	if (!$update) {
+		return $data;
+	}
+
+	$post_id = isset($postarr['ID']) ? (int) $postarr['ID'] : 0;
+	if ($post_id <= 0) {
+		return $data;
+	}
+
+	$post_type = \sanitize_key((string) ($data['post_type'] ?? ($postarr['post_type'] ?? '')));
+	if ($post_type === '') {
+		return $data;
+	}
+
+	$ptype_obj = \get_post_type_object($post_type);
+	if (!$ptype_obj instanceof \WP_Post_Type || !empty($ptype_obj->_builtin)) {
+		return $data;
+	}
+
+	// Manuell gesetzter Titel im aktuellen Editor-Request hat immer Vorrang.
+	$request_post_id = isset($_POST['post_ID']) ? (int) $_POST['post_ID'] : 0;
+	$request_title = '';
+	if (isset($_POST['post_title'])) {
+		$request_title = \trim(\sanitize_text_field((string) \wp_unslash($_POST['post_title'])));
+	}
+	if (
+		$request_post_id > 0
+		&& $request_post_id === $post_id
+		&& $request_title !== ''
+		&& !isset($manual_title_by_post[$post_id])
+	) {
+		$manual_title_by_post[$post_id] = $request_title;
+	}
+	if (isset($manual_title_by_post[$post_id]) && $manual_title_by_post[$post_id] !== '') {
+		$data['post_title'] = (string) $manual_title_by_post[$post_id];
+		return $data;
+	}
+
+	$incoming_title = \trim((string) ($data['post_title'] ?? ''));
+	if ($incoming_title !== '') {
+		return $data;
+	}
+
+	$current = \get_post($post_id);
+	if (!$current instanceof \WP_Post) {
+		return $data;
+	}
+	if ((string) $current->post_type !== $post_type) {
+		return $data;
+	}
+
+	$current_status = (string) $current->post_status;
+	if ($current_status === 'auto-draft' || $current_status === 'trash') {
+		return $data;
+	}
+
+	$current_title = \trim((string) $current->post_title);
+	if ($current_title === '') {
+		return $data;
+	}
+
+	$data['post_title'] = $current_title;
+	if (empty($data['post_name'])) {
+		$data['post_name'] = (string) $current->post_name;
+	}
+
+	return $data;
+}, 999, 4);
 
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\cmx_misbuero_activate' );
 function cmx_misbuero_activate(): void {
