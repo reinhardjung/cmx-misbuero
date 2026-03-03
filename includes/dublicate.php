@@ -95,6 +95,8 @@ function cmx_dup_meta_blacklist(): array {
 		'_cmx_beleg_qrr',       // QR-Referenz neu generieren
 		'_cmx_beleg_views',      // Aufrufe nicht übernehmen
 		'_cmx_beleg_views_log',  // Aufrufe-Log nicht übernehmen
+		'_cmx_beleg_copied_from', // keine Zuordnung zu Rechnung/Offerte/Lieferschein übernehmen
+		'_cmx_beleg_copied_to',   // keine Zuordnung zu Rechnung/Offerte/Lieferschein übernehmen
 		...$doc_upload_blacklist,
 	]);
 }
