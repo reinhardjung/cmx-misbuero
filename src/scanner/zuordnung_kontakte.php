@@ -129,21 +129,37 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		}
 
 		$doc_ids = cmx_scanner_get_doc_ids_for_post($delete_id);
-		$kontakt_id = (int) \get_post_meta($delete_id, CMX_SCANNER_REL_KONTAKTE_META, true);
-		if ($kontakt_id > 0) {
-			cmx_scanner_link_docs_to_kontakt($kontakt_id, $doc_ids);
-		}
-		$artikel_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_artikel_id', true);
-		if ($artikel_id > 0) {
-			cmx_scanner_link_docs_to_artikel($artikel_id, $doc_ids);
-		}
-		$projekt_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_projekte_id', true);
-		if ($projekt_id > 0) {
-			cmx_scanner_link_docs_to_projekte($projekt_id, $doc_ids);
-		}
-		$beleg_id = (int) \get_post_meta($delete_id, '_cmx_scanner_rel_belege_id', true);
-		if ($beleg_id > 0) {
-			cmx_scanner_link_docs_to_belege($beleg_id, $doc_ids);
+		$relation_metas = [
+			'kontakte' => CMX_SCANNER_REL_KONTAKTE_META,
+			'artikel'  => '_cmx_scanner_rel_artikel_id',
+			'projekte' => '_cmx_scanner_rel_projekte_id',
+			'belege'   => '_cmx_scanner_rel_belege_id',
+		];
+		foreach ($relation_metas as $relation_type => $relation_meta_key) {
+			$relation_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_relation_ids')
+				? cmx_scanner_get_relation_ids($delete_id, (string) $relation_meta_key)
+				: cmx_scanner_normalize_id_list(\get_post_meta($delete_id, (string) $relation_meta_key, true));
+			foreach ($relation_ids as $relation_id) {
+				$relation_id = (int) $relation_id;
+				if ($relation_id <= 0) {
+					continue;
+				}
+				if ($relation_type === 'kontakte') {
+					cmx_scanner_link_docs_to_kontakt($relation_id, $doc_ids);
+					continue;
+				}
+				if ($relation_type === 'artikel') {
+					cmx_scanner_link_docs_to_artikel($relation_id, $doc_ids);
+					continue;
+				}
+				if ($relation_type === 'projekte') {
+					cmx_scanner_link_docs_to_projekte($relation_id, $doc_ids);
+					continue;
+				}
+				if ($relation_type === 'belege') {
+					cmx_scanner_link_docs_to_belege($relation_id, $doc_ids);
+				}
+			}
 		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);
 
@@ -601,7 +617,8 @@ function cmx_scanner_render_rel_kontakte_metabox(\WP_Post $post): void {
 		CMX_SCANNER_REL_KONTAKTE_META,
 		'cmx_scanner_rel_kontakte_save',
 		'cmx_scanner_rel_kontakte_nonce',
-		'Kein Kontakt'
+		'Kein Kontakt',
+		true
 	);
 }
 
@@ -617,20 +634,38 @@ function cmx_scanner_render_rel_kontakte_metabox(\WP_Post $post): void {
 	}
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
-	$value = isset($_POST[CMX_SCANNER_REL_KONTAKTE_META]) ? (int) $_POST[CMX_SCANNER_REL_KONTAKTE_META] : 0;
-	$has_submitted_value = \array_key_exists(CMX_SCANNER_REL_KONTAKTE_META, $_POST);
+	$selected_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_posted_relation_ids')
+		? cmx_scanner_get_posted_relation_ids(CMX_SCANNER_REL_KONTAKTE_META)
+		: cmx_scanner_normalize_id_list($_POST[CMX_SCANNER_REL_KONTAKTE_META] ?? []);
+	$has_submitted_value = \function_exists(__NAMESPACE__ . '\\cmx_scanner_has_posted_relation_value')
+		? cmx_scanner_has_posted_relation_value(CMX_SCANNER_REL_KONTAKTE_META)
+		: \array_key_exists(CMX_SCANNER_REL_KONTAKTE_META, $_POST);
+	$has_zero_value = \function_exists(__NAMESPACE__ . '\\cmx_scanner_posted_relation_has_zero')
+		? cmx_scanner_posted_relation_has_zero(CMX_SCANNER_REL_KONTAKTE_META)
+		: false;
 	$is_touched = \function_exists(__NAMESPACE__ . '\\cmx_scanner_relation_was_touched')
 		? cmx_scanner_relation_was_touched(CMX_SCANNER_REL_KONTAKTE_META)
 		: false;
 	if ($selected_type !== 'kontakte' && !$is_touched) {
 		return;
 	}
-	if (!$has_submitted_value || ($value <= 0 && !$is_touched)) {
+	if (!$has_submitted_value || (empty($selected_ids) && !$has_zero_value && !$is_touched)) {
 		return;
 	}
 
-	$kontakt_post_type = (string) \get_post_type($value);
-	if ($value > 0 && !\in_array($kontakt_post_type, ['kontakte', 'kontakt'], true)) {
+	$valid_ids = [];
+	foreach ($selected_ids as $selected_id) {
+		$selected_id = (int) $selected_id;
+		if ($selected_id <= 0) {
+			continue;
+		}
+		$kontakt_post_type = (string) \get_post_type($selected_id);
+		if (\in_array($kontakt_post_type, ['kontakte', 'kontakt'], true)) {
+			$valid_ids[] = $selected_id;
+		}
+	}
+	$valid_ids = \array_values(\array_unique($valid_ids));
+	if (empty($valid_ids) && !$has_zero_value) {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META);
 		return;
 	}
@@ -638,9 +673,15 @@ function cmx_scanner_render_rel_kontakte_metabox(\WP_Post $post): void {
 	cmx_scanner_ensure_doc_for_post($post_id);
 	$doc_ids = cmx_scanner_get_doc_ids_for_post($post_id);
 
-	if ($value > 0) {
-		\update_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META, $value);
-		cmx_scanner_link_docs_to_kontakt($value, $doc_ids);
+	if (!empty($valid_ids)) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_store_relation_ids')) {
+			cmx_scanner_store_relation_ids($post_id, CMX_SCANNER_REL_KONTAKTE_META, $valid_ids);
+		} else {
+			\update_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META, \count($valid_ids) === 1 ? (int) $valid_ids[0] : $valid_ids);
+		}
+		foreach ($valid_ids as $kontakt_id) {
+			cmx_scanner_link_docs_to_kontakt((int) $kontakt_id, $doc_ids);
+		}
 
 		// Nach erfolgreicher Verarbeitung auf die Scanner-Liste springen.
 		// Das Löschen (CPT + Datei) erfolgt dort im Folge-Request.
@@ -654,7 +695,11 @@ function cmx_scanner_render_rel_kontakte_metabox(\WP_Post $post): void {
 		return;
 	}
 
-	\update_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META, $new_kontakt_id);
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_store_relation_ids')) {
+		cmx_scanner_store_relation_ids($post_id, CMX_SCANNER_REL_KONTAKTE_META, [$new_kontakt_id]);
+	} else {
+		\update_post_meta($post_id, CMX_SCANNER_REL_KONTAKTE_META, $new_kontakt_id);
+	}
 	cmx_scanner_link_docs_to_kontakt($new_kontakt_id, $doc_ids);
 	cmx_scanner_mark_redirect_to_target_edit_after_save($post_id, $new_kontakt_id);
 });

@@ -216,9 +216,6 @@ function cmx_scanner_sync_get_source_rel_for_post(int $post_id): string {
 
 function cmx_scanner_sync_get_uploaded_ts(int $post_id): int {
 	$stored = (int) \get_post_meta($post_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, true);
-	if ($stored > 0) {
-		return $stored;
-	}
 
 	$rel = cmx_scanner_sync_get_source_rel_for_post($post_id);
 	if ($rel !== '') {
@@ -226,9 +223,16 @@ function cmx_scanner_sync_get_uploaded_ts(int $post_id): int {
 		if ($abs !== '') {
 			$mtime = @\filemtime($abs);
 			if (\is_int($mtime) && $mtime > 0) {
+				if ($stored !== $mtime) {
+					\update_post_meta($post_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, $mtime);
+				}
 				return $mtime;
 			}
 		}
+	}
+
+	if ($stored > 0) {
+		return $stored;
 	}
 
 	$fallback = (int) \get_post_time('U', true, $post_id);
@@ -341,6 +345,19 @@ function cmx_scanner_sync_canonical_rel_from_uploads_abs(string $abs, string $up
 	return $rel;
 }
 
+function cmx_scanner_sync_is_allowed_file(string $path): bool {
+	$ext = \strtolower((string) \pathinfo($path, \PATHINFO_EXTENSION));
+	return $ext === 'pdf';
+}
+
+function cmx_scanner_sync_rel_is_allowed_file(string $rel): bool {
+	$filename = (string) \basename($rel);
+	if ($filename === '') {
+		return false;
+	}
+	return cmx_scanner_sync_is_allowed_file($filename);
+}
+
 function cmx_scanner_sync_collect_files(): array {
 	cmx_scanner_sync_clear_fs_cache();
 
@@ -380,6 +397,10 @@ function cmx_scanner_sync_collect_files(): array {
 					if ($base === '' || $base[0] === '.') {
 						continue;
 					}
+
+				if (!cmx_scanner_sync_is_allowed_file($abs)) {
+					continue;
+				}
 
 				$rel = cmx_scanner_sync_rel_from_abs_and_root($abs, $root, $prefix);
 				if ($rel === '') {
@@ -555,6 +576,16 @@ function cmx_scanner_sync_delete_orphan_posts(array $scanner_ids, array $existin
 		if (empty($rels)) {
 			continue;
 		}
+		$has_allowed_rel = false;
+		foreach ($rels as $rel) {
+			if (cmx_scanner_sync_rel_is_allowed_file((string) $rel)) {
+				$has_allowed_rel = true;
+				break;
+			}
+		}
+		if (!$has_allowed_rel) {
+			continue;
+		}
 
 		if (cmx_scanner_sync_has_existing_file_for_post($scanner_id, $existing_file_keys)) {
 			continue;
@@ -672,13 +703,23 @@ function cmx_scanner_sync_files_to_cpt(): void {
 		$mtime = @\filemtime($abs_path);
 		$signature = cmx_scanner_sync_build_fs_signature($abs_path);
 		$stored_signature = (string) \get_post_meta($scanner_id, CMX_SCANNER_SYNC_FS_SIG_META, true);
+		$mtime_ts = (\is_int($mtime) && $mtime > 0) ? (int) $mtime : 0;
 		if ($signature !== '') {
 			if ($signature !== $stored_signature) {
-				\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, (int) \current_time('timestamp'));
+				if ($mtime_ts > 0) {
+					\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, $mtime_ts);
+				} else {
+					\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, (int) \current_time('timestamp'));
+				}
 				\update_post_meta($scanner_id, CMX_SCANNER_SYNC_FS_SIG_META, $signature);
 			}
-		} elseif (\is_int($mtime) && $mtime > 0) {
-			\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, $mtime);
+		}
+
+		if ($mtime_ts > 0) {
+			$stored_uploaded_ts = (int) \get_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, true);
+			if ($stored_uploaded_ts !== $mtime_ts) {
+				\update_post_meta($scanner_id, CMX_SCANNER_SYNC_UPLOADED_TS_META, $mtime_ts);
+			}
 		}
 
 		$title = (string) \get_the_title($scanner_id);

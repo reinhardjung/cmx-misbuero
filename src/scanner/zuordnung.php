@@ -41,6 +41,75 @@ function cmx_scanner_relation_was_touched(string $meta_key): bool {
 	return isset($map[$meta_key]) && (int) $map[$meta_key] === 1;
 }
 
+function cmx_scanner_normalize_relation_ids($value): array {
+	if (\is_scalar($value) || $value === null) {
+		$value = [$value];
+	}
+
+	$ids = [];
+	foreach ((array) $value as $item) {
+		$id = (int) $item;
+		if ($id > 0) {
+			$ids[] = $id;
+		}
+	}
+	return \array_values(\array_unique($ids));
+}
+
+function cmx_scanner_get_relation_ids(int $post_id, string $meta_key): array {
+	if ($post_id <= 0 || $meta_key === '') {
+		return [];
+	}
+	return cmx_scanner_normalize_relation_ids(\get_post_meta($post_id, $meta_key, true));
+}
+
+function cmx_scanner_store_relation_ids(int $post_id, string $meta_key, array $ids): void {
+	if ($post_id <= 0 || $meta_key === '') {
+		return;
+	}
+	$ids = cmx_scanner_normalize_relation_ids($ids);
+	if (empty($ids)) {
+		\delete_post_meta($post_id, $meta_key);
+		return;
+	}
+	if (\count($ids) === 1) {
+		\update_post_meta($post_id, $meta_key, (int) $ids[0]);
+		return;
+	}
+	\update_post_meta($post_id, $meta_key, $ids);
+}
+
+function cmx_scanner_has_posted_relation_value(string $meta_key): bool {
+	return $meta_key !== '' && \array_key_exists($meta_key, $_POST);
+}
+
+function cmx_scanner_get_posted_relation_ids(string $meta_key): array {
+	if (!cmx_scanner_has_posted_relation_value($meta_key)) {
+		return [];
+	}
+	return cmx_scanner_normalize_relation_ids($_POST[$meta_key]);
+}
+
+function cmx_scanner_posted_relation_has_zero(string $meta_key): bool {
+	if (!cmx_scanner_has_posted_relation_value($meta_key)) {
+		return false;
+	}
+
+	$raw_values = $_POST[$meta_key];
+	if (\is_scalar($raw_values) || $raw_values === null) {
+		$raw_values = [$raw_values];
+	}
+
+	foreach ((array) $raw_values as $raw) {
+		$text = \trim((string) $raw);
+		if ($text === '0') {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 function cmx_scanner_get_rel_meta_keys(): array {
 	return [
 		'kontakte'  => '_cmx_scanner_rel_kontakte_id',
@@ -90,34 +159,39 @@ function cmx_scanner_fetch_relation_options(string $target_post_type, int $limit
 	return $options;
 }
 
-function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_type, string $meta_key, string $nonce_action, string $nonce_name, string $empty_label = 'Kein Eintrag'): void {
+function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_type, string $meta_key, string $nonce_action, string $nonce_name, string $empty_label = 'Kein Eintrag', bool $allow_multiple = false): void {
 	if ($post->post_type !== cmx_scanner_cpt_slug()) {
 		return;
 	}
 
 	\wp_nonce_field($nonce_action, $nonce_name);
-	$current = (int) \get_post_meta($post->ID, $meta_key, true);
-	$has_current = $current > 0;
+	$current_ids = cmx_scanner_get_relation_ids((int) $post->ID, $meta_key);
+	$has_current = !empty($current_ids);
 	$options = cmx_scanner_fetch_relation_options($target_type);
-	$target_label = CMX_SCANNER_ZUORDNUNG_TYPES[$target_type] ?? ucfirst($target_type);
 	$id_suffix = preg_replace('~[^a-z0-9_]+~', '_', strtolower($target_type . '_' . $meta_key));
 	$select_id = 'cmx_scanner_rel_select_' . $id_suffix;
 	$search_id = 'cmx_scanner_rel_search_' . $id_suffix;
 	$nohit_id  = 'cmx_scanner_rel_nohit_' . $id_suffix;
 	$touched_id = 'cmx_scanner_rel_touched_' . $id_suffix;
 	$touched_name = 'cmx_scanner_rel_touched[' . $meta_key . ']';
+	$select_name = $allow_multiple ? ($meta_key . '[]') : $meta_key;
+	$multiple_attr = $allow_multiple ? ' multiple data-cmx-multiple="1"' : '';
 
-	// echo '<p style="margin:0 0 8px;"><em>Zuordnung zu: ' . \esc_html($target_label) . '</em></p>';
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
 	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-scanner-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-scanner-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-scanner-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10"' . $multiple_attr . '>';
 	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
-		echo '<option value="' . \esc_attr((string) $opt['id']) . '" ' . \selected($current, (int) $opt['id'], false) . '>' . \esc_html((string) $opt['label']) . '</option>';
+		$id = (int) ($opt['id'] ?? 0);
+		$selected = \in_array($id, $current_ids, true) ? ' selected' : '';
+		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
 	echo '<p id="' . \esc_attr($nohit_id) . '" style="display:none;margin:8px 0 0;"><em>Keine Treffer.</em></p>';
+	if ($allow_multiple) {
+		echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: Strg/Cmd gedrückt halten und mehrere Einträge wählen.</em></p>';
+	}
 
 	if (empty($options)) {
 		echo '<p style="margin:8px 0 0;"><em>Keine Datensätze gefunden.</em></p>';
@@ -140,18 +214,38 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 					touched.value = String(state || "0");
 				};
 
-				var markTouched = function(select){
-					setTouchState(select, "1");
-				};
+					var markTouched = function(select){
+						setTouchState(select, "1");
+					};
 
-				var clearSelection = function(select){
-					if (!select) return;
-					for (var i = 0; i < select.options.length; i++) {
-						select.options[i].selected = false;
-					}
-					select.selectedIndex = -1;
-					setTouchState(select, "2");
-				};
+					var normalizeSelection = function(select){
+						if (!select) return;
+						var firstOption = select.options.length > 0 ? select.options[0] : null;
+						if (!firstOption || String(firstOption.value || "") !== "0") return;
+						var hasPositiveSelection = false;
+						for (var i = 1; i < select.options.length; i++) {
+							if (select.options[i].selected) {
+								hasPositiveSelection = true;
+								break;
+							}
+						}
+						if (hasPositiveSelection && firstOption.selected) {
+							firstOption.selected = false;
+						}
+					};
+
+					var clearSelection = function(select){
+						if (!select) return;
+						for (var i = 0; i < select.options.length; i++) {
+							select.options[i].selected = false;
+						}
+						select.selectedIndex = -1;
+						var firstOption = select.options.length > 0 ? select.options[0] : null;
+						if (firstOption && String(firstOption.value || "") === "0") {
+							firstOption.selected = true;
+						}
+						setTouchState(select, "2");
+					};
 
 				var filter = function(input){
 					var selectId = input.getAttribute("data-target-select") || "";
@@ -190,11 +284,12 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 					filter(t);
 				});
 
-				document.addEventListener("change", function(e){
-					var t = e.target;
-					if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-select")) return;
-					markTouched(t);
-				});
+					document.addEventListener("change", function(e){
+						var t = e.target;
+						if (!t || !t.classList || !t.classList.contains("cmx-scanner-rel-select")) return;
+						normalizeSelection(t);
+						markTouched(t);
+					});
 
 				document.addEventListener("keydown", function(e){
 					var t = e.target;
@@ -219,13 +314,14 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 				if (!select) return;
 				e.preventDefault();
 				select.focus();
-				for (var i = 1; i < select.options.length; i++) {
-					if (!select.options[i].hidden) {
-						select.options[i].selected = true;
-						break;
+					for (var i = 1; i < select.options.length; i++) {
+						if (!select.options[i].hidden) {
+							select.options[i].selected = true;
+							normalizeSelection(select);
+							break;
+							}
 						}
-					}
-				});
+					});
 
 				document.addEventListener("keydown", function(e){
 					var t = e.target;
@@ -242,8 +338,8 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 
 				var boot = function(){
 					var selects = document.querySelectorAll(".cmx-scanner-rel-select[data-cmx-no-selection=\'1\']");
-					for (var si = 0; si < selects.length; si++) {
-						var select = selects[si];
+						for (var si = 0; si < selects.length; si++) {
+							var select = selects[si];
 						var hasSelected = false;
 						for (var oi = 0; oi < select.options.length; oi++) {
 							if (select.options[oi].selected) {
@@ -251,10 +347,11 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 								break;
 							}
 						}
-						if (hasSelected) {
-							select.selectedIndex = -1;
+							if (hasSelected) {
+								select.selectedIndex = -1;
+							}
+							normalizeSelection(select);
 						}
-					}
 					var inputs = document.querySelectorAll(".cmx-scanner-rel-search");
 					for (var i = 0; i < inputs.length; i++) {
 						filter(inputs[i]);

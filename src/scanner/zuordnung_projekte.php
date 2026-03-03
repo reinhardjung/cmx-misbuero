@@ -20,7 +20,8 @@ function cmx_scanner_render_rel_projekte_metabox(\WP_Post $post): void {
 		CMX_SCANNER_REL_PROJEKTE_META,
 		'cmx_scanner_rel_projekte_save',
 		'cmx_scanner_rel_projekte_nonce',
-		'Kein Projekt'
+		'Kein Projekt',
+		true
 	);
 }
 
@@ -36,19 +37,35 @@ function cmx_scanner_render_rel_projekte_metabox(\WP_Post $post): void {
 	}
 
 	$selected_type = cmx_scanner_get_requested_zuordnung_type($post_id);
-	$value = isset($_POST[CMX_SCANNER_REL_PROJEKTE_META]) ? (int) $_POST[CMX_SCANNER_REL_PROJEKTE_META] : 0;
-	$has_submitted_value = \array_key_exists(CMX_SCANNER_REL_PROJEKTE_META, $_POST);
+	$selected_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_posted_relation_ids')
+		? cmx_scanner_get_posted_relation_ids(CMX_SCANNER_REL_PROJEKTE_META)
+		: [];
+	$has_submitted_value = \function_exists(__NAMESPACE__ . '\\cmx_scanner_has_posted_relation_value')
+		? cmx_scanner_has_posted_relation_value(CMX_SCANNER_REL_PROJEKTE_META)
+		: \array_key_exists(CMX_SCANNER_REL_PROJEKTE_META, $_POST);
+	$has_zero_value = \function_exists(__NAMESPACE__ . '\\cmx_scanner_posted_relation_has_zero')
+		? cmx_scanner_posted_relation_has_zero(CMX_SCANNER_REL_PROJEKTE_META)
+		: false;
 	$is_touched = \function_exists(__NAMESPACE__ . '\\cmx_scanner_relation_was_touched')
 		? cmx_scanner_relation_was_touched(CMX_SCANNER_REL_PROJEKTE_META)
 		: false;
 	if ($selected_type !== 'projekte' && !$is_touched) {
 		return;
 	}
-	if (!$has_submitted_value || ($value <= 0 && !$is_touched)) {
+	if (!$has_submitted_value || (empty($selected_ids) && !$has_zero_value && !$is_touched)) {
 		return;
 	}
 
-	if ($value > 0 && \get_post_type($value) !== 'projekte') {
+	$valid_ids = [];
+	foreach ($selected_ids as $selected_id) {
+		$selected_id = (int) $selected_id;
+		if ($selected_id <= 0 || \get_post_type($selected_id) !== 'projekte') {
+			continue;
+		}
+		$valid_ids[] = $selected_id;
+	}
+	$valid_ids = \array_values(\array_unique($valid_ids));
+	if (empty($valid_ids) && !$has_zero_value) {
 		\delete_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META);
 		return;
 	}
@@ -61,10 +78,16 @@ function cmx_scanner_render_rel_projekte_metabox(\WP_Post $post): void {
 		? cmx_scanner_get_doc_ids_for_post($post_id)
 		: [];
 
-	if ($value > 0) {
-		\update_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META, $value);
+	if (!empty($valid_ids)) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_store_relation_ids')) {
+			cmx_scanner_store_relation_ids($post_id, CMX_SCANNER_REL_PROJEKTE_META, $valid_ids);
+		} else {
+			\update_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META, \count($valid_ids) === 1 ? (int) $valid_ids[0] : $valid_ids);
+		}
 		if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_projekte')) {
-			cmx_scanner_link_docs_to_projekte($value, $doc_ids);
+			foreach ($valid_ids as $projekt_id) {
+				cmx_scanner_link_docs_to_projekte((int) $projekt_id, $doc_ids);
+			}
 		}
 		if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
 			cmx_scanner_mark_redirect_to_list_after_save($post_id);
@@ -80,7 +103,11 @@ function cmx_scanner_render_rel_projekte_metabox(\WP_Post $post): void {
 		return;
 	}
 
-	\update_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META, $new_projekt_id);
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_store_relation_ids')) {
+		cmx_scanner_store_relation_ids($post_id, CMX_SCANNER_REL_PROJEKTE_META, [$new_projekt_id]);
+	} else {
+		\update_post_meta($post_id, CMX_SCANNER_REL_PROJEKTE_META, $new_projekt_id);
+	}
 	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_projekte')) {
 		cmx_scanner_link_docs_to_projekte($new_projekt_id, $doc_ids);
 	}

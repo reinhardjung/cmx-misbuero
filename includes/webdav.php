@@ -311,6 +311,21 @@ function cmx_dav_relative_from_base_uri(string $baseUri, string $path): string {
 	return \ltrim($path, '/');
 }
 
+function cmx_dav_is_pdf_file_name(string $path): bool {
+	$path = \trim((string) $path);
+	if ($path === '' || \str_ends_with($path, '/')) {
+		return false;
+	}
+
+	$name = (string) \basename($path);
+	if ($name === '' || $name === '.' || $name === '..') {
+		return false;
+	}
+
+	$ext = \strtolower((string) \pathinfo($name, \PATHINFO_EXTENSION));
+	return $ext === 'pdf';
+}
+
 function cmx_dav_cleanup_ds_store_in_dir(string $dir): int {
 	if ($dir === '' || !\is_dir($dir)) {
 		return 0;
@@ -642,13 +657,30 @@ add_action('init', function () {
 			}
 		});
 	} else {
-		$server->on('beforeMethod', function(HTTP\RequestInterface $r) use ($sharePath): void {
+		$server->on('beforeMethod', function(HTTP\RequestInterface $r) use ($sharePath, $baseUri): void {
 			$writeMethods = ['PUT','POST','MKCOL','DELETE','MOVE','COPY','PROPPATCH','LOCK','UNLOCK','PATCH'];
 			if (!in_array($r->getMethod(), $writeMethods, true)) {
 				return;
 			}
 			if (!is_dir($sharePath) || !is_writable($sharePath)) {
 				throw new DAV\Exception\Forbidden('Scanner-Ordner ist nicht beschreibbar (Server-Rechte).');
+			}
+
+			$method = \strtoupper((string) $r->getMethod());
+			if ($method === 'PUT') {
+				$relPath = \ltrim((string) $r->getPath(), '/');
+				if (!cmx_dav_is_pdf_file_name($relPath)) {
+					throw new DAV\Exception\Forbidden('Im Scanner sind nur PDF-Dateien erlaubt.');
+				}
+				return;
+			}
+
+			if ($method === 'MOVE' || $method === 'COPY') {
+				$destPath = (string) \parse_url((string) $r->getHeader('Destination'), \PHP_URL_PATH);
+				$destRel = cmx_dav_relative_from_base_uri($baseUri, $destPath);
+				if ($destRel !== '' && !\str_ends_with($destRel, '/') && !cmx_dav_is_pdf_file_name($destRel)) {
+					throw new DAV\Exception\Forbidden('Im Scanner sind nur PDF-Dateien erlaubt.');
+				}
 			}
 		});
 			$server->on('afterMethod:PUT', function(HTTP\RequestInterface $request) use ($sharePath, $baseUri): void {
@@ -735,11 +767,9 @@ add_action('init', function () {
 				}
 			}
 
-			$allowedExt = ['pdf', 'png', 'jpg'];
+			$allowedExt = ['pdf'];
 			$allowedMimes = [
 				'pdf'  => 'application/pdf',
-				'png'  => 'image/png',
-				'jpg'  => 'image/jpeg',
 			];
 			$okCount = 0;
 			$firstError = '';
@@ -784,7 +814,7 @@ add_action('init', function () {
 				$ext = strtolower((string)pathinfo($safeName, PATHINFO_EXTENSION));
 				if (!in_array($ext, $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Erlaubt sind nur PDF, PNG, JPG.';
+						$firstError = 'Erlaubt sind nur PDF-Dateien.';
 					}
 					continue;
 				}
@@ -792,7 +822,7 @@ add_action('init', function () {
 				$fileType = wp_check_filetype_and_ext($tmpName, $safeName, $allowedMimes);
 				if (empty($fileType['ext']) || !in_array((string)$fileType['ext'], $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Dateityp nicht erlaubt (nur PDF, PNG, JPG).';
+						$firstError = 'Dateityp nicht erlaubt (nur PDF).';
 					}
 					continue;
 				}
@@ -1043,9 +1073,9 @@ add_action('init', function () {
 				$uploadForm = '';
 				if (!$readOnly) {
 					$uploadForm = '<form id="uploadform" method="POST" enctype="multipart/form-data" action="'.cmx_dav_h($currentDirUrl).'" class="uploadform">'
-						. '<input type="file" name="scanner_upload[]" accept=".pdf,.png,.jpg,application/pdf,image/png,image/jpeg" multiple required class="upload-input" />'
+						. '<input type="file" name="scanner_upload[]" accept=".pdf,application/pdf" multiple required class="upload-input" />'
 						. '<button type="submit" class="btn btn-upload">Hochladen</button>'
-						. '<span class="upload-hint">Nur PDF/PNG/JPG, max. 100 MB pro Datei</span>'
+						. '<span class="upload-hint">Nur PDF, max. 100 MB pro Datei</span>'
 						. '</form>';
 				}
 				$uploadNotice = '';
