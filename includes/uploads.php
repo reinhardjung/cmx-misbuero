@@ -148,7 +148,7 @@ function cmx_belege_next_suffix(string $dir, string $prefix): int {
 		return;
 	}
 	$scanner_url = \admin_url('edit.php?post_type=scanner');
-	$uploads_title = '<a href="' . \esc_url($scanner_url) . '" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Uploads</a>';
+	$uploads_title = '<a href="' . \esc_url($scanner_url) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Uploads</a>';
 	\add_meta_box(
 		'cmx_uploads_box',
 		$uploads_title,

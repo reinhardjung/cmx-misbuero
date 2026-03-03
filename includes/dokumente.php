@@ -66,7 +66,11 @@ function cmx_dok_is_allowed_post_type(string $post_type): bool {
 
 \add_action('add_meta_boxes', function($post_type) {
 	if (!cmx_dok_is_allowed_post_type((string)$post_type)) return;
-	$box_title = ((string) $post_type === 'scanner') ? 'als Scan' : 'Dokumente';
+	$box_title = 'als Scan';
+	if ((string) $post_type !== 'scanner') {
+		$dokumente_url = \admin_url('edit.php?post_type=dokumente');
+		$box_title = '<a href="' . \esc_url($dokumente_url) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Dokumente</a>';
+	}
 	\add_meta_box(
 		'cmx_dokumente_box',
 		$box_title,
