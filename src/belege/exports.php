@@ -65,10 +65,13 @@ function cmxbu_belege_export_presets(): array {
 		'heute' => 'Heute (heute bis heute)',
 		'diesen_monat' => 'Diesen Monat',
 		'letzten_monat' => 'Letzten Monat',
+		'vorletzten_monat' => 'Vorletzten Monat',
 		'dieses_quartal' => 'Dieses Quartal',
 		'letztes_quartal' => 'Letztes Quartal',
+		'vorletztes_quartal' => 'Vorletztes Quartal',
 		'dieses_jahr' => 'Dieses Jahr',
 		'letztes_jahr' => 'Letztes Jahr',
+		'vorletztes_jahr' => 'Vorletztes Jahr',
 		'benutzerdefiniert' => 'Benutzerdefiniert',
 	];
 }
@@ -104,6 +107,11 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 				'from' => $now->modify('first day of last month')->format('Y-m-d'),
 				'to' => $now->modify('last day of last month')->format('Y-m-d'),
 			];
+		case 'vorletzten_monat':
+			return [
+				'from' => $now->modify('first day of -2 months')->format('Y-m-d'),
+				'to' => $now->modify('last day of -2 months')->format('Y-m-d'),
+			];
 		case 'dieses_quartal':
 			$year = (int) $now->format('Y');
 			$month = (int) $now->format('n');
@@ -125,6 +133,17 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 				'from' => $last_q_start->format('Y-m-d'),
 				'to' => $last_q_end->format('Y-m-d'),
 			];
+		case 'vorletztes_quartal':
+			$year = (int) $now->format('Y');
+			$month = (int) $now->format('n');
+			$q_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+			$current_q_start = $now->setDate($year, $q_start_month, 1);
+			$prev2_q_start = $current_q_start->modify('-6 months');
+			$prev2_q_end = $current_q_start->modify('-3 months')->modify('-1 day');
+			return [
+				'from' => $prev2_q_start->format('Y-m-d'),
+				'to' => $prev2_q_end->format('Y-m-d'),
+			];
 		case 'dieses_jahr':
 			$year = (int) $now->format('Y');
 			return [
@@ -133,6 +152,12 @@ function cmxbu_belege_export_range_from_preset(string $preset): array {
 			];
 		case 'letztes_jahr':
 			$year = ((int) $now->format('Y')) - 1;
+			return [
+				'from' => \sprintf('%04d-01-01', $year),
+				'to' => \sprintf('%04d-12-31', $year),
+			];
+		case 'vorletztes_jahr':
+			$year = ((int) $now->format('Y')) - 2;
 			return [
 				'from' => \sprintf('%04d-01-01', $year),
 				'to' => \sprintf('%04d-12-31', $year),
@@ -375,6 +400,10 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 					from = ymd(new Date(y, m - 1, 1));
 					to = ymd(new Date(y, m, 0));
 					break;
+				case 'vorletzten_monat':
+					from = ymd(new Date(y, m - 2, 1));
+					to = ymd(new Date(y, m - 1, 0));
+					break;
 				case 'dieses_quartal':
 					var qStartMonth = Math.floor(m / 3) * 3;
 					from = ymd(new Date(y, qStartMonth, 1));
@@ -388,6 +417,14 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 					from = ymd(lastQStart);
 					to = ymd(lastQEnd);
 					break;
+				case 'vorletztes_quartal':
+					var thisQStartMonth2 = Math.floor(m / 3) * 3;
+					var thisQStart2 = new Date(y, thisQStartMonth2, 1);
+					var prev2QStart = new Date(thisQStart2.getFullYear(), thisQStart2.getMonth() - 6, 1);
+					var prev2QEnd = new Date(thisQStart2.getFullYear(), thisQStart2.getMonth() - 3, 0);
+					from = ymd(prev2QStart);
+					to = ymd(prev2QEnd);
+					break;
 				case 'dieses_jahr':
 					from = y + '-01-01';
 					to = y + '-12-31';
@@ -395,6 +432,10 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 				case 'letztes_jahr':
 					from = (y - 1) + '-01-01';
 					to = (y - 1) + '-12-31';
+					break;
+				case 'vorletztes_jahr':
+					from = (y - 2) + '-01-01';
+					to = (y - 2) + '-12-31';
 					break;
 				default:
 					return;
