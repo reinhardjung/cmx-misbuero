@@ -210,7 +210,9 @@ function cmxbu_get_beleg_primary_upload_abs_path(int $post_id): string {
 	}
 
 	$uploads = (array) \get_post_meta($post_id, cmxbu_beleg_uploads_meta_key(), true);
-	foreach ($uploads as $entry) {
+	// Neueste Upload-Datei bevorzugen: neue Einträge werden am Ende gespeichert.
+	for ($i = \count($uploads) - 1; $i >= 0; $i--) {
+		$entry = $uploads[$i] ?? null;
 		$abs_path = '';
 		if (\is_numeric($entry)) {
 			$abs_path = (string) \get_attached_file((int) $entry);
