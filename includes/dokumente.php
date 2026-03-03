@@ -525,3 +525,240 @@ function cmx_dokumente_delete_files(int $post_id): void {
 	}
 	cmx_dokumente_delete_files($post_id);
 }, 10, 1);
+
+if (!\defined(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN')) {
+	\define(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN', 'cmx_related_doc_pdf');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_DOK_ADMIN_ICON_POST_TYPES')) {
+	\define(__NAMESPACE__ . '\\CMX_DOK_ADMIN_ICON_POST_TYPES', ['artikel', 'kontakte', 'projekte', 'dokumente', 'scanner']);
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_icon_post_types')) {
+	function cmx_dok_admin_icon_post_types(): array {
+		$types = \defined(__NAMESPACE__ . '\\CMX_DOK_ADMIN_ICON_POST_TYPES')
+			? \constant(__NAMESPACE__ . '\\CMX_DOK_ADMIN_ICON_POST_TYPES')
+			: [];
+		if (!\is_array($types)) {
+			$types = [];
+		}
+		$types = \array_map(static function ($value): string {
+			return \sanitize_key((string) $value);
+		}, $types);
+		$types = \array_values(\array_unique(\array_filter($types, static function ($value): bool {
+			return $value !== '' && $value !== 'belege';
+		})));
+		return $types;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_upload_url_from_rel')) {
+	function cmx_dok_admin_upload_url_from_rel(string $file_rel): string {
+		$file_rel = \ltrim(\str_replace('\\', '/', $file_rel), '/');
+		if ($file_rel === '') {
+			return '';
+		}
+
+		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+		$abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel));
+		if ($abs === '' || !\str_starts_with($abs, $uploads_root) || !\is_file($abs)) {
+			return '';
+		}
+
+		return (string) \content_url('/uploads/' . $file_rel);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_doc_url_from_id')) {
+	function cmx_dok_admin_doc_url_from_id(int $doc_id): string {
+		if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+			return '';
+		}
+
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+		$self_files = (array) \get_post_meta($doc_id, $self_meta_key, true);
+		$self_files = \array_values(\array_filter($self_files, static function ($value): bool {
+			return (\is_string($value) && $value !== '') || \is_numeric($value);
+		}));
+		for ($i = \count($self_files) - 1; $i >= 0; $i--) {
+			$entry = $self_files[$i];
+			$file_rel = '';
+			if (\is_numeric($entry)) {
+				$file_rel = (string) \get_post_meta((int) $entry, '_wp_attached_file', true);
+			} else {
+				$file_rel = (string) $entry;
+			}
+			$url = cmx_dok_admin_upload_url_from_rel($file_rel);
+			if ($url !== '') {
+				return $url;
+			}
+		}
+
+		$file_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
+		$url = cmx_dok_admin_upload_url_from_rel($file_rel);
+		if ($url !== '') {
+			return $url;
+		}
+
+		$edit_url = (string) \get_edit_post_link($doc_id, 'raw');
+		return $edit_url !== '' ? $edit_url : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_latest_related_doc_url')) {
+	function cmx_dok_admin_latest_related_doc_url(int $post_id): string {
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			: '_cmx_dokumente_uploads';
+		$doc_ids = (array) \get_post_meta($post_id, $uploads_meta_key, true);
+		$doc_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $doc_ids))));
+		if (empty($doc_ids)) {
+			return '';
+		}
+
+		for ($i = \count($doc_ids) - 1; $i >= 0; $i--) {
+			$url = cmx_dok_admin_doc_url_from_id((int) $doc_ids[$i]);
+			if ($url !== '') {
+				return $url;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_latest_self_doc_url')) {
+	function cmx_dok_admin_latest_self_doc_url(int $post_id): string {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'dokumente') {
+			return '';
+		}
+
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+		$self_files = (array) \get_post_meta($post_id, $self_meta_key, true);
+		$self_files = \array_values(\array_filter($self_files, static function ($value): bool {
+			return (\is_string($value) && $value !== '') || \is_numeric($value);
+		}));
+
+		for ($i = \count($self_files) - 1; $i >= 0; $i--) {
+			$entry = $self_files[$i];
+			$file_rel = '';
+			if (\is_numeric($entry)) {
+				$file_rel = (string) \get_post_meta((int) $entry, '_wp_attached_file', true);
+			} else {
+				$file_rel = (string) $entry;
+			}
+			$url = cmx_dok_admin_upload_url_from_rel($file_rel);
+			if ($url !== '') {
+				return $url;
+			}
+		}
+
+		$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
+		$url = cmx_dok_admin_upload_url_from_rel($file_rel);
+		if ($url !== '') {
+			return $url;
+		}
+
+		$edit_url = (string) \get_edit_post_link($post_id, 'raw');
+		return $edit_url !== '' ? $edit_url : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_latest_doc_url_for_post')) {
+	function cmx_dok_admin_latest_doc_url_for_post(int $post_id, string $post_type): string {
+		$post_type = \sanitize_key($post_type);
+		if ($post_type === 'dokumente') {
+			return cmx_dok_admin_latest_self_doc_url($post_id);
+		}
+		return cmx_dok_admin_latest_related_doc_url($post_id);
+	}
+}
+
+\add_action('init', function (): void {
+	$column_key = \defined(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN')
+		: 'cmx_related_doc_pdf';
+
+	foreach (cmx_dok_admin_icon_post_types() as $post_type) {
+		$append_column = static function (array $columns) use ($column_key): array {
+			unset($columns[$column_key]);
+			$columns[$column_key] = 'PDF';
+			return $columns;
+		};
+
+		\add_filter('manage_edit-' . $post_type . '_columns', $append_column, 2000);
+		\add_filter('manage_' . $post_type . '_posts_columns', $append_column, 2000);
+
+		\add_action('manage_' . $post_type . '_posts_custom_column', static function (string $column, int $post_id) use ($column_key, $post_type): void {
+			if ($column !== $column_key) {
+				return;
+			}
+
+			$url = cmx_dok_admin_latest_doc_url_for_post($post_id, $post_type);
+			if ($url === '') {
+				echo '<span class="cmx-related-doc-pdf-placeholder" aria-hidden="true"></span>';
+				return;
+			}
+
+			echo '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" title="Letztes zugeordnetes Dokument anzeigen" class="cmx-related-doc-pdf-icon" aria-label="Letztes zugeordnetes Dokument anzeigen"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></a>';
+		}, 20, 2);
+	}
+}, 5);
+
+\add_action('admin_head-edit.php', function (): void {
+	$post_type = isset($_GET['post_type']) ? \sanitize_key((string) $_GET['post_type']) : '';
+	if ($post_type === '' && \function_exists('get_current_screen')) {
+		$screen = \get_current_screen();
+		if ($screen && isset($screen->post_type)) {
+			$post_type = \sanitize_key((string) $screen->post_type);
+		}
+	}
+
+	$post_types = cmx_dok_admin_icon_post_types();
+	if ($post_type === '' || !\in_array($post_type, $post_types, true)) {
+		return;
+	}
+
+	$column_key = \defined(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_ADMIN_PDF_COLUMN')
+		: 'cmx_related_doc_pdf';
+
+	\wp_enqueue_style('dashicons');
+
+	echo '<style>
+		.wp-list-table th.column-' . \esc_attr($column_key) . ' {
+			width: 42px;
+			text-align: center;
+		}
+		.wp-list-table td.column-' . \esc_attr($column_key) . ' {
+			text-align: center;
+			vertical-align: top;
+		}
+		.cmx-related-doc-pdf-icon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			text-decoration: none;
+			min-height: 20px;
+			color: #111111;
+		}
+		.cmx-related-doc-pdf-icon .dashicons {
+			width: 18px;
+			height: 18px;
+			font-size: 18px;
+			line-height: 18px;
+		}
+		.cmx-related-doc-pdf-placeholder {
+			display: inline-block;
+			width: 18px;
+			height: 18px;
+		}
+	</style>';
+});
