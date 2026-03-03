@@ -148,6 +148,8 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
+	static $in_progress = [];
+	if (!empty($in_progress[$post_id])) return;
 
 	$new_title = cmx_dokumente_sanitized_title_from_file($post_id);
 	if ($new_title === '') {
@@ -158,17 +160,16 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	}
 
 	$current_title = \trim((string) $post->post_title);
-	$new_slug = \sanitize_title($new_title);
-	$current_slug = (string) $post->post_name;
-	if ($current_title === $new_title && $current_slug === $new_slug) {
+	if ($current_title === $new_title) {
 		return;
 	}
 
+	$in_progress[$post_id] = true;
 	\wp_update_post([
 		'ID'         => $post_id,
 		'post_title' => $new_title,
-		'post_name'  => $new_slug,
 	]);
+	unset($in_progress[$post_id]);
 }, 10, 2);
 
 

@@ -15,7 +15,7 @@ const CMX_SCANNER_REL_DOKUMENTE_META = '_cmx_scanner_rel_dokumente_id';
 
 function cmx_scanner_render_rel_dokumente_metabox(\WP_Post $post): void {
 	\wp_nonce_field('cmx_scanner_rel_dokumente_save', 'cmx_scanner_rel_dokumente_nonce');
-	echo '<p>' . \esc_html__('Bei Auswahl "Dokumente" wird automatisch ein neues Dokument erzeugt.', 'cmx') . '</p>';
+	echo '<p>' . \esc_html__('Bei Zuoerdnung "Dokumente" wird automatisch "nur" ein neues Dokument erzeugt.', 'cmx') . '</p>';
 }
 
 \add_action('save_post_scanner', function (int $post_id): void {
