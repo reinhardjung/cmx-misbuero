@@ -11,6 +11,12 @@ if (!\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')) {
 	\define(__NAMESPACE__ . '\\CMX_DOK_SELF_META', '_cmx_dokumente_files');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_PENDING_META')) {
+	\define(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_PENDING_META', '_cmx_dok_upload_notice_pending');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META')) {
+	\define(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META', '_cmx_dok_upload_notice_flash');
+}
 
 function cmx_dok_upload_target_dir(string $post_type, int $year): array {
 	if ($post_type === 'scanner') {
@@ -34,6 +40,20 @@ function cmx_dok_sanitize_title_from_filename(string $filename): string {
 	$base = \trim((string) $base);
 	$base = \sanitize_text_field($base);
 	return $base;
+}
+
+function cmx_dok_is_placeholder_post_title(string $title): bool {
+	$title = \trim((string) \wp_strip_all_tags($title));
+	if ($title === '') {
+		return true;
+	}
+
+	$normalized = \strtolower($title);
+	$normalized = \str_replace(['_', ' '], '-', $normalized);
+
+	return \str_contains($normalized, 'automatisch-gespeicherter-entwurf')
+		|| \str_contains($normalized, 'auto-draft')
+		|| \str_contains($normalized, 'autodraft');
 }
 
 function cmx_dok_is_allowed_post_type(string $post_type): bool {
@@ -60,10 +80,18 @@ function cmx_dok_is_allowed_post_type(string $post_type): bool {
 function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	$nonce = \wp_create_nonce('cmx_dokumente_upload');
 	$is_dokumente = ($post->post_type === 'dokumente');
+	$is_scanner = ($post->post_type === 'scanner');
 	$docs = [];
 	if ($is_dokumente) {
 		$docs = (array) \get_post_meta($post->ID, CMX_DOK_SELF_META, true);
 		$docs = array_values(array_filter($docs, function($v){ return $v !== '' && $v !== null; }));
+	} elseif ($is_scanner) {
+		$source_rel = (string) \get_post_meta($post->ID, '_cmx_scanner_source_rel', true);
+		if ($source_rel === '' && \function_exists(__NAMESPACE__ . '\\cmx_scanner_sync_get_source_rel_for_post')) {
+			$source_rel = (string) cmx_scanner_sync_get_source_rel_for_post((int) $post->ID);
+		}
+		$source_rel = \ltrim(\str_replace('\\', '/', $source_rel), '/');
+		$docs = $source_rel !== '' ? [$source_rel] : [];
 	} else {
 		$docs = (array) \get_post_meta($post->ID, CMX_DOK_UPLOADS_META, true);
 		$docs = array_values(array_filter(array_map('intval', $docs)));
@@ -80,9 +108,9 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	if ($docs) {
 		echo '<ul id="cmx-dokumente-existing" style="margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;">';
 		foreach ($docs as $doc_entry) {
-			$doc_id = $is_dokumente ? 0 : (int) $doc_entry;
+			$doc_id = ($is_dokumente || $is_scanner) ? 0 : (int) $doc_entry;
 			$file_rel = '';
-			$edit_url = $is_dokumente ? \get_edit_post_link((int)$post->ID, 'raw') : \get_edit_post_link((int)$doc_id, 'raw');
+			$edit_url = ($is_dokumente || $is_scanner) ? '' : \get_edit_post_link((int)$doc_id, 'raw');
 			if ($is_dokumente) {
 				if (is_numeric($doc_entry)) {
 					$att_id = (int) $doc_entry;
@@ -90,6 +118,8 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 				} else {
 					$file_rel = ltrim((string) $doc_entry, '/');
 				}
+			} elseif ($is_scanner) {
+				$file_rel = \ltrim((string) $doc_entry, '/');
 			} else {
 				$file_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
 				if ($file_rel === '') {
@@ -109,10 +139,12 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			$url = content_url('/uploads/' . $file_rel);
 			$file_base = basename($file_rel);
 			$label = $file_base ?: ($doc_id ? (\get_the_title($doc_id) ?: ('#' . $doc_id)) : $file_rel);
-			$data_attr = $is_dokumente ? 'data-path="' . \esc_attr($file_rel) . '"' : 'data-doc-id="' . (int)$doc_id . '"';
-			$grid_cols = $is_dokumente ? '1fr 14px' : '18px 1fr 14px';
+			$data_attr = ($is_dokumente || $is_scanner)
+				? 'data-path="' . \esc_attr($file_rel) . '"'
+				: 'data-doc-id="' . (int) $doc_id . '"';
+			$grid_cols = ($is_dokumente || $is_scanner) ? '1fr 14px' : '18px 1fr 14px';
 			echo '<li ' . $data_attr . ' style="display:grid;grid-template-columns:' . $grid_cols . ';align-items:center;gap:4px;width:100%;white-space:nowrap;">';
-			if (!$is_dokumente) {
+			if (!$is_dokumente && !$is_scanner) {
 				if ($edit_url) {
 					echo '<a href="' . \esc_url($edit_url) . '" target="_blank" rel="noopener noreferrer" title="Dokument bearbeiten" style="text-decoration:none;justify-self:start;">';
 					echo '<span style="display:inline-block;padding:0 3px;border:1px solid #ccd0d4;border-radius:2px;font-size:10px;line-height:1.2;">D</span>';
@@ -142,14 +174,34 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			var isDok = ' . ($is_dokumente ? 'true' : 'false') . ';
 			var nonce = ' . \wp_json_encode($nonce) . ';
 			var ajaxurl = ' . \wp_json_encode(\admin_url('admin-ajax.php')) . ';
-			var autoSaveTypes = ["artikel", "kontakte", "belege", "projekte", "dokumente"];
+			var autoSaveTypes = ["artikel", "kontakte", "belege", "projekte", "dokumente", "scanner"];
 			var shouldAutoSave = autoSaveTypes.indexOf(postType) !== -1;
 			var saveTimer = null;
+			var pendingUploadNotice = false;
+			var noticeFieldId = "cmx-dok-upload-saved-flag";
+
+			function markUploadSavedNotice(){
+				pendingUploadNotice = true;
+				var form = document.getElementById("post");
+				if (!form) return;
+				var input = document.getElementById(noticeFieldId);
+				if (!input) {
+					input = document.createElement("input");
+					input.type = "hidden";
+					input.id = noticeFieldId;
+					input.name = "cmx_dok_upload_saved";
+					form.appendChild(input);
+				}
+				input.value = "1";
+			}
 
 			function triggerPostSave(){
 				if (!shouldAutoSave) return;
 				var form = document.getElementById("post");
 				if (!form) return;
+				if (pendingUploadNotice) {
+					markUploadSavedNotice();
+				}
 				var btn = form.querySelector("#publish:not([disabled]), #save-post:not([disabled])");
 				if (btn && typeof btn.click === "function") {
 					btn.click();
@@ -197,6 +249,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 							} else {
 								$row.text(label);
 							}
+							markUploadSavedNotice();
 							queuePostSave();
 						} else {
 							$row.text("Fehler beim Upload: " + file.name);
@@ -314,6 +367,7 @@ function cmx_dokumente_upload_file(): void {
 		: ($is_scanner
 			? \wp_date('ymd-His')
 			: ($incoming_title !== '' ? $incoming_title : ($source_title !== '' ? (string) $source_title : \wp_date('ymd-His'))));
+	$response_title = '';
 	if ($is_dokumente) {
 		if ($doc_title === '') {
 			$doc_title = \wp_date('ymd-His');
@@ -328,6 +382,24 @@ function cmx_dokumente_upload_file(): void {
 				'post_title' => $doc_title,
 				'post_name' => $new_slug,
 			]);
+		}
+		$response_title = $doc_title;
+	}
+
+	if ($is_scanner) {
+		$response_title = $scanner_title;
+	} elseif (!$is_dokumente && \in_array($post_type, ['artikel', 'kontakte', 'projekte'], true)) {
+		$parent_title = $incoming_title !== '' ? $incoming_title : $doc_title;
+		$current_title = $post_obj ? \trim((string) $post_obj->post_title) : '';
+		$current_slug = $post_obj ? (string) $post_obj->post_name : '';
+		if ($parent_title !== '' && cmx_dok_is_placeholder_post_title($current_title)) {
+			$new_slug = \sanitize_title($parent_title);
+			\wp_update_post([
+				'ID'         => $post_id,
+				'post_title' => $parent_title,
+				'post_name'  => ($current_slug === '' || $current_slug === 'auto-draft') ? $new_slug : $current_slug,
+			]);
+			$response_title = $parent_title;
 		}
 	}
 
@@ -445,9 +517,87 @@ function cmx_dokumente_upload_file(): void {
 		'id'    => (int) $doc_id,
 		'url'   => $file_url,
 		'label' => basename($rel) ?: $doc_title,
-		'title' => ($is_scanner ? $scanner_title : ($is_dokumente ? $doc_title : '')),
+		'title' => $response_title,
 	]);
 }
+
+\add_action('save_post', function (int $post_id, \WP_Post $post): void {
+	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+		return;
+	}
+	if (\wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) {
+		return;
+	}
+	if (!\current_user_can('edit_post', $post_id)) {
+		return;
+	}
+
+	$pending = (string) \get_post_meta($post_id, CMX_DOK_UPLOAD_NOTICE_PENDING_META, true);
+	if ($pending !== '1') {
+		return;
+	}
+
+	$user_id = (int) \get_current_user_id();
+	if ($user_id <= 0) {
+		return;
+	}
+
+	\update_user_meta($user_id, CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META, (string) \time());
+	\delete_post_meta($post_id, CMX_DOK_UPLOAD_NOTICE_PENDING_META);
+}, 30, 2);
+
+\add_filter('redirect_post_location', function (string $location, int $post_id): string {
+	if ($post_id <= 0) {
+		return $location;
+	}
+
+	$marker = isset($_POST['cmx_dok_upload_saved'])
+		? (string) \sanitize_text_field((string) \wp_unslash($_POST['cmx_dok_upload_saved']))
+		: '';
+	if ($marker !== '1') {
+		return $location;
+	}
+
+	if (!\current_user_can('edit_post', $post_id)) {
+		return $location;
+	}
+
+	$location = (string) \add_query_arg('cmx_dok_upload_saved', '1', $location);
+	if ((string) \get_post_type($post_id) === 'scanner') {
+		$location = (string) \remove_query_arg(['message', 'updated'], $location);
+	}
+
+	return $location;
+}, 9999, 2);
+
+\add_action('all_admin_notices', function (): void {
+	$has_query_marker = isset($_GET['cmx_dok_upload_saved'])
+		? (string) \sanitize_text_field((string) \wp_unslash($_GET['cmx_dok_upload_saved']))
+		: '';
+	$has_query_marker = ($has_query_marker === '1');
+
+	$user_id = (int) \get_current_user_id();
+	$has_flash_marker = false;
+	if ($user_id > 0) {
+		$flash_raw = (string) \get_user_meta($user_id, CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META, true);
+		$has_flash_marker = ($flash_raw !== '');
+	}
+
+	if (!$has_query_marker && !$has_flash_marker) {
+		return;
+	}
+
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || !\in_array((string) $screen->base, ['post', 'edit'], true)) {
+		return;
+	}
+
+	if ($user_id > 0 && $has_flash_marker) {
+		\delete_user_meta($user_id, CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META);
+	}
+
+	echo '<div class="notice notice-success is-dismissible"><p>Dokument wurde hochgeladen und gespeichert.</p></div>';
+});
 
 \add_action('wp_ajax_cmx_dokumente_remove_file', __NAMESPACE__ . '\\cmx_dokumente_remove_file');
 function cmx_dokumente_remove_file(): void {
@@ -461,6 +611,7 @@ function cmx_dokumente_remove_file(): void {
 	if ($post_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 	$post_type = (string) \get_post_type($post_id);
 	$is_dokumente = ($post_type === 'dokumente');
+	$is_scanner = ($post_type === 'scanner');
 
 	if ($is_dokumente) {
 		if ($path === '') \wp_send_json_error(['message'=>'bad_params'], 400);
@@ -474,6 +625,20 @@ function cmx_dokumente_remove_file(): void {
 		}
 		\delete_post_meta($post_id, '_cmx_dokumente_file_path');
 		\wp_delete_post($post_id, true);
+	} elseif ($is_scanner) {
+		$source_rel = (string) \get_post_meta($post_id, '_cmx_scanner_source_rel', true);
+		$path = $path !== '' ? $path : $source_rel;
+		$path = \ltrim(\str_replace('\\', '/', (string) $path), '/');
+		if ($path === '') \wp_send_json_error(['message'=>'bad_params'], 400);
+
+		$abs = WP_CONTENT_DIR . '/uploads/' . $path;
+		if (is_file($abs)) {
+			@unlink($abs);
+		}
+
+		\delete_post_meta($post_id, '_cmx_scanner_source_rel');
+		\delete_post_meta($post_id, '_cmx_scanner_uploaded_ts');
+		\delete_post_meta($post_id, '_cmx_scanner_fs_signature');
 	} else {
 		if ($doc_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 		$docs = (array) \get_post_meta($post_id, CMX_DOK_UPLOADS_META, true);
