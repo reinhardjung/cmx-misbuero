@@ -82,7 +82,7 @@ function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 
 	$title_safe = ($title !== '') ? $title : (string) $post->ID;
 	$basename   = \sanitize_title($title_safe . '_' . $file_type);
-	$base_dir   = rtrim(CMX_UPLOADS_MISBUERO, '/\\') . '/';
+	$base_dir   = rtrim(CMX_UPLOADS_MISBUERO, '/\\');
 
 	$years = [\date('Y')];
 	if (!empty($post->post_date)) {
@@ -94,43 +94,61 @@ function cmxbu_get_beleg_pdf_paths(\WP_Post $post): array {
 	$years = array_values(array_unique(array_filter($years)));
 
 	foreach ($years as $year) {
-		$dir = $base_dir . $year . '/belege/';
-		$abs = $dir . $basename . '.pdf';
-		if (is_file($abs)) {
-			return [$year . '/belege/' . $basename . '.pdf', $abs];
-		}
+		$dir_candidates = [
+			[
+				'dir'        => $base_dir . '/archiv/' . $year . '/belege/',
+				'rel_prefix' => 'archiv/' . $year . '/belege/',
+			],
+			[
+				'dir'        => $base_dir . '/' . $year . '/belege/',
+				'rel_prefix' => $year . '/belege/',
+			],
+		];
 
-		// Fallback: bezahlte Belege können ein Datumspräfix haben
-		foreach ((array) \glob($dir . '????-??-??_' . $basename . '.pdf') as $prefixed) {
-			if (is_file($prefixed)) {
-				return [$year . '/belege/' . basename($prefixed), $prefixed];
+		foreach ($dir_candidates as $candidate) {
+			$dir = (string) ($candidate['dir'] ?? '');
+			$rel_prefix = (string) ($candidate['rel_prefix'] ?? '');
+			if ($dir === '' || $rel_prefix === '') {
+				continue;
 			}
-		}
 
-		$legacy_types = [];
-		if ($file_type !== $type) {
-			$legacy_types[] = $type;
-		}
-		if ($type_raw !== '' && $type_raw !== $type && $type_raw !== $file_type) {
-			$legacy_types[] = $type_raw;
-		}
-		foreach (array_values(array_unique($legacy_types)) as $legacy_type) {
-			$old_base = \sanitize_title($title_safe . '_' . $legacy_type);
-			$old_abs = $dir . $old_base . '.pdf';
-			if (is_file($old_abs)) {
-				return [$year . '/belege/' . $old_base . '.pdf', $old_abs];
+			$abs = $dir . $basename . '.pdf';
+			if (is_file($abs)) {
+				return [$rel_prefix . $basename . '.pdf', $abs];
 			}
-			foreach ((array) \glob($dir . '????-??-??_' . $old_base . '.pdf') as $prefixed) {
+
+			// Fallback: bezahlte Belege können ein Datumspräfix haben
+			foreach ((array) \glob($dir . '????-??-??_' . $basename . '.pdf') as $prefixed) {
 				if (is_file($prefixed)) {
-					return [$year . '/belege/' . basename($prefixed), $prefixed];
+					return [$rel_prefix . basename($prefixed), $prefixed];
+				}
+			}
+
+			$legacy_types = [];
+			if ($file_type !== $type) {
+				$legacy_types[] = $type;
+			}
+			if ($type_raw !== '' && $type_raw !== $type && $type_raw !== $file_type) {
+				$legacy_types[] = $type_raw;
+			}
+			foreach (array_values(array_unique($legacy_types)) as $legacy_type) {
+				$old_base = \sanitize_title($title_safe . '_' . $legacy_type);
+				$old_abs = $dir . $old_base . '.pdf';
+				if (is_file($old_abs)) {
+					return [$rel_prefix . $old_base . '.pdf', $old_abs];
+				}
+				foreach ((array) \glob($dir . '????-??-??_' . $old_base . '.pdf') as $prefixed) {
+					if (is_file($prefixed)) {
+						return [$rel_prefix . basename($prefixed), $prefixed];
+					}
 				}
 			}
 		}
 	}
 
 	// Fallback: Standardpfad zurückgeben, auch wenn Datei noch nicht existiert
-	$pdf_rel_path = \date('Y') . '/belege/' . $basename . '.pdf';
-	$pdf_abs_path = $base_dir . $pdf_rel_path;
+	$pdf_rel_path = 'archiv/' . \date('Y') . '/belege/' . $basename . '.pdf';
+	$pdf_abs_path = $base_dir . '/' . $pdf_rel_path;
 
 	return [$pdf_rel_path, $pdf_abs_path];
 }

@@ -798,8 +798,8 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			? (int) cmx_get_beleg_upload_year( 0 )
 			: (int) wp_date( 'Y', $ts );
 		$upload_filter = function( array $dirs ) use ( $year ) : array {
-			$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
-			$url  = content_url( '/uploads/misbuero/' . $year . '/belege' );
+			$base = WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/belege';
+			$url  = content_url( '/uploads/misbuero/archiv/' . $year . '/belege' );
 			if ( ! is_dir( $base ) ) {
 				wp_mkdir_p( $base );
 			}

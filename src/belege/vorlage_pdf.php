@@ -869,7 +869,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$up=wp_get_upload_dir();
 			if (!defined(__NAMESPACE__.'\\CMX_UPLOADS_MISBUERO')) define(__NAMESPACE__.'\\CMX_UPLOADS_MISBUERO', trailingslashit($up['basedir']).'misbuero/');
 		}
-		$base_dir=rtrim(CMX_UPLOADS_MISBUERO,'/').'/'.date('Y').'/belege/';
+		$base_dir=rtrim(CMX_UPLOADS_MISBUERO,'/').'/archiv/'.date('Y').'/belege/';
 		if (!wp_mkdir_p($base_dir) || !is_writable($base_dir)) { cmxbu_log('FEHLER: Upload-Verzeichnis',['dir'=>$base_dir]); return; }
 
 		// Cleanup: automatisch gespeicherte Entwurf-Dateien entfernen

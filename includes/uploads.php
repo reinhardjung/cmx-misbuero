@@ -76,8 +76,8 @@ function cmx_get_beleg_upload_year(int $post_id = 0): int {
 }
 
 function cmx_belege_upload_dir(int $year): array {
-	$base = WP_CONTENT_DIR . '/uploads/misbuero/' . $year . '/belege';
-	$url  = content_url('/uploads/misbuero/' . $year . '/belege');
+	$base = WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/belege';
+	$url  = content_url('/uploads/misbuero/archiv/' . $year . '/belege');
 	if (!is_dir($base)) {
 		wp_mkdir_p($base);
 	}
@@ -249,13 +249,34 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 	}
 	// Do not mutate stored meta here; only filter display.
 
-	echo '<script>
-	jQuery(function($){
-		var $drop = $("#cmx-belege-drop");
-		var $file = $("#cmx-belege-file");
-		var postId = ' . (int) $post->ID . ';
-		var nonce = ' . wp_json_encode($nonce) . ';
-		var ajaxurl = ' . wp_json_encode(admin_url('admin-ajax.php')) . ';
+		echo '<script>
+		jQuery(function($){
+			var $drop = $("#cmx-belege-drop");
+			var $file = $("#cmx-belege-file");
+			var postId = ' . (int) $post->ID . ';
+			var nonce = ' . wp_json_encode($nonce) . ';
+			var ajaxurl = ' . wp_json_encode(admin_url('admin-ajax.php')) . ';
+			var saveTimer = null;
+
+			function triggerPostSave(){
+				var form = document.getElementById("post");
+				if (!form) return;
+				var btn = form.querySelector("#publish:not([disabled]), #save-post:not([disabled])");
+				if (btn && typeof btn.click === "function") {
+					btn.click();
+					return;
+				}
+				if (typeof form.requestSubmit === "function") {
+					form.requestSubmit();
+					return;
+				}
+				form.submit();
+			}
+
+			function queuePostSave(){
+				if (saveTimer) window.clearTimeout(saveTimer);
+				saveTimer = window.setTimeout(triggerPostSave, 450);
+			}
 
 		function uploadFile(file){
 			var fd = new FormData();
@@ -271,11 +292,11 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 				processData: false,
 				contentType: false,
 				success: function(resp){
-					if (resp && resp.success && resp.data) {
-						if (resp.data.title) {
-							$("#title").val(resp.data.title);
-							$("#title-prompt-text").addClass("screen-reader-text");
-						}
+						if (resp && resp.success && resp.data) {
+							if (resp.data.title) {
+								$("#title").val(resp.data.title);
+								$("#title-prompt-text").addClass("screen-reader-text");
+							}
 						if (resp.data.notice) {
 							var $notice = $("#cmx-belege-upload-notice");
 							if (!$notice.length) {
@@ -319,15 +340,16 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 						}).text("X");
 						$li.append($link).append($btn);
 						var $existing = $("#cmx-belege-existing");
-						if ($existing.length) {
-							$existing.append($li);
+							if ($existing.length) {
+								$existing.append($li);
+							} else {
+								$existing = $("<ul id=\"cmx-belege-existing\" style=\"margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;\"></ul>");
+								$existing.append($li);
+								$("#cmx-belege-upload-box").append($existing);
+							}
+							queuePostSave();
 						} else {
-							$existing = $("<ul id=\"cmx-belege-existing\" style=\"margin:6px 0 0 0;padding:0;list-style:none;max-height:160px;overflow:auto;width:100%;\"></ul>");
-							$existing.append($li);
-							$("#cmx-belege-upload-box").append($existing);
-						}
-					} else {
-						var $notice = $("#cmx-belege-upload-notice");
+							var $notice = $("#cmx-belege-upload-notice");
 						if (!$notice.length) {
 							$notice = $("<div id=\"cmx-belege-upload-notice\" class=\"notice notice-error is-dismissible\" style=\"margin:8px 0;\"><p></p></div>");
 							$("#poststuff").before($notice);
@@ -375,12 +397,13 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 			var path = $li.data("path");
 			if (!attId && !path) return;
 			if (!confirm("Datei entfernen?")) return;
-			$.post(ajaxurl, { action:"cmx_belege_remove_file", post_id: postId, att_id: attId, path: path, nonce: nonce }, function(resp){
-				if (resp && resp.success) {
-					$li.remove();
-				}
+				$.post(ajaxurl, { action:"cmx_belege_remove_file", post_id: postId, att_id: attId, path: path, nonce: nonce }, function(resp){
+					if (resp && resp.success) {
+						$li.remove();
+						queuePostSave();
+					}
+				});
 			});
-		});
 	});
 	</script>';
 }

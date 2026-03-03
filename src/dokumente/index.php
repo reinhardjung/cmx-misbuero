@@ -89,22 +89,86 @@ cmx_require_files(__DIR__,'modules,status,validity,admincolumns,features_image')
 	$query->set('meta_query', $meta_query);
 }, 20);
 
-// Auto-Titel fuer Dokumente: YYMMDDHHMMSS beim Speichern, wenn leer
-\add_action('save_post_dokumente', function (int $post_id, \WP_Post $post) {
+function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
+	if ($post_id <= 0) {
+		return '';
+	}
+
+	$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
+	if ($file_rel === '') {
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+		$self_files = (array) \get_post_meta($post_id, $self_meta_key, true);
+		$self_files = \array_values(\array_filter($self_files, static function ($value): bool {
+			return \is_string($value) && $value !== '';
+		}));
+		if (!empty($self_files)) {
+			$file_rel = (string) $self_files[\count($self_files) - 1];
+		}
+	}
+
+	if ($file_rel === '') {
+		$attachment_id = (int) \get_post_meta($post_id, '_cmx_dokumente_attachment_id', true);
+		if ($attachment_id > 0) {
+			$attached_path = (string) \get_attached_file($attachment_id);
+			if ($attached_path !== '') {
+				$file_rel = (string) \basename($attached_path);
+			}
+		}
+	}
+
+	$file_rel = \ltrim(\str_replace('\\', '/', $file_rel), '/');
+	if ($file_rel === '') {
+		return '';
+	}
+
+	$filename = (string) \basename($file_rel);
+	if ($filename === '') {
+		return '';
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_dok_sanitize_title_from_filename')) {
+		$title = (string) cmx_dok_sanitize_title_from_filename($filename);
+		if ($title !== '') {
+			return $title;
+		}
+	}
+
+	$fallback = (string) \pathinfo($filename, \PATHINFO_FILENAME);
+	$fallback = \wp_strip_all_tags($fallback);
+	$fallback = (string) \preg_replace('/[_\-]+/', ' ', $fallback);
+	$fallback = (string) \preg_replace('/\s+/', ' ', $fallback);
+	return \trim(\sanitize_text_field($fallback));
+}
+
+// Dokumente-Titel immer aus dem Dateinamen ableiten (sanitized).
+\add_action('save_post_dokumente', function (int $post_id, \WP_Post $post): void {
 	if ($post->post_type !== 'dokumente') return;
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
-	if (\trim((string) $post->post_title) !== '') return;
 
-	$new_title = \wp_date('ymd-His');
-	\remove_action('save_post_dokumente', __FUNCTION__, 10);
+	$new_title = cmx_dokumente_sanitized_title_from_file($post_id);
+	if ($new_title === '') {
+		$new_title = \trim((string) $post->post_title);
+		if ($new_title === '') {
+			$new_title = \wp_date('ymd-His');
+		}
+	}
+
+	$current_title = \trim((string) $post->post_title);
+	$new_slug = \sanitize_title($new_title);
+	$current_slug = (string) $post->post_name;
+	if ($current_title === $new_title && $current_slug === $new_slug) {
+		return;
+	}
+
 	\wp_update_post([
 		'ID'         => $post_id,
 		'post_title' => $new_title,
-		'post_name'  => \sanitize_title($new_title),
+		'post_name'  => $new_slug,
 	]);
-	\add_action('save_post_dokumente', __FUNCTION__, 10, 2);
 }, 10, 2);
 
 

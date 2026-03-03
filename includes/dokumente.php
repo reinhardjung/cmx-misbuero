@@ -132,15 +132,41 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 		echo '</ul>';
 	}
 
-	echo '<script>
-	jQuery(function($){
-		var $drop = $("#cmx-dokumente-drop");
-		var $file = $("#cmx-dokumente-file");
-		var $list = $("#cmx-dokumente-list");
-		var postId = ' . (int)$post->ID . ';
-		var isDok = ' . ($is_dokumente ? 'true' : 'false') . ';
-		var nonce = ' . \wp_json_encode($nonce) . ';
-		var ajaxurl = ' . \wp_json_encode(\admin_url('admin-ajax.php')) . ';
+		echo '<script>
+		jQuery(function($){
+			var $drop = $("#cmx-dokumente-drop");
+			var $file = $("#cmx-dokumente-file");
+			var $list = $("#cmx-dokumente-list");
+			var postId = ' . (int)$post->ID . ';
+			var postType = ' . \wp_json_encode((string) $post->post_type) . ';
+			var isDok = ' . ($is_dokumente ? 'true' : 'false') . ';
+			var nonce = ' . \wp_json_encode($nonce) . ';
+			var ajaxurl = ' . \wp_json_encode(\admin_url('admin-ajax.php')) . ';
+			var autoSaveTypes = ["artikel", "kontakte", "belege", "projekte", "dokumente"];
+			var shouldAutoSave = autoSaveTypes.indexOf(postType) !== -1;
+			var saveTimer = null;
+
+			function triggerPostSave(){
+				if (!shouldAutoSave) return;
+				var form = document.getElementById("post");
+				if (!form) return;
+				var btn = form.querySelector("#publish:not([disabled]), #save-post:not([disabled])");
+				if (btn && typeof btn.click === "function") {
+					btn.click();
+					return;
+				}
+				if (typeof form.requestSubmit === "function") {
+					form.requestSubmit();
+					return;
+				}
+				form.submit();
+			}
+
+			function queuePostSave(){
+				if (!shouldAutoSave) return;
+				if (saveTimer) window.clearTimeout(saveTimer);
+				saveTimer = window.setTimeout(triggerPostSave, 450);
+			}
 
 		function uploadFile(file){
 			var fd = new FormData();
@@ -170,17 +196,11 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 								$row.find("a").attr("href", resp.data.url).text(label);
 							} else {
 								$row.text(label);
-						}
-						var $pub = $("#publish");
-						if ($pub.length) {
-							$pub.trigger("click");
+							}
+							queuePostSave();
 						} else {
-							var $form = $("#post");
-							if ($form.length) $form.trigger("submit");
+							$row.text("Fehler beim Upload: " + file.name);
 						}
-					} else {
-						$row.text("Fehler beim Upload: " + file.name);
-					}
 				},
 				error: function(){
 					$row.text("Fehler beim Upload: " + file.name);
@@ -210,19 +230,13 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			var path = $li.data("path");
 			if (!docId && !path) return;
 			if (!confirm("Dokument entfernen?")) return;
-			$.post(ajaxurl, { action:"cmx_dokumente_remove_file", post_id: postId, doc_id: docId, path: path, nonce: nonce }, function(resp){
-				if (resp && resp.success) {
-					$li.remove();
-					var $pub = $("#publish");
-					if ($pub.length) {
-						$pub.trigger("click");
-					} else {
-						var $form = $("#post");
-						if ($form.length) $form.trigger("submit");
+				$.post(ajaxurl, { action:"cmx_dokumente_remove_file", post_id: postId, doc_id: docId, path: path, nonce: nonce }, function(resp){
+					if (resp && resp.success) {
+						$li.remove();
+						queuePostSave();
 					}
-				}
+				});
 			});
-		});
 	});
 	</script>';
 }
@@ -255,6 +269,8 @@ function cmx_dokumente_upload_file(): void {
 	if (!in_array($ext, $allowed, true)) {
 		\wp_send_json_error(['message'=>'bad_type'], 400);
 	}
+	$incoming_filename = (string) ($_FILES['file']['name'] ?? '');
+	$incoming_title = cmx_dok_sanitize_title_from_filename($incoming_filename);
 
 	if ($post_type === 'scanner') {
 		$scanner_title = cmx_dok_sanitize_title_from_filename((string) ($_FILES['file']['name'] ?? ''));
@@ -293,27 +309,22 @@ function cmx_dokumente_upload_file(): void {
 	if ($source_title === '') {
 		$source_title = \wp_date('ymd-His') . '_' . \sanitize_key($post_type);
 	}
-	$doc_title = $is_dokumente ? (string) $source_title : \wp_date('ymd-His');
+	$doc_title = $is_dokumente
+		? ($incoming_title !== '' ? $incoming_title : (string) $source_title)
+		: \wp_date('ymd-His');
 	if ($is_dokumente) {
-		$needs_title = false;
-		if ($source_title === '') {
-			$needs_title = true;
-		} else {
-			$normalized_title = \strtolower($source_title);
-			$normalized_title = \str_replace(['_', ' '], '-', $normalized_title);
-			if (\stripos($normalized_title, 'automatisch-gespeicherter-entwurf') !== false) {
-				$needs_title = true;
-			}
-		}
-		if (!$needs_title && $post_obj && (string) $post_obj->post_status === 'auto-draft') {
-			$needs_title = true;
-		}
-		if ($needs_title) {
+		if ($doc_title === '') {
 			$doc_title = \wp_date('ymd-His');
+		}
+
+		$current_title = $post_obj ? \trim((string) $post_obj->post_title) : '';
+		$current_slug = $post_obj ? (string) $post_obj->post_name : '';
+		$new_slug = \sanitize_title($doc_title);
+		if ($current_title !== $doc_title || $current_slug !== $new_slug) {
 			\wp_update_post([
 				'ID' => $post_id,
 				'post_title' => $doc_title,
-				'post_name' => \sanitize_title($doc_title),
+				'post_name' => $new_slug,
 			]);
 		}
 	}
@@ -432,7 +443,7 @@ function cmx_dokumente_upload_file(): void {
 		'id'    => (int) $doc_id,
 		'url'   => $file_url,
 		'label' => basename($rel) ?: $doc_title,
-		'title' => ($is_scanner ? $scanner_title : ''),
+		'title' => ($is_scanner ? $scanner_title : ($is_dokumente ? $doc_title : '')),
 	]);
 }
 
