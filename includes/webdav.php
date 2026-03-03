@@ -1084,14 +1084,22 @@ add_action('init', function () {
 					$uploadNotice = '<div class="upload-notice '.($isOk ? 'is-ok' : 'is-err').'">'.cmx_dav_h((string)$q['msg']).'</div>';
 				}
 				$toolbarClass = $readOnly ? 'toolbar' : 'toolbar toolbar-upload';
+				$showSearch = (strcasecmp((string) $baseUri, '/archiv') === 0);
+				$searchBar = $showSearch
+					? '<div class="head-search">'
+						. '<label for="cmx-dav-search" class="sr-only">Suche</label>'
+						. '<input type="search" id="cmx-dav-search" class="search-input" placeholder="Name filtern..." autocomplete="off" />'
+						. '<span id="cmx-dav-search-meta" class="search-meta" aria-live="polite"></span>'
+						. '</div>'
+					: '';
 
 			// Parent-Link (..), sofern nicht Root
-			$rows = '';
-			if (!empty($segments)) {
-				$parent = array_slice($segments, 0, -1);
-				$parentHref = cmx_dav_h(cmx_dav_join_uri($base, implode('/', $parent))).'/' . cmx_dav_h($sortQuery);
-				$rows .= '<tr class="up"><td class="sel"></td><td class="name"><a href="'.$parentHref.'">..</a></td><td class="type">Ordner</td><td class="size"></td><td class="mtime"></td><td class="action"></td></tr>';
-			}
+				$rows = '';
+				if (!empty($segments)) {
+					$parent = array_slice($segments, 0, -1);
+					$parentHref = cmx_dav_h(cmx_dav_join_uri($base, implode('/', $parent))).'/' . cmx_dav_h($sortQuery);
+					$rows .= '<tr class="cmx-row up" data-search=".."><td class="sel"></td><td class="name"><a href="'.$parentHref.'">..</a></td><td class="type">Ordner</td><td class="size"></td><td class="mtime"></td><td class="action"></td></tr>';
+				}
 
 			// Anzahl der Dateien (nur aktuelle Ebene, Ordner ausgeschlossen)
 			$fileCount = count(array_filter($children, fn($c) => !($c['isDir'])));
@@ -1157,7 +1165,7 @@ add_action('init', function () {
 					: '';
 
 				$link_target = $isDir ? '' : ' target="_blank" rel="noopener noreferrer"';
-				$rows .= '<tr>'
+				$rows .= '<tr class="cmx-row" data-search="'.cmx_dav_h($name).($isDir ? '/' : '').'">'
 					. '<td class="sel">'.($checkbox).'</td>'
 					. '<td class="name"><a href="'.cmx_dav_h($href).'"'.$link_target.'>'.cmx_dav_h($name).($isDir?'/':'').'</a></td>'
 					. '<td class="type">'.cmx_dav_h($type).'</td>'
@@ -1181,13 +1189,14 @@ add_action('init', function () {
 					}
 					*{box-sizing:border-box}
 					html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial}
-					.wrap{max-width:1060px;margin:32px auto;padding:0 20px}
-						h1{font-size:26px;font-weight:800;letter-spacing:-.01em;margin:0 0 10px 0}
-						.toolbar{display:flex;align-items:center;gap:12px;margin:8px 0 18px 0}
-						.toolbar-upload{flex-wrap:wrap}
-						.zipbtn{ display:inline-flex;align-items:center;gap:8px;padding:10px 2px 10px 10px;border:1px solid var(--accent);border-radius:calc(var(--radius) - 6px);text-decoration:none;color:#fff;background:var(--accent);box-shadow:var(--shadow);cursor:pointer}
-						.zipbtn:hover{filter:saturate(1.05) brightness(1.02)}
-						.zipbtn .ico{display:block}
+						.wrap{max-width:1060px;margin:32px auto;padding:0 20px}
+							.headbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 10px 0}
+							h1{font-size:26px;font-weight:800;letter-spacing:-.01em;margin:0}
+							.toolbar{display:flex;align-items:center;gap:12px;margin:8px 0 18px 0}
+							.toolbar-upload{flex-wrap:wrap}
+							.zipbtn{ display:inline-flex;align-items:center;gap:8px;padding:10px 2px 10px 10px;border:1px solid var(--accent);border-radius:calc(var(--radius) - 6px);text-decoration:none;color:#fff;background:var(--accent);box-shadow:var(--shadow);cursor:pointer}
+							.zipbtn:hover{filter:saturate(1.05) brightness(1.02)}
+							.zipbtn .ico{display:block}
 						.uploadform{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 						.upload-input{max-width:320px}
 						.btn-upload{padding:10px 14px;border-color:var(--accent);color:var(--accent);font-weight:600}
@@ -1195,6 +1204,15 @@ add_action('init', function () {
 						.upload-notice{margin:10px 0 14px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff}
 						.upload-notice.is-ok{border-color:#16a34a33;color:#166534}
 						.upload-notice.is-err{border-color:#dc262633;color:#991b1b}
+						.head-search{display:inline-flex;align-items:center;gap:10px;max-width:420px;min-width:280px}
+						.search-input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--text)}
+						.search-input:focus{outline:none;border-color:#d1d5db;box-shadow:0 0 0 3px rgba(229,57,53,.08)}
+						.search-meta{font-size:12px;color:var(--muted)}
+						.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+						@media (max-width: 780px){
+							.headbar{flex-wrap:wrap}
+							.head-search{max-width:none;min-width:0;width:100%}
+						}
 						.breadcrumbs{display:inline-flex;align-items:center;gap:10px;margin-left:6px;color:var(--muted);font-weight:500}
 						.breadcrumbs a{color:var(--text);text-decoration:none;border-radius:10px;padding:4px 6px}
 						.breadcrumbs a:hover{background:var(--accent-weak)}
@@ -1229,7 +1247,7 @@ add_action('init', function () {
 				.'<input type="hidden" name="zip" value="1" />'
 				.'</form>'
 
-				.'<h1><a href="'.cmx_dav_h($baseUri).'/">Mis Büro - '.cmx_dav_h($label).'</a></h1>'
+				.'<div class="headbar"><h1><a href="'.cmx_dav_h($baseUri).'/">Mis Büro - '.cmx_dav_h($label).'</a></h1>'.$searchBar.'</div>'
 				.'<div class="'.cmx_dav_h($toolbarClass).'">'.$zipButton.'<span class="breadcrumbs">'.implode('', $crumbs).'</span>'.$uploadForm.'</div>'
 				.$uploadNotice
 				.'<table class="table"><thead><tr>'
@@ -1284,11 +1302,11 @@ add_action('init', function () {
 						});
 					}
 
-					// NEU: Beim ZIP-Submit die ausgewählten Dateien in das GET-Formular übernehmen
-					var zipForm = document.getElementById("zipform");
-					document.addEventListener("click", function(e){
-						var btn = e.target.closest(".zipbtn");
-						if(!btn) return;
+						// NEU: Beim ZIP-Submit die ausgewählten Dateien in das GET-Formular übernehmen
+						var zipForm = document.getElementById("zipform");
+						document.addEventListener("click", function(e){
+							var btn = e.target.closest(".zipbtn");
+							if(!btn) return;
 						// vor dem Submit alte sel[]-Inputs aus dem Formular entfernen
 						[].slice.call(zipForm.querySelectorAll(\'input[name="sel[]"]\')).forEach(function(n){ n.remove(); });
 						// markierte Dateien als sel[] hinzufügen
@@ -1299,11 +1317,34 @@ add_action('init', function () {
 								zipForm.appendChild(i);
 							}
 						});
-						// Standard: wenn keine Auswahl -> Formular nur mit zip=1 absenden (kompletter Ordner)
-					});
+							// Standard: wenn keine Auswahl -> Formular nur mit zip=1 absenden (kompletter Ordner)
+						});
 
-				})();
-				</script>'
+						// Suche (nur /archiv): Zeilen live nach Name filtern
+						var searchInput = document.getElementById("cmx-dav-search");
+						var searchMeta = document.getElementById("cmx-dav-search-meta");
+						if(searchInput){
+							var rows = [].slice.call(document.querySelectorAll("table.table tbody tr.cmx-row"));
+							var normalize = function(v){ return (v || "").toString().toLowerCase().trim(); };
+							var updateFilter = function(){
+								var query = normalize(searchInput.value);
+								var visible = 0;
+								rows.forEach(function(row){
+									var hay = normalize(row.getAttribute("data-search"));
+									var match = (query === "") || (hay.indexOf(query) !== -1);
+									row.style.display = match ? "" : "none";
+									if(match) visible++;
+								});
+								if(searchMeta){
+									searchMeta.textContent = query === "" ? "" : (visible + " Treffer");
+								}
+							};
+							searchInput.addEventListener("input", updateFilter);
+							updateFilter();
+						}
+
+					})();
+					</script>'
 				.'</div></body></html>';
 
 			$response->setStatus(200);
