@@ -683,11 +683,23 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 		],
 		\admin_url('edit.php')
 	);
+	$einheiten_admin_url = '';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')) {
+		$einheiten_tax = (string) cmx_artikel_einheiten_taxonomy();
+		if ($einheiten_tax !== '') {
+			$einheiten_admin_url = \admin_url(
+				'edit-tags.php?taxonomy=' . \rawurlencode($einheiten_tax) . '&post_type=artikel'
+			);
+		}
+	}
+	$einheiten_head = $einheiten_admin_url !== ''
+		? '<a href="' . \esc_url($einheiten_admin_url) . '" target="_blank" rel="noopener noreferrer">Einheiten</a>'
+		: 'Einheiten';
 	echo '<div id="cmx-positionen-wrap">';
 		echo '<table class="widefat striped" id="cmx-positionen-table">
 				<thead><tr>
 					<th><a href="' . esc_url($artikel_list_url) . '" target="_blank" rel="noopener noreferrer">Artikel</a></th>
-					<th class="cmx-pos-qty-head"><span class="cmx-pos-qty-head-menge">&nbsp;Menge</span><span class="cmx-pos-qty-head-einheit">&nbsp;Einheit</span></th>
+					<th class="cmx-pos-qty-head"><span class="cmx-pos-qty-head-menge">&nbsp;Menge</span><span class="cmx-pos-qty-head-einheit">&nbsp;' . $einheiten_head . '</span></th>
 					<th>&nbsp;&nbsp;Einzelpreis</th>
 					<th>&nbsp;&nbsp;Rabatt</th>
 					<th style="text-align:right;">Gesamt</th>
