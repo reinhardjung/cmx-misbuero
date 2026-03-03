@@ -43,33 +43,30 @@ if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomies')) {
 		}
 
 		$cache = [];
-		$candidates = [];
 
+		// Belege-Positionen sollen exakt dieselbe Einheiten-Taxonomie wie Artikel nutzen.
 		$const = __NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN';
 		if (\defined($const)) {
-			$candidates[] = (string) \constant($const);
+			$tax = \sanitize_key((string) \constant($const));
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				$cache = [$tax];
+				return $cache;
+			}
 		}
+
 		if (\function_exists(__NAMESPACE__ . '\\cmx_tax_einheiten')) {
-			$maybe = (string) cmx_tax_einheiten();
-			if ($maybe !== '') {
-				$candidates[] = $maybe;
+			$tax = \sanitize_key((string) cmx_tax_einheiten());
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				$cache = [$tax];
+				return $cache;
 			}
 		}
 
-		$candidates = \array_merge($candidates, [
-			'artikel_einheit',
-			'artikel_einheiten',
-			'einheit',
-			'einheiten',
-		]);
-
-		foreach ($candidates as $tax) {
-			$tax = \sanitize_key((string) $tax);
-			if ($tax === '' || !\taxonomy_exists($tax)) {
-				continue;
-			}
-			if (!\in_array($tax, $cache, true)) {
-				$cache[] = $tax;
+		foreach (['artikel_einheit', 'artikel_einheiten', 'einheit', 'einheiten'] as $candidate) {
+			$tax = \sanitize_key((string) $candidate);
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				$cache = [$tax];
+				return $cache;
 			}
 		}
 
