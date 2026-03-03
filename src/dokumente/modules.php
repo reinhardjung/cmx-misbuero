@@ -328,14 +328,13 @@ function cmx_dok_fetch_relation_options(string $target_type, int $limit = 200): 
 	return $options;
 }
 
-function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type, string $meta_key, string $empty_label): void {
+function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type, string $meta_key, string $empty_label, bool $allow_multiple = false): void {
 	if ($post->post_type !== cmx_dok_cpt_slug()) {
 		return;
 	}
 
 	$current_ids = cmx_dok_int_list(\get_post_meta($post->ID, $meta_key, true));
-	$current = !empty($current_ids) ? (int) $current_ids[0] : 0;
-	$has_current = $current > 0;
+	$has_current = !empty($current_ids);
 	$options = cmx_dok_fetch_relation_options($target_type);
 	$id_suffix = \preg_replace('~[^a-z0-9_]+~', '_', \strtolower($target_type . '_' . $meta_key));
 	$select_id = 'cmx_dok_rel_select_' . $id_suffix;
@@ -343,17 +342,24 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	$nohit_id = 'cmx_dok_rel_nohit_' . $id_suffix;
 	$touched_id = 'cmx_dok_rel_touched_' . $id_suffix;
 	$touched_name = 'cmx_dok_rel_touched[' . $meta_key . ']';
+	$select_name = $allow_multiple ? ($meta_key . '[]') : $meta_key;
+	$multiple_attr = $allow_multiple ? ' multiple data-cmx-multiple="1"' : '';
 
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
 	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-dok-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($meta_key) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10">';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10"' . $multiple_attr . '>';
 	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
-		echo '<option value="' . \esc_attr((string) $opt['id']) . '" ' . \selected($current, (int) $opt['id'], false) . '>' . \esc_html((string) $opt['label']) . '</option>';
+		$id = (int) ($opt['id'] ?? 0);
+		$selected = \in_array($id, $current_ids, true) ? ' selected' : '';
+		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
 	echo '<p id="' . \esc_attr($nohit_id) . '" style="display:none;margin:8px 0 0;"><em>Keine Treffer.</em></p>';
+	if ($allow_multiple) {
+		echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: Strg/Cmd gedrückt halten und mehrere Einträge wählen.</em></p>';
+	}
 
 	if (empty($options)) {
 		echo '<p style="margin:8px 0 0;"><em>Keine Datensaetze gefunden.</em></p>';
@@ -383,12 +389,32 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 				setTouchState(select, "1");
 			};
 
+			var normalizeSelection = function(select){
+				if (!select) return;
+				var firstOption = select.options.length > 0 ? select.options[0] : null;
+				if (!firstOption || String(firstOption.value || "") !== "0") return;
+				var hasPositiveSelection = false;
+				for (var i = 1; i < select.options.length; i++) {
+					if (select.options[i].selected) {
+						hasPositiveSelection = true;
+						break;
+					}
+				}
+				if (hasPositiveSelection && firstOption.selected) {
+					firstOption.selected = false;
+				}
+			};
+
 			var clearSelection = function(select){
 				if (!select) return;
 				for (var i = 0; i < select.options.length; i++) {
 					select.options[i].selected = false;
 				}
 				select.selectedIndex = -1;
+				var firstOption = select.options.length > 0 ? select.options[0] : null;
+				if (firstOption && String(firstOption.value || "") === "0") {
+					firstOption.selected = true;
+				}
 				setTouchState(select, "2");
 			};
 
@@ -432,6 +458,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			document.addEventListener("change", function(e){
 				var t = e.target;
 				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-select")) return;
+				normalizeSelection(t);
 				markTouched(t);
 			});
 
@@ -461,6 +488,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			for (var i = 1; i < select.options.length; i++) {
 				if (!select.options[i].hidden) {
 					select.options[i].selected = true;
+					normalizeSelection(select);
 					break;
 					}
 				}
@@ -519,7 +547,7 @@ function cmx_dok_render_relation_metabox(\WP_Post $post, string $target_type): v
 	}
 
 	$empty_label = (string) ($cfg['empty'] ?? 'Kein Eintrag');
-	cmx_dok_render_relation_select_box($post, $target_type, $meta_key, $empty_label);
+	cmx_dok_render_relation_select_box($post, $target_type, $meta_key, $empty_label, true);
 }
 
 function cmx_dok_render_zuordnung_metabox(\WP_Post $post): void {

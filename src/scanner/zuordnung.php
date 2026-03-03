@@ -9,13 +9,24 @@ const CMX_SCANNER_ZUORDNUNG_TYPES = [
 	'belege'    => 'Belege',
 ];
 
+function cmx_scanner_default_zuordnung_type(): string {
+	if (\array_key_exists('belege', CMX_SCANNER_ZUORDNUNG_TYPES)) {
+		return 'belege';
+	}
+	$keys = \array_keys(CMX_SCANNER_ZUORDNUNG_TYPES);
+	return isset($keys[0]) ? (string) $keys[0] : '';
+}
+
 function cmx_scanner_cpt_slug(): string {
 	return basename(__DIR__);
 }
 
 function cmx_scanner_get_selected_zuordnung_type(int $post_id): string {
+	if ($post_id <= 0) {
+		return cmx_scanner_default_zuordnung_type();
+	}
 	$type = (string) \get_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META, true);
-	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : '';
+	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : cmx_scanner_default_zuordnung_type();
 }
 
 function cmx_scanner_get_requested_zuordnung_type(int $post_id = 0): string {
@@ -27,7 +38,7 @@ function cmx_scanner_get_requested_zuordnung_type(int $post_id = 0): string {
 		$type = cmx_scanner_get_selected_zuordnung_type($post_id);
 	}
 
-	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : '';
+	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : cmx_scanner_default_zuordnung_type();
 }
 
 function cmx_scanner_relation_was_touched(string $meta_key): bool {
@@ -379,7 +390,7 @@ function cmx_scanner_print_relation_metabox_hide_style(): void {
 	}
 
 	$post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
-	$selected = $post_id > 0 ? cmx_scanner_get_selected_zuordnung_type($post_id) : '';
+	$selected = cmx_scanner_get_selected_zuordnung_type($post_id);
 	$selected_box_id = ($selected !== '' && isset($ids[$selected])) ? (string) $ids[$selected] : '';
 
 	$selectors = [];
