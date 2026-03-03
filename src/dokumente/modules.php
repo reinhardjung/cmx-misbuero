@@ -281,6 +281,94 @@ function cmx_dok_cleanup_legacy_kassenbuch_links(): int {
 	\update_option($cleanup_done_key, '1', false);
 }, 20);
 
+function cmx_dok_beleg_contact_option_label(int $beleg_id): string {
+	$label = \trim((string) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_label', true));
+	if ($label !== '') {
+		return $label;
+	}
+
+	$kontakt_id = (int) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_id', true);
+	if ($kontakt_id > 0) {
+		$kontakt_title = \trim((string) \get_the_title($kontakt_id));
+		if ($kontakt_title !== '') {
+			return $kontakt_title;
+		}
+	}
+
+	return '(kein Kontakt)';
+}
+
+function cmx_dok_beleg_amount_option_label(int $beleg_id): string {
+	$total = null;
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+		$calc = (array) cmxbu_get_beleg_positionen_calc($beleg_id);
+		if (isset($calc['total'])) {
+			$total = (float) $calc['total'];
+		}
+	}
+
+	if ($total === null) {
+		$override_raw = \trim((string) \get_post_meta($beleg_id, '_cmx_beleg_summe_override', true));
+		if ($override_raw !== '') {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_parse_number')) {
+				$total = (float) cmx_parse_number($override_raw);
+			} else {
+				$total = (float) \str_replace(',', '.', $override_raw);
+			}
+		}
+	}
+
+	if ($total === null) {
+		return '-';
+	}
+
+	$formatted = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+		? cmx_format_swiss_number($total, 2)
+		: \number_format($total, 2, '.', "'");
+
+	return \trim($formatted);
+}
+
+function cmx_dok_text_length(string $value): int {
+	return \function_exists('mb_strlen') ? (int) \mb_strlen($value, 'UTF-8') : (int) \strlen($value);
+}
+
+function cmx_dok_text_substr(string $value, int $start, int $length): string {
+	return \function_exists('mb_substr')
+		? (string) \mb_substr($value, $start, $length, 'UTF-8')
+		: (string) \substr($value, $start, $length);
+}
+
+function cmx_dok_fixed_width_cell(string $text, int $width, bool $align_right = false): string {
+	$text = (string) \preg_replace('~\\s+~', ' ', \trim($text));
+	if ($text === '') {
+		$text = '-';
+	}
+
+	$len = cmx_dok_text_length($text);
+	if ($len > $width) {
+		if ($width <= 3) {
+			$text = cmx_dok_text_substr($text, 0, $width);
+		} else {
+			$text = cmx_dok_text_substr($text, 0, $width - 3) . '...';
+		}
+		$len = cmx_dok_text_length($text);
+	}
+
+	if ($len < $width) {
+		$pad = \str_repeat("\u{2007}", $width - $len);
+		$text = $align_right ? ($pad . $text) : ($text . $pad);
+	}
+
+	return $text;
+}
+
+function cmx_dok_beleg_two_col_option_label(int $beleg_id): string {
+	$contact = cmx_dok_fixed_width_cell((string) cmx_dok_beleg_contact_option_label($beleg_id), 20, false);
+	$amount = cmx_dok_fixed_width_cell((string) cmx_dok_beleg_amount_option_label($beleg_id), 10, true);
+	return $contact . '|' . $amount;
+}
+
 function cmx_dok_fetch_relation_options(string $target_type, int $limit = 200): array {
 	$cfg = cmx_dok_rel_ui_map()[$target_type] ?? null;
 	if (!\is_array($cfg)) {
@@ -315,6 +403,16 @@ function cmx_dok_fetch_relation_options(string $target_type, int $limit = 200): 
 		if ($id <= 0) {
 			continue;
 		}
+
+		if ($target_type === 'belege') {
+			$options[] = [
+				'id'      => $id,
+				'label'   => cmx_dok_beleg_two_col_option_label($id),
+				'tooltip' => 'Beleg-ID: ' . $id,
+			];
+			continue;
+		}
+
 		$title = \get_the_title($id);
 		if ($title === '') {
 			$title = '(ohne Titel)';
@@ -344,16 +442,22 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	$touched_name = 'cmx_dok_rel_touched[' . $meta_key . ']';
 	$select_name = $allow_multiple ? ($meta_key . '[]') : $meta_key;
 	$multiple_attr = $allow_multiple ? ' multiple data-cmx-multiple="1"' : '';
+	$select_style = 'width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;box-sizing:border-box;';
+	if ($target_type === 'belege') {
+		$select_style .= 'font-family:Consolas,Monaco,Courier,monospace;font-size:12px;white-space:pre;font-variant-numeric:tabular-nums;letter-spacing:0;padding-right:24px;';
+	}
 
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
 	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
 	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-dok-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;" size="10"' . $multiple_attr . '>';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="' . \esc_attr($select_style) . '" size="10"' . $multiple_attr . '>';
 	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		$id = (int) ($opt['id'] ?? 0);
 		$selected = \in_array($id, $current_ids, true) ? ' selected' : '';
-		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . '>' . \esc_html((string) $opt['label']) . '</option>';
+		$tooltip = isset($opt['tooltip']) ? \trim((string) $opt['tooltip']) : '';
+		$title_attr = $tooltip !== '' ? ' title="' . \esc_attr($tooltip) . '"' : '';
+		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
 	echo '<p id="' . \esc_attr($nohit_id) . '" style="display:none;margin:8px 0 0;"><em>Keine Treffer.</em></p>';
