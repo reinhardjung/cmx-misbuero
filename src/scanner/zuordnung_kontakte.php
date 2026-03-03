@@ -66,11 +66,35 @@ function cmx_scanner_redirect_to_target_edit_after_save(string $location, int $p
 
 	$target_id = isset($map[$post_id]) ? (int) $map[$post_id] : 0;
 	if ($target_id > 0) {
-		return (string) \admin_url('post.php?post=' . $target_id . '&action=edit');
+		$target_url = (string) \admin_url('post.php?post=' . $target_id . '&action=edit');
+		if ((string) \get_post_type($target_id) === 'belege') {
+			$target_url = (string) \add_query_arg(['cmx_scanner_beleg_saved' => 1], $target_url);
+		}
+		return $target_url;
 	}
 
 	return $location;
 }
+
+\add_action('all_admin_notices', function (): void {
+	if (!\is_admin()) {
+		return;
+	}
+	if (!isset($_GET['cmx_scanner_beleg_saved']) || (int) $_GET['cmx_scanner_beleg_saved'] !== 1) {
+		return;
+	}
+
+	$pagenow = (string) ($GLOBALS['pagenow'] ?? '');
+	if ($pagenow !== 'post.php') {
+		return;
+	}
+	$post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
+	if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'belege') {
+		return;
+	}
+
+	echo '<div class="notice notice-success is-dismissible"><p>Beleg wurde gespeichert.</p></div>';
+});
 
 function cmx_scanner_redirect_to_list_after_save(string $location, int $post_id): string {
 	$ids = isset($GLOBALS['cmx_scanner_redirect_to_list_ids']) && \is_array($GLOBALS['cmx_scanner_redirect_to_list_ids'])
@@ -141,12 +165,14 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 		$belege_as_document = \function_exists(__NAMESPACE__ . '\\cmx_scanner_belege_use_document_mode')
 			? cmx_scanner_belege_use_document_mode($delete_id)
 			: true;
-		$belege_upload_mode_has_rel = false;
 		$belege_upload_mode_success = false;
 		foreach ($relation_metas as $relation_type => $relation_meta_key) {
 			$relation_ids = \function_exists(__NAMESPACE__ . '\\cmx_scanner_get_relation_ids')
 				? cmx_scanner_get_relation_ids($delete_id, (string) $relation_meta_key)
 				: cmx_scanner_normalize_id_list(\get_post_meta($delete_id, (string) $relation_meta_key, true));
+			if ($relation_type === 'belege' && !$belege_as_document && \count($relation_ids) !== 1) {
+				continue;
+			}
 			foreach ($relation_ids as $relation_id) {
 				$relation_id = (int) $relation_id;
 				if ($relation_id <= 0) {
@@ -168,7 +194,6 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 					if ($belege_as_document) {
 						cmx_scanner_link_docs_to_belege($relation_id, $doc_ids);
 					} elseif (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_scan_to_beleg_upload')) {
-						$belege_upload_mode_has_rel = true;
 						if (cmx_scanner_link_scan_to_beleg_upload($delete_id, $relation_id)) {
 							$belege_upload_mode_success = true;
 						}
@@ -176,7 +201,7 @@ function cmx_scanner_finalize_delete_after_redirect(): void {
 				}
 			}
 		}
-		if (!$belege_as_document && $belege_upload_mode_has_rel && !$belege_upload_mode_success) {
+		if (!$belege_as_document && !$belege_upload_mode_success) {
 			continue;
 		}
 		cmx_scanner_move_doc_files_to_archive($delete_id, $doc_ids);

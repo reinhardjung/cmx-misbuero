@@ -102,8 +102,22 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		\update_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META, \count($valid_ids) === 1 ? (int) $valid_ids[0] : $valid_ids);
 	}
 
-	$redirect_target_id = (int) \end($valid_ids);
-	if ($redirect_target_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_target_edit_after_save')) {
-		cmx_scanner_mark_redirect_to_target_edit_after_save($post_id, $redirect_target_id);
+	$is_single_beleg = \count($valid_ids) === 1;
+
+	// Nur im Upload-Modus mit genau einem Ziel-Beleg direkt in Belege springen.
+	if (!$as_document) {
+		if (!$is_single_beleg) {
+			return;
+		}
+		$redirect_target_id = (int) \reset($valid_ids);
+		if ($redirect_target_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_target_edit_after_save')) {
+			cmx_scanner_mark_redirect_to_target_edit_after_save($post_id, $redirect_target_id);
+		}
+		return;
+	}
+
+	// Im Dokument-Modus wie bisher zurück zur Scanner-Liste (kein Sprung in Belege).
+	if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_mark_redirect_to_list_after_save')) {
+		cmx_scanner_mark_redirect_to_list_after_save($post_id);
 	}
 });
