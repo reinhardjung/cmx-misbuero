@@ -424,7 +424,6 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 
 	echo '<label for="cmx_scanner_zuordnung_typ" class="screen-reader-text">Zuordnung</label>';
 	echo '<select id="cmx_scanner_zuordnung_typ" name="cmx_scanner_zuordnung_typ" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;">';
-	echo '<option value="">- bitte wählen -</option>';
 	foreach (CMX_SCANNER_ZUORDNUNG_TYPES as $key => $label) {
 		echo '<option value="' . \esc_attr($key) . '" ' . \selected($current, $key, false) . '>' . \esc_html($label) . '</option>';
 	}

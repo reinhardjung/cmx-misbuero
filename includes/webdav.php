@@ -730,10 +730,6 @@ add_action('init', function () {
 	if (!$readOnly) {
 		$server->on('method:POST', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $maxUploadBytes) {
 			$contentType = strtolower((string)$request->getHeader('Content-Type'));
-			if (strpos($contentType, 'multipart/form-data') === false) {
-				return null;
-			}
-
 			$relPath = trim($request->getPath(), '/');
 			$targetDir = rtrim($sharePath, DIRECTORY_SEPARATOR) . ($relPath === '' ? '' : DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
 			$targetReal = realpath($targetDir);
@@ -742,6 +738,48 @@ add_action('init', function () {
 				$response->setHeader('Content-Type', 'text/plain; charset=UTF-8');
 				$response->setBody('Ungültiger Upload-Pfad.');
 				return false;
+			}
+
+			$redirectPath = cmx_dav_join_uri(rtrim((string)$server->getBaseUri(), '/'), $relPath) . '/';
+
+			// Browser-Löschen einzelner Dateien aus der Liste.
+			$deleteFile = isset($_POST['delete_file']) ? (string) \wp_unslash($_POST['delete_file']) : '';
+			if ($deleteFile !== '') {
+				$deleteFile = trim($deleteFile);
+				$status = 'err';
+				$msg = 'Datei konnte nicht gelöscht werden.';
+
+				if ($deleteFile === '' || strpos($deleteFile, '/') !== false || strpos($deleteFile, '\\') !== false || basename($deleteFile) !== $deleteFile) {
+					$msg = 'Ungültiger Dateiname.';
+				} else {
+					$deleteAbs = $targetReal . DIRECTORY_SEPARATOR . $deleteFile;
+					$deleteReal = realpath($deleteAbs);
+					if (!$deleteReal || !is_file($deleteReal) || !cmx_dav_is_subpath($sharePath, $deleteReal)) {
+						$msg = 'Datei nicht gefunden.';
+					} elseif (@unlink($deleteReal)) {
+						$status = 'ok';
+						$msg = 'Datei wurde gelöscht.';
+						cmx_dav_cleanup_ds_store($sharePath, $relPath);
+						cmx_dav_force_scanner_sync((string) $server->getBaseUri());
+					}
+				}
+
+				$location = add_query_arg(
+					[
+						'delete' => $status,
+						'msg'    => $msg,
+					],
+					$redirectPath
+				);
+
+				$response->setStatus(303);
+				$response->setHeader('Location', (string)$location);
+				$response->setBody('');
+				return false;
+			}
+
+			if (strpos($contentType, 'multipart/form-data') === false) {
+				return null;
 			}
 
 			$raw = $_FILES['scanner_upload'] ?? null;
@@ -850,7 +888,6 @@ add_action('init', function () {
 				$msg = $firstError !== '' ? $firstError : 'Keine Datei ausgewählt.';
 			}
 
-				$redirectPath = cmx_dav_join_uri(rtrim((string)$server->getBaseUri(), '/'), $relPath) . '/';
 				cmx_dav_cleanup_ds_store($sharePath, $relPath);
 				if ($okCount > 0) {
 					cmx_dav_force_scanner_sync((string) $server->getBaseUri());
@@ -1083,6 +1120,10 @@ add_action('init', function () {
 					$isOk = ((string)$q['upload'] === 'ok');
 					$uploadNotice = '<div class="upload-notice '.($isOk ? 'is-ok' : 'is-err').'">'.cmx_dav_h((string)$q['msg']).'</div>';
 				}
+				if (!$readOnly && $uploadNotice === '' && isset($q['delete'], $q['msg'])) {
+					$isOk = ((string)$q['delete'] === 'ok');
+					$uploadNotice = '<div class="upload-notice '.($isOk ? 'is-ok' : 'is-err').'">'.cmx_dav_h((string)$q['msg']).'</div>';
+				}
 				$toolbarClass = $readOnly ? 'toolbar' : 'toolbar toolbar-upload';
 				$showSearch = (strcasecmp((string) $baseUri, '/archiv') === 0);
 				$searchBar = $showSearch
@@ -1163,6 +1204,18 @@ add_action('init', function () {
 						</svg>
 					  </a>'
 					: '';
+				$deleteBtn = (!$isDir && !$readOnly)
+					? '<form method="POST" action="'.cmx_dav_h($currentDirUrl).'" class="inline-delete-form" onsubmit="return confirm(\'Datei wirklich löschen?\');">'
+						. '<input type="hidden" name="delete_file" value="'.cmx_dav_h($name).'" />'
+						. '<button type="submit" class="btn btn-danger btn-delete" title="Datei löschen" aria-label="Datei löschen">'
+							. '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">'
+								. '<path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>'
+								. '<path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 1 1 0-2H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4 4v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4H4z"/>'
+							. '</svg>'
+						. '</button>'
+					. '</form>'
+					: '';
+				$actionCell = $isDir ? '' : trim($copyBtn.' '.$downloadBtn.' '.$deleteBtn);
 
 				$link_target = $isDir ? '' : ' target="_blank" rel="noopener noreferrer"';
 				$rows .= '<tr class="cmx-row" data-search="'.cmx_dav_h($name).($isDir ? '/' : '').'">'
@@ -1171,7 +1224,7 @@ add_action('init', function () {
 					. '<td class="type">'.cmx_dav_h($type).'</td>'
 					. '<td class="size">'.cmx_dav_h($size).'</td>'
 					. '<td class="mtime">'.cmx_dav_h($mtime).'</td>'
-					. '<td class="action">'.($isDir ? '' : $copyBtn.' '.$downloadBtn).'</td>'
+					. '<td class="action">'.$actionCell.'</td>'
 					. '</tr>';
 			}
 
@@ -1231,6 +1284,9 @@ add_action('init', function () {
 					.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;text-decoration:none;background:#fff;color:var(--text);cursor:pointer;box-shadow:0 1px 0 rgba(15,23,42,.03)}
 					.btn:hover{border-color:#d1d5db;background:#fff}
 					.btn-secondary{background:#fff}
+					.inline-delete-form{display:inline}
+					.btn-danger{color:#b42318;border-color:#fecaca;background:#fff}
+					.btn-danger:hover{border-color:#fca5a5;background:#fff5f5}
 					.btn-copy.ok{border-color:var(--ok)}
 					.footer{margin-top:14px;font-size:12px;color:var(--muted)}
 					a.link-misbuero { color: black; text-decoration: none; cursor: pointer; transition: color 0.2s ease-in-out; }
