@@ -2,6 +2,41 @@
 
 const CMX_SCANNER_REL_BELEGE_META = '_cmx_scanner_rel_belege_id';
 
+function cmx_scanner_prepare_new_beleg_defaults(int $beleg_id): void {
+	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+		return;
+	}
+
+	// "Ausgabe" entspricht in Belege der Richtung "eingang".
+	$richtung_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+		: '_cmx_beleg_richtung';
+	\update_post_meta($beleg_id, $richtung_meta_key, 'eingang');
+
+	$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy')
+		? (string) cmx_belege_kategorie_taxonomy()
+		: '';
+	if ($tax === '' || !\taxonomy_exists($tax)) {
+		return;
+	}
+
+	$term = \get_term_by('slug', 'rechnung', $tax);
+	if (!$term || \is_wp_error($term)) {
+		$term = \get_term_by('name', 'Rechnung', $tax);
+	}
+	if (!$term || \is_wp_error($term)) {
+		$created = \wp_insert_term('Rechnung', $tax, ['slug' => 'rechnung']);
+		if (!\is_wp_error($created) && isset($created['term_id'])) {
+			$term = \get_term((int) $created['term_id'], $tax);
+		}
+	}
+	if (!$term || \is_wp_error($term)) {
+		return;
+	}
+
+	\wp_set_post_terms($beleg_id, [(int) $term->term_id], $tax, false);
+}
+
 \add_action('add_meta_boxes_scanner', function (\WP_Post $post): void {
 	\add_meta_box(
 		'cmx_scanner_rel_belege',
@@ -88,6 +123,9 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		if ($new_beleg_id <= 0 || \get_post_type($new_beleg_id) !== 'belege') {
 			\delete_post_meta($post_id, CMX_SCANNER_REL_BELEGE_META);
 			return;
+		}
+		if (!$as_document) {
+			cmx_scanner_prepare_new_beleg_defaults($new_beleg_id);
 		}
 		$valid_ids = [$new_beleg_id];
 	}
