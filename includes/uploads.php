@@ -147,9 +147,11 @@ function cmx_belege_next_suffix(string $dir, string $prefix): int {
 	if ((string)$post_type !== 'belege') {
 		return;
 	}
+	$scanner_url = \admin_url('edit.php?post_type=scanner');
+	$uploads_title = '<a href="' . \esc_url($scanner_url) . '" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Uploads</a>';
 	\add_meta_box(
 		'cmx_uploads_box',
-		'Uploads',
+		$uploads_title,
 		__NAMESPACE__ . '\\cmx_render_uploads_box',
 		$post_type,
 		'side',
