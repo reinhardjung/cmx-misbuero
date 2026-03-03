@@ -7,6 +7,10 @@
 		'cmx_valid_to'   => 'Gültig bis',
 		'cmx_modules'    => 'Zugeordnete Module',
 		'cmx_cats'       => 'Kategorien',
+		'cmx_rel_k'      => 'K',
+		'cmx_rel_a'      => 'A',
+		'cmx_rel_b'      => 'B',
+		'cmx_rel_p'      => 'P',
 	];
 	$preview = ['cmx_thumb' => 'Anhang'];
 
@@ -23,6 +27,47 @@
 });
 
 \add_action('manage_dokumente_posts_custom_column', function($col, $post_id) {
+	$relation_cols = [
+		'cmx_rel_k' => ['type' => 'kontakte', 'fallback' => 'cmx_dokumente_kunden'],
+		'cmx_rel_a' => ['type' => 'artikel',  'fallback' => 'cmx_dokumente_artikel'],
+		'cmx_rel_b' => ['type' => 'belege',   'fallback' => 'cmx_dokumente_belege'],
+		'cmx_rel_p' => ['type' => 'projekte', 'fallback' => 'cmx_dokumente_projekte'],
+	];
+
+	if (isset($relation_cols[$col])) {
+		$type = (string) ($relation_cols[$col]['type'] ?? '');
+		$meta_key = (string) ($relation_cols[$col]['fallback'] ?? '');
+		$map = \defined(__NAMESPACE__ . '\\CMX_DOK_REL_META') ? CMX_DOK_REL_META : [];
+		if ($type !== '' && \is_array($map) && isset($map[$type]) && \is_string($map[$type]) && $map[$type] !== '') {
+			$meta_key = (string) $map[$type];
+		}
+
+		$ids = (array) get_post_meta($post_id, $meta_key, true);
+		$ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+		$ids = array_values(array_filter($ids, static function (int $id): bool {
+			return $id > 0 && (string) get_post_status($id) !== '';
+		}));
+		$count = count($ids);
+		if ($count <= 0) {
+			echo '';
+			return;
+		}
+		if ($count === 1) {
+			$target_id = (int) $ids[0];
+			$edit_url = (string) get_edit_post_link($target_id, '');
+			if ($edit_url !== '') {
+				$target_title = trim((string) get_the_title($target_id));
+				if ($target_title === '') {
+					$target_title = '(ohne Titel #' . $target_id . ')';
+				}
+				echo '<a href="' . esc_url($edit_url) . '" title="' . esc_attr($target_title) . '" aria-label="' . esc_attr($target_title) . '">' . esc_html('1') . '</a>';
+				return;
+			}
+		}
+		echo esc_html((string) $count);
+		return;
+	}
+
 	switch ($col) {
 		case 'cmx_thumb':
 			$local = get_post_meta($post_id, '_cmx_local_image_dokumente_url', true);
@@ -83,4 +128,26 @@
 	$cols['cmx_valid_from'] = 'cmx_valid_from';
 	$cols['cmx_valid_to'] = 'cmx_valid_to';
 	return $cols;
+});
+
+\add_action('admin_head-edit.php', function () {
+	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'dokumente') {
+		return;
+	}
+
+	echo '<style>
+		.wp-list-table th.column-cmx_rel_k,
+		.wp-list-table th.column-cmx_rel_a,
+		.wp-list-table th.column-cmx_rel_b,
+		.wp-list-table th.column-cmx_rel_p {
+			width: 42px;
+			text-align: center;
+		}
+		.wp-list-table td.column-cmx_rel_k,
+		.wp-list-table td.column-cmx_rel_a,
+		.wp-list-table td.column-cmx_rel_b,
+		.wp-list-table td.column-cmx_rel_p {
+			text-align: center;
+		}
+	</style>';
 });

@@ -825,16 +825,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_latest_self_doc_url')) {
 			}
 		}
 
-		$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
-		$url = cmx_dok_admin_upload_url_from_rel($file_rel);
-		if ($url !== '') {
-			return $url;
+			$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
+			$url = cmx_dok_admin_upload_url_from_rel($file_rel);
+			if ($url !== '') {
+				return $url;
+			}
+			return '';
 		}
-
-		$edit_url = (string) \get_edit_post_link($post_id, 'raw');
-		return $edit_url !== '' ? $edit_url : '';
 	}
-}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_dok_admin_latest_doc_url_for_post')) {
 	function cmx_dok_admin_latest_doc_url_for_post(int $post_id, string $post_type): string {
