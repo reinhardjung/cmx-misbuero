@@ -103,7 +103,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 
 	echo '<div id="cmx-dokumente-upload-box">';
 	echo '<div id="cmx-dokumente-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
-	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG</small>';
+	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG, CSV</small>';
 	echo '</div>';
 	echo '<input type="file" id="cmx-dokumente-file" style="display:none" multiple accept=".pdf,.png,.jpg,.jpeg">';
 	echo '<div id="cmx-dokumente-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
@@ -322,6 +322,9 @@ function cmx_dokumente_upload_file(): void {
 	}
 
 	$allowed = ['pdf','png','jpg','jpeg'];
+	if ($is_scanner) {
+		$allowed[] = 'csv';
+	}
 	$ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
 	if (!in_array($ext, $allowed, true)) {
 		\wp_send_json_error(['message'=>'bad_type'], 400);
@@ -437,12 +440,16 @@ function cmx_dokumente_upload_file(): void {
 	\add_filter('intermediate_image_sizes', $no_sizes_filter_simple);
 	\add_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
 	\add_filter('big_image_size_threshold', $no_big_image, 10, 0);
-	$uploaded = \wp_handle_upload($_FILES['file'], ['test_form' => false, 'mimes' => [
+	$allowed_mimes = [
 		'pdf'  => 'application/pdf',
 		'png'  => 'image/png',
 		'jpg'  => 'image/jpeg',
 		'jpeg' => 'image/jpeg',
-	]]);
+	];
+	if ($is_scanner) {
+		$allowed_mimes['csv'] = 'text/csv';
+	}
+	$uploaded = \wp_handle_upload($_FILES['file'], ['test_form' => false, 'mimes' => $allowed_mimes]);
 
 	if (!isset($uploaded['file'])) {
 		\remove_filter('big_image_size_threshold', $no_big_image, 10);
