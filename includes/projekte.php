@@ -8,7 +8,7 @@ const CMX_ZU_PROJEKT_AJAX_NONCE_ACTION = 'cmx_zu_projekt_search';
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_zu_projekt_supported_post_types')) {
 	function cmx_zu_projekt_supported_post_types(): array {
-		return ['kontakte', 'artikel', 'belege', 'dokumente'];
+		return ['kontakte', 'artikel', 'belege'];
 	}
 }
 
