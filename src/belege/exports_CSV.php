@@ -343,6 +343,10 @@ function cmxbu_beleg_export_is_allowed_base_type(string $type): bool {
 	return \in_array($type, ['rechnung', 'quittung', 'gutschrift'], true);
 }
 
+function cmxbu_beleg_export_is_credit_note_type(string $type): bool {
+	return cmxbu_beleg_export_normalize_type($type) === 'gutschrift';
+}
+
 function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_am = '', int $post_id = 0): bool {
 	$status = \sanitize_key($status);
 	$bezahlt_am = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
@@ -362,6 +366,28 @@ function cmxbu_beleg_export_is_paid_or_partial(string $status, string $bezahlt_a
 	}
 
 	return false;
+}
+
+function cmxbu_beleg_export_row_date(int $post_id, string $bezahlt_am, string $belegtyp): string {
+	$bezahlt_am = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
+	if ($bezahlt_am !== '') {
+		return $bezahlt_am;
+	}
+
+	if (!cmxbu_beleg_export_is_credit_note_type($belegtyp)) {
+		return '';
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_post_date')) {
+		return cmxbu_beleg_export_normalize_any_date((string) cmxbu_belege_export_post_date($post_id));
+	}
+
+	$post = \get_post($post_id);
+	if (!$post) {
+		return '';
+	}
+	$fallback = (string) \mysql2date('Y-m-d', (string) $post->post_date, false);
+	return cmxbu_beleg_export_normalize_any_date($fallback);
 }
 
 function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''): string {
@@ -508,9 +534,6 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status',
 			true
 		));
-		if (!cmxbu_beleg_export_is_paid_or_partial($status, $bezahlt_am, $pid)) {
-			continue;
-		}
 
 		$belegnr = (string) $post->post_title;
 
@@ -523,6 +546,11 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			if (!cmxbu_beleg_export_is_allowed_base_type($belegtyp)) {
 				continue;
 			}
+			$is_credit_note = cmxbu_beleg_export_is_credit_note_type($belegtyp);
+			if (!cmxbu_beleg_export_is_paid_or_partial($status, $bezahlt_am, $pid) && !$is_credit_note) {
+				continue;
+			}
+			$row_date = cmxbu_beleg_export_row_date($pid, $bezahlt_am, $belegtyp);
 			$belegtyp_display = cmxbu_beleg_export_ucfirst($belegtyp);
 			$effective_type = cmxbu_beleg_export_effective_type($post, $raw_type);
 		$richtung = \sanitize_key((string) \get_post_meta(
@@ -551,7 +579,6 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		$subtotal_base = (float) ($calc['subtotal_base'] ?? 0.0);
 
 		$is_invoice_like = \in_array($belegtyp, ['rechnung', 'quittung'], true);
-		$is_credit_note = ($belegtyp === 'gutschrift');
 
 		// Gutschriften sind betriebswirtschaftlich invertiert:
 		// ausgang => Ausgabe, eingang => Einnahme.
@@ -613,14 +640,14 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 					}
 					continue;
 				}
-			if ($bezahlt_am === '') {
+			if ($row_date === '') {
 				continue;
 			}
 		}
 
 				$row = [
 					$belegnr,
-					cmxbu_beleg_export_format_date_display($bezahlt_am),
+					cmxbu_beleg_export_format_date_display($row_date),
 					$belegtyp_display,
 					$kontakt,
 					$zahlungsart,
@@ -631,10 +658,10 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			cmxbu_beleg_export_format_money($einnahmen),
 			cmxbu_beleg_export_format_money($ausgaben),
 		];
-			if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($bezahlt_am, $range)) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_date_in_range') && !cmxbu_belege_export_date_in_range($row_date, $range)) {
 				continue;
 			}
-			$paid_sort_date = cmxbu_beleg_export_normalize_any_date($bezahlt_am);
+			$paid_sort_date = cmxbu_beleg_export_normalize_any_date($row_date);
 			if ($paid_sort_date === '') {
 				continue;
 			}

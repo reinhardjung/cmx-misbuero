@@ -539,6 +539,35 @@ function cmxbu_belege_export_collect_ids(): array {
 
 	$payment_filtered = [];
 	foreach ($post_ids as $post_id) {
+		$is_credit_note = false;
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_raw_type') && \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_type')) {
+			$post_obj = \get_post($post_id);
+			if ($post_obj instanceof \WP_Post) {
+				$raw_type = (string) cmxbu_beleg_export_raw_type($post_obj);
+				$is_credit_note = ((string) cmxbu_beleg_export_normalize_type($raw_type) === 'gutschrift');
+			}
+		}
+		if (!$is_credit_note) {
+			$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')
+				? (string) cmx_belege_taxonomy()
+				: '';
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+				if (!\is_wp_error($slugs) && !empty($slugs[0])) {
+					$slug = \sanitize_key((string) $slugs[0]);
+					$is_credit_note = ($slug === 'gutschrift' || $slug === 'gutschriften');
+				}
+			}
+		}
+
+		if ($is_credit_note) {
+			$post_date = cmxbu_belege_export_post_date($post_id);
+			if ($post_date === '') continue;
+			if (!cmxbu_belege_export_date_in_range($post_date, $range)) continue;
+			$payment_filtered[] = $post_id;
+			continue;
+		}
+
 		if (!cmxbu_belege_export_has_payment_date($post_id)) continue;
 		if (!cmxbu_belege_export_has_payment_in_range($post_id, $range)) continue;
 		$payment_filtered[] = $post_id;
