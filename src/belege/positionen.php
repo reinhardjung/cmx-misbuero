@@ -1980,23 +1980,27 @@ function cmx_beleg_positionen_js() {
 				}
 
 		/* ========= Eingabe-Events ========= */
-		const selectorMRP = 'input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]';
-		table.on('keydown', selectorMRP, function(e){
-			if (e.key !== 'Enter') return;
-			e.preventDefault();
-			const $el = $(this);
-			$el.trigger('blur');
-			const $row = $el.closest('tr');
-			const $inputs = $row.find(selectorMRP).filter(':visible');
-			const idx = $inputs.index(this);
-			if (idx > -1 && idx < $inputs.length - 1) {
+			const selectorMRP = 'input[name*="[menge]"], input[name*="[preis]"], input[name*="[rabatt]"]';
+			table.on('keydown', selectorMRP, function(e){
+				if (e.key !== 'Enter') return;
+				e.preventDefault();
+				const $el = $(this);
+				$el.trigger('blur');
 				setTimeout(function(){
-					const $next = $inputs.eq(idx + 1);
-					$next.trigger('focus');
-					try { $next[0].select(); } catch (err) {}
+					const form = document.getElementById('post');
+					if (!form) return;
+					const publishBtn = document.getElementById('publish');
+					if (publishBtn && !publishBtn.disabled) {
+						publishBtn.click();
+						return;
+					}
+					if (typeof form.requestSubmit === 'function') {
+						form.requestSubmit();
+						return;
+					}
+					form.submit();
 				}, 0);
-			}
-		});
+			});
 		table.on('focus', selectorMRP, function(){ const el=this; setTimeout(()=>{ try{ el.select(); }catch(e){} }, 0); });
 		table.on('mouseup', selectorMRP, function(e){ e.preventDefault(); });
 

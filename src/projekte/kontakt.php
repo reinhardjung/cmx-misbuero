@@ -39,7 +39,7 @@ function cmx_render_projekt_kontakt_box(\WP_Post $post): void {
 
 	wp_nonce_field('cmx_save_projekt_kontakt', 'cmx_projekt_kontakt_nonce');
 
-	echo '<p><label for="cmx_projekt_kontakt_select">' . esc_html__('Kontakt auswählen', 'cmx') . '</label></p>';
+	// echo '<p><label for="cmx_projekt_kontakt_select">' . esc_html__('Kontakt auswählen', 'cmx') . '</label></p>';
 	echo '<select name="cmx_projekt_kontakt_id" id="cmx_projekt_kontakt_select" style="width:100%;">';
 	echo '<option value="">' . esc_html__('— Kein Kontakt —', 'cmx') . '</option>';
 
@@ -55,7 +55,16 @@ function cmx_render_projekt_kontakt_box(\WP_Post $post): void {
 
 	// Kleiner Hinweis
 	if (empty($kontakte)) {
-		echo '<p style="margin-top:8px;color:#666;">' . esc_html__('Keine Kontakte gefunden. Lege zuerst Kontakte an.', 'cmx') . '</p>';
+		$new_kontakt_url = admin_url('post-new.php?post_type=kontakte');
+		$anlegen_link = '<a href="' . esc_url($new_kontakt_url) . '" target="_blank" rel="noopener noreferrer">' . esc_html__('anlegen', 'cmx') . '</a>';
+		$hint_html = sprintf(__('Keine Kontakte - zuerst einen %s.', 'cmx'), $anlegen_link);
+		echo '<p style="margin-top:8px;color:#666;">' . wp_kses($hint_html, [
+			'a' => [
+				'href'   => [],
+				'target' => [],
+				'rel'    => [],
+			],
+		]) . '</p>';
 	}
 }
 

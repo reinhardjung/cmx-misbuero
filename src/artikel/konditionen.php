@@ -41,6 +41,9 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	$sel_einheit = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_EINHEITEN);
 	$einheiten   = cmx_get_terms_safe(TAX_ARTIKEL_EINHEITEN);
+	$einheiten_url = \taxonomy_exists(TAX_ARTIKEL_EINHEITEN)
+		? \admin_url('edit-tags.php?taxonomy=' . \rawurlencode((string) TAX_ARTIKEL_EINHEITEN) . '&post_type=artikel')
+		: '';
 
 	echo '<style>
 		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
@@ -80,7 +83,13 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	// Einheit (halbe Breite)
 	echo '<div class="cmx-f cmx-f--half">
-		<label for="cmx_artikel_einheit">Einheit</label>
+		<label for="cmx_artikel_einheit">';
+	if ($einheiten_url !== '') {
+		echo '<a href="' . \esc_url($einheiten_url) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;" title="Einheiten verwalten">Einheit</a>';
+	} else {
+		echo 'Einheit';
+	}
+	echo '</label>
 		<select id="cmx_artikel_einheit" name="cmx_artikel_einheit">
 			<option value="0">— auswählen —</option>';
 	foreach ($einheiten as $t) {
