@@ -550,17 +550,21 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		$total = (float) ($calc['total'] ?? 0.0);
 		$subtotal_base = (float) ($calc['subtotal_base'] ?? 0.0);
 
-		$is_outgoing_invoice = ($richtung === 'ausgang')
-			&& \in_array($belegtyp, ['rechnung', 'quittung'], true);
-		$is_supplier_invoice = ($richtung === 'eingang')
-			&& \in_array($belegtyp, ['rechnung', 'quittung'], true);
+		$is_invoice_like = \in_array($belegtyp, ['rechnung', 'quittung'], true);
+		$is_credit_note = ($belegtyp === 'gutschrift');
 
-		$mwst = $is_outgoing_invoice ? $tax_amount : 0.0;
-		$vorsteuer = $is_supplier_invoice ? $tax_amount : 0.0;
+		// Gutschriften sind betriebswirtschaftlich invertiert:
+		// ausgang => Ausgabe, eingang => Einnahme.
+		$is_income_side = ($richtung === 'ausgang' && $is_invoice_like)
+			|| ($richtung === 'eingang' && $is_credit_note);
+		$is_expense_side = ($richtung === 'eingang' && $is_invoice_like)
+			|| ($richtung === 'ausgang' && $is_credit_note);
 
-		$einnahmen = $is_outgoing_invoice ? $total : 0.0;
+		$mwst = ($richtung === 'ausgang') ? $tax_amount : 0.0;
+		$vorsteuer = ($richtung === 'eingang') ? $tax_amount : 0.0;
 
-		$ausgaben = $is_supplier_invoice ? $total : 0.0;
+		$einnahmen = $is_income_side ? $total : 0.0;
+		$ausgaben = $is_expense_side ? $total : 0.0;
 
 			if ($status === 'teilbezahlt') {
 				$partials = cmxbu_beleg_export_partial_payments($pid, $zahlungsart_tax);
@@ -579,12 +583,12 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 						$partial_art = (string) ($partial['zahlungsart'] ?? '');
 						if ($partial_art === '') $partial_art = $zahlungsart;
 
-							$partial_einnahmen = $is_outgoing_invoice ? $total : 0.0;
-							$partial_ausgaben = $is_supplier_invoice ? $total : 0.0;
+							$partial_einnahmen = $is_income_side ? $total : 0.0;
+							$partial_ausgaben = $is_expense_side ? $total : 0.0;
 							$partial_ratio = $total > 0.0 ? ($partial_amount / $total) : 0.0;
 							$partial_tax_amount = max(0.0, (float) $tax_amount * (float) $partial_ratio);
-							$partial_mwst = $is_outgoing_invoice ? $partial_tax_amount : 0.0;
-							$partial_vorsteuer = $is_supplier_invoice ? $partial_tax_amount : 0.0;
+							$partial_mwst = ($richtung === 'ausgang') ? $partial_tax_amount : 0.0;
+							$partial_vorsteuer = ($richtung === 'eingang') ? $partial_tax_amount : 0.0;
 
 							$partial_row = [
 								$belegnr,
