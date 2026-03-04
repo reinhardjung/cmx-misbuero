@@ -60,12 +60,25 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 	);
 
 	$as_document = (string) \get_post_meta((int) $post->ID, CMX_SCANNER_REL_BELEGE_AS_DOC_META, true) === '1';
+	$toggle_label = $as_document ? 'als Uploads' : 'als Dokument';
 	echo '<p style="margin:8px 0 0;">';
 	echo '<label for="cmx_scanner_rel_belege_as_document">';
 	echo '<input type="checkbox" id="cmx_scanner_rel_belege_as_document" name="cmx_scanner_rel_belege_as_document" value="1" ' . \checked($as_document, true, false) . ' /> ';
-	echo 'als Dokument';
+	echo '<span id="cmx_scanner_rel_belege_as_document_label">' . \esc_html($toggle_label) . '</span>';
 	echo '</label>';
 	echo '</p>';
+	echo '<script>
+	(function(){
+		var cb = document.getElementById("cmx_scanner_rel_belege_as_document");
+		var label = document.getElementById("cmx_scanner_rel_belege_as_document_label");
+		if (!cb || !label) return;
+		var sync = function(){
+			label.textContent = cb.checked ? "als Uploads" : "als Dokument";
+		};
+		cb.addEventListener("change", sync);
+		sync();
+	})();
+	</script>';
 }
 
 \add_action('save_post_scanner', function (int $post_id): void {
