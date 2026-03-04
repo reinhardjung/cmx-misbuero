@@ -372,6 +372,23 @@ function cmxbu_beleg_export_effective_type(\WP_Post $post, string $raw_type = ''
 	return \strtolower(\trim((string) $type));
 }
 
+function cmxbu_beleg_export_normalize_richtung(string $richtung): string {
+	$richtung = \sanitize_key((string) $richtung);
+	if ($richtung === '') return '';
+
+	$incoming = ['eingang', 'ausgabe', 'ausgaben', 'expense', 'expenses'];
+	if (\in_array($richtung, $incoming, true)) {
+		return 'eingang';
+	}
+
+	$outgoing = ['ausgang', 'einnahme', 'einnahmen', 'income', 'revenues'];
+	if (\in_array($richtung, $outgoing, true)) {
+		return 'ausgang';
+	}
+
+	return $richtung;
+}
+
 function cmxbu_beleg_export_mwst_context(int $post_id, string $effective_type): array {
 	$opts_general = (array) \get_option('cmx_einstellungen', []);
 	$is_brutto = \get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
@@ -422,9 +439,32 @@ function cmxbu_beleg_export_calc(int $post_id, float $mwst_rate, bool $is_brutto
 			? $manual_total
 			: (float) ($is_brutto ? ($calc['gross'] ?? 0.0) : ($calc['subtotal'] ?? 0.0)));
 
+	$tax_amount = max(0.0, (float) ($calc['tax_amount'] ?? 0.0));
+	$total = max(0.0, (float) ($calc['total'] ?? 0.0));
+
+	// Robuster Fallback: Falls bei Belegen ohne Positionen kein Total geliefert wird
+	// (z.B. Quittung mit manueller Summe), Betrag aus Basiswert ableiten.
+	if ($total <= 0.0 && $subtotal_base > 0.0) {
+		if ($is_brutto) {
+			$total = $subtotal_base;
+			if ($mwst_rate > 0.0 && $tax_amount <= 0.0) {
+				$net = $total / (1.0 + $mwst_rate);
+				$tax_amount = max(0.0, $total - $net);
+			}
+		} else {
+			if ($mwst_rate > 0.0 && $tax_amount <= 0.0) {
+				$tax_amount = max(0.0, $subtotal_base * $mwst_rate);
+			}
+			$total = $subtotal_base + $tax_amount;
+		}
+	}
+
+	$tax_amount = (float) \round($tax_amount, 2);
+	$total = (float) \round($total, 2);
+
 	return [
-		'tax_amount' => (float) ($calc['tax_amount'] ?? 0.0),
-		'total' => (float) ($calc['total'] ?? 0.0),
+		'tax_amount' => $tax_amount,
+		'total' => $total,
 		'subtotal_base' => (float) $subtotal_base,
 		'is_brutto' => (bool) $is_brutto,
 	];
@@ -490,9 +530,7 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung',
 			true
 		));
-		if ($richtung === 'ausgabe') {
-			$richtung = 'eingang';
-		}
+		$richtung = cmxbu_beleg_export_normalize_richtung($richtung);
 
 		$zahlungsart_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')
 			? cmx_beleg_zahlungsart_tax()

@@ -16,7 +16,7 @@ function register_scheme(): void {
 
 add_filter('admin_footer_text', __NAMESPACE__ . '\\cmx_admin_footer_text');
 function cmx_admin_footer_text(?string $text): string {
-	return 'Managend by <a href="https://misbuero.ch/" target="_blank" rel="noopener noreferrer">Mis Büro</a>';
+	return 'Managed by <a href="https://misbuero.ch/" target="_blank" rel="noopener noreferrer">Mis Büro</a>';
 }
 
 add_filter('update_footer', __NAMESPACE__ . '\\cmx_admin_footer_version', 11);
