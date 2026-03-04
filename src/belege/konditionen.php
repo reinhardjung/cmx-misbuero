@@ -384,12 +384,12 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	if ($post->post_type !== 'belege') return;
 
 	// RNG Datum
-	$rng = isset($_POST['cmx_beleg_rng_datum']) ? \sanitize_text_field($_POST['cmx_beleg_rng_datum']) : '';
-	if (!$rng || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
-		// Default: heutiges Datum
-		$rng = \gmdate('Y-m-d', \current_time('timestamp'));
+	$rng = isset($_POST['cmx_beleg_rng_datum']) ? \sanitize_text_field((string) \wp_unslash($_POST['cmx_beleg_rng_datum'])) : null;
+	// Kein automatisches Setzen mehr: nur gültiges Datum speichern.
+	// Bei leer/ungültig bleibt der bestehende Wert unverändert.
+	if (\is_string($rng) && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
+		\update_post_meta($post_id, CMX_BELEG_META_RNG_DATUM, $rng);
 	}
-	\update_post_meta($post_id, CMX_BELEG_META_RNG_DATUM, $rng);
 
 	// Fälligkeitsdatum
 	$fae = isset($_POST['cmx_beleg_faelligkeitsdatum']) ? \sanitize_text_field($_POST['cmx_beleg_faelligkeitsdatum']) : '';

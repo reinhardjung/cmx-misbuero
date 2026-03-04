@@ -862,7 +862,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			$beleg_kategorie_id = (int) ( $_POST['beleg_kategorie'] ?? 0 );
 			$beleg_richtung = sanitize_key( (string) ( $_POST['beleg_richtung'] ?? '' ) );
 
-		update_post_meta( $post_id, 'beleg_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
+		if ( $beleg_datum !== '' ) {
+			update_post_meta( $post_id, 'beleg_datum', $beleg_datum );
+		}
 		update_post_meta( $post_id, 'betrag', $betrag ?: ( $ocr['betrag'] ?? '' ) );
 		update_post_meta( $post_id, 'info', $info );
 		if ( $info !== '' ) {
@@ -870,7 +872,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		}
 		update_post_meta( $post_id, 'datei_url', esc_url_raw( $upload['url'] ) );
 
-		update_post_meta( $post_id, '_cmx_beleg_rng_datum', $beleg_datum ?: ( $ocr['datum'] ?? '' ) );
+		if ( $beleg_datum !== '' ) {
+			update_post_meta( $post_id, '_cmx_beleg_rng_datum', $beleg_datum );
+		}
 		if ( $betrag !== '' ) {
 			update_post_meta( $post_id, '_cmx_beleg_summe_override', $betrag );
 		}
