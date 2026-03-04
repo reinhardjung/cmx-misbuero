@@ -59,11 +59,13 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		true
 	);
 
-	$as_document = (string) \get_post_meta((int) $post->ID, CMX_SCANNER_REL_BELEGE_AS_DOC_META, true) === '1';
-	$toggle_label = $as_document ? 'als Uploads' : 'als Dokument';
+	$raw_mode = \get_post_meta((int) $post->ID, CMX_SCANNER_REL_BELEGE_AS_DOC_META, true);
+	$as_document = ($raw_mode === '' || $raw_mode === null) ? false : ((string) $raw_mode === '1');
+	$as_uploads_checked = !$as_document;
+	$toggle_label = $as_uploads_checked ? 'als Uploads' : 'als Dokument';
 	echo '<p style="margin:8px 0 0;">';
 	echo '<label for="cmx_scanner_rel_belege_as_document">';
-	echo '<input type="checkbox" id="cmx_scanner_rel_belege_as_document" name="cmx_scanner_rel_belege_as_document" value="1" ' . \checked($as_document, true, false) . ' /> ';
+	echo '<input type="checkbox" id="cmx_scanner_rel_belege_as_document" name="cmx_scanner_rel_belege_as_document" value="1" ' . \checked($as_uploads_checked, true, false) . ' /> ';
 	echo '<span id="cmx_scanner_rel_belege_as_document_label">' . \esc_html($toggle_label) . '</span>';
 	echo '</label>';
 	echo '</p>';
@@ -112,7 +114,8 @@ function cmx_scanner_render_rel_belege_metabox(\WP_Post $post): void {
 		return;
 	}
 
-	$as_document = isset($_POST['cmx_scanner_rel_belege_as_document']) && (int) $_POST['cmx_scanner_rel_belege_as_document'] === 1;
+	$as_uploads = isset($_POST['cmx_scanner_rel_belege_as_document']) && (int) $_POST['cmx_scanner_rel_belege_as_document'] === 1;
+	$as_document = !$as_uploads;
 	\update_post_meta($post_id, CMX_SCANNER_REL_BELEGE_AS_DOC_META, $as_document ? '1' : '0');
 
 	$valid_ids = [];
