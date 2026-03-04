@@ -650,14 +650,23 @@ function cmx_dokumente_remove_file(): void {
 		$docs = array_values(array_diff($docs, [$doc_id]));
 		\update_post_meta($post_id, CMX_DOK_UPLOADS_META, $docs);
 
-		$file_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
-		if ($file_rel !== '') {
-			$abs = WP_CONTENT_DIR . '/uploads/' . ltrim($file_rel, '/');
-			if (is_file($abs)) {
-				@unlink($abs);
+		// Nur die Zuordnung zum aktuellen Post entfernen.
+		// Das Dokument selbst (inkl. Datei) bleibt erhalten.
+		$rel_key = 'cmx_dokumente_rel_' . \sanitize_key($post_type);
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+			$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+			if (\is_array($map) && isset($map[$post_type]) && \is_string($map[$post_type]) && $map[$post_type] !== '') {
+				$rel_key = (string) $map[$post_type];
 			}
 		}
-		\wp_delete_post($doc_id, true);
+		$doc_rel = (array) \get_post_meta($doc_id, $rel_key, true);
+		$doc_rel = \array_values(\array_filter(\array_map('intval', $doc_rel)));
+		$doc_rel = \array_values(\array_diff($doc_rel, [(int) $post_id]));
+		if (empty($doc_rel)) {
+			\delete_post_meta($doc_id, $rel_key);
+		} else {
+			\update_post_meta($doc_id, $rel_key, $doc_rel);
+		}
 	}
 
 	\wp_send_json_success(['removed' => $doc_id ?: $path]);
