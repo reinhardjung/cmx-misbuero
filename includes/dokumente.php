@@ -619,30 +619,39 @@ function cmx_dokumente_remove_file(): void {
 
 	if ($is_dokumente) {
 		if ($path === '') \wp_send_json_error(['message'=>'bad_params'], 400);
+		$path_norm = \ltrim(\str_replace('\\', '/', (string) $path), '/');
 		$files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
 		$files = array_values(array_filter($files, function($v){ return $v !== '' && $v !== null; }));
-		$files = array_values(array_diff($files, [$path]));
+		$files = array_values(array_filter($files, function($v) use ($path_norm){
+			$v_norm = \ltrim(\str_replace('\\', '/', (string) $v), '/');
+			return $v_norm !== $path_norm;
+		}));
 		\update_post_meta($post_id, CMX_DOK_SELF_META, $files);
-		$abs = WP_CONTENT_DIR . '/uploads/' . ltrim($path, '/');
-		if (is_file($abs)) {
-			@unlink($abs);
+
+		// Nur Zuordnung entfernen, Datei und Dokument-Post bleiben bestehen.
+		$current_primary = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
+		$current_primary_norm = \ltrim(\str_replace('\\', '/', $current_primary), '/');
+		if ($current_primary_norm === $path_norm) {
+			if (!empty($files)) {
+				$new_primary = (string) \end($files);
+				\update_post_meta($post_id, '_cmx_dokumente_file_path', $new_primary);
+			} else {
+				\delete_post_meta($post_id, '_cmx_dokumente_file_path');
+			}
 		}
-		\delete_post_meta($post_id, '_cmx_dokumente_file_path');
-		\wp_delete_post($post_id, true);
 	} elseif ($is_scanner) {
 		$source_rel = (string) \get_post_meta($post_id, '_cmx_scanner_source_rel', true);
 		$path = $path !== '' ? $path : $source_rel;
 		$path = \ltrim(\str_replace('\\', '/', (string) $path), '/');
 		if ($path === '') \wp_send_json_error(['message'=>'bad_params'], 400);
 
-		$abs = WP_CONTENT_DIR . '/uploads/' . $path;
-		if (is_file($abs)) {
-			@unlink($abs);
+		// Nur Zuordnung entfernen, Datei bleibt bestehen.
+		$source_norm = \ltrim(\str_replace('\\', '/', $source_rel), '/');
+		if ($source_norm === $path || $source_norm === '') {
+			\delete_post_meta($post_id, '_cmx_scanner_source_rel');
+			\delete_post_meta($post_id, '_cmx_scanner_uploaded_ts');
+			\delete_post_meta($post_id, '_cmx_scanner_fs_signature');
 		}
-
-		\delete_post_meta($post_id, '_cmx_scanner_source_rel');
-		\delete_post_meta($post_id, '_cmx_scanner_uploaded_ts');
-		\delete_post_meta($post_id, '_cmx_scanner_fs_signature');
 	} else {
 		if ($doc_id <= 0) \wp_send_json_error(['message'=>'bad_params'], 400);
 		$docs = (array) \get_post_meta($post_id, CMX_DOK_UPLOADS_META, true);
