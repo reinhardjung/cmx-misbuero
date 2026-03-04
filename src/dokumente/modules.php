@@ -151,11 +151,17 @@ function cmx_dok_create_related_entry(int $doc_id, string $target_type): int {
 	}
 
 	$title = cmx_dok_default_target_title($doc_id, $target_type);
-	$inserted = \wp_insert_post([
+	$insert_args = [
 		'post_type'   => $post_type,
 		'post_title'  => $title,
 		'post_status' => 'draft',
-	], true);
+	];
+	if ($post_type === 'belege' || $target_type === 'belege') {
+		// Belege sollen ihre Standard-Nummer/Standardtitel-Logik selbst setzen.
+		$insert_args['post_title'] = '';
+		$insert_args['meta_input'] = ['_cmx_title_auto' => 1];
+	}
+	$inserted = \wp_insert_post($insert_args, true);
 	if (\is_wp_error($inserted) || (int) $inserted <= 0) {
 		return 0;
 	}
