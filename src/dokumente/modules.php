@@ -82,6 +82,9 @@ function cmx_dok_get_selected_zuordnung_type(int $post_id): string {
 		return cmx_dok_default_zuordnung_type();
 	}
 	$type = (string) \get_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META, true);
+	if ($type === '0') {
+		return '';
+	}
 	if (\array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES)) {
 		return $type;
 	}
@@ -92,10 +95,16 @@ function cmx_dok_get_requested_zuordnung_type(int $post_id = 0): string {
 	$type = isset($_POST['cmx_dok_zuordnung_typ'])
 		? \sanitize_key((string) \wp_unslash($_POST['cmx_dok_zuordnung_typ']))
 		: '';
-	if ($type === '' && $post_id > 0) {
-		$type = cmx_dok_get_selected_zuordnung_type($post_id);
+	if ($type === '0') {
+		return '';
 	}
-	return \array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES) ? $type : cmx_dok_default_zuordnung_type();
+	if ($type === '' && $post_id > 0) {
+		return cmx_dok_get_selected_zuordnung_type($post_id);
+	}
+	if (\array_key_exists($type, CMX_DOK_ZUORDNUNG_TYPES)) {
+		return $type;
+	}
+	return $post_id > 0 ? cmx_dok_get_selected_zuordnung_type($post_id) : cmx_dok_default_zuordnung_type();
 }
 
 function cmx_dok_resolve_target_post_type(string $target_type): string {
@@ -667,6 +676,7 @@ function cmx_dok_render_zuordnung_metabox(\WP_Post $post): void {
 
 	echo '<label for="cmx_dok_zuordnung_typ" class="screen-reader-text">Zuordnung</label>';
 	echo '<select id="cmx_dok_zuordnung_typ" name="cmx_dok_zuordnung_typ" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;">';
+	echo '<option value="0" ' . \selected($current, '', false) . '>&mdash; auswählen &mdash;</option>';
 	foreach (CMX_DOK_ZUORDNUNG_TYPES as $key => $label) {
 		echo '<option value="' . \esc_attr($key) . '" ' . \selected($current, $key, false) . '>' . \esc_html($label) . '</option>';
 	}
@@ -820,7 +830,7 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 
 	$type = cmx_dok_get_requested_zuordnung_type($post_id);
 	if ($type === '') {
-		\delete_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META);
+		\update_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META, '0');
 	} else {
 		\update_post_meta($post_id, CMX_DOK_ZUORDNUNG_TYP_META, $type);
 	}
@@ -840,6 +850,9 @@ function cmx_dok_print_relation_metabox_hide_style(): void {
 		}
 		$prev_map[$rel_type] = cmx_dok_int_list(\get_post_meta($post_id, $meta_key, true));
 		$new_map[$rel_type] = [];
+		if ($type === '') {
+			continue;
+		}
 
 		$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', (array) ($cfg['post_types'] ?? [])))));
 		if (empty($allowed_post_types) || !\array_key_exists($meta_key, $_POST)) {

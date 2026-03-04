@@ -26,19 +26,30 @@ function cmx_scanner_get_selected_zuordnung_type(int $post_id): string {
 		return cmx_scanner_default_zuordnung_type();
 	}
 	$type = (string) \get_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META, true);
+	if ($type === '0') {
+		return '';
+	}
 	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : cmx_scanner_default_zuordnung_type();
 }
 
 function cmx_scanner_get_requested_zuordnung_type(int $post_id = 0): string {
 	$type = isset($_POST['cmx_scanner_zuordnung_typ'])
-		? \sanitize_key((string) $_POST['cmx_scanner_zuordnung_typ'])
+		? \sanitize_key((string) \wp_unslash($_POST['cmx_scanner_zuordnung_typ']))
 		: '';
 
-	if ($type === '' && $post_id > 0) {
-		$type = cmx_scanner_get_selected_zuordnung_type($post_id);
+	if ($type === '0') {
+		return '';
 	}
 
-	return \array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES) ? $type : cmx_scanner_default_zuordnung_type();
+	if ($type === '' && $post_id > 0) {
+		return cmx_scanner_get_selected_zuordnung_type($post_id);
+	}
+
+	if (\array_key_exists($type, CMX_SCANNER_ZUORDNUNG_TYPES)) {
+		return $type;
+	}
+
+	return $post_id > 0 ? cmx_scanner_get_selected_zuordnung_type($post_id) : cmx_scanner_default_zuordnung_type();
 }
 
 function cmx_scanner_relation_was_touched(string $meta_key): bool {
@@ -528,6 +539,7 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 
 	echo '<label for="cmx_scanner_zuordnung_typ" class="screen-reader-text">Zuordnung</label>';
 	echo '<select id="cmx_scanner_zuordnung_typ" name="cmx_scanner_zuordnung_typ" style="width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;">';
+	echo '<option value="0" ' . \selected($current, '', false) . '>&mdash; auswählen &mdash;</option>';
 	foreach (CMX_SCANNER_ZUORDNUNG_TYPES as $key => $label) {
 		echo '<option value="' . \esc_attr($key) . '" ' . \selected($current, $key, false) . '>' . \esc_html($label) . '</option>';
 	}
@@ -622,7 +634,16 @@ function cmx_scanner_render_zuordnung_metabox(\WP_Post $post): void {
 	$type = cmx_scanner_get_requested_zuordnung_type($post_id);
 
 	if ($type === '') {
-		\delete_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META);
+		\update_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META, '0');
+		foreach (cmx_scanner_get_rel_meta_keys() as $relation_meta_key) {
+			if (!\is_string($relation_meta_key) || $relation_meta_key === '') {
+				continue;
+			}
+			\delete_post_meta($post_id, $relation_meta_key);
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_SCANNER_REL_BELEGE_AS_DOC_META')) {
+			\delete_post_meta($post_id, (string) \constant(__NAMESPACE__ . '\\CMX_SCANNER_REL_BELEGE_AS_DOC_META'));
+		}
 	} else {
 		\update_post_meta($post_id, CMX_SCANNER_ZUORDNUNG_TYP_META, $type);
 	}
