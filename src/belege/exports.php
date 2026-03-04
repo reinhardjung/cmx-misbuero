@@ -80,7 +80,7 @@ function cmxbu_belege_export_requested_preset(): string {
 	$preset = \sanitize_key((string) ($_REQUEST['cmx_export_range_preset'] ?? ''));
 	$presets = cmxbu_belege_export_presets();
 	if ($preset !== '' && isset($presets[$preset])) return $preset;
-	return 'heute';
+	return 'dieses_jahr';
 }
 
 function cmxbu_belege_export_now_datetime(): \DateTimeImmutable {
