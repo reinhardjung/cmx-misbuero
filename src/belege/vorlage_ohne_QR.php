@@ -217,7 +217,8 @@ $logo_y_css = $fmt_mm((float)($layout['logo_y_mm'] ?? 20.0));
 $logo_w_css = $fmt_mm((float)($layout['logo_width_mm'] ?? 40.0));
 $recipient_x_mm = (float)($layout['recipient_x_mm'] ?? 20.0);
 $recipient_x_shift_mm = 13.23; // 50px
-$recipient_x_css = $fmt_mm($recipient_x_mm - $recipient_x_shift_mm);
+$recipient_x_char_offset_mm = 4.0; // ca. 2 Zeichen nach rechts
+$recipient_x_css = $fmt_mm($recipient_x_mm - $recipient_x_shift_mm + $recipient_x_char_offset_mm);
 $recipient_y_css = $fmt_mm((float)($layout['recipient_y_mm'] ?? 45.0));
 $recipient_w_css = $fmt_mm((float)($layout['recipient_width_mm'] ?? 85.0));
 $recipient_h_css = $fmt_mm((float)($layout['recipient_height_mm'] ?? 40.0));
@@ -248,7 +249,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	.header {
 		position: relative;
 		min-height: <?= htmlspecialchars($header_h_css, ENT_QUOTES, 'UTF-8'); ?>;
-		margin-bottom: 6mm;
+		margin-bottom: 2mm;
 	}
 	.sender-address {
 		width: 100%;
@@ -676,7 +677,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<?php if ($show_subtotal_row): ?>
 					<tr>
 						<td colspan="<?= $col_count; ?>" class="text-right">
-							<strong>Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?></strong>
+							Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?>
 						</td>
 					</tr>
 				<?php endif; ?>
