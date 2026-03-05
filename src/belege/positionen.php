@@ -1077,7 +1077,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			$wpdb->prepare(
 				"SELECT ID FROM {$post_tbl}
 				 WHERE post_type=%s AND post_status<>'trash'
-				 ORDER BY post_modified_gmt DESC, post_title ASC
+				 ORDER BY post_title ASC
 				 LIMIT %d",
 				$post_type, $limit
 			)
