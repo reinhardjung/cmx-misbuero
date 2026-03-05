@@ -430,6 +430,44 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
 		return 'kontakte';
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_current_user_can_create_post_type')) {
+	function cmx_current_user_can_create_post_type(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->create_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('edit_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_create_kontakt_from_label')) {
+	function cmx_beleg_create_kontakt_from_label(string $raw_label): int {
+		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field($raw_label)));
+		if ($title === '') {
+			return 0;
+		}
+
+		$cpt = cmx_kontakte_cpt();
+		if (!\post_type_exists($cpt) || !cmx_current_user_can_create_post_type($cpt)) {
+			return 0;
+		}
+
+		$inserted = \wp_insert_post([
+			'post_type'   => $cpt,
+			'post_title'  => $title,
+			'post_status' => 'publish',
+		], true);
+
+		if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+			return 0;
+		}
+
+		return (int) $inserted;
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_iso2_from_land')) {
 	function cmx_iso2_from_land(int $kontakt_id): string {
 		$meta_land = \strtoupper(\trim((string)\get_post_meta($kontakt_id, '_cmx_rechnung_land', true)));
@@ -1168,18 +1206,28 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			}
 		}
 
+		$k_label = '';
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') && isset($_POST['cmx_kontakt_search'])) {
+			$k_label = \sanitize_text_field(\wp_unslash($_POST['cmx_kontakt_search']));
+			if ($k_label !== '') \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, $k_label);
+			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL);
+		}
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') && isset($_POST['cmx_kontakt_id'])) {
 			$kid = (int) $_POST['cmx_kontakt_id'];
+			if ($kid <= 0 && $k_label !== '') {
+				$new_kid = cmx_beleg_create_kontakt_from_label($k_label);
+				if ($new_kid > 0) {
+					$kid = $new_kid;
+					if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL')) {
+						\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, (string) \get_the_title($new_kid));
+					}
+				}
+			}
 			if ($kid > 0) \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_ID, $kid);
 			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_ID);
 		}
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR') && isset($_POST['cmx_kontakt_addr'])) {
 			\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_ADDR, \wp_kses_post(\wp_unslash($_POST['cmx_kontakt_addr'])));
-		}
-		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') && isset($_POST['cmx_kontakt_search'])) {
-			$k_label = \sanitize_text_field(\wp_unslash($_POST['cmx_kontakt_search']));
-			if ($k_label !== '') \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, $k_label);
-			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL);
 		}
 
 		$previous_projekt_id = \defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID')
