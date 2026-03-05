@@ -62,7 +62,7 @@ function cmx65_render_front_quicklinks_css(): void {
 		return;
 	}
 	echo '<style id="cmx-front-quicklinks-css">'
-		. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#1d2327;color:#fff;font-size:13px;line-height:1.3;}'
+		. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#a42c24;color:#fff;font-size:13px;line-height:1.3;}'
 		. '.cmx-front-quicklinks-main{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}'
 		. '.cmx-front-quicklinks a{color:#fff;text-decoration:none;}'
 		. '.cmx-front-quicklinks a:hover,.cmx-front-quicklinks a:focus{text-decoration:underline;color:#fff;}'
