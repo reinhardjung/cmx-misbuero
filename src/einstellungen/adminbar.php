@@ -4,6 +4,138 @@
  * Admin-Bar (Link auf Support-Tab)
  * -------------------------------------------------------------------------- */
 
+function cmx65_is_home_request_path(): bool {
+	$request_uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+	$request_path = (string) \parse_url($request_uri, \PHP_URL_PATH);
+	if ($request_path === '') {
+		$request_path = '/';
+	}
+	$request_path = '/' . \ltrim($request_path, '/');
+	$request_path = \rtrim($request_path, '/');
+	if ($request_path === '') {
+		$request_path = '/';
+	}
+
+	$home_path = (string) \parse_url(\home_url('/'), \PHP_URL_PATH);
+	if ($home_path === '') {
+		$home_path = '/';
+	}
+	$home_path = '/' . \ltrim($home_path, '/');
+	$home_path = \rtrim($home_path, '/');
+	if ($home_path === '') {
+		$home_path = '/';
+	}
+
+	return $request_path === $home_path;
+}
+
+add_filter('show_admin_bar', __NAMESPACE__ . '\\cmx65_filter_show_adminbar_on_instance_home', 50);
+function cmx65_filter_show_adminbar_on_instance_home($show): bool {
+	if (!(bool) $show) {
+		return false;
+	}
+	if (\is_admin() || \wp_doing_ajax()) {
+		return (bool) $show;
+	}
+	if (!\is_user_logged_in()) {
+		return (bool) $show;
+	}
+	if (cmx65_is_home_request_path()) {
+		return false;
+	}
+	return (bool) $show;
+}
+
+function cmx65_is_instance_home_request(): bool {
+	if (\is_admin() || \wp_doing_ajax()) {
+		return false;
+	}
+	if (!\is_user_logged_in()) {
+		return false;
+	}
+	return (\is_front_page() || \is_home() || cmx65_is_home_request_path());
+}
+
+add_action('wp_head', __NAMESPACE__ . '\\cmx65_render_front_quicklinks_css', 20);
+function cmx65_render_front_quicklinks_css(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+	echo '<style id="cmx-front-quicklinks-css">'
+		. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#1d2327;color:#fff;font-size:13px;line-height:1.3;}'
+		. '.cmx-front-quicklinks-main{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}'
+		. '.cmx-front-quicklinks a{color:#fff;text-decoration:none;}'
+		. '.cmx-front-quicklinks a:hover,.cmx-front-quicklinks a:focus{text-decoration:underline;color:#fff;}'
+		. '.cmx-front-quicklinks .cmx-front-sep{opacity:.55;}'
+		. '.cmx-front-quicklinks-logout{margin-left:auto;white-space:nowrap;}'
+		. 'html{margin-top:0 !important;}* html body{margin-top:0 !important;}'
+		. '@media (max-width: 900px){.cmx-front-quicklinks{flex-wrap:wrap;}.cmx-front-quicklinks-logout{margin-left:0;}}'
+		. '@media screen and (max-width:782px){html{margin-top:0 !important;}}'
+		. '</style>';
+}
+
+add_action('wp_body_open', __NAMESPACE__ . '\\cmx65_render_front_quicklinks', 5);
+function cmx65_render_front_quicklinks(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+
+	$support_url = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? \add_query_arg(
+			[
+				'page' => CMX_SETTINGS_SLUG,
+				'tab'  => 'support',
+			],
+			\admin_url('admin.php')
+		)
+		: \admin_url('admin.php?page=cmx-einstellungen&tab=support');
+
+	$links = [
+		['label' => 'Home', 'href' => \home_url('/wp-admin/')],
+		['label' => 'Mis Büro', 'href' => 'https://misbuero.ch/', 'target' => '_blank'],
+		['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'],
+		['label' => 'Katalog', 'href' => \home_url('/katalog/')],
+		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/')],
+		['label' => 'Archiv', 'href' => \home_url('/archiv/')],
+		['label' => 'Scanner', 'href' => \home_url('/scanner/')],
+	];
+
+	if (\current_user_can('manage_options')) {
+		$token = \get_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN);
+		if (empty($token)) {
+			$token = \wp_generate_uuid4();
+			\update_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false);
+		}
+		$links[] = ['label' => 'Upload-Link', 'href' => \home_url('/mis-upload/?token=' . $token)];
+	}
+
+	$links = array_merge($links, [
+		['label' => 'FAQ', 'href' => 'https://misbuero.ch/faq/', 'target' => '_blank'],
+		['label' => 'Aktuelles', 'href' => 'https://misbuero.ch/aktuelles/', 'target' => '_blank'],
+		['label' => 'YouTube', 'href' => 'https://www.youtube.com/@MisBuero', 'target' => '_blank'],
+		['label' => 'Support-Ticket', 'href' => $support_url],
+	]);
+
+	echo '<nav class="cmx-front-quicklinks" aria-label="Schnellnavigation">';
+	echo '<div class="cmx-front-quicklinks-main">';
+	$first = true;
+	foreach ($links as $link) {
+		if (!$first) {
+			echo '<span class="cmx-front-sep">|</span>';
+		}
+		$first = false;
+		$href = (string) ($link['href'] ?? '');
+		$label = (string) ($link['label'] ?? '');
+		$target = (string) ($link['target'] ?? '');
+		$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+		$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+		echo '<a href="' . \esc_url($href) . '"' . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+	}
+	echo '</div>';
+	echo '<div class="cmx-front-quicklinks-logout"><a href="' . \esc_url(\wp_logout_url(\home_url('/'))) . '">Abmelden</a></div>';
+	echo '</nav>';
+}
+
 add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar', 999);
 function cmx65_adminbar($wp_admin_bar) {
 
