@@ -8,7 +8,7 @@
 $__fmt_dec  = (string)($tpl['format']['decimal']   ?? '.');
 $__fmt_tho  = (string)($tpl['format']['thousands'] ?? "'");
 $__fmt_prec = (int)   ($tpl['format']['decimals']  ?? 2);
-$__fmt_cur  = (string)($tpl['format']['currency']  ?? 'CHF');
+$__fmt_cur  = (string)($tpl['document']['currency'] ?? ($tpl['format']['currency'] ?? 'CHF'));
 
 $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): string {
 	return number_format($v, $__fmt_prec, $__fmt_dec, $__fmt_tho);
