@@ -1172,28 +1172,24 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 			<input type="hidden" name="ref" value="<?php echo \esc_attr($ref); ?>">
 			<input type="hidden" id="cmx-export-submit-action" value="">
 
-			<table class="form-table" role="presentation" style="margin-top:1em;">
-				<tbody>
-					<tr>
-						<th scope="row"><label for="cmx_export_range_preset">Zeitraum</label></th>
-						<td>
-							<select id="cmx_export_range_preset" name="cmx_export_range_preset">
-								<?php foreach ($presets as $value => $label): ?>
-									<option value="<?php echo \esc_attr($value); ?>" <?php selected($preset, $value); ?>><?php echo \esc_html($label); ?></option>
-								<?php endforeach; ?>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="cmx_export_date_from">Datum von</label></th>
-						<td><input type="date" id="cmx_export_date_from" name="cmx_export_date_from" value="<?php echo \esc_attr($range['from']); ?>" required></td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="cmx_export_date_to">Datum bis</label></th>
-						<td><input type="date" id="cmx_export_date_to" name="cmx_export_date_to" value="<?php echo \esc_attr($range['to']); ?>" required></td>
-					</tr>
-				</tbody>
-			</table>
+				<div style="margin-top:1em;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+					<div style="display:flex;align-items:center;gap:8px;">
+						<label for="cmx_export_range_preset" style="font-weight:600;">Zeitraum</label>
+						<select id="cmx_export_range_preset" name="cmx_export_range_preset">
+							<?php foreach ($presets as $value => $label): ?>
+								<option value="<?php echo \esc_attr($value); ?>" <?php selected($preset, $value); ?>><?php echo \esc_html($label); ?></option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div style="display:flex;align-items:center;gap:8px;">
+						<label for="cmx_export_date_from" style="font-weight:600;">Datum von</label>
+						<input type="date" id="cmx_export_date_from" name="cmx_export_date_from" value="<?php echo \esc_attr($range['from']); ?>" required>
+					</div>
+					<div style="display:flex;align-items:center;gap:8px;">
+						<label for="cmx_export_date_to" style="font-weight:600;">Datum bis</label>
+						<input type="date" id="cmx_export_date_to" name="cmx_export_date_to" value="<?php echo \esc_attr($range['to']); ?>" required>
+					</div>
+				</div>
 
 			<p class="submit">
 				<button type="submit" id="cmx-export-belege-zip-btn" name="action" value="cmx_export_belege_list" class="button button-primary">Exportieren ZIP</button>
