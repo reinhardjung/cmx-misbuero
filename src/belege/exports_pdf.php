@@ -15,6 +15,9 @@ use Dompdf\Options;
 	$options->set('isRemoteEnabled', true);
 	$dom = new Dompdf($options);
 	$branding_logo = \function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo') ? (string) cmx_get_branding_logo() : '';
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_png_for_dompdf')) {
+		$branding_logo = (string) cmxbu_prepare_png_for_dompdf((string) $branding_logo);
+	}
 	$row_items = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
 		? cmxbu_beleg_export_rows_from_ids($post_ids, true)
 		: [];
@@ -212,7 +215,7 @@ use Dompdf\Options;
 		.doc-header-title .doc-header-subtitle{display:block;font-size:10px;font-weight:400;color:#444;margin-top:3px}
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
-		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
+		.header-logo{width:150px;height:50px;min-width:150px;max-width:150px;min-height:50px;max-height:50px;object-fit:contain}
 			table{width:100%;border-collapse:collapse;table-layout:auto}
 			th,td{padding:6px;border:none}
 			thead th{font-weight:700;background:transparent;text-align:left;white-space:normal}

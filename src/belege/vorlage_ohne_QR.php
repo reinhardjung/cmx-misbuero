@@ -260,25 +260,28 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		padding: 0;
 		vertical-align: top;
 	}
-	.sender-left { width: 37%; }
-	.sender-center {
-		width: 26%;
-		text-align: center;
-	}
-	.sender-right {
-		width: 37%;
-		text-align: right;
-		white-space: nowrap;
-	}
-	.sender-right a { color: inherit; text-decoration: none; }
-	.sender-logo {
-		width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
-		min-width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
-		max-width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
-		height: auto;
-		display: block;
-		margin: 0 auto;
-	}
+		.sender-left { width: 29%; }
+		.sender-center {
+			width: 42%;
+			text-align: center;
+		}
+		.sender-right {
+			width: 29%;
+			text-align: right;
+			white-space: nowrap;
+		}
+		.sender-right a { color: inherit; text-decoration: none; }
+			.sender-logo {
+				width: 300px;
+				min-width: 300px;
+				max-width: 300px;
+				height: 100px;
+				min-height: 100px;
+				max-height: 100px;
+				object-fit: contain;
+				display: block;
+				margin: 0 auto;
+			}
 	.invoice-meta {
 		width: 40mm;
 		position: absolute;
@@ -311,7 +314,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
 	.beleg-content {
-		margin-top: -56px;
+		margin-top: -68px;
 		position: relative;
 	}
 	.beleg-content .fold-mark-left {

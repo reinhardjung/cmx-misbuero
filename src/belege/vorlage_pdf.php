@@ -92,6 +92,167 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_first_meta')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmxbu_strip_png_iccp_chunks')) {
+	/**
+	 * Entfernt iCCP-Chunks aus PNG-Daten (verhindert libpng-Warnungen in Dompdf/GD).
+	 */
+	function cmxbu_strip_png_iccp_chunks(string $png_data, bool &$removed = false): string {
+		$removed = false;
+		$signature = "\x89PNG\x0D\x0A\x1A\x0A";
+		if (strlen($png_data) < 8 || substr($png_data, 0, 8) !== $signature) {
+			return $png_data;
+		}
+
+		$len = strlen($png_data);
+		$offset = 8;
+		$out = $signature;
+		$has_iend = false;
+
+		while ($offset + 12 <= $len) {
+			$chunk_len_raw = substr($png_data, $offset, 4);
+			$chunk_len_arr = unpack('Nlen', $chunk_len_raw);
+			$chunk_len = (int)($chunk_len_arr['len'] ?? -1);
+			if ($chunk_len < 0) {
+				break;
+			}
+
+			$chunk_total = 12 + $chunk_len;
+			if ($offset + $chunk_total > $len) {
+				break;
+			}
+
+			$chunk_type = substr($png_data, $offset + 4, 4);
+			$chunk_bin = substr($png_data, $offset, $chunk_total);
+			if ($chunk_type === 'iCCP') {
+				$removed = true;
+			} else {
+				$out .= $chunk_bin;
+			}
+
+			$offset += $chunk_total;
+			if ($chunk_type === 'IEND') {
+				$has_iend = true;
+				break;
+			}
+		}
+
+		if (!$has_iend) {
+			return $png_data;
+		}
+
+		return $removed ? $out : $png_data;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmxbu_local_path_from_url')) {
+	/**
+	 * Versucht aus einer lokalen URL den absoluten Dateipfad zu ermitteln.
+	 */
+	function cmxbu_local_path_from_url(string $url): string {
+		$url = trim($url);
+		if ($url === '') {
+			return '';
+		}
+
+		$url_path = (string) parse_url($url, PHP_URL_PATH);
+		if ($url_path === '') {
+			return '';
+		}
+		$url_path = rawurldecode($url_path);
+
+		$uploads = wp_get_upload_dir();
+		$baseurl_path = (string) parse_url((string)($uploads['baseurl'] ?? ''), PHP_URL_PATH);
+		$basedir = (string)($uploads['basedir'] ?? '');
+		if ($baseurl_path !== '' && $basedir !== '' && str_starts_with($url_path, $baseurl_path)) {
+			$rel = ltrim(substr($url_path, strlen($baseurl_path)), '/');
+			$candidate = trailingslashit($basedir) . $rel;
+			if (is_file($candidate)) {
+				return $candidate;
+			}
+		}
+
+		$home_path = (string) parse_url(home_url('/'), PHP_URL_PATH);
+		if ($home_path === '') {
+			$home_path = '/';
+		}
+		$home_path = '/' . ltrim($home_path, '/');
+		$home_path = rtrim($home_path, '/');
+		if ($home_path === '') {
+			$home_path = '/';
+		}
+		if (str_starts_with($url_path, $home_path)) {
+			$rel = ltrim(substr($url_path, strlen($home_path)), '/');
+			$candidate = trailingslashit(ABSPATH) . $rel;
+			if (is_file($candidate)) {
+				return $candidate;
+			}
+		}
+
+		if (is_file($url_path)) {
+			return $url_path;
+		}
+
+		return '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmxbu_prepare_png_for_dompdf')) {
+	/**
+	 * Gibt bei problematischen lokalen PNGs eine bereinigte Cache-Datei-URL zurück.
+	 */
+	function cmxbu_prepare_png_for_dompdf(string $url): string {
+		$url = trim($url);
+		if ($url === '') {
+			return '';
+		}
+
+		$url_path = (string) parse_url($url, PHP_URL_PATH);
+		if ($url_path === '' || !preg_match('~\.png$~i', $url_path)) {
+			return $url;
+		}
+
+		$source_path = cmxbu_local_path_from_url($url);
+		if ($source_path === '' || !is_readable($source_path)) {
+			return $url;
+		}
+
+		$raw = @file_get_contents($source_path);
+		if (!is_string($raw) || $raw === '') {
+			return $url;
+		}
+
+		$removed = false;
+		$clean = cmxbu_strip_png_iccp_chunks($raw, $removed);
+		if (!$removed) {
+			return $url;
+		}
+
+		$uploads = wp_get_upload_dir();
+		$basedir = (string)($uploads['basedir'] ?? '');
+		$baseurl = (string)($uploads['baseurl'] ?? '');
+		if ($basedir === '' || $baseurl === '') {
+			return $url;
+		}
+
+		$cache_dir = trailingslashit($basedir) . 'misbuero/png-clean';
+		if (!is_dir($cache_dir) && !wp_mkdir_p($cache_dir)) {
+			return $url;
+		}
+
+		$fingerprint = $source_path . '|' . (string)@filemtime($source_path) . '|' . (string)strlen($clean);
+		$file_name = md5($fingerprint) . '.png';
+		$target_path = trailingslashit($cache_dir) . $file_name;
+		if (!is_file($target_path)) {
+			$ok = @file_put_contents($target_path, $clean);
+			if ($ok === false) {
+				return $url;
+			}
+		}
+
+		return esc_url_raw(trailingslashit($baseurl) . 'misbuero/png-clean/' . rawurlencode($file_name));
+	}
+}
+
 // Hole Kontakt-Logo von Kategorie "Das bin ich"
 // Fallback bleibt das bisherige Standardlogo
 // Kontakt-Logo "Das bin ich" ermitteln
@@ -925,6 +1086,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					$branding_logo = $kontakt_logo;
 				}
 			}
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_png_for_dompdf')) {
+			$branding_logo = (string) cmxbu_prepare_png_for_dompdf((string) $branding_logo);
 		}
 		// var_dump(cmx_get_branding_logo()); exit;
 
