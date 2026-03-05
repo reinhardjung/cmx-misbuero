@@ -64,6 +64,16 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_strip_url_protocol')) {
 		return \trim($url);
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_normalize_minus_sign')) {
+	function cmx_normalize_minus_sign(string $value): string {
+		$value = \str_replace(['&#8211;', '&#8212;', '&ndash;', '&mdash;'], '-', $value);
+		$decoded = \html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		if (\is_string($decoded) && $decoded !== '') {
+			$value = $decoded;
+		}
+		return \str_replace(["\u{00A0}", '–', '—', '−'], [' ', '-', '-', '-'], $value);
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_url_value')) {
 	function cmx_get_projekt_url_value(int $projekt_id): string {
 		if ($projekt_id <= 0) {
@@ -445,6 +455,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_current_user_can_create_post_type')) 
 }
 if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_create_kontakt_from_label')) {
 	function cmx_beleg_create_kontakt_from_label(string $raw_label): int {
+		$raw_label = cmx_normalize_minus_sign($raw_label);
 		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field($raw_label)));
 		if ($title === '') {
 			return 0;
@@ -479,7 +490,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_postanschrift')) {
 	function cmx_build_kontakt_postanschrift(int $kontakt_id): string {
 		if ($kontakt_id <= 0) return '';
 
-		$firma = \trim((string) \get_the_title($kontakt_id));
+		$firma = \trim((string) cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)));
 		$firma_lc = \function_exists('mb_strtolower') ? \mb_strtolower($firma) : \strtolower($firma);
 		if ($firma_lc === 'firmenname fehlt') {
 			$firma = '';
@@ -631,14 +642,14 @@ function cmx_ajax_search_projekte(): void {
 
 	$out = [];
 	foreach ($proj_ids as $id) {
-		$title = \get_the_title($id);
+		$title = cmx_normalize_minus_sign((string) \get_the_title($id));
 
 		$kontakt_id = (int) (
 			\get_post_meta($id, '_cmx_projekt_kontakt_id', true) ?:
 			\get_post_meta($id, '_cmx_kontakt_id', true) ?:
 			\get_post_meta($id, 'kontakt_id', true)
 		);
-		$kontakt_title = $kontakt_id ? \get_the_title($kontakt_id) : '';
+		$kontakt_title = $kontakt_id ? cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)) : '';
 		$kontakt_addr  = '';
 		if ($kontakt_id) {
 			$kontakt_addr = cmx_build_kontakt_postanschrift($kontakt_id);
@@ -694,7 +705,7 @@ function cmx_ajax_search_kontakte(): void {
 
 	$out = [];
 	foreach ($ids as $id) {
-		$title = \get_the_title($id);
+		$title = cmx_normalize_minus_sign((string) \get_the_title($id));
 		$addr  = cmx_build_kontakt_postanschrift((int) $id);
 		$out[] = [
 			'id'    => (int)$id,
@@ -876,8 +887,8 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 	echo '<div class="cmx-col">';
 
 	/* Projektsuche */
-	$current_proj_title = $projekt_id ? \get_the_title($projekt_id) : '';
-	$display_proj = $projekt_label ?: $current_proj_title;
+	$current_proj_title = $projekt_id ? cmx_normalize_minus_sign((string) \get_the_title($projekt_id)) : '';
+	$display_proj = cmx_normalize_minus_sign($projekt_label !== '' ? $projekt_label : $current_proj_title);
 
 	$proj_edit_link = $projekt_id ? \get_edit_post_link($projekt_id, '') : '';
 	$proj_list_link = \admin_url('edit.php?post_type=projekte');
@@ -898,8 +909,8 @@ echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'
 	echo '</p>';
 
 	/* Kontaktsuche */
-	$kontakte_title = $kontakt_id ? \get_the_title($kontakt_id) : '';
-	$display_kontakt = $kontakt_label ?: $kontakte_title;
+	$kontakte_title = $kontakt_id ? cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)) : '';
+	$display_kontakt = cmx_normalize_minus_sign($kontakt_label !== '' ? $kontakt_label : $kontakte_title);
 
 	$cpt = cmx_kontakte_cpt();
 	$kontakt_edit_link = $kontakt_id ? \get_edit_post_link($kontakt_id, '') : '';
@@ -1209,6 +1220,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 		$k_label = '';
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') && isset($_POST['cmx_kontakt_search'])) {
 			$k_label = \sanitize_text_field(\wp_unslash($_POST['cmx_kontakt_search']));
+			$k_label = cmx_normalize_minus_sign($k_label);
 			if ($k_label !== '') \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, $k_label);
 			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL);
 		}
@@ -1219,7 +1231,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				if ($new_kid > 0) {
 					$kid = $new_kid;
 					if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL')) {
-						\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, (string) \get_the_title($new_kid));
+						\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, cmx_normalize_minus_sign((string) \get_the_title($new_kid)));
 					}
 				}
 			}
@@ -1244,6 +1256,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 		}
 		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL') && isset($_POST['cmx_projekt_search'])) {
 			$proj_label = \sanitize_text_field(\wp_unslash($_POST['cmx_projekt_search']));
+			$proj_label = cmx_normalize_minus_sign($proj_label);
 			if ($proj_label !== '') \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL, $proj_label);
 			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
 		}
