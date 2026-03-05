@@ -389,11 +389,12 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 	.totals-table td { border: 0 !important; }
 	.totals-table tr { line-height: 1.1; }
 	.totals-table td { padding: 2px 8px; }
-	.totals-table .total-row td { padding-top: 8px; }
-	.beleg-subject { margin-top: 6px; font-size: 13px; }
-	.beleg-desc { margin-top: 2px; }
-	.mwst-note { margin-top: 8px; font-size: 11px; }
-	.totals { width: 40%; float: right; margin-top: 16px; }
+		.totals-table .total-row td { padding-top: 8px; }
+		.beleg-subject { margin-top: 6px; font-size: 13px; }
+		.beleg-desc { margin-top: 2px; }
+		.beleg-booking-note { margin-top: -2px; font-size: 11px; color: #c00; }
+		.mwst-note { margin-top: 8px; font-size: 11px; }
+		.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { position: fixed; left: 0; right: 0; bottom: 20px; font-size: 11px; }
 	.clear { clear: both; }
 	.text-right { text-align: right; }
@@ -502,12 +503,15 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 		<div class="clear"></div>
 	</div>
 
-	<div class="beleg-content">
-		<span class="fold-mark-left"></span>
-		<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
-		<?php if ($beleg_subject !== ''): ?>
-			<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
-		<?php endif; ?>
+		<div class="beleg-content">
+			<span class="fold-mark-left"></span>
+			<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+			<?php if ($is_eingang): ?>
+				<div class="beleg-booking-note text-right">Buchungsbeleg (Org. im Anhang)</div>
+			<?php endif; ?>
+			<?php if ($beleg_subject !== ''): ?>
+				<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<?php endif; ?>
 		<?php if ($beleg_description !== ''): ?>
 			<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
 		<?php endif; ?>
