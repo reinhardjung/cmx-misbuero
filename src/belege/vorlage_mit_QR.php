@@ -74,6 +74,7 @@ $opts_belege = (array) get_option('cmx_belege', []);
 $beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
 $richtung = strtolower((string)($tpl['document']['richtung'] ?? ''));
 $is_ausgang = ($richtung === 'ausgang');
+$is_eingang = ($richtung === 'eingang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
 $is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
 $is_gutschrift = ($beleg_type === 'gutschrift');
@@ -180,6 +181,19 @@ if ($recipient_block === '') {
 		($tpl['recipient']['street'] ?? '') . "\n" .
 		(trim(($tpl['recipient']['zip'] ?? '') . ' ' . ($tpl['recipient']['city'] ?? '')))
 	);
+}
+if ($is_eingang) {
+	$sender_as_recipient = (string) $sender_block;
+	$sender_from_recipient = trim((string) $recipient_block);
+	$sender_plain = (string) preg_replace('~<br\s*/?>~i', "\n", $sender_from_recipient);
+	$sender_plain = str_replace(["\r\n", "\r"], "\n", wp_strip_all_tags($sender_plain));
+	$sender_lines = array_values(array_filter(array_map('trim', explode("\n", $sender_plain)), static function (string $v): bool {
+		return $v !== '';
+	}));
+	$sender_block = implode("\n", $sender_lines);
+	$sender_line_parts = $sender_lines;
+	$sender_line = implode(' • ', $sender_lines);
+	$recipient_block = $sender_as_recipient;
 }
 $recipient_block = str_replace(["\r\n", "\r"], "\n", $recipient_block);
 $recipient_has_br = (stripos($recipient_block, '<br') !== false);
