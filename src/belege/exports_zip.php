@@ -867,7 +867,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 			$range_stamp = \sanitize_file_name($range_stamp);
 		}
 
-		return $user_name . '_misbuero_' . $range_stamp . '.ZIP';
+		$prefix = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_site_prefix')
+			? (string) cmxbu_belege_export_site_prefix()
+			: 'misbuero';
+		$prefix = \sanitize_file_name($prefix);
+		if ($prefix === '') {
+			$prefix = 'misbuero';
+		}
+
+		return $prefix . '_' . $user_name . '_' . $range_stamp . '.ZIP';
 	}
 }
 

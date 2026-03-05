@@ -625,10 +625,23 @@ function cmxbu_belege_export_filename(string $ext): string {
 	if ($ext === '') $ext = 'dat';
 	$prefix = cmxbu_belege_export_site_prefix();
 	$range = cmxbu_belege_export_range_stamp();
+	$user_name = '';
+	$user = \wp_get_current_user();
+	if ($user instanceof \WP_User && $user->exists()) {
+		$user_name = (string) $user->user_login;
+		if ($user_name === '') {
+			$user_name = (string) $user->display_name;
+		}
+	}
+	$user_name = \sanitize_file_name($user_name);
+	if ($user_name === '') {
+		$user_name = 'user';
+	}
+
 	if ($ext === 'pdf') {
-		$base = $prefix . '-milchbuechli-' . $range;
+		$base = $prefix . '_milchbuechli_' . $user_name . '_' . $range;
 	} elseif ($ext === 'csv') {
-		$base = $prefix . '-' . $range;
+		$base = $prefix . '_' . $user_name . '_' . $range;
 	} else {
 		$base = $prefix . '-belege-' . $range;
 	}
