@@ -418,6 +418,8 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact')) {
 		// var_dump(get_post_meta($id)); exit;
 		return [
 			'company' => get_post_meta($id, '_company', true) ?: $p->post_title,
+			'vorname' => get_post_meta($id, '_cmx_kontakte_vorname', true),
+			'nachname'=> get_post_meta($id, '_cmx_kontakte_nachname', true),
 			'strasse' => get_post_meta($id, '_cmx_rechnung_strasse', true),
 			'plz'     => get_post_meta($id, '_cmx_rechnung_plz', true),
 			'ort'     => get_post_meta($id, '_cmx_rechnung_ort', true),

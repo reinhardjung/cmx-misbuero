@@ -159,14 +159,20 @@ $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')))
 if ($sender_country_code === '') $sender_country_code = 'CH';
 $sender_plz = trim((string)($tpl['me']['plz'] ?? ''));
 $sender_ort = trim((string)($tpl['me']['ort'] ?? ''));
+$sender_person_name = trim(
+	trim((string)($tpl['me']['vorname'] ?? '')) . ' ' .
+	trim((string)($tpl['me']['nachname'] ?? ''))
+);
 $sender_city_line = trim($sender_country_code . '-' . $sender_plz . ' ' . $sender_ort);
 $sender_block = trim(
 	($tpl['me']['company'] ?? '') . "\n" .
+	($sender_person_name !== '' ? $sender_person_name . "\n" : '') .
 	($tpl['me']['strasse'] ?? '') . "\n" .
 	$sender_city_line
 );
 $sender_line_parts = array_values(array_filter([
 	trim((string)($tpl['me']['company'] ?? '')),
+	trim((string)$sender_person_name),
 	trim((string)($tpl['me']['strasse'] ?? '')),
 	trim((string)$sender_city_line),
 ], static function (string $v): bool {
@@ -444,7 +450,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 			?>
 			<table class="sender-row">
 				<tr>
-					<td class="sender-left"><strong><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></strong></td>
+					<td class="sender-left"><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></td>
 					<td class="sender-center">
 						<?php if ($brand_logo !== ''): ?>
 							<?php if ($brand_url !== ''): ?>
@@ -502,7 +508,7 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 				<div class="recipient-sender-line"><?= htmlspecialchars($sender_line, ENT_QUOTES, 'UTF-8'); ?></div>
 			<?php endif; ?>
 			<div class="recipient-label"><strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong></div>
-			<div class="recipient-lines"><?= $recipient_html; ?></div>
+			<div class="recipient-lines"><strong><?= $recipient_html; ?></strong></div>
 		</div>
 		<div class="clear"></div>
 	</div>
