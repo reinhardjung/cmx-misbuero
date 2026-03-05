@@ -70,7 +70,11 @@ if (is_file($autoload)) require_once $autoload; // cmxbu_log('Composer autoload 
  * ========================= */
 if (!function_exists(__NAMESPACE__.'\\cmxbu_parse_date_ymd')) {
 	function cmxbu_parse_date_ymd($val): ?string {
-		if ($val === null || $val === '') return null;
+		if ($val === null) return null;
+		if (is_string($val)) {
+			$val = trim($val);
+			if ($val === '') return null;
+		}
 		if (is_int($val) || (is_string($val) && ctype_digit($val))) { $ts=(int)$val; return $ts>0 ? gmdate('Y-m-d',$ts) : null; }
 		if (is_string($val) && preg_match('~^\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*$~',$val,$m)) {
 			return sprintf('%04d-%02d-%02d',(int)$m[3],(int)$m[2],(int)$m[1]);
@@ -219,7 +223,7 @@ function cmx_get_beleg_briefbogen(string $beleg_type): string {
 if (!function_exists(__NAMESPACE__.'\\cmxbu_beleg_get_dates')) {
 function cmxbu_beleg_get_dates(int $post_id): array {
 		$inv_raw = cmxbu_first_meta($post_id, ['_cmx_beleg_rng_datum','_cmx_rechnungsdatum','_invoice_date','_date']);
-		$date_invoice = cmxbu_parse_date_ymd($inv_raw) ?: date('d.m.Y');
+		$date_invoice = cmxbu_parse_date_ymd($inv_raw) ?: '';
 
 		// $due_raw = cmxbu_first_meta($post_id, ['_cmx_beleg_faellig_am','_cmx_faellig_am','_faellig_bis','_due_date','_due']);
 		$due_raw = cmxbu_first_meta($post_id, ['_cmx_beleg_faelligkeitsdatum']);

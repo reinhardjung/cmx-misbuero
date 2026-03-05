@@ -213,7 +213,8 @@ if ($brand_url === '') {
 if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
 	$brand_url = 'https://' . $brand_url;
 }
-$show_due_line = ($beleg_type === 'rechnung') || $is_offerte;
+$document_due = trim((string)($tpl['document']['due'] ?? ''));
+$show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
 $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
 ?>
 <!DOCTYPE html>
@@ -452,18 +453,21 @@ $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'F�
 			</table>
 		</div>
 
+		<?php $document_date = trim((string)($tpl['document']['date'] ?? '')); ?>
 		<div class="invoice-meta">
 			<table style="width:100%; border-collapse:collapse; border:0;">
-				<tr>
-					<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
-					<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['date'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
-				</tr>
-				<?php if ($show_due_line): ?>
+				<?php if ($document_date !== ''): ?>
 					<tr>
-						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($due_label, ENT_QUOTES, 'UTF-8'); ?></td>
-						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['document']['due'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($document_date, ENT_QUOTES, 'UTF-8'); ?></td>
 					</tr>
 				<?php endif; ?>
+					<?php if ($show_due_line): ?>
+						<tr>
+							<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($due_label, ENT_QUOTES, 'UTF-8'); ?></td>
+							<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($document_due, ENT_QUOTES, 'UTF-8'); ?></td>
+						</tr>
+					<?php endif; ?>
 				<?php $period_value = trim((string)($tpl['document']['period'] ?? '')); ?>
 				<?php if ($period_value !== ''): ?>
 					<tr>
