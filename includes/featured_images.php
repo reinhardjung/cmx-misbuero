@@ -51,6 +51,145 @@ function cmx_local_image_basename_for_post(\WP_Post $post): string {
 	return $title_slug !== '' ? $title_slug : ($post_type !== '' ? $post_type : 'bild');
 }
 
+/**
+ * Bringt ein Bild auf exakt target_w x target_h (Cover + zentrierter Beschnitt).
+ * Vergrößert bei Bedarf ebenfalls.
+ */
+function cmx_local_image_normalize_to_fixed_size(string $path, int $target_w = 1500, int $target_h = 500): bool {
+	if ($path === '' || !is_file($path) || $target_w <= 0 || $target_h <= 0) {
+		return false;
+	}
+
+	$info = @getimagesize($path);
+	if (!is_array($info)) {
+		return false;
+	}
+
+	$src_w = (int)($info[0] ?? 0);
+	$src_h = (int)($info[1] ?? 0);
+	$mime  = strtolower((string)($info['mime'] ?? ''));
+	if ($src_w <= 0 || $src_h <= 0 || $mime === '') {
+		return false;
+	}
+
+	// Bevorzugt Imagick (robust bei Formaten/Profilen), dann GD als Fallback.
+	if (class_exists('\Imagick')) {
+		try {
+			$im = new \Imagick();
+			$im->readImage($path);
+			$im->setIteratorIndex(0);
+
+			$iw = (int)$im->getImageWidth();
+			$ih = (int)$im->getImageHeight();
+			if ($iw > 0 && $ih > 0) {
+				$scale = max($target_w / $iw, $target_h / $ih);
+				$new_w = max($target_w, (int) ceil($iw * $scale));
+				$new_h = max($target_h, (int) ceil($ih * $scale));
+
+				$im->resizeImage($new_w, $new_h, \Imagick::FILTER_LANCZOS, 1.0, true);
+				$crop_x = (int) floor(($new_w - $target_w) / 2);
+				$crop_y = (int) floor(($new_h - $target_h) / 2);
+				$im->cropImage($target_w, $target_h, $crop_x, $crop_y);
+				$im->setImagePage(0, 0, 0, 0);
+
+				if ($mime === 'image/jpeg') {
+					$im->setImageFormat('jpeg');
+					$im->setImageCompressionQuality(90);
+				} elseif ($mime === 'image/png') {
+					$im->setImageFormat('png');
+				} elseif ($mime === 'image/webp') {
+					$im->setImageFormat('webp');
+					$im->setImageCompressionQuality(90);
+				} elseif ($mime === 'image/avif') {
+					$im->setImageFormat('avif');
+					$im->setImageCompressionQuality(50);
+				} elseif ($mime === 'image/gif') {
+					$im->setImageFormat('gif');
+				}
+
+				$ok = (bool) $im->writeImage($path);
+				$im->clear();
+				$im->destroy();
+				if ($ok) {
+					return true;
+				}
+			}
+		} catch (\Throwable $e) {
+			// Fallback auf GD
+		}
+	}
+
+	$src = null;
+	if ($mime === 'image/jpeg') {
+		$src = @imagecreatefromjpeg($path);
+	} elseif ($mime === 'image/png') {
+		$src = @imagecreatefrompng($path);
+	} elseif ($mime === 'image/gif') {
+		$src = @imagecreatefromgif($path);
+	} elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+		$src = @imagecreatefromwebp($path);
+	} elseif ($mime === 'image/avif' && function_exists('imagecreatefromavif')) {
+		$src = @imagecreatefromavif($path);
+	}
+	if (!$src) {
+		return false;
+	}
+
+	$preserve_alpha = in_array($mime, ['image/png', 'image/gif', 'image/webp', 'image/avif'], true);
+	$scale = max($target_w / $src_w, $target_h / $src_h);
+	$resized_w = max($target_w, (int) ceil($src_w * $scale));
+	$resized_h = max($target_h, (int) ceil($src_h * $scale));
+
+	$tmp = imagecreatetruecolor($resized_w, $resized_h);
+	if (!$tmp) {
+		imagedestroy($src);
+		return false;
+	}
+	if ($preserve_alpha) {
+		imagealphablending($tmp, false);
+		imagesavealpha($tmp, true);
+		$transparent = imagecolorallocatealpha($tmp, 0, 0, 0, 127);
+		imagefilledrectangle($tmp, 0, 0, $resized_w, $resized_h, $transparent);
+	}
+	imagecopyresampled($tmp, $src, 0, 0, 0, 0, $resized_w, $resized_h, $src_w, $src_h);
+
+	$dst = imagecreatetruecolor($target_w, $target_h);
+	if (!$dst) {
+		imagedestroy($tmp);
+		imagedestroy($src);
+		return false;
+	}
+	if ($preserve_alpha) {
+		imagealphablending($dst, false);
+		imagesavealpha($dst, true);
+		$transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+		imagefilledrectangle($dst, 0, 0, $target_w, $target_h, $transparent);
+	}
+
+	$crop_x = (int) floor(($resized_w - $target_w) / 2);
+	$crop_y = (int) floor(($resized_h - $target_h) / 2);
+	imagecopy($dst, $tmp, 0, 0, $crop_x, $crop_y, $target_w, $target_h);
+
+	$saved = false;
+	if ($mime === 'image/jpeg') {
+		$saved = (bool) @imagejpeg($dst, $path, 90);
+	} elseif ($mime === 'image/png') {
+		$saved = (bool) @imagepng($dst, $path, 6);
+	} elseif ($mime === 'image/gif') {
+		$saved = (bool) @imagegif($dst, $path);
+	} elseif ($mime === 'image/webp' && function_exists('imagewebp')) {
+		$saved = (bool) @imagewebp($dst, $path, 90);
+	} elseif ($mime === 'image/avif' && function_exists('imageavif')) {
+		$saved = (bool) @imageavif($dst, $path, 50);
+	}
+
+	imagedestroy($dst);
+	imagedestroy($tmp);
+	imagedestroy($src);
+
+	return $saved;
+}
+
 /** Bestehende Datei auf aktuellen Post-Titel umbenennen */
 function cmx_local_image_sync_filename_with_title(int $post_id, \WP_Post $post, string $meta_base): void {
 	$current_path = (string) get_post_meta($post_id, $meta_base . '_path', true);
@@ -246,6 +385,9 @@ add_action('save_post', function($post_id, $post) {
 		return;
 	}
 	@chmod($target, 0644);
+	if (!cmx_local_image_normalize_to_fixed_size($target, 1500, 500)) {
+		error_log('[CMX] Hinweis: Bild konnte nicht auf 1500x500 normalisiert werden: ' . $target);
+	}
 
 	// Cache-Busting: ?v=filemtime
 	$version = @filemtime($target) ?: time();
