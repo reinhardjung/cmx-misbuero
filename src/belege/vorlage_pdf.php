@@ -1245,13 +1245,10 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$bank_iban = trim((string)($bank['iban'] ?? ''));
 		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
 		$qr_user_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));
-		$qr_meta_enabled = $qr_user_enabled && ($qr_iban !== '');
+		$qr_payment_iban = $qr_iban !== '' ? $qr_iban : $bank_iban;
+		$qr_meta_enabled = $qr_user_enabled && ($qr_payment_iban !== '');
 		$qr_should_print = $qr_meta_enabled
 			&& (strtolower($beleg_type) === 'rechnung');
-		$qr_payment_iban = $qr_user_enabled ? $qr_iban : $bank_iban;
-		if ($qr_payment_iban === '') {
-			$qr_payment_iban = $qr_iban;
-		}
 // var_dump($dates['currency']); exit;
 		$doc_date = '';
 		$doc_due  = '';

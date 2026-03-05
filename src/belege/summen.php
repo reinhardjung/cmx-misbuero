@@ -173,8 +173,6 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 	$is_lieferschein = ($beleg_type === 'lieferschein');
 	$has_positions = cmx_has_positionen_data($positionen);
 	$manual_total_raw = (string) get_post_meta($post->ID, '_cmx_beleg_summe_override', true);
-	$qr_enabled_raw = strtolower(trim((string) get_post_meta($post->ID, '_cmx_beleg_qr_enabled', true)));
-	$qr_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));
 
 	$summe = 0.0;
 	foreach ($positionen as $p) {
@@ -212,13 +210,6 @@ function cmx_beleg_summe_box_render(\WP_Post $post): void {
 			esc_html(cmx_format_swiss_number($offen, 2)) .
 			'</strong></div>';
 	}
-	echo '<div style="margin-top:8px; font-size:12px; text-align:center;">';
-	echo '<label style="display:inline-flex; align-items:center; gap:6px;">';
-	echo '<input type="hidden" name="cmx_beleg_qr_enabled" value="0">';
-	echo '<input type="checkbox" name="cmx_beleg_qr_enabled" value="1" ' . checked($qr_enabled, true, false) . '>';
-	echo 'inkl. QR-Code';
-	echo '</label>';
-	echo '</div>';
 	echo '</div>';
 }
 

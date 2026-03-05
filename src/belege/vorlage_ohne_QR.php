@@ -752,26 +752,6 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 
 	<div class="footer">
 		<?= $footer_html; ?>
-		<?php
-		$bank_name = trim((string)($tpl['bank']['bank_name'] ?? ''));
-		$iban = trim((string)($tpl['bank']['iban'] ?? ''));
-		$bic = trim((string)($tpl['bank']['bic'] ?? ''));
-		$bank_iban = $iban;
-		?>
-		<?php if ($is_ausgang && !$is_lieferschein && !$is_lieferantenrechnung && !$is_offerte && ($bank_name !== '' || $bank_iban !== '' || $bic !== '')): ?>
-			<div style="margin-top:8px;">
-				<div><strong>Zahlungsinformationen</strong></div>
-				<?php if ($bank_name !== ''): ?>
-					<div>Bank: <?= htmlspecialchars($bank_name, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-				<?php if ($bank_iban !== ''): ?>
-					<div>IBAN: <?= htmlspecialchars($bank_iban, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-				<?php if ($bic !== ''): ?>
-					<div>BIC: <?= htmlspecialchars($bic, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-			</div>
-		<?php endif; ?>
 	</div>
 </div>
 </body>
