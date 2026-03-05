@@ -61,13 +61,14 @@ function cmx65_render_front_quicklinks_css(): void {
 	if (!cmx65_is_instance_home_request()) {
 		return;
 	}
-	echo '<style id="cmx-front-quicklinks-css">'
-		. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#a42c24;color:#fff;font-size:13px;line-height:1.3;}'
-		. '.cmx-front-quicklinks-main{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}'
-		. '.cmx-front-quicklinks a{color:#fff;text-decoration:none;}'
-		. '.cmx-front-quicklinks a:hover,.cmx-front-quicklinks a:focus{text-decoration:underline;color:#fff;}'
-		. '.cmx-front-quicklinks .cmx-front-sep{opacity:.55;}'
-		. '.cmx-front-quicklinks-logout{margin-left:auto;white-space:nowrap;}'
+		echo '<style id="cmx-front-quicklinks-css">'
+			. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#a42c24;color:#fff;font-size:13px;line-height:1.3;}'
+			. '.cmx-front-quicklinks-main{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}'
+			. '.cmx-front-quicklinks a{color:#fff;text-decoration:none;font-weight:700;}'
+			. '.cmx-front-quicklinks a.cmx-front-home-link{color:#ffeb3b;}'
+			. '.cmx-front-quicklinks a:hover,.cmx-front-quicklinks a:focus{text-decoration:underline;color:#fff;}'
+			. '.cmx-front-quicklinks .cmx-front-sep{opacity:.55;}'
+			. '.cmx-front-quicklinks-logout{margin-left:auto;white-space:nowrap;}'
 		. 'html{margin-top:0 !important;}* html body{margin-top:0 !important;}'
 		. '@media (max-width: 900px){.cmx-front-quicklinks{flex-wrap:wrap;}.cmx-front-quicklinks-logout{margin-left:0;}}'
 		. '@media screen and (max-width:782px){html{margin-top:0 !important;}}'
@@ -124,13 +125,14 @@ function cmx65_render_front_quicklinks(): void {
 			echo '<span class="cmx-front-sep">|</span>';
 		}
 		$first = false;
-		$href = (string) ($link['href'] ?? '');
-		$label = (string) ($link['label'] ?? '');
-		$target = (string) ($link['target'] ?? '');
-		$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
-		$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
-		echo '<a href="' . \esc_url($href) . '"' . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
-	}
+			$href = (string) ($link['href'] ?? '');
+			$label = (string) ($link['label'] ?? '');
+			$target = (string) ($link['target'] ?? '');
+			$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+			$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+			$class_attr = ($label === 'Home') ? ' class="cmx-front-home-link"' : '';
+			echo '<a href="' . \esc_url($href) . '"' . $class_attr . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+		}
 	echo '</div>';
 	echo '<div class="cmx-front-quicklinks-logout"><a href="' . \esc_url(\wp_logout_url(\home_url('/'))) . '">Abmelden</a></div>';
 	echo '</nav>';
