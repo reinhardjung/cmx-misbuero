@@ -1204,8 +1204,8 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, $zip_trustee_selected_id);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
-		<h2>Belegexport als Milchbüchli</h2>
-		<p>Wähle <code>Datum von</code> und <code>Datum bis</code>. Erst danach kann das Milchbüchli exportiert werden.</p>
+		<h2>Belege und Milchbüechli exportieren</h2>
+		<p><code>ZIP</code> exportiert Milchbüechli, Belege und zugeordnete Dokumente und erstellt einen Link zum Teilen mit Ihrem Treuhänder.</p>
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
 		<?php endif; ?>
@@ -1238,9 +1238,10 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 				</div>
 
 			<p class="submit">
-				<button type="submit" id="cmx-export-belege-zip-btn" name="action" value="cmx_export_belege_list" class="button button-primary">Exportieren ZIP</button>
-				<button type="submit" id="cmx-export-belege-pdf-btn" name="action" value="cmx_export_belege_list_pdf" class="button">Exportieren PDF</button>
-				<button type="submit" id="cmx-export-belege-csv-btn" name="action" value="cmx_export_belege_list_csv" class="button">Exportieren CSV</button>
+				<p>Exportieren als</p>
+				<button type="submit" id="cmx-export-belege-zip-btn" name="action" value="cmx_export_belege_list" class="button button-primary">ZIP</button>
+				<button type="submit" id="cmx-export-belege-pdf-btn" name="action" value="cmx_export_belege_list_pdf" class="button">PDF</button>
+				<button type="submit" id="cmx-export-belege-csv-btn" name="action" value="cmx_export_belege_list_csv" class="button">CSV</button>
 				<a href="<?php echo \esc_url($cancel_url); ?>" class="button">Abbrechen</a>
 			</p>
 
