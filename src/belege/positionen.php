@@ -649,6 +649,124 @@ if (!function_exists(__NAMESPACE__ . '\cmx_norm_decimal')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_artikel_usage_cache_key')) {
+	function cmx_beleg_artikel_usage_cache_key(): string {
+		return 'cmx_beleg_artikel_usage_counts_v1';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_artikel_usage_counts_invalidate')) {
+	function cmx_beleg_artikel_usage_counts_invalidate(): void {
+		\delete_transient(cmx_beleg_artikel_usage_cache_key());
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_artikel_usage_counts')) {
+	/**
+	 * Anzahl Belege pro Artikel-ID (ein Artikel zählt pro Beleg höchstens einmal).
+	 *
+	 * @return array<int,int> artikel_id => beleg_count
+	 */
+	function cmx_beleg_artikel_usage_counts(): array {
+		static $runtime_cache = null;
+		if (\is_array($runtime_cache)) {
+			return $runtime_cache;
+		}
+
+		$cached = \get_transient(cmx_beleg_artikel_usage_cache_key());
+		if (\is_array($cached)) {
+			$out = [];
+			foreach ($cached as $artikel_id => $count) {
+				$aid = (int) $artikel_id;
+				$cnt = (int) $count;
+				if ($aid > 0 && $cnt > 0) {
+					$out[$aid] = $cnt;
+				}
+			}
+			$runtime_cache = $out;
+			return $runtime_cache;
+		}
+
+		$beleg_ids = \get_posts([
+			'post_type'              => 'belege',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'suppress_filters'       => true,
+		]);
+
+		$counts = [];
+		foreach ((array) $beleg_ids as $beleg_id_raw) {
+			$beleg_id = (int) $beleg_id_raw;
+			if ($beleg_id <= 0) {
+				continue;
+			}
+
+			$rows = \get_post_meta($beleg_id, '_cmx_beleg_positionen', true);
+			if (\is_string($rows) && $rows !== '') {
+				$tmp = \json_decode($rows, true);
+				if (\json_last_error() === \JSON_ERROR_NONE && \is_array($tmp)) {
+					$rows = $tmp;
+				} else {
+					$tmp = @\maybe_unserialize($rows);
+					$rows = \is_array($tmp) ? $tmp : [];
+				}
+			} elseif (!\is_array($rows)) {
+				$rows = [];
+			}
+
+			if (empty($rows)) {
+				continue;
+			}
+
+			$seen_in_beleg = [];
+			foreach ($rows as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$artikel_id = isset($row['artikel_id']) ? (int) $row['artikel_id'] : 0;
+				if ($artikel_id > 0) {
+					$seen_in_beleg[$artikel_id] = true;
+				}
+			}
+
+			foreach (\array_keys($seen_in_beleg) as $artikel_id) {
+				$aid = (int) $artikel_id;
+				if ($aid <= 0) {
+					continue;
+				}
+				$counts[$aid] = (int) ($counts[$aid] ?? 0) + 1;
+			}
+		}
+
+		\set_transient(cmx_beleg_artikel_usage_cache_key(), $counts, 30 * \MINUTE_IN_SECONDS);
+		$runtime_cache = $counts;
+		return $runtime_cache;
+	}
+}
+
+\add_action('trashed_post', function (int $post_id): void {
+	if ((string) \get_post_type($post_id) !== 'belege') return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts_invalidate')) {
+		cmx_beleg_artikel_usage_counts_invalidate();
+	}
+});
+\add_action('untrashed_post', function (int $post_id): void {
+	if ((string) \get_post_type($post_id) !== 'belege') return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts_invalidate')) {
+		cmx_beleg_artikel_usage_counts_invalidate();
+	}
+});
+\add_action('deleted_post', function (int $post_id): void {
+	if ((string) \get_post_type($post_id) !== 'belege') return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts_invalidate')) {
+		cmx_beleg_artikel_usage_counts_invalidate();
+	}
+});
+
 /* ------------------------------
  * Metabox registrieren
  * ------------------------------ */
@@ -947,6 +1065,9 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 
 	if ($old_data !== $clean) {
 		update_post_meta($post_id, '_cmx_beleg_positionen', $clean);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts_invalidate')) {
+			cmx_beleg_artikel_usage_counts_invalidate();
+		}
 	}
 
 }, 10, 3);
@@ -1133,6 +1254,32 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			'nr'    => $nr,
 			'title' => $title,
 		];
+	}
+
+	$priority_threshold = (int) \apply_filters('cmx_beleg_artikel_priority_threshold', 3);
+	if ($priority_threshold < 1) {
+		$priority_threshold = 1;
+	}
+	$usage_counts = \function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts')
+		? cmx_beleg_artikel_usage_counts()
+		: [];
+	if (!empty($usage_counts) && !empty($items)) {
+		\usort($items, static function(array $a, array $b) use ($usage_counts, $priority_threshold): int {
+			$a_id = (int) ($a['value'] ?? 0);
+			$b_id = (int) ($b['value'] ?? 0);
+			$a_hot = ((int) ($usage_counts[$a_id] ?? 0) >= $priority_threshold) ? 1 : 0;
+			$b_hot = ((int) ($usage_counts[$b_id] ?? 0) >= $priority_threshold) ? 1 : 0;
+			if ($a_hot !== $b_hot) {
+				return $b_hot <=> $a_hot;
+			}
+			$a_title = (string) ($a['title'] ?? '');
+			$b_title = (string) ($b['title'] ?? '');
+			$cmp = \strnatcasecmp($a_title, $b_title);
+			if ($cmp !== 0) {
+				return $cmp;
+			}
+			return $a_id <=> $b_id;
+		});
 	}
 
 	wp_send_json($items);
@@ -2434,7 +2581,12 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 	}
 
 	$old = get_post_meta($post_id, '_cmx_beleg_positionen', true);
-	if ($old !== $clean) update_post_meta($post_id, '_cmx_beleg_positionen', $clean);
+	if ($old !== $clean) {
+		update_post_meta($post_id, '_cmx_beleg_positionen', $clean);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_artikel_usage_counts_invalidate')) {
+			cmx_beleg_artikel_usage_counts_invalidate();
+		}
+	}
 
 	wp_send_json_success(['saved'=>count($clean)]);
 });
