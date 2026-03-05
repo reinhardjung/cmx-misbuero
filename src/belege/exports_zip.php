@@ -34,13 +34,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_csv_string_from_ids
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids')) {
 	function cmxbu_belege_export_pdf_binary_from_ids(array $post_ids): string {
-		$options = new Options();
-		$options->set('isRemoteEnabled', true);
-		$dom = new Dompdf($options);
-		$branding_logo = \function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo') ? (string) cmx_get_branding_logo() : '';
-		$row_items = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
-			? cmxbu_beleg_export_rows_from_ids($post_ids, true)
-			: [];
+			$options = new Options();
+			$options->set('isRemoteEnabled', true);
+			$dom = new Dompdf($options);
+			$branding_logo = \function_exists(__NAMESPACE__ . '\\cmx_get_branding_logo') ? (string) cmx_get_branding_logo() : '';
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_png_for_dompdf')) {
+				$branding_logo = (string) cmxbu_prepare_png_for_dompdf((string) $branding_logo);
+			}
+			$row_items = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
+				? cmxbu_beleg_export_rows_from_ids($post_ids, true)
+				: [];
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_sort_context_rows_by_paid_date')) {
 			$row_items = cmxbu_beleg_export_sort_context_rows_by_paid_date((array) $row_items);
 		}
