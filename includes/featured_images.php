@@ -148,17 +148,19 @@ function cmx_render_local_image_box(\WP_Post $post) {
 	}
 
 	// Bild-Preview + Upload
-	if ($url) {
-		$display_url = esc_url($url);
-		$path = parse_url($display_url, PHP_URL_PATH);
-		$filename = $path ? basename($path) : ($pt . '-' . (int) $post->ID . '.jpg');
-		echo '<div style="margin-bottom:8px;"><a href="' . $display_url . '" download="' . esc_attr($filename) . '" title="Bild herunterladen" style="display:block;max-width:100%;"><img src="' . $display_url . '" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></a></div>';
-		echo '<input type="file" name="cmx_local_image_file" accept="image/*" style="width:100%;" />';
-		echo '<p style="margin-top:8px;"><label><input type="checkbox" name="cmx_local_image_remove" value="1"> Entfernen</label></p>';
-	} else {
-		echo '<em>Kein ' . esc_html($label) . ' hinterlegt.</em>';
-		echo '<p style="margin-top:8px;"><input type="file" name="cmx_local_image_file" accept="image/*" style="width:100%;" /></p>';
-	}
+		if ($url) {
+			$display_url = esc_url($url);
+			$path = parse_url($display_url, PHP_URL_PATH);
+			$filename = $path ? basename($path) : ($pt . '-' . (int) $post->ID . '.jpg');
+			echo '<div style="margin-bottom:8px;"><a href="' . $display_url . '" download="' . esc_attr($filename) . '" title="Bild herunterladen" style="display:block;max-width:100%;"><img src="' . $display_url . '" style="max-width:100%;height:auto;display:block;border:1px solid #ddd;padding:2px;background:#fff;" alt="" /></a></div>';
+			echo '<p style="margin:0 0 6px;color:#666;font-size:12px;">Ideale Grösse: 1500x500px</p>';
+			echo '<input type="file" name="cmx_local_image_file" accept="image/*" style="width:100%;" />';
+			echo '<p style="margin-top:8px;"><label><input type="checkbox" name="cmx_local_image_remove" value="1"> Entfernen</label></p>';
+		} else {
+			echo '<em>Kein ' . esc_html($label) . ' hinterlegt.</em>';
+			echo '<p style="margin:8px 0 6px;color:#666;font-size:12px;">Ideale Grösse: 1500x500px</p>';
+			echo '<p style="margin-top:8px;"><input type="file" name="cmx_local_image_file" accept="image/*" style="width:100%;" /></p>';
+		}
 
 	// echo '<p style="color:#666;margin-top:8px;">Nach Auswahl normal „Aktualisieren“ klicken. Datei wird lokal gespeichert (nicht in der Mediathek).</p>';
 	echo '</div>';
