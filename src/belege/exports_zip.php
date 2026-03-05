@@ -445,7 +445,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_upload_entries
 				if ($base_name === '') {
 					$base_name = 'upload';
 				}
-				$zip_path = cmxbu_belege_zip_unique_path('Belege/' . $base_name, $used_zip_paths);
+				$zip_path = cmxbu_belege_zip_unique_path('belege/' . $base_name, $used_zip_paths);
 				$entries[] = [
 					'abs' => $abs_path,
 					'zip' => $zip_path,
@@ -493,7 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_beleg_pdf_entr
 			if ($base_name === '') {
 				$base_name = 'beleg-' . $post_id . '.pdf';
 			}
-			$zip_path = cmxbu_belege_zip_unique_path('Rechnungen/' . $base_name, $used_zip_paths);
+			$zip_path = cmxbu_belege_zip_unique_path('rechnungen/' . $base_name, $used_zip_paths);
 			$entries[] = [
 				'abs' => $pdf_abs,
 				'zip' => $zip_path,
@@ -901,9 +901,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_build_zip_file_from
 			return false;
 		}
 
-		$zip->addEmptyDir('Rechnungen');
-		$zip->addEmptyDir('Belege');
-		$zip->addEmptyDir('Bank');
+			$zip->addEmptyDir('rechnungen');
+			$zip->addEmptyDir('belege');
+			$zip->addEmptyDir('bank');
 		$zip->addEmptyDir('export');
 		$zip->addEmptyDir('dokumente');
 
