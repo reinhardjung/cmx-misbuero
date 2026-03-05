@@ -404,13 +404,14 @@ $due_label = $is_offerte ? 'GÃ¼ltig bis' : (string)($tpl['labels']['due'] ?? 'FÃ
 <body>
 <div class="container">
 	<div class="header header-layout-<?= htmlspecialchars($layout_profile, ENT_QUOTES, 'UTF-8'); ?>">
-		<div class="sender-address">
-			<?php
-			$me_phone = trim((string)($tpl['me']['phone'] ?? ''));
-			$me_email = trim((string)($tpl['me']['email'] ?? ''));
-			$me_web = trim((string)($tpl['me']['website'] ?? ''));
-			$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
-			$format_ch_phone = static function(string $raw): string {
+			<div class="sender-address">
+				<?php
+				$contact_source = $is_eingang ? (array)($tpl['counterparty_contact'] ?? []) : (array)($tpl['me'] ?? []);
+				$me_phone = trim((string)($contact_source['phone'] ?? ''));
+				$me_email = trim((string)($contact_source['email'] ?? ''));
+				$me_web = trim((string)($contact_source['website'] ?? ''));
+				$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
+				$format_ch_phone = static function(string $raw): string {
 				$digits = preg_replace('/\D+/', '', $raw);
 				if (strpos($digits, '0041') === 0) {
 					$digits = '41' . substr($digits, 4);

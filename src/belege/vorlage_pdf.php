@@ -893,6 +893,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$opts=(array)get_option('cmx_einstellungen',[]);
 		$branding_logo = \CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo();
 		$beleg_richtung = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
+		$counterparty_contact = [
+			'phone' => '',
+			'email' => '',
+			'website' => '',
+		];
 		if ($beleg_richtung === 'eingang') {
 			$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
 				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
@@ -900,6 +905,19 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
 			if ($kontakt_id <= 0 && $kontakt_meta_key !== '_cmx_beleg_kontakt_id') {
 				$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+			}
+			if ($kontakt_id > 0) {
+				$counterparty_contact = [
+					'phone' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+						'_cmx_telefon_1', 'cmx_telefon_1', 'telefon_1', 'tel_1', 'phone_1', 'telefon', 'tel', 'phone',
+					])),
+					'email' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+						'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
+					])),
+					'website' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+						'_cmx_kontakte_url', 'cmx_kontakte_meta_url', 'cmx_kontakte_url', '_cmx_url', 'cmx_url', '_website', 'website', 'url',
+					])),
+				];
 			}
 			if ($kontakt_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_get_contact_logo')) {
 				$kontakt_logo = (string) cmx_get_contact_logo($kontakt_id);
@@ -1146,6 +1164,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			],
 			'anzahlungen' => $anzahlungen,
 			'me' => $me,
+			'counterparty_contact' => $counterparty_contact,
 			'bank' => $bank,
 		];
 		$layout_profiles = [
