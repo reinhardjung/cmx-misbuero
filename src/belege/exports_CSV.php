@@ -415,6 +415,61 @@ function cmxbu_beleg_export_normalize_richtung(string $richtung): string {
 	return $richtung;
 }
 
+function cmxbu_beleg_export_direction_side_from_label(string $label): string {
+	$label = \trim((string) \wp_strip_all_tags($label));
+	if ($label === '') {
+		return '';
+	}
+
+	$txt = \function_exists('mb_strtolower')
+		? \mb_strtolower($label, 'UTF-8')
+		: \strtolower($label);
+
+	if (\strpos($txt, 'einnah') !== false || \strpos($txt, 'income') !== false || \strpos($txt, 'ertrag') !== false) {
+		return 'income';
+	}
+	if (\strpos($txt, 'ausgab') !== false || \strpos($txt, 'expense') !== false || \strpos($txt, 'aufwand') !== false || \strpos($txt, 'kosten') !== false) {
+		return 'expense';
+	}
+
+	return '';
+}
+
+function cmxbu_beleg_export_direction_side_map(string $belegtyp): array {
+	$normalized = cmxbu_beleg_export_normalize_type($belegtyp);
+	$map = ['ausgang' => '', 'eingang' => ''];
+
+	if (\in_array($normalized, ['rechnung', 'quittung'], true)) {
+		$map = ['ausgang' => 'income', 'eingang' => 'expense'];
+	} elseif ($normalized === 'gutschrift') {
+		$map = ['ausgang' => 'expense', 'eingang' => 'income'];
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_richtung_label_map')) {
+		$label_map = (array) cmx_beleg_admin_richtung_label_map();
+		$candidates = \array_values(\array_unique(\array_filter([
+			\sanitize_key($belegtyp),
+			$normalized,
+		])));
+
+		foreach ($candidates as $slug) {
+			$labels = $label_map[$slug] ?? null;
+			if (!\is_array($labels)) {
+				continue;
+			}
+			foreach (['ausgang', 'eingang'] as $dir) {
+				$side = cmxbu_beleg_export_direction_side_from_label((string) ($labels[$dir] ?? ''));
+				if ($side !== '') {
+					$map[$dir] = $side;
+				}
+			}
+			break;
+		}
+	}
+
+	return $map;
+}
+
 function cmxbu_beleg_export_mwst_context(int $post_id, string $effective_type): array {
 	$opts_general = (array) \get_option('cmx_einstellungen', []);
 	$is_brutto = \get_post_meta($post_id, '_cmx_beleg_is_brutto', true) === '1';
@@ -553,12 +608,12 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			$row_date = cmxbu_beleg_export_row_date($pid, $bezahlt_am, $belegtyp);
 			$belegtyp_display = cmxbu_beleg_export_ucfirst($belegtyp);
 			$effective_type = cmxbu_beleg_export_effective_type($post, $raw_type);
-		$richtung = \sanitize_key((string) \get_post_meta(
+		$richtung_raw = \sanitize_key((string) \get_post_meta(
 			$pid,
 			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung',
 			true
 		));
-		$richtung = cmxbu_beleg_export_normalize_richtung($richtung);
+		$richtung = cmxbu_beleg_export_normalize_richtung($richtung_raw);
 
 		$zahlungsart_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')
 			? cmx_beleg_zahlungsart_tax()
@@ -578,17 +633,24 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 		$total = (float) ($calc['total'] ?? 0.0);
 		$subtotal_base = (float) ($calc['subtotal_base'] ?? 0.0);
 
-		$is_invoice_like = \in_array($belegtyp, ['rechnung', 'quittung'], true);
+		$legacy_income_direction = \in_array($richtung_raw, ['einnahme', 'einnahmen', 'income', 'revenues'], true);
+		$legacy_expense_direction = \in_array($richtung_raw, ['ausgabe', 'ausgaben', 'expense', 'expenses'], true);
+		$richtung_side_map = cmxbu_beleg_export_direction_side_map($belegtyp);
 
-		// Gutschriften sind betriebswirtschaftlich invertiert:
-		// ausgang => Ausgabe, eingang => Einnahme.
-		$is_income_side = ($richtung === 'ausgang' && $is_invoice_like)
-			|| ($richtung === 'eingang' && $is_credit_note);
-		$is_expense_side = ($richtung === 'eingang' && $is_invoice_like)
-			|| ($richtung === 'ausgang' && $is_credit_note);
+		if ($legacy_income_direction || $legacy_expense_direction) {
+			// Legacy-Werte sind bereits betriebswirtschaftlich (Einnahme/Ausgabe).
+			$is_income_side = $legacy_income_direction;
+			$is_expense_side = $legacy_expense_direction;
+		} else {
+			$side = (string) ($richtung_side_map[$richtung] ?? '');
+			$is_income_side = ($side === 'income');
+			$is_expense_side = ($side === 'expense');
+		}
 
-		$mwst = ($richtung === 'ausgang') ? $tax_amount : 0.0;
-		$vorsteuer = ($richtung === 'eingang') ? $tax_amount : 0.0;
+		$is_mwst_side = $is_income_side;
+		$is_vorsteuer_side = $is_expense_side;
+		$mwst = $is_mwst_side ? $tax_amount : 0.0;
+		$vorsteuer = $is_vorsteuer_side ? $tax_amount : 0.0;
 
 		$einnahmen = $is_income_side ? $total : 0.0;
 		$ausgaben = $is_expense_side ? $total : 0.0;
@@ -614,8 +676,8 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 							$partial_ausgaben = $is_expense_side ? $total : 0.0;
 							$partial_ratio = $total > 0.0 ? ($partial_amount / $total) : 0.0;
 							$partial_tax_amount = max(0.0, (float) $tax_amount * (float) $partial_ratio);
-							$partial_mwst = ($richtung === 'ausgang') ? $partial_tax_amount : 0.0;
-							$partial_vorsteuer = ($richtung === 'eingang') ? $partial_tax_amount : 0.0;
+							$partial_mwst = $is_income_side ? $partial_tax_amount : 0.0;
+							$partial_vorsteuer = $is_expense_side ? $partial_tax_amount : 0.0;
 
 							$partial_row = [
 								$belegnr,
