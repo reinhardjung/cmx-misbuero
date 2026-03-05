@@ -730,6 +730,20 @@ function cmxbu_belege_export_zip_copy_delete_for_current_user(bool $delete_file 
 	\delete_user_meta((int) $user->ID, $meta_key);
 }
 
+function cmxbu_belege_export_normalize_trustee_label(string $label): string {
+	$label = \trim($label);
+	if ($label === '') {
+		return '';
+	}
+
+	$label = \html_entity_decode($label, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+	$label = \wp_strip_all_tags($label);
+	$label = \str_replace(["\u{00A0}", '–', '—', '−'], [' ', '-', '-', '-'], $label);
+	$label = \str_replace(['&#8211;', '&#8212;', '&ndash;', '&mdash;'], '-', $label);
+	$label = (string) \preg_replace('/\s+/u', ' ', $label);
+	return \trim($label);
+}
+
 function cmxbu_belege_export_trustee_contacts(): array {
 	$taxes = [];
 	if (\function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {
@@ -802,11 +816,11 @@ function cmxbu_belege_export_trustee_contacts(): array {
 			continue;
 		}
 
-		$label = \trim((string) \get_the_title($post_id));
+		$label = cmxbu_belege_export_normalize_trustee_label((string) \get_the_title($post_id));
 		if ($label === '') {
 			$vorname = \trim((string) \get_post_meta($post_id, '_cmx_kontakte_vorname', true));
 			$nachname = \trim((string) \get_post_meta($post_id, '_cmx_kontakte_nachname', true));
-			$label = \trim($vorname . ' ' . $nachname);
+			$label = cmxbu_belege_export_normalize_trustee_label(\trim($vorname . ' ' . $nachname));
 		}
 		if ($label === '') {
 			$label = 'Kontakt #' . $post_id;
@@ -847,7 +861,7 @@ function cmxbu_belege_export_trustee_options_html(array $contacts, int $selected
 		if ($id <= 0) {
 			continue;
 		}
-		$label = \trim((string) ($contact['label'] ?? ''));
+		$label = cmxbu_belege_export_normalize_trustee_label((string) ($contact['label'] ?? ''));
 		$email = \sanitize_email((string) ($contact['email'] ?? ''));
 		if ($label === '') {
 			$label = 'Kontakt #' . $id;
@@ -1144,7 +1158,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, 0);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
-		<h2>Belege Export als Milchbüchli</h2>
+		<h2>Belegexport als Milchbüchli</h2>
 		<p>Wähle <code>Datum von</code> und <code>Datum bis</code>. Erst danach kann das Milchbüchli exportiert werden.</p>
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
@@ -1617,6 +1631,9 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 					if (!id) continue;
 					var label = String(row.label || '').trim();
 					var email = String(row.email || '').trim();
+					label = label
+						.replace(/&#8211;|&#8212;|&ndash;|&mdash;/gi, '-')
+						.replace(/[–—−]/g, '-');
 					if (!label) label = 'Kontakt #' + id;
 					var text = label + (email ? ' (' + email + ')' : '');
 					html += '<option value="' + escAttr(String(id)) + '">' + escText(text) + '</option>';
