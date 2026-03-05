@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-02-16T19:22:38+00:00",
+    "exported_at": "2026-03-05T01:30:55+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -17,6 +17,9 @@
         "closedpostboxes_dokumente": [],
         "closedpostboxes_kontakte": [],
         "closedpostboxes_projekte": [],
+        "closedpostboxes_scanner": [
+            "cmx_scanner_rel_artikel"
+        ],
         "meta-box-order_artikel": {
             "side": "cmx_savebox,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_farbe_side,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_zu_projekt,cmx_dokumente_box",
             "normal": "cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_artikel_belegtext,cmx_internenotizen_central",
@@ -34,7 +37,7 @@
             false
         ],
         "meta-box-order_belege": {
-            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box,cmxbu_logfile_box",
+            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box",
             "normal": "cmx_beleg_details,cmx_beleg_positionen,cmx_internenotizen_central",
             "advanced": ""
         },
@@ -86,6 +89,13 @@
         ],
         "metaboxhidden_kontakte": [],
         "metaboxhidden_projekte": [],
+        "metaboxhidden_scanner": [
+            "cmx_scanner_rel_kontakte",
+            "cmx_scanner_rel_dokumente",
+            "cmx_scanner_rel_projekte",
+            "cmx_scanner_rel_belege",
+            "slugdiv"
+        ],
         "screen_layout_artikel": "2",
         "screen_layout_ausgaben": "2",
         "screen_layout_belege": "2",
