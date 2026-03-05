@@ -445,7 +445,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_upload_entries
 				if ($base_name === '') {
 					$base_name = 'upload';
 				}
-				$zip_path = cmxbu_belege_zip_unique_path('uploads/' . $base_name, $used_zip_paths);
+				$zip_path = cmxbu_belege_zip_unique_path('Belege/' . $base_name, $used_zip_paths);
 				$entries[] = [
 					'abs' => $abs_path,
 					'zip' => $zip_path,
@@ -493,7 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_beleg_pdf_entr
 			if ($base_name === '') {
 				$base_name = 'beleg-' . $post_id . '.pdf';
 			}
-			$zip_path = cmxbu_belege_zip_unique_path('belege/' . $base_name, $used_zip_paths);
+			$zip_path = cmxbu_belege_zip_unique_path('Rechnungen/' . $base_name, $used_zip_paths);
 			$entries[] = [
 				'abs' => $pdf_abs,
 				'zip' => $zip_path,
@@ -504,11 +504,345 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_beleg_pdf_entr
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_int_list')) {
+	function cmxbu_belege_zip_int_list($value): array {
+		$out = [];
+		$queue = [$value];
+
+		while (!empty($queue)) {
+			$item = \array_shift($queue);
+			if (\is_array($item)) {
+				foreach ($item as $sub) {
+					$queue[] = $sub;
+				}
+				continue;
+			}
+			if (\is_numeric($item)) {
+				$id = (int) $item;
+				if ($id > 0) {
+					$out[$id] = true;
+				}
+				continue;
+			}
+			if (!\is_string($item)) {
+				continue;
+			}
+
+			$txt = \trim($item);
+			if ($txt === '') {
+				continue;
+			}
+			if (\preg_match('/^\d+(?:\s*,\s*\d+)+$/', $txt)) {
+				foreach (\explode(',', $txt) as $part) {
+					$id = (int) \trim($part);
+					if ($id > 0) {
+						$out[$id] = true;
+					}
+				}
+				continue;
+			}
+			if (\preg_match('/^\d+$/', $txt)) {
+				$id = (int) $txt;
+				if ($id > 0) {
+					$out[$id] = true;
+				}
+				continue;
+			}
+
+			$decoded = \json_decode($txt, true);
+			if (\json_last_error() === JSON_ERROR_NONE && (\is_array($decoded) || \is_numeric($decoded) || \is_string($decoded))) {
+				$queue[] = $decoded;
+				continue;
+			}
+
+			$maybe = @\maybe_unserialize($txt);
+			if (\is_array($maybe) || \is_numeric($maybe) || \is_string($maybe)) {
+				$queue[] = $maybe;
+			}
+		}
+
+		return \array_map('intval', \array_keys($out));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_positionen_rows')) {
+	function cmxbu_belege_zip_positionen_rows(int $beleg_id): array {
+		if ($beleg_id <= 0) {
+			return [];
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_positionen_meta_array')) {
+			return (array) cmx_beleg_positionen_meta_array($beleg_id);
+		}
+
+		$raw = \get_post_meta($beleg_id, '_cmx_beleg_positionen', true);
+		if (\is_array($raw)) {
+			return $raw;
+		}
+		if (\is_string($raw) && $raw !== '') {
+			$tmp = \json_decode($raw, true);
+			if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+				return $tmp;
+			}
+			$tmp = @\maybe_unserialize($raw);
+			if (\is_array($tmp)) {
+				return $tmp;
+			}
+		}
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_related_entity_ids')) {
+	function cmxbu_belege_zip_related_entity_ids(array $beleg_ids): array {
+		$kontakt_ids = [];
+		$artikel_ids = [];
+
+		$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			: '_cmx_beleg_kontakt_id';
+
+		foreach ($beleg_ids as $raw_beleg_id) {
+			$beleg_id = (int) $raw_beleg_id;
+			if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+				continue;
+			}
+
+			$kontakt_id = (int) \get_post_meta($beleg_id, $kontakt_meta_key, true);
+			if ($kontakt_id <= 0 && $kontakt_meta_key !== '_cmx_beleg_kontakt_id') {
+				$kontakt_id = (int) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_id', true);
+			}
+			if ($kontakt_id > 0) {
+				$kontakt_ids[$kontakt_id] = true;
+			}
+
+			$rows = cmxbu_belege_zip_positionen_rows($beleg_id);
+			foreach ($rows as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$artikel_id = (int) ($row['artikel_id'] ?? 0);
+				if ($artikel_id > 0) {
+					$artikel_ids[$artikel_id] = true;
+				}
+			}
+		}
+
+		return [
+			'kontakte' => \array_map('intval', \array_keys($kontakt_ids)),
+			'artikel' => \array_map('intval', \array_keys($artikel_ids)),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_doc_ids_from_posts')) {
+	function cmxbu_belege_zip_doc_ids_from_posts(array $post_ids): array {
+		$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			: '_cmx_dokumente_uploads';
+
+		$doc_ids = [];
+		foreach ($post_ids as $raw_post_id) {
+			$post_id = (int) $raw_post_id;
+			if ($post_id <= 0) {
+				continue;
+			}
+			$meta_val = \get_post_meta($post_id, $uploads_meta_key, true);
+			foreach (cmxbu_belege_zip_int_list($meta_val) as $doc_id) {
+				if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+					continue;
+				}
+				$doc_ids[$doc_id] = true;
+			}
+		}
+
+		return \array_map('intval', \array_keys($doc_ids));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_doc_ids_from_relation_meta')) {
+	function cmxbu_belege_zip_doc_ids_from_relation_meta(string $meta_key, array $related_ids): array {
+		$meta_key = \trim($meta_key);
+		$related_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $related_ids))));
+		if ($meta_key === '' || empty($related_ids)) {
+			return [];
+		}
+
+		$candidate_doc_ids = \get_posts([
+			'post_type' => 'dokumente',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'fields' => 'ids',
+			'posts_per_page' => -1,
+			'no_found_rows' => true,
+			'suppress_filters' => true,
+			'meta_query' => [
+				[
+					'key' => $meta_key,
+					'compare' => 'EXISTS',
+				],
+			],
+		]);
+
+		if (empty($candidate_doc_ids)) {
+			return [];
+		}
+
+		$lookup = [];
+		foreach ($related_ids as $rid) {
+			if ($rid > 0) {
+				$lookup[$rid] = true;
+			}
+		}
+
+		$matched = [];
+		foreach ((array) $candidate_doc_ids as $raw_doc_id) {
+			$doc_id = (int) $raw_doc_id;
+			if ($doc_id <= 0) {
+				continue;
+			}
+			$rel_ids = cmxbu_belege_zip_int_list(\get_post_meta($doc_id, $meta_key, true));
+			foreach ($rel_ids as $rid) {
+				if (isset($lookup[(int) $rid])) {
+					$matched[$doc_id] = true;
+					break;
+				}
+			}
+		}
+
+		return \array_map('intval', \array_keys($matched));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_abs_upload_path_from_rel')) {
+	function cmxbu_belege_zip_abs_upload_path_from_rel(string $file_rel): string {
+		$file_rel = \ltrim(\str_replace('\\', '/', $file_rel), '/');
+		if ($file_rel === '') {
+			return '';
+		}
+
+		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+		$abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel));
+		if ($abs === '' || !\str_starts_with($abs, $uploads_root) || !\is_file($abs)) {
+			return '';
+		}
+		return $abs;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_doc_abs_paths_from_doc_id')) {
+	function cmxbu_belege_zip_doc_abs_paths_from_doc_id(int $doc_id): array {
+		if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+			return [];
+		}
+
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+
+		$abs_paths = [];
+		$seen = [];
+
+		$primary_rel = (string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true);
+		$primary_abs = cmxbu_belege_zip_abs_upload_path_from_rel($primary_rel);
+		if ($primary_abs !== '') {
+			$norm = \wp_normalize_path($primary_abs);
+			$seen[$norm] = true;
+			$abs_paths[] = $primary_abs;
+		}
+
+		$self_files = (array) \get_post_meta($doc_id, $self_meta_key, true);
+		foreach ($self_files as $entry) {
+			$file_rel = '';
+			if (\is_numeric($entry)) {
+				$file_rel = (string) \get_post_meta((int) $entry, '_wp_attached_file', true);
+			} elseif (\is_string($entry)) {
+				$file_rel = $entry;
+			}
+			$abs = cmxbu_belege_zip_abs_upload_path_from_rel((string) $file_rel);
+			if ($abs === '') {
+				continue;
+			}
+			$norm = \wp_normalize_path($abs);
+			if (isset($seen[$norm])) {
+				continue;
+			}
+			$seen[$norm] = true;
+			$abs_paths[] = $abs;
+		}
+
+		return $abs_paths;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_collect_dokumente_entries')) {
+	function cmxbu_belege_zip_collect_dokumente_entries(array $beleg_ids): array {
+		$entries = [];
+		$used_zip_paths = [];
+		$seen_abs = [];
+		$doc_ids = [];
+
+		$beleg_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $beleg_ids))));
+		$related = cmxbu_belege_zip_related_entity_ids($beleg_ids);
+		$kontakt_ids = (array) ($related['kontakte'] ?? []);
+		$artikel_ids = (array) ($related['artikel'] ?? []);
+
+		foreach (cmxbu_belege_zip_doc_ids_from_posts($beleg_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+		foreach (cmxbu_belege_zip_doc_ids_from_posts($kontakt_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+		foreach (cmxbu_belege_zip_doc_ids_from_posts($artikel_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+
+		$rel_map = \defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')
+			? (array) \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META')
+			: [];
+		$rel_belege = (string) ($rel_map['belege'] ?? 'cmx_dokumente_belege');
+		$rel_kontakte = (string) ($rel_map['kontakte'] ?? 'cmx_dokumente_kunden');
+		$rel_artikel = (string) ($rel_map['artikel'] ?? 'cmx_dokumente_artikel');
+
+		foreach (cmxbu_belege_zip_doc_ids_from_relation_meta($rel_belege, $beleg_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+		foreach (cmxbu_belege_zip_doc_ids_from_relation_meta($rel_kontakte, $kontakt_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+		foreach (cmxbu_belege_zip_doc_ids_from_relation_meta($rel_artikel, $artikel_ids) as $doc_id) {
+			$doc_ids[(int) $doc_id] = true;
+		}
+
+		foreach (\array_keys($doc_ids) as $raw_doc_id) {
+			$doc_id = (int) $raw_doc_id;
+			if ($doc_id <= 0) {
+				continue;
+			}
+			$paths = cmxbu_belege_zip_doc_abs_paths_from_doc_id($doc_id);
+			foreach ($paths as $abs_path) {
+				$abs_norm = \wp_normalize_path((string) $abs_path);
+				if ($abs_norm === '' || isset($seen_abs[$abs_norm])) {
+					continue;
+				}
+				$seen_abs[$abs_norm] = true;
+
+				$base_name = \sanitize_file_name((string) \basename((string) $abs_path));
+				if ($base_name === '') {
+					$base_name = 'dokument-' . $doc_id;
+				}
+				$zip_path = cmxbu_belege_zip_unique_path('dokumente/' . $base_name, $used_zip_paths);
+				$entries[] = [
+					'abs' => (string) $abs_path,
+					'zip' => $zip_path,
+				];
+			}
+		}
+
+		return $entries;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 	function cmxbu_belege_zip_download_filename(): string {
-		$base = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_filename')
-			? (string) cmxbu_belege_export_filename('zip')
-			: 'belege-export.zip';
 		$user_name = '';
 		$user = \wp_get_current_user();
 		if ($user instanceof \WP_User && $user->exists()) {
@@ -519,9 +853,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 		}
 		$user_name = \sanitize_file_name($user_name);
 		if ($user_name === '') {
-			return $base;
+			$user_name = 'user';
 		}
-		return $user_name . '_' . $base;
+
+		$range_stamp = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_range_stamp')
+			? (string) cmxbu_belege_export_range_stamp()
+			: '';
+		$range_stamp = \sanitize_file_name($range_stamp);
+		if ($range_stamp === '') {
+			$range_stamp = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_now_stamp')
+				? (string) cmxbu_belege_export_now_stamp()
+				: (string) \date('Ymd-His');
+			$range_stamp = \sanitize_file_name($range_stamp);
+		}
+
+		return $user_name . '_misbuero_' . $range_stamp . '.ZIP';
 	}
 }
 
@@ -541,6 +887,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 	$pdf_binary = cmxbu_belege_export_pdf_binary_from_ids($post_ids);
 	$beleg_pdf_entries = cmxbu_belege_zip_collect_beleg_pdf_entries($post_ids);
 	$upload_entries = cmxbu_belege_zip_collect_upload_entries($post_ids);
+	$dokumente_entries = cmxbu_belege_zip_collect_dokumente_entries($post_ids);
 
 	$tmp_zip = \wp_tempnam('cmx-belege-export-zip');
 	if (!\is_string($tmp_zip) || $tmp_zip === '') {
@@ -553,7 +900,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 		\wp_die('ZIP-Datei konnte nicht geöffnet werden.');
 	}
 
-	$zip->addFromString(cmxbu_belege_export_filename('csv'), $csv_content);
+	$zip->addEmptyDir('Rechnungen');
+	$zip->addEmptyDir('Belege');
+	$zip->addEmptyDir('Bank');
+	$zip->addEmptyDir('export');
+	$zip->addEmptyDir('dokumente');
+
+	$zip->addFromString('export/' . cmxbu_belege_export_filename('csv'), $csv_content);
 	$zip->addFromString(cmxbu_belege_export_filename('pdf'), $pdf_binary);
 
 	foreach ($beleg_pdf_entries as $entry) {
@@ -566,6 +919,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 	}
 
 	foreach ($upload_entries as $entry) {
+		$abs = (string) ($entry['abs'] ?? '');
+		$zip_path = (string) ($entry['zip'] ?? '');
+		if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
+			continue;
+		}
+		$zip->addFile($abs, $zip_path);
+	}
+
+	foreach ($dokumente_entries as $entry) {
 		$abs = (string) ($entry['abs'] ?? '');
 		$zip_path = (string) ($entry['zip'] ?? '');
 		if ($abs === '' || $zip_path === '' || !\is_file($abs)) {

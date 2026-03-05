@@ -624,7 +624,14 @@ function cmxbu_belege_export_filename(string $ext): string {
 	$ext = strtolower(trim($ext, ". \t\n\r\0\x0B"));
 	if ($ext === '') $ext = 'dat';
 	$prefix = cmxbu_belege_export_site_prefix();
-	$base = $prefix . '-belege-' . cmxbu_belege_export_range_stamp();
+	$range = cmxbu_belege_export_range_stamp();
+	if ($ext === 'pdf') {
+		$base = $prefix . '-milchbuechli-' . $range;
+	} elseif ($ext === 'csv') {
+		$base = $prefix . '-' . $range;
+	} else {
+		$base = $prefix . '-belege-' . $range;
+	}
 	return $base . '.' . $ext;
 }
 
