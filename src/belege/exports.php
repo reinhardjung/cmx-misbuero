@@ -830,6 +830,8 @@ function cmxbu_belege_export_trustee_contacts(): array {
 			'id' => $post_id,
 			'label' => $label,
 			'email' => $email,
+			'created_ts' => (int) (\strtotime((string) $post->post_date_gmt) ?: \strtotime((string) $post->post_date) ?: 0),
+			'modified_ts' => (int) (\strtotime((string) $post->post_modified_gmt) ?: \strtotime((string) $post->post_modified) ?: 0),
 		];
 	}
 
@@ -848,6 +850,44 @@ function cmxbu_belege_export_trustee_contacts(): array {
 	});
 
 	return $items;
+}
+
+function cmxbu_belege_export_trustee_default_id(array $contacts): int {
+	$best_id = 0;
+	$best_modified_ts = 0;
+	$best_created_ts = 0;
+
+	foreach ($contacts as $contact) {
+		$id = (int) ($contact['id'] ?? 0);
+		if ($id <= 0) {
+			continue;
+		}
+		$created_ts = (int) ($contact['created_ts'] ?? 0);
+		$modified_ts = (int) ($contact['modified_ts'] ?? 0);
+
+		if (
+			$modified_ts > $best_modified_ts
+			|| ($modified_ts === $best_modified_ts && $created_ts > $best_created_ts)
+			|| ($modified_ts === $best_modified_ts && $created_ts === $best_created_ts && $id > $best_id)
+		) {
+			$best_id = $id;
+			$best_modified_ts = $modified_ts;
+			$best_created_ts = $created_ts;
+		}
+	}
+
+	if ($best_id > 0) {
+		return $best_id;
+	}
+
+	foreach ($contacts as $contact) {
+		$id = (int) ($contact['id'] ?? 0);
+		if ($id > 0) {
+			return $id;
+		}
+	}
+
+	return 0;
 }
 
 function cmxbu_belege_export_trustee_options_html(array $contacts, int $selected_id = 0): string {
@@ -990,12 +1030,15 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 		\wp_send_json_error(['message' => 'Ungültige Anfrage.'], 403);
 	}
 
+	$trustees = cmxbu_belege_export_trustee_contacts();
 	$kontakt_id = isset($_REQUEST['kontakt_id']) ? (int) $_REQUEST['kontakt_id'] : 0;
 	if ($kontakt_id <= 0) {
-		\wp_send_json_error(['message' => 'Bitte zuerst einen Treuhänder auswählen.'], 400);
+		$kontakt_id = cmxbu_belege_export_trustee_default_id($trustees);
+		if ($kontakt_id <= 0) {
+			\wp_send_json_error(['message' => 'Bitte zuerst einen Treuhänder auswählen.'], 400);
+		}
 	}
 
-	$trustees = cmxbu_belege_export_trustee_contacts();
 	$recipient = null;
 	foreach ($trustees as $entry) {
 		if ((int) ($entry['id'] ?? 0) === $kontakt_id) {
@@ -1106,6 +1149,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$delete_nonce = (string) \wp_create_nonce('cmx_export_belege_zip_copy_delete');
 	$send_nonce = (string) \wp_create_nonce('cmx_export_belege_zip_share_send');
 	$trustees = cmxbu_belege_export_trustee_contacts();
+	$default_trustee_id = cmxbu_belege_export_trustee_default_id($trustees);
 
 	\wp_send_json_success([
 		'share_url' => $share_url,
@@ -1113,6 +1157,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 		'delete_nonce' => $delete_nonce,
 		'send_nonce' => $send_nonce,
 		'trustees' => $trustees,
+		'default_trustee_id' => $default_trustee_id,
 		'download_url' => $share_url,
 		'noise' => ($build_noise !== '' || $store_noise !== ''),
 	]);
@@ -1155,7 +1200,8 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$zip_delete_nonce = ($zip_share_url !== '') ? (string) \wp_create_nonce('cmx_export_belege_zip_copy_delete') : '';
 	$zip_send_nonce = ($zip_share_url !== '') ? (string) \wp_create_nonce('cmx_export_belege_zip_share_send') : '';
 	$zip_trustees = cmxbu_belege_export_trustee_contacts();
-	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, 0);
+	$zip_trustee_selected_id = cmxbu_belege_export_trustee_default_id($zip_trustees);
+	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, $zip_trustee_selected_id);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Belegexport als Milchbüchli</h2>
@@ -1240,6 +1286,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 				var zipRequestActive = false;
 				var initialTrustees = <?php echo \wp_json_encode(\array_values($zip_trustees)); ?>;
 				var initialSendNonce = <?php echo \wp_json_encode((string) $zip_send_nonce); ?>;
+				var initialSelectedTrusteeId = <?php echo \wp_json_encode((int) $zip_trustee_selected_id); ?>;
 
 		function pad2(n){ return (n < 10 ? '0' : '') + n; }
 		function ymd(date){
@@ -1615,11 +1662,21 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 					.replace(/</g, '&lt;')
 					.replace(/>/g, '&gt;');
 			}
-			function buildTrusteeOptions(list){
+			function buildTrusteeOptions(list, selectedId){
 				var html = '<option value="">Treuhänder auswählen</option>';
 				if (!Array.isArray(list) || list.length === 0) {
 					html += '<option value="" disabled>Keine Treuhänder gefunden</option>';
 					return html;
+				}
+				var chosenId = parseInt(selectedId || 0, 10);
+				if (!chosenId) {
+					for (var d = 0; d < list.length; d++) {
+						var did = parseInt((list[d] && list[d].id) ? list[d].id : 0, 10);
+						if (did) {
+							chosenId = did;
+							break;
+						}
+					}
 				}
 				for (var i = 0; i < list.length; i++) {
 					var row = list[i] || {};
@@ -1632,7 +1689,8 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 						.replace(/[–—−]/g, '-');
 					if (!label) label = 'Kontakt #' + id;
 					var text = label + (email ? ' (' + email + ')' : '');
-					html += '<option value="' + escAttr(String(id)) + '">' + escText(text) + '</option>';
+					var selectedAttr = (chosenId && id === chosenId) ? ' selected' : '';
+					html += '<option value="' + escAttr(String(id)) + '"' + selectedAttr + '>' + escText(text) + '</option>';
 				}
 				return html;
 			}
@@ -1647,8 +1705,16 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 					recipient.style.minWidth = '260px';
 					recipient.style.maxWidth = '100%';
 					recipient.style.display = 'inline-block';
-					recipient.innerHTML = buildTrusteeOptions(initialTrustees);
+					recipient.innerHTML = buildTrusteeOptions(initialTrustees, initialSelectedTrusteeId);
 					share.insertBefore(recipient, share.firstChild);
+				}
+				if (!recipient.value) {
+					for (var oi = 0; oi < recipient.options.length; oi++) {
+						if (recipient.options[oi].value) {
+							recipient.value = recipient.options[oi].value;
+							break;
+						}
+					}
 				}
 
 				var sendBtn = document.getElementById('cmx-export-zip-share-send');
@@ -1677,13 +1743,15 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 
 					var shareUrl = String((data && data.share_url) ? data.share_url : '').trim();
 					if (!shareUrl) return;
-				var deleteUrl = String((data && data.delete_url) ? data.delete_url : '').trim();
-				var deleteNonce = String((data && data.delete_nonce) ? data.delete_nonce : '').trim();
-				var sendNonce = String((data && data.send_nonce) ? data.send_nonce : '').trim();
-				var trustees = (data && Array.isArray(data.trustees)) ? data.trustees : [];
-				initialTrustees = trustees;
-				initialSendNonce = sendNonce;
-				var optionsHtml = buildTrusteeOptions(trustees);
+					var deleteUrl = String((data && data.delete_url) ? data.delete_url : '').trim();
+					var deleteNonce = String((data && data.delete_nonce) ? data.delete_nonce : '').trim();
+					var sendNonce = String((data && data.send_nonce) ? data.send_nonce : '').trim();
+					var trustees = (data && Array.isArray(data.trustees)) ? data.trustees : [];
+					var defaultTrusteeId = parseInt((data && data.default_trustee_id) ? data.default_trustee_id : 0, 10) || 0;
+					initialTrustees = trustees;
+					initialSendNonce = sendNonce;
+					initialSelectedTrusteeId = defaultTrusteeId;
+					var optionsHtml = buildTrusteeOptions(trustees, defaultTrusteeId);
 
 					shell.innerHTML =
 						'<div id="cmx-export-zip-share" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
