@@ -1256,19 +1256,19 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 							</button>
 							<input type="text" id="cmx-export-zip-share-link" readonly value="<?php echo \esc_attr($zip_share_url); ?>" style="min-width:460px;max-width:100%;width:58ch;">
 							<button type="button" id="cmx-export-zip-share-copy" class="button button-secondary" title="Link kopieren">
-								<span class="dashicons dashicons-clipboard" style="margin-top:3px;"></span>
+								<span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span>
 							</button>
-						<button
-							type="button"
-							id="cmx-export-zip-share-delete"
-							class="button button-link-delete"
-							title="ZIP-Link löschen"
-							data-delete-url="<?php echo \esc_attr($zip_delete_url); ?>"
-							data-delete-nonce="<?php echo \esc_attr($zip_delete_nonce); ?>"
-						>
-							<span class="dashicons dashicons-trash"></span>
-						</button>
-					</div>
+							<button
+								type="button"
+								id="cmx-export-zip-share-delete"
+								class="button button-link-delete"
+								title="ZIP-Link löschen"
+								data-delete-url="<?php echo \esc_attr($zip_delete_url); ?>"
+								data-delete-nonce="<?php echo \esc_attr($zip_delete_nonce); ?>"
+							>
+								<span class="dashicons dashicons-trash" style="margin-top:4px;"></span>
+							</button>
+						</div>
 					<p id="cmx-export-zip-share-status" class="description" style="margin-top:6px;">Der ZIP-Link wird automatisch in die Zwischenablage kopiert.</p>
 				<?php endif; ?>
 			</div>
@@ -1764,10 +1764,10 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 						+ '</button>'
 						+ '<input type="text" id="cmx-export-zip-share-link" readonly value="' + escAttr(shareUrl) + '" style="min-width:460px;max-width:100%;width:58ch;">'
 						+ '<button type="button" id="cmx-export-zip-share-copy" class="button button-secondary" title="Link kopieren">'
-						+ '<span class="dashicons dashicons-clipboard" style="margin-top:3px;"></span>'
+						+ '<span class="dashicons dashicons-clipboard" style="margin-top:4px;"></span>'
 						+ '</button>'
 						+ '<button type="button" id="cmx-export-zip-share-delete" class="button button-link-delete" title="ZIP-Link löschen" data-delete-url="' + escAttr(deleteUrl) + '" data-delete-nonce="' + escAttr(deleteNonce) + '">'
-					+ '<span class="dashicons dashicons-trash"></span>'
+					+ '<span class="dashicons dashicons-trash" style="margin-top:4px;"></span>'
 					+ '</button>'
 					+ '</div>'
 						+ '<p id="cmx-export-zip-share-status" class="description" style="margin-top:6px;">Der ZIP-Link wird automatisch in die Zwischenablage kopiert.</p>';
