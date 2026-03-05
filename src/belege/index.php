@@ -172,6 +172,48 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 // Hinweis: Reihenfolge wird über "Save box position" gespeichert.
 
+\add_action('all_admin_notices', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen) {
+		return;
+	}
+
+	$post_type = basename(__DIR__);
+	$screen_post_type = (string) ($screen->post_type ?? '');
+	$screen_id = (string) ($screen->id ?? '');
+	$get_post_type = isset($_GET['post_type']) ? \sanitize_key((string) \wp_unslash($_GET['post_type'])) : '';
+	$is_belege_screen = (
+		$screen_post_type === $post_type
+		|| $get_post_type === $post_type
+		|| \strpos($screen_id, $post_type) !== false
+	);
+	if (!$is_belege_screen) {
+		return;
+	}
+
+	$has_standard_bank = false;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_get_active_bank')) {
+		$active_bank = cmx_get_active_bank();
+		$has_standard_bank = \is_array($active_bank) && !empty($active_bank['key']);
+	}
+	if (!$has_standard_bank) {
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+		foreach (['rev_enabled', 'zkb_enabled', 'ubs_enabled', 'migros_enabled', 'eisen_enabled'] as $bank_key) {
+			if (!empty($options[$bank_key])) {
+				$has_standard_bank = true;
+				break;
+			}
+		}
+	}
+	if ($has_standard_bank) {
+		return;
+	}
+
+	$new_bank_url = \admin_url('admin.php?page=cmx-einstellungen&tab=banken');
+	echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte wähle Deine <strong>Hausbank</strong> in den Einstellungen aus, gebe alle Daten an <strong>und</strong> markiere sie als Standardbank. <a href="' . \esc_url($new_bank_url) . '" class="button button-secondary" style="margin-left:8px;">Hausbank auswählen</a></p></div>';
+});
+
 
 // Define: Const 4 @ll CPT Fields
 // cmx_define_meta_constants(basename(__DIR__), ['umsatz']);
