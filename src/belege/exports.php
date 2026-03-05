@@ -1205,7 +1205,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Belege und Milchbüechli exportieren</h2>
-		<p><code>ZIP</code> exportiert Milchbüechli, Belege und zugeordnete Dokumente und erstellt einen Link zum Teilen mit Ihrem Treuhänder.</p>
+		<code>ZIP</code> exportiert Milchbüechli, Belege und zugeordnete Dokumente und erstellt einen Link zum Teilen mit Ihrem Treuhänder. <code>PDF</code> und <code>CSV</code> exportieren nur das Milchbüechli.</p>
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
 		<?php endif; ?>
