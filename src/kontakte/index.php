@@ -159,7 +159,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 			],
 			\admin_url('post-new.php')
 		);
-		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Typ/Kategorie <strong>Das bin ich</strong> anlegen. Dieser Kontakt muss zwingend eine gültige <strong>E-Mail 1</strong> hinterlegt haben. <a href="' . \esc_url($new_self_url) . '" class="button button-secondary" style="margin-left:8px;">„Das bin ich“-Kontakt anlegen</a></p></div>';
+		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Kategorie <strong>Das bin ich</strong> anlegen. Dein eigener Kontakt muss komplett ausgefüllt werden. Inkl. E-Mail, Adresse und Firmenlogo etc. <a href="' . \esc_url($new_self_url) . '" class="button button-secondary" style="margin-left:8px;">„Das bin ich“-Kontakt anlegen</a></p></div>';
 	}
 
 	if ($needs_trustee) {
@@ -170,7 +170,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 			],
 			\admin_url('post-new.php')
 		);
-		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Typ/Kategorie <strong>Treuhänder</strong> anlegen. Der Treuhänder muss zwingend eine gültige <strong>E-Mail 1</strong> hinterlegt haben. <a href="' . \esc_url($new_trustee_url) . '" class="button button-secondary" style="margin-left:8px;">Treuhänder-Kontakt anlegen</a></p></div>';
+		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Kategorie <strong>Treuhänder</strong> anlegen. Der Treuhänder muss zwingend eine gültige <strong>E-Mail 1</strong> hinterlegt haben. <a href="' . \esc_url($new_trustee_url) . '" class="button button-secondary" style="margin-left:8px;">Treuhänder-Kontakt anlegen</a></p></div>';
 	}
 });
 

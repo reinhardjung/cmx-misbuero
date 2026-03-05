@@ -49,6 +49,35 @@ add_action('admin_menu', function() {
 	);
 });
 
+add_action('all_admin_notices', function (): void {
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page !== CMX_SETTINGS_SLUG) {
+		return;
+	}
+
+	$has_standard_bank = false;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_get_active_bank')) {
+		$active_bank = cmx_get_active_bank();
+		$has_standard_bank = \is_array($active_bank) && !empty($active_bank['key']);
+	}
+	if (!$has_standard_bank) {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		foreach (['rev_enabled', 'zkb_enabled', 'ubs_enabled', 'migros_enabled', 'eisen_enabled'] as $bank_key) {
+			if (!empty($options[$bank_key])) {
+				$has_standard_bank = true;
+				break;
+			}
+		}
+	}
+	if ($has_standard_bank) {
+		return;
+	}
+
+	$new_bank_url = \admin_url('admin.php?page=cmx-einstellungen&tab=banken');
+
+	echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte wähle Deine <strong>Hausbank</strong> in den Einstellungen aus, gebe alle Daten an <strong>und</strong> markiere sie als Standardbank. <a href="' . \esc_url($new_bank_url) . '" class="button button-secondary" style="margin-left:8px;">Hausbank auswählen</a></p></div>';
+});
+
 /* ------------------------------------------------------------
  * TAB-LISTEN
  * ------------------------------------------------------------ */
@@ -228,7 +257,7 @@ function cmx_render_settings_page(): void {
 }
 
 /* ------------------------------------------------------------
- * SANITIZER: IMMER GENAU 1 BANK
+ * SANITIZER: MAXIMAL 1 BANK
  * ------------------------------------------------------------ */
 add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 	$new = \is_array($new) ? $new : [];
@@ -278,12 +307,8 @@ add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 		}
 	}
 
-	/* Keine aktiv → erste aktivieren */
+	/* Keine aktiv → bewusst keine Standardbank setzen */
 	if (count($active) === 0) {
-		$first = $bank_keys[0];
-		foreach ($bank_keys as $k) {
-			$new[$k] = ($k === $first) ? 1 : 0;
-		}
 		return $new;
 	}
 
