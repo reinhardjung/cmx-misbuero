@@ -294,6 +294,816 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 	return false;
 }
 
+function cmxbu_belege_export_zip_copy_meta_key(): string {
+	return '_cmx_belege_export_zip_copy';
+}
+
+function cmxbu_belege_export_zip_copy_token_option_key(string $token): string {
+	return 'cmx_belege_zip_token_data_' . $token;
+}
+
+function cmxbu_belege_export_zip_copy_sanitize_token(string $token): string {
+	$token = \trim($token);
+	if ($token === '') {
+		return '';
+	}
+	if (!\preg_match('/^[A-Za-z0-9]{16,64}$/', $token)) {
+		return '';
+	}
+	return $token;
+}
+
+function cmxbu_belege_export_zip_copy_generate_token(): string {
+	for ($i = 0; $i < 12; $i++) {
+		$token = cmxbu_belege_export_zip_copy_sanitize_token((string) \wp_generate_password(24, false, false));
+		if ($token === '') {
+			continue;
+		}
+		if (\get_option(cmxbu_belege_export_zip_copy_token_option_key($token), null) === null) {
+			return $token;
+		}
+	}
+
+	return '';
+}
+
+function cmxbu_belege_export_zip_copy_share_url_for_token(string $token): string {
+	$token = cmxbu_belege_export_zip_copy_sanitize_token($token);
+	if ($token === '') {
+		return '';
+	}
+
+	return \esc_url_raw((string) \add_query_arg('beleg_zip', $token, \home_url('/')));
+}
+
+function cmxbu_belege_export_zip_copy_token_data_get(string $token): array {
+	$token = cmxbu_belege_export_zip_copy_sanitize_token($token);
+	if ($token === '') {
+		return [];
+	}
+
+	$raw = \get_option(cmxbu_belege_export_zip_copy_token_option_key($token), null);
+	if (!\is_array($raw)) {
+		return [];
+	}
+
+	$rel = \ltrim(\str_replace('\\', '/', (string) ($raw['rel'] ?? '')), '/');
+	if ($rel === '' || !\str_starts_with($rel, 'misbuero/')) {
+		return [];
+	}
+
+	$file_name = \sanitize_file_name((string) ($raw['file_name'] ?? ''));
+	if ($file_name === '') {
+		$file_name = (string) \basename($rel);
+	}
+
+	return [
+		'token' => $token,
+		'rel' => $rel,
+		'file_name' => $file_name,
+		'created' => (int) ($raw['created'] ?? 0),
+		'user_id' => (int) ($raw['user_id'] ?? 0),
+	];
+}
+
+function cmxbu_belege_export_zip_copy_token_data_store(
+	string $token,
+	string $rel,
+	string $file_name,
+	int $created = 0,
+	int $user_id = 0
+): bool {
+	$token = cmxbu_belege_export_zip_copy_sanitize_token($token);
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($token === '' || $rel === '' || !\str_starts_with($rel, 'misbuero/')) {
+		return false;
+	}
+
+	$file_name = \sanitize_file_name($file_name);
+	if ($file_name === '') {
+		$file_name = (string) \basename($rel);
+	}
+
+	if ($created <= 0) {
+		$created = (int) \current_time('timestamp');
+	}
+
+	return (bool) \update_option(
+		cmxbu_belege_export_zip_copy_token_option_key($token),
+		[
+			'rel' => $rel,
+			'file_name' => $file_name,
+			'created' => $created,
+			'user_id' => $user_id,
+		],
+		false
+	);
+}
+
+function cmxbu_belege_export_zip_copy_token_data_delete(string $token): void {
+	$token = cmxbu_belege_export_zip_copy_sanitize_token($token);
+	if ($token === '') {
+		return;
+	}
+	\delete_option(cmxbu_belege_export_zip_copy_token_option_key($token));
+}
+
+function cmxbu_belege_export_zip_copy_ensure_token(string $rel, string $file_name, int $created = 0, int $user_id = 0, string $preferred = ''): string {
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '' || !\str_starts_with($rel, 'misbuero/')) {
+		return '';
+	}
+
+	$file_name = \sanitize_file_name($file_name);
+	if ($file_name === '') {
+		$file_name = (string) \basename($rel);
+	}
+	if ($created <= 0) {
+		$created = (int) \current_time('timestamp');
+	}
+
+	$preferred = cmxbu_belege_export_zip_copy_sanitize_token($preferred);
+	if ($preferred !== '') {
+		$existing = cmxbu_belege_export_zip_copy_token_data_get($preferred);
+		if ((string) ($existing['rel'] ?? '') === $rel) {
+			cmxbu_belege_export_zip_copy_token_data_store($preferred, $rel, $file_name, $created, $user_id);
+			return $preferred;
+		}
+	}
+
+	$token = cmxbu_belege_export_zip_copy_generate_token();
+	if ($token === '') {
+		return '';
+	}
+
+	if (!cmxbu_belege_export_zip_copy_token_data_store($token, $rel, $file_name, $created, $user_id)) {
+		return '';
+	}
+
+	return $token;
+}
+
+function cmxbu_belege_export_zip_copy_storage_year(): int {
+	$range = cmxbu_belege_export_requested_date_range();
+	$candidates = [
+		(string) ($range['to'] ?? ''),
+		(string) ($range['from'] ?? ''),
+	];
+	foreach ($candidates as $date_ymd) {
+		if (\preg_match('/^(\d{4})-\d{2}-\d{2}$/', $date_ymd, $m)) {
+			$y = (int) $m[1];
+			if ($y >= 1970 && $y <= 2100) {
+				return $y;
+			}
+		}
+	}
+
+	$now_year = (int) \wp_date('Y');
+	return ($now_year > 0) ? $now_year : (int) \date('Y');
+}
+
+function cmxbu_belege_export_zip_copy_upload_context(): array {
+	$uploads = \wp_get_upload_dir();
+	$basedir = \wp_normalize_path((string) ($uploads['basedir'] ?? ''));
+	$baseurl = (string) ($uploads['baseurl'] ?? '');
+	if ($basedir === '' || $baseurl === '') {
+		return [
+			'uploads_root' => '',
+			'uploads_url_root' => '',
+			'target_rel_dir' => '',
+			'target_dir' => '',
+		];
+	}
+
+	$uploads_root = \trailingslashit($basedir);
+	$uploads_url_root = \trailingslashit($baseurl);
+	$target_rel_dir = 'misbuero/archiv';
+	return [
+		'uploads_root' => $uploads_root,
+		'uploads_url_root' => $uploads_url_root,
+		'target_rel_dir' => $target_rel_dir,
+		'target_dir' => $uploads_root . $target_rel_dir,
+	];
+}
+
+function cmxbu_belege_export_zip_copy_rel_path_for_file(string $file_name): string {
+	$file_name = \sanitize_file_name($file_name);
+	if ($file_name === '') {
+		return '';
+	}
+	$ctx = cmxbu_belege_export_zip_copy_upload_context();
+	$target_rel_dir = \trim((string) ($ctx['target_rel_dir'] ?? ''), '/');
+	if ($target_rel_dir === '') {
+		return '';
+	}
+	return $target_rel_dir . '/' . $file_name;
+}
+
+function cmxbu_belege_export_zip_copy_rel_to_abs(string $rel): string {
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '') {
+		return '';
+	}
+	$ctx = cmxbu_belege_export_zip_copy_upload_context();
+	$uploads_root = (string) ($ctx['uploads_root'] ?? '');
+	if ($uploads_root === '') {
+		return '';
+	}
+	$abs = \wp_normalize_path($uploads_root . $rel);
+	if ($abs === '' || !\str_starts_with($abs, $uploads_root)) {
+		return '';
+	}
+	return $abs;
+}
+
+function cmxbu_belege_export_zip_copy_rel_to_url(string $rel): string {
+	$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+	if ($rel === '') {
+		return '';
+	}
+	$ctx = cmxbu_belege_export_zip_copy_upload_context();
+	$uploads_url_root = (string) ($ctx['uploads_url_root'] ?? '');
+	if ($uploads_url_root === '') {
+		return '';
+	}
+	$encoded = \str_replace('%2F', '/', \rawurlencode($rel));
+	return \esc_url_raw($uploads_url_root . $encoded);
+}
+
+function cmxbu_belege_export_zip_copy_fallback_current_range(): array {
+	if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
+		return [];
+	}
+
+	$file_name = \sanitize_file_name((string) cmxbu_belege_zip_download_filename());
+	if ($file_name === '') {
+		return [];
+	}
+	$rel = cmxbu_belege_export_zip_copy_rel_path_for_file($file_name);
+	if ($rel === '') {
+		return [];
+	}
+	$abs = cmxbu_belege_export_zip_copy_rel_to_abs($rel);
+	if ($abs === '' || !\is_file($abs)) {
+		return [];
+	}
+
+	return [
+		'rel' => $rel,
+		'abs' => $abs,
+		'url' => '',
+		'token' => '',
+		'file_name' => (string) \basename($rel),
+		'created' => (int) @\filemtime($abs),
+	];
+}
+
+function cmxbu_belege_export_zip_copy_get(): array {
+	$user = \wp_get_current_user();
+	if (!$user instanceof \WP_User || !$user->exists()) {
+		return [];
+	}
+	$user_id = (int) $user->ID;
+
+	$meta_key = cmxbu_belege_export_zip_copy_meta_key();
+	$raw = \get_user_meta((int) $user->ID, $meta_key, true);
+	if (empty($raw)) {
+		$raw = cmxbu_belege_export_zip_copy_fallback_current_range();
+	}
+	if (\is_string($raw)) {
+		$decoded = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($decoded)) {
+			$raw = $decoded;
+		}
+	}
+	if (!\is_array($raw)) {
+		\delete_user_meta((int) $user->ID, $meta_key);
+		return [];
+	}
+
+	$rel = \ltrim(\str_replace('\\', '/', (string) ($raw['rel'] ?? '')), '/');
+	if ($rel === '' || !\str_starts_with($rel, 'misbuero/')) {
+		\delete_user_meta((int) $user->ID, $meta_key);
+		return [];
+	}
+	$abs = cmxbu_belege_export_zip_copy_rel_to_abs($rel);
+	if ($abs === '' || !\is_file($abs)) {
+		\delete_user_meta((int) $user->ID, $meta_key);
+		$stale_token = cmxbu_belege_export_zip_copy_sanitize_token((string) ($raw['token'] ?? ''));
+		if ($stale_token !== '') {
+			cmxbu_belege_export_zip_copy_token_data_delete($stale_token);
+		}
+		return [];
+	}
+
+	$file_name = \sanitize_file_name((string) ($raw['file_name'] ?? (string) \basename($rel)));
+	if ($file_name === '') {
+		$file_name = (string) \basename($rel);
+	}
+	$created = (int) ($raw['created'] ?? 0);
+	if ($created <= 0) {
+		$created = (int) @\filemtime($abs);
+		if ($created <= 0) {
+			$created = (int) \current_time('timestamp');
+		}
+	}
+
+	$token = cmxbu_belege_export_zip_copy_sanitize_token((string) ($raw['token'] ?? ''));
+	$token_data = ($token !== '') ? cmxbu_belege_export_zip_copy_token_data_get($token) : [];
+	if ($token === '' || (string) ($token_data['rel'] ?? '') !== $rel) {
+		$token = cmxbu_belege_export_zip_copy_ensure_token($rel, $file_name, $created, $user_id, $token);
+	}
+
+	$url = ($token !== '')
+		? cmxbu_belege_export_zip_copy_share_url_for_token($token)
+		: cmxbu_belege_export_zip_copy_rel_to_url($rel);
+
+	$fresh_meta = [
+		'rel' => $rel,
+		'token' => $token,
+		'file_name' => $file_name,
+		'created' => $created,
+	];
+	if ($raw !== $fresh_meta) {
+		\update_user_meta($user_id, $meta_key, $fresh_meta);
+	}
+
+	return [
+		'rel' => $rel,
+		'abs' => $abs,
+		'url' => $url,
+		'token' => $token,
+		'file_name' => $file_name,
+		'created' => $created,
+	];
+}
+
+function cmxbu_belege_export_zip_copy_store_from_temp(string $source_abs, string $target_file_name): string {
+	$source_abs = (string) $source_abs;
+	if ($source_abs === '' || !\is_file($source_abs)) {
+		return '';
+	}
+
+	$ctx = cmxbu_belege_export_zip_copy_upload_context();
+	$target_dir = (string) ($ctx['target_dir'] ?? '');
+	if ($target_dir === '') {
+		return '';
+	}
+	if (!\is_dir($target_dir) && !\wp_mkdir_p($target_dir)) {
+		return '';
+	}
+
+	$file_name = \sanitize_file_name($target_file_name);
+	if ($file_name === '') {
+		$file_name = 'misbuero_export.zip';
+	}
+	if (!\preg_match('/\.zip$/i', $file_name)) {
+		$file_name .= '.zip';
+	}
+	$target_abs = \wp_normalize_path(\trailingslashit($target_dir) . $file_name);
+	$target_root = \trailingslashit(\wp_normalize_path($target_dir));
+	if ($target_abs === '' || !\str_starts_with($target_abs, $target_root)) {
+		return '';
+	}
+
+	$previous = cmxbu_belege_export_zip_copy_get();
+	$previous_abs = (string) ($previous['abs'] ?? '');
+	if ($previous_abs !== '') {
+		$previous_abs = \wp_normalize_path($previous_abs);
+		if ($previous_abs !== '' && $previous_abs !== $target_abs && \is_file($previous_abs)) {
+			@unlink($previous_abs);
+		}
+	}
+	$previous_token = cmxbu_belege_export_zip_copy_sanitize_token((string) ($previous['token'] ?? ''));
+	if ($previous_token !== '') {
+		cmxbu_belege_export_zip_copy_token_data_delete($previous_token);
+	}
+
+	if (!@\copy($source_abs, $target_abs)) {
+		return '';
+	}
+
+	$user = \wp_get_current_user();
+	if ($user instanceof \WP_User && $user->exists()) {
+		$user_id = (int) $user->ID;
+		$rel = cmxbu_belege_export_zip_copy_rel_path_for_file($file_name);
+		if ($rel === '') {
+			return '';
+		}
+		$created = (int) \current_time('timestamp');
+		$token = cmxbu_belege_export_zip_copy_ensure_token($rel, $file_name, $created, $user_id);
+		$share_url = ($token !== '')
+			? cmxbu_belege_export_zip_copy_share_url_for_token($token)
+			: cmxbu_belege_export_zip_copy_rel_to_url($rel);
+
+		\update_user_meta(
+			$user_id,
+			cmxbu_belege_export_zip_copy_meta_key(),
+			[
+				'rel' => $rel,
+				'token' => $token,
+				'file_name' => $file_name,
+				'created' => $created,
+			]
+		);
+		return $share_url;
+	}
+
+	return '';
+}
+
+function cmxbu_belege_export_zip_copy_delete_for_current_user(bool $delete_file = true): void {
+	$user = \wp_get_current_user();
+	if (!$user instanceof \WP_User || !$user->exists()) {
+		return;
+	}
+
+	$meta_key = cmxbu_belege_export_zip_copy_meta_key();
+	$current = cmxbu_belege_export_zip_copy_get();
+	if ($delete_file && !empty($current['abs']) && \is_file((string) $current['abs'])) {
+		@unlink((string) $current['abs']);
+	}
+	$token = cmxbu_belege_export_zip_copy_sanitize_token((string) ($current['token'] ?? ''));
+	if ($token !== '') {
+		cmxbu_belege_export_zip_copy_token_data_delete($token);
+	}
+	\delete_user_meta((int) $user->ID, $meta_key);
+}
+
+function cmxbu_belege_export_trustee_contacts(): array {
+	$taxes = [];
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {
+		$taxes = (array) cmxbu_contact_category_taxonomies();
+	}
+	if (empty($taxes)) {
+		$fallback_taxes = ['kontakte_kategorien', 'kontakte_kategorie', 'kundenkategorie', 'kontakt_kategorie'];
+		foreach ($fallback_taxes as $tax) {
+			if (\taxonomy_exists($tax)) {
+				$taxes[] = $tax;
+			}
+		}
+	}
+	$taxes = \array_values(\array_unique(\array_filter(\array_map('strval', $taxes))));
+	if (empty($taxes)) {
+		return [];
+	}
+
+	$queries = [
+		['field' => 'slug', 'terms' => ['treuhaender', 'treuhander', 'treuhänder']],
+		['field' => 'name', 'terms' => ['Treuhänder', 'Treuhaender', 'Treuhander']],
+	];
+
+	$posts_by_id = [];
+	foreach ($taxes as $tax) {
+		foreach ($queries as $query) {
+			$posts = \get_posts([
+				'post_type' => ['kontakte', 'kontakt', 'contact'],
+				'post_status' => ['publish', 'private'],
+				'posts_per_page' => 300,
+				'orderby' => 'title',
+				'order' => 'ASC',
+				'no_found_rows' => true,
+				'suppress_filters' => true,
+				'tax_query' => [[
+					'taxonomy' => $tax,
+					'field' => (string) $query['field'],
+					'terms' => (array) $query['terms'],
+				]],
+			]);
+			foreach ((array) $posts as $post) {
+				if ($post instanceof \WP_Post) {
+					$posts_by_id[(int) $post->ID] = $post;
+				}
+			}
+		}
+	}
+
+	if (empty($posts_by_id)) {
+		return [];
+	}
+
+	$items = [];
+	foreach ($posts_by_id as $post) {
+		$post_id = (int) $post->ID;
+		if ($post_id <= 0) {
+			continue;
+		}
+
+		$email = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
+			$email = (string) cmxbu_get_contact_primary_email($post_id);
+		}
+		if ($email === '' && \function_exists(__NAMESPACE__ . '\\cmxbu_collect_contact_reply_emails')) {
+			$emails = (array) cmxbu_collect_contact_reply_emails($post_id);
+			$email = (string) ($emails[0] ?? '');
+		}
+		$email = \sanitize_email($email);
+		if (!\is_email($email)) {
+			continue;
+		}
+
+		$label = \trim((string) \get_the_title($post_id));
+		if ($label === '') {
+			$vorname = \trim((string) \get_post_meta($post_id, '_cmx_kontakte_vorname', true));
+			$nachname = \trim((string) \get_post_meta($post_id, '_cmx_kontakte_nachname', true));
+			$label = \trim($vorname . ' ' . $nachname);
+		}
+		if ($label === '') {
+			$label = 'Kontakt #' . $post_id;
+		}
+
+		$items[] = [
+			'id' => $post_id,
+			'label' => $label,
+			'email' => $email,
+		];
+	}
+
+	if (empty($items)) {
+		return [];
+	}
+
+	\usort($items, static function (array $a, array $b): int {
+		$la = (string) ($a['label'] ?? '');
+		$lb = (string) ($b['label'] ?? '');
+		$cmp = \strnatcasecmp($la, $lb);
+		if ($cmp !== 0) {
+			return $cmp;
+		}
+		return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+	});
+
+	return $items;
+}
+
+function cmxbu_belege_export_trustee_options_html(array $contacts, int $selected_id = 0): string {
+	$html = '<option value="">Treuhänder auswählen</option>';
+	if (empty($contacts)) {
+		$html .= '<option value="" disabled>Keine Treuhänder gefunden</option>';
+		return $html;
+	}
+	foreach ($contacts as $contact) {
+		$id = (int) ($contact['id'] ?? 0);
+		if ($id <= 0) {
+			continue;
+		}
+		$label = \trim((string) ($contact['label'] ?? ''));
+		$email = \sanitize_email((string) ($contact['email'] ?? ''));
+		if ($label === '') {
+			$label = 'Kontakt #' . $id;
+		}
+		$option_text = $label . ($email !== '' ? ' (' . $email . ')' : '');
+		$html .= '<option value="' . \esc_attr((string) $id) . '"' . \selected($selected_id, $id, false) . '>' . \esc_html($option_text) . '</option>';
+	}
+	return $html;
+}
+
+function cmxbu_handle_belege_zip_download(): void {
+	if (empty($_GET['beleg_zip'])) {
+		return;
+	}
+
+	$token = cmxbu_belege_export_zip_copy_sanitize_token((string) $_GET['beleg_zip']);
+	if ($token === '') {
+		\wp_die('Ungültiger Link.');
+	}
+
+	$data = cmxbu_belege_export_zip_copy_token_data_get($token);
+	if ($data === []) {
+		\wp_die('ZIP-Link nicht gefunden oder abgelaufen.');
+	}
+
+	$rel = (string) ($data['rel'] ?? '');
+	$abs = cmxbu_belege_export_zip_copy_rel_to_abs($rel);
+	if ($abs === '' || !\is_file($abs)) {
+		cmxbu_belege_export_zip_copy_token_data_delete($token);
+		\wp_die('ZIP-Datei nicht gefunden.');
+	}
+
+	$file_name = \sanitize_file_name((string) ($data['file_name'] ?? ''));
+	if ($file_name === '') {
+		$file_name = (string) \basename($rel);
+	}
+	if (!\preg_match('/\.zip$/i', $file_name)) {
+		$file_name .= '.zip';
+	}
+
+	while (\ob_get_level()) {
+		\ob_end_clean();
+	}
+
+	\nocache_headers();
+	header('Content-Type: application/zip');
+	header('X-Content-Type-Options: nosniff');
+	header('Content-Disposition: attachment; filename="' . $file_name . '"');
+	header('Content-Length: ' . (string) \filesize($abs));
+
+	\readfile($abs);
+	exit;
+}
+\add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_handle_belege_zip_download');
+
+function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range = null, string $preset = ''): string {
+	if ($ref === '') {
+		$ref = cmxbu_belege_export_request_ref();
+	}
+	if ($preset === '') {
+		$preset = cmxbu_belege_export_requested_preset();
+	}
+	if ($range === null) {
+		$range = cmxbu_belege_export_requested_date_range();
+	}
+
+	$delete_args = [
+		'action' => 'cmx_export_belege_zip_copy_delete',
+		'ref' => $ref,
+		'cmx_export_range_preset' => $preset,
+		'cmx_export_date_from' => (string) ($range['from'] ?? ''),
+		'cmx_export_date_to' => (string) ($range['to'] ?? ''),
+		'_wpnonce' => \wp_create_nonce('cmx_export_belege_zip_copy_delete'),
+	];
+
+	return (string) \add_query_arg($delete_args, \admin_url('admin-post.php'));
+}
+
+\add_action('admin_post_cmx_export_belege_zip_copy_delete', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_die('Keine Berechtigung.');
+	}
+	if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) $_REQUEST['_wpnonce'], 'cmx_export_belege_zip_copy_delete')) {
+		\wp_die('Ungültige Anfrage.');
+	}
+
+	cmxbu_belege_export_zip_copy_delete_for_current_user(true);
+
+	$args = [
+		'post_type' => 'belege',
+		'cmx_export' => 1,
+		'cmx_export_zip_deleted' => 1,
+		'ref' => cmxbu_belege_export_request_ref(),
+		'cmx_export_range_preset' => cmxbu_belege_export_requested_preset(),
+	];
+	$range = cmxbu_belege_export_requested_date_range();
+	if ((string) ($range['from'] ?? '') !== '') {
+		$args['cmx_export_date_from'] = (string) $range['from'];
+	}
+	if ((string) ($range['to'] ?? '') !== '') {
+		$args['cmx_export_date_to'] = (string) $range['to'];
+	}
+
+	$target = \add_query_arg($args, \admin_url('edit.php'));
+	\wp_safe_redirect($target);
+	exit;
+});
+
+\add_action('wp_ajax_cmx_export_belege_zip_copy_delete_ajax', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) $_REQUEST['_wpnonce'], 'cmx_export_belege_zip_copy_delete')) {
+		\wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+
+	cmxbu_belege_export_zip_copy_delete_for_current_user(true);
+	\wp_send_json_success(['deleted' => true]);
+});
+
+\add_action('wp_ajax_cmx_export_belege_zip_share_send_ajax', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+	if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) $_REQUEST['_wpnonce'], 'cmx_export_belege_zip_share_send')) {
+		\wp_send_json_error(['message' => 'Ungültige Anfrage.'], 403);
+	}
+
+	$kontakt_id = isset($_REQUEST['kontakt_id']) ? (int) $_REQUEST['kontakt_id'] : 0;
+	if ($kontakt_id <= 0) {
+		\wp_send_json_error(['message' => 'Bitte zuerst einen Treuhänder auswählen.'], 400);
+	}
+
+	$trustees = cmxbu_belege_export_trustee_contacts();
+	$recipient = null;
+	foreach ($trustees as $entry) {
+		if ((int) ($entry['id'] ?? 0) === $kontakt_id) {
+			$recipient = $entry;
+			break;
+		}
+	}
+	if (!\is_array($recipient)) {
+		\wp_send_json_error(['message' => 'Ausgewählter Treuhänder ist ungültig.'], 400);
+	}
+
+	$to = \sanitize_email((string) ($recipient['email'] ?? ''));
+	if (!\is_email($to)) {
+		\wp_send_json_error(['message' => 'Beim Treuhänder ist keine gültige E-Mail hinterlegt.'], 400);
+	}
+
+	$zip_copy = cmxbu_belege_export_zip_copy_get();
+	$share_url = (string) ($zip_copy['url'] ?? '');
+	if ($share_url === '') {
+		\wp_send_json_error(['message' => 'Es ist aktuell kein ZIP-Link verfügbar.'], 400);
+	}
+
+	$user = \wp_get_current_user();
+	$sender_name = '';
+	if ($user instanceof \WP_User && $user->exists()) {
+		$sender_name = \trim((string) ($user->display_name ?: $user->user_login));
+	}
+	$subject = 'ZIP-Export Milchbüchli';
+	$message = "Guten Tag,\n\nhier ist der ZIP-Download-Link:\n" . $share_url;
+	if ($sender_name !== '') {
+		$message .= "\n\nGesendet von: " . $sender_name;
+	}
+
+	$headers = ['Content-Type: text/plain; charset=UTF-8'];
+	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
+	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+	$GLOBALS['cmx_force_current_user_mail_sender'] = true;
+	try {
+		$sent = \wp_mail($to, $subject, $message, $headers);
+	} finally {
+		if ($had_sender_override) {
+			$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
+		} else {
+			unset($GLOBALS['cmx_force_current_user_mail_sender']);
+		}
+	}
+
+	if (!$sent) {
+		\wp_send_json_error(['message' => 'E-Mail konnte nicht gesendet werden.'], 500);
+	}
+
+	\wp_send_json_success([
+		'to' => $to,
+		'recipient_label' => (string) ($recipient['label'] ?? ''),
+	]);
+});
+
+\add_action('wp_ajax_cmx_export_belege_list_ajax', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	if (!cmxbu_belege_export_verify_nonce('cmx_export_belege_list')) {
+		\wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+
+	$range = cmxbu_belege_export_requested_date_range();
+	if ((string) ($range['from'] ?? '') === '' || (string) ($range['to'] ?? '') === '') {
+		\wp_send_json_error(['message' => 'missing_range'], 400);
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_build_zip_file_from_ids')) {
+		\wp_send_json_error(['message' => 'zip_builder_missing'], 500);
+	}
+
+	$post_ids = cmxbu_belege_export_collect_ids();
+	$tmp_zip = \wp_tempnam('cmx-belege-export-zip-ajax');
+	if (!\is_string($tmp_zip) || $tmp_zip === '') {
+		\wp_send_json_error(['message' => 'tmp_failed'], 500);
+	}
+
+	$build_noise = '';
+	\ob_start();
+	$built = cmxbu_belege_export_build_zip_file_from_ids($post_ids, $tmp_zip);
+	$build_noise = (string) \ob_get_clean();
+	if (!$built) {
+		@unlink($tmp_zip);
+		\wp_send_json_error(['message' => 'zip_build_failed'], 500);
+	}
+
+	$download_name = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')
+		? (string) cmxbu_belege_zip_download_filename()
+		: (string) cmxbu_belege_export_filename('zip');
+
+	$store_noise = '';
+	\ob_start();
+	$share_url = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_zip_copy_store_from_temp')
+		? (string) cmxbu_belege_export_zip_copy_store_from_temp($tmp_zip, $download_name)
+		: '';
+	$store_noise = (string) \ob_get_clean();
+	@unlink($tmp_zip);
+
+	if ($share_url === '') {
+		\wp_send_json_error(['message' => 'zip_copy_store_failed'], 500);
+	}
+
+	$preset = cmxbu_belege_export_requested_preset();
+	$ref = cmxbu_belege_export_request_ref();
+	$delete_url = cmxbu_belege_export_zip_copy_delete_url($ref, $range, $preset);
+	$delete_nonce = (string) \wp_create_nonce('cmx_export_belege_zip_copy_delete');
+	$send_nonce = (string) \wp_create_nonce('cmx_export_belege_zip_share_send');
+	$trustees = cmxbu_belege_export_trustee_contacts();
+
+	\wp_send_json_success([
+		'share_url' => $share_url,
+		'delete_url' => $delete_url,
+		'delete_nonce' => $delete_nonce,
+		'send_nonce' => $send_nonce,
+		'trustees' => $trustees,
+		'download_url' => $share_url,
+		'noise' => ($build_noise !== '' || $store_noise !== ''),
+	]);
+});
+
 /* ===== Link „export“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
@@ -324,6 +1134,14 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 	$ref = cmxbu_belege_export_request_ref();
 	$cancel_url = cmxbu_belege_export_normalize_ref($ref);
 	$has_error = !empty($_GET['cmx_export_error']);
+	$zip_deleted = !empty($_GET['cmx_export_zip_deleted']);
+	$zip_copy = cmxbu_belege_export_zip_copy_get();
+	$zip_share_url = (string) ($zip_copy['url'] ?? '');
+	$zip_delete_url = ($zip_share_url !== '') ? cmxbu_belege_export_zip_copy_delete_url($ref, $range, $preset) : '';
+	$zip_delete_nonce = ($zip_share_url !== '') ? (string) \wp_create_nonce('cmx_export_belege_zip_copy_delete') : '';
+	$zip_send_nonce = ($zip_share_url !== '') ? (string) \wp_create_nonce('cmx_export_belege_zip_share_send') : '';
+	$zip_trustees = cmxbu_belege_export_trustee_contacts();
+	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, 0);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Belege Export als Milchbüchli</h2>
@@ -331,10 +1149,14 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
 		<?php endif; ?>
+		<?php if ($zip_deleted): ?>
+			<p style="color:#007017;"><strong>ZIP-Link wurde gelöscht und ist nicht mehr gültig.</strong></p>
+		<?php endif; ?>
 
 		<form method="post" action="<?php echo \esc_url(\admin_url('admin-post.php')); ?>" id="cmx-belege-export-form">
 			<?php \wp_nonce_field('cmx_export_belege_range'); ?>
 			<input type="hidden" name="ref" value="<?php echo \esc_attr($ref); ?>">
+			<input type="hidden" id="cmx-export-submit-action" value="">
 
 			<table class="form-table" role="presentation" style="margin-top:1em;">
 				<tbody>
@@ -360,20 +1182,54 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 			</table>
 
 			<p class="submit">
-				<button type="submit" name="action" value="cmx_export_belege_list" class="button button-primary">Exportieren ZIP</button>
-				<button type="submit" name="action" value="cmx_export_belege_list_pdf" class="button">Exportieren PDF</button>
-				<button type="submit" name="action" value="cmx_export_belege_list_csv" class="button">Exportieren CSV</button>
+				<button type="submit" id="cmx-export-belege-zip-btn" name="action" value="cmx_export_belege_list" class="button button-primary">Exportieren ZIP</button>
+				<button type="submit" id="cmx-export-belege-pdf-btn" name="action" value="cmx_export_belege_list_pdf" class="button">Exportieren PDF</button>
+				<button type="submit" id="cmx-export-belege-csv-btn" name="action" value="cmx_export_belege_list_csv" class="button">Exportieren CSV</button>
 				<a href="<?php echo \esc_url($cancel_url); ?>" class="button">Abbrechen</a>
 			</p>
+
+				<div id="cmx-export-zip-share-shell">
+					<?php if ($zip_share_url !== ''): ?>
+						<div id="cmx-export-zip-share" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+							<select id="cmx-export-zip-share-recipient" style="min-width:260px;max-width:100%;">
+								<?php echo $zip_trustee_options_html; ?>
+							</select>
+							<button type="button" id="cmx-export-zip-share-send" class="button button-secondary" title="ZIP-Link per Mail versenden" data-send-nonce="<?php echo \esc_attr($zip_send_nonce); ?>">
+								<span class="dashicons dashicons-email" style="margin-top:3px;"></span>
+							</button>
+							<input type="text" id="cmx-export-zip-share-link" readonly value="<?php echo \esc_attr($zip_share_url); ?>" style="min-width:460px;max-width:100%;width:58ch;">
+							<button type="button" id="cmx-export-zip-share-copy" class="button button-secondary" title="Link kopieren">
+								<span class="dashicons dashicons-clipboard" style="margin-top:3px;"></span>
+							</button>
+						<button
+							type="button"
+							id="cmx-export-zip-share-delete"
+							class="button button-link-delete"
+							title="ZIP-Link löschen"
+							data-delete-url="<?php echo \esc_attr($zip_delete_url); ?>"
+							data-delete-nonce="<?php echo \esc_attr($zip_delete_nonce); ?>"
+						>
+							<span class="dashicons dashicons-trash"></span>
+						</button>
+					</div>
+					<p id="cmx-export-zip-share-status" class="description" style="margin-top:6px;">Der ZIP-Link wird automatisch in die Zwischenablage kopiert.</p>
+				<?php endif; ?>
+			</div>
 		</form>
 	</div>
-	<script>
-	(function(){
-		var form = document.getElementById('cmx-belege-export-form');
-		if (!form) return;
-		var preset = document.getElementById('cmx_export_range_preset');
-		var fromField = document.getElementById('cmx_export_date_from');
-		var toField = document.getElementById('cmx_export_date_to');
+		<script>
+			(function(){
+				var form = document.getElementById('cmx-belege-export-form');
+				if (!form) return;
+				var preset = document.getElementById('cmx_export_range_preset');
+				var fromField = document.getElementById('cmx_export_date_from');
+				var toField = document.getElementById('cmx_export_date_to');
+				var actionMemoryField = document.getElementById('cmx-export-submit-action');
+				var submitButtons = form.querySelectorAll('button[type="submit"][name="action"]');
+				var zipButton = document.getElementById('cmx-export-belege-zip-btn');
+				var zipRequestActive = false;
+				var initialTrustees = <?php echo \wp_json_encode(\array_values($zip_trustees)); ?>;
+				var initialSendNonce = <?php echo \wp_json_encode((string) $zip_send_nonce); ?>;
 
 		function pad2(n){ return (n < 10 ? '0' : '') + n; }
 		function ymd(date){
@@ -464,9 +1320,9 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 			applyPreset(preset.value);
 		}
 
-		form.addEventListener('submit', function () {
-			var stale = form.querySelectorAll('input[data-cmx-selected="1"]');
-			for (var i = 0; i < stale.length; i++) stale[i].remove();
+			function syncSelectedPostsIntoForm(){
+				var stale = form.querySelectorAll('input[data-cmx-selected="1"]');
+				for (var i = 0; i < stale.length; i++) stale[i].remove();
 
 			var checked = document.querySelectorAll('#the-list input[name="post[]"]:checked');
 			for (var j = 0; j < checked.length; j++) {
@@ -475,10 +1331,473 @@ function cmxbu_belege_export_has_payment_in_range(int $post_id, array $range): b
 				hid.name = 'post[]';
 				hid.value = checked[j].value;
 				hid.setAttribute('data-cmx-selected', '1');
-				form.appendChild(hid);
+					form.appendChild(hid);
+				}
 			}
-		});
-	})();
+			function rememberSubmitAction(value){
+				var actionValue = String(value || '').trim();
+				if (actionMemoryField) actionMemoryField.value = actionValue;
+				return actionValue;
+			}
+			function detectSubmitAction(ev){
+				var actionValue = '';
+				if (ev && ev.submitter && ev.submitter.name === 'action') {
+					actionValue = String(ev.submitter.value || '').trim();
+				}
+				if (!actionValue && actionMemoryField && actionMemoryField.value) {
+					actionValue = String(actionMemoryField.value || '').trim();
+				}
+				if (!actionValue) {
+					var active = document.activeElement;
+					if (active && active.name === 'action') {
+						actionValue = String(active.value || '').trim();
+					}
+				}
+				return actionValue;
+			}
+
+			function setZipStatus(msg){
+				var status = document.getElementById('cmx-export-zip-share-status');
+				if (status) status.textContent = msg;
+			}
+		function copyFallback(text){
+			var ta = document.createElement('textarea');
+			ta.value = text;
+			ta.setAttribute('readonly', 'readonly');
+			ta.style.position = 'absolute';
+			ta.style.left = '-9999px';
+			document.body.appendChild(ta);
+			ta.select();
+			var ok = false;
+			try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+			document.body.removeChild(ta);
+			return ok;
+		}
+			function copyZipLink(isAuto){
+				var input = document.getElementById('cmx-export-zip-share-link');
+				if (!input || !input.value) return Promise.resolve(false);
+			var text = input.value;
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				return navigator.clipboard.writeText(text).then(function(){
+					setZipStatus(isAuto ? 'Link automatisch in Zwischenablage kopiert.' : 'Link wurde in Zwischenablage kopiert.');
+					return true;
+				}).catch(function(){
+					var ok = copyFallback(text);
+					if (ok) {
+						setZipStatus(isAuto ? 'Link automatisch in Zwischenablage kopiert.' : 'Link wurde in Zwischenablage kopiert.');
+					} else {
+						setZipStatus('Link konnte nicht kopiert werden.');
+					}
+					return ok;
+				});
+			}
+			var ok = copyFallback(text);
+			if (ok) {
+				setZipStatus(isAuto ? 'Link automatisch in Zwischenablage kopiert.' : 'Link wurde in Zwischenablage kopiert.');
+			} else {
+				setZipStatus('Link konnte nicht kopiert werden.');
+				}
+				return Promise.resolve(ok);
+			}
+			function getSelectedTrusteeId(){
+				var select = document.getElementById('cmx-export-zip-share-recipient');
+				if (!select) return '';
+				return String(select.value || '').trim();
+			}
+			function runZipSendAjax(triggerButton){
+				if (!triggerButton || zipRequestActive) return;
+				if (typeof ajaxurl === 'undefined' || !ajaxurl) {
+					setZipStatus('Mailversand ist nicht verfügbar.');
+					return;
+				}
+
+				var kontaktId = getSelectedTrusteeId();
+				if (!kontaktId) {
+					setZipStatus('Bitte zuerst einen Treuhänder auswählen.');
+					return;
+				}
+
+				var nonce = String(triggerButton.getAttribute('data-send-nonce') || '').trim();
+				if (!nonce) {
+					setZipStatus('Mailversand ist aktuell nicht möglich.');
+					return;
+				}
+
+				zipRequestActive = true;
+				triggerButton.disabled = true;
+				setZipStatus('E-Mail wird gesendet ...');
+
+				var fd = new FormData();
+				fd.set('action', 'cmx_export_belege_zip_share_send_ajax');
+				fd.set('_wpnonce', nonce);
+				fd.set('kontakt_id', kontaktId);
+
+				fetch(ajaxurl, {
+					method: 'POST',
+					credentials: 'same-origin',
+					body: fd
+				})
+				.then(function(resp){ return resp.text(); })
+				.then(function(text){
+					var payload = null;
+					var jsonText = String(text || '');
+					var payloadStart = jsonText.indexOf('{"success"');
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{\"success\"');
+					}
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{');
+					}
+					if (payloadStart > 0) {
+						jsonText = jsonText.slice(payloadStart);
+					}
+					try {
+						payload = JSON.parse(jsonText);
+					} catch (e) {
+						throw new Error('bad_json');
+					}
+					if (!payload) {
+						throw new Error('send_failed');
+					}
+					if (!payload.success) {
+						var msg = payload.data && payload.data.message ? String(payload.data.message) : 'E-Mail konnte nicht gesendet werden.';
+						throw new Error(msg);
+					}
+					var to = (payload.data && payload.data.to) ? String(payload.data.to) : '';
+					if (to) {
+						setZipStatus('E-Mail wurde an ' + to + ' gesendet.');
+					} else {
+						setZipStatus('E-Mail wurde gesendet.');
+					}
+				})
+				.catch(function(err){
+					var msg = (err && err.message) ? String(err.message) : 'E-Mail konnte nicht gesendet werden.';
+					setZipStatus(msg);
+					alert(msg);
+				})
+				.finally(function(){
+					triggerButton.disabled = false;
+					zipRequestActive = false;
+				});
+			}
+				function bindZipCopyButton(){
+					var copyBtn = document.getElementById('cmx-export-zip-share-copy');
+					if (!copyBtn || copyBtn.getAttribute('data-bound') === '1') return;
+					copyBtn.setAttribute('data-bound', '1');
+					copyBtn.addEventListener('click', function(ev){
+						ev.preventDefault();
+						copyZipLink(false);
+					});
+				}
+				function bindZipSendButton(){
+					var sendBtn = document.getElementById('cmx-export-zip-share-send');
+					if (!sendBtn || sendBtn.getAttribute('data-bound') === '1') return;
+					sendBtn.setAttribute('data-bound', '1');
+					sendBtn.addEventListener('click', function(ev){
+						ev.preventDefault();
+						runZipSendAjax(sendBtn);
+					});
+				}
+			function clearZipShare(){
+				var shell = document.getElementById('cmx-export-zip-share-shell');
+				if (shell) shell.innerHTML = '';
+			}
+			function runZipDeleteAjax(triggerButton){
+				if (!triggerButton || zipRequestActive) return;
+				if (!window.confirm('ZIP-Datei wirklich löschen? Der Link wird danach ungültig.')) {
+					return;
+				}
+				if (typeof ajaxurl === 'undefined' || !ajaxurl) {
+					return;
+				}
+
+				var nonce = String(triggerButton.getAttribute('data-delete-nonce') || '').trim();
+				var fallbackUrl = String(triggerButton.getAttribute('data-delete-url') || '').trim();
+				if (!nonce) {
+					if (fallbackUrl) window.location.href = fallbackUrl;
+					return;
+				}
+
+				zipRequestActive = true;
+				triggerButton.disabled = true;
+				setZipStatus('ZIP-Link wird gelöscht ...');
+
+				var fd = new FormData();
+				fd.set('action', 'cmx_export_belege_zip_copy_delete_ajax');
+				fd.set('_wpnonce', nonce);
+
+				fetch(ajaxurl, {
+					method: 'POST',
+					credentials: 'same-origin',
+					body: fd
+				})
+				.then(function(resp){ return resp.text(); })
+				.then(function(text){
+					var payload = null;
+					var jsonText = String(text || '');
+					var payloadStart = jsonText.indexOf('{"success"');
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{\"success\"');
+					}
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{');
+					}
+					if (payloadStart > 0) {
+						jsonText = jsonText.slice(payloadStart);
+					}
+					try {
+						payload = JSON.parse(jsonText);
+					} catch (e) {
+						throw new Error('bad_json');
+					}
+					if (!payload || !payload.success) {
+						throw new Error('delete_failed');
+					}
+					clearZipShare();
+				})
+				.catch(function(){
+					setZipStatus('ZIP-Link konnte nicht gelöscht werden.');
+					alert('ZIP-Link konnte nicht gelöscht werden.');
+				})
+				.finally(function(){
+					triggerButton.disabled = false;
+					zipRequestActive = false;
+				});
+			}
+			function bindZipDeleteButton(){
+				var deleteBtn = document.getElementById('cmx-export-zip-share-delete');
+				if (!deleteBtn || deleteBtn.getAttribute('data-bound') === '1') return;
+				deleteBtn.setAttribute('data-bound', '1');
+				deleteBtn.addEventListener('click', function(ev){
+					ev.preventDefault();
+					runZipDeleteAjax(deleteBtn);
+				});
+			}
+			function maybeAutoCopyCurrentLink(){
+				var input = document.getElementById('cmx-export-zip-share-link');
+				if (!input || !input.value) return;
+				var cacheKey = 'cmx_zip_export_autocopied_' + input.value;
+			var shouldAutoCopy = true;
+			try {
+				if (window.localStorage && localStorage.getItem(cacheKey) === '1') {
+					shouldAutoCopy = false;
+				}
+			} catch (e) {}
+			if (shouldAutoCopy) {
+				copyZipLink(true).then(function(ok){
+					if (!ok) return;
+					try {
+						if (window.localStorage) localStorage.setItem(cacheKey, '1');
+					} catch (e) {}
+				});
+			}
+		}
+			function escAttr(value){
+				return String(value || '')
+					.replace(/&/g, '&amp;')
+					.replace(/"/g, '&quot;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;');
+			}
+			function escText(value){
+				return String(value || '')
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;');
+			}
+			function buildTrusteeOptions(list){
+				var html = '<option value="">Treuhänder auswählen</option>';
+				if (!Array.isArray(list) || list.length === 0) {
+					html += '<option value="" disabled>Keine Treuhänder gefunden</option>';
+					return html;
+				}
+				for (var i = 0; i < list.length; i++) {
+					var row = list[i] || {};
+					var id = parseInt(row.id || 0, 10);
+					if (!id) continue;
+					var label = String(row.label || '').trim();
+					var email = String(row.email || '').trim();
+					if (!label) label = 'Kontakt #' + id;
+					var text = label + (email ? ' (' + email + ')' : '');
+					html += '<option value="' + escAttr(String(id)) + '">' + escText(text) + '</option>';
+				}
+				return html;
+			}
+			function ensureZipShareRecipientControls(){
+				var share = document.getElementById('cmx-export-zip-share');
+				if (!share) return;
+
+				var recipient = document.getElementById('cmx-export-zip-share-recipient');
+				if (!recipient) {
+					recipient = document.createElement('select');
+					recipient.id = 'cmx-export-zip-share-recipient';
+					recipient.style.minWidth = '260px';
+					recipient.style.maxWidth = '100%';
+					recipient.style.display = 'inline-block';
+					recipient.innerHTML = buildTrusteeOptions(initialTrustees);
+					share.insertBefore(recipient, share.firstChild);
+				}
+
+				var sendBtn = document.getElementById('cmx-export-zip-share-send');
+				if (!sendBtn) {
+					sendBtn = document.createElement('button');
+					sendBtn.type = 'button';
+					sendBtn.id = 'cmx-export-zip-share-send';
+					sendBtn.className = 'button button-secondary';
+					sendBtn.title = 'ZIP-Link per Mail versenden';
+					sendBtn.setAttribute('data-send-nonce', initialSendNonce || '');
+					sendBtn.innerHTML = '<span class="dashicons dashicons-email" style="margin-top:3px;"></span>';
+					if (recipient.nextSibling) {
+						share.insertBefore(sendBtn, recipient.nextSibling);
+					} else {
+						share.appendChild(sendBtn);
+					}
+				} else if (!sendBtn.getAttribute('data-send-nonce') && initialSendNonce) {
+					sendBtn.setAttribute('data-send-nonce', initialSendNonce);
+				}
+
+				bindZipSendButton();
+			}
+				function renderZipShare(data){
+					var shell = document.getElementById('cmx-export-zip-share-shell');
+					if (!shell) return;
+
+					var shareUrl = String((data && data.share_url) ? data.share_url : '').trim();
+					if (!shareUrl) return;
+				var deleteUrl = String((data && data.delete_url) ? data.delete_url : '').trim();
+				var deleteNonce = String((data && data.delete_nonce) ? data.delete_nonce : '').trim();
+				var sendNonce = String((data && data.send_nonce) ? data.send_nonce : '').trim();
+				var trustees = (data && Array.isArray(data.trustees)) ? data.trustees : [];
+				initialTrustees = trustees;
+				initialSendNonce = sendNonce;
+				var optionsHtml = buildTrusteeOptions(trustees);
+
+					shell.innerHTML =
+						'<div id="cmx-export-zip-share" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+						+ '<select id="cmx-export-zip-share-recipient" style="min-width:260px;max-width:100%;">'
+						+ optionsHtml
+						+ '</select>'
+						+ '<button type="button" id="cmx-export-zip-share-send" class="button button-secondary" title="ZIP-Link per Mail versenden" data-send-nonce="' + escAttr(sendNonce) + '">'
+						+ '<span class="dashicons dashicons-email" style="margin-top:3px;"></span>'
+						+ '</button>'
+						+ '<input type="text" id="cmx-export-zip-share-link" readonly value="' + escAttr(shareUrl) + '" style="min-width:460px;max-width:100%;width:58ch;">'
+						+ '<button type="button" id="cmx-export-zip-share-copy" class="button button-secondary" title="Link kopieren">'
+						+ '<span class="dashicons dashicons-clipboard" style="margin-top:3px;"></span>'
+						+ '</button>'
+						+ '<button type="button" id="cmx-export-zip-share-delete" class="button button-link-delete" title="ZIP-Link löschen" data-delete-url="' + escAttr(deleteUrl) + '" data-delete-nonce="' + escAttr(deleteNonce) + '">'
+					+ '<span class="dashicons dashicons-trash"></span>'
+					+ '</button>'
+					+ '</div>'
+						+ '<p id="cmx-export-zip-share-status" class="description" style="margin-top:6px;">Der ZIP-Link wird automatisch in die Zwischenablage kopiert.</p>';
+
+				ensureZipShareRecipientControls();
+				bindZipCopyButton();
+				bindZipDeleteButton();
+				maybeAutoCopyCurrentLink();
+			}
+			function triggerZipDownload(url){
+				url = String(url || '').trim();
+				if (!url) return;
+			var frame = document.getElementById('cmx-belege-export-zip-download-frame');
+			if (!frame) {
+				frame = document.createElement('iframe');
+				frame.id = 'cmx-belege-export-zip-download-frame';
+				frame.name = 'cmx-belege-export-zip-download-frame';
+				frame.style.display = 'none';
+				document.body.appendChild(frame);
+			}
+				var sep = (url.indexOf('?') === -1) ? '?' : '&';
+				frame.src = url + sep + '_dlts=' + Date.now();
+			}
+			function runZipExportAjax(triggerButton){
+				if (zipRequestActive) return;
+				syncSelectedPostsIntoForm();
+
+				var btn = (triggerButton && triggerButton.tagName) ? triggerButton : zipButton;
+				if (btn) btn.disabled = true;
+				zipRequestActive = true;
+				setZipStatus('ZIP wird erstellt ...');
+
+				if (typeof ajaxurl === 'undefined' || !ajaxurl) {
+					setZipStatus('AJAX ist nicht verfügbar.');
+					if (btn) btn.disabled = false;
+					zipRequestActive = false;
+					return;
+				}
+
+				var fd = new FormData(form);
+				fd.set('action', 'cmx_export_belege_list_ajax');
+
+				fetch(ajaxurl, {
+					method: 'POST',
+					credentials: 'same-origin',
+					body: fd
+				})
+				.then(function(resp){ return resp.text(); })
+				.then(function(text){
+					var payload = null;
+					var jsonText = String(text || '');
+					var payloadStart = jsonText.indexOf('{"success"');
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{\"success\"');
+					}
+					if (payloadStart === -1) {
+						payloadStart = jsonText.indexOf('{');
+					}
+					if (payloadStart > 0) {
+						jsonText = jsonText.slice(payloadStart);
+					}
+					try {
+						payload = JSON.parse(jsonText);
+					} catch (e) {
+						throw new Error('bad_json');
+					}
+					if (!payload || !payload.success || !payload.data) {
+						throw new Error('zip_failed');
+					}
+					renderZipShare(payload.data);
+					triggerZipDownload(payload.data.download_url || payload.data.share_url || '');
+				})
+				.catch(function(){
+					setZipStatus('ZIP-Export fehlgeschlagen. Bitte erneut versuchen.');
+					alert('ZIP-Export fehlgeschlagen. Bitte erneut versuchen.');
+				})
+				.finally(function(){
+					if (btn) btn.disabled = false;
+					zipRequestActive = false;
+				});
+			}
+
+			for (var b = 0; b < submitButtons.length; b++) {
+				submitButtons[b].addEventListener('click', function(){
+					rememberSubmitAction(this.value || '');
+				});
+			}
+
+			if (zipButton) {
+				zipButton.addEventListener('click', function(ev){
+					ev.preventDefault();
+					rememberSubmitAction('cmx_export_belege_list');
+					runZipExportAjax(zipButton);
+				});
+			}
+
+			form.addEventListener('submit', function (ev) {
+				var actionVal = detectSubmitAction(ev);
+				if (actionVal === 'cmx_export_belege_list') {
+					ev.preventDefault();
+					var submitter = ev && ev.submitter ? ev.submitter : zipButton;
+					runZipExportAjax(submitter);
+					return;
+				}
+				syncSelectedPostsIntoForm();
+			});
+
+			ensureZipShareRecipientControls();
+			bindZipCopyButton();
+			bindZipDeleteButton();
+			maybeAutoCopyCurrentLink();
+		})();
 	</script>
 	<?php
 });

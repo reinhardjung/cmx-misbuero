@@ -879,6 +879,68 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_build_zip_file_from_ids')) {
+	function cmxbu_belege_export_build_zip_file_from_ids(array $post_ids, string $zip_abs_path): bool {
+		if (!\class_exists('\\ZipArchive')) {
+			return false;
+		}
+
+		$zip_abs_path = (string) $zip_abs_path;
+		if ($zip_abs_path === '') {
+			return false;
+		}
+
+		$csv_content = cmxbu_belege_export_csv_string_from_ids($post_ids);
+		$pdf_binary = cmxbu_belege_export_pdf_binary_from_ids($post_ids);
+		$beleg_pdf_entries = cmxbu_belege_zip_collect_beleg_pdf_entries($post_ids);
+		$upload_entries = cmxbu_belege_zip_collect_upload_entries($post_ids);
+		$dokumente_entries = cmxbu_belege_zip_collect_dokumente_entries($post_ids);
+
+		$zip = new \ZipArchive();
+		if ($zip->open($zip_abs_path, \ZipArchive::OVERWRITE) !== true) {
+			return false;
+		}
+
+		$zip->addEmptyDir('Rechnungen');
+		$zip->addEmptyDir('Belege');
+		$zip->addEmptyDir('Bank');
+		$zip->addEmptyDir('export');
+		$zip->addEmptyDir('dokumente');
+
+		$zip->addFromString('export/' . cmxbu_belege_export_filename('csv'), $csv_content);
+		$zip->addFromString(cmxbu_belege_export_filename('pdf'), $pdf_binary);
+
+		foreach ($beleg_pdf_entries as $entry) {
+			$abs = (string) ($entry['abs'] ?? '');
+			$zip_path = (string) ($entry['zip'] ?? '');
+			if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
+				continue;
+			}
+			$zip->addFile($abs, $zip_path);
+		}
+
+		foreach ($upload_entries as $entry) {
+			$abs = (string) ($entry['abs'] ?? '');
+			$zip_path = (string) ($entry['zip'] ?? '');
+			if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
+				continue;
+			}
+			$zip->addFile($abs, $zip_path);
+		}
+
+		foreach ($dokumente_entries as $entry) {
+			$abs = (string) ($entry['abs'] ?? '');
+			$zip_path = (string) ($entry['zip'] ?? '');
+			if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
+				continue;
+			}
+			$zip->addFile($abs, $zip_path);
+		}
+
+		return ($zip->close() === true);
+	}
+}
+
 /* ===== ZIP Link ===== */
 \add_action('admin_post_cmx_export_belege_list', function(){
 	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
@@ -891,64 +953,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 
 	$post_ids = cmxbu_belege_export_collect_ids();
 
-	$csv_content = cmxbu_belege_export_csv_string_from_ids($post_ids);
-	$pdf_binary = cmxbu_belege_export_pdf_binary_from_ids($post_ids);
-	$beleg_pdf_entries = cmxbu_belege_zip_collect_beleg_pdf_entries($post_ids);
-	$upload_entries = cmxbu_belege_zip_collect_upload_entries($post_ids);
-	$dokumente_entries = cmxbu_belege_zip_collect_dokumente_entries($post_ids);
-
 	$tmp_zip = \wp_tempnam('cmx-belege-export-zip');
 	if (!\is_string($tmp_zip) || $tmp_zip === '') {
 		\wp_die('ZIP-Datei konnte nicht erstellt werden.');
 	}
 
-	$zip = new \ZipArchive();
-	if ($zip->open($tmp_zip, \ZipArchive::OVERWRITE) !== true) {
+	if (!cmxbu_belege_export_build_zip_file_from_ids($post_ids, $tmp_zip)) {
 		@unlink($tmp_zip);
-		\wp_die('ZIP-Datei konnte nicht geöffnet werden.');
+		\wp_die('ZIP-Datei konnte nicht erstellt werden.');
 	}
-
-	$zip->addEmptyDir('Rechnungen');
-	$zip->addEmptyDir('Belege');
-	$zip->addEmptyDir('Bank');
-	$zip->addEmptyDir('export');
-	$zip->addEmptyDir('dokumente');
-
-	$zip->addFromString('export/' . cmxbu_belege_export_filename('csv'), $csv_content);
-	$zip->addFromString(cmxbu_belege_export_filename('pdf'), $pdf_binary);
-
-	foreach ($beleg_pdf_entries as $entry) {
-		$abs = (string) ($entry['abs'] ?? '');
-		$zip_path = (string) ($entry['zip'] ?? '');
-		if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
-			continue;
-		}
-		$zip->addFile($abs, $zip_path);
-	}
-
-	foreach ($upload_entries as $entry) {
-		$abs = (string) ($entry['abs'] ?? '');
-		$zip_path = (string) ($entry['zip'] ?? '');
-		if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
-			continue;
-		}
-		$zip->addFile($abs, $zip_path);
-	}
-
-	foreach ($dokumente_entries as $entry) {
-		$abs = (string) ($entry['abs'] ?? '');
-		$zip_path = (string) ($entry['zip'] ?? '');
-		if ($abs === '' || $zip_path === '' || !\is_file($abs)) {
-			continue;
-		}
-		$zip->addFile($abs, $zip_path);
-	}
-
-	$zip->close();
 
 	$download_name = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')
 		? (string) cmxbu_belege_zip_download_filename()
 		: (string) cmxbu_belege_export_filename('zip');
+	if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_zip_copy_store_from_temp')) {
+		cmxbu_belege_export_zip_copy_store_from_temp($tmp_zip, $download_name);
+	}
 	$size = @\filesize($tmp_zip);
 
 	\ignore_user_abort(true);
