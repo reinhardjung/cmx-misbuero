@@ -54,18 +54,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_field(
-		'cmx_email_alias',
-		'Alias',
-		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('email_alias'));
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="buchhaltung@DeineMailDomain.com" autocomplete="off">';
-			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
-		},
-		$page,
-		'cmx_sec_email_account'
-	);
-
-	\add_settings_field(
 		'cmx_email_bcc',
 		'',
 		static function (): void {
@@ -78,15 +66,46 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_section(
+		'cmx_sec_email_alias',
+		'Aliasse',
+		static function (): void {},
+		$page
+	);
+
+	\add_settings_field(
+		'cmx_email_alias',
+		'Allgemein',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_alias'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="buchhaltung@DeineMailDomain.com" autocomplete="off">';
+			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
+		},
+		$page,
+		'cmx_sec_email_alias'
+	);
+
+	\add_settings_field(
+		'cmx_email_alias_belege',
+		'Belege',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@DeineMailDomain.com" autocomplete="off">';
+			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
+		},
+		$page,
+		'cmx_sec_email_alias'
+	);
+
+	\add_settings_section(
 		'cmx_sec_email_smtp',
-		'SMTP',
+		'Server',
 		static function (): void {},
 		$page
 	);
 
 	\add_settings_field(
 		'cmx_email_smtp_host',
-		'Host*',
+		'SMTP',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('smtp_host'));
 			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[smtp_host]" value="' . $value . '" placeholder="smtp.infomaniak.com" autocomplete="off">';
@@ -110,14 +129,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	\add_settings_section(
 		'cmx_sec_email_imap',
-		'IMAP',
+		'',
 		static function (): void {},
 		$page
 	);
 
 	\add_settings_field(
 		'cmx_email_imap_host',
-		'Host*',
+		'IMAP',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('imap_host'));
 			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[imap_host]" value="' . $value . '" placeholder="imap.infomaniak.com" autocomplete="off">';
@@ -148,6 +167,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	$new['email_address'] = \sanitize_email((string) ($new['email_address'] ?? ''));
 	$new['email_password'] = (string) ($new['email_password'] ?? '');
 	$new['email_alias'] = \sanitize_email((string) ($new['email_alias'] ?? ''));
+	$new['email_alias_belege'] = \sanitize_email((string) ($new['email_alias_belege'] ?? ''));
 	$bcc_raw = (string) ($new['email_bcc'] ?? '');
 	$bcc_parts = \preg_split('/[,\s;]+/', $bcc_raw) ?: [];
 	$bcc_clean = [];
