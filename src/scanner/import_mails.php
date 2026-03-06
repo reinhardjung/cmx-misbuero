@@ -1704,7 +1704,7 @@ function cmx_mail_import_render_log_page(): void {
 			return $imported > 0 || $skipped > 0;
 		}
 	));
-	$recent_run_entries = \array_slice($recent_run_entries, 0, 40);
+	$recent_run_entries = \array_slice($recent_run_entries, 0, 10);
 
 	echo '<div class="wrap">';
 	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
