@@ -39,13 +39,13 @@ function cmxbu_handle_beleg_send(): void {
 	if (!$post || $post->post_type !== 'belege') {
 		\wp_die('Beleg nicht gefunden.');
 	}
+	$redirect_base = \get_edit_post_link($post_id, '');
+	if (!\is_string($redirect_base) || $redirect_base === '') {
+		$redirect_base = \admin_url('post.php?post=' . (int) $post_id . '&action=edit');
+	}
 	$opts_general = (array) \get_option('cmx_einstellungen', []);
 	$configured_sender = \sanitize_email((string) ($opts_general['email_address'] ?? ''));
 	if (!\is_email($configured_sender)) {
-		$redirect_base = \get_edit_post_link($post_id, '');
-		if (!\is_string($redirect_base) || $redirect_base === '') {
-			$redirect_base = \admin_url('post.php?post=' . (int) $post_id . '&action=edit');
-		}
 		$redirect = \add_query_arg(
 			['cmx_beleg_mail_missing_sender' => '1'],
 			$redirect_base
@@ -162,11 +162,33 @@ function cmxbu_handle_beleg_send(): void {
 	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
 	$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
 	$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
+	$wp_mail_failed_message = '';
+	$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
+		if (!$error instanceof \WP_Error) {
+			return;
+		}
+		$msg = \trim((string) $error->get_error_message());
+		if ($msg === '') {
+			$all = \array_map('strval', (array) $error->get_error_messages());
+			$msg = \trim(\implode(' | ', \array_filter($all, static function (string $item): bool {
+				return $item !== '';
+			})));
+		}
+		$data = $error->get_error_data();
+		if (\is_array($data) && !empty($data['phpmailer_exception_code'])) {
+			$msg = $msg !== ''
+				? ($msg . ' (Code ' . (string) $data['phpmailer_exception_code'] . ')')
+				: ('PHPMailer-Fehler (Code ' . (string) $data['phpmailer_exception_code'] . ')');
+		}
+		$wp_mail_failed_message = $msg;
+	};
 	$GLOBALS['cmx_force_current_user_mail_sender'] = true;
 	$GLOBALS['cmx_mail_context'] = 'beleg_send';
+	\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
 	try {
 		$sent = \wp_mail($to, $subject, $message, $headers);
 	} finally {
+		\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
 		if ($had_sender_override) {
 			$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
 		} else {
@@ -184,7 +206,19 @@ function cmxbu_handle_beleg_send(): void {
 	}
 
 	if (!$sent) {
-		\wp_die('E-Mail konnte nicht gesendet werden.');
+		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: failed reason', ['post_id' => $post_id, 'reason' => (string) $wp_mail_failed_message]);
+		}
+		$args = ['cmx_beleg_mail_error' => '1'];
+		$error_message = \trim((string) $wp_mail_failed_message);
+		if ($error_message !== '') {
+			$token = \wp_generate_password(12, false, false);
+			$key = 'cmx_beleg_mail_error_' . (int) \get_current_user_id() . '_' . $token;
+			\set_transient($key, \substr($error_message, 0, 400), 10 * MINUTE_IN_SECONDS);
+			$args['cmx_beleg_mail_error_token'] = $token;
+		}
+		\wp_safe_redirect(\add_query_arg($args, $redirect_base));
+		exit;
 	}
 
 	$redirect = \add_query_arg(
@@ -206,7 +240,26 @@ function cmxbu_handle_beleg_send(): void {
 	}
 	if (!empty($_GET['cmx_beleg_mail_missing_sender'])) {
 		$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email');
-		echo '<div class="notice notice-error is-dismissible"><p><strong>Bitte hinterlege zuerst Deine E-Mail-Adresse.</strong> Ohne Absender-Adresse kann kein Beleg versendet werden. <a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;">Zu Einstellungen / E-Mail</a></p></div>';
+		echo '<div class="notice notice-error is-dismissible"><p><strong>Bitte hinterlege zuerst Deine E-Mail-Adresse.</strong> Ohne Absender-Adresse kann kein Beleg versendet werden. <a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;" target="_blank" rel="noopener noreferrer">Einstellungen / E-Mail</a></p></div>';
+		return;
+	}
+	if (!empty($_GET['cmx_beleg_mail_error'])) {
+		$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email');
+		$detail = '';
+		$token = isset($_GET['cmx_beleg_mail_error_token']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_mail_error_token'])) : '';
+		if ($token !== '') {
+			$key = 'cmx_beleg_mail_error_' . (int) \get_current_user_id() . '_' . $token;
+			$stored = \get_transient($key);
+			if (\is_string($stored) && $stored !== '') {
+				$detail = $stored;
+			}
+			\delete_transient($key);
+		}
+		echo '<div class="notice notice-error is-dismissible"><p><strong>E-Mail konnte nicht gesendet werden.</strong> Bitte prüfe Deine SMTP-/Alias-Einstellungen. <a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;" target="_blank" rel="noopener noreferrer">Einstellungen / E-Mail</a></p>';
+		if ($detail !== '') {
+			echo '<p style="margin-top:6px;"><small>Technischer Hinweis: ' . \esc_html($detail) . '</small></p>';
+		}
+		echo '</div>';
 		return;
 	}
 	if (empty($_GET['cmx_beleg_mail_sent'])) {
@@ -216,8 +269,17 @@ function cmxbu_handle_beleg_send(): void {
 		? \sanitize_email((string) \wp_unslash($_GET['cmx_beleg_mail_to']))
 		: '';
 	if ($mail_to !== '') {
+		$opts = (array) \get_option('cmx_einstellungen', []);
+		$sender_mail = \sanitize_email((string) ($opts['email_alias_belege'] ?? ''));
+		if (!\is_email($sender_mail)) {
+			$sender_mail = \sanitize_email((string) ($opts['email_address'] ?? ''));
+		}
+		$sender_hint = '';
+		if (\is_email($sender_mail)) {
+			$sender_hint = ' <i style="color:silver;">(von: ' . \esc_html($sender_mail) . ')</i>';
+		}
 		$link = '<a href="' . \esc_url('mailto:' . $mail_to) . '">' . \esc_html($mail_to) . '</a>';
-		echo '<div class="notice notice-success is-dismissible"><p>E-Mail wurde versendet an: ' . $link . '</p></div>';
+		echo '<div class="notice notice-success is-dismissible"><p>E-Mail wurde versendet an: ' . $link . $sender_hint . '</p></div>';
 		return;
 	}
 	echo '<div class="notice notice-success is-dismissible"><p>E-Mail wurde versendet.</p></div>';
