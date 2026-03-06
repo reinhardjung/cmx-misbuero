@@ -1628,7 +1628,12 @@ function cmx_mail_import_render_log_page(): void {
 	$recent_run_entries = \array_values(\array_filter(
 		cmx_mail_import_get_run_log(),
 		static function ($run_entry): bool {
-			return \is_array($run_entry) && (int) ($run_entry['imported_items'] ?? 0) > 0;
+			if (!\is_array($run_entry)) {
+				return false;
+			}
+			$imported = (int) ($run_entry['imported_items'] ?? 0);
+			$skipped = (int) ($run_entry['skipped_messages'] ?? 0);
+			return $imported > 0 || $skipped > 0;
 		}
 	));
 	$recent_run_entries = \array_slice($recent_run_entries, 0, 40);
@@ -1668,8 +1673,12 @@ function cmx_mail_import_render_log_page(): void {
 			$skipped = (int) ($run_entry['skipped_messages'] ?? 0);
 			$status = \sanitize_key((string) ($run_entry['status'] ?? ''));
 			$title = 'status=' . $status . ', imported=' . $imported . ', skipped=' . $skipped;
-			$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
-			$parts[] = '<a href="' . \esc_url($url) . '" title="' . \esc_attr($title) . '"><code>' . \esc_html($label) . '</code></a>';
+			if ($imported > 0) {
+				$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
+				$parts[] = '<a href="' . \esc_url($url) . '" title="' . \esc_attr($title) . '"><code>' . \esc_html($label) . '</code></a>';
+				continue;
+			}
+			$parts[] = '<code title="' . \esc_attr($title) . '" style="opacity:.7;">' . \esc_html($label) . '</code>';
 		}
 		echo \implode(' | ', $parts);
 		echo '</p>';
