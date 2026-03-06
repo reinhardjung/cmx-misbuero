@@ -1357,6 +1357,14 @@ function cmx_mail_import_log_file_url(): string {
 }
 
 function cmx_mail_import_render_admin_details_table(array $entries): void {
+	$entries = \array_values(\array_filter($entries, static function ($entry): bool {
+		if (!\is_array($entry)) {
+			return false;
+		}
+		$status = \sanitize_key((string) ($entry['status'] ?? ''));
+		return $status !== 'skipped';
+	}));
+
 	if (empty($entries)) {
 		echo '<p>Keine automatisch zugeordneten Eintraege fuer diesen Lauf gefunden.</p>';
 		return;
