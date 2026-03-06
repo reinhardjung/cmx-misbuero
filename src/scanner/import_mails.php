@@ -1724,7 +1724,7 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<label for="cmx_mail_import_limit"><strong>Limit:</strong></label> ';
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
-	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alles anzeigen</a> ';
+	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alle anzeigen</a> ';
 	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a>';
 	echo '</form>';
 
