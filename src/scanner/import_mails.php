@@ -1583,7 +1583,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 	}
 
 	echo '<table class="widefat striped" style="margin-top:8px;"><thead><tr>';
-	echo '<th>Zeit</th><th>Status</th><th>Typ</th><th>Kontakt</th><th>Absender</th><th>Datei</th><th>Ziel</th><th>Upload</th>';
+	echo '<th>Zeit</th><th>Status</th><th>Typ</th><th>Kontakt</th><th>Absender</th><th>Empfänger</th><th>Datei</th><th>Ziel</th>';
 	echo '</tr></thead><tbody>';
 	foreach ($entries as $entry) {
 		$ts = (int) ($entry['ts'] ?? 0);
@@ -1608,6 +1608,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		}
 		$kontakt_link = $kontakt_id > 0 ? \get_edit_post_link($kontakt_id, '') : '';
 		$sender = cmx_mail_import_normalize_email((string) ($entry['sender'] ?? ''));
+		$recipients = cmx_mail_import_parse_email_list($entry['recipients'] ?? []);
 		$filename = \sanitize_file_name((string) ($entry['filename'] ?? ''));
 		$target_post_id = (int) ($entry['target_post_id'] ?? 0);
 		$target_label = '-';
@@ -1644,19 +1645,33 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 			echo '-';
 		}
 		echo '</td>';
-		echo '<td>' . \esc_html($filename) . '</td>';
+		echo '<td>';
+		if (!empty($recipients)) {
+			$recipient_links = [];
+			foreach ($recipients as $recipient) {
+				$recipient = cmx_mail_import_normalize_email((string) $recipient);
+				if ($recipient === '') {
+					continue;
+				}
+				$recipient_links[] = '<a href="mailto:' . \esc_attr($recipient) . '">' . \esc_html($recipient) . '</a>';
+			}
+			echo !empty($recipient_links) ? \implode(', ', $recipient_links) : '-';
+		} else {
+			echo '-';
+		}
+		echo '</td>';
+		echo '<td>';
+		if ($upload_url !== '') {
+			echo '<a href="' . \esc_url($upload_url) . '" title="' . \esc_attr($upload_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($filename !== '' ? $filename : 'Datei') . '</a>';
+		} else {
+			echo \esc_html($filename !== '' ? $filename : '-');
+		}
+		echo '</td>';
 		echo '<td>';
 		if ($target_link !== '') {
 			echo '<a href="' . \esc_url($target_link) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($target_label) . '</a>';
 		} else {
 			echo \esc_html($target_label);
-		}
-		echo '</td>';
-		echo '<td>';
-		if ($upload_url !== '') {
-			echo '<a href="' . \esc_url($upload_url) . '" title="' . \esc_attr($upload_url) . '" target="_blank" rel="noopener noreferrer">Link</a>';
-		} else {
-			echo '-';
 		}
 		echo '</td>';
 		echo '</tr>';
