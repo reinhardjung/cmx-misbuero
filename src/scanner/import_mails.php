@@ -1698,6 +1698,7 @@ function cmx_mail_import_render_log_page(): void {
 	$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 200;
 	$limit = \max(20, \min(500, $limit));
 	$entries = cmx_mail_import_get_events_for_run_query($run_query, $limit);
+	$visible_entry_count = \count(\array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event')));
 	$today_count = cmx_mail_import_count_events_today();
 	$scanner_url = \admin_url('edit.php?post_type=scanner');
 	$log_file_path = cmx_mail_import_log_file_path();
@@ -1739,14 +1740,12 @@ function cmx_mail_import_render_log_page(): void {
 	echo '</form>';
 
 	if (!empty($recent_run_entries)) {
-		$display_count = 0;
 		$parts = [];
 		foreach ($recent_run_entries as $run_entry) {
 			$rid = \sanitize_text_field((string) ($run_entry['run_id'] ?? ''));
 			if ($rid === '') {
 				continue;
 			}
-			$display_count++;
 			$label = cmx_mail_import_run_id_label($rid);
 			$imported = (int) ($run_entry['imported_items'] ?? 0);
 			$skipped = (int) ($run_entry['skipped_messages'] ?? 0);
@@ -1759,7 +1758,8 @@ function cmx_mail_import_render_log_page(): void {
 			}
 			$parts[] = '<code title="' . \esc_attr($title) . '" style="opacity:.7;">' . \esc_html($label) . '</code>';
 		}
-		echo '<p><strong>' . \esc_html((string) $display_count) . ' Letzte Runs:</strong> ';
+		echo '<p><strong>' . \esc_html((string) $visible_entry_count) . ' Eintraege (Run/Filter):</strong> ';
+		echo '| <strong>Letzte Runs:</strong> ';
 		echo \implode(' | ', $parts);
 		echo '</p>';
 	}
