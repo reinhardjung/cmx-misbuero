@@ -1121,7 +1121,7 @@ function cmx_mail_import_create_document(int $kontakt_id, string $subject, array
 
 	$inserted = \wp_insert_post([
 		'post_type' => 'dokumente',
-		'post_status' => 'draft',
+		'post_status' => 'publish',
 		'post_title' => $title,
 	], true);
 	if (\is_wp_error($inserted) || (int) $inserted <= 0) {
@@ -1247,7 +1247,7 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 					'type' => 'dokument',
 					'rule' => 'supplier_document_fallback',
 					'status' => 'imported',
-					'reason' => 'no_invoice_keyword_or_contact_not_supplier',
+					'reason' => 'general_document',
 					'kontakt_id' => $kontakt_id,
 					'sender' => $sender_email,
 					'recipients' => $recipients,
