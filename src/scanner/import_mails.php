@@ -128,14 +128,23 @@ function cmx_mail_import_run_log_option_name(): string {
 	return (string) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_OPTION');
 }
 
+function cmx_mail_import_is_empty_run_entry(array $entry): bool {
+	$imported = (int) ($entry['imported_items'] ?? 0);
+	return $imported <= 0;
+}
+
 function cmx_mail_import_get_run_log(): array {
-	$entries = \get_option(cmx_mail_import_run_log_option_name(), []);
-	if (!\is_array($entries)) {
+	$stored = \get_option(cmx_mail_import_run_log_option_name(), []);
+	if (!\is_array($stored)) {
 		return [];
 	}
-	return \array_values(\array_filter($entries, static function ($entry): bool {
-		return \is_array($entry);
+	$entries = \array_values(\array_filter($stored, static function ($entry): bool {
+		return \is_array($entry) && !cmx_mail_import_is_empty_run_entry($entry);
 	}));
+	if (\count($entries) !== \count($stored)) {
+		cmx_mail_import_save_run_log($entries);
+	}
+	return $entries;
 }
 
 function cmx_mail_import_save_run_log(array $entries): void {
@@ -164,6 +173,9 @@ function cmx_mail_import_register_run(array $result): void {
 		'skipped_messages' => (int) ($result['skipped_messages'] ?? 0),
 		'skip_reasons' => (array) ($result['skip_reasons'] ?? []),
 	];
+	if (cmx_mail_import_is_empty_run_entry($entry)) {
+		return;
+	}
 
 	$entries = \array_values(\array_filter(cmx_mail_import_get_run_log(), static function ($row) use ($run_id): bool {
 		return (string) ($row['run_id'] ?? '') !== $run_id;
@@ -472,6 +484,8 @@ function cmx_mail_import_collect_contact_emails(int $kontakt_id): array {
 	if (\is_array($bundle)) {
 		for ($i = 1; $i <= 3; $i++) {
 			$add((string) ($bundle['email'][$i]['value'] ?? ''));
+			$add((string) ($bundle['email'][$i] ?? ''));
+			$add((string) ($bundle['email_' . $i] ?? ''));
 		}
 	}
 
@@ -553,7 +567,7 @@ function cmx_mail_import_find_contact_by_sender(string $sender_email): int {
 
 	$direct_matches = \get_posts([
 		'post_type' => $post_types,
-		'post_status' => ['publish', 'private'],
+		'post_status' => 'any',
 		'posts_per_page' => 50,
 		'fields' => 'ids',
 		'meta_query' => $meta_query,
@@ -575,7 +589,7 @@ function cmx_mail_import_find_contact_by_sender(string $sender_email): int {
 
 	$all_contacts = \get_posts([
 		'post_type' => $post_types,
-		'post_status' => ['publish', 'private'],
+		'post_status' => 'any',
 		'posts_per_page' => (int) CMX_MAIL_IMPORT_MAX_CONTACTS_SCAN,
 		'fields' => 'ids',
 		'orderby' => 'modified',
@@ -729,8 +743,9 @@ function cmx_mail_import_collect_pdf_parts_walk($part, string $part_no, array &$
 
 	$mime = cmx_mail_import_get_mime_type($part);
 	$filename = cmx_mail_import_part_filename($part);
+	$is_pdf_by_name = $filename !== '' && \strtolower((string) \pathinfo($filename, \PATHINFO_EXTENSION)) === 'pdf';
 
-	if ($mime === 'application/pdf') {
+	if ($mime === 'application/pdf' || $is_pdf_by_name) {
 		$parts[] = [
 			'part_no' => $part_no !== '' ? $part_no : '1',
 			'encoding' => isset($part->encoding) ? (int) $part->encoding : 0,
@@ -1046,10 +1061,6 @@ function cmx_mail_import_create_supplier_beleg(int $kontakt_id, string $subject,
 }
 
 function cmx_mail_import_create_document(int $kontakt_id, string $subject, array $attachment, array $context = []): array {
-	if ($kontakt_id <= 0) {
-		return ['post_id' => 0, 'upload_rel' => ''];
-	}
-
 	$file_name = (string) ($attachment['filename'] ?? '');
 	$title_from_file = (string) \pathinfo($file_name, \PATHINFO_FILENAME);
 	$title = \sanitize_text_field(\trim($title_from_file !== '' ? $title_from_file : $subject));
@@ -1078,20 +1089,22 @@ function cmx_mail_import_create_document(int $kontakt_id, string $subject, array
 	\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
 	\update_post_meta($doc_id, cmx_mail_import_doc_self_meta_key(), [$rel]);
 
-	$kontakt_rel_key = cmx_mail_import_doc_kontakt_rel_key();
-	$current_contacts = (array) \get_post_meta($doc_id, $kontakt_rel_key, true);
-	$current_contacts = \array_values(\array_unique(\array_map('intval', $current_contacts)));
-	if (!\in_array($kontakt_id, $current_contacts, true)) {
-		$current_contacts[] = $kontakt_id;
-	}
-	\update_post_meta($doc_id, $kontakt_rel_key, \array_values(\array_filter($current_contacts)));
+	if ($kontakt_id > 0) {
+		$kontakt_rel_key = cmx_mail_import_doc_kontakt_rel_key();
+		$current_contacts = (array) \get_post_meta($doc_id, $kontakt_rel_key, true);
+		$current_contacts = \array_values(\array_unique(\array_map('intval', $current_contacts)));
+		if (!\in_array($kontakt_id, $current_contacts, true)) {
+			$current_contacts[] = $kontakt_id;
+		}
+		\update_post_meta($doc_id, $kontakt_rel_key, \array_values(\array_filter($current_contacts)));
 
-	$kontakt_uploads_meta = cmx_mail_import_doc_uploads_meta_key();
-	$kontakt_docs = (array) \get_post_meta($kontakt_id, $kontakt_uploads_meta, true);
-	$kontakt_docs = \array_values(\array_unique(\array_map('intval', $kontakt_docs)));
-	if (!\in_array($doc_id, $kontakt_docs, true)) {
-		$kontakt_docs[] = $doc_id;
-		\update_post_meta($kontakt_id, $kontakt_uploads_meta, $kontakt_docs);
+		$kontakt_uploads_meta = cmx_mail_import_doc_uploads_meta_key();
+		$kontakt_docs = (array) \get_post_meta($kontakt_id, $kontakt_uploads_meta, true);
+		$kontakt_docs = \array_values(\array_unique(\array_map('intval', $kontakt_docs)));
+		if (!\in_array($doc_id, $kontakt_docs, true)) {
+			$kontakt_docs[] = $doc_id;
+			\update_post_meta($kontakt_id, $kontakt_uploads_meta, $kontakt_docs);
+		}
 	}
 
 	cmx_mail_import_stamp_post($doc_id, $context, $rel);
@@ -1110,16 +1123,12 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 		return ['imported' => 0, 'reason' => 'missing_sender'];
 	}
 
-	$kontakt_id = cmx_mail_import_find_contact_by_sender($sender_email);
-	if ($kontakt_id <= 0) {
-		return ['imported' => 0, 'reason' => 'kontakt_not_found', 'sender' => $sender_email];
-	}
-
 	$attachments = cmx_mail_import_collect_pdf_attachments($imap, $msg_no);
 	if (empty($attachments)) {
-		return ['imported' => 0, 'reason' => 'no_pdf', 'kontakt_id' => $kontakt_id, 'sender' => $sender_email];
+		return ['imported' => 0, 'reason' => 'no_pdf', 'kontakt_id' => 0, 'sender' => $sender_email];
 	}
 
+	$kontakt_id = cmx_mail_import_find_contact_by_sender($sender_email);
 	$recipients = cmx_mail_import_header_recipient_emails($imap, $msg_no, $header);
 	$supplier_target = cmx_mail_import_normalize_email((string) ($settings['supplier_email'] ?? ''));
 	$is_supplier_mail = ($supplier_target !== '' && \in_array($supplier_target, $recipients, true));
@@ -1130,6 +1139,42 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 	}
 	$subject = \sanitize_text_field($subject);
 	$run_id = \sanitize_text_field((string) ($run_context['run_id'] ?? ''));
+
+	if ($kontakt_id <= 0) {
+		$imported = 0;
+		foreach ($attachments as $attachment) {
+			$created = cmx_mail_import_create_document(0, $subject, $attachment, [
+				'run_id' => $run_id,
+				'sender' => $sender_email,
+				'recipients' => $recipients,
+			]);
+			$doc_id = (int) ($created['post_id'] ?? 0);
+			$upload_rel = (string) ($created['upload_rel'] ?? '');
+			if ($doc_id <= 0) {
+				continue;
+			}
+			$imported++;
+			cmx_mail_import_register_event([
+				'run_id' => $run_id,
+				'type' => 'dokument',
+				'rule' => 'no_contact_fallback',
+				'status' => 'imported',
+				'reason' => 'kontakt_not_found_document_import',
+				'kontakt_id' => 0,
+				'sender' => $sender_email,
+				'recipients' => $recipients,
+				'message_no' => $msg_no,
+				'filename' => (string) ($attachment['filename'] ?? 'attachment.pdf'),
+				'target_post_id' => $doc_id,
+				'upload_rel' => $upload_rel,
+			]);
+		}
+
+		if ($imported > 0) {
+			return ['imported' => $imported, 'reason' => 'ok_document_no_contact', 'kontakt_id' => 0, 'sender' => $sender_email];
+		}
+		return ['imported' => 0, 'reason' => 'kontakt_not_found', 'kontakt_id' => 0, 'sender' => $sender_email];
+	}
 
 	$imported = 0;
 	if ($is_supplier_mail) {
@@ -1424,20 +1469,6 @@ function cmx_mail_import_maybe_run_for_scanner_admin_list(): void {
 	}
 }
 
-function cmx_mail_import_maybe_run_for_scanner_log_page(): void {
-	static $did_run = false;
-	if ($did_run) {
-		return;
-	}
-	$did_run = true;
-
-	$result = cmx_mail_import_run(['source' => 'scanner_log_page']);
-	$GLOBALS['cmx_mail_import_last_admin_run'] = $result;
-	if ((int) ($result['imported_items'] ?? 0) > 0) {
-		cmx_mail_import_log('scanner log page run', $result);
-	}
-}
-
 function cmx_mail_import_is_scanner_list_request_params(): bool {
 	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'scanner') {
 		return false;
@@ -1448,21 +1479,11 @@ function cmx_mail_import_is_scanner_list_request_params(): bool {
 	return true;
 }
 
-function cmx_mail_import_is_scanner_log_page_request_params(): bool {
-	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'scanner') {
-		return false;
-	}
-	return isset($_GET['page']) && (string) $_GET['page'] === 'cmx-mail-import-log';
-}
-
 function cmx_mail_import_maybe_run_for_scanner_request(): void {
-	if (cmx_mail_import_is_scanner_list_request_params()) {
-		cmx_mail_import_maybe_run_for_scanner_admin_list();
+	if (!cmx_mail_import_is_scanner_list_request_params()) {
 		return;
 	}
-	if (cmx_mail_import_is_scanner_log_page_request_params()) {
-		cmx_mail_import_maybe_run_for_scanner_log_page();
-	}
+	cmx_mail_import_maybe_run_for_scanner_admin_list();
 }
 
 \add_action('admin_init', function (): void {
