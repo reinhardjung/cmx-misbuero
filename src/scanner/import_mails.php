@@ -1700,7 +1700,6 @@ function cmx_mail_import_render_log_page(): void {
 	$entries = cmx_mail_import_get_events_for_run_query($run_query, $limit);
 	$visible_entry_count = \count(\array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event')));
 	$today_count = cmx_mail_import_count_events_today();
-	$scanner_url = \admin_url('edit.php?post_type=scanner');
 	$log_file_path = cmx_mail_import_log_file_path();
 	$open_log_url = \admin_url('admin-post.php?action=cmx_mail_import_open_logfile');
 
@@ -1731,7 +1730,6 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
 	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alle anzeigen</a> ';
-	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a> ';
 	if ($log_file_path !== '') {
 		echo '<a class="button" href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer">Logdatei öffnen</a>';
 	}
