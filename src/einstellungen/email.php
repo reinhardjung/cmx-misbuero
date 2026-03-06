@@ -59,7 +59,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="office@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Alias gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Alias ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -71,7 +71,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Alias gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Alias ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
