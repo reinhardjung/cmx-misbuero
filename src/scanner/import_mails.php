@@ -1721,11 +1721,6 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
 	// echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
 	echo 'In der Scanner-Liste werden nur ungelesene Mails geprueft.</p>';
-	if ($log_file_path !== '') {
-		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer"><strong>Logdatei öffnen</strong></a></p>';
-	} else {
-		echo '<p><strong>Logdatei nicht verfuegbar</strong></p>';
-	}
 
 	echo '<form method="get" style="margin:10px 0 14px;">';
 	echo '<input type="hidden" name="post_type" value="scanner">';
@@ -1736,7 +1731,10 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
 	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alle anzeigen</a> ';
-	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a>';
+	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a> ';
+	if ($log_file_path !== '') {
+		echo '<a class="button" href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer">Logdatei öffnen</a>';
+	}
 	echo '</form>';
 
 	if (!empty($recent_run_entries)) {
