@@ -205,6 +205,7 @@ function cmx_mail_import_register_event(array $context): void {
 	$rule = \sanitize_key((string) ($context['rule'] ?? ''));
 	$status = \sanitize_key((string) ($context['status'] ?? 'imported'));
 	$reason = \sanitize_key((string) ($context['reason'] ?? ''));
+	$subject = \sanitize_text_field((string) ($context['subject'] ?? ''));
 	$sender = cmx_mail_import_normalize_email((string) ($context['sender'] ?? ''));
 	$recipients = cmx_mail_import_parse_email_list($context['recipients'] ?? []);
 	$filename = \sanitize_file_name((string) ($context['filename'] ?? ''));
@@ -220,6 +221,7 @@ function cmx_mail_import_register_event(array $context): void {
 		'rule' => $rule,
 		'status' => $status,
 		'reason' => $reason,
+		'subject' => $subject,
 		'message_no' => $message_no,
 		'kontakt_id' => $kontakt_id,
 		'kontakt_title' => $kontakt_id > 0 ? \sanitize_text_field((string) \get_the_title($kontakt_id)) : '',
@@ -1220,6 +1222,7 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 						'rule' => 'supplier',
 						'status' => 'imported',
 						'reason' => 'keyword_invoice_match',
+						'subject' => $subject,
 						'kontakt_id' => $kontakt_id,
 						'sender' => $sender_email,
 						'recipients' => $recipients,
@@ -1248,6 +1251,7 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 					'rule' => 'supplier_document_fallback',
 					'status' => 'imported',
 					'reason' => 'general_document',
+					'subject' => $subject,
 					'kontakt_id' => $kontakt_id,
 					'sender' => $sender_email,
 					'recipients' => $recipients,
@@ -1288,6 +1292,7 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 				'rule' => 'general',
 				'status' => 'imported',
 				'reason' => 'general_document',
+				'subject' => $subject,
 				'kontakt_id' => $kontakt_id,
 				'sender' => $sender_email,
 				'recipients' => $recipients,
@@ -1608,6 +1613,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		}
 		$kontakt_link = $kontakt_id > 0 ? \get_edit_post_link($kontakt_id, '') : '';
 		$sender = cmx_mail_import_normalize_email((string) ($entry['sender'] ?? ''));
+		$subject = \sanitize_text_field((string) ($entry['subject'] ?? ''));
 		$recipients = cmx_mail_import_parse_email_list($entry['recipients'] ?? []);
 		$filename = \sanitize_file_name((string) ($entry['filename'] ?? ''));
 		$target_post_id = (int) ($entry['target_post_id'] ?? 0);
@@ -1640,7 +1646,11 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		echo '</td>';
 		echo '<td>';
 		if ($sender !== '') {
-			echo '<a href="mailto:' . \esc_attr($sender) . '">' . \esc_html($sender) . '</a>';
+			$mailto = 'mailto:' . $sender;
+			if ($subject !== '') {
+				$mailto .= '?subject=' . \rawurlencode($subject);
+			}
+			echo '<a href="' . \esc_url($mailto) . '" title="' . \esc_attr($subject) . '">' . \esc_html($sender) . '</a>';
 		} else {
 			echo '-';
 		}
