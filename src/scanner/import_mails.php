@@ -567,7 +567,7 @@ function cmx_mail_import_find_contact_by_sender(string $sender_email): int {
 
 	$direct_matches = \get_posts([
 		'post_type' => $post_types,
-		'post_status' => 'any',
+		'post_status' => 'publish',
 		'posts_per_page' => 50,
 		'fields' => 'ids',
 		'meta_query' => $meta_query,
@@ -589,7 +589,7 @@ function cmx_mail_import_find_contact_by_sender(string $sender_email): int {
 
 	$all_contacts = \get_posts([
 		'post_type' => $post_types,
-		'post_status' => 'any',
+		'post_status' => 'publish',
 		'posts_per_page' => (int) CMX_MAIL_IMPORT_MAX_CONTACTS_SCAN,
 		'fields' => 'ids',
 		'orderby' => 'modified',
@@ -743,9 +743,8 @@ function cmx_mail_import_collect_pdf_parts_walk($part, string $part_no, array &$
 
 	$mime = cmx_mail_import_get_mime_type($part);
 	$filename = cmx_mail_import_part_filename($part);
-	$is_pdf_by_name = $filename !== '' && \strtolower((string) \pathinfo($filename, \PATHINFO_EXTENSION)) === 'pdf';
 
-	if ($mime === 'application/pdf' || $is_pdf_by_name) {
+	if ($mime === 'application/pdf') {
 		$parts[] = [
 			'part_no' => $part_no !== '' ? $part_no : '1',
 			'encoding' => isset($part->encoding) ? (int) $part->encoding : 0,
@@ -1061,6 +1060,10 @@ function cmx_mail_import_create_supplier_beleg(int $kontakt_id, string $subject,
 }
 
 function cmx_mail_import_create_document(int $kontakt_id, string $subject, array $attachment, array $context = []): array {
+	if ($kontakt_id <= 0) {
+		return ['post_id' => 0, 'upload_rel' => ''];
+	}
+
 	$file_name = (string) ($attachment['filename'] ?? '');
 	$title_from_file = (string) \pathinfo($file_name, \PATHINFO_FILENAME);
 	$title = \sanitize_text_field(\trim($title_from_file !== '' ? $title_from_file : $subject));
@@ -1089,22 +1092,20 @@ function cmx_mail_import_create_document(int $kontakt_id, string $subject, array
 	\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
 	\update_post_meta($doc_id, cmx_mail_import_doc_self_meta_key(), [$rel]);
 
-	if ($kontakt_id > 0) {
-		$kontakt_rel_key = cmx_mail_import_doc_kontakt_rel_key();
-		$current_contacts = (array) \get_post_meta($doc_id, $kontakt_rel_key, true);
-		$current_contacts = \array_values(\array_unique(\array_map('intval', $current_contacts)));
-		if (!\in_array($kontakt_id, $current_contacts, true)) {
-			$current_contacts[] = $kontakt_id;
-		}
-		\update_post_meta($doc_id, $kontakt_rel_key, \array_values(\array_filter($current_contacts)));
+	$kontakt_rel_key = cmx_mail_import_doc_kontakt_rel_key();
+	$current_contacts = (array) \get_post_meta($doc_id, $kontakt_rel_key, true);
+	$current_contacts = \array_values(\array_unique(\array_map('intval', $current_contacts)));
+	if (!\in_array($kontakt_id, $current_contacts, true)) {
+		$current_contacts[] = $kontakt_id;
+	}
+	\update_post_meta($doc_id, $kontakt_rel_key, \array_values(\array_filter($current_contacts)));
 
-		$kontakt_uploads_meta = cmx_mail_import_doc_uploads_meta_key();
-		$kontakt_docs = (array) \get_post_meta($kontakt_id, $kontakt_uploads_meta, true);
-		$kontakt_docs = \array_values(\array_unique(\array_map('intval', $kontakt_docs)));
-		if (!\in_array($doc_id, $kontakt_docs, true)) {
-			$kontakt_docs[] = $doc_id;
-			\update_post_meta($kontakt_id, $kontakt_uploads_meta, $kontakt_docs);
-		}
+	$kontakt_uploads_meta = cmx_mail_import_doc_uploads_meta_key();
+	$kontakt_docs = (array) \get_post_meta($kontakt_id, $kontakt_uploads_meta, true);
+	$kontakt_docs = \array_values(\array_unique(\array_map('intval', $kontakt_docs)));
+	if (!\in_array($doc_id, $kontakt_docs, true)) {
+		$kontakt_docs[] = $doc_id;
+		\update_post_meta($kontakt_id, $kontakt_uploads_meta, $kontakt_docs);
 	}
 
 	cmx_mail_import_stamp_post($doc_id, $context, $rel);
@@ -1123,12 +1124,16 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 		return ['imported' => 0, 'reason' => 'missing_sender'];
 	}
 
-	$attachments = cmx_mail_import_collect_pdf_attachments($imap, $msg_no);
-	if (empty($attachments)) {
-		return ['imported' => 0, 'reason' => 'no_pdf', 'kontakt_id' => 0, 'sender' => $sender_email];
+	$kontakt_id = cmx_mail_import_find_contact_by_sender($sender_email);
+	if ($kontakt_id <= 0) {
+		return ['imported' => 0, 'reason' => 'kontakt_not_found', 'sender' => $sender_email];
 	}
 
-	$kontakt_id = cmx_mail_import_find_contact_by_sender($sender_email);
+	$attachments = cmx_mail_import_collect_pdf_attachments($imap, $msg_no);
+	if (empty($attachments)) {
+		return ['imported' => 0, 'reason' => 'no_pdf', 'kontakt_id' => $kontakt_id, 'sender' => $sender_email];
+	}
+
 	$recipients = cmx_mail_import_header_recipient_emails($imap, $msg_no, $header);
 	$supplier_target = cmx_mail_import_normalize_email((string) ($settings['supplier_email'] ?? ''));
 	$is_supplier_mail = ($supplier_target !== '' && \in_array($supplier_target, $recipients, true));
@@ -1139,42 +1144,6 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 	}
 	$subject = \sanitize_text_field($subject);
 	$run_id = \sanitize_text_field((string) ($run_context['run_id'] ?? ''));
-
-	if ($kontakt_id <= 0) {
-		$imported = 0;
-		foreach ($attachments as $attachment) {
-			$created = cmx_mail_import_create_document(0, $subject, $attachment, [
-				'run_id' => $run_id,
-				'sender' => $sender_email,
-				'recipients' => $recipients,
-			]);
-			$doc_id = (int) ($created['post_id'] ?? 0);
-			$upload_rel = (string) ($created['upload_rel'] ?? '');
-			if ($doc_id <= 0) {
-				continue;
-			}
-			$imported++;
-			cmx_mail_import_register_event([
-				'run_id' => $run_id,
-				'type' => 'dokument',
-				'rule' => 'no_contact_fallback',
-				'status' => 'imported',
-				'reason' => 'kontakt_not_found_document_import',
-				'kontakt_id' => 0,
-				'sender' => $sender_email,
-				'recipients' => $recipients,
-				'message_no' => $msg_no,
-				'filename' => (string) ($attachment['filename'] ?? 'attachment.pdf'),
-				'target_post_id' => $doc_id,
-				'upload_rel' => $upload_rel,
-			]);
-		}
-
-		if ($imported > 0) {
-			return ['imported' => $imported, 'reason' => 'ok_document_no_contact', 'kontakt_id' => 0, 'sender' => $sender_email];
-		}
-		return ['imported' => 0, 'reason' => 'kontakt_not_found', 'kontakt_id' => 0, 'sender' => $sender_email];
-	}
 
 	$imported = 0;
 	if ($is_supplier_mail) {
