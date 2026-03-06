@@ -1583,19 +1583,24 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 	}
 
 	echo '<table class="widefat striped" style="margin-top:8px;"><thead><tr>';
-	echo '<th>Zeit</th><th>Status</th><th>Typ</th><th>Mail#</th><th>Kontakt</th><th>Absender</th><th>Datei</th><th>Ziel</th><th>Upload</th>';
+	echo '<th>Zeit</th><th>Status</th><th>Typ</th><th>Kontakt</th><th>Absender</th><th>Datei</th><th>Ziel</th><th>Upload</th>';
 	echo '</tr></thead><tbody>';
 	foreach ($entries as $entry) {
 		$ts = (int) ($entry['ts'] ?? 0);
 		$time = $ts > 0 ? \wp_date('d.m.Y H:i', $ts) : '';
 		$status = \sanitize_key((string) ($entry['status'] ?? ''));
 		$reason = \sanitize_key((string) ($entry['reason'] ?? ''));
-		$status_label = $status !== '' ? $status : '-';
-		if ($reason !== '') {
-			$status_label .= ' (' . $reason . ')';
-		}
+		$status_label = $reason !== '' ? $reason : ($status !== '' ? $status : '-');
 		$type = \sanitize_text_field((string) ($entry['type'] ?? ''));
-		$message_no = (int) ($entry['message_no'] ?? 0);
+		$type_post_type = \sanitize_key((string) ($entry['target_post_type'] ?? ''));
+		if ($type_post_type === '') {
+			if ($type === 'beleg') {
+				$type_post_type = 'belege';
+			} elseif ($type === 'dokument') {
+				$type_post_type = 'dokumente';
+			}
+		}
+		$type_list_link = $type_post_type !== '' ? \admin_url('edit.php?post_type=' . $type_post_type) : '';
 		$kontakt = \sanitize_text_field((string) ($entry['kontakt_title'] ?? ''));
 		$kontakt_id = (int) ($entry['kontakt_id'] ?? 0);
 		if ($kontakt === '' && $kontakt_id > 0) {
@@ -1605,12 +1610,11 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		$sender = cmx_mail_import_normalize_email((string) ($entry['sender'] ?? ''));
 		$filename = \sanitize_file_name((string) ($entry['filename'] ?? ''));
 		$target_post_id = (int) ($entry['target_post_id'] ?? 0);
-		$target_label = '';
+		$target_label = '-';
 		$target_link = '';
 		if ($target_post_id > 0) {
-			$target_type = \sanitize_key((string) ($entry['target_post_type'] ?? ''));
 			$target_title = \sanitize_text_field((string) \get_the_title($target_post_id));
-			$target_label = $target_type . ' #' . $target_post_id . ($target_title !== '' ? ' (' . $target_title . ')' : '');
+			$target_label = $target_title !== '' ? $target_title : '-';
 			$target_link = (string) \get_edit_post_link($target_post_id, '');
 		}
 		$upload_rel = \sanitize_text_field((string) ($entry['upload_rel'] ?? ''));
@@ -1619,8 +1623,13 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		echo '<tr>';
 		echo '<td>' . \esc_html($time) . '</td>';
 		echo '<td><code>' . \esc_html($status_label) . '</code></td>';
-		echo '<td>' . \esc_html($type) . '</td>';
-		echo '<td>' . \esc_html($message_no > 0 ? (string) $message_no : '-') . '</td>';
+		echo '<td>';
+		if ($type_list_link !== '') {
+			echo '<a href="' . \esc_url($type_list_link) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($type) . '</a>';
+		} else {
+			echo \esc_html($type);
+		}
+		echo '</td>';
 		echo '<td>';
 		if ($kontakt_link !== '') {
 			echo '<a href="' . \esc_url($kontakt_link) . '">' . \esc_html($kontakt) . '</a>';
@@ -1628,20 +1637,26 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 			echo \esc_html($kontakt);
 		}
 		echo '</td>';
-		echo '<td>' . \esc_html($sender) . '</td>';
+		echo '<td>';
+		if ($sender !== '') {
+			echo '<a href="mailto:' . \esc_attr($sender) . '">' . \esc_html($sender) . '</a>';
+		} else {
+			echo '-';
+		}
+		echo '</td>';
 		echo '<td>' . \esc_html($filename) . '</td>';
 		echo '<td>';
 		if ($target_link !== '') {
-			echo '<a href="' . \esc_url($target_link) . '">' . \esc_html($target_label) . '</a>';
+			echo '<a href="' . \esc_url($target_link) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($target_label) . '</a>';
 		} else {
 			echo \esc_html($target_label);
 		}
 		echo '</td>';
 		echo '<td>';
 		if ($upload_url !== '') {
-			echo '<a href="' . \esc_url($upload_url) . '" target="_blank" rel="noopener noreferrer"><code>' . \esc_html($upload_rel) . '</code></a>';
+			echo '<a href="' . \esc_url($upload_url) . '" title="' . \esc_attr($upload_url) . '" target="_blank" rel="noopener noreferrer">Link</a>';
 		} else {
-			echo '<code>' . \esc_html($upload_rel) . '</code>';
+			echo '-';
 		}
 		echo '</td>';
 		echo '</tr>';
