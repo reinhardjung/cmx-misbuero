@@ -1322,6 +1322,20 @@ function cmx_mail_import_maybe_run_for_scanner_admin_list(): void {
 	}
 }
 
+function cmx_mail_import_maybe_run_for_scanner_log_page(): void {
+	static $did_run = false;
+	if ($did_run) {
+		return;
+	}
+	$did_run = true;
+
+	$result = cmx_mail_import_run(['source' => 'scanner_log_page']);
+	$GLOBALS['cmx_mail_import_last_admin_run'] = $result;
+	if ((int) ($result['imported_items'] ?? 0) > 0) {
+		cmx_mail_import_log('scanner log page run', $result);
+	}
+}
+
 function cmx_mail_import_is_scanner_list_request_params(): bool {
 	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'scanner') {
 		return false;
@@ -1332,11 +1346,22 @@ function cmx_mail_import_is_scanner_list_request_params(): bool {
 	return true;
 }
 
+function cmx_mail_import_is_scanner_log_page_request_params(): bool {
+	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'scanner') {
+		return false;
+	}
+	return isset($_GET['page']) && (string) $_GET['page'] === 'cmx-mail-import-log';
+}
+
 \add_action('load-edit.php', function (): void {
 	if (!\is_admin()) {
 		return;
 	}
 	if (!cmx_mail_import_is_scanner_list_request_params()) {
+		if (!cmx_mail_import_is_scanner_log_page_request_params()) {
+			return;
+		}
+		cmx_mail_import_maybe_run_for_scanner_log_page();
 		return;
 	}
 	cmx_mail_import_maybe_run_for_scanner_admin_list();
@@ -1352,10 +1377,13 @@ function cmx_mail_import_is_scanner_list_request_params(): bool {
 	if ((string) ($screen->post_type ?? '') !== 'scanner') {
 		return;
 	}
-	if (!cmx_mail_import_is_scanner_list_request_params()) {
+	if (cmx_mail_import_is_scanner_list_request_params()) {
+		cmx_mail_import_maybe_run_for_scanner_admin_list();
 		return;
 	}
-	cmx_mail_import_maybe_run_for_scanner_admin_list();
+	if (cmx_mail_import_is_scanner_log_page_request_params()) {
+		cmx_mail_import_maybe_run_for_scanner_log_page();
+	}
 }, 9);
 
 function cmx_mail_import_is_scanner_admin_list_request(): bool {
@@ -1492,16 +1520,22 @@ function cmx_mail_import_render_log_page(): void {
 	$open_log_url = \admin_url('admin-post.php?action=cmx_mail_import_open_logfile');
 
 	$recent_runs = [];
-	foreach (cmx_mail_import_get_recent_events(250) as $entry) {
-		if (!cmx_mail_import_is_visible_event($entry)) {
-			continue;
-		}
+	$run_has_visible_entries = [];
+	foreach (cmx_mail_import_get_event_log() as $entry) {
 		$candidate = \sanitize_text_field((string) ($entry['run_id'] ?? ''));
-		if ($candidate === '' || isset($recent_runs[$candidate])) {
+		if ($candidate === '') {
 			continue;
 		}
-		$recent_runs[$candidate] = $candidate;
-		if (\count($recent_runs) >= 20) {
+		if (!isset($run_has_visible_entries[$candidate])) {
+			$run_has_visible_entries[$candidate] = false;
+		}
+		if (cmx_mail_import_is_visible_event($entry)) {
+			$run_has_visible_entries[$candidate] = true;
+		}
+		if (!isset($recent_runs[$candidate])) {
+			$recent_runs[$candidate] = $candidate;
+		}
+		if (\count($recent_runs) >= 40) {
 			break;
 		}
 	}
@@ -1525,15 +1559,20 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
 	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alles anzeigen</a> ';
-	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zur Scanner-Liste</a>';
+	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a>';
 	echo '</form>';
 
 	if (!empty($recent_runs)) {
 		echo '<p><strong>Letzte Runs:</strong> ';
 		$parts = [];
 		foreach ($recent_runs as $rid) {
-			$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
-			$parts[] = '<a href="' . \esc_url($url) . '"><code>' . \esc_html(cmx_mail_import_run_id_label($rid)) . '</code></a>';
+			$label = cmx_mail_import_run_id_label($rid);
+			if (!empty($run_has_visible_entries[$rid])) {
+				$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
+				$parts[] = '<a href="' . \esc_url($url) . '"><code>' . \esc_html($label) . '</code></a>';
+				continue;
+			}
+			$parts[] = '<code style="opacity:.65;">' . \esc_html($label) . '</code>';
 		}
 		echo \implode(' | ', $parts);
 		echo '</p>';
