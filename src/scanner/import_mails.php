@@ -1715,7 +1715,7 @@ function cmx_mail_import_render_log_page(): void {
 			return $imported > 0 || $skipped > 0;
 		}
 	));
-	$recent_run_entries = \array_slice($recent_run_entries, 0, 10);
+	$recent_run_entries = \array_slice($recent_run_entries, 0, 8);
 
 	echo '<div class="wrap">';
 	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
@@ -1758,7 +1758,7 @@ function cmx_mail_import_render_log_page(): void {
 			}
 			$parts[] = '<code title="' . \esc_attr($title) . '" style="opacity:.7;">' . \esc_html($label) . '</code>';
 		}
-		echo '<p><strong>' . \esc_html((string) $visible_entry_count) . ' Einträge:</strong> ';
+		echo '<p><strong>' . \esc_html((string) $visible_entry_count) . ' Einträge</strong> ';
 		echo '| <strong>Letzte Runs:</strong> ';
 		echo \implode(' | ', $parts);
 		echo '</p>';
