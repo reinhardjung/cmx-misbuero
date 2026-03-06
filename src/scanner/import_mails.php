@@ -1758,7 +1758,7 @@ function cmx_mail_import_render_log_page(): void {
 			}
 			$parts[] = '<code title="' . \esc_attr($title) . '" style="opacity:.7;">' . \esc_html($label) . '</code>';
 		}
-		echo '<p><strong>' . \esc_html((string) $visible_entry_count) . ' Eintraege (Run/Filter):</strong> ';
+		echo '<p><strong>' . \esc_html((string) $visible_entry_count) . ' Einträge:</strong> ';
 		echo '| <strong>Letzte Runs:</strong> ';
 		echo \implode(' | ', $parts);
 		echo '</p>';
