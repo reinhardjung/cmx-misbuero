@@ -1587,7 +1587,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		return;
 	}
 
-	echo '<table class="widefat striped" style="margin-top:8px;"><thead><tr>';
+	echo '<table id="cmx-mail-import-table" class="widefat striped" style="margin-top:8px;"><thead><tr>';
 	echo '<th>Zeit</th><th>Status</th><th>Typ</th><th>Kontakt</th><th>Absender</th><th>Empfänger</th><th>Datei</th><th>Ziel</th>';
 	echo '</tr></thead><tbody>';
 	foreach ($entries as $entry) {
@@ -1628,7 +1628,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		$upload_url = cmx_mail_import_upload_url_from_rel($upload_rel);
 
 		echo '<tr>';
-		echo '<td>' . \esc_html($time) . '</td>';
+		echo '<td class="cmx-mail-import-zeit-cell">' . \esc_html($time) . '</td>';
 		echo '<td><code>' . \esc_html($status_label) . '</code></td>';
 		echo '<td>';
 		if ($type_list_link !== '') {
@@ -1761,6 +1761,7 @@ function cmx_mail_import_render_log_page(): void {
 	}
 
 	cmx_mail_import_render_admin_details_table($entries);
+	echo '<script>(function(){var runInput=document.getElementById("cmx_mail_import_run");if(!runInput){return;}var toElement=function(node){if(!node){return null;}return node.nodeType===1?node:node.parentElement;};var isZeitSelectionNode=function(node){var el=toElement(node);if(!el){return false;}return !!el.closest(".cmx-mail-import-zeit-cell");};document.addEventListener("mouseup",function(){var selection=window.getSelection?window.getSelection():null;if(!selection||selection.isCollapsed){return;}if(!isZeitSelectionNode(selection.anchorNode)&&!isZeitSelectionNode(selection.focusNode)){return;}var selected=(selection.toString()||"").trim();if(selected===""){return;}runInput.value=selected;runInput.dispatchEvent(new Event("input",{bubbles:true}));if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(selected).catch(function(){});}});})();</script>';
 	echo '</div>';
 }
 
