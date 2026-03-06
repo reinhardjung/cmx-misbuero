@@ -24,6 +24,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_FILENAME')) {
 	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_FILENAME', 'cmx-mail-import.log');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_MAX_LINES')) {
+	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_MAX_LINES', 500);
+}
+
 function cmx_mail_import_log_file_path(): string {
 	$upload_data = \wp_get_upload_dir();
 	$base_dir = \wp_normalize_path((string) ($upload_data['basedir'] ?? ''));
@@ -40,6 +44,21 @@ function cmx_mail_import_log_file_path(): string {
 	return \trailingslashit($dir) . (string) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_FILENAME');
 }
 
+function cmx_mail_import_trim_log_file(string $log_file, int $max_lines = 500): void {
+	$max_lines = \max(1, $max_lines);
+	if ($log_file === '' || !\is_file($log_file) || !\is_readable($log_file) || !\is_writable($log_file)) {
+		return;
+	}
+
+	$lines = @\file($log_file, \FILE_IGNORE_NEW_LINES);
+	if (!\is_array($lines) || \count($lines) <= $max_lines) {
+		return;
+	}
+
+	$tail = \array_slice($lines, -$max_lines);
+	@\file_put_contents($log_file, \implode(\PHP_EOL, $tail) . \PHP_EOL, \LOCK_EX);
+}
+
 function cmx_mail_import_log(string $message, array $context = []): void {
 	$payload = $context ? ' | ' . \wp_json_encode($context, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : '';
 	$line = '[' . \wp_date('Y-m-d H:i:s') . '] [CMX MAIL IMPORT] ' . $message . $payload;
@@ -48,6 +67,10 @@ function cmx_mail_import_log(string $message, array $context = []): void {
 	$log_file = cmx_mail_import_log_file_path();
 	if ($log_file !== '') {
 		@\file_put_contents($log_file, $line . \PHP_EOL, \FILE_APPEND | \LOCK_EX);
+		cmx_mail_import_trim_log_file(
+			$log_file,
+			(int) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_MAX_LINES')
+		);
 	}
 }
 
@@ -1353,18 +1376,28 @@ function cmx_mail_import_is_scanner_log_page_request_params(): bool {
 	return isset($_GET['page']) && (string) $_GET['page'] === 'cmx-mail-import-log';
 }
 
+function cmx_mail_import_maybe_run_for_scanner_request(): void {
+	if (cmx_mail_import_is_scanner_list_request_params()) {
+		cmx_mail_import_maybe_run_for_scanner_admin_list();
+		return;
+	}
+	if (cmx_mail_import_is_scanner_log_page_request_params()) {
+		cmx_mail_import_maybe_run_for_scanner_log_page();
+	}
+}
+
+\add_action('admin_init', function (): void {
+	if (!\is_admin()) {
+		return;
+	}
+	cmx_mail_import_maybe_run_for_scanner_request();
+}, 8);
+
 \add_action('load-edit.php', function (): void {
 	if (!\is_admin()) {
 		return;
 	}
-	if (!cmx_mail_import_is_scanner_list_request_params()) {
-		if (!cmx_mail_import_is_scanner_log_page_request_params()) {
-			return;
-		}
-		cmx_mail_import_maybe_run_for_scanner_log_page();
-		return;
-	}
-	cmx_mail_import_maybe_run_for_scanner_admin_list();
+	cmx_mail_import_maybe_run_for_scanner_request();
 }, 9);
 
 \add_action('current_screen', function ($screen): void {
@@ -1377,13 +1410,7 @@ function cmx_mail_import_is_scanner_log_page_request_params(): bool {
 	if ((string) ($screen->post_type ?? '') !== 'scanner') {
 		return;
 	}
-	if (cmx_mail_import_is_scanner_list_request_params()) {
-		cmx_mail_import_maybe_run_for_scanner_admin_list();
-		return;
-	}
-	if (cmx_mail_import_is_scanner_log_page_request_params()) {
-		cmx_mail_import_maybe_run_for_scanner_log_page();
-	}
+	cmx_mail_import_maybe_run_for_scanner_request();
 }, 9);
 
 function cmx_mail_import_is_scanner_admin_list_request(): bool {
@@ -1532,7 +1559,7 @@ function cmx_mail_import_render_log_page(): void {
 		if (cmx_mail_import_is_visible_event($entry)) {
 			$run_has_visible_entries[$candidate] = true;
 		}
-		if (!isset($recent_runs[$candidate])) {
+		if (!isset($recent_runs[$candidate]) && !empty($run_has_visible_entries[$candidate])) {
 			$recent_runs[$candidate] = $candidate;
 		}
 		if (\count($recent_runs) >= 40) {
@@ -1545,7 +1572,7 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
 	echo 'In der Scanner-Liste werden nur ungelesene Mails geprueft.</p>';
 	if ($log_file_path !== '') {
-		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '"><strong>Logdatei öffnen</strong></a></p>';
+		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer"><strong>Logdatei öffnen</strong></a></p>';
 	} else {
 		echo '<p><strong>Logdatei nicht verfuegbar</strong></p>';
 	}
@@ -1567,12 +1594,8 @@ function cmx_mail_import_render_log_page(): void {
 		$parts = [];
 		foreach ($recent_runs as $rid) {
 			$label = cmx_mail_import_run_id_label($rid);
-			if (!empty($run_has_visible_entries[$rid])) {
-				$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
-				$parts[] = '<a href="' . \esc_url($url) . '"><code>' . \esc_html($label) . '</code></a>';
-				continue;
-			}
-			$parts[] = '<code style="opacity:.65;">' . \esc_html($label) . '</code>';
+			$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
+			$parts[] = '<a href="' . \esc_url($url) . '"><code>' . \esc_html($label) . '</code></a>';
 		}
 		echo \implode(' | ', $parts);
 		echo '</p>';
