@@ -30,6 +30,7 @@ require_once 'allgemein.php';
 require_once 'banken.php';
 require_once 'kontakte.php';
 require_once 'belege.php';
+require_once 'email.php';
 require_once 'erweitert.php';
 require_once 'support.php';
 require_once 'adminbar.php';
@@ -86,6 +87,7 @@ function cmx_get_tabs(): array {
 		'general' => 'Allgemein',
 		'banken'  => 'Banken',
 		'belege'  => 'Belege',
+		'email'   => 'E-Mail',
 		'support' => 'Support',
 	];
 }
