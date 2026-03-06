@@ -719,20 +719,67 @@ function cmx_mail_import_part_filename($part): string {
 		$params = \array_merge($params, $part->dparameters);
 	}
 
+	$multipart_names = [
+		'filename' => [],
+		'name' => [],
+	];
+	$single_names = [
+		'filename' => '',
+		'name' => '',
+	];
+
 	foreach ($params as $param) {
 		if (!\is_object($param)) {
 			continue;
 		}
 		$attr = \strtolower((string) ($param->attribute ?? ''));
-		if ($attr !== 'filename' && $attr !== 'name') {
+		$value_raw = (string) ($param->value ?? '');
+		$value = cmx_mail_import_decode_mime_header($value_raw);
+
+		if (\preg_match('/^(filename|name)\\*(\\d+)\\*?$/', $attr, $match) === 1) {
+			$key = (string) ($match[1] ?? '');
+			$idx = (int) ($match[2] ?? 0);
+			$value = (string) \rawurldecode($value);
+			if ($value !== '') {
+				$multipart_names[$key][$idx] = $value;
+			}
 			continue;
 		}
-		$value = cmx_mail_import_decode_mime_header((string) ($param->value ?? ''));
-		$value = \sanitize_file_name($value);
-		if ($value !== '') {
-			return $value;
+
+		if (\preg_match('/^(filename|name)\\*$/', $attr, $match) === 1) {
+			$key = (string) ($match[1] ?? '');
+			$value = (string) \rawurldecode($value);
+			// RFC2231: charset'lang'value
+			if (\preg_match("/^[^']*'[^']*'(.*)$/", $value, $m) === 1) {
+				$value = (string) ($m[1] ?? '');
+			}
+			if ($value !== '') {
+				$single_names[$key] = $value;
+			}
+			continue;
+		}
+
+		if ($attr === 'filename' || $attr === 'name') {
+			if ($value !== '') {
+				$single_names[$attr] = $value;
+			}
 		}
 	}
+
+	foreach (['filename', 'name'] as $key) {
+		if (!empty($multipart_names[$key])) {
+			\ksort($multipart_names[$key], \SORT_NUMERIC);
+			$combined = \sanitize_file_name(\implode('', $multipart_names[$key]));
+			if ($combined !== '') {
+				return $combined;
+			}
+		}
+		$single = \sanitize_file_name((string) ($single_names[$key] ?? ''));
+		if ($single !== '') {
+			return $single;
+		}
+	}
+
 	return '';
 }
 
@@ -743,8 +790,9 @@ function cmx_mail_import_collect_pdf_parts_walk($part, string $part_no, array &$
 
 	$mime = cmx_mail_import_get_mime_type($part);
 	$filename = cmx_mail_import_part_filename($part);
+	$is_pdf_by_name = $filename !== '' && \strtolower((string) \pathinfo($filename, \PATHINFO_EXTENSION)) === 'pdf';
 
-	if ($mime === 'application/pdf') {
+	if ($mime === 'application/pdf' || $is_pdf_by_name) {
 		$parts[] = [
 			'part_no' => $part_no !== '' ? $part_no : '1',
 			'encoding' => isset($part->encoding) ? (int) $part->encoding : 0,
