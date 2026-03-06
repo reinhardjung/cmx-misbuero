@@ -78,6 +78,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_field(
+		'cmx_email_reply',
+		'Antwortadresse',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('reply'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[reply]" value="' . $value . '" placeholder="antwort@beispiel.ch" autocomplete="off">';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
 		'cmx_email_bcc',
 		'',
 		static function (): void {
@@ -139,6 +150,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	$new['email_password'] = (string) ($new['email_password'] ?? '');
 	$new['email_alias'] = \sanitize_email((string) ($new['email_alias'] ?? ''));
 	$new['email_alias_belege'] = \sanitize_email((string) ($new['email_alias_belege'] ?? ''));
+	$new['reply'] = \sanitize_email((string) ($new['reply'] ?? ''));
 	$bcc_raw = (string) ($new['email_bcc'] ?? '');
 	$bcc_parts = \preg_split('/[,\s;]+/', $bcc_raw) ?: [];
 	$bcc_clean = [];

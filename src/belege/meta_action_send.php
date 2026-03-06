@@ -39,6 +39,20 @@ function cmxbu_handle_beleg_send(): void {
 	if (!$post || $post->post_type !== 'belege') {
 		\wp_die('Beleg nicht gefunden.');
 	}
+	$opts_general = (array) \get_option('cmx_einstellungen', []);
+	$configured_sender = \sanitize_email((string) ($opts_general['email_address'] ?? ''));
+	if (!\is_email($configured_sender)) {
+		$redirect_base = \get_edit_post_link($post_id, '');
+		if (!\is_string($redirect_base) || $redirect_base === '') {
+			$redirect_base = \admin_url('post.php?post=' . (int) $post_id . '&action=edit');
+		}
+		$redirect = \add_query_arg(
+			['cmx_beleg_mail_missing_sender' => '1'],
+			$redirect_base
+		);
+		\wp_safe_redirect($redirect);
+		exit;
+	}
 	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
 		cmxbu_log('MAIL: start', ['post_id' => $post_id]);
 	}
@@ -146,7 +160,10 @@ function cmxbu_handle_beleg_send(): void {
 	$message = cmxbu_prepare_belegmail_html($message);
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+	$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
+	$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
 	$GLOBALS['cmx_force_current_user_mail_sender'] = true;
+	$GLOBALS['cmx_mail_context'] = 'beleg_send';
 	try {
 		$sent = \wp_mail($to, $subject, $message, $headers);
 	} finally {
@@ -154,6 +171,11 @@ function cmxbu_handle_beleg_send(): void {
 			$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
 		} else {
 			unset($GLOBALS['cmx_force_current_user_mail_sender']);
+		}
+		if ($had_mail_context) {
+			$GLOBALS['cmx_mail_context'] = $previous_mail_context;
+		} else {
+			unset($GLOBALS['cmx_mail_context']);
 		}
 	}
 
@@ -178,11 +200,16 @@ function cmxbu_handle_beleg_send(): void {
 \add_action('admin_post_cmxbu_beleg_send', __NAMESPACE__ . '\\cmxbu_handle_beleg_send');
 
 \add_action('all_admin_notices', function (): void {
-	if (empty($_GET['cmx_beleg_mail_sent'])) {
-		return;
-	}
 	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
 	if (!$screen || $screen->post_type !== 'belege' || $screen->base !== 'post') {
+		return;
+	}
+	if (!empty($_GET['cmx_beleg_mail_missing_sender'])) {
+		$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email');
+		echo '<div class="notice notice-error is-dismissible"><p><strong>Bitte hinterlege zuerst Deine E-Mail-Adresse.</strong> Ohne Absender-Adresse kann kein Beleg versendet werden. <a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;">Zu Einstellungen / E-Mail</a></p></div>';
+		return;
+	}
+	if (empty($_GET['cmx_beleg_mail_sent'])) {
 		return;
 	}
 	$mail_to = isset($_GET['cmx_beleg_mail_to'])
