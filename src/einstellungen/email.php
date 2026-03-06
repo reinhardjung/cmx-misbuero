@@ -54,6 +54,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_field(
+		'cmx_email_alias',
+		'Für allgemeine E-Mails',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_alias'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="office@beispiel.ch" autocomplete="off">';
+			echo '<span style="margin-left:8px;">(optional) <i>Alias gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
+		'cmx_email_alias_belege',
+		'E-Mail für Belegversand',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@beispiel.ch" autocomplete="off">';
+			echo '<span style="margin-left:8px;">(optional) <i>Alias gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
 		'cmx_email_bcc',
 		'',
 		static function (): void {
@@ -66,37 +90,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_section(
-		'cmx_sec_email_alias',
-		'Aliasse',
-		static function (): void {},
-		$page
-	);
-
-	\add_settings_field(
-		'cmx_email_alias',
-		'Allgemein',
-		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('email_alias'));
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="buchhaltung@DeineMailDomain.com" autocomplete="off">';
-			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
-		},
-		$page,
-		'cmx_sec_email_alias'
-	);
-
-	\add_settings_field(
-		'cmx_email_alias_belege',
-		'Belege',
-		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@DeineMailDomain.com" autocomplete="off">';
-			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
-		},
-		$page,
-		'cmx_sec_email_alias'
-	);
-
-	\add_settings_section(
 		'cmx_sec_email_smtp',
 		'Server',
 		static function (): void {},
@@ -105,23 +98,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	\add_settings_field(
 		'cmx_email_smtp_host',
-		'SMTP',
+		'SMTP (587)',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('smtp_host'));
 			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[smtp_host]" value="' . $value . '" placeholder="smtp.infomaniak.com" autocomplete="off">';
-			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[smtp_port]" value="587">';
-			echo '<label style="margin-left:8px;">Port <input type="text" class="small-text" value="587" readonly></label>';
-		},
-		$page,
-		'cmx_sec_email_smtp'
-	);
-
-	\add_settings_field(
-		'cmx_email_smtp_test',
-		'',
-		static function (): void {
-			echo '<button type="button" class="button button-secondary" id="cmx-email-smtp-test" disabled>SMTP Verbindung testen</button>';
-			echo '<div style="margin-top:5px;"><span id="cmx-email-smtp-result" class="cmx-email-test-result" aria-live="polite"></span></div>';
+			echo '<button type="button" class="button button-secondary" id="cmx-email-smtp-test" disabled style="margin-left:8px;">SMTP Verbindung testen</button>';
+			echo '<div style="margin-top:5px;height:22px;overflow:hidden;"><span id="cmx-email-smtp-result" class="cmx-email-test-result" aria-live="polite" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span></div>';
 		},
 		$page,
 		'cmx_sec_email_smtp'
@@ -136,23 +118,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	\add_settings_field(
 		'cmx_email_imap_host',
-		'IMAP',
+		'IMAP (143)',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('imap_host'));
 			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[imap_host]" value="' . $value . '" placeholder="imap.infomaniak.com" autocomplete="off">';
-			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[imap_port]" value="143">';
-			echo '<label style="margin-left:8px;">Port <input type="text" class="small-text" value="143" readonly></label>';
-		},
-		$page,
-		'cmx_sec_email_imap'
-	);
-
-	\add_settings_field(
-		'cmx_email_imap_test',
-		'',
-		static function (): void {
-			echo '<button type="button" class="button button-secondary" id="cmx-email-imap-test" disabled>IMAP Verbindung testen</button>';
-			echo '<div style="margin-top:5px;"><span id="cmx-email-imap-result" class="cmx-email-test-result" aria-live="polite"></span></div>';
+			echo '<button type="button" class="button button-secondary" id="cmx-email-imap-test" disabled style="margin-left:8px;">IMAP Verbindung testen</button>';
+			echo '<div style="margin-top:5px;height:22px;overflow:hidden;"><span id="cmx-email-imap-result" class="cmx-email-test-result" aria-live="polite" style="display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span></div>';
 		},
 		$page,
 		'cmx_sec_email_imap'
