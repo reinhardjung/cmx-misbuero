@@ -59,7 +59,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="office@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Alias ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Dieser <strong>Alias</strong> ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -71,7 +71,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Alias ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Dieser <strong>Alias</strong> ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -83,6 +83,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('reply'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[reply]" value="' . $value . '" placeholder="antwort@beispiel.ch" autocomplete="off">';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
+		'cmx_email_supplier',
+		'Lieferantenrechnung(en)',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('supplier'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[supplier]" value="' . $value . '" placeholder="rechnung@beispiel.ch" autocomplete="off">';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -151,6 +162,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	$new['email_alias'] = \sanitize_email((string) ($new['email_alias'] ?? ''));
 	$new['email_alias_belege'] = \sanitize_email((string) ($new['email_alias_belege'] ?? ''));
 	$new['reply'] = \sanitize_email((string) ($new['reply'] ?? ''));
+	$new['supplier'] = \sanitize_email((string) ($new['supplier'] ?? ''));
 	$bcc_raw = (string) ($new['email_bcc'] ?? '');
 	$bcc_parts = \preg_split('/[,\s;]+/', $bcc_raw) ?: [];
 	$bcc_clean = [];
@@ -223,7 +235,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_smtp_connection')) {
 			$mail->smtpClose();
 
 			if ($connected) {
-				return [true, 'SMTP-Verbindung erfolgreich. Du kannst nun E-Mails versenden.'];
+				return [true, 'SMTP-Verbindung erfolgreich. Du kannst nun E-Mails versenden!'];
 			}
 			return [false, $error !== '' ? 'SMTP-Test fehlgeschlagen: ' . $error : 'SMTP-Test fehlgeschlagen.'];
 		} catch (\Throwable $e) {
@@ -243,7 +255,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			$imap = @\imap_open($mailbox, $username, $password, OP_HALFOPEN, 1, ['DISABLE_AUTHENTICATOR' => 'GSSAPI']);
 			if ($imap !== false) {
 				@\imap_close($imap);
-				return [true, 'IMAP-Verbindung erfolgreich.'];
+				return [true, 'IMAP-Verbindung erfolgreich. Du kannst nun E-Mails empfangen!'];
 			}
 			$err = \trim((string) \imap_last_error());
 			return [false, $err !== '' ? 'IMAP-Test fehlgeschlagen: ' . $err : 'IMAP-Test fehlgeschlagen.'];
