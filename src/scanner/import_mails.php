@@ -20,6 +20,14 @@ if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_EVENT_LOG_LIMIT')) {
 	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_EVENT_LOG_LIMIT', 300);
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_OPTION')) {
+	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_OPTION', 'cmx_mail_import_run_log');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_LIMIT')) {
+	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_LIMIT', 200);
+}
+
 if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_FILENAME')) {
 	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_FILENAME', 'cmx-mail-import.log');
 }
@@ -114,6 +122,54 @@ function cmx_mail_import_get_event_log(): array {
 	return \array_values(\array_filter($entries, static function ($entry): bool {
 		return \is_array($entry);
 	}));
+}
+
+function cmx_mail_import_run_log_option_name(): string {
+	return (string) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_OPTION');
+}
+
+function cmx_mail_import_get_run_log(): array {
+	$entries = \get_option(cmx_mail_import_run_log_option_name(), []);
+	if (!\is_array($entries)) {
+		return [];
+	}
+	return \array_values(\array_filter($entries, static function ($entry): bool {
+		return \is_array($entry);
+	}));
+}
+
+function cmx_mail_import_save_run_log(array $entries): void {
+	$limit = (int) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_RUN_LOG_LIMIT');
+	if ($limit <= 0) {
+		$limit = 200;
+	}
+	$entries = \array_slice(\array_values($entries), 0, $limit);
+	\update_option(cmx_mail_import_run_log_option_name(), $entries, false);
+}
+
+function cmx_mail_import_register_run(array $result): void {
+	$run_id = \sanitize_text_field((string) ($result['run_id'] ?? ''));
+	if ($run_id === '') {
+		return;
+	}
+
+	$entry = [
+		'ts' => \time(),
+		'run_id' => $run_id,
+		'source' => \sanitize_key((string) ($result['source'] ?? '')),
+		'status' => \sanitize_key((string) ($result['status'] ?? 'unknown')),
+		'unseen_messages' => (int) ($result['unseen_messages'] ?? 0),
+		'processed_messages' => (int) ($result['processed_messages'] ?? 0),
+		'imported_items' => (int) ($result['imported_items'] ?? 0),
+		'skipped_messages' => (int) ($result['skipped_messages'] ?? 0),
+		'skip_reasons' => (array) ($result['skip_reasons'] ?? []),
+	];
+
+	$entries = \array_values(\array_filter(cmx_mail_import_get_run_log(), static function ($row) use ($run_id): bool {
+		return (string) ($row['run_id'] ?? '') !== $run_id;
+	}));
+	\array_unshift($entries, $entry);
+	cmx_mail_import_save_run_log($entries);
 }
 
 function cmx_mail_import_save_event_log(array $entries): void {
@@ -1219,7 +1275,9 @@ function cmx_mail_import_run(array $run_context = []): array {
 	$result = [
 		'processed_messages' => 0,
 		'imported_items' => 0,
+		'skipped_messages' => 0,
 		'unseen_messages' => 0,
+		'skip_reasons' => [],
 		'status' => 'idle',
 		'run_id' => $run_id,
 		'source' => $source,
@@ -1231,6 +1289,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 
 	if (!\function_exists('imap_open')) {
 		$result['status'] = 'imap_extension_missing';
+		cmx_mail_import_register_run($result);
 		cmx_mail_import_log('run stop', [
 			'run_id' => $run_id,
 			'status' => $result['status'],
@@ -1241,6 +1300,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 	$settings = cmx_mail_import_get_settings();
 	if ((string) ($settings['imap_host'] ?? '') === '' || (string) ($settings['email_address'] ?? '') === '' || (string) ($settings['email_password'] ?? '') === '') {
 		$result['status'] = 'settings_incomplete';
+		cmx_mail_import_register_run($result);
 		cmx_mail_import_log('run stop', [
 			'run_id' => $run_id,
 			'status' => $result['status'],
@@ -1255,6 +1315,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 	$imap = cmx_mail_import_open_mailbox($settings);
 	if ($imap === false) {
 		$result['status'] = 'imap_connect_failed';
+		cmx_mail_import_register_run($result);
 		cmx_mail_import_log('run stop', [
 			'run_id' => $run_id,
 			'status' => $result['status'],
@@ -1268,6 +1329,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 		$messages = \imap_search($imap, 'UNSEEN UNDELETED');
 		if (!\is_array($messages) || empty($messages)) {
 			$result['status'] = 'no_unseen';
+			cmx_mail_import_register_run($result);
 			cmx_mail_import_log('run stop', [
 				'run_id' => $run_id,
 				'status' => $result['status'],
@@ -1317,6 +1379,10 @@ function cmx_mail_import_run(array $run_context = []): array {
 				]);
 			} else {
 				$mark_seen_on_skip = cmx_mail_import_should_mark_seen_for_reason($reason);
+				$result['skipped_messages'] = (int) ($result['skipped_messages'] ?? 0) + 1;
+				$skip_reasons = (array) ($result['skip_reasons'] ?? []);
+				$skip_reasons[$reason] = ((int) ($skip_reasons[$reason] ?? 0)) + 1;
+				$result['skip_reasons'] = $skip_reasons;
 				if ($mark_seen_on_skip) {
 					@\imap_setflag_full($imap, (string) $msg_no, '\\Seen');
 				} else {
@@ -1336,6 +1402,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 		}
 
 		$result['status'] = 'done';
+		cmx_mail_import_register_run($result);
 		cmx_mail_import_log('run done', $result);
 		return $result;
 	} finally {
@@ -1558,26 +1625,13 @@ function cmx_mail_import_render_log_page(): void {
 	$log_file_path = cmx_mail_import_log_file_path();
 	$open_log_url = \admin_url('admin-post.php?action=cmx_mail_import_open_logfile');
 
-	$recent_runs = [];
-	$run_has_visible_entries = [];
-	foreach (cmx_mail_import_get_event_log() as $entry) {
-		$candidate = \sanitize_text_field((string) ($entry['run_id'] ?? ''));
-		if ($candidate === '') {
-			continue;
+	$recent_run_entries = \array_values(\array_filter(
+		cmx_mail_import_get_run_log(),
+		static function ($run_entry): bool {
+			return \is_array($run_entry) && (int) ($run_entry['imported_items'] ?? 0) > 0;
 		}
-		if (!isset($run_has_visible_entries[$candidate])) {
-			$run_has_visible_entries[$candidate] = false;
-		}
-		if (cmx_mail_import_is_visible_event($entry)) {
-			$run_has_visible_entries[$candidate] = true;
-		}
-		if (!isset($recent_runs[$candidate]) && !empty($run_has_visible_entries[$candidate])) {
-			$recent_runs[$candidate] = $candidate;
-		}
-		if (\count($recent_runs) >= 40) {
-			break;
-		}
-	}
+	));
+	$recent_run_entries = \array_slice($recent_run_entries, 0, 40);
 
 	echo '<div class="wrap">';
 	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
@@ -1601,13 +1655,21 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<a class="button" href="' . \esc_url($scanner_url) . '">Zum Posteingang</a>';
 	echo '</form>';
 
-	if (!empty($recent_runs)) {
+	if (!empty($recent_run_entries)) {
 		echo '<p><strong>Letzte Runs:</strong> ';
 		$parts = [];
-		foreach ($recent_runs as $rid) {
+		foreach ($recent_run_entries as $run_entry) {
+			$rid = \sanitize_text_field((string) ($run_entry['run_id'] ?? ''));
+			if ($rid === '') {
+				continue;
+			}
 			$label = cmx_mail_import_run_id_label($rid);
+			$imported = (int) ($run_entry['imported_items'] ?? 0);
+			$skipped = (int) ($run_entry['skipped_messages'] ?? 0);
+			$status = \sanitize_key((string) ($run_entry['status'] ?? ''));
+			$title = 'status=' . $status . ', imported=' . $imported . ', skipped=' . $skipped;
 			$url = cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $rid]);
-			$parts[] = '<a href="' . \esc_url($url) . '"><code>' . \esc_html($label) . '</code></a>';
+			$parts[] = '<a href="' . \esc_url($url) . '" title="' . \esc_attr($title) . '"><code>' . \esc_html($label) . '</code></a>';
 		}
 		echo \implode(' | ', $parts);
 		echo '</p>';
@@ -1700,7 +1762,7 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 }
 
 \add_action('add_meta_boxes', function (): void {
-	foreach (['belege', 'dokumente'] as $post_type) {
+	foreach (['dokumente'] as $post_type) {
 		if (!\post_type_exists($post_type)) {
 			continue;
 		}
