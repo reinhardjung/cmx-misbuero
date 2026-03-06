@@ -1739,13 +1739,14 @@ function cmx_mail_import_render_log_page(): void {
 	echo '</form>';
 
 	if (!empty($recent_run_entries)) {
-		echo '<p><strong>Letzte Runs:</strong> ';
+		$display_count = 0;
 		$parts = [];
 		foreach ($recent_run_entries as $run_entry) {
 			$rid = \sanitize_text_field((string) ($run_entry['run_id'] ?? ''));
 			if ($rid === '') {
 				continue;
 			}
+			$display_count++;
 			$label = cmx_mail_import_run_id_label($rid);
 			$imported = (int) ($run_entry['imported_items'] ?? 0);
 			$skipped = (int) ($run_entry['skipped_messages'] ?? 0);
@@ -1758,6 +1759,7 @@ function cmx_mail_import_render_log_page(): void {
 			}
 			$parts[] = '<code title="' . \esc_attr($title) . '" style="opacity:.7;">' . \esc_html($label) . '</code>';
 		}
+		echo '<p><strong>' . \esc_html((string) $display_count) . ' Letzte Runs:</strong> ';
 		echo \implode(' | ', $parts);
 		echo '</p>';
 	}
