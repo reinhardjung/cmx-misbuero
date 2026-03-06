@@ -214,6 +214,21 @@ function cmx_mail_import_get_recent_events(int $limit = 50): array {
 	return \array_slice(cmx_mail_import_get_event_log(), 0, $limit);
 }
 
+function cmx_mail_import_should_mark_seen_for_reason(string $reason): bool {
+	$reason = \sanitize_key($reason);
+	if ($reason === '') {
+		return false;
+	}
+
+	// Diese Faelle sind in der Regel nicht importierbar und sollen nicht in jedem Lauf erneut geprueft werden.
+	return \in_array($reason, [
+		'kontakt_not_found',
+		'no_pdf',
+		'missing_sender',
+		'missing_header',
+	], true);
+}
+
 function cmx_mail_import_count_events_today(): int {
 	$today = \wp_date('Y-m-d');
 	$count = 0;
@@ -1301,24 +1316,21 @@ function cmx_mail_import_run(array $run_context = []): array {
 					'kontakt_id' => $kontakt_id,
 				]);
 			} else {
-				// Falls ein IMAP-Client beim Lesen implizit "Seen" setzt, wieder rueckgaengig machen.
-				@\imap_clearflag_full($imap, (string) $msg_no, '\\Seen');
-				cmx_mail_import_register_event([
-					'run_id' => $run_id,
-					'type' => 'mail',
-					'rule' => 'scan',
-					'status' => 'skipped',
-					'reason' => $reason,
-					'message_no' => $msg_no,
-					'kontakt_id' => $kontakt_id,
-					'sender' => $sender,
-				]);
+				$mark_seen_on_skip = cmx_mail_import_should_mark_seen_for_reason($reason);
+				if ($mark_seen_on_skip) {
+					@\imap_setflag_full($imap, (string) $msg_no, '\\Seen');
+				} else {
+					// Falls ein IMAP-Client beim Lesen implizit "Seen" setzt, wieder rueckgaengig machen.
+					@\imap_clearflag_full($imap, (string) $msg_no, '\\Seen');
+				}
+				// skipped nur im Datei-Log halten, nicht im DB-Eventlog.
 				cmx_mail_import_log('message skipped', [
 					'run_id' => $run_id,
 					'msg_no' => $msg_no,
 					'reason' => $reason,
 					'sender' => $sender,
 					'kontakt_id' => $kontakt_id,
+					'mark_seen' => $mark_seen_on_skip,
 				]);
 			}
 		}
