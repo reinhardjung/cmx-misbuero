@@ -1632,7 +1632,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 		echo '</td>';
 		echo '<td>';
 		if ($kontakt_link !== '') {
-			echo '<a href="' . \esc_url($kontakt_link) . '">' . \esc_html($kontakt) . '</a>';
+			echo '<a href="' . \esc_url($kontakt_link) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($kontakt) . '</a>';
 		} else {
 			echo \esc_html($kontakt);
 		}
