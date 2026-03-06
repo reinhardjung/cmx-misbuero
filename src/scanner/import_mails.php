@@ -1708,7 +1708,7 @@ function cmx_mail_import_render_log_page(): void {
 
 	echo '<div class="wrap">';
 	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
-	echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
+	// echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
 	echo 'In der Scanner-Liste werden nur ungelesene Mails geprueft.</p>';
 	if ($log_file_path !== '') {
 		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer"><strong>Logdatei öffnen</strong></a></p>';
