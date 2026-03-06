@@ -1394,14 +1394,16 @@ function cmx_mail_import_upload_url_from_rel(string $rel): string {
 	return $base_url . \implode('/', $parts);
 }
 
+function cmx_mail_import_is_visible_event($entry): bool {
+	if (!\is_array($entry)) {
+		return false;
+	}
+	$status = \sanitize_key((string) ($entry['status'] ?? ''));
+	return $status !== 'skipped';
+}
+
 function cmx_mail_import_render_admin_details_table(array $entries): void {
-	$entries = \array_values(\array_filter($entries, static function ($entry): bool {
-		if (!\is_array($entry)) {
-			return false;
-		}
-		$status = \sanitize_key((string) ($entry['status'] ?? ''));
-		return $status !== 'skipped';
-	}));
+	$entries = \array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event'));
 
 	if (empty($entries)) {
 		echo '<p>Keine automatisch zugeordneten Eintraege fuer diesen Lauf gefunden.</p>';
@@ -1491,6 +1493,9 @@ function cmx_mail_import_render_log_page(): void {
 
 	$recent_runs = [];
 	foreach (cmx_mail_import_get_recent_events(250) as $entry) {
+		if (!cmx_mail_import_is_visible_event($entry)) {
+			continue;
+		}
 		$candidate = \sanitize_text_field((string) ($entry['run_id'] ?? ''));
 		if ($candidate === '' || isset($recent_runs[$candidate])) {
 			continue;
@@ -1506,7 +1511,7 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
 	echo 'In der Scanner-Liste werden nur ungelesene Mails geprueft.</p>';
 	if ($log_file_path !== '') {
-		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '"><strong>Logdatei oeffnen</strong></a></p>';
+		echo '<p><a href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '"><strong>Logdatei öffnen</strong></a></p>';
 	} else {
 		echo '<p><strong>Logdatei nicht verfuegbar</strong></p>';
 	}
