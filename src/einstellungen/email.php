@@ -54,12 +54,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	);
 
 	\add_settings_field(
+		'cmx_email_alias',
+		'Alias',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_alias'));
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="buchhaltung@DeineMailDomain.com" autocomplete="off">';
+			echo '<span style="margin-left:8px;">Gegebenenfalls zusätzlich im Mailserver einzurichten</span>';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
 		'cmx_email_bcc',
 		'',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_bcc'));
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_bcc]" value="' . $value . '" placeholder="DeineArchivMail@gmail.com" autocomplete="off" aria-label="E-Mail Adresse BCC">';
-			echo '<span style="margin-left:8px;"><strong>BCC</strong> (Blind Carbon Copy)</span>';
+			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_bcc]" value="' . $value . '" placeholder="a@beispiel.ch, b@beispiel.ch" autocomplete="off" aria-label="E-Mail Adresse BCC" multiple>';
+			echo '<span style="margin-left:8px;" title="Sendet eine versteckte Kopie der E-Mail an zusätzliche Empfänger"><strong>BCC</strong> (Blind Carbon Copy)</span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -135,7 +147,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	$new['email_address'] = \sanitize_email((string) ($new['email_address'] ?? ''));
 	$new['email_password'] = (string) ($new['email_password'] ?? '');
-	$new['email_bcc'] = \sanitize_email((string) ($new['email_bcc'] ?? ''));
+	$new['email_alias'] = \sanitize_email((string) ($new['email_alias'] ?? ''));
+	$bcc_raw = (string) ($new['email_bcc'] ?? '');
+	$bcc_parts = \preg_split('/[,\s;]+/', $bcc_raw) ?: [];
+	$bcc_clean = [];
+	foreach ($bcc_parts as $bcc_part) {
+		$candidate = \sanitize_email((string) $bcc_part);
+		if (\is_email($candidate)) {
+			$bcc_clean[$candidate] = $candidate;
+		}
+	}
+	$new['email_bcc'] = \implode(', ', \array_values($bcc_clean));
 	$new['smtp_host'] = \sanitize_text_field((string) ($new['smtp_host'] ?? ''));
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
 	$new['smtp_port'] = '587';

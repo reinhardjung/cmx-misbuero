@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.6.338
+ * Version: 3.6.417
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -409,6 +409,22 @@ function cmx_check_and_create_subdomain_admin() {
 	$is_beleg_send_context = static function (): bool {
 		return (($GLOBALS['cmx_mail_context'] ?? '') === 'beleg_send');
 	};
+	$get_configured_bcc = static function (): array {
+		$opts = (array) \get_option('cmx_einstellungen', []);
+		$raw = (string) ($opts['email_bcc'] ?? '');
+		if ($raw === '') {
+			return [];
+		}
+		$parts = \preg_split('/[,\s;]+/', $raw) ?: [];
+		$clean = [];
+		foreach ($parts as $part) {
+			$candidate = \sanitize_email((string) $part);
+			if (\is_email($candidate)) {
+				$clean[$candidate] = $candidate;
+			}
+		}
+		return \array_values($clean);
+	};
 
 	// Absender-Adresse pro eingeloggtem WP-User setzen (spät, damit wir gewinnen)
 	add_filter('wp_mail_from', function($email) use ($resolve_mail_sender, $is_beleg_send_context) {
@@ -431,7 +447,7 @@ function cmx_check_and_create_subdomain_admin() {
 	update_option('blogname', 'Mis Buero – ' . $sub);
 	// update_option('blogdescription', 'Der neue Untertitel der Website');
 
-	add_filter('wp_mail', function($args) use ($resolve_mail_sender, $is_beleg_send_context) {
+	add_filter('wp_mail', function($args) use ($resolve_mail_sender, $is_beleg_send_context, $get_configured_bcc) {
 			if ($is_beleg_send_context()) {
 				return $args;
 			}
@@ -466,6 +482,11 @@ function cmx_check_and_create_subdomain_admin() {
 					} else {
 						$headers[] = 'Reply-To: ' . $reply_to_email;
 					}
+				}
+
+				$bcc_list = $get_configured_bcc();
+				if (!empty($bcc_list)) {
+					$headers[] = 'Bcc: ' . \implode(', ', $bcc_list);
 				}
 			}
 
