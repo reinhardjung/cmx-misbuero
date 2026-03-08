@@ -565,6 +565,57 @@ function cmx_kontakte_search_email_meta_keys(): array {
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
 }
 
+function cmx_kontakte_search_address_meta_keys(): array {
+	$keys = [
+		CMX_RECHNUNG_META_STRASSE,
+		CMX_RECHNUNG_META_ZUSATZ,
+		CMX_RECHNUNG_META_PLZ,
+		CMX_RECHNUNG_META_ORT,
+		CMX_RECHNUNG_META_LAND,
+		CMX_LIEFER_META_STRASSE,
+		CMX_LIEFER_META_ZUSATZ,
+		CMX_LIEFER_META_PLZ,
+		CMX_LIEFER_META_ORT,
+		CMX_LIEFER_META_LAND,
+		'_cmx_rechnung',
+		'cmx_rechnung',
+		'rechnung',
+		'_cmx_liefer',
+		'cmx_liefer',
+		'liefer',
+		'cmx_billing',
+		'cmx_shipping',
+		'rechnung_strasse',
+		'rechnung_zusatz',
+		'rechnung_plz',
+		'rechnung_ort',
+		'rechnung_land',
+		'billing_street',
+		'billing_zip',
+		'billing_city',
+		'billing_country',
+		'liefer_strasse',
+		'liefer_zusatz',
+		'liefer_plz',
+		'liefer_ort',
+		'liefer_land',
+		'shipping_street',
+		'shipping_zip',
+		'shipping_city',
+		'shipping_country',
+		'strasse',
+		'plz',
+		'ort',
+		'land',
+		'street',
+		'zip',
+		'city',
+		'country',
+	];
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+}
+
 \add_action('pre_get_posts', __NAMESPACE__ . '\\cmx_kontakte_extend_admin_search', 20);
 function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	if (!\is_admin() || !$query->is_main_query()) {
@@ -598,7 +649,10 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	]));
 
 	$email_meta_query = ['relation' => 'OR'];
-	foreach (cmx_kontakte_search_email_meta_keys() as $meta_key) {
+	foreach (\array_merge(
+		cmx_kontakte_search_email_meta_keys(),
+		cmx_kontakte_search_address_meta_keys()
+	) as $meta_key) {
 		$email_meta_query[] = [
 			'key' => $meta_key,
 			'value' => $search_term,
