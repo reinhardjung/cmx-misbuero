@@ -347,7 +347,7 @@ function cmx_scanner_sync_canonical_rel_from_uploads_abs(string $abs, string $up
 
 function cmx_scanner_sync_is_allowed_file(string $path): bool {
 	$ext = \strtolower((string) \pathinfo($path, \PATHINFO_EXTENSION));
-	return $ext === 'pdf';
+	return \in_array($ext, ['pdf', 'xml'], true);
 }
 
 function cmx_scanner_sync_rel_is_allowed_file(string $rel): bool {
@@ -746,11 +746,13 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 	foreach ($columns as $key => $label) {
 		$new[$key] = $label;
 		if ($key === 'title') {
+			$new['cmx_scanner_source_type'] = 'Typ';
 			$new['cmx_scanner_uploaded_at'] = 'Eingegangen am';
 			$inserted = true;
 		}
 	}
 	if (!$inserted) {
+		$new['cmx_scanner_source_type'] = 'Typ';
 		$new['cmx_scanner_uploaded_at'] = 'Eingegangen am';
 	}
 	return $new;
@@ -758,18 +760,77 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 \add_filter('manage_edit-' . CMX_PT_SCANNER . '_columns', $cmx_scanner_add_uploaded_column, 50);
 \add_filter('manage_' . CMX_PT_SCANNER . '_posts_columns', $cmx_scanner_add_uploaded_column, 50);
 
+function cmx_scanner_sync_normalize_title_for_source_match(string $value): string {
+	$value = \wp_strip_all_tags($value);
+	$value = (string) \preg_replace('/[_\-]+/', ' ', $value);
+	$value = (string) \preg_replace('/\s+/', ' ', $value);
+	return \trim(\strtolower(\sanitize_text_field($value)));
+}
+
+function cmx_scanner_sync_is_upload_source(int $post_id, string $rel, string $title): bool {
+	$signature = (string) \get_post_meta($post_id, CMX_SCANNER_SYNC_FS_SIG_META, true);
+	if ($signature === '') {
+		return true;
+	}
+
+	$filename_base = (string) \pathinfo((string) \basename($rel), \PATHINFO_FILENAME);
+	if ($filename_base === '') {
+		return false;
+	}
+
+	$current_title = cmx_scanner_sync_normalize_title_for_source_match($title);
+	if ($current_title === '') {
+		return false;
+	}
+
+	$generated_title = cmx_scanner_sync_normalize_title_for_source_match(cmx_scanner_sync_make_title($rel));
+	if ($generated_title === $current_title) {
+		return false;
+	}
+
+	if (\preg_match('/^\d{6}-\d{6}[_\-\s]+(.+)$/', $filename_base, $match) !== 1) {
+		return false;
+	}
+
+	$suffix = (string) ($match[1] ?? '');
+	$suffix_title = \function_exists(__NAMESPACE__ . '\\cmx_dok_sanitize_title_from_filename')
+		? (string) cmx_dok_sanitize_title_from_filename($suffix)
+		: $suffix;
+
+	return cmx_scanner_sync_normalize_title_for_source_match($suffix_title) === $current_title;
+}
+
+function cmx_scanner_sync_get_source_type_label(int $post_id): string {
+	if ((string) \get_post_meta($post_id, '_cmx_mail_import_auto', true) === '1') {
+		return 'E-Mail';
+	}
+
+	$rel = (string) cmx_scanner_sync_get_source_rel_for_post($post_id);
+	$title = (string) \get_the_title($post_id);
+
+	if ($rel !== '' && cmx_scanner_sync_is_upload_source($post_id, $rel, $title)) {
+		return 'Upload';
+	}
+
+	return 'WebDAV';
+}
+
 \add_action('manage_' . CMX_PT_SCANNER . '_posts_custom_column', function (string $column, int $post_id): void {
-	if ($column !== 'cmx_scanner_uploaded_at') {
+	if ($column === 'cmx_scanner_source_type') {
+		echo \esc_html(cmx_scanner_sync_get_source_type_label($post_id));
 		return;
 	}
 
-	$ts = cmx_scanner_sync_get_uploaded_ts($post_id);
-	if ($ts <= 0) {
-		echo '';
+	if ($column === 'cmx_scanner_uploaded_at') {
+		$ts = cmx_scanner_sync_get_uploaded_ts($post_id);
+		if ($ts <= 0) {
+			echo '';
+			return;
+		}
+
+		echo \esc_html(\wp_date('d.m.Y H:i', $ts));
 		return;
 	}
-
-	echo \esc_html(\wp_date('d.m.Y H:i', $ts));
 }, 10, 2);
 
 \add_action('admin_head-edit.php', function (): void {
@@ -777,6 +838,8 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 		return;
 	}
 	echo '<style>
+		.wp-list-table th.column-cmx_scanner_source_type { width: 110px; }
+		.wp-list-table td.column-cmx_scanner_source_type { white-space: nowrap; }
 		.wp-list-table th.column-cmx_scanner_uploaded_at { width: 140px; }
 		.wp-list-table td.column-cmx_scanner_uploaded_at { white-space: nowrap; }
 	</style>';

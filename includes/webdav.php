@@ -805,9 +805,10 @@ add_action('init', function () {
 				}
 			}
 
-			$allowedExt = ['pdf'];
+			$allowedExt = ['pdf', 'xml'];
 			$allowedMimes = [
 				'pdf'  => 'application/pdf',
+				'xml'  => 'text/xml',
 			];
 			$okCount = 0;
 			$firstError = '';
@@ -852,7 +853,7 @@ add_action('init', function () {
 				$ext = strtolower((string)pathinfo($safeName, PATHINFO_EXTENSION));
 				if (!in_array($ext, $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Erlaubt sind nur PDF-Dateien.';
+						$firstError = 'Erlaubt sind nur PDF- oder XML-Dateien.';
 					}
 					continue;
 				}
@@ -860,7 +861,7 @@ add_action('init', function () {
 				$fileType = wp_check_filetype_and_ext($tmpName, $safeName, $allowedMimes);
 				if (empty($fileType['ext']) || !in_array((string)$fileType['ext'], $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Dateityp nicht erlaubt (nur PDF).';
+						$firstError = 'Dateityp nicht erlaubt (nur PDF oder XML).';
 					}
 					continue;
 				}
@@ -1110,9 +1111,9 @@ add_action('init', function () {
 				$uploadForm = '';
 				if (!$readOnly) {
 					$uploadForm = '<form id="uploadform" method="POST" enctype="multipart/form-data" action="'.cmx_dav_h($currentDirUrl).'" class="uploadform">'
-						. '<input type="file" name="scanner_upload[]" accept=".pdf,application/pdf" multiple required class="upload-input" />'
+						. '<input type="file" name="scanner_upload[]" accept=".pdf,.xml,application/pdf,text/xml,application/xml" multiple required class="upload-input" />'
 						. '<button type="submit" class="btn btn-upload">Hochladen</button>'
-						. '<span class="upload-hint">Nur PDF, max. 100 MB pro Datei</span>'
+						. '<span class="upload-hint">Nur PDF oder XML, max. 100 MB pro Datei</span>'
 						. '</form>';
 				}
 				$uploadNotice = '';
