@@ -551,3 +551,71 @@ function cmx_kontakte_orderby_columns(\WP_Query $query): void {
 		$query->set('orderby', 'meta_value');
 	}
 }
+
+function cmx_kontakte_search_email_meta_keys(): array {
+	$keys = [
+		'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+		'cmx_email_1', 'cmx_email_2', 'cmx_email_3',
+		'email_1', 'email_2', 'email_3',
+		'e_mail_1', 'e_mail_2', 'e_mail_3',
+		'kontakt_email', 'email', 'e_mail', 'mail',
+		'_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation',
+	];
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+}
+
+\add_action('pre_get_posts', __NAMESPACE__ . '\\cmx_kontakte_extend_admin_search', 20);
+function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
+	if (!\is_admin() || !$query->is_main_query()) {
+		return;
+	}
+	if ((string) $query->get('post_type') !== 'kontakte') {
+		return;
+	}
+	if ((bool) $query->get('cmx_kontakte_search_lookup')) {
+		return;
+	}
+
+	$search_term = \trim((string) $query->get('s'));
+	if ($search_term === '') {
+		return;
+	}
+
+	$lookup_args = [
+		'post_type' => 'kontakte',
+		'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'no_found_rows' => true,
+		'orderby' => 'ID',
+		'order' => 'ASC',
+		'cmx_kontakte_search_lookup' => true,
+	];
+
+	$default_match_ids = \get_posts(\array_merge($lookup_args, [
+		's' => $search_term,
+	]));
+
+	$email_meta_query = ['relation' => 'OR'];
+	foreach (cmx_kontakte_search_email_meta_keys() as $meta_key) {
+		$email_meta_query[] = [
+			'key' => $meta_key,
+			'value' => $search_term,
+			'compare' => 'LIKE',
+		];
+	}
+
+	$email_match_ids = \get_posts(\array_merge($lookup_args, [
+		's' => '',
+		'meta_query' => $email_meta_query,
+	]));
+
+	$matched_ids = \array_values(\array_unique(\array_map('intval', \array_merge(
+		(array) $default_match_ids,
+		(array) $email_match_ids
+	))));
+
+	$query->set('s', '');
+	$query->set('post__in', empty($matched_ids) ? [0] : $matched_ids);
+}
