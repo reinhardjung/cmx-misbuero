@@ -83,9 +83,7 @@ function cmx_mail_import_log(string $message, array $context = []): void {
 }
 
 function cmx_mail_import_build_run_id(): string {
-	$stamp = \wp_date('Ymd-His');
-	$suffix = \function_exists('wp_generate_password') ? \wp_generate_password(6, false, false) : (string) \mt_rand(100000, 999999);
-	return 'run-' . $stamp . '-' . \strtolower(\sanitize_key((string) $suffix));
+	return \wp_date('d.m.Y H:i:s');
 }
 
 function cmx_mail_import_run_id_label(string $run_id): string {
@@ -1736,7 +1734,7 @@ function cmx_mail_import_render_log_page(): void {
 	$recent_run_entries = \array_slice($recent_run_entries, 0, 8);
 
 	echo '<div class="wrap">';
-	echo '<h1>E-Mail Auto-Import Protokoll</h1>';
+	echo '<h1>E-Mail Auto-Import</h1>';
 	// echo '<p>Heute importiert: <strong>' . \esc_html((string) $today_count) . '</strong>. ';
 	echo 'In der Scanner-Liste werden nur ungelesene Mails geprueft.</p>';
 
@@ -1788,8 +1786,8 @@ function cmx_mail_import_render_log_page(): void {
 \add_action('admin_menu', function (): void {
 	\add_submenu_page(
 		'edit.php?post_type=scanner',
-		'E-Mail Auto-Import Protokoll',
-		'E-Mail-Protokoll',
+		'E-Mail Auto-Import',
+		'E-Mails',
 		'manage_options',
 		'cmx-mail-import-log',
 		__NAMESPACE__ . '\\cmx_mail_import_render_log_page'
