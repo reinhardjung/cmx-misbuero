@@ -140,7 +140,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	\add_settings_field(
 		'cmx_email_imap_host',
-		'IMAP (143)',
+		'IMAP (993)',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('imap_host'));
 			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[imap_host]" value="' . $value . '" placeholder="imap.infomaniak.com" autocomplete="off">';
@@ -176,7 +176,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	$new['smtp_host'] = \sanitize_text_field((string) ($new['smtp_host'] ?? ''));
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
 	$new['smtp_port'] = '587';
-	$new['imap_port'] = '143';
+	$new['imap_port'] = '993';
 
 	return $new;
 }, 20, 2);
@@ -251,11 +251,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 		}
 
 		if (\function_exists('imap_open') && $username !== '' && $password !== '') {
-			$mailbox = '{' . $host . ':' . $port . '/imap/notls}INBOX';
-			$imap = @\imap_open($mailbox, $username, $password, OP_HALFOPEN, 1, ['DISABLE_AUTHENTICATOR' => 'GSSAPI']);
-			if ($imap !== false) {
-				@\imap_close($imap);
-				return [true, 'IMAP-Verbindung erfolgreich. Du kannst nun E-Mails empfangen!'];
+			$mailboxes = [
+				'{' . $host . ':' . $port . '/imap/ssl}INBOX',
+				'{' . $host . ':' . $port . '/imap/ssl/novalidate-cert}INBOX',
+			];
+			foreach ($mailboxes as $mailbox) {
+				$imap = @\imap_open($mailbox, $username, $password, OP_HALFOPEN, 1, ['DISABLE_AUTHENTICATOR' => 'GSSAPI']);
+				if ($imap !== false) {
+					@\imap_close($imap);
+					return [true, 'IMAP-Verbindung erfolgreich. Du kannst nun E-Mails empfangen!'];
+				}
 			}
 			$err = \trim((string) \imap_last_error());
 			return [false, $err !== '' ? 'IMAP-Test fehlgeschlagen: ' . $err : 'IMAP-Test fehlgeschlagen.'];
@@ -263,21 +268,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 
 		$errno = 0;
 		$errstr = '';
-		$fp = @\fsockopen($host, $port, $errno, $errstr, 10.0);
+		$fp = @\fsockopen('ssl://' . $host, $port, $errno, $errstr, 10.0);
 		if (!$fp) {
 			return [false, 'IMAP-Server nicht erreichbar: ' . $errstr . ' (' . $errno . ')'];
 		}
-		@\stream_set_timeout($fp, 5);
-		$banner = (string) \fgets($fp, 512);
 		\fclose($fp);
 
-		if ($banner !== '' && \stripos($banner, 'OK') !== false) {
-			if (\function_exists('imap_open')) {
-				return [true, 'IMAP-Server erreichbar.'];
-			}
-			return [true, 'IMAP-Server erreichbar (Login-Test nicht moeglich, PHP-IMAP fehlt).'];
+		if (\function_exists('imap_open')) {
+			return [true, 'IMAP-Server erreichbar.'];
 		}
-		return [true, 'IMAP-Server erreichbar.'];
+		return [true, 'IMAP-Server via SSL erreichbar (Login-Test nicht moeglich, PHP-IMAP fehlt).'];
 	}
 }
 
@@ -302,7 +302,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 	$email = \sanitize_email((string) (\wp_unslash($_POST['email'] ?? '')));
 	$password = (string) (\wp_unslash($_POST['password'] ?? ''));
 
-	[$ok, $message] = cmx_email_test_imap_connection($host, 143, $email, $password);
+	[$ok, $message] = cmx_email_test_imap_connection($host, 993, $email, $password);
 	if ($ok) {
 		\wp_send_json_success(['message' => $message]);
 	}

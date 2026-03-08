@@ -358,7 +358,7 @@ function cmx_mail_import_get_settings(): array {
 		'email_address' => \is_email($email_address) ? $email_address : '',
 		'email_password' => $email_password,
 		'imap_host' => $imap_host,
-		'imap_port' => 143,
+		'imap_port' => 993,
 		'supplier_email' => \is_email($supplier) ? $supplier : '',
 	];
 }
@@ -1309,7 +1309,7 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 
 function cmx_mail_import_open_mailbox(array $settings) {
 	$host = (string) ($settings['imap_host'] ?? '');
-	$port = (int) ($settings['imap_port'] ?? 143);
+	$port = (int) ($settings['imap_port'] ?? 993);
 	$user = (string) ($settings['email_address'] ?? '');
 	$pass = (string) ($settings['email_password'] ?? '');
 
@@ -1318,8 +1318,8 @@ function cmx_mail_import_open_mailbox(array $settings) {
 	}
 
 	$mailboxes = [
-		'{' . $host . ':' . $port . '/imap/notls}INBOX',
-		'{' . $host . ':' . $port . '/imap/notls/novalidate-cert}INBOX',
+		'{' . $host . ':' . $port . '/imap/ssl}INBOX',
+		'{' . $host . ':' . $port . '/imap/ssl/novalidate-cert}INBOX',
 	];
 
 	foreach ($mailboxes as $mailbox) {
