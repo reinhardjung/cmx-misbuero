@@ -237,11 +237,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 <html>
 <head>
 	<meta charset="utf-8">
-	<style>
-		body{font-family:DejaVu Sans, Arial, sans-serif;font-size:9px;color:#111}
-		.doc-header{margin:0 0 10px 0}
-		.doc-header-title{float:left;font-size:18px;font-weight:700;line-height:1.2}
-		.doc-header-title .doc-header-subtitle{display:block;font-size:10px;font-weight:400;color:#444;margin-top:3px}
+		<style>
+			body{font-family:DejaVu Sans, Arial, sans-serif;font-size:9px;color:#111}
+			.doc-header{margin:0 0 10px 0}
+			.doc-header-title{float:left;font-size:18px;font-weight:700;line-height:1.2}
+			.doc-header-title .doc-header-overview{display:inline-block;margin-left:6px;font-size:13px;font-style:italic;font-weight:400;position:relative;top:3px}
+			.doc-header-title .doc-header-subtitle{display:block;font-size:10px;font-weight:400;color:#444;margin-top:3px}
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
@@ -263,12 +264,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 	</style>
 </head>
 <body>
-	<div class="doc-header">
-		<div class="doc-header-title">
-			Milchbüchli
-			<span class="doc-header-subtitle">
-				Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
-			</span>
+		<div class="doc-header">
+			<div class="doc-header-title">
+				Milchbüchli <span class="doc-header-overview">Übersicht</span>
+				<span class="doc-header-subtitle">
+					Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
+				</span>
 		</div>
 		<div class="doc-header-logo">
 			<?php if ($branding_logo !== ''): ?>
