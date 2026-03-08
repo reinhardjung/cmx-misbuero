@@ -363,6 +363,17 @@ function cmx_mail_import_get_settings(): array {
 	];
 }
 
+function cmx_mail_import_support_user_switch_enabled(): bool {
+	$opts = (array) \get_option(cmx_mail_import_settings_option_name(), []);
+	$value = $opts['support_user_switch'] ?? '';
+
+	if (\is_bool($value)) {
+		return $value;
+	}
+
+	return \in_array((string) $value, ['1', 'true', 'yes', 'on'], true);
+}
+
 function cmx_mail_import_normalize_email(string $raw): string {
 	$email = \sanitize_email((string) $raw);
 	return \is_email($email) ? \strtolower($email) : '';
@@ -1702,6 +1713,7 @@ function cmx_mail_import_render_log_page(): void {
 	$today_count = cmx_mail_import_count_events_today();
 	$log_file_path = cmx_mail_import_log_file_path();
 	$open_log_url = \admin_url('admin-post.php?action=cmx_mail_import_open_logfile');
+	$can_open_log_file = cmx_mail_import_support_user_switch_enabled();
 
 	$recent_run_entries = \array_values(\array_filter(
 		cmx_mail_import_get_run_log(),
@@ -1730,7 +1742,7 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
 	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alle anzeigen</a> ';
-	if ($log_file_path !== '') {
+	if ($can_open_log_file && $log_file_path !== '') {
 		echo '<a class="button" href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer">Logdatei öffnen</a>';
 	}
 	echo '</form>';
@@ -1888,6 +1900,9 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 
 \add_action('admin_post_cmx_mail_import_open_logfile', function (): void {
 	if (!\current_user_can('manage_options')) {
+		\wp_die('forbidden');
+	}
+	if (!cmx_mail_import_support_user_switch_enabled()) {
 		\wp_die('forbidden');
 	}
 
