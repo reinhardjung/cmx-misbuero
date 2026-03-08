@@ -524,10 +524,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		$render_main_rows = ($carry_last_row_with_result && $render_row_count > 1)
 			? \array_slice($render_rows_indexed, 0, $render_row_count - 1)
 			: $render_rows_indexed;
+		$render_last_row_number = \is_array($render_last_row) ? (int) $render_row_count : null;
 		?>
 		<table class="beleg-table">
 		<thead>
 		<tr>
+			<th style="text-align:right;width:26px;">#</th>
 			<th style="text-align:center;width:20px;"></th>
 			<th style="width:80px;">Belegnummer</th>
 			<th style="width:60px">Bezahlt am</th>
@@ -542,17 +544,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			<th style="text-align:right;width:90px;">Ausgaben</th>
 		</tr>
 		<tr>
-			<th colspan="12" class="line-row-cell"></th>
+			<th colspan="13" class="line-row-cell"></th>
 		</tr>
 		</thead>
 		<tbody>
 			<?php if (empty($render_rows_indexed)): ?>
 				<tr>
-					<td colspan="12">Keine Daten im gewählten Zeitraum.</td>
+					<td colspan="13">Keine Daten im gewählten Zeitraum.</td>
 				</tr>
 			<?php else: ?>
-				<?php foreach ($render_main_rows as $row_view): ?>
+				<?php foreach ($render_main_rows as $row_index => $row_view): ?>
 					<tr>
+						<td style="text-align:right;"><?= (int) $row_index + 1; ?></td>
 						<td style="text-align:center;"><?= $row_view['open']; ?></td>
 						<td><?= $row_view['belegnummer']; ?></td>
 						<td><?= $row_view['bezahlt_am']; ?></td>
@@ -572,7 +575,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		<tfoot>
 			<?php if (!\is_array($render_last_row)): ?>
 				<tr>
-					<td colspan="12" class="line-row-cell"></td>
+					<td colspan="13" class="line-row-cell"></td>
 				</tr>
 			<?php endif; ?>
 		</tfoot>
@@ -583,6 +586,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				<table class="beleg-table">
 					<thead>
 					<tr>
+						<th style="text-align:right;width:26px;">#</th>
 						<th style="text-align:center;width:20px;"></th>
 						<th style="width:80px;">Belegnummer</th>
 						<th style="width:60px">Bezahlt am</th>
@@ -597,11 +601,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 						<th style="text-align:right;width:90px;">Ausgaben</th>
 					</tr>
 					<tr>
-						<th colspan="12" class="line-row-cell"></th>
+						<th colspan="13" class="line-row-cell"></th>
 					</tr>
 					</thead>
 					<tbody>
 						<tr class="beleg-last-row">
+							<td style="text-align:right;width:26px;"><?= $render_last_row_number; ?></td>
 							<td style="text-align:center;width:20px;"><?= $render_last_row['open']; ?></td>
 							<td style="width:80px;"><?= $render_last_row['belegnummer']; ?></td>
 							<td style="width:60px;"><?= $render_last_row['bezahlt_am']; ?></td>
@@ -621,7 +626,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			<?php if (\is_array($render_last_row)): ?>
 				<table>
 				<tr>
-					<td colspan="12" class="line-row-cell"></td>
+					<td colspan="13" class="line-row-cell"></td>
 				</tr>
 				</table>
 			<?php endif; ?>
@@ -696,6 +701,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				<table class="beleg-table">
 					<thead>
 				<tr>
+					<th style="text-align:right;width:26px;">#</th>
 					<th style="text-align:center;width:20px;"></th>
 					<th style="width:80px;">Belegnummer</th>
 					<th style="width:60px">Bezahlt am</th>
@@ -710,17 +716,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 					<th style="text-align:right;width:90px;">Ausgaben</th>
 				</tr>
 				<tr>
-					<th colspan="12" class="line-row-cell"></th>
+					<th colspan="13" class="line-row-cell"></th>
 				</tr>
 				</thead>
 				<tbody>
 				<?php if (empty($section_rows)): ?>
 					<tr>
-						<td colspan="12"><?= \esc_html($section_empty_label); ?></td>
+						<td colspan="13"><?= \esc_html($section_empty_label); ?></td>
 					</tr>
 				<?php else: ?>
-					<?php foreach ($section_rows as $row_view): ?>
+					<?php foreach ($section_rows as $row_index => $row_view): ?>
 						<tr>
+							<td style="text-align:right;"><?= (int) $row_index + 1; ?></td>
 							<td style="text-align:center;"><?= $row_view['open']; ?></td>
 							<td><?= $row_view['belegnummer']; ?></td>
 							<td><?= $row_view['bezahlt_am']; ?></td>
@@ -739,10 +746,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				</tbody>
 				<tfoot>
 					<tr>
-						<td colspan="12" class="line-row-cell"></td>
+						<td colspan="13" class="line-row-cell"></td>
 					</tr>
 					<tr>
-						<td colspan="8"></td>
+						<td colspan="9"></td>
 						<td style="text-align:right;"><strong><?= \esc_html($section_mwst_sum_display); ?></strong></td>
 						<td style="text-align:right;"><strong><?= \esc_html($section_vorsteuer_sum_display); ?></strong></td>
 						<td style="text-align:right;"><strong><?= \esc_html($section_einnahmen_sum_display); ?></strong></td>
