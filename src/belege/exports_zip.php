@@ -236,6 +236,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			: \number_format((float) \round($sum_zzz, 2), 2, '.', "'");
 		$mwst_groups = [];
 		$belegtyp_groups = [];
+		$zahlungsart_groups = [];
+		$zahlungsgrund_groups = [];
 		foreach ($render_rows as $row_view) {
 			$row_mwst = (float) ($row_view['mwst_value'] ?? $to_float($row_view['mwst'] ?? 0));
 			$row_vorsteuer = (float) ($row_view['vorsteuer_value'] ?? $to_float($row_view['vorsteuer'] ?? 0));
@@ -285,6 +287,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			$belegtyp_groups[$belegtyp_label]['sum_vorsteuer'] += $row_vorsteuer;
 			$belegtyp_groups[$belegtyp_label]['sum_einnahmen'] += $row_einnahmen;
 			$belegtyp_groups[$belegtyp_label]['sum_ausgaben'] += $row_ausgaben;
+
+			$zahlungsart_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['zahlungsart'] ?? '')));
+			if ($zahlungsart_label === '') {
+				$zahlungsart_label = 'Ohne Zahlungsart';
+			}
+			if (!isset($zahlungsart_groups[$zahlungsart_label])) {
+				$sort_label = \function_exists('mb_strtolower')
+					? \mb_strtolower($zahlungsart_label, 'UTF-8')
+					: \strtolower($zahlungsart_label);
+				$zahlungsart_groups[$zahlungsart_label] = [
+					'label' => $zahlungsart_label,
+					'sort_label' => $sort_label,
+					'rows' => [],
+					'sum_mwst' => 0.0,
+					'sum_vorsteuer' => 0.0,
+					'sum_einnahmen' => 0.0,
+					'sum_ausgaben' => 0.0,
+				];
+			}
+			$zahlungsart_groups[$zahlungsart_label]['rows'][] = $row_view;
+			$zahlungsart_groups[$zahlungsart_label]['sum_mwst'] += $row_mwst;
+			$zahlungsart_groups[$zahlungsart_label]['sum_vorsteuer'] += $row_vorsteuer;
+			$zahlungsart_groups[$zahlungsart_label]['sum_einnahmen'] += $row_einnahmen;
+			$zahlungsart_groups[$zahlungsart_label]['sum_ausgaben'] += $row_ausgaben;
+
+			$zahlungsgrund_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['zahlungsgrund'] ?? '')));
+			if ($zahlungsgrund_label === '') {
+				$zahlungsgrund_label = 'Ohne Zahlungsgrund';
+			}
+			if (!isset($zahlungsgrund_groups[$zahlungsgrund_label])) {
+				$sort_label = \function_exists('mb_strtolower')
+					? \mb_strtolower($zahlungsgrund_label, 'UTF-8')
+					: \strtolower($zahlungsgrund_label);
+				$zahlungsgrund_groups[$zahlungsgrund_label] = [
+					'label' => $zahlungsgrund_label,
+					'sort_label' => $sort_label,
+					'rows' => [],
+					'sum_mwst' => 0.0,
+					'sum_vorsteuer' => 0.0,
+					'sum_einnahmen' => 0.0,
+					'sum_ausgaben' => 0.0,
+				];
+			}
+			$zahlungsgrund_groups[$zahlungsgrund_label]['rows'][] = $row_view;
+			$zahlungsgrund_groups[$zahlungsgrund_label]['sum_mwst'] += $row_mwst;
+			$zahlungsgrund_groups[$zahlungsgrund_label]['sum_vorsteuer'] += $row_vorsteuer;
+			$zahlungsgrund_groups[$zahlungsgrund_label]['sum_einnahmen'] += $row_einnahmen;
+			$zahlungsgrund_groups[$zahlungsgrund_label]['sum_ausgaben'] += $row_ausgaben;
 		}
 		$mwst_group_items = \array_values($mwst_groups);
 		if (\count($mwst_group_items) > 1) {
@@ -298,6 +348,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		$belegtyp_group_items = \array_values($belegtyp_groups);
 		if (\count($belegtyp_group_items) > 1) {
 			\usort($belegtyp_group_items, static function (array $a, array $b): int {
+				return \strcmp((string) ($a['sort_label'] ?? ''), (string) ($b['sort_label'] ?? ''));
+			});
+		}
+		$zahlungsart_group_items = \array_values($zahlungsart_groups);
+		if (\count($zahlungsart_group_items) > 1) {
+			\usort($zahlungsart_group_items, static function (array $a, array $b): int {
+				return \strcmp((string) ($a['sort_label'] ?? ''), (string) ($b['sort_label'] ?? ''));
+			});
+		}
+		$zahlungsgrund_group_items = \array_values($zahlungsgrund_groups);
+		if (\count($zahlungsgrund_group_items) > 1) {
+			\usort($zahlungsgrund_group_items, static function (array $a, array $b): int {
 				return \strcmp((string) ($a['sort_label'] ?? ''), (string) ($b['sort_label'] ?? ''));
 			});
 		}
@@ -345,6 +407,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			$list_sections[] = [
 				'title' => $belegtyp_pluralize($title),
 				'empty_label' => 'Keine Daten für diesen Belegtyp.',
+				'rows' => (array) ($group['rows'] ?? []),
+				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+			];
+		}
+		foreach ($zahlungsart_group_items as $group) {
+			$title = (string) ($group['label'] ?? '');
+			if ($title === '') {
+				$title = 'Ohne Zahlungsart';
+			}
+			$list_sections[] = [
+				'title' => $title,
+				'empty_label' => 'Keine Daten für diese Zahlungsart.',
+				'rows' => (array) ($group['rows'] ?? []),
+				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+			];
+		}
+		foreach ($zahlungsgrund_group_items as $group) {
+			$title = (string) ($group['label'] ?? '');
+			if ($title === '') {
+				$title = 'Ohne Zahlungsgrund';
+			}
+			$list_sections[] = [
+				'title' => $title,
+				'empty_label' => 'Keine Daten für diesen Zahlungsgrund.',
 				'rows' => (array) ($group['rows'] ?? []),
 				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
 				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
