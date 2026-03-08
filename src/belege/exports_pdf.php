@@ -163,6 +163,10 @@ use Dompdf\Options;
 			'vorsteuer' => \esc_html((string) ($display_row[9] ?? '')),
 			'einnahmen' => \esc_html((string) ($display_row[10] ?? '')),
 			'ausgaben' => \esc_html((string) ($display_row[11] ?? '')),
+			'mwst_value' => $to_float($display_row[8] ?? 0),
+			'vorsteuer_value' => $to_float($display_row[9] ?? 0),
+			'einnahmen_value' => $to_float($display_row[10] ?? 0),
+			'ausgaben_value' => $to_float($display_row[11] ?? 0),
 		];
 	}
 		if (\count($render_rows) > 1) {
@@ -207,8 +211,34 @@ use Dompdf\Options;
 	$sum_zzz_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum_zzz, 2)
 		: \number_format((float) \round($sum_zzz, 2), 2, '.', "'");
+	$mwst_groups = [];
 	$belegtyp_groups = [];
 	foreach ($render_rows as $row_view) {
+		$row_mwst = (float) ($row_view['mwst_value'] ?? $to_float($row_view['mwst'] ?? 0));
+		$row_vorsteuer = (float) ($row_view['vorsteuer_value'] ?? $to_float($row_view['vorsteuer'] ?? 0));
+		$row_einnahmen = (float) ($row_view['einnahmen_value'] ?? $to_float($row_view['einnahmen'] ?? 0));
+		$row_ausgaben = (float) ($row_view['ausgaben_value'] ?? $to_float($row_view['ausgaben'] ?? 0));
+
+		$mwst_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['mwst_satz'] ?? '')));
+		if ($mwst_label !== '') {
+			if (!isset($mwst_groups[$mwst_label])) {
+				$mwst_groups[$mwst_label] = [
+					'label' => $mwst_label,
+					'sort_value' => $to_float($mwst_label),
+					'rows' => [],
+					'sum_mwst' => 0.0,
+					'sum_vorsteuer' => 0.0,
+					'sum_einnahmen' => 0.0,
+					'sum_ausgaben' => 0.0,
+				];
+			}
+			$mwst_groups[$mwst_label]['rows'][] = $row_view;
+			$mwst_groups[$mwst_label]['sum_mwst'] += $row_mwst;
+			$mwst_groups[$mwst_label]['sum_vorsteuer'] += $row_vorsteuer;
+			$mwst_groups[$mwst_label]['sum_einnahmen'] += $row_einnahmen;
+			$mwst_groups[$mwst_label]['sum_ausgaben'] += $row_ausgaben;
+		}
+
 		$belegtyp_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['belegtyp'] ?? '')));
 		if ($belegtyp_label === '') {
 			$belegtyp_label = 'Ohne Belegtyp';
@@ -223,17 +253,81 @@ use Dompdf\Options;
 				'rows' => [],
 				'sum_mwst' => 0.0,
 				'sum_vorsteuer' => 0.0,
+				'sum_einnahmen' => 0.0,
+				'sum_ausgaben' => 0.0,
 			];
 		}
 		$belegtyp_groups[$belegtyp_label]['rows'][] = $row_view;
-		$belegtyp_groups[$belegtyp_label]['sum_mwst'] += $to_float($row_view['mwst'] ?? 0);
-		$belegtyp_groups[$belegtyp_label]['sum_vorsteuer'] += $to_float($row_view['vorsteuer'] ?? 0);
+		$belegtyp_groups[$belegtyp_label]['sum_mwst'] += $row_mwst;
+		$belegtyp_groups[$belegtyp_label]['sum_vorsteuer'] += $row_vorsteuer;
+		$belegtyp_groups[$belegtyp_label]['sum_einnahmen'] += $row_einnahmen;
+		$belegtyp_groups[$belegtyp_label]['sum_ausgaben'] += $row_ausgaben;
+	}
+	$mwst_group_items = \array_values($mwst_groups);
+	if (\count($mwst_group_items) > 1) {
+		\usort($mwst_group_items, static function (array $a, array $b): int {
+			$av = (float) ($a['sort_value'] ?? 0.0);
+			$bv = (float) ($b['sort_value'] ?? 0.0);
+			if ($av !== $bv) return $av <=> $bv;
+			return \strcmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
+		});
 	}
 	$belegtyp_group_items = \array_values($belegtyp_groups);
 	if (\count($belegtyp_group_items) > 1) {
 		\usort($belegtyp_group_items, static function (array $a, array $b): int {
 			return \strcmp((string) ($a['sort_label'] ?? ''), (string) ($b['sort_label'] ?? ''));
 		});
+	}
+	$belegtyp_pluralize = static function (string $label): string {
+		$label = \trim(\str_replace("\xC2\xA0", ' ', $label));
+		if ($label === '') return 'Belege';
+		$normalized = \function_exists('mb_strtolower')
+			? \mb_strtolower($label, 'UTF-8')
+			: \strtolower($label);
+		$map = [
+			'rechnung' => 'Rechnungen',
+			'rechnungen' => 'Rechnungen',
+			'quittung' => 'Quittungen',
+			'quittungen' => 'Quittungen',
+			'gutschrift' => 'Gutschriften',
+			'gutschriften' => 'Gutschriften',
+			'ohne belegtyp' => 'Ohne Belegtyp',
+		];
+		return (string) ($map[$normalized] ?? $label);
+	};
+	$list_sections = [];
+	foreach ($mwst_group_items as $group) {
+		$title = (string) ($group['label'] ?? '');
+		if ($title !== '' && \strpos($title, '%') === false) {
+			$title .= '%';
+		}
+		if ($title !== '' && \stripos($title, 'mwst') === false) {
+			$title .= ' MwSt';
+		}
+		$list_sections[] = [
+			'title' => $title,
+			'empty_label' => 'Keine Daten für diesen MwSt-Satz.',
+			'rows' => (array) ($group['rows'] ?? []),
+			'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+			'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+			'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+			'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+		];
+	}
+	foreach ($belegtyp_group_items as $group) {
+		$title = (string) ($group['label'] ?? '');
+		if ($title === '') {
+			$title = 'Ohne Belegtyp';
+		}
+		$list_sections[] = [
+			'title' => $belegtyp_pluralize($title),
+			'empty_label' => 'Keine Daten für diesen Belegtyp.',
+			'rows' => (array) ($group['rows'] ?? []),
+			'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+			'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+			'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+			'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+		];
 	}
 	ob_start();
 	?>
@@ -374,26 +468,28 @@ use Dompdf\Options;
 	</tr>
 	</table>
 
-	<?php foreach ($belegtyp_group_items as $belegtyp_group): ?>
+	<?php foreach ($list_sections as $section): ?>
 		<?php
-		$belegtyp_title = (string) ($belegtyp_group['label'] ?? '');
-		if ($belegtyp_title === '') {
-			$belegtyp_title = 'Ohne Belegtyp';
-		}
-		$belegtyp_rows = (array) ($belegtyp_group['rows'] ?? []);
-		$group_mwst_sum = (float) ($belegtyp_group['sum_mwst'] ?? 0.0);
-		$group_vorsteuer_sum = (float) ($belegtyp_group['sum_vorsteuer'] ?? 0.0);
-		$group_mwst_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
-			? (string) cmxbu_beleg_export_format_money($group_mwst_sum)
-			: \number_format((float) \round($group_mwst_sum, 2), 2, '.', "'");
-		$group_vorsteuer_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
-			? (string) cmxbu_beleg_export_format_money($group_vorsteuer_sum)
-			: \number_format((float) \round($group_vorsteuer_sum, 2), 2, '.', "'");
+		$section_title = (string) ($section['title'] ?? '');
+		$section_rows = (array) ($section['rows'] ?? []);
+		$section_empty_label = (string) ($section['empty_label'] ?? 'Keine Daten.');
+		$section_mwst_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money((float) ($section['sum_mwst'] ?? 0.0))
+			: \number_format((float) \round((float) ($section['sum_mwst'] ?? 0.0), 2), 2, '.', "'");
+		$section_vorsteuer_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money((float) ($section['sum_vorsteuer'] ?? 0.0))
+			: \number_format((float) \round((float) ($section['sum_vorsteuer'] ?? 0.0), 2), 2, '.', "'");
+		$section_einnahmen_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money((float) ($section['sum_einnahmen'] ?? 0.0))
+			: \number_format((float) \round((float) ($section['sum_einnahmen'] ?? 0.0), 2), 2, '.', "'");
+		$section_ausgaben_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money((float) ($section['sum_ausgaben'] ?? 0.0))
+			: \number_format((float) \round((float) ($section['sum_ausgaben'] ?? 0.0), 2), 2, '.', "'");
 		?>
 		<div class="mwst-page">
 			<div class="doc-header">
 				<div class="doc-header-title">
-					Milchbüchli <span class="doc-header-overview"><?= \esc_html($belegtyp_title); ?></span>
+					Milchbüchli <span class="doc-header-overview"><?= \esc_html($section_title); ?></span>
 					<span class="doc-header-subtitle">
 						Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
 					</span>
@@ -426,12 +522,12 @@ use Dompdf\Options;
 				</tr>
 				</thead>
 				<tbody>
-				<?php if (empty($belegtyp_rows)): ?>
+				<?php if (empty($section_rows)): ?>
 					<tr>
-						<td colspan="12">Keine Daten für diesen Belegtyp.</td>
+						<td colspan="12"><?= \esc_html($section_empty_label); ?></td>
 					</tr>
 				<?php else: ?>
-					<?php foreach ($belegtyp_rows as $row_view): ?>
+					<?php foreach ($section_rows as $row_view): ?>
 						<tr>
 							<td style="text-align:center;"><?= $row_view['open']; ?></td>
 							<td><?= $row_view['belegnummer']; ?></td>
@@ -455,10 +551,10 @@ use Dompdf\Options;
 					</tr>
 					<tr>
 						<td colspan="8"></td>
-						<td style="text-align:right;"><strong><?= \esc_html($group_mwst_sum_display); ?></strong></td>
-						<td style="text-align:right;"><strong><?= \esc_html($group_vorsteuer_sum_display); ?></strong></td>
-						<td></td>
-						<td></td>
+						<td style="text-align:right;"><strong><?= \esc_html($section_mwst_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($section_vorsteuer_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($section_einnahmen_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($section_ausgaben_sum_display); ?></strong></td>
 					</tr>
 				</tfoot>
 			</table>
