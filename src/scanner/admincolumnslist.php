@@ -746,12 +746,12 @@ $cmx_scanner_add_uploaded_column = static function (array $columns): array {
 	foreach ($columns as $key => $label) {
 		$new[$key] = $label;
 		if ($key === 'title') {
-			$new['cmx_scanner_uploaded_at'] = 'E-Mail / Scanner';
+			$new['cmx_scanner_uploaded_at'] = 'Eingegangen am';
 			$inserted = true;
 		}
 	}
 	if (!$inserted) {
-		$new['cmx_scanner_uploaded_at'] = 'E-Mail / Scanner';
+		$new['cmx_scanner_uploaded_at'] = 'Eingegangen am';
 	}
 	return $new;
 };
