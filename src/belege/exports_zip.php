@@ -239,9 +239,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 					'label' => $mwst_label,
 					'sort_value' => $to_float($mwst_label),
 					'rows' => [],
+					'sum_mwst' => 0.0,
+					'sum_vorsteuer' => 0.0,
 				];
 			}
 			$mwst_groups[$mwst_label]['rows'][] = $row_view;
+			$mwst_groups[$mwst_label]['sum_mwst'] += $to_float($row_view['mwst'] ?? 0);
+			$mwst_groups[$mwst_label]['sum_vorsteuer'] += $to_float($row_view['vorsteuer'] ?? 0);
 		}
 		$mwst_group_items = \array_values($mwst_groups);
 		if (\count($mwst_group_items) > 1) {
@@ -398,7 +402,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		if ($mwst_title !== '' && \strpos($mwst_title, '%') === false) {
 			$mwst_title .= '%';
 		}
+		if ($mwst_title !== '' && \stripos($mwst_title, 'mwst') === false) {
+			$mwst_title .= ' MwSt';
+		}
 		$mwst_rows = (array) ($mwst_group['rows'] ?? []);
+		$mwst_sum = (float) ($mwst_group['sum_mwst'] ?? 0.0);
+		$vorsteuer_sum = (float) ($mwst_group['sum_vorsteuer'] ?? 0.0);
+		$mwst_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money($mwst_sum)
+			: \number_format((float) \round($mwst_sum, 2), 2, '.', "'");
+		$vorsteuer_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money($vorsteuer_sum)
+			: \number_format((float) \round($vorsteuer_sum, 2), 2, '.', "'");
 		?>
 		<div class="mwst-page">
 			<div class="doc-header">
@@ -462,6 +477,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				<tfoot>
 					<tr>
 						<td colspan="12" class="line-row-cell"></td>
+					</tr>
+					<tr>
+						<td colspan="8"></td>
+						<td style="text-align:right;"><strong><?= \esc_html($mwst_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($vorsteuer_sum_display); ?></strong></td>
+						<td></td>
+						<td></td>
 					</tr>
 				</tfoot>
 			</table>
