@@ -423,21 +423,26 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		\delete_post_meta($post_id, CMX_BELEG_META_WAEHRUNG);
 	}
 
-	// ===== NEU: Bezahlt am =====
-	$bez = isset($_POST['cmx_beleg_bezahlt_am']) ? \sanitize_text_field($_POST['cmx_beleg_bezahlt_am']) : '';
-	$bez_valid = ($bez && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $bez));
-	if ($bez_valid) {
-		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM, $bez);
-	} else {
-		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
-	}
-
 	// ===== NEU: Status =====
 	$val = isset($_POST['cmx_beleg_status']) ? \sanitize_key($_POST['cmx_beleg_status']) : '';
 	$opts = cmx_beleg_status_options();
 	if (!isset($opts[$val])) {
 		$val = array_key_first($opts);
 	}
+
+	// ===== NEU: Bezahlt am =====
+	$bez = isset($_POST['cmx_beleg_bezahlt_am']) ? \sanitize_text_field($_POST['cmx_beleg_bezahlt_am']) : '';
+	$bez_valid = ($bez && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $bez));
+	if ($val !== 'bezahlt') {
+		$bez = '';
+		$bez_valid = false;
+	}
+	if ($bez_valid) {
+		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM, $bez);
+	} else {
+		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
+	}
+
 	if ($bez_valid) {
 		$val = 'bezahlt';
 	}
