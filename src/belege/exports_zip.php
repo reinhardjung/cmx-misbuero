@@ -516,8 +516,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		$render_rows_indexed = \array_values((array) $render_rows);
 		$render_row_count = \count($render_rows_indexed);
 		// Heuristik: nur bei voraussichtlichem Überlauf die letzte Zeile mit Kopf in den Ergebnisblock verschieben.
-		// 17 Zeilen passen im Regelfall noch zusammen mit Ergebnisblock auf eine Seite.
-		$carry_last_row_with_result = ($render_row_count > 17);
+		// 18 Zeilen passen im Regelfall noch zusammen mit Ergebnisblock auf eine Seite.
+		$carry_last_row_with_result = ($render_row_count > 18);
 		$render_last_row = ($carry_last_row_with_result && $render_row_count > 0)
 			? (array) $render_rows_indexed[$render_row_count - 1]
 			: null;
