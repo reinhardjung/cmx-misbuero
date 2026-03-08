@@ -616,6 +616,30 @@ function cmx_kontakte_search_address_meta_keys(): array {
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
 }
 
+function cmx_kontakte_search_terms(string $search_term): array {
+	$search_term = \trim($search_term);
+	if ($search_term === '') {
+		return [];
+	}
+
+	$terms = [$search_term];
+	$umlaut_variant = \strtr($search_term, [
+		'Ä' => 'Ae',
+		'Ö' => 'Oe',
+		'Ü' => 'Ue',
+		'ä' => 'ae',
+		'ö' => 'oe',
+		'ü' => 'ue',
+		'ß' => 'ss',
+	]);
+
+	if ($umlaut_variant !== $search_term) {
+		$terms[] = $umlaut_variant;
+	}
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $terms))));
+}
+
 \add_action('pre_get_posts', __NAMESPACE__ . '\\cmx_kontakte_extend_admin_search', 20);
 function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	if (!\is_admin() || !$query->is_main_query()) {
@@ -632,6 +656,10 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	if ($search_term === '') {
 		return;
 	}
+	$search_terms = cmx_kontakte_search_terms($search_term);
+	if (empty($search_terms)) {
+		return;
+	}
 
 	$lookup_args = [
 		'post_type' => 'kontakte',
@@ -644,20 +672,25 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 		'cmx_kontakte_search_lookup' => true,
 	];
 
-	$default_match_ids = \get_posts(\array_merge($lookup_args, [
-		's' => $search_term,
-	]));
+	$default_match_ids = [];
+	foreach ($search_terms as $lookup_term) {
+		$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
+			's' => $lookup_term,
+		])));
+	}
 
 	$email_meta_query = ['relation' => 'OR'];
-	foreach (\array_merge(
-		cmx_kontakte_search_email_meta_keys(),
-		cmx_kontakte_search_address_meta_keys()
-	) as $meta_key) {
-		$email_meta_query[] = [
-			'key' => $meta_key,
-			'value' => $search_term,
-			'compare' => 'LIKE',
-		];
+	foreach ($search_terms as $lookup_term) {
+		foreach (\array_merge(
+			cmx_kontakte_search_email_meta_keys(),
+			cmx_kontakte_search_address_meta_keys()
+		) as $meta_key) {
+			$email_meta_query[] = [
+				'key' => $meta_key,
+				'value' => $lookup_term,
+				'compare' => 'LIKE',
+			];
+		}
 	}
 
 	$email_match_ids = \get_posts(\array_merge($lookup_args, [
