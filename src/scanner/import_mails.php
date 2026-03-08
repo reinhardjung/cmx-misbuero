@@ -108,6 +108,23 @@ function cmx_mail_import_run_id_label(string $run_id): string {
 	return $day . '.' . $month . '.' . $year . ' ' . $hour . ':' . $minute . ':' . $second;
 }
 
+function cmx_mail_import_run_query_value(string $run_id): string {
+	$run_id = \trim($run_id);
+	if ($run_id === '') {
+		return '';
+	}
+
+	if (\preg_match('/^run-(\d{8})-(\d{6})(?:-[a-z0-9]+)?$/i', $run_id, $match) === 1) {
+		return (string) ($match[1] . '-' . $match[2]);
+	}
+
+	if (\preg_match('/^(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2}):(\d{2})$/', $run_id, $match) === 1) {
+		return (string) ($match[3] . $match[2] . $match[1] . '-' . $match[4] . $match[5] . $match[6]);
+	}
+
+	return $run_id;
+}
+
 function cmx_mail_import_event_log_option_name(): string {
 	return (string) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_EVENT_LOG_OPTION');
 }
@@ -266,7 +283,8 @@ function cmx_mail_import_get_events_for_run_query(string $run_query, int $limit 
 			continue;
 		}
 		$label = \strtolower(cmx_mail_import_run_id_label($run_id));
-		if (\strpos(\strtolower($run_id), $needle) === false && \strpos($label, $needle) === false) {
+		$query_value = \strtolower(cmx_mail_import_run_query_value($run_id));
+		if (\strpos(\strtolower($run_id), $needle) === false && \strpos($label, $needle) === false && \strpos($query_value, $needle) === false) {
 			continue;
 		}
 		$out[] = $entry;
@@ -1561,6 +1579,9 @@ function cmx_mail_import_admin_log_page_url(array $args = []): string {
 		'page' => 'cmx-mail-import-log',
 	];
 	$args = \array_merge($base_args, $args);
+	if (isset($args['cmx_mail_import_run'])) {
+		$args['cmx_mail_import_run'] = cmx_mail_import_run_query_value((string) $args['cmx_mail_import_run']);
+	}
 	return \add_query_arg($args, \admin_url('edit.php'));
 }
 
@@ -1588,6 +1609,54 @@ function cmx_mail_import_is_visible_event($entry): bool {
 	return $status !== 'skipped';
 }
 
+function cmx_mail_import_entry_status_label(array $entry): string {
+	$status = \sanitize_key((string) ($entry['status'] ?? ''));
+	$reason = \sanitize_key((string) ($entry['reason'] ?? ''));
+	return $reason !== '' ? $reason : ($status !== '' ? $status : '-');
+}
+
+function cmx_mail_import_collect_status_filter_options(array $entries): array {
+	$options = [];
+	foreach ($entries as $entry) {
+		if (!\is_array($entry) || !cmx_mail_import_is_visible_event($entry)) {
+			continue;
+		}
+		$label = cmx_mail_import_entry_status_label($entry);
+		if ($label === '' || $label === '-') {
+			continue;
+		}
+		$options[$label] = $label;
+	}
+	\ksort($options, \SORT_NATURAL | \SORT_FLAG_CASE);
+	return \array_values($options);
+}
+
+function cmx_mail_import_filter_entries_by_status(array $entries, string $status_filter): array {
+	$status_filter = \sanitize_key($status_filter);
+	if ($status_filter === '') {
+		return $entries;
+	}
+
+	return \array_values(\array_filter($entries, static function ($entry) use ($status_filter): bool {
+		return \is_array($entry) && cmx_mail_import_entry_status_label($entry) === $status_filter;
+	}));
+}
+
+function cmx_mail_import_filter_entries_by_sender(array $entries, string $sender_filter): array {
+	$sender_filter = cmx_mail_import_normalize_email($sender_filter);
+	if ($sender_filter === '') {
+		return $entries;
+	}
+
+	return \array_values(\array_filter($entries, static function ($entry) use ($sender_filter): bool {
+		if (!\is_array($entry)) {
+			return false;
+		}
+		$sender = cmx_mail_import_normalize_email((string) ($entry['sender'] ?? ''));
+		return $sender !== '' && \strpos($sender, $sender_filter) !== false;
+	}));
+}
+
 function cmx_mail_import_render_admin_details_table(array $entries): void {
 	$entries = \array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event'));
 
@@ -1602,9 +1671,7 @@ function cmx_mail_import_render_admin_details_table(array $entries): void {
 	foreach ($entries as $entry) {
 		$ts = (int) ($entry['ts'] ?? 0);
 		$time = $ts > 0 ? \wp_date('d.m.Y H:i', $ts) : '';
-		$status = \sanitize_key((string) ($entry['status'] ?? ''));
-		$reason = \sanitize_key((string) ($entry['reason'] ?? ''));
-		$status_label = $reason !== '' ? $reason : ($status !== '' ? $status : '-');
+		$status_label = cmx_mail_import_entry_status_label($entry);
 		$type = \sanitize_text_field((string) ($entry['type'] ?? ''));
 		$type_post_type = \sanitize_key((string) ($entry['target_post_type'] ?? ''));
 		if ($type_post_type === '') {
@@ -1704,9 +1771,29 @@ function cmx_mail_import_render_log_page(): void {
 	}
 
 	$run_query = \sanitize_text_field((string) ($_GET['cmx_mail_import_run'] ?? $_GET['run'] ?? ''));
+	$run_query_field = cmx_mail_import_run_query_value($run_query);
+	$status_filter = \sanitize_key((string) ($_GET['status_filter'] ?? ''));
+	$sender_filter = cmx_mail_import_normalize_email((string) ($_GET['sender_filter'] ?? ''));
 	$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 200;
 	$limit = \max(20, \min(500, $limit));
+	if ($run_query !== '' && $run_query_field !== '' && $run_query_field !== $run_query) {
+		$redirect_args = ['cmx_mail_import_run' => $run_query_field];
+		if (isset($_GET['limit'])) {
+			$redirect_args['limit'] = $limit;
+		}
+		if ($status_filter !== '') {
+			$redirect_args['status_filter'] = $status_filter;
+		}
+		if ($sender_filter !== '') {
+			$redirect_args['sender_filter'] = $sender_filter;
+		}
+		\wp_safe_redirect(cmx_mail_import_admin_log_page_url($redirect_args));
+		exit;
+	}
 	$entries = cmx_mail_import_get_events_for_run_query($run_query, $limit);
+	$status_filter_options = cmx_mail_import_collect_status_filter_options($entries);
+	$entries = cmx_mail_import_filter_entries_by_status($entries, $status_filter);
+	$entries = cmx_mail_import_filter_entries_by_sender($entries, $sender_filter);
 	$visible_entry_count = \count(\array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event')));
 	$today_count = cmx_mail_import_count_events_today();
 	$log_file_path = cmx_mail_import_log_file_path();
@@ -1742,7 +1829,17 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<input type="hidden" name="post_type" value="scanner">';
 	echo '<input type="hidden" name="page" value="cmx-mail-import-log">';
 	echo '<label for="cmx_mail_import_run"><strong>Zeiteintrag:</strong></label> ';
-	echo '<input type="text" id="cmx_mail_import_run" name="cmx_mail_import_run" value="' . \esc_attr($run_query) . '" placeholder="06.03.2026 08:01:30"> ';
+	echo '<input type="text" id="cmx_mail_import_run" name="cmx_mail_import_run" value="' . \esc_attr($run_query_field) . '" placeholder="20260306-080130"> ';
+	echo '<label for="cmx_mail_import_status_filter"><strong>Status:</strong></label> ';
+	echo '<select id="cmx_mail_import_status_filter" name="status_filter">';
+	echo '<option value="">Alle</option>';
+	foreach ($status_filter_options as $option) {
+		$selected = $status_filter === $option ? ' selected' : '';
+		echo '<option value="' . \esc_attr($option) . '"' . $selected . '>' . \esc_html($option) . '</option>';
+	}
+	echo '</select> ';
+	echo '<label for="cmx_mail_import_sender_filter"><strong>Absender:</strong></label> ';
+	echo '<input type="text" id="cmx_mail_import_sender_filter" name="sender_filter" value="' . \esc_attr($sender_filter) . '" placeholder="name@example.com"> ';
 	echo '<label for="cmx_mail_import_limit"><strong>Limit:</strong></label> ';
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
@@ -1805,18 +1902,19 @@ function cmx_mail_import_render_log_page(): void {
 	$status = \sanitize_key((string) ($last_run['status'] ?? ($_GET['cmx_mail_import_status'] ?? '')));
 	$items = isset($last_run['imported_items']) ? (int) $last_run['imported_items'] : (int) ($_GET['cmx_mail_import_items'] ?? 0);
 	$run_id = \sanitize_text_field((string) ($last_run['run_id'] ?? ($_GET['cmx_mail_import_run'] ?? '')));
+	$run_query = cmx_mail_import_run_query_value($run_id);
 	$today_count = cmx_mail_import_count_events_today();
 
 	$details_url = \add_query_arg(
 		[
 			'post_type' => 'scanner',
 			'cmx_mail_import_details' => 1,
-			'cmx_mail_import_run' => $run_id,
+			'cmx_mail_import_run' => $run_query,
 		],
 		\admin_url('edit.php')
 	);
-	$log_url = $run_id !== ''
-		? cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $run_id])
+	$log_url = $run_query !== ''
+		? cmx_mail_import_admin_log_page_url(['cmx_mail_import_run' => $run_query])
 		: cmx_mail_import_admin_log_page_url();
 
 	$class = $items > 0 ? 'notice notice-success is-dismissible' : 'notice notice-info is-dismissible';
@@ -1835,7 +1933,7 @@ function cmx_mail_import_render_log_page(): void {
 		return;
 	}
 
-	$entries = $run_id !== '' ? cmx_mail_import_get_events_for_run($run_id, 80) : cmx_mail_import_get_recent_events(80);
+	$entries = $run_query !== '' ? cmx_mail_import_get_events_for_run_query($run_query, 80) : cmx_mail_import_get_recent_events(80);
 	echo '<div class="notice notice-info"><p><strong>Auto-Import Details</strong></p>';
 	cmx_mail_import_render_admin_details_table($entries);
 	echo '</div>';
@@ -1861,7 +1959,7 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 	echo '<p><strong>Absender:</strong> ' . \esc_html($sender !== '' ? $sender : '-') . '</p>';
 	echo '<p><strong>Empfaenger:</strong> ' . \esc_html($recipients !== '' ? $recipients : '-') . '</p>';
 	echo '<p><strong>Upload:</strong> <code>' . \esc_html($upload_rel !== '' ? $upload_rel : '-') . '</code></p>';
-	echo '<p><strong>Zeiteintrag:</strong> <code>' . \esc_html($run_id !== '' ? $run_id : '-') . '</code></p>';
+	echo '<p><strong>Zeiteintrag:</strong> <code>' . \esc_html($run_id !== '' ? cmx_mail_import_run_query_value($run_id) : '-') . '</code></p>';
 	echo '<p><a class="button button-secondary" href="' . \esc_url($run_log_url) . '">Im Import-Protokoll anzeigen</a></p>';
 }
 
@@ -1935,9 +2033,9 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 	cmx_mail_import_log('manual run', $result);
 
 	$redirect_args = [
-		'cmx_mail_import_status' => \rawurlencode((string) ($result['status'] ?? 'unknown')),
+		'cmx_mail_import_status' => (string) ($result['status'] ?? 'unknown'),
 		'cmx_mail_import_items' => (int) ($result['imported_items'] ?? 0),
-		'cmx_mail_import_run' => \rawurlencode((string) ($result['run_id'] ?? '')),
+		'cmx_mail_import_run' => cmx_mail_import_run_query_value((string) ($result['run_id'] ?? '')),
 	];
 	$redirect = $redirect_target === 'log'
 		? cmx_mail_import_admin_log_page_url($redirect_args)
