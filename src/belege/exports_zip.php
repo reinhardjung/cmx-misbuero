@@ -192,10 +192,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			\usort($render_rows, static function (array $a, array $b): int {
 				$ats = (int) ($a['paid_ts'] ?? 0);
 				$bts = (int) ($b['paid_ts'] ?? 0);
-				if ($ats !== $bts) return $bts <=> $ats;
+				$a_has_date = $ats > 0;
+				$b_has_date = $bts > 0;
+				if ($a_has_date !== $b_has_date) {
+					return $a_has_date ? -1 : 1; // rows without paid date go to the end
+				}
+				if ($ats !== $bts) return $ats <=> $bts; // oldest paid date first
 				$aseq = (int) ($a['sort_seq'] ?? 0);
 				$bseq = (int) ($b['sort_seq'] ?? 0);
-				if ($aseq !== $bseq) return $bseq <=> $aseq;
+				if ($aseq !== $bseq) return $aseq <=> $bseq;
 				$ai = (int) ($a['row_idx'] ?? 0);
 				$bi = (int) ($b['row_idx'] ?? 0);
 				return $ai <=> $bi;
