@@ -230,30 +230,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		$sum_zzz_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 			? (string) cmx_format_swiss_number($sum_zzz, 2)
 			: \number_format((float) \round($sum_zzz, 2), 2, '.', "'");
-		$mwst_groups = [];
+		$belegtyp_groups = [];
 		foreach ($render_rows as $row_view) {
-			$mwst_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['mwst_satz'] ?? '')));
-			if ($mwst_label === '') continue;
-			if (!isset($mwst_groups[$mwst_label])) {
-				$mwst_groups[$mwst_label] = [
-					'label' => $mwst_label,
-					'sort_value' => $to_float($mwst_label),
+			$belegtyp_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['belegtyp'] ?? '')));
+			if ($belegtyp_label === '') {
+				$belegtyp_label = 'Ohne Belegtyp';
+			}
+			if (!isset($belegtyp_groups[$belegtyp_label])) {
+				$sort_label = \function_exists('mb_strtolower')
+					? \mb_strtolower($belegtyp_label, 'UTF-8')
+					: \strtolower($belegtyp_label);
+				$belegtyp_groups[$belegtyp_label] = [
+					'label' => $belegtyp_label,
+					'sort_label' => $sort_label,
 					'rows' => [],
 					'sum_mwst' => 0.0,
 					'sum_vorsteuer' => 0.0,
 				];
 			}
-			$mwst_groups[$mwst_label]['rows'][] = $row_view;
-			$mwst_groups[$mwst_label]['sum_mwst'] += $to_float($row_view['mwst'] ?? 0);
-			$mwst_groups[$mwst_label]['sum_vorsteuer'] += $to_float($row_view['vorsteuer'] ?? 0);
+			$belegtyp_groups[$belegtyp_label]['rows'][] = $row_view;
+			$belegtyp_groups[$belegtyp_label]['sum_mwst'] += $to_float($row_view['mwst'] ?? 0);
+			$belegtyp_groups[$belegtyp_label]['sum_vorsteuer'] += $to_float($row_view['vorsteuer'] ?? 0);
 		}
-		$mwst_group_items = \array_values($mwst_groups);
-		if (\count($mwst_group_items) > 1) {
-			\usort($mwst_group_items, static function (array $a, array $b): int {
-				$av = (float) ($a['sort_value'] ?? 0.0);
-				$bv = (float) ($b['sort_value'] ?? 0.0);
-				if ($av !== $bv) return $av <=> $bv;
-				return \strcmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
+		$belegtyp_group_items = \array_values($belegtyp_groups);
+		if (\count($belegtyp_group_items) > 1) {
+			\usort($belegtyp_group_items, static function (array $a, array $b): int {
+				return \strcmp((string) ($a['sort_label'] ?? ''), (string) ($b['sort_label'] ?? ''));
 			});
 		}
 
@@ -396,29 +398,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 	</tr>
 	</table>
 
-	<?php foreach ($mwst_group_items as $mwst_group): ?>
+	<?php foreach ($belegtyp_group_items as $belegtyp_group): ?>
 		<?php
-		$mwst_title = (string) ($mwst_group['label'] ?? '');
-		if ($mwst_title !== '' && \strpos($mwst_title, '%') === false) {
-			$mwst_title .= '%';
+		$belegtyp_title = (string) ($belegtyp_group['label'] ?? '');
+		if ($belegtyp_title === '') {
+			$belegtyp_title = 'Ohne Belegtyp';
 		}
-		if ($mwst_title !== '' && \stripos($mwst_title, 'mwst') === false) {
-			$mwst_title .= ' MwSt';
-		}
-		$mwst_rows = (array) ($mwst_group['rows'] ?? []);
-		$mwst_sum = (float) ($mwst_group['sum_mwst'] ?? 0.0);
-		$vorsteuer_sum = (float) ($mwst_group['sum_vorsteuer'] ?? 0.0);
-		$mwst_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
-			? (string) cmxbu_beleg_export_format_money($mwst_sum)
-			: \number_format((float) \round($mwst_sum, 2), 2, '.', "'");
-		$vorsteuer_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
-			? (string) cmxbu_beleg_export_format_money($vorsteuer_sum)
-			: \number_format((float) \round($vorsteuer_sum, 2), 2, '.', "'");
+		$belegtyp_rows = (array) ($belegtyp_group['rows'] ?? []);
+		$group_mwst_sum = (float) ($belegtyp_group['sum_mwst'] ?? 0.0);
+		$group_vorsteuer_sum = (float) ($belegtyp_group['sum_vorsteuer'] ?? 0.0);
+		$group_mwst_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money($group_mwst_sum)
+			: \number_format((float) \round($group_mwst_sum, 2), 2, '.', "'");
+		$group_vorsteuer_sum_display = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_format_money')
+			? (string) cmxbu_beleg_export_format_money($group_vorsteuer_sum)
+			: \number_format((float) \round($group_vorsteuer_sum, 2), 2, '.', "'");
 		?>
 		<div class="mwst-page">
 			<div class="doc-header">
 				<div class="doc-header-title">
-					Milchbüchli <span class="doc-header-overview"><?= \esc_html($mwst_title); ?></span>
+					Milchbüchli <span class="doc-header-overview"><?= \esc_html($belegtyp_title); ?></span>
 					<span class="doc-header-subtitle">
 						Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
 					</span>
@@ -451,12 +450,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				</tr>
 				</thead>
 				<tbody>
-				<?php if (empty($mwst_rows)): ?>
+				<?php if (empty($belegtyp_rows)): ?>
 					<tr>
-						<td colspan="12">Keine Daten für diesen MwSt-Satz.</td>
+						<td colspan="12">Keine Daten für diesen Belegtyp.</td>
 					</tr>
 				<?php else: ?>
-					<?php foreach ($mwst_rows as $row_view): ?>
+					<?php foreach ($belegtyp_rows as $row_view): ?>
 						<tr>
 							<td style="text-align:center;"><?= $row_view['open']; ?></td>
 							<td><?= $row_view['belegnummer']; ?></td>
@@ -480,8 +479,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 					</tr>
 					<tr>
 						<td colspan="8"></td>
-						<td style="text-align:right;"><strong><?= \esc_html($mwst_sum_display); ?></strong></td>
-						<td style="text-align:right;"><strong><?= \esc_html($vorsteuer_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($group_mwst_sum_display); ?></strong></td>
+						<td style="text-align:right;"><strong><?= \esc_html($group_vorsteuer_sum_display); ?></strong></td>
 						<td></td>
 						<td></td>
 					</tr>
