@@ -59,7 +59,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias]" value="' . $value . '" placeholder="office@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Dieser <strong>Alias</strong> ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Dieser <code>Alias</code> ist dann zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -71,7 +71,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_alias_belege'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_alias_belege]" value="' . $value . '" placeholder="belege@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) <i>Dieser <strong>Alias</strong> ist gegebenenfalls zusätzlich im Mailserver einzurichten</i></span>';
+			echo '<span style="margin-left:8px;">(optional) <i>Dieser <code>Alias</code> ist dann zusätzlich im Mailserver einzurichten</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -90,10 +90,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 
 	\add_settings_field(
 		'cmx_email_supplier',
-		'Lieferantenrechnung(en)',
+		'Lieferantenrechnung',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('supplier'));
+			$email_address = \sanitize_email(cmx_email_option_value('email_address'));
+			if (!\is_email($email_address)) {
+				$email_address = 'E-Mail-Adresse';
+			}
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[supplier]" value="' . $value . '" placeholder="rechnung@beispiel.ch" autocomplete="off">';
+			echo '<span style="margin-left:8px;">(optional) muss dann an die <code>' . \esc_html($email_address) . '</code> weitergeleitet werden</span>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -105,7 +110,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_bcc'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_bcc]" value="' . $value . '" placeholder="a@beispiel.ch, b@beispiel.ch" autocomplete="off" aria-label="E-Mail Adresse BCC" multiple>';
-			echo '<span style="margin-left:8px;" title="Sendet eine versteckte Kopie der E-Mail an zusätzliche Empfänger"><strong>BCC</strong> (Blind Carbon Copy)</span>';
+			echo '<span style="margin-left:8px;" title="Sendet eine versteckte Kopie der E-Mail an zusätzliche Empfänger"><strong>BCC</strong> (Blind Carbon Copy) <i>mehrere möglich, durch KOMMA separiert</i></span>';
 		},
 		$page,
 		'cmx_sec_email_account'
