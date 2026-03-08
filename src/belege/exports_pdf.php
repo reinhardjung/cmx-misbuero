@@ -207,6 +207,28 @@ use Dompdf\Options;
 	$sum_zzz_display = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum_zzz, 2)
 		: \number_format((float) \round($sum_zzz, 2), 2, '.', "'");
+	$mwst_groups = [];
+	foreach ($render_rows as $row_view) {
+		$mwst_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['mwst_satz'] ?? '')));
+		if ($mwst_label === '') continue;
+		if (!isset($mwst_groups[$mwst_label])) {
+			$mwst_groups[$mwst_label] = [
+				'label' => $mwst_label,
+				'sort_value' => $to_float($mwst_label),
+				'rows' => [],
+			];
+		}
+		$mwst_groups[$mwst_label]['rows'][] = $row_view;
+	}
+	$mwst_group_items = \array_values($mwst_groups);
+	if (\count($mwst_group_items) > 1) {
+		\usort($mwst_group_items, static function (array $a, array $b): int {
+			$av = (float) ($a['sort_value'] ?? 0.0);
+			$bv = (float) ($b['sort_value'] ?? 0.0);
+			if ($av !== $bv) return $av <=> $bv;
+			return \strcmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
+		});
+	}
 	ob_start();
 	?>
 <!doctype html>
@@ -219,6 +241,7 @@ use Dompdf\Options;
 			.doc-header-title{float:left;font-size:18px;font-weight:700;line-height:1.2}
 			.doc-header-title .doc-header-overview{display:inline-block;margin-left:6px;font-size:13px;font-style:italic;font-weight:400;position:relative;top:3px}
 			.doc-header-title .doc-header-subtitle{display:block;font-size:10px;font-weight:400;color:#444;margin-top:3px}
+		.mwst-page{page-break-before:always}
 		.doc-header-logo{float:right;text-align:right}
 		.doc-header::after{content:"";display:block;clear:both}
 		.header-logo{width:150px;height:50px;min-width:150px;max-width:150px;min-height:50px;max-height:50px;object-fit:contain}
@@ -344,6 +367,82 @@ use Dompdf\Options;
 		<td style="text-align:right;width:100px;border-bottom:3px double #000;"><strong><?= $sum_zzz_display; ?></strong></td>
 	</tr>
 	</table>
+
+	<?php foreach ($mwst_group_items as $mwst_group): ?>
+		<?php
+		$mwst_title = (string) ($mwst_group['label'] ?? '');
+		if ($mwst_title !== '' && \strpos($mwst_title, '%') === false) {
+			$mwst_title .= '%';
+		}
+		$mwst_rows = (array) ($mwst_group['rows'] ?? []);
+		?>
+		<div class="mwst-page">
+			<div class="doc-header">
+				<div class="doc-header-title">
+					Milchbüchli <span class="doc-header-overview"><?= \esc_html($mwst_title); ?></span>
+					<span class="doc-header-subtitle">
+						Zeitraum: <strong><?= \esc_html($preset_label); ?></strong> | Von: <strong><?= \esc_html($range_from); ?></strong> | Bis: <strong><?= \esc_html($range_to); ?></strong>
+					</span>
+				</div>
+				<div class="doc-header-logo">
+					<?php if ($branding_logo !== ''): ?>
+						<img class="header-logo" src="<?= \esc_url($branding_logo); ?>" alt="Das bin ich Logo">
+					<?php endif; ?>
+				</div>
+			</div>
+
+			<table>
+				<thead>
+				<tr>
+					<th style="text-align:center;width:20px;"></th>
+					<th style="width:80px;">Belegnummer</th>
+					<th style="width:60px">Bezahlt am</th>
+					<th style="width:70px;">Belegtyp</th>
+					<th style="">Kontakt</th>
+					<th style="width:80px">Zahlungsart</th>
+					<th style="width:90px;">Zahlungsgrund</th>
+					<th style="text-align:center;width:50px;">Satz</th>
+					<th style="text-align:center;width:50px;">MwSt</th>
+					<th style="text-align:center;width:50px">Vorsteuer</th>
+					<th style="text-align:right;width:90px;">Einnahmen</th>
+					<th style="text-align:right;width:90px;">Ausgaben</th>
+				</tr>
+				<tr>
+					<th colspan="12" class="line-row-cell"></th>
+				</tr>
+				</thead>
+				<tbody>
+				<?php if (empty($mwst_rows)): ?>
+					<tr>
+						<td colspan="12">Keine Daten für diesen MwSt-Satz.</td>
+					</tr>
+				<?php else: ?>
+					<?php foreach ($mwst_rows as $row_view): ?>
+						<tr>
+							<td style="text-align:center;"><?= $row_view['open']; ?></td>
+							<td><?= $row_view['belegnummer']; ?></td>
+							<td><?= $row_view['bezahlt_am']; ?></td>
+							<td><?= $row_view['belegtyp']; ?></td>
+							<td><?= $row_view['kontakt']; ?></td>
+							<td><?= $row_view['zahlungsart']; ?></td>
+							<td><?= $row_view['zahlungsgrund']; ?></td>
+							<td style="text-align:right;"><?= $row_view['mwst_satz']; ?></td>
+							<td style="text-align:right;"><?= $row_view['mwst']; ?></td>
+							<td style="text-align:right;"><?= $row_view['vorsteuer']; ?></td>
+							<td style="text-align:right;"><?= $row_view['einnahmen']; ?></td>
+							<td style="text-align:right;"><?= $row_view['ausgaben']; ?></td>
+						</tr>
+					<?php endforeach; ?>
+				<?php endif; ?>
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="12" class="line-row-cell"></td>
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+	<?php endforeach; ?>
 
 </body>
 </html>
