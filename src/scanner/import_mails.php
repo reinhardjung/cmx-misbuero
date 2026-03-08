@@ -1712,6 +1712,13 @@ function cmx_mail_import_render_log_page(): void {
 	$visible_entry_count = \count(\array_values(\array_filter($entries, __NAMESPACE__ . '\\cmx_mail_import_is_visible_event')));
 	$today_count = cmx_mail_import_count_events_today();
 	$log_file_path = cmx_mail_import_log_file_path();
+	$run_now_url = \add_query_arg(
+		[
+			'action' => 'cmx_mail_import_run_now',
+			'redirect' => 'log',
+		],
+		\admin_url('admin-post.php')
+	);
 	$open_log_url = \admin_url('admin-post.php?action=cmx_mail_import_open_logfile');
 	$can_open_log_file = cmx_mail_import_support_user_switch_enabled();
 
@@ -1736,12 +1743,13 @@ function cmx_mail_import_render_log_page(): void {
 	echo '<form method="get" style="margin:10px 0 14px;">';
 	echo '<input type="hidden" name="post_type" value="scanner">';
 	echo '<input type="hidden" name="page" value="cmx-mail-import-log">';
-	echo '<label for="cmx_mail_import_run"><strong>Run-ID:</strong></label> ';
-	echo '<input type="text" id="cmx_mail_import_run" name="cmx_mail_import_run" value="' . \esc_attr($run_query) . '" placeholder="z. B. 06.03.2026 08:01"> ';
+	echo '<label for="cmx_mail_import_run"><strong>Zeiteintrag:</strong></label> ';
+	echo '<input type="text" id="cmx_mail_import_run" name="cmx_mail_import_run" value="' . \esc_attr($run_query) . '" placeholder="06.03.2026 08:01:30"> ';
 	echo '<label for="cmx_mail_import_limit"><strong>Limit:</strong></label> ';
 	echo '<input type="number" id="cmx_mail_import_limit" name="limit" min="20" max="500" value="' . \esc_attr((string) $limit) . '" style="width:90px;"> ';
 	echo '<button class="button button-primary" type="submit">Filtern</button> ';
 	echo '<a class="button" href="' . \esc_url(cmx_mail_import_admin_log_page_url()) . '">Alle anzeigen</a> ';
+	echo '<a class="button" href="' . \esc_url($run_now_url) . '">E-Mails prüfen</a> ';
 	if ($can_open_log_file && $log_file_path !== '') {
 		echo '<a class="button" href="' . \esc_url($open_log_url) . '" title="' . \esc_attr($log_file_path) . '" target="_blank" rel="noopener noreferrer">Logdatei öffnen</a>';
 	}
@@ -1855,7 +1863,7 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 	echo '<p><strong>Absender:</strong> ' . \esc_html($sender !== '' ? $sender : '-') . '</p>';
 	echo '<p><strong>Empfaenger:</strong> ' . \esc_html($recipients !== '' ? $recipients : '-') . '</p>';
 	echo '<p><strong>Upload:</strong> <code>' . \esc_html($upload_rel !== '' ? $upload_rel : '-') . '</code></p>';
-	echo '<p><strong>Run-ID:</strong> <code>' . \esc_html($run_id !== '' ? $run_id : '-') . '</code></p>';
+	echo '<p><strong>Zeiteintrag:</strong> <code>' . \esc_html($run_id !== '' ? $run_id : '-') . '</code></p>';
 	echo '<p><a class="button button-secondary" href="' . \esc_url($run_log_url) . '">Im Import-Protokoll anzeigen</a></p>';
 }
 
@@ -1923,16 +1931,19 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 	if (!\current_user_can('manage_options')) {
 		\wp_die('forbidden');
 	}
+
+	$redirect_target = \sanitize_key((string) ($_GET['redirect'] ?? $_POST['redirect'] ?? ''));
 	$result = cmx_mail_import_run(['source' => 'manual_admin']);
 	cmx_mail_import_log('manual run', $result);
-	$redirect = \add_query_arg(
-		[
-			'cmx_mail_import_status' => \rawurlencode((string) ($result['status'] ?? 'unknown')),
-			'cmx_mail_import_items' => (int) ($result['imported_items'] ?? 0),
-			'cmx_mail_import_run' => \rawurlencode((string) ($result['run_id'] ?? '')),
-		],
-		\admin_url('edit.php?post_type=scanner')
-	);
+
+	$redirect_args = [
+		'cmx_mail_import_status' => \rawurlencode((string) ($result['status'] ?? 'unknown')),
+		'cmx_mail_import_items' => (int) ($result['imported_items'] ?? 0),
+		'cmx_mail_import_run' => \rawurlencode((string) ($result['run_id'] ?? '')),
+	];
+	$redirect = $redirect_target === 'log'
+		? cmx_mail_import_admin_log_page_url($redirect_args)
+		: \add_query_arg($redirect_args, \admin_url('edit.php?post_type=scanner'));
 	\wp_safe_redirect($redirect);
 	exit;
 });

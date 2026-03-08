@@ -33,4 +33,4 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__, 'zuordnung,zuordnung_kontakte,zuordnung_artikel,zuordnung_dokumente,zuordnung_projekte,zuordnung_belege,admincolumnslist,import_mails');
+cmx_require_files(__DIR__, 'zuordnung,zuordnung_kontakte,zuordnung_artikel,zuordnung_dokumente,zuordnung_projekte,zuordnung_belege,admincolumnslist,import_mails,import_camt');
