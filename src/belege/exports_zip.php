@@ -482,18 +482,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		th,td{padding:6px;border:none}
 		thead th{font-weight:700;background:transparent;text-align:left;white-space:normal}
 		.line-row-cell{padding:0 !important;height:1px;line-height:1px;font-size:0;background:#000;border:none !important}
-		tbody td{word-wrap:break-word}
-		tbody tr:nth-child(odd) td{background:transparent}
-		tbody tr:nth-child(even) td{background:#f7f8fa}
-		thead th.col-mwst-satz, thead th.col-mwst, thead th.col-vorsteuer{font-size:8px}
-		th.col-kontakt, td.col-kontakt{width:16% !important}
-		th.col-belegnummer, td.col-belegnummer{white-space:nowrap}
-		td.col-kontakt{font-size:9.2px}
-		th.col-open, td.col-open{text-align:center}
-		.pdf-icon-link{display:inline-block;text-decoration:none;line-height:1}
-		.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:8px;line-height:1;white-space:nowrap}
-		.beleg-link{color:#111;text-decoration:underline}
-	</style>
+			.beleg-table tbody td{word-wrap:break-word}
+			.beleg-table tbody tr:nth-child(odd) td{background:transparent}
+			.beleg-table tbody tr:nth-child(even) td{background:#f7f8fa}
+			thead th.col-mwst-satz, thead th.col-mwst, thead th.col-vorsteuer{font-size:8px}
+			th.col-kontakt, td.col-kontakt{width:16% !important}
+			th.col-belegnummer, td.col-belegnummer{white-space:nowrap}
+			td.col-kontakt{font-size:9.2px}
+			th.col-open, td.col-open{text-align:center}
+			tr.beleg-last-row td{page-break-inside:avoid;page-break-after:avoid}
+			.result-block{page-break-inside:avoid;break-inside:avoid}
+			.pdf-icon-link{display:inline-block;text-decoration:none;line-height:1}
+			.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:8px;line-height:1;white-space:nowrap}
+			.beleg-link{color:#111;text-decoration:underline}
+		</style>
 </head>
 <body>
 		<div class="doc-header">
@@ -510,7 +512,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		</div>
 	</div>
 
-	<table>
+		<?php
+		$render_rows_indexed = \array_values((array) $render_rows);
+		$render_row_count = \count($render_rows_indexed);
+		// Heuristik: nur bei voraussichtlichem Überlauf die letzte Zeile mit Kopf in den Ergebnisblock verschieben.
+		// 17 Zeilen passen im Regelfall noch zusammen mit Ergebnisblock auf eine Seite.
+		$carry_last_row_with_result = ($render_row_count > 17);
+		$render_last_row = ($carry_last_row_with_result && $render_row_count > 0)
+			? (array) $render_rows_indexed[$render_row_count - 1]
+			: null;
+		$render_main_rows = ($carry_last_row_with_result && $render_row_count > 1)
+			? \array_slice($render_rows_indexed, 0, $render_row_count - 1)
+			: $render_rows_indexed;
+		?>
+		<table class="beleg-table">
 		<thead>
 		<tr>
 			<th style="text-align:center;width:20px;"></th>
@@ -531,75 +546,119 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		</tr>
 		</thead>
 		<tbody>
-		<?php if (empty($render_rows)): ?>
-			<tr>
-				<td colspan="12">Keine Daten im gewählten Zeitraum.</td>
-			</tr>
-		<?php else: ?>
-			<?php foreach ($render_rows as $row_view): ?>
+			<?php if (empty($render_rows_indexed)): ?>
 				<tr>
-					<td style="text-align:center;"><?= $row_view['open']; ?></td>
-					<td><?= $row_view['belegnummer']; ?></td>
-					<td><?= $row_view['bezahlt_am']; ?></td>
-					<td><?= $row_view['belegtyp']; ?></td>
-					<td><?= $row_view['kontakt']; ?></td>
-					<td><?= $row_view['zahlungsart']; ?></td>
-					<td><?= $row_view['zahlungsgrund']; ?></td>
-					<td style="text-align:right;"><?= $row_view['mwst_satz']; ?></td>
-					<td style="text-align:right;"><?= $row_view['mwst']; ?></td>
-					<td style="text-align:right;"><?= $row_view['vorsteuer']; ?></td>
-					<td style="text-align:right;"><?= $row_view['einnahmen']; ?></td>
-					<td style="text-align:right;"><?= $row_view['ausgaben']; ?></td>
+					<td colspan="12">Keine Daten im gewählten Zeitraum.</td>
 				</tr>
-			<?php endforeach; ?>
-		<?php endif; ?>
+			<?php else: ?>
+				<?php foreach ($render_main_rows as $row_view): ?>
+					<tr>
+						<td style="text-align:center;"><?= $row_view['open']; ?></td>
+						<td><?= $row_view['belegnummer']; ?></td>
+						<td><?= $row_view['bezahlt_am']; ?></td>
+						<td><?= $row_view['belegtyp']; ?></td>
+						<td><?= $row_view['kontakt']; ?></td>
+						<td><?= $row_view['zahlungsart']; ?></td>
+						<td><?= $row_view['zahlungsgrund']; ?></td>
+						<td style="text-align:right;"><?= $row_view['mwst_satz']; ?></td>
+						<td style="text-align:right;"><?= $row_view['mwst']; ?></td>
+						<td style="text-align:right;"><?= $row_view['vorsteuer']; ?></td>
+						<td style="text-align:right;"><?= $row_view['einnahmen']; ?></td>
+						<td style="text-align:right;"><?= $row_view['ausgaben']; ?></td>
+					</tr>
+				<?php endforeach; ?>
+			<?php endif; ?>
 		</tbody>
 		<tfoot>
-			<tr>
-				<td colspan="12" class="line-row-cell"></td>
-			</tr>
+			<?php if (!\is_array($render_last_row)): ?>
+				<tr>
+					<td colspan="12" class="line-row-cell"></td>
+				</tr>
+			<?php endif; ?>
 		</tfoot>
 	</table>
 
-	<table>
-	<tr>
-		<td></td>
-		<td style="text-align:right;width:50px;"><?= $sum_mwst_display; ?></td>
-		<td style="text-align:right;width:50px;"><?= $sum_vorsteuer_display; ?></td>
-		<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
-		<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
-	</tr>
-	</table>
+			<div class="result-block">
+			<?php if (\is_array($render_last_row)): ?>
+				<table class="beleg-table">
+					<thead>
+					<tr>
+						<th style="text-align:center;width:20px;"></th>
+						<th style="width:80px;">Belegnummer</th>
+						<th style="width:60px">Bezahlt am</th>
+						<th style="width:70px;">Belegtyp</th>
+						<th style="">Kontakt</th>
+						<th style="width:80px">Zahlungsart</th>
+						<th style="width:90px;">Zahlungsgrund</th>
+						<th style="text-align:center;width:50px;">Satz</th>
+						<th style="text-align:center;width:50px;">MwSt</th>
+						<th style="text-align:center;width:50px">Vorsteuer</th>
+						<th style="text-align:right;width:90px;">Einnahmen</th>
+						<th style="text-align:right;width:90px;">Ausgaben</th>
+					</tr>
+					<tr>
+						<th colspan="12" class="line-row-cell"></th>
+					</tr>
+					</thead>
+					<tbody>
+						<tr class="beleg-last-row">
+							<td style="text-align:center;width:20px;"><?= $render_last_row['open']; ?></td>
+							<td style="width:80px;"><?= $render_last_row['belegnummer']; ?></td>
+							<td style="width:60px;"><?= $render_last_row['bezahlt_am']; ?></td>
+							<td style="width:70px;"><?= $render_last_row['belegtyp']; ?></td>
+							<td><?= $render_last_row['kontakt']; ?></td>
+							<td style="width:80px;"><?= $render_last_row['zahlungsart']; ?></td>
+							<td style="width:90px;"><?= $render_last_row['zahlungsgrund']; ?></td>
+							<td style="text-align:right;width:50px;"><?= $render_last_row['mwst_satz']; ?></td>
+							<td style="text-align:right;width:50px;"><?= $render_last_row['mwst']; ?></td>
+							<td style="text-align:right;width:50px;"><?= $render_last_row['vorsteuer']; ?></td>
+							<td style="text-align:right;width:90px;"><?= $render_last_row['einnahmen']; ?></td>
+							<td style="text-align:right;width:90px;"><?= $render_last_row['ausgaben']; ?></td>
+						</tr>
+					</tbody>
+				</table>
+				<?php endif; ?>
+			<?php if (\is_array($render_last_row)): ?>
+				<table>
+				<tr>
+					<td colspan="12" class="line-row-cell"></td>
+				</tr>
+				</table>
+			<?php endif; ?>
+			<table>
+			<tr>
+				<td></td>
+				<td style="text-align:right;width:50px;"><?= $sum_mwst_display; ?></td>
+				<td style="text-align:right;width:50px;"><?= $sum_vorsteuer_display; ?></td>
+				<td style="text-align:right;width:90px;"><strong><?= $sum_einnahmen_display; ?></strong></td>
+				<td style="text-align:right;width:90px;"><strong><?= $sum_ausgaben_display; ?></strong></td>
+			</tr>
+			</table>
+			<br>
+			<table>
+			<tr>
+				<td></td>
+				<td style="text-align:right;width:50px;"><strong>Ergebnis</strong></td>
+				<td style="text-align:right;width:100px;"><strong><?= $sum_diff_display; ?></strong></td>
+			</tr>
+			</table>
 
-	<table>
-	<tr>
-		<td colspan="12" class="line-row-cell"></td>
-	</tr>
-	</table>
-<br>
-	<table>
-	<tr>
-		<td></td>
-		<td style="text-align:right;width:50px;"><strong>Ergebnis</strong></td>
-		<td style="text-align:right;width:100px;"><strong><?= $sum_diff_display; ?></strong></td>
-	</tr>
-	</table>
+			<table>
+			<tr>
+				<td></td>
+				<td style="text-align:right;width:50px;">Märlistüür</td>
+				<td style="text-align:right;width:100px;"><?= $sum_xxx_display; ?></td>
+			</tr>
+			</table>
 
-	<table>
-	<tr>
-		<td></td>
-		<td style="text-align:right;width:50px;">Märlistüür</td>
-		<td style="text-align:right;width:100px;"><?= $sum_xxx_display; ?></td>
-	</tr>
-	</table>
-
-	<table>
-	<tr>
-		<td></td>
-		<td style="text-align:right;width:50px;border-bottom:3px double #000;"><strong>Gewinn</strong></td>
-		<td style="text-align:right;width:100px;border-bottom:3px double #000;"><strong><?= $sum_zzz_display; ?></strong></td>
-	</tr>
-	</table>
+			<table>
+			<tr>
+				<td></td>
+				<td style="text-align:right;width:50px;border-bottom:3px double #000;"><strong>Gewinn</strong></td>
+				<td style="text-align:right;width:100px;border-bottom:3px double #000;"><strong><?= $sum_zzz_display; ?></strong></td>
+			</tr>
+			</table>
+		</div>
 
 	<?php foreach ($list_sections as $section): ?>
 		<?php
@@ -634,8 +693,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 				</div>
 			</div>
 
-			<table>
-				<thead>
+				<table class="beleg-table">
+					<thead>
 				<tr>
 					<th style="text-align:center;width:20px;"></th>
 					<th style="width:80px;">Belegnummer</th>
