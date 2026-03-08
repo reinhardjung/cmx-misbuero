@@ -222,24 +222,26 @@ use Dompdf\Options;
 		$row_ausgaben = (float) ($row_view['ausgaben_value'] ?? $to_float($row_view['ausgaben'] ?? 0));
 
 		$mwst_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['mwst_satz'] ?? '')));
-		if ($mwst_label !== '') {
-			if (!isset($mwst_groups[$mwst_label])) {
-				$mwst_groups[$mwst_label] = [
-					'label' => $mwst_label,
-					'sort_value' => $to_float($mwst_label),
-					'rows' => [],
-					'sum_mwst' => 0.0,
-					'sum_vorsteuer' => 0.0,
-					'sum_einnahmen' => 0.0,
-					'sum_ausgaben' => 0.0,
-				];
-			}
-			$mwst_groups[$mwst_label]['rows'][] = $row_view;
-			$mwst_groups[$mwst_label]['sum_mwst'] += $row_mwst;
-			$mwst_groups[$mwst_label]['sum_vorsteuer'] += $row_vorsteuer;
-			$mwst_groups[$mwst_label]['sum_einnahmen'] += $row_einnahmen;
-			$mwst_groups[$mwst_label]['sum_ausgaben'] += $row_ausgaben;
+		$mwst_is_without = ($mwst_label === '');
+		$mwst_key = $mwst_is_without ? '__without_mwst__' : $mwst_label;
+		if (!isset($mwst_groups[$mwst_key])) {
+			$mwst_groups[$mwst_key] = [
+				'label' => $mwst_is_without ? 'ohne MwSt' : $mwst_label,
+				'sort_value' => $mwst_is_without ? 999999.0 : $to_float($mwst_label),
+				'sort_without' => $mwst_is_without ? 1 : 0,
+				'is_without_rate' => $mwst_is_without ? 1 : 0,
+				'rows' => [],
+				'sum_mwst' => 0.0,
+				'sum_vorsteuer' => 0.0,
+				'sum_einnahmen' => 0.0,
+				'sum_ausgaben' => 0.0,
+			];
 		}
+		$mwst_groups[$mwst_key]['rows'][] = $row_view;
+		$mwst_groups[$mwst_key]['sum_mwst'] += $row_mwst;
+		$mwst_groups[$mwst_key]['sum_vorsteuer'] += $row_vorsteuer;
+		$mwst_groups[$mwst_key]['sum_einnahmen'] += $row_einnahmen;
+		$mwst_groups[$mwst_key]['sum_ausgaben'] += $row_ausgaben;
 
 		$belegtyp_label = \trim(\str_replace("\xC2\xA0", ' ', (string) ($row_view['belegtyp'] ?? '')));
 		if ($belegtyp_label === '') {
@@ -316,6 +318,9 @@ use Dompdf\Options;
 	$mwst_group_items = \array_values($mwst_groups);
 	if (\count($mwst_group_items) > 1) {
 		\usort($mwst_group_items, static function (array $a, array $b): int {
+			$aw = (int) ($a['sort_without'] ?? 0);
+			$bw = (int) ($b['sort_without'] ?? 0);
+			if ($aw !== $bw) return $aw <=> $bw;
 			$av = (float) ($a['sort_value'] ?? 0.0);
 			$bv = (float) ($b['sort_value'] ?? 0.0);
 			if ($av !== $bv) return $av <=> $bv;
@@ -359,11 +364,13 @@ use Dompdf\Options;
 	};
 	$list_sections = [];
 	foreach ($mwst_group_items as $group) {
-		$title = (string) ($group['label'] ?? '');
-		if ($title !== '' && \strpos($title, '%') === false) {
+		$title = !empty($group['is_without_rate'])
+			? 'ohne MwSt'
+			: (string) ($group['label'] ?? '');
+		if (empty($group['is_without_rate']) && $title !== '' && \strpos($title, '%') === false) {
 			$title .= '%';
 		}
-		if ($title !== '' && \stripos($title, 'mwst') === false) {
+		if (empty($group['is_without_rate']) && $title !== '' && \stripos($title, 'mwst') === false) {
 			$title .= ' MwSt';
 		}
 		$list_sections[] = [
