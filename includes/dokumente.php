@@ -101,14 +101,15 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 		$docs = array_values(array_filter(array_map('intval', $docs)));
 	}
 
-	$upload_hint = $is_scanner ? 'PDF, PNG, JPG, CSV, XML, EML' : 'PDF, PNG, JPG, CSV';
-	$upload_accept = $is_scanner ? '.pdf,.png,.jpg,.jpeg,.csv,.xml,.eml' : '.pdf,.png,.jpg,.jpeg';
+	$upload_hint = $is_scanner ? 'PDF, PNG, JPG, CSV, XML' : 'PDF, PNG, JPG, CSV';
+	$upload_accept = $is_scanner ? '.pdf,.png,.jpg,.jpeg,.csv,.xml' : '.pdf,.png,.jpg,.jpeg';
 
 	echo '<div id="cmx-dokumente-upload-box">';
-	echo '<div id="cmx-dokumente-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
+	echo '<label for="cmx-dokumente-file" id="cmx-dokumente-drop" style="display:block;border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
 	echo '<strong>Datei hier ablegen</strong><br><small>' . \esc_html($upload_hint) . '</small>';
-	echo '</div>';
-	echo '<input type="file" id="cmx-dokumente-file" style="display:none" multiple accept="' . \esc_attr($upload_accept) . '">';
+	echo '</label>';
+	echo '<input type="file" id="cmx-dokumente-file" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;" multiple accept="' . \esc_attr($upload_accept) . '">';
+	echo '<label for="cmx-dokumente-file" class="button" style="display:block;margin-top:8px;text-align:center;">Datei auswaehlen</label>';
 	echo '<div id="cmx-dokumente-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
 	echo '</div>';
 
@@ -234,12 +235,13 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			fd.append("nonce", nonce);
 			fd.append("file", file);
 
-			var $row = $("<div>").text("Upload: " + file.name);
+			var $row = $("<div>").text("Upload laeuft: " + file.name);
 			$list.append($row);
 
 			$.ajax({
 				url: ajaxurl,
 				type: "POST",
+				dataType: "json",
 				data: fd,
 				processData: false,
 				contentType: false,
@@ -275,20 +277,25 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 							markUploadSavedNotice();
 							queuePostSave();
 						} else {
-							$row.text("Fehler beim Upload: " + file.name);
+							var serverMessage = "";
+							if (resp && resp.data && resp.data.message) {
+								serverMessage = String(resp.data.message);
+							}
+							$row.text(serverMessage !== "" ? serverMessage : ("Fehler beim Upload: " + file.name));
 						}
 				},
 				error: function(xhr){
 					var serverMessage = "";
 					if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
 						serverMessage = String(xhr.responseJSON.data.message);
+					} else if (xhr && xhr.responseText) {
+						serverMessage = String(xhr.responseText).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 					}
 					$row.text(serverMessage !== "" ? serverMessage : ("Fehler beim Upload: " + file.name));
 				}
 			});
 		}
 
-		$drop.on("click", function(){ $file.trigger("click"); });
 		$drop.on("dragover", function(e){ e.preventDefault(); e.stopPropagation(); $drop.css("background","#f0f6fc"); });
 		$drop.on("dragleave", function(e){ e.preventDefault(); e.stopPropagation(); $drop.css("background","#fafafa"); });
 		$drop.on("drop", function(e){
@@ -321,276 +328,26 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	</script>';
 }
 
-function cmx_dok_decode_mime_header_value(string $value): string {
-	$value = \trim($value);
-	if ($value === '') {
-		return '';
+function cmx_dok_upload_error_message(int $error_code): string {
+	switch ($error_code) {
+		case \UPLOAD_ERR_OK:
+			return '';
+		case \UPLOAD_ERR_INI_SIZE:
+		case \UPLOAD_ERR_FORM_SIZE:
+			return 'Datei ist zu gross fuer den Upload.';
+		case \UPLOAD_ERR_PARTIAL:
+			return 'Datei wurde nur teilweise hochgeladen.';
+		case \UPLOAD_ERR_NO_FILE:
+			return 'Keine Datei empfangen.';
+		case \UPLOAD_ERR_NO_TMP_DIR:
+			return 'Temporarer Upload-Ordner fehlt.';
+		case \UPLOAD_ERR_CANT_WRITE:
+			return 'Datei konnte nicht auf dem Server gespeichert werden.';
+		case \UPLOAD_ERR_EXTENSION:
+			return 'Upload wurde durch eine Server-Erweiterung gestoppt.';
+		default:
+			return 'Upload fehlgeschlagen.';
 	}
-
-	if (\function_exists('iconv_mime_decode')) {
-		$decoded = @\iconv_mime_decode($value, \ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
-		if (\is_string($decoded) && $decoded !== '') {
-			return \trim($decoded);
-		}
-	}
-
-	return \trim($value, " \t\n\r\0\x0B\"'");
-}
-
-function cmx_dok_eml_parse_headers(string $raw_headers): array {
-	$raw_headers = \str_replace(["\r\n", "\r"], "\n", $raw_headers);
-	$lines = \explode("\n", $raw_headers);
-	$headers = [];
-	$current_key = '';
-
-	foreach ($lines as $line) {
-		if ($line === '') {
-			continue;
-		}
-		$first_char = $line[0] ?? '';
-		if (($first_char === ' ' || $first_char === "\t") && $current_key !== '' && !empty($headers[$current_key])) {
-			$last_index = \count($headers[$current_key]) - 1;
-			$headers[$current_key][$last_index] .= ' ' . \trim($line);
-			continue;
-		}
-
-		$pos = \strpos($line, ':');
-		if ($pos === false) {
-			continue;
-		}
-
-		$current_key = \strtolower(\trim((string) \substr($line, 0, $pos)));
-		$headers[$current_key][] = \trim((string) \substr($line, $pos + 1));
-	}
-
-	return $headers;
-}
-
-function cmx_dok_eml_header_first(array $headers, string $name): string {
-	$key = \strtolower($name);
-	if (!isset($headers[$key][0]) || !\is_string($headers[$key][0])) {
-		return '';
-	}
-	return (string) $headers[$key][0];
-}
-
-function cmx_dok_eml_header_param(string $header_value, string $param): string {
-	if ($header_value === '') {
-		return '';
-	}
-
-	$quoted_param = \preg_quote($param, '/');
-	if (\preg_match('/(?:^|;)\s*' . $quoted_param . '\*\s*=\s*([^;]+)/i', $header_value, $match) === 1) {
-		$raw = \trim((string) ($match[1] ?? ''), " \t\n\r\0\x0B\"'");
-		$parts = \explode("''", $raw, 2);
-		$raw = (string) \end($parts);
-		return cmx_dok_decode_mime_header_value((string) \rawurldecode($raw));
-	}
-
-	if (\preg_match('/(?:^|;)\s*' . $quoted_param . '\s*=\s*"([^"]*)"/i', $header_value, $match) === 1) {
-		return cmx_dok_decode_mime_header_value((string) ($match[1] ?? ''));
-	}
-	if (\preg_match('/(?:^|;)\s*' . $quoted_param . '\s*=\s*([^;]+)/i', $header_value, $match) === 1) {
-		return cmx_dok_decode_mime_header_value((string) ($match[1] ?? ''));
-	}
-
-	return '';
-}
-
-function cmx_dok_eml_decode_transfer(string $body, string $encoding): string {
-	$encoding = \strtolower(\trim($encoding));
-	if ($encoding === 'base64') {
-		$decoded = \base64_decode((string) \preg_replace('/\s+/', '', $body), true);
-		return \is_string($decoded) ? $decoded : '';
-	}
-	if ($encoding === 'quoted-printable') {
-		return (string) \quoted_printable_decode($body);
-	}
-	return $body;
-}
-
-function cmx_dok_eml_split_multipart_body(string $body, string $boundary): array {
-	$body = \str_replace(["\r\n", "\r"], "\n", $body);
-	$delimiter = '--' . $boundary;
-	$end_delimiter = $delimiter . '--';
-	$lines = \explode("\n", $body);
-	$parts = [];
-	$current = [];
-	$collecting = false;
-
-	foreach ($lines as $line) {
-		$trimmed = \rtrim($line, "\n");
-		if ($trimmed === $delimiter) {
-			if ($collecting && !empty($current)) {
-				$parts[] = \implode("\n", $current);
-			}
-			$current = [];
-			$collecting = true;
-			continue;
-		}
-		if ($trimmed === $end_delimiter) {
-			if ($collecting && !empty($current)) {
-				$parts[] = \implode("\n", $current);
-			}
-			break;
-		}
-		if ($collecting) {
-			$current[] = $line;
-		}
-	}
-
-	return $parts;
-}
-
-function cmx_dok_eml_collect_pdf_attachments_from_raw(string $raw, array &$attachments): void {
-	$raw = \str_replace(["\r\n", "\r"], "\n", $raw);
-	$split = \explode("\n\n", $raw, 2);
-	$raw_headers = (string) ($split[0] ?? '');
-	$body = (string) ($split[1] ?? '');
-	$headers = cmx_dok_eml_parse_headers($raw_headers);
-
-	$content_type = cmx_dok_eml_header_first($headers, 'content-type');
-	$content_disposition = cmx_dok_eml_header_first($headers, 'content-disposition');
-	$transfer_encoding = cmx_dok_eml_header_first($headers, 'content-transfer-encoding');
-	$mime = \strtolower(\trim((string) \strtok($content_type !== '' ? $content_type : 'text/plain', ';')));
-	$boundary = cmx_dok_eml_header_param($content_type, 'boundary');
-
-	if (\str_starts_with($mime, 'multipart/') && $boundary !== '') {
-		foreach (cmx_dok_eml_split_multipart_body($body, $boundary) as $part_raw) {
-			cmx_dok_eml_collect_pdf_attachments_from_raw((string) $part_raw, $attachments);
-		}
-		return;
-	}
-
-	if ($mime === 'message/rfc822') {
-		$inner_raw = cmx_dok_eml_decode_transfer($body, $transfer_encoding);
-		if ($inner_raw !== '') {
-			cmx_dok_eml_collect_pdf_attachments_from_raw($inner_raw, $attachments);
-		}
-		return;
-	}
-
-	$filename = cmx_dok_eml_header_param($content_disposition, 'filename');
-	if ($filename === '') {
-		$filename = cmx_dok_eml_header_param($content_type, 'name');
-	}
-
-	$is_pdf = ($mime === 'application/pdf') || (\strtolower((string) \pathinfo($filename, \PATHINFO_EXTENSION)) === 'pdf');
-	if (!$is_pdf) {
-		return;
-	}
-
-	$content = cmx_dok_eml_decode_transfer($body, $transfer_encoding);
-	if ($content === '' || \strpos($content, '%PDF-') === false) {
-		return;
-	}
-
-	$safe_filename = \sanitize_file_name($filename);
-	if ($safe_filename === '' || \strtolower((string) \pathinfo($safe_filename, \PATHINFO_EXTENSION)) !== 'pdf') {
-		$safe_filename = \wp_date('ymd-His') . '-mail-attachment.pdf';
-	}
-
-	$attachments[] = [
-		'filename' => $safe_filename,
-		'content' => $content,
-	];
-}
-
-function cmx_dok_eml_collect_pdf_attachments(string $eml_path): array {
-	if ($eml_path === '' || !\is_file($eml_path) || !\is_readable($eml_path)) {
-		return [];
-	}
-
-	$raw = (string) \file_get_contents($eml_path);
-	if ($raw === '') {
-		return [];
-	}
-
-	$attachments = [];
-	cmx_dok_eml_collect_pdf_attachments_from_raw($raw, $attachments);
-
-	return \array_values(\array_filter($attachments, static function ($entry): bool {
-		return \is_array($entry)
-			&& isset($entry['filename'], $entry['content'])
-			&& \is_string($entry['filename'])
-			&& \is_string($entry['content'])
-			&& $entry['content'] !== '';
-	}));
-}
-
-function cmx_dok_scanner_store_binary_upload(int $post_id, string $source_filename, string $binary, bool $create_new_post = false): array {
-	$post_id = (int) $post_id;
-	if ($create_new_post) {
-		$inserted = \wp_insert_post([
-			'post_type' => 'scanner',
-			'post_status' => 'publish',
-			'post_title' => '',
-		], true);
-		if (\is_wp_error($inserted) || (int) $inserted <= 0) {
-			return [];
-		}
-		$post_id = (int) $inserted;
-	}
-
-	if ((string) \get_post_type($post_id) !== 'scanner') {
-		return [];
-	}
-
-	$scanner_title = cmx_dok_sanitize_title_from_filename($source_filename);
-	if ($scanner_title === '') {
-		$scanner_title = \wp_date('ymd-His') . ' scanner';
-	}
-
-	\wp_update_post([
-		'ID' => $post_id,
-		'post_title' => $scanner_title,
-		'post_name' => \sanitize_title($scanner_title),
-	]);
-
-	$ts = (int) \current_time('timestamp');
-	$year = (int) \date('Y', $ts);
-	[$base_dir] = cmx_dok_upload_target_dir('scanner', $year);
-
-	$ext = \strtolower((string) \pathinfo($source_filename, \PATHINFO_EXTENSION));
-	if ($ext === '') {
-		$ext = 'pdf';
-	}
-
-	$doc_title = \wp_date('ymd-His');
-	$file_name = \sanitize_file_name($doc_title . '_' . $scanner_title . '.' . $ext);
-	$file_name = \wp_unique_filename($base_dir, $file_name);
-	$target_abs = \trailingslashit($base_dir) . $file_name;
-
-	$written = @\file_put_contents($target_abs, $binary);
-	if ($written === false) {
-		return [];
-	}
-
-	@\chmod($target_abs, 0666);
-
-	$normalized_abs = \wp_normalize_path($target_abs);
-	$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-	$rel = \str_starts_with($normalized_abs, $uploads_root)
-		? \ltrim((string) \substr($normalized_abs, \strlen($uploads_root)), '/')
-		: '';
-	if ($rel === '') {
-		return [];
-	}
-
-	\update_post_meta($post_id, '_cmx_scanner_source_rel', $rel);
-
-	$mtime = @\filemtime($target_abs);
-	if (\is_int($mtime) && $mtime > 0) {
-		\update_post_meta($post_id, '_cmx_scanner_uploaded_ts', $mtime);
-	}
-	\delete_post_meta($post_id, '_cmx_scanner_fs_signature');
-
-	return [
-		'id' => $post_id,
-		'url' => \content_url('/uploads/' . $rel),
-		'label' => \basename($rel) ?: $scanner_title,
-		'title' => $scanner_title,
-	];
 }
 
 /* =========================================================
@@ -615,52 +372,22 @@ function cmx_dokumente_upload_file(): void {
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
 		\wp_send_json_error(['message'=>'no_file'], 400);
 	}
+	$file_error = isset($_FILES['file']['error']) ? (int) $_FILES['file']['error'] : \UPLOAD_ERR_NO_FILE;
+	if ($file_error !== \UPLOAD_ERR_OK) {
+		\wp_send_json_error(['message' => cmx_dok_upload_error_message($file_error)], 400);
+	}
 
 	$incoming_filename = (string) ($_FILES['file']['name'] ?? '');
 	$allowed = ['pdf','png','jpg','jpeg'];
 	if ($is_scanner) {
 		$allowed[] = 'csv';
 		$allowed[] = 'xml';
-		$allowed[] = 'eml';
 	}
 	$ext = strtolower(pathinfo($incoming_filename, PATHINFO_EXTENSION));
 	if (!in_array($ext, $allowed, true)) {
 		\wp_send_json_error(['message'=>'bad_type'], 400);
 	}
 	$incoming_title = cmx_dok_sanitize_title_from_filename($incoming_filename);
-
-	if ($is_scanner && $ext === 'eml') {
-		$attachments = cmx_dok_eml_collect_pdf_attachments((string) ($_FILES['file']['tmp_name'] ?? ''));
-		if (empty($attachments)) {
-			\wp_send_json_error(['message' => 'Keine PDF-Anhaenge in der E-Mail gefunden.'], 400);
-		}
-
-		$items = [];
-		foreach ($attachments as $index => $attachment) {
-			$item = cmx_dok_scanner_store_binary_upload(
-				$post_id,
-				(string) ($attachment['filename'] ?? 'attachment.pdf'),
-				(string) ($attachment['content'] ?? ''),
-				$index > 0
-			);
-			if (!empty($item)) {
-				$items[] = $item;
-			}
-		}
-
-		if (empty($items)) {
-			\wp_send_json_error(['message' => 'PDF-Anhaenge konnten nicht gespeichert werden.'], 500);
-		}
-
-		$first_item = (array) ($items[0] ?? []);
-		\wp_send_json_success([
-			'id' => (int) ($first_item['id'] ?? 0),
-			'url' => (string) ($first_item['url'] ?? ''),
-			'label' => (string) ($first_item['label'] ?? $incoming_filename),
-			'title' => (string) ($first_item['title'] ?? ''),
-			'items' => $items,
-		]);
-	}
 
 	if ($post_type === 'scanner') {
 		$scanner_title = cmx_dok_sanitize_title_from_filename((string) ($_FILES['file']['name'] ?? ''));
