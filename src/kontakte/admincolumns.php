@@ -518,9 +518,6 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 			? CMX_KONTAKTE_META_FIRMENGRUENDUNG
 			: CMX_KONTAKTE_META_GEBURTSDATUM;
 		$raw = (string) \get_post_meta($post_id, $meta_key, true);
-		if ($raw === '') {
-			$raw = (string) \get_post_meta($post_id, CMX_KONTAKTE_META_DATUM, true);
-		}
 		if ($raw === '') { echo ''; return; }
 
 		$dt = \DateTime::createFromFormat('Y-m-d', $raw);

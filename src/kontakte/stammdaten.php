@@ -115,14 +115,8 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$privat   = (bool)   \get_post_meta($post->ID, CMX_KONTAKTE_META_PRIVAT, true);
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
-	$datum_legacy = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_DATUM, true);
 	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
 	$geburt   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_GEBURTSDATUM, true);
-	if ($datum_legacy !== '') {
-		if ($privat && $geburt === '') $geburt = $datum_legacy;
-		if (!$privat && $firmengr === '') $firmengr = $datum_legacy;
-		if ($firmengr === '' && $geburt === '') $firmengr = $datum_legacy;
-	}
 
 	// Für das Label (nur Anzeige) https:// ergänzen
 	$url_disp = \trim($url_raw);
