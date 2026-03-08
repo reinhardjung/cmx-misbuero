@@ -315,20 +315,20 @@ use Dompdf\Options;
 		$zahlungsgrund_groups[$zahlungsgrund_label]['sum_einnahmen'] += $row_einnahmen;
 		$zahlungsgrund_groups[$zahlungsgrund_label]['sum_ausgaben'] += $row_ausgaben;
 	}
-		$mwst_group_items = \array_values($mwst_groups);
-		$has_regular_mwst_group = false;
-		foreach ($mwst_group_items as $mwst_group_item) {
-			if (empty($mwst_group_item['is_without_rate'])) {
-				$has_regular_mwst_group = true;
-				break;
-			}
+	$mwst_group_items = \array_values($mwst_groups);
+	$has_regular_mwst_group = false;
+	foreach ($mwst_group_items as $mwst_group_item) {
+		if (empty($mwst_group_item['is_without_rate'])) {
+			$has_regular_mwst_group = true;
+			break;
 		}
-		if (!$has_regular_mwst_group) {
-			$mwst_group_items = [];
-		}
-		if (\count($mwst_group_items) > 1) {
-			\usort($mwst_group_items, static function (array $a, array $b): int {
-				$aw = (int) ($a['sort_without'] ?? 0);
+	}
+	if (!$has_regular_mwst_group) {
+		$mwst_group_items = [];
+	}
+	if (\count($mwst_group_items) > 1) {
+		\usort($mwst_group_items, static function (array $a, array $b): int {
+			$aw = (int) ($a['sort_without'] ?? 0);
 			$bw = (int) ($b['sort_without'] ?? 0);
 			if ($aw !== $bw) return $aw <=> $bw;
 			$av = (float) ($a['sort_value'] ?? 0.0);
