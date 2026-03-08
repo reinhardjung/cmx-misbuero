@@ -743,7 +743,7 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 			if ($adate !== '' || $bdate !== '') {
 				if ($adate === '') return 1;
 				if ($bdate === '') return -1;
-				if ($adate !== $bdate) return \strcmp($bdate, $adate); // newest date first
+				if ($adate !== $bdate) return \strcmp($adate, $bdate); // oldest date first
 			}
 
 			$ats = (int) ($a['sort_ts'] ?? 0);
@@ -760,10 +760,10 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 				}
 			}
 
-			if ($ats !== $bts) return $bts <=> $ats; // newest first
+			if ($ats !== $bts) return $ats <=> $bts; // oldest first
 			$aseq = (int) ($a['sort_seq'] ?? 0);
 			$bseq = (int) ($b['sort_seq'] ?? 0);
-			return $bseq <=> $aseq;
+			return $aseq <=> $bseq;
 		});
 	}
 
