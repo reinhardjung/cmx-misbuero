@@ -395,71 +395,85 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			];
 			return (string) ($map[$normalized] ?? $label);
 		};
+		$requested_appendix_types = \array_fill_keys(
+			\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_pdf_appendices')
+				? cmxbu_belege_export_requested_pdf_appendices()
+				: [],
+			true
+		);
 		$list_sections = [];
-		foreach ($mwst_group_items as $group) {
-			$title = !empty($group['is_without_rate'])
-				? 'ohne MwSt'
-				: (string) ($group['label'] ?? '');
-			if (empty($group['is_without_rate']) && $title !== '' && \strpos($title, '%') === false) {
-				$title .= '%';
+		if (isset($requested_appendix_types['mwst'])) {
+			foreach ($mwst_group_items as $group) {
+				$title = !empty($group['is_without_rate'])
+					? 'ohne MwSt'
+					: (string) ($group['label'] ?? '');
+				if (empty($group['is_without_rate']) && $title !== '' && \strpos($title, '%') === false) {
+					$title .= '%';
+				}
+				if (empty($group['is_without_rate']) && $title !== '' && \stripos($title, 'mwst') === false) {
+					$title .= ' MwSt';
+				}
+				$list_sections[] = [
+					'title' => $title,
+					'empty_label' => 'Keine Daten für diesen MwSt-Satz.',
+					'rows' => (array) ($group['rows'] ?? []),
+					'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+					'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+					'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+					'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+				];
 			}
-			if (empty($group['is_without_rate']) && $title !== '' && \stripos($title, 'mwst') === false) {
-				$title .= ' MwSt';
-			}
-			$list_sections[] = [
-				'title' => $title,
-				'empty_label' => 'Keine Daten für diesen MwSt-Satz.',
-				'rows' => (array) ($group['rows'] ?? []),
-				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
-				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
-				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
-				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
-			];
 		}
-		foreach ($belegtyp_group_items as $group) {
-			$title = (string) ($group['label'] ?? '');
-			if ($title === '') {
-				$title = 'Ohne Belegtyp';
+		if (isset($requested_appendix_types['belegtyp'])) {
+			foreach ($belegtyp_group_items as $group) {
+				$title = (string) ($group['label'] ?? '');
+				if ($title === '') {
+					$title = 'Ohne Belegtyp';
+				}
+				$list_sections[] = [
+					'title' => $belegtyp_pluralize($title),
+					'empty_label' => 'Keine Daten für diesen Belegtyp.',
+					'rows' => (array) ($group['rows'] ?? []),
+					'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+					'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+					'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+					'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+				];
 			}
-			$list_sections[] = [
-				'title' => $belegtyp_pluralize($title),
-				'empty_label' => 'Keine Daten für diesen Belegtyp.',
-				'rows' => (array) ($group['rows'] ?? []),
-				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
-				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
-				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
-				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
-			];
 		}
-		foreach ($zahlungsart_group_items as $group) {
-			$title = (string) ($group['label'] ?? '');
-			if ($title === '') {
-				$title = 'Ohne Zahlungsart';
+		if (isset($requested_appendix_types['zahlungsart'])) {
+			foreach ($zahlungsart_group_items as $group) {
+				$title = (string) ($group['label'] ?? '');
+				if ($title === '') {
+					$title = 'Ohne Zahlungsart';
+				}
+				$list_sections[] = [
+					'title' => $title,
+					'empty_label' => 'Keine Daten für diese Zahlungsart.',
+					'rows' => (array) ($group['rows'] ?? []),
+					'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+					'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+					'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+					'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+				];
 			}
-			$list_sections[] = [
-				'title' => $title,
-				'empty_label' => 'Keine Daten für diese Zahlungsart.',
-				'rows' => (array) ($group['rows'] ?? []),
-				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
-				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
-				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
-				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
-			];
 		}
-		foreach ($zahlungsgrund_group_items as $group) {
-			$title = (string) ($group['label'] ?? '');
-			if ($title === '') {
-				$title = 'Ohne Zahlungsgrund';
+		if (isset($requested_appendix_types['zahlungsgrund'])) {
+			foreach ($zahlungsgrund_group_items as $group) {
+				$title = (string) ($group['label'] ?? '');
+				if ($title === '') {
+					$title = 'Ohne Zahlungsgrund';
+				}
+				$list_sections[] = [
+					'title' => $title,
+					'empty_label' => 'Keine Daten für diesen Zahlungsgrund.',
+					'rows' => (array) ($group['rows'] ?? []),
+					'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
+					'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
+					'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
+					'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
+				];
 			}
-			$list_sections[] = [
-				'title' => $title,
-				'empty_label' => 'Keine Daten für diesen Zahlungsgrund.',
-				'rows' => (array) ($group['rows'] ?? []),
-				'sum_mwst' => (float) ($group['sum_mwst'] ?? 0.0),
-				'sum_vorsteuer' => (float) ($group['sum_vorsteuer'] ?? 0.0),
-				'sum_einnahmen' => (float) ($group['sum_einnahmen'] ?? 0.0),
-				'sum_ausgaben' => (float) ($group['sum_ausgaben'] ?? 0.0),
-			];
 		}
 
 		\ob_start();

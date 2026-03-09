@@ -83,6 +83,33 @@ function cmxbu_belege_export_requested_preset(): string {
 	return 'dieses_jahr';
 }
 
+function cmxbu_belege_export_pdf_appendix_options(): array {
+	return [
+		'mwst' => 'MwSt',
+		'belegtyp' => 'Belegtyp',
+		'zahlungsart' => 'Zahlungsart',
+		'zahlungsgrund' => 'Zahlungsgrund',
+	];
+}
+
+function cmxbu_belege_export_requested_pdf_appendices(): array {
+	$raw = $_REQUEST['cmx_export_pdf_appendices'] ?? [];
+	if (!\is_array($raw)) {
+		return [];
+	}
+
+	$allowed = cmxbu_belege_export_pdf_appendix_options();
+	$selected = [];
+	foreach ($raw as $value) {
+		$key = \sanitize_key((string) $value);
+		if ($key !== '' && isset($allowed[$key])) {
+			$selected[$key] = true;
+		}
+	}
+
+	return \array_keys($selected);
+}
+
 function cmxbu_belege_export_now_datetime(): \DateTimeImmutable {
 	if (\function_exists('wp_timezone')) {
 		return new \DateTimeImmutable('now', \wp_timezone());
@@ -196,6 +223,10 @@ function cmxbu_belege_export_require_date_range_or_redirect(): array {
 		'ref' => cmxbu_belege_export_request_ref(),
 		'cmx_export_range_preset' => cmxbu_belege_export_requested_preset(),
 	];
+	$requested_appendices = cmxbu_belege_export_requested_pdf_appendices();
+	if (!empty($requested_appendices)) {
+		$args['cmx_export_pdf_appendices'] = $requested_appendices;
+	}
 	if ($range['from'] !== '') $args['cmx_export_date_from'] = $range['from'];
 	if ($range['to'] !== '') $args['cmx_export_date_to'] = $range['to'];
 
@@ -1210,6 +1241,8 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$zip_trustees = cmxbu_belege_export_trustee_contacts();
 	$zip_trustee_selected_id = cmxbu_belege_export_trustee_default_id($zip_trustees);
 	$zip_trustee_options_html = cmxbu_belege_export_trustee_options_html($zip_trustees, $zip_trustee_selected_id);
+	$pdf_appendix_options = cmxbu_belege_export_pdf_appendix_options();
+	$pdf_appendix_selected = \array_fill_keys(cmxbu_belege_export_requested_pdf_appendices(), true);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Belege und Milchbüechli exportieren</h2>
@@ -1243,6 +1276,23 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 						<label for="cmx_export_date_to" style="font-weight:600;">Datum bis</label>
 						<input type="date" id="cmx_export_date_to" name="cmx_export_date_to" value="<?php echo \esc_attr($range['to']); ?>" required>
 					</div>
+				</div>
+
+				<div style="margin-top:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+					<!-- <span style="font-weight:600;">Zusätzliche Listen im PDF:</span> -->
+					<!-- <span style="color:#555;">Übersicht ist immer enthalten.</span> -->
+					<span style="color:#555;">Zusätzliche Listen</span>
+					<?php foreach ($pdf_appendix_options as $appendix_key => $appendix_label): ?>
+						<label style="display:inline-flex;align-items:center;gap:6px;">
+							<input
+								type="checkbox"
+								name="cmx_export_pdf_appendices[]"
+								value="<?php echo \esc_attr($appendix_key); ?>"
+								<?php checked(isset($pdf_appendix_selected[$appendix_key])); ?>
+							>
+							<span><?php echo \esc_html($appendix_label); ?></span>
+						</label>
+					<?php endforeach; ?>
 				</div>
 
 			<p class="submit">
