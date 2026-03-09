@@ -191,6 +191,41 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_tooltip')) {
+	function cmx_cockpit_beleg_type_tooltip(int $post_id): string {
+		$type_label = '';
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_raw_type')) {
+			$post = \get_post($post_id);
+			if ($post instanceof \WP_Post) {
+				$type = (string) cmxbu_beleg_export_raw_type($post);
+				if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_type')) {
+					$type = (string) cmxbu_beleg_export_normalize_type($type);
+				}
+				if ($type !== '') {
+					$type_label = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_ucfirst')
+						? (string) cmxbu_beleg_export_ucfirst($type)
+						: \ucfirst($type);
+				}
+			}
+		}
+
+		if ($type_label === '') {
+			$tax = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_taxonomy')
+				? (string) cmx_cockpit_beleg_taxonomy()
+				: '';
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				$terms = \wp_get_post_terms($post_id, $tax, ['fields' => 'names']);
+				if (!\is_wp_error($terms) && !empty($terms[0])) {
+					$type_label = (string) $terms[0];
+				}
+			}
+		}
+
+		return $type_label !== '' ? ('Belegtyp: ' . $type_label) : '';
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) {
 	function cmx_cockpit_faellige_rechnungen_data(): array {
 		static $cache = [];
@@ -306,6 +341,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 
 				$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
 				$amount_tooltip = cmx_cockpit_beleg_amount_tooltip($post_id);
+				$type_tooltip = cmx_cockpit_beleg_type_tooltip($post_id);
 
 				$rows[] = [
 					'id'       => $post_id,
@@ -317,6 +353,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 					'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
 					'edit_url' => (string) \get_edit_post_link($post_id, ''),
 					'amount_tooltip' => $amount_tooltip,
+					'type_tooltip' => $type_tooltip,
 				];
 			}
 
@@ -383,7 +420,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	</style>';
 	echo '<table class="cmx-faellig-table">';
 	echo '<thead><tr>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;width:108px;">Rechnung</th>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;width:108px;">Beleg</th>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;width:78px;">Fällig am</th>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;">Kontakt</th>';
 	// echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
@@ -397,17 +434,20 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				$kontakt_url = (string) ($row['kontakt_url'] ?? '');
 				$edit    = (string) ($row['edit_url'] ?? '');
 				$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
+				$type_tooltip = (string) ($row['type_tooltip'] ?? '');
 
 			echo '<tr>';
 			echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
 			if ($edit !== '') {
-				$title_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+				$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
 				echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
 			} else {
-				echo \esc_html($title);
+				$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
+				echo '<span' . $title_attr . '>' . \esc_html($title) . '</span>';
 			}
 		echo '</td>';
-		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">' . \esc_html($due) . '</td>';
+		$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;"' . $due_attr . '>' . \esc_html($due) . '</td>';
 			echo '<td style="padding:4px 0;vertical-align:top;">';
 			$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
 			if ($kontakt !== '' && $kontakt_url !== '') {
