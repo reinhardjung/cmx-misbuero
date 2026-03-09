@@ -23,11 +23,12 @@ function cmx_render_cpt_count_widget() {
 
 	echo '<style>
 		.cmx-cpt-table{width:100%;border-collapse:collapse}
-		.cmx-cpt-table th,.cmx-cpt-table td{padding:8px 10px;border-bottom:1px solid #ececec;text-align:left;vertical-align:middle}
+		.cmx-cpt-table th,.cmx-cpt-table td{padding:5px 10px;text-align:left;vertical-align:middle;font-size:14px}
 		.cmx-cpt-table th{font-weight:600}
-		.cmx-cpt-table tr:last-child td{border-bottom:none}
 		.cmx-cpt-table td.summe, th.summe { text-align:right; }
 		.cmx-cpt-table th.add, .cmx-cpt-table td.add { width:58px; text-align:center; }
+		.cmx-cpt-module-link{font-weight:700;text-decoration:none}
+		.cmx-cpt-module-link:hover{text-decoration:underline}
 
 		/* Zeilen-Hover-Highlight, damit klar ist, wo das Plus geklickt wird */
 		.cmx-cpt-table tbody tr{ transition: background-color .15s ease, box-shadow .15s ease; }
@@ -83,11 +84,6 @@ function cmx_render_cpt_count_widget() {
 	</style>';
 
 	echo '<table class="cmx-cpt-table">';
-	echo '<thead><tr>
-			<th>' . esc_html__('Modul', 'default') . '</th>
-			<th class="summe">' . esc_html__('aktiv', 'default') . '</th>
-			<th class="add" title="' . esc_attr__('Neu erfassen', 'default') . '"></th>
-		</tr></thead>';
 	echo '<tbody>';
 
 	foreach ($objects as $slug => $obj) {
@@ -103,7 +99,7 @@ function cmx_render_cpt_count_widget() {
 		$add_new_url = $can_create ? \admin_url('post-new.php?post_type=' . $slug) : '';
 
 		echo '<tr>';
-		echo '<td><a href="' . esc_url($list_url) . '">' . esc_html($label) . '</a></td>';
+		echo '<td><a class="cmx-cpt-module-link" href="' . esc_url($list_url) . '">' . esc_html($label) . '</a></td>';
 		echo '<td class="summe" style="padding-right:15px;">' . esc_html(cmx_format_swiss_number($count, 0)) . '</td>';
 
 		echo '<td class="add">';
