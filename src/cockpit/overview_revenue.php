@@ -467,6 +467,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-list{margin-top:8px;border-top:1px solid #dcdcde}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f1}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title{color:#1d2327}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a{display:inline-block;color:#2271b1;text-decoration:none;white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a:hover{text-decoration:underline}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-value{font-weight:600}
 			</style>';
 
@@ -529,13 +531,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 				echo '<div class="cmx-overview-revenue-detail-list">';
 				foreach ($summary['items'] as $item) {
 					$item = (array) $item;
+					$post_id = (int) ($item['post_id'] ?? 0);
+					$title = (string) ($item['title'] ?? '');
+					$edit_link = $post_id > 0 ? (string) \get_edit_post_link($post_id, '') : '';
+					$title_html = $title !== '' ? \esc_html($title) : '';
+					if ($title !== '' && $edit_link !== '') {
+						$title_html = '<a href="' . \esc_url($edit_link) . '">' . \esc_html($title) . '</a>';
+					}
 					$amount = (float) ($item['amount'] ?? 0.0);
 					$side = (string) ($item['side'] ?? '');
 					if ($side === 'expense' && $amount > 0) {
 						$amount *= -1;
 					}
 					echo '<div class="cmx-overview-revenue-detail-row">';
-					echo '<div class="cmx-overview-revenue-detail-title">' . \esc_html((string) ($item['title'] ?? '')) . '</div>';
+					echo '<div class="cmx-overview-revenue-detail-title">' . $title_html . '</div>';
 					echo '<div class="cmx-overview-revenue-detail-value">' . \esc_html(cmx_cockpit_overview_revenue_format_money($amount)) . '</div>';
 					echo '</div>';
 				}

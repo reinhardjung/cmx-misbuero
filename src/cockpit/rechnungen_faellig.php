@@ -370,6 +370,10 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		return;
 	}
 
+	echo '<style>
+		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:inline-block;white-space:nowrap;text-decoration:none}
+		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
+	</style>';
 	echo '<table style="width:100%;border-collapse:collapse;">';
 	echo '<thead><tr>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;">Rechnung</th>';
@@ -388,10 +392,10 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
 
 			echo '<tr>';
-			echo '<td style="padding:4px 10px 4px 0;vertical-align:top;">';
+			echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
 			if ($edit !== '') {
 				$title_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
-				echo '<a href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
+				echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
 			} else {
 				echo \esc_html($title);
 			}
