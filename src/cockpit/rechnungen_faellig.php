@@ -1,11 +1,11 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /**
- * Dashboard-Widget: Faellige Rechnungen (offen)
- * - zeigt max. 5 offene, faellige Rechnungen
- * - Titel enthaelt die Gesamtanzahl aller offenen, faelligen Rechnungen
+ * Dashboard-Widget: Faellige Rechnungen/Gutschriften (offen)
+ * - zeigt max. 5 offene, faellige Rechnungen und Gutschriften
+ * - Titel enthaelt die Gesamtanzahl aller offenen, faelligen Rechnungen und Gutschriften
  * - Klick auf Widget-Titel springt in die Belege-Liste mit aktivem Filter:
- *   offen + Rechnungen
+ *   offen + Rechnungen/Gutschriften
  */
 
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_taxonomy')) {
@@ -55,14 +55,6 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_is_unpaid_beleg')) {
 			}
 		}
 		return true;
-	}
-}
-
-if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_is_customer_direction')) {
-	function cmx_cockpit_is_customer_direction(int $post_id): bool {
-		$dir = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
-		// Legacy-Belege ohne Richtung als Ausgang behandeln.
-		return ($dir === '' || $dir === 'ausgang');
 	}
 }
 
@@ -233,24 +225,25 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 					$is_invoice_slug = ($slug === 'rechnung' || $slug === 'rechnungen');
 					$is_invoice_name = ($name_lc === 'rechnung' || $name_lc === 'rechnungen');
 					$is_invoice_variant = (\strpos($slug, 'rechnung-') === 0 && \strpos($slug, 'lieferanten') === false);
+					$is_credit_slug = ($slug === 'gutschrift' || $slug === 'gutschriften');
+					$is_credit_name = ($name_lc === 'gutschrift' || $name_lc === 'gutschriften');
 
-					if ($is_invoice_slug || $is_invoice_name || $is_invoice_variant) {
+					if ($is_invoice_slug || $is_invoice_name || $is_invoice_variant || $is_credit_slug || $is_credit_name) {
 						$term_slugs[] = $slug;
 					}
 				}
 			}
 		}
 		if (empty($term_slugs)) {
-			$term_slugs = ['rechnung', 'rechnungen'];
+			$term_slugs = ['rechnung', 'rechnungen', 'gutschrift', 'gutschriften'];
 		} else {
 			$term_slugs = \array_values(\array_unique($term_slugs));
 		}
-		$term_slug_for_link = (string) ($term_slugs[0] ?? 'rechnung');
+		$term_slug_for_link = \implode(',', $term_slugs);
 
 		$list_args = [
 			'post_type'        => 'belege',
 			'cmx_bezahlfilter' => 'offen',
-			'cmx_richtungfilter' => 'ausgang',
 		];
 		if ($tax !== '') {
 			$list_args[$tax] = $term_slug_for_link;
@@ -293,9 +286,6 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				continue;
 			}
 			if (!cmx_cockpit_is_unpaid_beleg($post_id)) {
-				continue;
-			}
-			if (!cmx_cockpit_is_customer_direction($post_id)) {
 				continue;
 			}
 
@@ -357,7 +347,7 @@ function cmx_register_rechnungen_faellig_widget(): void {
 	}
 
 	$data = cmx_cockpit_faellige_rechnungen_data();
-	$title = 'Fällige Rechnungen (' . (int) ($data['total'] ?? 0) . ')';
+	$title = 'Fällige Belege (' . (int) ($data['total'] ?? 0) . ')';
 	$title_link = '<a href="' . \esc_url((string) ($data['list_url'] ?? '')) . '" style="font-weight:700;font-size:14px;text-decoration:none;">' . \esc_html($title) . '</a>';
 
 	\wp_add_dashboard_widget(
@@ -378,7 +368,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	$items = (array) ($data['items'] ?? []);
 
 	if ($total <= 0) {
-		echo '<p>Keine fälligen / offenen Rechnungen</p>';
+		echo '<p>Keine fälligen / offenen Belege</p>';
 		return;
 	}
 
