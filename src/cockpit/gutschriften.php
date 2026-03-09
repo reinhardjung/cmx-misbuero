@@ -21,16 +21,33 @@ function cmx_render_gutschriften_widget(): void {
 		return;
 	}
 
+	$range = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_range')
+		? (array) cmx_cockpit_requested_range()
+		: ['from' => '', 'to' => ''];
+
 	$taxonomy  = 'belege_kategorien';
 	$term_slug = 'gutschrift';
 
 	// Helper zum Summieren
-	$calc_total = function(array $args) {
+	$calc_total = function(array $args, string $date_mode) use ($range) {
 		$q = new \WP_Query($args);
 		$count = 0;
 		$sum = 0.0;
 		if ($q->have_posts() && function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			foreach ($q->posts as $pid) {
+				if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_date_in_range')) {
+					$date_value = '';
+					if ($date_mode === 'paid' && \function_exists(__NAMESPACE__ . '\\cmx_cockpit_paid_date')) {
+						$date_value = cmx_cockpit_paid_date((int) $pid);
+					} elseif ($date_mode === 'post' && \function_exists(__NAMESPACE__ . '\\cmx_cockpit_post_date')) {
+						$date_value = cmx_cockpit_post_date((int) $pid);
+					}
+
+					if ($date_value === '' || !cmx_cockpit_date_in_range($date_value, $range)) {
+						continue;
+					}
+				}
+
 				$calc = cmxbu_get_beleg_positionen_calc($pid);
 				$total = isset($calc['total']) ? (float)$calc['total'] : 0.0;
 				$sum += $total;
@@ -66,7 +83,7 @@ function cmx_render_gutschriften_widget(): void {
 				'compare' => '!=',
 			],
 		],
-	]);
+	], 'paid');
 
 	// Offen: kein oder leeres Bezahlt-Datum
 	[$open_count, $open_sum] = $calc_total([
@@ -95,7 +112,7 @@ function cmx_render_gutschriften_widget(): void {
 				'compare' => '=',
 			],
 		],
-	]);
+	], 'post');
 
 	echo '<style>
 		.cmx-lr-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:6px;}

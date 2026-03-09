@@ -26,6 +26,10 @@ function cmx_render_umsatz_widget() {
 		return;
 	}
 
+	$range = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_range')
+		? (array) cmx_cockpit_requested_range()
+		: ['from' => '', 'to' => ''];
+
 	// Bezahlte Belege auswerten
 	$q = new \WP_Query([
 		'post_type'      => 'belege',
@@ -60,6 +64,14 @@ function cmx_render_umsatz_widget() {
 
 	if ($q->have_posts() && function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		foreach ($q->posts as $bid) {
+			if (
+				\function_exists(__NAMESPACE__ . '\\cmx_cockpit_date_in_range')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_cockpit_paid_date')
+				&& !cmx_cockpit_date_in_range(cmx_cockpit_paid_date((int) $bid), $range)
+			) {
+				continue;
+			}
+
 			$calc  = cmxbu_get_beleg_positionen_calc($bid);
 			$total = isset($calc['total']) ? (float)$calc['total'] : 0.0;
 			$sum_total += $total;

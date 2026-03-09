@@ -2,6 +2,10 @@
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_preset_options')) {
 	function cmx_cockpit_overview_revenue_preset_options(): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_preset_options')) {
+			return (array) cmx_cockpit_preset_options();
+		}
+
 		$fallback = [
 			'heute' => 'Heute (heute bis heute)',
 			'diesen_monat' => 'Diesen Monat',
@@ -29,6 +33,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_preset_opt
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_requested_preset')) {
 	function cmx_cockpit_overview_revenue_requested_preset(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_preset')) {
+			return (string) cmx_cockpit_requested_preset();
+		}
+
 		$presets = cmx_cockpit_overview_revenue_preset_options();
 		$preset = \sanitize_key((string) ($_GET['cmx_overview_revenue_preset'] ?? 'dieses_jahr'));
 		return isset($presets[$preset]) ? $preset : 'dieses_jahr';
@@ -476,7 +484,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 		echo '<div class="cmx-overview-revenue-controls">';
 		echo '<div class="cmx-overview-revenue-field">';
 		echo '<label for="cmx-overview-revenue-preset">Zeitraum</label>';
-		echo '<select id="cmx-overview-revenue-preset" name="cmx_overview_revenue_preset">';
+		echo '<select id="cmx-overview-revenue-preset" name="cmx_cockpit_preset">';
 		foreach ($presets as $preset_key => $preset_label) {
 			echo '<option value="' . \esc_attr((string) $preset_key) . '"' . \selected($selected_preset, (string) $preset_key, false) . '>' . \esc_html((string) $preset_label) . '</option>';
 		}

@@ -1,6 +1,6 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-$widgets = ['stammdaten','rechnungen','rechnungen_faellig','lieferantenrechungen','kontakt_daten','gutschriften','kuchen_ein_aus_ok','kuchen_ein_aus_nok','overview_revenue'];
+$widgets = ['date_range','stammdaten','rechnungen','rechnungen_faellig','lieferantenrechungen','kontakt_daten','gutschriften','quittungen','kuchen_ein_aus_ok','kuchen_ein_aus_nok','overview_revenue'];
 
 foreach ($widgets as $file) {
 	$path = __DIR__ . '/' . $file . '.php';

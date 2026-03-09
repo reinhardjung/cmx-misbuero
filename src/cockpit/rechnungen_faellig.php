@@ -201,10 +201,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
 
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) {
 	function cmx_cockpit_faellige_rechnungen_data(): array {
-		static $cache = null;
-		if (\is_array($cache)) {
-			return $cache;
+		static $cache = [];
+		$preset = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_preset')
+			? (string) cmx_cockpit_requested_preset()
+			: 'dieses_jahr';
+		if (isset($cache[$preset]) && \is_array($cache[$preset])) {
+			return $cache[$preset];
 		}
+		$range = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_range')
+			? (array) cmx_cockpit_requested_range()
+			: ['from' => '', 'to' => ''];
 
 		$tax = cmx_cockpit_beleg_taxonomy();
 		$term_slugs = [];
@@ -253,12 +259,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 		$list_url = \add_query_arg($list_args, \admin_url('edit.php'));
 
 		if ($tax === '') {
-			$cache = [
+			$cache[$preset] = [
 				'total'    => 0,
 				'items'    => [],
 				'list_url' => $list_url,
 			];
-			return $cache;
+			return $cache[$preset];
 		}
 
 		$q = new \WP_Query([
@@ -295,6 +301,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 
 			$due_raw = cmx_cockpit_due_raw($post_id);
 			$due_ts  = cmx_cockpit_parse_date_to_ts($due_raw);
+			if (
+				\function_exists(__NAMESPACE__ . '\\cmx_cockpit_date_in_range')
+				&& !cmx_cockpit_date_in_range((string) ($due_raw !== '' ? $due_raw : ''), $range)
+			) {
+				continue;
+			}
 			$due_sort = $due_ts > 0 ? $due_ts : PHP_INT_MAX;
 
 			$title = \trim((string) \get_the_title($post_id));
@@ -329,12 +341,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 		$total = \count($rows);
 		$items = \array_slice($rows, 0, 5);
 
-		$cache = [
+		$cache[$preset] = [
 			'total'    => $total,
 			'items'    => $items,
 			'list_url' => $list_url,
 		];
-		return $cache;
+		return $cache[$preset];
 	}
 }
 

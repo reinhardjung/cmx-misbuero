@@ -39,6 +39,10 @@ function cmx_render_kuchen_ein_aus(): void {
 		return;
 	}
 
+	$range = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_range')
+		? (array) cmx_cockpit_requested_range()
+		: ['from' => '', 'to' => ''];
+
 	$taxonomy = 'belege_kategorien';
 	$terms = [
 		'rechnung'             => ['label' => 'Rechnungen',            'color' => '#1e88e5'],
@@ -81,6 +85,14 @@ function cmx_render_kuchen_ein_aus(): void {
 		$sum   = 0.0;
 		if ($q->have_posts()) {
 			foreach ($q->posts as $pid) {
+				if (
+					\function_exists(__NAMESPACE__ . '\\cmx_cockpit_date_in_range')
+					&& \function_exists(__NAMESPACE__ . '\\cmx_cockpit_paid_date')
+					&& !cmx_cockpit_date_in_range(cmx_cockpit_paid_date((int) $pid), $range)
+				) {
+					continue;
+				}
+
 				$calc  = cmxbu_get_beleg_positionen_calc($pid);
 				$sum  += isset($calc['total']) ? (float)$calc['total'] : 0.0;
 				$count++;
