@@ -341,6 +341,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_type_label
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_beleg_taxonomy')) {
+	function cmx_cockpit_overview_revenue_beleg_taxonomy(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_taxonomy')) {
+			$tax = (string) cmx_cockpit_beleg_taxonomy();
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')) {
+			$tax = (string) cmx_belege_taxonomy();
+			if ($tax !== '' && \taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+
+		foreach (['belege_kategorien', 'beleg_kategorie'] as $tax) {
+			if (\taxonomy_exists($tax)) {
+				return $tax;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_type_admin_url')) {
+	function cmx_cockpit_overview_revenue_type_admin_url(string $type): string {
+		$args = ['post_type' => 'belege'];
+		$tax = cmx_cockpit_overview_revenue_beleg_taxonomy();
+		if ($tax !== '' && $type !== '') {
+			$args[$tax] = $type;
+		}
+
+		return (string) \add_query_arg($args, \admin_url('edit.php'));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_summary')) {
 		function cmx_cockpit_overview_revenue_summary(string $preset, string $type): array {
 			$summary = [
@@ -429,6 +467,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_summary'))
 					$summary['items'][] = [
 						'post_id' => $post_id,
 						'title' => (string) $post->post_title,
+						'type' => $post_type,
 						'type_label' => (string) cmx_cockpit_overview_revenue_type_label($post_type),
 						'amount' => (float) $display_amount,
 						'side' => $is_income_side ? 'income' : ($is_expense_side ? 'expense' : ''),
@@ -497,6 +536,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a:hover{text-decoration:underline}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type{justify-self:start;text-align:left;white-space:nowrap}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-badge{display:inline-flex;align-items:center;justify-content:center;padding:0 7px;border:1px solid #c8daf6;border-radius:4px;background:#eef5ff;color:#466792;line-height:1.25;text-align:center}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-link{text-decoration:none}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-link:hover .cmx-overview-revenue-detail-type-badge{background:#e4efff;border-color:#a8c6f0}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-value{font-weight:600;text-align:right;white-space:nowrap}
 			</style>';
 
@@ -566,16 +607,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 					if ($title !== '' && $edit_link !== '') {
 						$title_html = '<a href="' . \esc_url($edit_link) . '">' . \esc_html($title) . '</a>';
 						}
-						$amount = (float) ($item['amount'] ?? 0.0);
-						$type_label = (string) ($item['type_label'] ?? '');
-						$side = (string) ($item['side'] ?? '');
+							$amount = (float) ($item['amount'] ?? 0.0);
+							$type = (string) ($item['type'] ?? '');
+							$type_label = (string) ($item['type_label'] ?? '');
+							$type_url = $type !== '' ? cmx_cockpit_overview_revenue_type_admin_url($type) : '';
+							$side = (string) ($item['side'] ?? '');
 						if ($side === 'expense' && $amount > 0) {
 							$amount *= -1;
-						}
-						echo '<div class="cmx-overview-revenue-detail-row">';
-						echo '<div class="cmx-overview-revenue-detail-title">' . $title_html . '</div>';
-						echo '<div class="cmx-overview-revenue-detail-type"><span class="cmx-overview-revenue-detail-type-badge">' . \esc_html($type_label) . '</span></div>';
-						echo '<div class="cmx-overview-revenue-detail-value">' . \esc_html(cmx_cockpit_overview_revenue_format_money($amount)) . '</div>';
+							}
+							echo '<div class="cmx-overview-revenue-detail-row">';
+							echo '<div class="cmx-overview-revenue-detail-title">' . $title_html . '</div>';
+							echo '<div class="cmx-overview-revenue-detail-type">';
+							if ($type_url !== '') {
+								echo '<a class="cmx-overview-revenue-detail-type-link" href="' . \esc_url($type_url) . '"><span class="cmx-overview-revenue-detail-type-badge">' . \esc_html($type_label) . '</span></a>';
+							} else {
+								echo '<span class="cmx-overview-revenue-detail-type-badge">' . \esc_html($type_label) . '</span>';
+							}
+							echo '</div>';
+							echo '<div class="cmx-overview-revenue-detail-value">' . \esc_html(cmx_cockpit_overview_revenue_format_money($amount)) . '</div>';
 						echo '</div>';
 					}
 				echo '</div>';
