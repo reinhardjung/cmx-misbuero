@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-03-05T02:27:13+00:00",
+    "exported_at": "2026-03-09T21:49:31+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -45,7 +45,7 @@
             "normal": "dashboard_site_health,dashboard_right_now,dashboard_activity,cmx_cpt_counts_widget",
             "side": "dashboard_quick_press,dashboard_primary,cmx_umsatz_widget,cmx_lieferanten_widget,cmx_gutschriften_widget",
             "column3": "cmx_kontakt_wichtige_daten,cmx_rechnungen_faellig_widget",
-            "column4": "cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok"
+            "column4": "cmx_overview_revenue_widget,cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok"
         },
         "meta-box-order_dokumente": {
             "side": "cmx_dokumente_box,cmx_savebox,dokumente_kategoriendiv,cmx_dokumente_validity,cmx_dokumente_status,cmx_zu_projekt,cmx_dokumente_modules",
