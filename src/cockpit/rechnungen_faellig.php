@@ -385,11 +385,16 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	echo '<style>
 		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:inline-block;white-space:nowrap;text-decoration:none}
 		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
+		#cmx_rechnungen_faellig_widget .cmx-faellig-table{width:100%;border-collapse:collapse;table-layout:fixed}
+		#cmx_rechnungen_faellig_widget .cmx-faellig-contact,
+		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{text-decoration:none}
+		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link:hover{text-decoration:underline}
 	</style>';
-	echo '<table style="width:100%;border-collapse:collapse;">';
+	echo '<table class="cmx-faellig-table">';
 	echo '<thead><tr>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;">Rechnung</th>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;">Fällig am</th>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;width:108px;">Rechnung</th>';
+	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;width:78px;">Fällig am</th>';
 	echo '<th style="text-align:left;padding:0 0 6px 0;">Kontakt</th>';
 	// echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
 	echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
@@ -414,10 +419,11 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		echo '</td>';
 		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">' . \esc_html($due) . '</td>';
 			echo '<td style="padding:4px 0;vertical-align:top;">';
+			$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
 			if ($kontakt !== '' && $kontakt_url !== '') {
-				echo '<a href="' . \esc_url($kontakt_url) . '">' . \esc_html($kontakt) . '</a>';
+				echo '<a class="cmx-faellig-contact-link" href="' . \esc_url($kontakt_url) . '"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</a>';
 			} else {
-				echo \esc_html($kontakt);
+				echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
 				}
 				echo '</td>';
 			echo '<td style="padding:4px 0;vertical-align:top;text-align:center;">';

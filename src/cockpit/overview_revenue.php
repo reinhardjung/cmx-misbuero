@@ -491,12 +491,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 				#cmx_overview_revenue_widget .cmx-overview-revenue-details{margin-top:10px}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-details summary{cursor:pointer;color:#2271b1}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-list{margin-top:8px;border-top:1px solid #dcdcde}
-				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f1;align-items:center}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:6px;padding:3px 0;align-items:center}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title{color:#1d2327;min-width:0}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a{display:inline-block;color:#2271b1;text-decoration:none;white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a:hover{text-decoration:underline}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type{justify-self:start;text-align:left;white-space:nowrap}
-				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-badge{display:inline-flex;align-items:center;justify-content:center;padding:1px 7px;border:1px solid #c8daf6;border-radius:4px;background:#eef5ff;color:#466792;line-height:1.35;text-align:center}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-badge{display:inline-flex;align-items:center;justify-content:center;padding:0 7px;border:1px solid #c8daf6;border-radius:4px;background:#eef5ff;color:#466792;line-height:1.25;text-align:center}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-value{font-weight:600;text-align:right;white-space:nowrap}
 			</style>';
 
