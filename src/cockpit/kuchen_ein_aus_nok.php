@@ -4,7 +4,7 @@ use ChartsPhp\ChartsPhp;
 
 /**
  * Dashboard-Widget: Kuchen Einnahmen/Ausgaben
- * Zeigt ein einfaches Kuchen-Diagramm für Rechnungen, Lieferantenrechnungen und Gutschriften.
+ * Zeigt ein einfaches Kuchen-Diagramm für Rechnungen, Lieferantenrechnungen, Gutschriften und Quittungen.
  */
 
 add_action('wp_dashboard_setup', function () {
@@ -45,9 +45,26 @@ function cmx_render_kuchen_ein_aus_nok(): void {
 
 	$taxonomy = 'belege_kategorien';
 	$terms = [
-		'rechnung'             => ['label' => 'Rechnungen',            'color' => '#1e88e5'],
-		'lieferantenrechnung'  => ['label' => 'Lieferantenrechnungen', 'color' => '#e53935'],
-		'gutschrift'           => ['label' => 'Gutschriften',          'color' => '#43a047'],
+		'rechnung' => [
+			'label' => 'Rechnungen',
+			'color' => '#1e88e5',
+			'terms' => ['rechnung'],
+		],
+		'lieferantenrechnung' => [
+			'label' => 'Lieferantenrechnungen',
+			'color' => '#e53935',
+			'terms' => ['lieferantenrechnung'],
+		],
+		'gutschrift' => [
+			'label' => 'Gutschriften',
+			'color' => '#43a047',
+			'terms' => ['gutschrift'],
+		],
+		'quittung' => [
+			'label' => 'Quittungen',
+			'color' => '#f59e0b',
+			'terms' => ['quittung', 'quittungen'],
+		],
 	];
 
 	$results = [];
@@ -64,7 +81,7 @@ function cmx_render_kuchen_ein_aus_nok(): void {
 				[
 					'taxonomy' => $taxonomy,
 					'field'    => 'slug',
-					'terms'    => [$slug],
+					'terms'    => (array) ($meta['terms'] ?? [$slug]),
 					'operator' => 'IN',
 				],
 			],
