@@ -254,6 +254,62 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				color:#667085;
 				font-size:13px;
 			}
+			.mb-monitor-article-table-wrap{
+				overflow:auto;
+			}
+			.mb-monitor-article-table{
+				width:100%;
+				border-collapse:collapse;
+			}
+			.mb-monitor-article-table th,
+			.mb-monitor-article-table td{
+				padding:8px 10px;
+				border-top:1px solid #eef2f6;
+				font-size:13px;
+				vertical-align:top;
+			}
+			.mb-monitor-article-table tr:first-child th,
+			.mb-monitor-article-table tr:first-child td{
+				border-top:0;
+			}
+			.mb-monitor-article-table th{
+				text-align:left;
+				font-size:11px;
+				letter-spacing:.04em;
+				text-transform:uppercase;
+				color:#98a2b3;
+				font-weight:700;
+			}
+			.mb-monitor-article-table td.is-num{
+				text-align:right;
+				white-space:nowrap;
+				font-variant-numeric:tabular-nums;
+			}
+			.mb-monitor-article-link{
+				color:#162033;
+				text-decoration:none;
+				font-weight:600;
+			}
+			.mb-monitor-article-link:hover{
+				text-decoration:underline;
+			}
+			.mb-monitor-article-meta{
+				display:block;
+				margin-top:2px;
+				font-size:11px;
+				color:#98a2b3;
+			}
+			.mb-monitor-article-profit-negative{
+				color:#b42318;
+			}
+			.mb-monitor-article-profit-positive{
+				color:#166534;
+			}
+			.mb-monitor-article-empty{
+				padding:10px 0 2px;
+				color:#667085;
+				font-size:13px;
+			}
 			.mb-demo-linechart-stats strong{
 				display:block;
 				font-size:16px;
@@ -693,6 +749,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_cost')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_position_discount')) {
+	function cmx_cockpit_view_monitor_position_discount(float $subtotal, string $discount_raw): float {
+		$txt = \strtolower(\trim($discount_raw));
+		if ($txt === '') {
+			return 0.0;
+		}
+
+		if (\preg_match('~([\-−]?\d+[.,]?\d*)\s*%~u', $txt, $matches)) {
+			$pct = \abs(cmx_cockpit_view_monitor_parse_number($matches[1] ?? 0));
+			return $pct > 0 ? (\abs($subtotal) * ($pct / 100)) : 0.0;
+		}
+
+		$clean = (string) \preg_replace('~(chf|fr\.?)~i', '', $txt);
+		$amount = \abs(cmx_cockpit_view_monitor_parse_number($clean));
+		return \min($amount, \abs($subtotal));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_position_revenue')) {
+	function cmx_cockpit_view_monitor_position_revenue(array $row): float {
+		$qty = cmx_cockpit_view_monitor_parse_number($row['menge'] ?? 0);
+		$price = cmx_cockpit_view_monitor_parse_number($row['preis'] ?? 0);
+		$subtotal = $qty * $price;
+		$discount = cmx_cockpit_view_monitor_position_discount($subtotal, (string) ($row['rabatt'] ?? ''));
+		$line_total = $subtotal >= 0 ? ($subtotal - $discount) : ($subtotal + $discount);
+		return \round($line_total, 2);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_article_meta')) {
+	function cmx_cockpit_view_monitor_article_meta(int $artikel_id, array $row = []): array {
+		$title = '';
+		if ($artikel_id > 0) {
+			$title = (string) (\get_the_title($artikel_id) ?: '');
+		}
+		if ($title === '') {
+			$title = (string) ($row['artikel_name'] ?? $row['title'] ?? $row['item'] ?? '');
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$title = (string) cmx_beleg_decode_label_text($title);
+		}
+
+		$number = '';
+		if ($artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')) {
+			$number = (string) cmx_get_artikel_nr($artikel_id);
+		}
+		if ($number === '' && $artikel_id > 0) {
+			foreach (['cmx_artikel_sku', '_cmx_artikel_sku', '_cmx_artikel_nr', '_sku'] as $meta_key) {
+				$number = (string) \get_post_meta($artikel_id, $meta_key, true);
+				if ($number !== '') {
+					break;
+				}
+			}
+		}
+
+		return [
+			'title' => \trim($title),
+			'number' => \trim($number),
+			'edit_link' => $artikel_id > 0 ? (string) (\get_edit_post_link($artikel_id, '') ?: '') : '',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -710,6 +829,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$daily_cost_series_by_type = [];
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
+		$article_rows = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
@@ -819,6 +939,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
+
+			foreach (cmx_cockpit_view_monitor_position_rows((int) $post->ID) as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+
+				$row_type = \sanitize_key((string) ($row['typ'] ?? $row['row_type'] ?? ''));
+				if ($row_type === 'abschnitt') {
+					continue;
+				}
+
+				$artikel_id = (int) ($row['artikel_id'] ?? 0);
+				if ($artikel_id <= 0) {
+					continue;
+				}
+
+				$qty = cmx_cockpit_view_monitor_parse_number($row['menge'] ?? 0);
+				if ($qty === 0.0) {
+					continue;
+				}
+
+				$article_meta = cmx_cockpit_view_monitor_article_meta($artikel_id, $row);
+				$line_revenue = cmx_cockpit_view_monitor_position_revenue($row);
+				$line_cost = \round($qty * cmx_cockpit_view_monitor_artikel_unit_cost($artikel_id), 2);
+				$article_rows[] = [
+					'year' => $year,
+					'month' => $month_number,
+					'type' => $type_slug,
+					'article_id' => $artikel_id,
+					'article_title' => (string) ($article_meta['title'] ?? ''),
+					'article_number' => (string) ($article_meta['number'] ?? ''),
+					'edit_link' => (string) ($article_meta['edit_link'] ?? ''),
+					'revenue' => (float) $line_revenue,
+					'cost' => (float) $line_cost,
+				];
+			}
 		}
 
 		\wp_reset_postdata();
@@ -943,6 +1099,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'daily_cost_series_by_type' => $daily_cost_series_by_type,
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
+			'article_rows' => $article_rows,
 		];
 	}
 }
@@ -1103,6 +1260,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 					</div>
 				</section>
+				<section class="mb-card mb-card--soft mb-span-8">
+					<h3>Deckungsbeitrag pro Artikel</h3>
+					<p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<div class="mb-monitor-article-table-wrap">
+						<table class="mb-monitor-article-table">
+							<thead>
+								<tr>
+									<th>Artikel</th>
+									<th>Umsatz</th>
+									<th>Aufwand</th>
+									<th>Deckungsbeitrag</th>
+									<th>Marge %</th>
+								</tr>
+							</thead>
+							<tbody id="cmx-monitor-article-rows"></tbody>
+						</table>
+						<p class="mb-monitor-article-empty" id="cmx-monitor-article-empty" hidden>Keine Artikeldaten im aktuellen Filter.</p>
+					</div>
+				</section>
 
 			</div>
 		</div>
@@ -1160,6 +1336,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var compareLabelEl = document.getElementById("cmx-monitor-stat-compare-label");
 			var countEl = document.getElementById("cmx-monitor-stat-count");
 			var modeEl = document.getElementById("cmx-monitor-stat-mode");
+			var articleRowsEl = document.getElementById("cmx-monitor-article-rows");
+			var articleEmptyEl = document.getElementById("cmx-monitor-article-empty");
 			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
@@ -1380,6 +1558,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var normalizedCount = Number(count || 0);
 				return normalizedCount > 0 ? (String(label) + " (" + normalizedCount + ")") : String(label);
 			};
+			var escapeHtml = function(value){
+				return String(value == null ? "" : value)
+					.replace(/&/g, "&amp;")
+					.replace(/</g, "&lt;")
+					.replace(/>/g, "&gt;")
+					.replace(/"/g, "&quot;")
+					.replace(/\'/g, "&#039;");
+			};
 			var updateYearOptions = function(){
 				var selectedQuarter = String(quarterSelect.value || "all");
 				var selectedMonth = String(monthSelect.value || "all");
@@ -1569,6 +1755,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				return {
 					labels: labels,
 					selectedYear: selectedYear,
+					selectedQuarter: selectedQuarter,
+					selectedMonth: selectedMonth,
+					selectedType: selectedType,
 					compareYear: compareYear,
 					indicatorCompareYear: indicatorCompareYear,
 					selectedTypeLabel: selectedTypeLabel,
@@ -2054,12 +2243,86 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				profitChart.data.datasets = datasets;
 				profitChart.update();
 			};
+			var renderArticleTable = function(context){
+				if (!articleRowsEl || !articleEmptyEl) return;
+
+				var selectedYear = String(context.selectedYear || "");
+				var selectedQuarter = String(context.selectedQuarter || "all");
+				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedType = String(context.selectedType || "all");
+				var sourceRows = Array.isArray(payload.article_rows) ? payload.article_rows : [];
+				var articles = {};
+
+				sourceRows.forEach(function(row){
+					var rowYear = String(row.year || "");
+					var rowMonth = Number(row.month || 0);
+					var rowType = String(row.type || "");
+					if (rowYear !== selectedYear) return;
+					if (selectedType !== "all" && rowType !== selectedType) return;
+					if (selectedMonth !== "all") {
+						if (rowMonth !== Number(selectedMonth || 0)) return;
+					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
+						return;
+					}
+
+					var key = String(row.article_id || "");
+					if (!key) return;
+					if (!articles[key]) {
+						articles[key] = {
+							id: key,
+							title: String(row.article_title || ""),
+							number: String(row.article_number || ""),
+							editLink: String(row.edit_link || ""),
+							revenue: 0,
+							cost: 0
+						};
+					}
+					articles[key].revenue += Number(row.revenue || 0);
+					articles[key].cost += Number(row.cost || 0);
+				});
+
+				var rows = Object.keys(articles).map(function(key){
+					var item = articles[key];
+					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
+					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
+					return item;
+				}).sort(function(a, b){
+					if (b.profit !== a.profit) return b.profit - a.profit;
+					if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+					return String(a.title || "").localeCompare(String(b.title || ""), "de");
+				});
+
+				articleRowsEl.innerHTML = "";
+				if (!rows.length) {
+					articleEmptyEl.hidden = false;
+					return;
+				}
+
+				articleEmptyEl.hidden = true;
+				rows.slice(0, 12).forEach(function(item){
+					var tr = document.createElement("tr");
+					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
+					var articleLabel = item.number ? (item.number + " - " + item.title) : item.title;
+					var articleInner = item.editLink
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(articleLabel || ("#" + item.id)) + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(articleLabel || ("#" + item.id)) + \'</span>\';
+					var metaInner = item.number && item.title ? \'<span class="mb-monitor-article-meta">#\' + escapeHtml(item.id) + \'</span>\' : "";
+					tr.innerHTML =
+						\'<td>\' + articleInner + metaInner + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
+							\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatPercent(item.margin)) + \'</td>\';
+					articleRowsEl.appendChild(tr);
+				});
+			};
 			var updateDashboard = function(){
 				var context = buildContextData();
 				updateOverview(context);
 				updateMainChart(context);
 				updateCostChart(context);
 				updateProfitChart(context);
+				renderArticleTable(context);
 			};
 
 			yearSelect.addEventListener("change", function(){
