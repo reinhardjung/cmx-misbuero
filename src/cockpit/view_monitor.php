@@ -97,6 +97,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				color:#56708f;
 				font-size:14px;
 			}
+			.mb-demo-linechart{
+				margin-top:18px;
+				padding:14px 16px 12px;
+				border:1px solid #d9e6f6;
+				border-radius:12px;
+				background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+			}
+			.mb-demo-linechart-canvas{
+				position:relative;
+				height:260px;
+			}
+			.mb-demo-linechart-canvas canvas{
+				display:block;
+				width:100%;
+				height:100%;
+			}
+			.mb-demo-linechart-stats{
+				display:grid;
+				grid-template-columns:repeat(4,minmax(0,1fr));
+				gap:10px;
+				margin-top:12px;
+			}
+			.mb-demo-linechart-stats strong{
+				display:block;
+				font-size:16px;
+				line-height:1.15;
+				color:#162033;
+			}
+			.mb-demo-linechart-stats span{
+				display:block;
+				margin-top:2px;
+				font-size:12px;
+				color:#667085;
+			}
 			.mb-list{
 				margin:0;
 				padding:0;
@@ -174,12 +208,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				.mb-span-7,
 				.mb-span-8{grid-column:span 1}
 			}
+			@media (max-width: 640px){
+				.mb-demo-linechart-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+			}
 		';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
+	function cmx_cockpit_view_monitor_chart_payload(): array {
+		return [
+			'labels' => ['Jan', 'Feb', 'Mrz', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug'],
+			'datasets' => [
+				[
+					'label' => 'Umsatz',
+					'data' => [12400, 13850, 13120, 14980, 16140, 15820, 17240, 18690],
+					'yAxisID' => 'y',
+					'borderColor' => '#4f86c6',
+					'backgroundColor' => 'rgba(79,134,198,0.14)',
+				],
+				[
+					'label' => 'Tickets',
+					'data' => [42, 39, 44, 37, 34, 31, 28, 26],
+					'yAxisID' => 'y1',
+					'borderColor' => '#ef7d00',
+					'backgroundColor' => 'rgba(239,125,0,0.14)',
+				],
+			],
+		];
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 	function cmx_render_view_main_page(): void {
+		$chart_payload = cmx_cockpit_view_monitor_chart_payload();
+		$umsatz = (array) ($chart_payload['datasets'][0]['data'] ?? []);
+		$tickets = (array) ($chart_payload['datasets'][1]['data'] ?? []);
+		$current_umsatz = (float) ($umsatz[\array_key_last($umsatz)] ?? 0);
+		$previous_umsatz = (float) ($umsatz[\array_key_last($umsatz) - 1] ?? 0);
+		$delta_umsatz = $previous_umsatz > 0
+			? (($current_umsatz - $previous_umsatz) / $previous_umsatz) * 100
+			: 0.0;
+		$current_tickets = (int) ($tickets[\array_key_last($tickets)] ?? 0);
 		?>
 		<div class="wrap mb-dashboard-wrap">
 			<!-- <h1>Monitor</h1> -->
@@ -190,7 +260,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<!-- <span class="mb-note">Dashboard</span> -->
 					<h2>Eigene Cockpit-Ansicht <? echo 'sdfgsdfg ' .UserDomain .' '; echo implode(', ', cmx_ini_get_value( 'vip', 'instanzen' )); ?></h2>
 					<p>Hier kannst du dein eigenes Layout frei aufbauen. Das Grid ist auf 8 Spalten ausgelegt und kann Karten mit 1 bis 8 Spalten Breite darstellen.</p>
-					<p>xyz</p>
+					<div class="mb-demo-linechart" aria-label="Demo-Line-Chart">
+						<div class="mb-demo-linechart-canvas">
+							<canvas id="cmx-monitor-multi-axis-chart" aria-label="Demo-Multi-Axis-Line-Chart"></canvas>
+						</div>
+						<div class="mb-demo-linechart-stats">
+							<div><strong><?php echo \esc_html(\number_format($current_umsatz, 0, '.', '\'')); ?></strong><span>Umsatz aktuell</span></div>
+							<div><strong><?php echo \esc_html(($delta_umsatz >= 0 ? '+' : '') . \number_format($delta_umsatz, 1, '.', '\'')); ?>%</strong><span>zum Vormonat</span></div>
+							<div><strong><?php echo \esc_html((string) $current_tickets); ?></strong><span>Tickets aktuell</span></div>
+							<div><strong><?php echo \esc_html((string) \count((array) ($chart_payload['labels'] ?? []))); ?></strong><span>Datenpunkte</span></div>
+						</div>
+					</div>
 				</section>
 
 			</div>
@@ -214,8 +294,124 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		return;
 	}
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_enqueue_chartjs')) {
+		cmx_enqueue_chartjs();
+	}
+
 	$handle = 'cmx-cockpit-view-main';
 	\wp_register_style($handle, false, [], '1.0');
 	\wp_enqueue_style($handle);
 	\wp_add_inline_style($handle, cmx_cockpit_view_main_css());
+
+	$chart_payload = cmx_cockpit_view_monitor_chart_payload();
+	$chart_script = '(function(){
+		var init = function(){
+			var canvas = document.getElementById("cmx-monitor-multi-axis-chart");
+			if (!canvas || typeof Chart === "undefined") return;
+
+			var ctx = canvas.getContext("2d");
+			if (!ctx) return;
+
+			var payload = ' . \wp_json_encode($chart_payload) . ';
+			new Chart(ctx, {
+				type: "line",
+				data: {
+					labels: payload.labels,
+					datasets: [
+						{
+							label: payload.datasets[0].label,
+							data: payload.datasets[0].data,
+							yAxisID: payload.datasets[0].yAxisID,
+							borderColor: payload.datasets[0].borderColor,
+							backgroundColor: payload.datasets[0].backgroundColor,
+							fill: true,
+							tension: 0.35,
+							borderWidth: 3,
+							pointRadius: 4,
+							pointHoverRadius: 5
+						},
+						{
+							label: payload.datasets[1].label,
+							data: payload.datasets[1].data,
+							yAxisID: payload.datasets[1].yAxisID,
+							borderColor: payload.datasets[1].borderColor,
+							backgroundColor: payload.datasets[1].backgroundColor,
+							fill: false,
+							tension: 0.35,
+							borderWidth: 3,
+							pointRadius: 4,
+							pointHoverRadius: 5
+						}
+					]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					interaction: {
+						mode: "index",
+						intersect: false
+					},
+					plugins: {
+						legend: {
+							position: "top",
+							labels: {
+								usePointStyle: true,
+								boxWidth: 10,
+								color: "#344054"
+							}
+						},
+						tooltip: {
+							backgroundColor: "rgba(22,32,51,0.92)",
+							padding: 10
+						}
+					},
+					scales: {
+						x: {
+							grid: {
+								color: "#eef3f8"
+							},
+							ticks: {
+								color: "#667085"
+							}
+						},
+						y: {
+							type: "linear",
+							position: "left",
+							grid: {
+								color: "#e7eef7"
+							},
+							ticks: {
+								color: "#4f86c6"
+							},
+							title: {
+								display: true,
+								text: "Umsatz"
+							}
+						},
+						y1: {
+							type: "linear",
+							position: "right",
+							grid: {
+								drawOnChartArea: false
+							},
+							ticks: {
+								color: "#ef7d00"
+							},
+							title: {
+								display: true,
+								text: "Tickets"
+							}
+						}
+					}
+				}
+			});
+		};
+
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", init);
+			return;
+		}
+		init();
+	})();';
+	\wp_add_inline_script('cmx-chartjs', $chart_script, 'after');
 });
