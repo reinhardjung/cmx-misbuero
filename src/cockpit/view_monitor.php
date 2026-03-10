@@ -909,9 +909,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_contact_meta')
 		}
 
 		$kontakt_title = \trim($kontakt_title);
-		if ($kontakt_title === '' && $kontakt_id > 0) {
-			$kontakt_title = 'Kontakt #' . $kontakt_id;
-		}
 
 		return [
 			'contact_id' => $kontakt_id,
@@ -2530,14 +2527,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
 					var articleLabel = item.number ? (item.number + " - " + item.title) : item.title;
 					var articleInner = item.editLink
-						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(articleLabel || ("#" + item.id)) + \'</a>\'
-						: \'<span class="mb-monitor-article-link">\' + escapeHtml(articleLabel || ("#" + item.id)) + \'</span>\';
-					var metaInner = item.number && item.title ? \'<span class="mb-monitor-article-meta">#\' + escapeHtml(item.id) + \'</span>\' : "";
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(articleLabel || "Unbekannter Artikel") + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(articleLabel || "Unbekannter Artikel") + \'</span>\';
 					tr.innerHTML =
-						\'<td>\' + articleInner + metaInner + \'</td>\' +
+						\'<td>\' + articleInner + \'</td>\' +
 						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
 						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
-							\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
+						\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
 						\'<td class="is-num">\' + escapeHtml(formatPercent(item.margin)) + \'</td>\';
 					articleRowsEl.appendChild(tr);
 				});
@@ -2605,13 +2601,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				rows.slice(0, 12).forEach(function(item){
 					var tr = document.createElement("tr");
 					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
-					var customerLabel = item.title || (item.id > 0 ? ("Kontakt #" + String(item.id)) : "Ohne Kontakt");
+					var customerLabel = item.title || "Unbekannter Kunde";
 					var customerInner = item.editLink
 						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(customerLabel) + \'</a>\'
 						: \'<span class="mb-monitor-article-link">\' + escapeHtml(customerLabel) + \'</span>\';
-					var metaInner = item.id > 0 ? \'<span class="mb-monitor-article-meta">#\' + escapeHtml(String(item.id)) + \'</span>\' : "";
 					tr.innerHTML =
-						\'<td>\' + customerInner + metaInner + \'</td>\' +
+						\'<td>\' + customerInner + \'</td>\' +
 						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
 						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
 						\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
