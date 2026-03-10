@@ -576,30 +576,40 @@ add_action('restrict_manage_posts', function($post_type){
 	$za_selected = isset($_GET['cmx_zahlungsartfilter']) ? sanitize_text_field($_GET['cmx_zahlungsartfilter']) : '';
 	$zg_selected = isset($_GET['cmx_zahlungsgrundfilter']) ? sanitize_text_field($_GET['cmx_zahlungsgrundfilter']) : '';
 	$zeitraum_selected = cmx_beleg_admin_zeitraum_selected();
+	$show_paid_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_bezahlt');
+	$show_date_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_datum');
+	$show_category_filter_by_column = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('cmx_belege_kategorie');
+	$show_direction_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_richtung');
+	$show_payment_type_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_zahlungsart');
+	$show_payment_reason_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_zahlungsgrund');
 	$cat_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
 		? cmx_beleg_admin_kategorie_taxonomy()
 		: '';
 	$cat_selected = ($cat_tax !== '' && isset($_GET[$cat_tax])) ? sanitize_title((string) \wp_unslash($_GET[$cat_tax])) : '';
 
-	echo '<select name="cmx_bezahlfilter" id="cmx_bezahlfilter" class="postform">';
-		echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
-		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlte', 'cmx') . '</option>';
-		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offene', 'cmx') . '</option>';
-	echo '</select>';
+	if ($show_paid_filter) {
+		echo '<select name="cmx_bezahlfilter" id="cmx_bezahlfilter" class="postform">';
+			echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
+			echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlte', 'cmx') . '</option>';
+			echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offene', 'cmx') . '</option>';
+		echo '</select>';
+	}
 
-	echo '<select name="cmx_zeitraumfilter" id="cmx_zeitraumfilter" class="postform">';
-		echo '<option value="">' . esc_html__('Alle Zeiträume', 'cmx') . '</option>';
-		foreach (cmx_beleg_admin_zeitraum_options() as $value => $label) {
-			echo '<option value="' . esc_attr((string) $value) . '" ' . selected($zeitraum_selected, (string) $value, false) . '>' . esc_html((string) $label) . '</option>';
-		}
-	echo '</select>';
+	if ($show_date_filter) {
+		echo '<select name="cmx_zeitraumfilter" id="cmx_zeitraumfilter" class="postform">';
+			echo '<option value="">' . esc_html__('Alle Zeiträume', 'cmx') . '</option>';
+			foreach (cmx_beleg_admin_zeitraum_options() as $value => $label) {
+				echo '<option value="' . esc_attr((string) $value) . '" ' . selected($zeitraum_selected, (string) $value, false) . '>' . esc_html((string) $label) . '</option>';
+			}
+		echo '</select>';
+	}
 
 	$show_category_filter = true;
 	if (\function_exists(__NAMESPACE__ . '\\cmx_is_cloudmeister_user') && cmx_is_cloudmeister_user()) {
 		// Für Cloudmeister rendert ac_kategorie.php bereits den Kategorien-Filter.
 		$show_category_filter = false;
 	}
-	if ($show_category_filter && $cat_tax !== '') {
+	if ($show_category_filter && $show_category_filter_by_column && $cat_tax !== '') {
 		$cat_terms = \get_terms([
 			'taxonomy'   => $cat_tax,
 			'hide_empty' => false,
@@ -626,24 +636,26 @@ add_action('restrict_manage_posts', function($post_type){
 		'ausgang' => 'Einnahme',
 		'eingang' => 'Ausgabe',
 	];
-	echo '<select name="cmx_richtungfilter" id="cmx_richtungfilter" class="postform">';
-		echo '<option value="">' . esc_html__('Alle Richtungen', 'cmx') . '</option>';
-		foreach ($dir_opts as $val => $label) {
-			$val = sanitize_key((string) $val);
-			if ($val !== 'ausgang' && $val !== 'eingang') {
-				continue;
+	if ($show_direction_filter) {
+		echo '<select name="cmx_richtungfilter" id="cmx_richtungfilter" class="postform">';
+			echo '<option value="">' . esc_html__('Alle Richtungen', 'cmx') . '</option>';
+			foreach ($dir_opts as $val => $label) {
+				$val = sanitize_key((string) $val);
+				if ($val !== 'ausgang' && $val !== 'eingang') {
+					continue;
+				}
+				$short = (string) ($dir_filter_labels[$val] ?? '');
+				if ($short === '') {
+					$short = cmx_beleg_admin_first_word((string) $label);
+					$short = $short !== '' ? $short : (string) $label;
+				}
+				echo '<option value="' . esc_attr($val) . '" ' . selected($dir_selected, $val, false) . '>' . esc_html($short) . '</option>';
 			}
-			$short = (string) ($dir_filter_labels[$val] ?? '');
-			if ($short === '') {
-				$short = cmx_beleg_admin_first_word((string) $label);
-				$short = $short !== '' ? $short : (string) $label;
-			}
-			echo '<option value="' . esc_attr($val) . '" ' . selected($dir_selected, $val, false) . '>' . esc_html($short) . '</option>';
-		}
-	echo '</select>';
+		echo '</select>';
+	}
 
 	$za_tax = cmx_beleg_zahlungsart_taxonomy();
-	if ($za_tax !== '') {
+	if ($show_payment_type_filter && $za_tax !== '') {
 		$za_terms = \get_terms([
 			'taxonomy'   => $za_tax,
 			'hide_empty' => false,
@@ -664,7 +676,7 @@ add_action('restrict_manage_posts', function($post_type){
 	}
 
 	$zg_tax = cmx_beleg_zahlungsgrund_taxonomy();
-	if ($zg_tax !== '') {
+	if ($show_payment_reason_filter && $zg_tax !== '') {
 		$zg_terms = \get_terms([
 			'taxonomy'   => $zg_tax,
 			'hide_empty' => false,
@@ -726,6 +738,29 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	}
 	$zeitraum_filter = \sanitize_key((string) $zeitraum_filter);
 	$q->set('cmx_zeitraumfilter', $zeitraum_filter);
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible')) {
+		if (!cmx_beleg_admin_column_is_visible('beleg_bezahlt')) {
+			$filter = '';
+			$q->set('cmx_bezahlfilter', '');
+		}
+		if (!cmx_beleg_admin_column_is_visible('beleg_datum')) {
+			$zeitraum_filter = '';
+			$q->set('cmx_zeitraumfilter', '');
+		}
+		if (!cmx_beleg_admin_column_is_visible('beleg_richtung')) {
+			$richtung_filter = '';
+			$q->set('cmx_richtungfilter', '');
+		}
+		if (!cmx_beleg_admin_column_is_visible('beleg_zahlungsart')) {
+			$za_filter = '';
+			$q->set('cmx_zahlungsartfilter', '');
+		}
+		if (!cmx_beleg_admin_column_is_visible('beleg_zahlungsgrund')) {
+			$zg_filter = '';
+			$q->set('cmx_zahlungsgrundfilter', '');
+		}
+	}
 
 	$paid_keys = array_values(array_unique([
 		CMX_BELEG_META_BEZAHLT,              // typischer Key mit Unterstrich

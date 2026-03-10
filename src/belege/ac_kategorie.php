@@ -85,6 +85,7 @@ add_action('manage_' . CMX_BELEGE_CPT . '_posts_custom_column', function(string 
 add_action('restrict_manage_posts', function($post_type){
 	if ($post_type !== CMX_BELEGE_CPT) return;
 	if (!cmx_is_cloudmeister_user()) return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_belege_kategorie')) return;
 
 	$tax = cmx_belege_taxonomy();
 	if ($tax === '') return;
@@ -114,6 +115,7 @@ add_action('pre_get_posts', function(\WP_Query $query){
 	// Nur auf der Belege-Übersicht anwenden
 	$post_type = isset($_GET['post_type']) ? sanitize_key($_GET['post_type']) : '';
 	if ($post_type !== CMX_BELEGE_CPT) return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_belege_kategorie')) return;
 
 	$tax = cmx_belege_taxonomy();
 	if ($tax === '') return;

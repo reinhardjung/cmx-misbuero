@@ -22,6 +22,32 @@ if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
 if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_txts')) {
 	function cmx_meta_projekt_txts(): array { return ['_cmx_beleg_projekt']; }
 }
+if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_hidden_columns')) {
+	function cmx_beleg_admin_hidden_columns(): array {
+		$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
+		if ($screen && !empty($screen->id) && function_exists('get_hidden_columns')) {
+			$hidden = \get_hidden_columns($screen);
+			if (is_array($hidden)) {
+				return array_values(array_unique(array_map('strval', $hidden)));
+			}
+		}
+
+		$hidden = \get_user_option('manageedit-' . cmx_belege_cpt() . 'columnshidden');
+		if (!is_array($hidden)) {
+			return [];
+		}
+
+		return array_values(array_unique(array_map('strval', $hidden)));
+	}
+}
+if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_column_is_visible')) {
+	function cmx_beleg_admin_column_is_visible(string $column_key): bool {
+		if ($column_key === '') {
+			return true;
+		}
+		return !in_array($column_key, cmx_beleg_admin_hidden_columns(), true);
+	}
+}
 
 /* Monats-Dropdown ausblenden (optional) */
 \add_filter('months_dropdown_results', function($months, $post_type){
@@ -38,6 +64,7 @@ if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_txts')) {
 \add_action('restrict_manage_posts', function($post_type = '', $which = ''){
 	$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
 	if (!$screen || $screen->id !== 'edit-'.cmx_belege_cpt() || $which !== 'top') return;
+	if (!cmx_beleg_admin_column_is_visible('cmx_beleg_projekt')) return;
 
 	$current = isset($_GET['cmx_proj_id']) ? (string)(int) $_GET['cmx_proj_id'] : '';
 
@@ -145,6 +172,7 @@ if (!function_exists(__NAMESPACE__.'\\cmx_build_project_meta_or')) {
 	$pt = $q->get('post_type');
 	$belege = cmx_belege_cpt();
 	if ((is_array($pt) && !in_array($belege, $pt, true)) || (!is_array($pt) && $pt !== $belege)) return;
+	if (!cmx_beleg_admin_column_is_visible('cmx_beleg_projekt')) return;
 
 	$pid = (int) ($q->get('cmx_proj_id') ?: ($_GET['cmx_proj_id'] ?? 0));
 	if ($pid <= 0) return;

@@ -105,6 +105,9 @@ $add_col = static function(array $columns): array {
 	if ($post_type !== CMX_PT_BELEGE) {
 		return;
 	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_beleg_leistungszeitraum')) {
+		return;
+	}
 
 	$selected = isset($_GET['cmx_leistungsmonat']) ? cmx_beleg_leistungsmonat_value((string) \wp_unslash($_GET['cmx_leistungsmonat'])) : '';
 	$labels = cmx_beleg_leistungsmonat_labels();
@@ -126,6 +129,9 @@ $add_col = static function(array $columns): array {
 		($post_type !== CMX_PT_BELEGE)
 		&& (!\is_array($post_type) || !\in_array(CMX_PT_BELEGE, $post_type, true))
 	) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_beleg_leistungszeitraum')) {
 		return;
 	}
 

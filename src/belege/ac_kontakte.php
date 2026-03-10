@@ -75,6 +75,9 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 	if (!\current_user_can('edit_posts')) {
 		return;
 	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_kontakt')) {
+		return;
+	}
 
 	$selected = isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0;
 
@@ -113,6 +116,9 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 	// Robust: prüfe direkt den post_type statt get_current_screen()
 	$post_type = $q->get('post_type');
 	if ((is_array($post_type) && !in_array(CMX_PT_BELEGE, $post_type, true)) || ($post_type !== CMX_PT_BELEGE)) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') && !cmx_beleg_admin_column_is_visible('cmx_kontakt')) {
 		return;
 	}
 

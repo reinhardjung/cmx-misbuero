@@ -40,6 +40,18 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$cat_slug = sanitize_text_field(wp_unslash($_GET[$tax]));
 	}
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible')) {
+		if (!cmx_beleg_admin_column_is_visible('cmx_kontakt')) {
+			$kontakt_id = 0;
+		}
+		if (!cmx_beleg_admin_column_is_visible('cmx_beleg_projekt')) {
+			$proj_id = 0;
+		}
+		if (!cmx_beleg_admin_column_is_visible('cmx_belege_kategorie')) {
+			$cat_slug = '';
+		}
+	}
+
 	// ---- meta_query aufbauen ----
 	$meta_query = ['relation' => 'AND'];
 
