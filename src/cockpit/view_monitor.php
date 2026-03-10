@@ -263,6 +263,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			}
 			.mb-monitor-card-head h3{
 				margin:0;
+				cursor:pointer;
 			}
 			.mb-monitor-card-toggle{
 				display:inline-flex;
@@ -1869,6 +1870,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var projectTaskEmptyEl = document.getElementById("cmx-monitor-project-task-empty");
 			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
 			var cardToggles = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-card-toggle"));
+			var collapsibleCards = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-nested-card"));
 			var articleSort = { key: "profit", direction: "desc" };
 			var customerSort = { key: "profit", direction: "desc" };
 			var projectSort = { key: "profit", direction: "desc" };
@@ -3147,16 +3149,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					updateDashboard();
 				});
 			});
+			var toggleMonitorCard = function(button, forceExpand){
+				var targetId = String(button.getAttribute("data-target") || "");
+				if (!targetId) return;
+				var body = document.getElementById(targetId);
+				if (!body) return;
+				var card = button.closest(".mb-monitor-nested-card");
+				var expanded = button.getAttribute("aria-expanded") !== "false";
+				var nextExpanded = typeof forceExpand === "boolean" ? forceExpand : !expanded;
+				button.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+				body.classList.toggle("is-collapsed", !nextExpanded);
+				if (card) {
+					card.classList.toggle("is-collapsed", !nextExpanded);
+				}
+			};
 			cardToggles.forEach(function(button){
 				button.addEventListener("click", function(){
-					var targetId = String(button.getAttribute("data-target") || "");
-					if (!targetId) return;
-					var body = document.getElementById(targetId);
-					if (!body) return;
-					var expanded = button.getAttribute("aria-expanded") !== "false";
-					button.setAttribute("aria-expanded", expanded ? "false" : "true");
-					body.classList.toggle("is-collapsed", expanded);
+					toggleMonitorCard(button);
 				});
+			});
+			collapsibleCards.forEach(function(card){
+				var toggleButton = card.querySelector(".mb-monitor-card-toggle");
+				var cardTitle = card.querySelector(".mb-monitor-card-head h3");
+				if (!toggleButton) return;
+				card.classList.toggle("is-collapsed", toggleButton.getAttribute("aria-expanded") === "false");
+				if (cardTitle) {
+					cardTitle.addEventListener("click", function(){
+						toggleMonitorCard(toggleButton);
+					});
+				}
 			});
 			var updateDashboard = function(){
 				var context = buildContextData();
