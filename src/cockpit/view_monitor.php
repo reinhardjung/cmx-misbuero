@@ -197,6 +197,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				height:0;
 				margin-right:8px;
 				vertical-align:middle;
+				position:relative;
+				top:-3px;
 			}
 			.mb-monitor-overview-indicator.is-up{
 				display:inline-block;
