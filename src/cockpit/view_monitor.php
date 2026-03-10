@@ -1674,18 +1674,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					</div>
 				</section>
 				<section class="mb-card mb-card--hero mb-span-8">
-					<h3>Deckungsbeiträge</h3>
-					<p class="mb-monitor-chart-intro">Artikel, Kunden und Projekte kompakt in einem gemeinsamen Bereich.</p>
+					<h3>Deckungsbeiträge pro ...</h3>
+					<p class="mb-monitor-chart-intro">Alle im gewählten Zeitraum.</p>
 					<div class="mb-monitor-deckungsbeitrag-group">
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Deckungsbeitrag pro Artikel</h3>
+						<h3>Artikel</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Artikel einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
 					</div>
 					<div class="mb-monitor-collapsible-body is-collapsed" id="cmx-monitor-article-card-body">
-					<p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<!-- <p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p> -->
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-article-table">
 							<colgroup>
@@ -1712,13 +1712,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Deckungsbeitrag pro Kunde</h3>
+						<h3>Kunde</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-customer-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Kunde einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
 					</div>
 					<div class="mb-monitor-collapsible-body is-collapsed" id="cmx-monitor-customer-card-body">
-					<p class="mb-monitor-chart-intro">Kunden im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<!-- <p class="mb-monitor-chart-intro">Kunden im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p> -->
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-customer-table">
 							<colgroup>
@@ -1745,13 +1745,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Deckungsbeitrag pro Projekt</h3>
+						<h3>Projekt</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-project-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Projekt einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
 					</div>
 					<div class="mb-monitor-collapsible-body is-collapsed" id="cmx-monitor-project-card-body">
-					<p class="mb-monitor-chart-intro">Projekte im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<!-- <p class="mb-monitor-chart-intro">Projekte im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p> -->
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-project-table">
 							<colgroup>
