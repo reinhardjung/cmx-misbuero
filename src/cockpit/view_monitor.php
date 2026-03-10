@@ -323,6 +323,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_timestam
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_has_paid_date')) {
+	function cmx_cockpit_view_monitor_beleg_has_paid_date(int $post_id): bool {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_paid_date')) {
+			return cmx_cockpit_paid_date($post_id) !== '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_paid_date')) {
+			return ((string) cmxbu_belege_export_paid_date($post_id)) !== '';
+		}
+
+		$raw = \trim((string) \get_post_meta($post_id, '_cmx_beleg_bezahlt_am', true));
+		return (bool) \preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -349,6 +364,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				continue;
 			}
 			if (\in_array((string) $post->post_status, ['trash', 'auto-draft'], true)) {
+				continue;
+			}
+			if (!cmx_cockpit_view_monitor_beleg_has_paid_date((int) $post->ID)) {
 				continue;
 			}
 
