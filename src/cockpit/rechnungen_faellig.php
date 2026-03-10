@@ -459,13 +459,15 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		return;
 	}
 
-		echo '<style>
-			#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:block;white-space:nowrap;text-decoration:none;overflow:hidden;text-overflow:ellipsis}
-			#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
-			#cmx_rechnungen_faellig_widget .cmx-faellig-table{width:100%;border-collapse:collapse;table-layout:fixed}
-			#cmx_rechnungen_faellig_widget .cmx-faellig-title-cell{overflow:hidden}
-			#cmx_rechnungen_faellig_widget .cmx-faellig-title-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-cell{text-align:right}
+			echo '<style>
+				#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:block;white-space:nowrap;text-decoration:none;overflow:hidden;text-overflow:ellipsis}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-table tbody tr:not(.cmx-faellig-group-row) td{transition:background-color .15s ease}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-table tbody tr:not(.cmx-faellig-group-row):hover td{background:#f7fbff}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-title-cell{overflow:hidden}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-title-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+				#cmx_rechnungen_faellig_widget .cmx-faellig-pay-cell{text-align:right}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-wrap{position:relative;display:inline-block}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-btn{cursor:pointer;border:1px solid #dcdcde;background:#f6f7f7;border-radius:4px;padding:2px 8px;line-height:1.4;font-weight:600;color:#1d2327}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-btn:hover{border-color:#2271b1;color:#2271b1;background:#fff}
@@ -530,7 +532,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					}
 
 				echo '<tr>';
-					echo '<td class="cmx-faellig-title-cell" style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
+					echo '<td class="cmx-faellig-title-cell" style="padding:4px 10px 4px 5px;vertical-align:top;white-space:nowrap;">';
 					if ($edit !== '') {
 						$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
 						echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
@@ -549,7 +551,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
 				}
 					echo '</td>';
-					echo '<td class="cmx-faellig-pay-cell" style="padding:4px 0;vertical-align:top;">';
+					echo '<td class="cmx-faellig-pay-cell" style="padding:4px 5px 4px 0;vertical-align:top;">';
 					if ($post_id > 0) {
 						echo '<span class="cmx-faellig-pay-wrap">';
 						echo '<button type="button" class="cmx-faellig-mark-paid cmx-faellig-pay-btn" data-beleg="' . (int) $post_id . '" title="Bezahlt am wählen" aria-label="Bezahlt am wählen">';
