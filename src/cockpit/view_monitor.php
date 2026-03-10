@@ -198,19 +198,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				margin-right:8px;
 				vertical-align:middle;
 				position:relative;
-				top:-3px;
+				top:-2px;
 			}
 			.mb-monitor-overview-indicator.is-up{
 				display:inline-block;
-				border-left:7px solid transparent;
-				border-right:7px solid transparent;
-				border-bottom:12px solid #16a34a;
+				border-left:9px solid transparent;
+				border-right:9px solid transparent;
+				border-bottom:15px solid #16a34a;
 			}
 			.mb-monitor-overview-indicator.is-down{
 				display:inline-block;
-				border-left:7px solid transparent;
-				border-right:7px solid transparent;
-				border-top:12px solid #b42318;
+				border-left:9px solid transparent;
+				border-right:9px solid transparent;
+				border-top:15px solid #b42318;
 			}
 			.mb-monitor-overview-compare{
 				display:none;
