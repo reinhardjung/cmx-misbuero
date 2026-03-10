@@ -1677,6 +1677,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				<section class="mb-card mb-card--hero mb-span-8">
 					<h3>Deckungsbeiträge pro ...</h3>
 					<p class="mb-monitor-chart-intro">Alle im gewählten Zeitraum.</p>
+					<p class="mb-monitor-chart-intro">&nbsp;</p>
 					<div class="mb-monitor-deckungsbeitrag-group">
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
