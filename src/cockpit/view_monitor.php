@@ -260,6 +260,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			.mb-monitor-article-table{
 				width:100%;
 				border-collapse:collapse;
+				table-layout:fixed;
+			}
+			.mb-monitor-article-table col.col-article{
+				width:42%;
+			}
+			.mb-monitor-article-table col.col-num{
+				width:14.5%;
 			}
 			.mb-monitor-article-table th,
 			.mb-monitor-article-table td{
@@ -284,6 +291,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				text-align:right;
 				white-space:nowrap;
 				font-variant-numeric:tabular-nums;
+			}
+			.mb-monitor-article-table th.is-num{
+				text-align:right;
+			}
+			.mb-monitor-article-table td:first-child{
+				padding-right:24px;
 			}
 			.mb-monitor-article-link{
 				color:#162033;
@@ -1265,13 +1278,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table">
+							<colgroup>
+								<col class="col-article">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+							</colgroup>
 							<thead>
 								<tr>
 									<th>Artikel</th>
-									<th>Umsatz</th>
-									<th>Aufwand</th>
-									<th>Deckungsbeitrag</th>
-									<th>Marge %</th>
+									<th class="is-num">Umsatz</th>
+									<th class="is-num">Aufwand</th>
+									<th class="is-num">Deckungsbeitrag</th>
+									<th class="is-num">Marge %</th>
 								</tr>
 							</thead>
 							<tbody id="cmx-monitor-article-rows"></tbody>
