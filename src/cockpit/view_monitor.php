@@ -946,10 +946,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		$selected_margin_total = $selected_total != 0.0 ? (($selected_profit_total / $selected_total) * 100) : 0.0;
 		$selected_count = (int) (($chart_payload['counts'] ?? [])[$selected_year] ?? 0);
 		$compare_year = isset($chart_payload['series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
-		$compare_series = $compare_year > 0
-			? (array) (($chart_payload['series'] ?? [])[$compare_year] ?? \array_fill(0, 12, 0.0))
-			: \array_fill(0, 12, 0.0);
-		$compare_total = \array_sum($compare_series);
+		$compare_total = 0.0;
 		?>
 		<div class="wrap mb-dashboard-wrap">
 			<!-- <h1>Monitor</h1> -->
@@ -996,7 +993,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 								</select>
 							</label>
 							<label class="mb-demo-linechart-control">
-								<input type="checkbox" id="cmx-monitor-chart-compare" <?php checked($compare_year > 0); ?>>
+								<input type="checkbox" id="cmx-monitor-chart-compare">
 								<span>vorheriger Zeitraum</span>
 							</label>
 						</div>
@@ -1010,9 +1007,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 						<div class="mb-demo-linechart-stats">
 							<div><strong id="cmx-monitor-stat-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></strong><span id="cmx-monitor-stat-total-label">Umsatz <?php echo \esc_html((string) $selected_year); ?></span></div>
-							<div><strong id="cmx-monitor-stat-compare"><?php echo \esc_html(\number_format($compare_total, 2, '.', '\'')); ?></strong><span id="cmx-monitor-stat-compare-label"><?php echo $compare_year > 0 ? \esc_html('Umsatz ' . $compare_year) : 'Vergleich'; ?></span></div>
+							<div><strong id="cmx-monitor-stat-compare"><?php echo \esc_html(\number_format($compare_total, 2, '.', '\'')); ?></strong><span id="cmx-monitor-stat-compare-label">Vergleich</span></div>
 							<div><strong id="cmx-monitor-stat-count"><?php echo \esc_html((string) $selected_count); ?></strong><span>Belege</span></div>
-							<div><strong id="cmx-monitor-stat-mode"><?php echo $compare_year > 0 ? 'aktiv' : 'aus'; ?></strong><span>Vergleich</span></div>
+							<div><strong id="cmx-monitor-stat-mode">aus</strong><span>Vergleich</span></div>
 						</div>
 					</div>
 				</section>
