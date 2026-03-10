@@ -1,5 +1,10 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+
+if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
+// if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
+
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_slug')) {
 	function cmx_cockpit_view_main_slug(): string {
 		return 'cmx-cockpit-dashboard';
@@ -177,130 +182,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 	function cmx_render_view_main_page(): void {
 		?>
 		<div class="wrap mb-dashboard-wrap">
-			<h1>Monitor</h1>
-			<p class="mb-dashboard-intro">Eigenes Dashboard mit Karten, die 1 bis 8 Spalten breit sein können.</p>
+			<!-- <h1>Monitor</h1> -->
+			<!-- <p class="mb-dashboard-intro">Akt. Daten</p> -->
 
 			<div class="mb-grid">
 				<section class="mb-card mb-card--hero mb-span-8">
-					<span class="mb-note">Dashboard</span>
-					<h2>Eigene Cockpit-Ansicht</h2>
+					<!-- <span class="mb-note">Dashboard</span> -->
+					<h2>Eigene Cockpit-Ansicht <? echo 'sdfgsdfg ' .UserDomain .' '; echo implode(', ', cmx_ini_get_value( 'vip', 'instanzen' )); ?></h2>
 					<p>Hier kannst du dein eigenes Layout frei aufbauen. Das Grid ist auf 8 Spalten ausgelegt und kann Karten mit 1 bis 8 Spalten Breite darstellen.</p>
+					<p>xyz</p>
 				</section>
 
-				<section class="mb-card mb-card--example mb-span-1">
-					<h3>1 Spalte</h3>
-					<p>Beispiel für <code>mb-span-1</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-2">
-					<h3>2 Spalten</h3>
-					<p>Beispiel für <code>mb-span-2</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-3">
-					<h3>3 Spalten</h3>
-					<p>Beispiel für <code>mb-span-3</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-4">
-					<h3>4 Spalten</h3>
-					<p>Beispiel für <code>mb-span-4</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-5">
-					<h3>5 Spalten</h3>
-					<p>Beispiel für <code>mb-span-5</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-6">
-					<h3>6 Spalten</h3>
-					<p>Beispiel für <code>mb-span-6</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-7">
-					<h3>7 Spalten</h3>
-					<p>Beispiel für <code>mb-span-7</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--example mb-span-8">
-					<h3>8 Spalten</h3>
-					<p>Beispiel für <code>mb-span-8</code>.</p>
-				</section>
-
-				<section class="mb-card mb-card--kpi mb-span-2">
-					<span class="mb-kpi-value">CHF 1’240</span>
-					<span class="mb-kpi-label">Umsatz heute</span>
-				</section>
-
-				<section class="mb-card mb-card--kpi mb-span-2">
-					<span class="mb-kpi-value">18</span>
-					<span class="mb-kpi-label">Offene Rechnungen</span>
-				</section>
-
-				<section class="mb-card mb-card--kpi mb-span-2">
-					<span class="mb-kpi-value">7</span>
-					<span class="mb-kpi-label">Neue Belege</span>
-				</section>
-
-				<section class="mb-card mb-card--kpi mb-span-2">
-					<span class="mb-kpi-value">5</span>
-					<span class="mb-kpi-label">Offene Buchungen</span>
-				</section>
-
-				<section class="mb-card mb-card--chart mb-span-4">
-					<h2>Umsatzentwicklung</h2>
-					<div class="mb-chart-placeholder">Hier kann später ein Chart oder Report hinein.</div>
-				</section>
-
-				<section class="mb-card mb-card--soft mb-span-4">
-					<h2>Letzte Aktivitäten</h2>
-					<ul class="mb-list">
-						<li>
-							<div>
-								<strong>Rechnung #2026-001 erstellt</strong>
-								<span>Heute, 09:14 Uhr</span>
-							</div>
-							<span class="mb-meta">neu</span>
-						</li>
-						<li>
-							<div>
-								<strong>Beleg importiert</strong>
-								<span>Heute, 08:42 Uhr</span>
-							</div>
-							<span class="mb-meta">Scanner</span>
-						</li>
-						<li>
-							<div>
-								<strong>Zahlung zugeordnet</strong>
-								<span>Gestern, 16:20 Uhr</span>
-							</div>
-							<span class="mb-meta">Bank</span>
-						</li>
-					</ul>
-				</section>
-
-				<section class="mb-card mb-span-2">
-					<h2>Bankabgleich</h2>
-					<div class="mb-stat">5</div>
-					<p>offene Buchungen zur Kontrolle</p>
-				</section>
-
-				<section class="mb-card mb-span-2">
-					<h2>Lieferanten</h2>
-					<div class="mb-stat">3</div>
-					<p>neue Dokumente zu prüfen</p>
-				</section>
-
-				<section class="mb-card mb-span-2">
-					<h2>Export</h2>
-					<div class="mb-stat">2</div>
-					<p>Milchbüechli-Exporte bereit</p>
-				</section>
-
-				<section class="mb-card mb-card--soft mb-span-2">
-					<h2>Hinweise</h2>
-					<p>QR-Rechnungsmodul aktiv. Nächster Monatsabschluss steht noch aus.</p>
-				</section>
 			</div>
 		</div>
 		<?php

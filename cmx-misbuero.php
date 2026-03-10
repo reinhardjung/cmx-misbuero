@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.10.253
+ * Version: 3.10.356
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -52,6 +52,28 @@ define('CMX_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CMX_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CMX_DOMAIN', explode('.', parse_url(home_url(), PHP_URL_HOST))[0]);
 define('CMX_UPLOADS_MISBUERO', wp_get_upload_dir()['basedir'] . '/misbuero/');
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_user_domain_value')) {
+	function cmx_user_domain_value(): string {
+		$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+		if (!$host) {
+			return '';
+		}
+
+		$host = (string) \preg_replace('~^www\.~', '', (string) $host);
+		$parts = \explode('.', $host);
+
+		if (\count($parts) < 3) {
+			return (string) ($parts[0] ?? '');
+		}
+
+		return (string) ($parts[0] ?? '');
+	}
+}
+
+if (!\defined('UserDomain')) {
+	\define('UserDomain', cmx_user_domain_value());
+}
 
 /**
  * Bei bestehenden CPT-Beiträgen niemals einen leeren Titel speichern.
