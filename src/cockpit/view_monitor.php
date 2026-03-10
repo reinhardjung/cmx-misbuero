@@ -191,6 +191,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			.mb-monitor-overview-card .mb-kpi-value{
 				font-size:28px;
 			}
+			.mb-monitor-overview-indicator{
+				display:none;
+				width:0;
+				height:0;
+				margin-right:8px;
+				vertical-align:middle;
+			}
+			.mb-monitor-overview-indicator.is-up{
+				display:inline-block;
+				border-left:7px solid transparent;
+				border-right:7px solid transparent;
+				border-bottom:12px solid #16a34a;
+			}
+			.mb-monitor-overview-indicator.is-down{
+				display:inline-block;
+				border-left:7px solid transparent;
+				border-right:7px solid transparent;
+				border-top:12px solid #b42318;
+			}
 			.mb-monitor-overview-compare{
 				display:none;
 				flex:0 0 auto;
@@ -1016,7 +1035,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
 					<div class="mb-monitor-overview-top">
 						<div class="mb-monitor-overview-main">
-							<strong class="mb-kpi-value" id="cmx-monitor-overview-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></strong>
+							<strong class="mb-kpi-value"><span class="mb-monitor-overview-indicator" id="cmx-monitor-overview-total-indicator"></span><span id="cmx-monitor-overview-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></span></strong>
 							<span class="mb-kpi-label">Umsatz</span>
 						</div>
 						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-total-compare-box" hidden>
@@ -1029,7 +1048,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
 					<div class="mb-monitor-overview-top">
 						<div class="mb-monitor-overview-main">
-							<strong class="mb-kpi-value" id="cmx-monitor-overview-cost"><?php echo \esc_html(\number_format($selected_cost_total, 2, '.', '\'')); ?></strong>
+							<strong class="mb-kpi-value"><span class="mb-monitor-overview-indicator" id="cmx-monitor-overview-cost-indicator"></span><span id="cmx-monitor-overview-cost"><?php echo \esc_html(\number_format($selected_cost_total, 2, '.', '\'')); ?></span></strong>
 							<span class="mb-kpi-label">Aufwand / Einkauf</span>
 						</div>
 						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-cost-compare-box" hidden>
@@ -1042,7 +1061,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
 					<div class="mb-monitor-overview-top">
 						<div class="mb-monitor-overview-main">
-							<strong class="mb-kpi-value" id="cmx-monitor-overview-profit"><?php echo \esc_html(\number_format($selected_profit_total, 2, '.', '\'')); ?></strong>
+							<strong class="mb-kpi-value"><span class="mb-monitor-overview-indicator" id="cmx-monitor-overview-profit-indicator"></span><span id="cmx-monitor-overview-profit"><?php echo \esc_html(\number_format($selected_profit_total, 2, '.', '\'')); ?></span></strong>
 							<span class="mb-kpi-label">Deckungsbeitrag / Gewinn</span>
 						</div>
 						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-profit-compare-box" hidden>
@@ -1055,7 +1074,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
 					<div class="mb-monitor-overview-top">
 						<div class="mb-monitor-overview-main">
-							<strong class="mb-kpi-value" id="cmx-monitor-overview-margin"><?php echo \esc_html(\number_format($selected_margin_total, 2, '.', '\'')); ?>%</strong>
+							<strong class="mb-kpi-value"><span class="mb-monitor-overview-indicator" id="cmx-monitor-overview-margin-indicator"></span><span id="cmx-monitor-overview-margin"><?php echo \esc_html(\number_format($selected_margin_total, 2, '.', '\'')); ?>%</span></strong>
 							<span class="mb-kpi-label">Marge in %</span>
 						</div>
 						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-margin-compare-box" hidden>
@@ -1144,6 +1163,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
 			var overviewMarginEl = document.getElementById("cmx-monitor-overview-margin");
+			var overviewTotalIndicatorEl = document.getElementById("cmx-monitor-overview-total-indicator");
+			var overviewCostIndicatorEl = document.getElementById("cmx-monitor-overview-cost-indicator");
+			var overviewProfitIndicatorEl = document.getElementById("cmx-monitor-overview-profit-indicator");
+			var overviewMarginIndicatorEl = document.getElementById("cmx-monitor-overview-margin-indicator");
 			var overviewTotalCompareBoxEl = document.getElementById("cmx-monitor-overview-total-compare-box");
 			var overviewTotalCompareYearEl = document.getElementById("cmx-monitor-overview-total-compare-year");
 			var overviewTotalCompareEl = document.getElementById("cmx-monitor-overview-total-compare");
@@ -1479,6 +1502,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedTypeLabel = typeLabelFor(selectedType);
 				var revenueSeries = Array.isArray(getSeriesForYear(selectedYear, selectedType)) ? getSeriesForYear(selectedYear, selectedType).slice() : [];
 				var costSeries = Array.isArray(getCostSeriesForYear(selectedYear, selectedType)) ? getCostSeriesForYear(selectedYear, selectedType).slice() : [];
+				var indicatorCompareYear = compareYearFor(selectedYear, selectedType);
+				var indicatorRevenueSeries = indicatorCompareYear ? (Array.isArray(getSeriesForYear(indicatorCompareYear, selectedType)) ? getSeriesForYear(indicatorCompareYear, selectedType).slice() : []) : [];
+				var indicatorCostSeries = indicatorCompareYear ? (Array.isArray(getCostSeriesForYear(indicatorCompareYear, selectedType)) ? getCostSeriesForYear(indicatorCompareYear, selectedType).slice() : []) : [];
 				var compareYear = filters.compare ? compareYearFor(selectedYear, selectedType) : "";
 				var compareRevenueSeries = compareYear ? (Array.isArray(getSeriesForYear(compareYear, selectedType)) ? getSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var compareCostSeries = compareYear ? (Array.isArray(getCostSeriesForYear(compareYear, selectedType)) ? getCostSeriesForYear(compareYear, selectedType).slice() : []) : [];
@@ -1496,6 +1522,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					labels = rangeLabelsForMonth(totalDays);
 					revenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
 					costSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+					indicatorRevenueSeries = indicatorCompareYear ? getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+					indicatorCostSeries = indicatorCompareYear ? getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 					compareRevenueSeries = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 					compareCostSeries = compareYear ? getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 					selectedCount = getCountForMonth(selectedYear, monthNumber, selectedType) || countSeries(revenueSeries);
@@ -1518,6 +1546,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					costSeries = quarterMonths.map(function(monthNumber){
 						return Number(costSeries[monthNumber - 1] || 0);
 					});
+					indicatorRevenueSeries = quarterMonths.map(function(monthNumber){
+						return Number(indicatorRevenueSeries[monthNumber - 1] || 0);
+					});
+					indicatorCostSeries = quarterMonths.map(function(monthNumber){
+						return Number(indicatorCostSeries[monthNumber - 1] || 0);
+					});
 					compareRevenueSeries = quarterMonths.map(function(monthNumber){
 						return Number(compareRevenueSeries[monthNumber - 1] || 0);
 					});
@@ -1535,9 +1569,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					labels: labels,
 					selectedYear: selectedYear,
 					compareYear: compareYear,
+					indicatorCompareYear: indicatorCompareYear,
 					selectedTypeLabel: selectedTypeLabel,
 					revenueSeries: revenueSeries,
 					costSeries: costSeries,
+					indicatorRevenueSeries: indicatorRevenueSeries,
+					indicatorCostSeries: indicatorCostSeries,
 					compareRevenueSeries: compareRevenueSeries,
 					compareCostSeries: compareCostSeries,
 					selectedCount: selectedCount,
@@ -1754,6 +1791,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var costTotal = sumSeries(context.costSeries);
 				var profitTotal = revenueTotal - costTotal;
 				var marginTotal = revenueTotal !== 0 ? ((profitTotal / revenueTotal) * 100) : 0;
+				var indicatorRevenueTotal = sumSeries(context.indicatorRevenueSeries);
+				var indicatorCostTotal = sumSeries(context.indicatorCostSeries);
+				var indicatorProfitTotal = indicatorRevenueTotal - indicatorCostTotal;
+				var indicatorMarginTotal = indicatorRevenueTotal !== 0 ? ((indicatorProfitTotal / indicatorRevenueTotal) * 100) : 0;
+				var indicatorCompareYear = String(context.indicatorCompareYear || "");
 				var compareRevenueTotal = sumSeries(context.compareRevenueSeries);
 				var compareCostTotal = sumSeries(context.compareCostSeries);
 				var compareProfitTotal = compareRevenueTotal - compareCostTotal;
@@ -1764,6 +1806,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				if (overviewCostEl) overviewCostEl.textContent = formatNumber(costTotal);
 				if (overviewProfitEl) overviewProfitEl.textContent = formatNumber(profitTotal);
 				if (overviewMarginEl) overviewMarginEl.textContent = formatPercent(marginTotal);
+
+				var setIndicator = function(indicatorEl, yearText, deltaValue){
+					if (!indicatorEl) return;
+					indicatorEl.classList.remove("is-up", "is-down");
+					if (!yearText || Number(deltaValue) === 0) {
+						return;
+					}
+					indicatorEl.classList.add(Number(deltaValue) > 0 ? "is-up" : "is-down");
+				};
 
 				var setCompareMeta = function(boxEl, yearEl, valueEl, deltaEl, yearText, compareValue, deltaValue, isPercent){
 					if (!boxEl || !yearEl || !valueEl || !deltaEl) return;
@@ -1831,6 +1882,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					marginTotal - compareMarginTotal,
 					true
 				);
+				setIndicator(overviewTotalIndicatorEl, indicatorCompareYear, revenueTotal - indicatorRevenueTotal);
+				setIndicator(overviewCostIndicatorEl, indicatorCompareYear, costTotal - indicatorCostTotal);
+				setIndicator(overviewProfitIndicatorEl, indicatorCompareYear, profitTotal - indicatorProfitTotal);
+				setIndicator(overviewMarginIndicatorEl, indicatorCompareYear, marginTotal - indicatorMarginTotal);
 			};
 			var updateMainChart = function(context){
 				var datasets = [
