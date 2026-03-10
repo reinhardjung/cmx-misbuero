@@ -164,7 +164,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_decimal')) {
 }
 
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
-	function cmx_cockpit_beleg_amount_tooltip(int $post_id): string {
+	function cmx_cockpit_beleg_amount_display(int $post_id): string {
 		$total = null;
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
@@ -183,16 +183,21 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
 			return '';
 		}
 
-		$formatted = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+		return \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 			? (string) cmx_format_swiss_number((float) $total, 2)
 			: \number_format((float) $total, 2, '.', "'");
-
-		return 'Betrag: CHF ' . $formatted;
 	}
 }
 
-if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_tooltip')) {
-	function cmx_cockpit_beleg_type_tooltip(int $post_id): string {
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
+	function cmx_cockpit_beleg_amount_tooltip(int $post_id): string {
+		$formatted = cmx_cockpit_beleg_amount_display($post_id);
+		return $formatted !== '' ? ('Betrag: CHF ' . $formatted) : '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_label')) {
+	function cmx_cockpit_beleg_type_label(int $post_id): string {
 		$type_label = '';
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_raw_type')) {
@@ -222,7 +227,41 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_tooltip')) {
 			}
 		}
 
+		return $type_label;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_tooltip')) {
+	function cmx_cockpit_beleg_type_tooltip(int $post_id): string {
+		$type_label = cmx_cockpit_beleg_type_label($post_id);
 		return $type_label !== '' ? ('Belegtyp: ' . $type_label) : '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_direction_label')) {
+	function cmx_cockpit_beleg_direction_label(int $post_id): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_richtung_short_label')) {
+			$label = (string) cmx_beleg_admin_richtung_short_label($post_id);
+			if ($label !== '') {
+				return \function_exists('mb_strtolower')
+					? (string) \mb_strtolower($label, 'UTF-8')
+					: \strtolower($label);
+			}
+		}
+
+		$raw = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_richtung')) {
+			$raw = (string) cmxbu_beleg_export_normalize_richtung($raw);
+		}
+
+		if ($raw === 'ausgang') {
+			return 'ausgang';
+		}
+		if ($raw === 'eingang') {
+			return 'eingang';
+		}
+
+		return '';
 	}
 }
 
@@ -339,9 +378,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				$title = '#' . $post_id;
 			}
 
-				$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
-				$amount_tooltip = cmx_cockpit_beleg_amount_tooltip($post_id);
-				$type_tooltip = cmx_cockpit_beleg_type_tooltip($post_id);
+					$kontakt_data = cmx_cockpit_beleg_kontakt_data($post_id);
+					$amount_tooltip = cmx_cockpit_beleg_amount_tooltip($post_id);
+					$amount_display = cmx_cockpit_beleg_amount_display($post_id);
+					$type_label = cmx_cockpit_beleg_type_label($post_id);
+					$direction_label = cmx_cockpit_beleg_direction_label($post_id);
+					$type_tooltip = $type_label !== '' ? ('Belegtyp: ' . $type_label) : '';
+					$group_label = $type_label !== '' ? $type_label : 'Ohne Belegtyp';
+					if ($direction_label !== '') {
+						$group_label .= ' / ' . $direction_label;
+					}
 
 				$rows[] = [
 					'id'       => $post_id,
@@ -351,11 +397,15 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				'due_sort' => $due_sort,
 					'due_ts'   => $due_ts,
 					'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
-					'edit_url' => (string) \get_edit_post_link($post_id, ''),
-					'amount_tooltip' => $amount_tooltip,
-					'type_tooltip' => $type_tooltip,
-				];
-			}
+						'edit_url' => (string) \get_edit_post_link($post_id, ''),
+						'amount_tooltip' => $amount_tooltip,
+						'amount_display' => $amount_display,
+						'type_label' => $type_label,
+						'direction_label' => $direction_label,
+						'group_label' => $group_label,
+						'type_tooltip' => $type_tooltip,
+					];
+				}
 
 		\usort($rows, static function (array $a, array $b): int {
 			$cmp = ((int) ($a['due_sort'] ?? PHP_INT_MAX)) <=> ((int) ($b['due_sort'] ?? PHP_INT_MAX));
@@ -409,63 +459,110 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		return;
 	}
 
-	echo '<style>
-		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:inline-block;white-space:nowrap;text-decoration:none}
-		#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
-		#cmx_rechnungen_faellig_widget .cmx-faellig-table{width:100%;border-collapse:collapse;table-layout:fixed}
-		#cmx_rechnungen_faellig_widget .cmx-faellig-contact,
-		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{text-decoration:none}
-		#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link:hover{text-decoration:underline}
-	</style>';
-	echo '<table class="cmx-faellig-table">';
-	echo '<thead><tr>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;width:108px;">Beleg</th>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;white-space:nowrap;width:78px;">Fällig am</th>';
-	echo '<th style="text-align:left;padding:0 0 6px 0;">Kontakt</th>';
-	// echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
-	echo '<th style="text-align:center;padding:0 0 6px 0;width:28px;" title="Als bezahlt markieren"><span style="font-size:16px;line-height:16px;width:16px;height:16px;"></span></th>';
-	echo '</tr></thead><tbody>';
-	foreach ($items as $row) {
-		$post_id = (int) ($row['id'] ?? 0);
-			$title   = (string) ($row['title'] ?? ('#' . $post_id));
-			$due     = (string) ($row['due_date'] ?? '');
+		echo '<style>
+			#cmx_rechnungen_faellig_widget .cmx-faellig-title-link{display:block;white-space:nowrap;text-decoration:none;overflow:hidden;text-overflow:ellipsis}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-title-link:hover{text-decoration:underline}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-table{width:100%;border-collapse:collapse;table-layout:fixed}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-title-cell{overflow:hidden}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-title-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-cell{text-align:right}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-wrap{position:relative;display:inline-block}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-btn{cursor:pointer;border:1px solid #dcdcde;background:#f6f7f7;border-radius:4px;padding:2px 8px;line-height:1.4;font-weight:600;color:#1d2327}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-btn:hover{border-color:#2271b1;color:#2271b1;background:#fff}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-pay-date{position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;border:0;padding:0;margin:0}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-group-row td{padding:8px 0 4px;font-size:11px;font-weight:700;color:#646970;letter-spacing:.04em}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-group-type{text-transform:uppercase}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-group-direction{text-transform:none}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-contact,
+			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{text-decoration:none}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link:hover{text-decoration:underline}
+		</style>';
+		echo '<table class="cmx-faellig-table">';
+		echo '<colgroup>';
+		echo '<col style="width:118px;">';
+		echo '<col style="width:86px;">';
+		echo '<col>';
+		echo '<col style="width:88px;">';
+		echo '</colgroup>';
+		echo '<tbody>';
+		$grouped_items = [];
+			foreach ($items as $row) {
+				$type_label = \trim((string) ($row['type_label'] ?? ''));
+				if ($type_label === '') {
+					$type_label = 'Ohne Belegtyp';
+				}
+				$direction_label = \trim((string) ($row['direction_label'] ?? ''));
+				$group_key = $type_label . '|' . $direction_label;
+			if (!isset($grouped_items[$group_key])) {
+				$grouped_items[$group_key] = [
+					'type_label' => $type_label,
+					'direction_label' => $direction_label,
+					'rows' => [],
+				];
+			}
+			$grouped_items[$group_key]['rows'][] = $row;
+		}
+
+		foreach ($grouped_items as $group) {
+			$group = (array) $group;
+			$group_type = (string) ($group['type_label'] ?? '');
+			$group_direction = (string) ($group['direction_label'] ?? '');
+			$group_rows = (array) ($group['rows'] ?? []);
+			echo '<tr class="cmx-faellig-group-row"><td colspan="4">';
+			echo '<span class="cmx-faellig-group-type">' . \esc_html($group_type) . '</span>';
+			if ($group_direction !== '') {
+				echo ' / <span class="cmx-faellig-group-direction">' . \esc_html($group_direction) . '</span>';
+			}
+			echo '</td></tr>';
+			foreach ($group_rows as $row) {
+				$post_id = (int) ($row['id'] ?? 0);
+				$title   = (string) ($row['title'] ?? ('#' . $post_id));
+				$due     = (string) ($row['due_date'] ?? '');
 				$kontakt = (string) ($row['kontakt'] ?? '');
 				$kontakt_url = (string) ($row['kontakt_url'] ?? '');
-				$edit    = (string) ($row['edit_url'] ?? '');
-				$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
-				$type_tooltip = (string) ($row['type_tooltip'] ?? '');
+					$edit    = (string) ($row['edit_url'] ?? '');
+					$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
+					$amount_display = (string) ($row['amount_display'] ?? '');
+					$type_tooltip = (string) ($row['type_tooltip'] ?? '');
+					if ($amount_display === '' && $amount_tooltip !== '') {
+						$amount_display = (string) \str_replace('Betrag: CHF ', '', $amount_tooltip);
+					}
 
-			echo '<tr>';
-			echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
-			if ($edit !== '') {
-				$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
-				echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
-			} else {
-				$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
-				echo '<span' . $title_attr . '>' . \esc_html($title) . '</span>';
-			}
-		echo '</td>';
-		$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
-		echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;"' . $due_attr . '>' . \esc_html($due) . '</td>';
-			echo '<td style="padding:4px 0;vertical-align:top;">';
-			$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
-			if ($kontakt !== '' && $kontakt_url !== '') {
-				echo '<a class="cmx-faellig-contact-link" href="' . \esc_url($kontakt_url) . '"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</a>';
-			} else {
-				echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
+				echo '<tr>';
+					echo '<td class="cmx-faellig-title-cell" style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
+					if ($edit !== '') {
+						$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
+						echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
+					} else {
+						$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
+						echo '<span class="cmx-faellig-title-text"' . $title_attr . '>' . \esc_html($title) . '</span>';
+					}
+					echo '</td>';
+					$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+					echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;"' . $due_attr . '>' . \esc_html($due) . '</td>';
+				echo '<td style="padding:4px 0;vertical-align:top;">';
+				$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
+				if ($kontakt !== '' && $kontakt_url !== '') {
+					echo '<a class="cmx-faellig-contact-link" href="' . \esc_url($kontakt_url) . '"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</a>';
+				} else {
+					echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
 				}
-				echo '</td>';
-			echo '<td style="padding:4px 0;vertical-align:top;text-align:center;">';
-			if ($post_id > 0) {
-				echo '<button type="button" class="cmx-faellig-mark-paid" data-beleg="' . (int) $post_id . '" title="Als bezahlt markieren" aria-label="Als bezahlt markieren" style="cursor:pointer;border:0;background:transparent;padding:0;line-height:1;">';
-				echo '<span class="dashicons dashicons-money-alt" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span>';
-				echo '</button>';
-			}
-			echo '</td>';
+					echo '</td>';
+					echo '<td class="cmx-faellig-pay-cell" style="padding:4px 0;vertical-align:top;">';
+					if ($post_id > 0) {
+						echo '<span class="cmx-faellig-pay-wrap">';
+						echo '<button type="button" class="cmx-faellig-mark-paid cmx-faellig-pay-btn" data-beleg="' . (int) $post_id . '" title="Bezahlt am wählen" aria-label="Bezahlt am wählen">';
+						echo \esc_html($amount_display);
+						echo '</button>';
+						echo '<input type="date" class="cmx-faellig-pay-date" data-beleg="' . (int) $post_id . '" aria-label="Bezahlt am wählen">';
+						echo '</span>';
+					}
+					echo '</td>';
 				echo '</tr>';
 			}
-	echo '</tbody></table>';
+		}
+		echo '</tbody></table>';
 
 	if ($total > \count($items)) {
 		echo '<p style="margin:8px 0 0; color:#666;">+' . \esc_html((string) ($total - \count($items))) . ' weitere.</p>';
@@ -485,9 +582,9 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	$paid_nonce = \wp_create_nonce('cmx_mark_paid');
 	$ajax_url = \admin_url('admin-ajax.php');
 	?>
-	<script>
-	(function(){
-		var box = document.getElementById('cmx_rechnungen_faellig_widget');
+		<script>
+		(function(){
+			var box = document.getElementById('cmx_rechnungen_faellig_widget');
 		if (!box) return;
 		var hndle = box.querySelector('.hndle, .postbox-header h2');
 		if (!hndle) return;
@@ -499,24 +596,14 @@ function cmx_render_rechnungen_faellig_widget(): void {
 			window.location.href = <?php echo \wp_json_encode($list_url); ?>;
 		});
 
-		document.addEventListener('click', function(e){
-			var btn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-mark-paid') : null;
-			if (!btn) return;
-			e.preventDefault();
-			e.stopPropagation();
+			function submitPaidDate(belegId, paidDate, btn){
+				var body = new URLSearchParams();
+				body.set('action', 'cmx_mark_beleg_paid');
+				body.set('post_id', String(belegId));
+				body.set('paid_date', paidDate);
+				body.set('_ajax_nonce', <?php echo \wp_json_encode($paid_nonce); ?>);
 
-			var belegId = parseInt(btn.getAttribute('data-beleg') || '0', 10);
-			if (!belegId || btn.dataset.loading === '1') return;
-
-			btn.dataset.loading = '1';
-			btn.disabled = true;
-
-			var body = new URLSearchParams();
-			body.set('action', 'cmx_mark_beleg_paid');
-			body.set('post_id', String(belegId));
-			body.set('_ajax_nonce', <?php echo \wp_json_encode($paid_nonce); ?>);
-
-			fetch(<?php echo \wp_json_encode($ajax_url); ?>, {
+				fetch(<?php echo \wp_json_encode($ajax_url); ?>, {
 				method: 'POST',
 				credentials: 'same-origin',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
@@ -529,13 +616,52 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					return;
 				}
 				throw new Error((resp && resp.data) ? String(resp.data) : 'Fehler beim Speichern.');
-			}).catch(function(err){
-				alert(err && err.message ? err.message : 'Fehler beim Speichern.');
-				btn.dataset.loading = '';
-				btn.disabled = false;
+				}).catch(function(err){
+					alert(err && err.message ? err.message : 'Fehler beim Speichern.');
+					btn.dataset.loading = '';
+					btn.disabled = false;
+				});
+			}
+
+			document.addEventListener('click', function(e){
+				var btn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-mark-paid') : null;
+				if (!btn) return;
+				e.preventDefault();
+				e.stopPropagation();
+
+				var wrap = btn.closest('.cmx-faellig-pay-wrap');
+				var input = wrap ? wrap.querySelector('.cmx-faellig-pay-date') : null;
+				if (!input) return;
+
+				var now = new Date();
+				var month = String(now.getMonth() + 1).padStart(2, '0');
+				var day = String(now.getDate()).padStart(2, '0');
+				input.value = input.value || (String(now.getFullYear()) + '-' + month + '-' + day);
+
+				if (typeof input.showPicker === 'function') {
+					input.showPicker();
+					return;
+				}
+
+				input.focus();
+				input.click();
 			});
-		});
-	})();
-	</script>
+
+			document.addEventListener('change', function(e){
+				var input = e.target && e.target.closest ? e.target.closest('.cmx-faellig-pay-date') : null;
+				if (!input) return;
+
+				var belegId = parseInt(input.getAttribute('data-beleg') || '0', 10);
+				var paidDate = String(input.value || '');
+				var wrap = input.closest('.cmx-faellig-pay-wrap');
+				var btn = wrap ? wrap.querySelector('.cmx-faellig-mark-paid') : null;
+				if (!belegId || !btn || btn.dataset.loading === '1' || !/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) return;
+
+				btn.dataset.loading = '1';
+				btn.disabled = true;
+				submitPaidDate(belegId, paidDate, btn);
+			});
+		})();
+		</script>
 	<?php
 });

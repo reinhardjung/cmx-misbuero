@@ -22,48 +22,68 @@ function cmx_render_cpt_count_widget() {
 	}
 
 	echo '<style>
-		.cmx-cpt-table{width:100%;border-collapse:collapse}
-		.cmx-cpt-table th,.cmx-cpt-table td{padding:5px 10px;text-align:left;vertical-align:middle;font-size:14px}
-		.cmx-cpt-table th{font-weight:600}
-		.cmx-cpt-table td.summe, th.summe { text-align:right; }
-		.cmx-cpt-table th.add, .cmx-cpt-table td.add { width:58px; text-align:center; }
-		.cmx-cpt-module-link{font-weight:700;text-decoration:none}
-		.cmx-cpt-module-link:hover{text-decoration:underline}
-
-		/* Zeilen-Hover-Highlight, damit klar ist, wo das Plus geklickt wird */
-		.cmx-cpt-table tbody tr{ transition: background-color .15s ease, box-shadow .15s ease; }
-		.cmx-cpt-table tbody tr:hover{
-			background:#f3f8ff;
-			box-shadow: inset 0 0 0 2px rgba(34,113,177,.15);
+		.cmx-cpt-table{width:100%;border-collapse:collapse;table-layout:fixed}
+		.cmx-cpt-table td{padding:6px 10px;text-align:left;vertical-align:middle;font-size:14px;border:0}
+		.cmx-cpt-table td.summe{text-align:right;width:68px}
+		.cmx-cpt-table td.add{width:42px;text-align:right;padding-right:4px}
+		.cmx-cpt-module-link{
+			display:inline-block;
+			font-weight:700;
+			font-size:15px;
+			line-height:1.2;
+			color:#135eaf;
+			text-decoration:none;
 		}
-
-		/* Hübscher "Neu"-Button mit echtem SVG-Icon + Tooltip per CSS */
+		.cmx-cpt-module-link:hover{text-decoration:underline}
+		.cmx-cpt-count-pill{
+			display:inline-flex;
+			align-items:center;
+			justify-content:center;
+			min-width:30px;
+			padding:2px 8px;
+			border-radius:999px;
+			background:#eef4fb;
+			color:#264b6f;
+			font-weight:700;
+			font-size:13px;
+			line-height:1.2;
+		}
+		.cmx-cpt-table tbody tr{transition:background-color .15s ease}
+		.cmx-cpt-table tbody tr:hover{background:#f7fbff}
+		.cmx-cpt-table tbody tr:hover .cmx-cpt-count-pill{
+			background:#e4eef9;
+			color:#135eaf;
+		}
 		.cmx-add-link{
 			position:relative;
-			display:inline-flex; align-items:center; justify-content:center;
-			width:34px; height:34px; border-radius:8px;
-			background: linear-gradient(#fefefe, #f6f7f7);
-			border:1px solid #dcdcde;
-			box-shadow: 0 1px 0 rgba(0,0,0,.02);
-			color:#1d2327; text-decoration:none;
-			transition: all .15s ease;
+			display:inline-flex;
+			align-items:center;
+			justify-content:center;
+			width:30px;
+			height:30px;
+			border-radius:8px;
+			background:#f7fafc;
+			border:1px solid #d7e2ee;
+			box-shadow:0 1px 3px rgba(18,52,86,.05);
+			color:#30587a;
+			text-decoration:none;
+			transition:all .15s ease;
 		}
 		.cmx-add-link:hover{
-			background:#fff; border-color:#2271b1; color:#2271b1;
-			box-shadow: 0 2px 4px rgba(0,0,0,.05);
+			background:#eef6ff;
+			border-color:#9fbddd;
+			color:#135eaf;
 		}
-		.cmx-add-link:active{ transform: translateY(1px); }
-		.cmx-add-link svg{ width:18px; height:18px; display:block; fill:currentColor; }
-		.cmx-add-link.is-disabled{ opacity:.45; cursor:not-allowed; }
-
-		/* Tooltip (MouseOver) zeigt, für welches Modul geklickt wird */
+		.cmx-add-link:active{transform:translateY(1px)}
+		.cmx-add-link svg{width:16px;height:16px;display:block;fill:currentColor}
+		.cmx-add-link.is-disabled{opacity:.45;cursor:not-allowed}
 		.cmx-add-link[data-tip]:hover::after{
 			content: attr(data-tip);
 			position:absolute;
-			bottom: 110%;
-			left: 50%;
-			transform: translateX(-50%);
-			white-space: nowrap;
+			bottom:110%;
+			left:50%;
+			transform:translateX(-50%);
+			white-space:nowrap;
 			background:#1d2327;
 			color:#fff;
 			padding:4px 8px;
@@ -75,9 +95,9 @@ function cmx_render_cpt_count_widget() {
 		.cmx-add-link[data-tip]:hover::before{
 			content:"";
 			position:absolute;
-			bottom: 100%;
-			left: 50%;
-			transform: translateX(-50%);
+			bottom:100%;
+			left:50%;
+			transform:translateX(-50%);
 			border:6px solid transparent;
 			border-top-color:#1d2327;
 		}
@@ -100,7 +120,7 @@ function cmx_render_cpt_count_widget() {
 
 		echo '<tr>';
 		echo '<td><a class="cmx-cpt-module-link" href="' . esc_url($list_url) . '">' . esc_html($label) . '</a></td>';
-		echo '<td class="summe" style="padding-right:15px;">' . esc_html(cmx_format_swiss_number($count, 0)) . '</td>';
+		echo '<td class="summe" style="padding-right:15px;"><span class="cmx-cpt-count-pill">' . esc_html(cmx_format_swiss_number($count, 0)) . '</span></td>';
 
 		echo '<td class="add">';
 		$svg_plus = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">

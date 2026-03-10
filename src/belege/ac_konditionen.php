@@ -789,7 +789,7 @@ add_action('admin_footer-edit.php', function () {
 	<?php
 });
 
-// AJAX: Beleg als bezahlt markieren (heutiges Datum)
+// AJAX: Beleg als bezahlt markieren (ausgewaehltes Datum oder heutiges Datum)
 add_action('wp_ajax_cmx_mark_beleg_paid', function() {
 	if (!current_user_can('edit_posts')) {
 		wp_send_json_error('forbidden', 403);
@@ -801,8 +801,11 @@ add_action('wp_ajax_cmx_mark_beleg_paid', function() {
 		wp_send_json_error('invalid');
 	}
 
-	$today = gmdate('Y-m-d', current_time('timestamp'));
-	update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $today);
+	$paid_date = isset($_POST['paid_date']) ? (string) $_POST['paid_date'] : '';
+	$paid_date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $paid_date)
+		? $paid_date
+		: gmdate('Y-m-d', current_time('timestamp'));
+	update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $paid_date);
 
 	wp_send_json_success();
 });

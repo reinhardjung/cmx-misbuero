@@ -492,7 +492,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_register_overview_revenue_widget'))
 	function cmx_register_overview_revenue_widget(): void {
 		\wp_add_dashboard_widget(
 			'cmx_overview_revenue_widget',
-			'Umsatz Übersicht',
+			'Übersicht',
 			__NAMESPACE__ . '\\cmx_render_overview_revenue_widget'
 		);
 	}
