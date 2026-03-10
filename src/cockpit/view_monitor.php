@@ -655,37 +655,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						return "";
 				}
 			};
-			var hasDataForYear = function(year){
-				return !!(payload.counts && Number(payload.counts[String(year || "")] || 0) > 0);
+			var countForQuarter = function(year, quarter){
+				return sumIntegerSeries(getQuarterMonths(quarter).map(function(monthNumber){
+					return payload.counts_monthly && payload.counts_monthly[String(year || "")] && payload.counts_monthly[String(year || "")][monthNumber]
+						? payload.counts_monthly[String(year || "")][monthNumber]
+						: 0;
+				}));
 			};
-			var hasDataForMonth = function(year, monthNumber){
-				return !!(
-					payload.counts_monthly &&
-					payload.counts_monthly[String(year || "")] &&
-					Number(payload.counts_monthly[String(year || "")][Number(monthNumber || 0)] || 0) > 0
-				);
+			var formatOptionLabel = function(label, count){
+				var normalizedCount = Number(count || 0);
+				return normalizedCount > 0 ? (String(label) + " (" + normalizedCount + ")") : String(label);
 			};
-			var hasDataForQuarter = function(year, quarter){
-				return getQuarterMonths(quarter).some(function(monthNumber){
-					return hasDataForMonth(year, monthNumber);
-				});
-			};
-			var setOptionWeight = function(option, isBold){
-				option.style.fontWeight = isBold ? "700" : "400";
-			};
-			var updateYearOptionWeights = function(){
+			var updateYearOptions = function(){
 				Array.prototype.forEach.call(yearSelect.options, function(option){
-					setOptionWeight(option, hasDataForYear(option.value));
+					var year = String(option.value || "");
+					var count = payload.counts && payload.counts[year] ? payload.counts[year] : 0;
+					option.textContent = formatOptionLabel(year, count);
 				});
 			};
-			var updateQuarterOptionWeights = function(){
+			var updateQuarterOptions = function(){
 				var selectedYear = String(yearSelect.value || "");
 				Array.prototype.forEach.call(quarterSelect.options, function(option){
 					if (option.value === "all") {
-						setOptionWeight(option, hasDataForYear(selectedYear));
+						option.textContent = formatOptionLabel("alle Quartale", payload.counts && payload.counts[selectedYear] ? payload.counts[selectedYear] : 0);
 						return;
 					}
-					setOptionWeight(option, hasDataForQuarter(selectedYear, option.value));
+					option.textContent = formatOptionLabel(quarterLabelFor(option.value), countForQuarter(selectedYear, option.value));
 				});
 			};
 			var updateMonthOptions = function(){
@@ -696,19 +691,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 				var allOption = document.createElement("option");
 				allOption.value = "all";
-				allOption.textContent = "alle Monate";
-				setOptionWeight(allOption, allowedMonths.some(function(monthNumber){
-					return hasDataForMonth(selectedYear, monthNumber);
-				}));
+				allOption.textContent = formatOptionLabel("alle Monate", sumIntegerSeries(allowedMonths.map(function(monthNumber){
+					return payload.counts_monthly && payload.counts_monthly[selectedYear] && payload.counts_monthly[selectedYear][monthNumber]
+						? payload.counts_monthly[selectedYear][monthNumber]
+						: 0;
+				})));
 				monthSelect.appendChild(allOption);
 
 				allowedMonths.forEach(function(monthNumber){
 					var option = document.createElement("option");
 					option.value = String(monthNumber);
-					option.textContent = Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
+					var monthLabel = Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
 						? payload.labels[monthNumber - 1]
 						: String(monthNumber);
-					setOptionWeight(option, hasDataForMonth(selectedYear, monthNumber));
+					var monthCount = payload.counts_monthly && payload.counts_monthly[selectedYear] && payload.counts_monthly[selectedYear][monthNumber]
+						? payload.counts_monthly[selectedYear][monthNumber]
+						: 0;
+					option.textContent = formatOptionLabel(monthLabel, monthCount);
 					monthSelect.appendChild(option);
 				});
 
@@ -913,7 +912,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			};
 
 			yearSelect.addEventListener("change", function(){
-				updateQuarterOptionWeights();
+				quarterSelect.value = "all";
+				monthSelect.value = "all";
+				updateQuarterOptions();
 				updateMonthOptions();
 				updateChart();
 				emitFiltersChanged();
@@ -931,8 +932,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateChart();
 				emitFiltersChanged();
 			});
-			updateYearOptionWeights();
-			updateQuarterOptionWeights();
+			updateYearOptions();
+			updateQuarterOptions();
 			updateMonthOptions();
 			updateChart();
 			emitFiltersChanged();
