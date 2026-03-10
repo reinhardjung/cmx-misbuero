@@ -178,8 +178,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			.mb-monitor-overview-card{
 				min-height:122px;
 			}
+			.mb-monitor-overview-top{
+				display:flex;
+				align-items:flex-start;
+				justify-content:space-between;
+				gap:14px;
+			}
+			.mb-monitor-overview-main{
+				min-width:0;
+				flex:1 1 auto;
+			}
 			.mb-monitor-overview-card .mb-kpi-value{
 				font-size:28px;
+			}
+			.mb-monitor-overview-compare{
+				display:none;
+				flex:0 0 auto;
+				min-width:108px;
+				text-align:right;
+			}
+			.mb-monitor-overview-compare.is-active{
+				display:block;
+			}
+			.mb-monitor-overview-compare-year{
+				display:block;
+				font-size:11px;
+				line-height:1.1;
+				color:#98a2b3;
+				text-transform:uppercase;
+				letter-spacing:.04em;
+			}
+			.mb-monitor-overview-compare-value{
+				display:block;
+				margin-top:4px;
+				font-size:15px;
+				line-height:1.15;
+				font-weight:700;
+				color:#344054;
+			}
+			.mb-monitor-overview-delta{
+				display:block;
+				margin-top:4px;
+				font-size:12px;
+				line-height:1.15;
+				color:#667085;
+			}
+			.mb-monitor-overview-delta.is-positive{
+				color:#166534;
+			}
+			.mb-monitor-overview-delta.is-negative{
+				color:#b42318;
 			}
 			.mb-monitor-chart-intro{
 				margin:-2px 0 12px;
@@ -969,20 +1017,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
-					<strong class="mb-kpi-value" id="cmx-monitor-overview-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></strong>
-					<span class="mb-kpi-label">Umsatz</span>
+					<div class="mb-monitor-overview-top">
+						<div class="mb-monitor-overview-main">
+							<strong class="mb-kpi-value" id="cmx-monitor-overview-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></strong>
+							<span class="mb-kpi-label">Umsatz</span>
+						</div>
+						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-total-compare-box" hidden>
+							<span class="mb-monitor-overview-compare-year" id="cmx-monitor-overview-total-compare-year"></span>
+							<strong class="mb-monitor-overview-compare-value" id="cmx-monitor-overview-total-compare"></strong>
+							<span class="mb-monitor-overview-delta" id="cmx-monitor-overview-total-delta"></span>
+						</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
-					<strong class="mb-kpi-value" id="cmx-monitor-overview-cost"><?php echo \esc_html(\number_format($selected_cost_total, 2, '.', '\'')); ?></strong>
-					<span class="mb-kpi-label">Aufwand / Einkauf</span>
+					<div class="mb-monitor-overview-top">
+						<div class="mb-monitor-overview-main">
+							<strong class="mb-kpi-value" id="cmx-monitor-overview-cost"><?php echo \esc_html(\number_format($selected_cost_total, 2, '.', '\'')); ?></strong>
+							<span class="mb-kpi-label">Aufwand / Einkauf</span>
+						</div>
+						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-cost-compare-box" hidden>
+							<span class="mb-monitor-overview-compare-year" id="cmx-monitor-overview-cost-compare-year"></span>
+							<strong class="mb-monitor-overview-compare-value" id="cmx-monitor-overview-cost-compare"></strong>
+							<span class="mb-monitor-overview-delta" id="cmx-monitor-overview-cost-delta"></span>
+						</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
-					<strong class="mb-kpi-value" id="cmx-monitor-overview-profit"><?php echo \esc_html(\number_format($selected_profit_total, 2, '.', '\'')); ?></strong>
-					<span class="mb-kpi-label">Deckungsbeitrag / Gewinn</span>
+					<div class="mb-monitor-overview-top">
+						<div class="mb-monitor-overview-main">
+							<strong class="mb-kpi-value" id="cmx-monitor-overview-profit"><?php echo \esc_html(\number_format($selected_profit_total, 2, '.', '\'')); ?></strong>
+							<span class="mb-kpi-label">Deckungsbeitrag / Gewinn</span>
+						</div>
+						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-profit-compare-box" hidden>
+							<span class="mb-monitor-overview-compare-year" id="cmx-monitor-overview-profit-compare-year"></span>
+							<strong class="mb-monitor-overview-compare-value" id="cmx-monitor-overview-profit-compare"></strong>
+							<span class="mb-monitor-overview-delta" id="cmx-monitor-overview-profit-delta"></span>
+						</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
-					<strong class="mb-kpi-value" id="cmx-monitor-overview-margin"><?php echo \esc_html(\number_format($selected_margin_total, 2, '.', '\'')); ?>%</strong>
-					<span class="mb-kpi-label">Marge in %</span>
+					<div class="mb-monitor-overview-top">
+						<div class="mb-monitor-overview-main">
+							<strong class="mb-kpi-value" id="cmx-monitor-overview-margin"><?php echo \esc_html(\number_format($selected_margin_total, 2, '.', '\'')); ?>%</strong>
+							<span class="mb-kpi-label">Marge in %</span>
+						</div>
+						<div class="mb-monitor-overview-compare" id="cmx-monitor-overview-margin-compare-box" hidden>
+							<span class="mb-monitor-overview-compare-year" id="cmx-monitor-overview-margin-compare-year"></span>
+							<strong class="mb-monitor-overview-compare-value" id="cmx-monitor-overview-margin-compare"></strong>
+							<span class="mb-monitor-overview-delta" id="cmx-monitor-overview-margin-delta"></span>
+						</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-4">
 					<h3>Aufwand vs. Umsatz</h3>
@@ -1063,6 +1147,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
 			var overviewMarginEl = document.getElementById("cmx-monitor-overview-margin");
+			var overviewTotalCompareBoxEl = document.getElementById("cmx-monitor-overview-total-compare-box");
+			var overviewTotalCompareYearEl = document.getElementById("cmx-monitor-overview-total-compare-year");
+			var overviewTotalCompareEl = document.getElementById("cmx-monitor-overview-total-compare");
+			var overviewTotalDeltaEl = document.getElementById("cmx-monitor-overview-total-delta");
+			var overviewCostCompareBoxEl = document.getElementById("cmx-monitor-overview-cost-compare-box");
+			var overviewCostCompareYearEl = document.getElementById("cmx-monitor-overview-cost-compare-year");
+			var overviewCostCompareEl = document.getElementById("cmx-monitor-overview-cost-compare");
+			var overviewCostDeltaEl = document.getElementById("cmx-monitor-overview-cost-delta");
+			var overviewProfitCompareBoxEl = document.getElementById("cmx-monitor-overview-profit-compare-box");
+			var overviewProfitCompareYearEl = document.getElementById("cmx-monitor-overview-profit-compare-year");
+			var overviewProfitCompareEl = document.getElementById("cmx-monitor-overview-profit-compare");
+			var overviewProfitDeltaEl = document.getElementById("cmx-monitor-overview-profit-delta");
+			var overviewMarginCompareBoxEl = document.getElementById("cmx-monitor-overview-margin-compare-box");
+			var overviewMarginCompareYearEl = document.getElementById("cmx-monitor-overview-margin-compare-year");
+			var overviewMarginCompareEl = document.getElementById("cmx-monitor-overview-margin-compare");
+			var overviewMarginDeltaEl = document.getElementById("cmx-monitor-overview-margin-delta");
 			var typeMeta = Array.isArray(payload.types) ? payload.types : [];
 			var formatNumber = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0));
@@ -1072,6 +1172,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			};
 			var formatPercent = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0)) + "%";
+			};
+			var formatSignedNumber = function(value){
+				var numeric = Number(value || 0);
+				return (numeric > 0 ? "+" : "") + formatNumber(numeric);
+			};
+			var formatSignedPercentPoints = function(value){
+				var numeric = Number(value || 0);
+				return (numeric > 0 ? "+" : "") + new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(numeric) + " PP";
 			};
 			var formatPercentAxis = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 0, maximumFractionDigits: 1}).format(Number(value || 0));
@@ -1649,11 +1757,83 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var costTotal = sumSeries(context.costSeries);
 				var profitTotal = revenueTotal - costTotal;
 				var marginTotal = revenueTotal !== 0 ? ((profitTotal / revenueTotal) * 100) : 0;
+				var compareRevenueTotal = sumSeries(context.compareRevenueSeries);
+				var compareCostTotal = sumSeries(context.compareCostSeries);
+				var compareProfitTotal = compareRevenueTotal - compareCostTotal;
+				var compareMarginTotal = compareRevenueTotal !== 0 ? ((compareProfitTotal / compareRevenueTotal) * 100) : 0;
+				var compareYear = String(context.compareYear || "");
 
 				if (overviewTotalEl) overviewTotalEl.textContent = formatNumber(revenueTotal);
 				if (overviewCostEl) overviewCostEl.textContent = formatNumber(costTotal);
 				if (overviewProfitEl) overviewProfitEl.textContent = formatNumber(profitTotal);
 				if (overviewMarginEl) overviewMarginEl.textContent = formatPercent(marginTotal);
+
+				var setCompareMeta = function(boxEl, yearEl, valueEl, deltaEl, yearText, compareValue, deltaValue, isPercent){
+					if (!boxEl || !yearEl || !valueEl || !deltaEl) return;
+
+					if (!yearText) {
+						boxEl.hidden = true;
+						boxEl.classList.remove("is-active");
+						yearEl.textContent = "";
+						valueEl.textContent = "";
+						deltaEl.textContent = "";
+						deltaEl.classList.remove("is-positive", "is-negative");
+						return;
+					}
+
+					boxEl.hidden = false;
+					boxEl.classList.add("is-active");
+					yearEl.textContent = yearText;
+					valueEl.textContent = isPercent ? formatPercent(compareValue) : formatNumber(compareValue);
+					deltaEl.textContent = isPercent ? formatSignedPercentPoints(deltaValue) : formatSignedNumber(deltaValue);
+					deltaEl.classList.remove("is-positive", "is-negative");
+					if (Number(deltaValue) > 0) {
+						deltaEl.classList.add("is-positive");
+					} else if (Number(deltaValue) < 0) {
+						deltaEl.classList.add("is-negative");
+					}
+				};
+
+				setCompareMeta(
+					overviewTotalCompareBoxEl,
+					overviewTotalCompareYearEl,
+					overviewTotalCompareEl,
+					overviewTotalDeltaEl,
+					compareYear,
+					compareRevenueTotal,
+					revenueTotal - compareRevenueTotal,
+					false
+				);
+				setCompareMeta(
+					overviewCostCompareBoxEl,
+					overviewCostCompareYearEl,
+					overviewCostCompareEl,
+					overviewCostDeltaEl,
+					compareYear,
+					compareCostTotal,
+					costTotal - compareCostTotal,
+					false
+				);
+				setCompareMeta(
+					overviewProfitCompareBoxEl,
+					overviewProfitCompareYearEl,
+					overviewProfitCompareEl,
+					overviewProfitDeltaEl,
+					compareYear,
+					compareProfitTotal,
+					profitTotal - compareProfitTotal,
+					false
+				);
+				setCompareMeta(
+					overviewMarginCompareBoxEl,
+					overviewMarginCompareYearEl,
+					overviewMarginCompareEl,
+					overviewMarginDeltaEl,
+					compareYear,
+					compareMarginTotal,
+					marginTotal - compareMarginTotal,
+					true
+				);
 			};
 			var updateMainChart = function(context){
 				var datasets = [
