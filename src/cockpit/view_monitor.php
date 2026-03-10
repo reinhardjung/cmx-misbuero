@@ -1011,8 +1011,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 \add_action('admin_menu', function (): void {
 	\add_dashboard_page(
-		'Monitor',
-		'Monitor',
+		'Wirtschaftlichkeit',
+		'Wirtschaftlichkeit',
 		'edit_posts',
 		cmx_cockpit_view_main_slug(),
 		__NAMESPACE__ . '\\cmx_render_view_main_page'
