@@ -254,6 +254,46 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				color:#667085;
 				font-size:13px;
 			}
+			.mb-monitor-card-head{
+				display:flex;
+				align-items:center;
+				justify-content:space-between;
+				gap:12px;
+				margin:0 0 8px;
+			}
+			.mb-monitor-card-head h3{
+				margin:0;
+			}
+			.mb-monitor-card-toggle{
+				display:inline-flex;
+				align-items:center;
+				justify-content:center;
+				width:28px;
+				height:28px;
+				padding:0;
+				border:1px solid #d0d9e5;
+				border-radius:8px;
+				background:#fff;
+				color:#667085;
+				cursor:pointer;
+			}
+			.mb-monitor-card-toggle:hover{
+				background:#edf5ff;
+				color:#2271b1;
+			}
+			.mb-monitor-card-toggle .dashicons{
+				font-size:16px;
+				width:16px;
+				height:16px;
+				line-height:16px;
+				transition:transform .16s ease;
+			}
+			.mb-monitor-card-toggle[aria-expanded="false"] .dashicons{
+				transform:rotate(180deg);
+			}
+			.mb-monitor-collapsible-body.is-collapsed{
+				display:none;
+			}
 			.mb-monitor-article-table-wrap{
 				overflow:auto;
 			}
@@ -270,10 +310,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			}
 			.mb-monitor-article-table th,
 			.mb-monitor-article-table td{
-				padding:8px 10px;
-				border-top:1px solid #eef2f6;
+				padding:5px 10px;
+				border-top:0;
 				font-size:13px;
 				vertical-align:top;
+				transition:background-color .12s ease;
 			}
 			.mb-monitor-article-table tr:first-child th,
 			.mb-monitor-article-table tr:first-child td{
@@ -328,6 +369,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			}
 			.mb-monitor-article-table td:first-child{
 				padding-right:24px;
+			}
+			.mb-monitor-article-table tbody tr:hover td{
+				background:#edf5ff;
 			}
 			.mb-monitor-article-link{
 				color:#162033;
@@ -1618,7 +1662,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-8">
-					<h3>Deckungsbeitrag pro Artikel</h3>
+					<div class="mb-monitor-card-head">
+						<h3>Deckungsbeitrag pro Artikel</h3>
+						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="true" aria-label="Deckungsbeitrag pro Artikel einklappen">
+							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="mb-monitor-collapsible-body" id="cmx-monitor-article-card-body">
 					<p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-article-table">
@@ -1642,9 +1692,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</table>
 						<p class="mb-monitor-article-empty" id="cmx-monitor-article-empty" hidden>Keine Artikeldaten im aktuellen Filter.</p>
 					</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-8">
-					<h3>Deckungsbeitrag pro Kunde</h3>
+					<div class="mb-monitor-card-head">
+						<h3>Deckungsbeitrag pro Kunde</h3>
+						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-customer-card-body" aria-expanded="true" aria-label="Deckungsbeitrag pro Kunde einklappen">
+							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="mb-monitor-collapsible-body" id="cmx-monitor-customer-card-body">
 					<p class="mb-monitor-chart-intro">Kunden im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-customer-table">
@@ -1668,9 +1725,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</table>
 						<p class="mb-monitor-article-empty" id="cmx-monitor-customer-empty" hidden>Keine Kundendaten im aktuellen Filter.</p>
 					</div>
+					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-8">
-					<h3>Deckungsbeitrag pro Projekt</h3>
+					<div class="mb-monitor-card-head">
+						<h3>Deckungsbeitrag pro Projekt</h3>
+						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-project-card-body" aria-expanded="true" aria-label="Deckungsbeitrag pro Projekt einklappen">
+							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="mb-monitor-collapsible-body" id="cmx-monitor-project-card-body">
 					<p class="mb-monitor-chart-intro">Projekte im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
 						<table class="mb-monitor-article-table" id="cmx-monitor-project-table">
@@ -1693,6 +1757,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							<tbody id="cmx-monitor-project-rows"></tbody>
 						</table>
 						<p class="mb-monitor-article-empty" id="cmx-monitor-project-empty" hidden>Keine Projektdaten im aktuellen Filter.</p>
+					</div>
 					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-8">
@@ -1785,6 +1850,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var projectTaskRowsEl = document.getElementById("cmx-monitor-project-task-rows");
 			var projectTaskEmptyEl = document.getElementById("cmx-monitor-project-task-empty");
 			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
+			var cardToggles = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-card-toggle"));
 			var articleSort = { key: "profit", direction: "desc" };
 			var customerSort = { key: "profit", direction: "desc" };
 			var projectSort = { key: "profit", direction: "desc" };
@@ -3061,6 +3127,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						sortState.direction = key === "title" ? "asc" : "desc";
 					}
 					updateDashboard();
+				});
+			});
+			cardToggles.forEach(function(button){
+				button.addEventListener("click", function(){
+					var targetId = String(button.getAttribute("data-target") || "");
+					if (!targetId) return;
+					var body = document.getElementById(targetId);
+					if (!body) return;
+					var expanded = button.getAttribute("aria-expanded") !== "false";
+					button.setAttribute("aria-expanded", expanded ? "false" : "true");
+					body.classList.toggle("is-collapsed", expanded);
 				});
 			});
 			var updateDashboard = function(){
