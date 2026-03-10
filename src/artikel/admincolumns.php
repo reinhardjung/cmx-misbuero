@@ -294,14 +294,19 @@ function cmx_lieferanten_args(): array {
 	if ($post_type !== 'artikel' || $which !== 'top') return;
 
 	$taxes = array_filter([
-		cmx_tax_typen()      => 'Typen',
-		cmx_tax_kategorien() => 'Kategorien',
-		cmx_tax_marken()     => 'Marken',
-		cmx_tax_farben()     => 'Farben',
-		cmx_tax_einheiten()  => 'Einheiten',
+		cmx_tax_typen()      => ['label' => 'Typen', 'column' => 'typen'],
+		cmx_tax_kategorien() => ['label' => 'Kategorien', 'column' => 'kategorien'],
+		cmx_tax_marken()     => ['label' => 'Marken', 'column' => 'marken'],
+		cmx_tax_farben()     => ['label' => 'Farben', 'column' => 'farben'],
+		cmx_tax_einheiten()  => ['label' => 'Einheiten', 'column' => 'einheiten'],
 	]);
 
-	foreach ($taxes as $tax => $label) {
+	foreach ($taxes as $tax => $config) {
+		$column = (string) ($config['column'] ?? '');
+		if ($column !== '' && \function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible('artikel', $column)) {
+			continue;
+		}
+		$label = (string) ($config['label'] ?? '');
 		$selected = isset($_GET[$tax]) ? sanitize_text_field($_GET[$tax]) : '';
 		\wp_dropdown_categories([
 			'show_option_all' => 'Alle '.$label,
@@ -320,38 +325,43 @@ function cmx_lieferanten_args(): array {
 	$current_verkaufbar = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
 	$current_katalog = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
 
-	echo '<label class="screen-reader-text" for="cmx_lieferant">Lieferant filtern</label>';
-	echo '<select name="cmx_lieferant" id="cmx_lieferant">';
-	echo '<option value="0">'.esc_html__('Alle Lieferanten', 'default').'</option>';
-	// *** NEU: "Kein Lieferant" Aufnahme ***
-	echo '<option value="-1"'.selected($current, '-1', false).'>- alle ohne -</option>';
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('artikel', 'lieferant')) {
+		echo '<label class="screen-reader-text" for="cmx_lieferant">Lieferant filtern</label>';
+		echo '<select name="cmx_lieferant" id="cmx_lieferant">';
+		echo '<option value="0">'.esc_html__('Alle Lieferanten', 'default').'</option>';
+		echo '<option value="-1"'.selected($current, '-1', false).'>- alle ohne -</option>';
 
-	if ($lieferanten) {
-		foreach ($lieferanten as $lid) {
-			$title = \get_the_title($lid);
-			if ($title === '') $title = '(ohne Titel #'.$lid.')';
-			printf('<option value="%1$d"%2$s>%3$s</option>',
-				(int)$lid,
-				selected((string)$current, (string)$lid, false),
-				esc_html($title)
-			);
+		if ($lieferanten) {
+			foreach ($lieferanten as $lid) {
+				$title = \get_the_title($lid);
+				if ($title === '') $title = '(ohne Titel #'.$lid.')';
+				printf('<option value="%1$d"%2$s>%3$s</option>',
+					(int)$lid,
+					selected((string)$current, (string)$lid, false),
+					esc_html($title)
+				);
+			}
 		}
+		echo '</select>';
 	}
-	echo '</select>';
 
-	echo '<label class="screen-reader-text" for="cmx_verkaufbar">Verkaufbarkeit filtern</label>';
-	echo '<select name="cmx_verkaufbar" id="cmx_verkaufbar">';
-	echo '<option value="0"' . selected($current_verkaufbar, '0', false) . '>Alle Verkaufbarkeit</option>';
-	echo '<option value="1"' . selected($current_verkaufbar, '1', false) . '>Nur verkaufbar</option>';
-	echo '<option value="2"' . selected($current_verkaufbar, '2', false) . '>Nur NICHT verkaufbar</option>';
-	echo '</select>';
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('artikel', 'verkaufbar')) {
+		echo '<label class="screen-reader-text" for="cmx_verkaufbar">Verkaufbarkeit filtern</label>';
+		echo '<select name="cmx_verkaufbar" id="cmx_verkaufbar">';
+		echo '<option value="0"' . selected($current_verkaufbar, '0', false) . '>Alle Verkaufbarkeit</option>';
+		echo '<option value="1"' . selected($current_verkaufbar, '1', false) . '>Nur verkaufbar</option>';
+		echo '<option value="2"' . selected($current_verkaufbar, '2', false) . '>Nur NICHT verkaufbar</option>';
+		echo '</select>';
+	}
 
-	echo '<label class="screen-reader-text" for="cmx_katalog">Katalog filtern</label>';
-	echo '<select name="cmx_katalog" id="cmx_katalog">';
-	echo '<option value="0"' . selected($current_katalog, '0', false) . '>Alle Katalogstatus</option>';
-	echo '<option value="1"' . selected($current_katalog, '1', false) . '>Nur im Katalog</option>';
-	echo '<option value="2"' . selected($current_katalog, '2', false) . '>Nur NICHT im Katalog</option>';
-	echo '</select>';
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('artikel', 'katalog')) {
+		echo '<label class="screen-reader-text" for="cmx_katalog">Katalog filtern</label>';
+		echo '<select name="cmx_katalog" id="cmx_katalog">';
+		echo '<option value="0"' . selected($current_katalog, '0', false) . '>Alle Katalogstatus</option>';
+		echo '<option value="1"' . selected($current_katalog, '1', false) . '>Nur im Katalog</option>';
+		echo '<option value="2"' . selected($current_katalog, '2', false) . '>Nur NICHT im Katalog</option>';
+		echo '</select>';
+	}
 }, 10, 2);
 
 
@@ -381,9 +391,22 @@ function cmx_lieferanten_args(): array {
 		cmx_tax_farben(),
 		cmx_tax_einheiten(),
 	]));
+	$tax_to_column = array_filter([
+		cmx_tax_typen()      => 'typen',
+		cmx_tax_kategorien() => 'kategorien',
+		cmx_tax_marken()     => 'marken',
+		cmx_tax_farben()     => 'farben',
+		cmx_tax_einheiten()  => 'einheiten',
+	]);
 
 	$active_tax_filters = [];
 	foreach ($tax_slugs as $tax) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible')) {
+			$column = (string) ($tax_to_column[$tax] ?? '');
+			if ($column !== '' && !cmx_admin_post_type_column_is_visible('artikel', $column)) {
+				continue;
+			}
+		}
 		if (isset($_GET[$tax]) && $_GET[$tax] !== '' && $_GET[$tax] !== '0') {
 			$active_tax_filters[$tax] = $_GET[$tax];
 		}
@@ -394,6 +417,19 @@ function cmx_lieferanten_args(): array {
 	$lieferant_id    = absint($lieferant_raw);
 	$verkaufbar_raw  = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
 	$katalog_raw     = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible')) {
+		if (!cmx_admin_post_type_column_is_visible('artikel', 'lieferant')) {
+			$lieferant_raw = '0';
+			$has_lieferant = false;
+			$lieferant_id = 0;
+		}
+		if (!cmx_admin_post_type_column_is_visible('artikel', 'verkaufbar')) {
+			$verkaufbar_raw = '0';
+		}
+		if (!cmx_admin_post_type_column_is_visible('artikel', 'katalog')) {
+			$katalog_raw = '0';
+		}
+	}
 
 	/* ---- Nur dann tax_query bauen, wenn wirklich ein Tax-Filter gesetzt ist ---- */
 	if (!empty($active_tax_filters)) {
@@ -674,6 +710,7 @@ function cmx_lieferanten_args(): array {
 
 \add_action('restrict_manage_posts', function (string $post_type, string $which) {
 	if ($post_type !== 'artikel' || $which !== 'top') return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible('artikel', 'lieferant')) return;
 
 	global $wpdb;
 

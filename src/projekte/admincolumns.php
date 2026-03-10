@@ -357,6 +357,7 @@ add_filter('months_dropdown_results', function($months, $post_type) {
 /** B1: Kategorie-Filter (Dropdown) über der Tabelle */
 add_action('restrict_manage_posts', function($post_type) {
 	if ($post_type !== CMX_PROJEKT_CPT) return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_kategorie')) return;
 
 	$tax = cmx_projekte_detect_taxonomy();
 	if (!$tax || !taxonomy_exists($tax) || !is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) return;
@@ -379,6 +380,7 @@ add_action('restrict_manage_posts', function($post_type) {
 /** B1b: Status-Filter (Dropdown) über der Tabelle */
 add_action('restrict_manage_posts', function($post_type) {
 	if ($post_type !== CMX_PROJEKT_CPT) return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_status')) return;
 
 	$tax = cmx_projekte_detect_status_taxonomy();
 	if (!$tax || !taxonomy_exists($tax) || !is_object_in_taxonomy(CMX_PROJEKT_CPT, $tax)) return;
@@ -409,6 +411,7 @@ add_action('restrict_manage_posts', function($post_type) {
 /** B2: Kunden-Filter (Dropdown) über der Tabelle */
 add_action('restrict_manage_posts', function($post_type) {
 	if ($post_type !== CMX_PROJEKT_CPT) return;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_kunde')) return;
 
 	$param = 'cmx_kunde_filter';
 	$selected = isset($_GET[$param]) ? absint(wp_unslash($_GET[$param])) : 0;
@@ -512,6 +515,9 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 
 	// Filter Kunde
 	$kunde_filter = isset($_GET['cmx_kunde_filter']) ? absint(wp_unslash($_GET['cmx_kunde_filter'])) : 0;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_kunde')) {
+		$kunde_filter = 0;
+	}
 	if ($kunde_filter > 0) {
 		$meta_query = (array) $q->get('meta_query');
 		$meta_query[] = [
@@ -529,6 +535,9 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 	$category_tax = cmx_projekte_detect_taxonomy();
 	if ($category_tax && taxonomy_exists($category_tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $category_tax)) {
 		$selected_category = isset($_GET[$category_tax]) ? sanitize_text_field(wp_unslash($_GET[$category_tax])) : '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_kategorie')) {
+			$selected_category = '';
+		}
 		if ($selected_category !== '' && $selected_category !== '0') {
 			$tax_query[] = [
 				'taxonomy'         => $category_tax,
@@ -541,6 +550,9 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 
 	$status_tax = cmx_projekte_detect_status_taxonomy();
 	$selected_status = isset($_GET['cmx_status_filter']) ? sanitize_text_field(wp_unslash($_GET['cmx_status_filter'])) : '';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible(CMX_PROJEKT_CPT, 'cmx_status')) {
+		$selected_status = '';
+	}
 	if ($status_tax && taxonomy_exists($status_tax) && is_object_in_taxonomy(CMX_PROJEKT_CPT, $status_tax) && $selected_status !== '' && $selected_status !== '0') {
 		$tax_query[] = [
 			'taxonomy'         => $status_tax,

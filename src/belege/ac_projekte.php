@@ -22,17 +22,22 @@ if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_ids')) {
 if (!function_exists(__NAMESPACE__.'\\cmx_meta_projekt_txts')) {
 	function cmx_meta_projekt_txts(): array { return ['_cmx_beleg_projekt']; }
 }
-if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_hidden_columns')) {
-	function cmx_beleg_admin_hidden_columns(): array {
+if (!function_exists(__NAMESPACE__.'\\cmx_admin_hidden_columns')) {
+	function cmx_admin_hidden_columns(string $post_type): array {
+		$post_type = \sanitize_key($post_type);
+		if ($post_type === '') {
+			return [];
+		}
+
 		$screen = function_exists('get_current_screen') ? \get_current_screen() : null;
-		if ($screen && !empty($screen->id) && function_exists('get_hidden_columns')) {
+		if ($screen && !empty($screen->id) && (string) ($screen->post_type ?? '') === $post_type && function_exists('get_hidden_columns')) {
 			$hidden = \get_hidden_columns($screen);
 			if (is_array($hidden)) {
 				return array_values(array_unique(array_map('strval', $hidden)));
 			}
 		}
 
-		$hidden = \get_user_option('manageedit-' . cmx_belege_cpt() . 'columnshidden');
+		$hidden = \get_user_option('manageedit-' . $post_type . 'columnshidden');
 		if (!is_array($hidden)) {
 			return [];
 		}
@@ -40,12 +45,23 @@ if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_hidden_columns')) {
 		return array_values(array_unique(array_map('strval', $hidden)));
 	}
 }
-if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_column_is_visible')) {
-	function cmx_beleg_admin_column_is_visible(string $column_key): bool {
+if (!function_exists(__NAMESPACE__.'\\cmx_admin_post_type_column_is_visible')) {
+	function cmx_admin_post_type_column_is_visible(string $post_type, string $column_key): bool {
+		$post_type = \sanitize_key($post_type);
 		if ($column_key === '') {
 			return true;
 		}
-		return !in_array($column_key, cmx_beleg_admin_hidden_columns(), true);
+		return !in_array($column_key, cmx_admin_hidden_columns($post_type), true);
+	}
+}
+if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_hidden_columns')) {
+	function cmx_beleg_admin_hidden_columns(): array {
+		return cmx_admin_hidden_columns(cmx_belege_cpt());
+	}
+}
+if (!function_exists(__NAMESPACE__.'\\cmx_beleg_admin_column_is_visible')) {
+	function cmx_beleg_admin_column_is_visible(string $column_key): bool {
+		return cmx_admin_post_type_column_is_visible(cmx_belege_cpt(), $column_key);
 	}
 }
 

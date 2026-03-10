@@ -330,11 +330,15 @@ function cmx_kontakte_tax_filters() {
 
 	// NEU: Kundenkategorie
 	$kundkat_tax = cmx_kundenkategorie_tax();
-	cmx_render_tax_filter_dropdown(taxonomy:$kundkat_tax, param:'filter_kundenkategorie', label:'Alle Kategorien');
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('kontakte', 'cmx_kategorie')) {
+		cmx_render_tax_filter_dropdown(taxonomy:$kundkat_tax, param:'filter_kundenkategorie', label:'Alle Kategorien');
+	}
 
 	// NEU: Stufen
 	$stufen_tax = cmx_stufen_tax();
-	cmx_render_tax_filter_dropdown(taxonomy:$stufen_tax, param:'filter_stufen', label:'Alle Stufen');
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('kontakte', 'cmx_stufen')) {
+		cmx_render_tax_filter_dropdown(taxonomy:$stufen_tax, param:'filter_stufen', label:'Alle Stufen');
+	}
 }
 
 function cmx_render_tax_filter_dropdown(string $taxonomy, string $param, string $label) {
@@ -400,7 +404,10 @@ function cmx_kontakte_apply_tax_filters($query) {
 	}
 
 	// NEU: Kundenkategorie
-	if (!empty($_GET['filter_kundenkategorie'])) {
+	if (
+		(!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('kontakte', 'cmx_kategorie'))
+		&& !empty($_GET['filter_kundenkategorie'])
+	) {
 		$kundkat_tax = cmx_kundenkategorie_tax();
 		$term_id = (int) sanitize_text_field(wp_unslash($_GET['filter_kundenkategorie']));
 		$tax_query[] = [
@@ -412,7 +419,10 @@ function cmx_kontakte_apply_tax_filters($query) {
 	}
 
 	// NEU: Stufen
-	if (!empty($_GET['filter_stufen'])) {
+	if (
+		(!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('kontakte', 'cmx_stufen'))
+		&& !empty($_GET['filter_stufen'])
+	) {
 		$stufen_tax = cmx_stufen_tax();
 		$term_id = (int) sanitize_text_field(wp_unslash($_GET['filter_stufen']));
 		$tax_query[] = [
