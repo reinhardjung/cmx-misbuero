@@ -9,6 +9,116 @@ if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_DATUM'))  define(__NAMESPACE__.'\\C
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG'))define(__NAMESPACE__.'\\CMX_BELEG_META_FAELLIG','_cmx_beleg_faellig_am');
 if (!defined(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT'))define(__NAMESPACE__.'\\CMX_BELEG_META_BEZAHLT','_cmx_beleg_bezahlt_am');
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_zeitraum_options')) {
+	function cmx_beleg_admin_zeitraum_options(): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_presets')) {
+			$options = (array) cmxbu_belege_export_presets();
+			unset($options['benutzerdefiniert']);
+			return $options;
+		}
+
+		return [
+			'heute' => 'Heute (heute bis heute)',
+			'diesen_monat' => 'Diesen Monat',
+			'letzten_monat' => 'Letzten Monat',
+			'vorletzten_monat' => 'Vorletzten Monat',
+			'dieses_quartal' => 'Dieses Quartal',
+			'letztes_quartal' => 'Letztes Quartal',
+			'vorletztes_quartal' => 'Vorletztes Quartal',
+			'dieses_jahr' => 'Dieses Jahr',
+			'letztes_jahr' => 'Letztes Jahr',
+			'vorletztes_jahr' => 'Vorletztes Jahr',
+		];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_zeitraum_selected')) {
+	function cmx_beleg_admin_zeitraum_selected(): string {
+		$selected = isset($_GET['cmx_zeitraumfilter']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_zeitraumfilter'])) : '';
+		$options = cmx_beleg_admin_zeitraum_options();
+		return ($selected !== '' && isset($options[$selected])) ? $selected : '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_zeitraum_range')) {
+	function cmx_beleg_admin_zeitraum_range(string $preset): array {
+		if ($preset === '') {
+			return ['from' => '', 'to' => ''];
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_range_from_preset')) {
+			$range = (array) cmxbu_belege_export_range_from_preset($preset);
+			return [
+				'from' => (string) ($range['from'] ?? ''),
+				'to' => (string) ($range['to'] ?? ''),
+			];
+		}
+
+		$now = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_now_datetime')
+			? cmxbu_belege_export_now_datetime()
+			: new \DateTimeImmutable('now', \function_exists('wp_timezone') ? \wp_timezone() : new \DateTimeZone('UTC'));
+		$today = $now->format('Y-m-d');
+
+		switch ($preset) {
+			case 'heute':
+				return ['from' => $today, 'to' => $today];
+			case 'diesen_monat':
+				return [
+					'from' => $now->modify('first day of this month')->format('Y-m-d'),
+					'to' => $now->modify('last day of this month')->format('Y-m-d'),
+				];
+			case 'letzten_monat':
+				return [
+					'from' => $now->modify('first day of last month')->format('Y-m-d'),
+					'to' => $now->modify('last day of last month')->format('Y-m-d'),
+				];
+			case 'vorletzten_monat':
+				return [
+					'from' => $now->modify('first day of -2 months')->format('Y-m-d'),
+					'to' => $now->modify('last day of -2 months')->format('Y-m-d'),
+				];
+			case 'dieses_quartal':
+				$year = (int) $now->format('Y');
+				$month = (int) $now->format('n');
+				$start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+				$q_start = $now->setDate($year, $start_month, 1);
+				return [
+					'from' => $q_start->format('Y-m-d'),
+					'to' => $q_start->modify('+2 months')->modify('last day of this month')->format('Y-m-d'),
+				];
+			case 'letztes_quartal':
+				$year = (int) $now->format('Y');
+				$month = (int) $now->format('n');
+				$start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+				$current_q_start = $now->setDate($year, $start_month, 1);
+				return [
+					'from' => $current_q_start->modify('-3 months')->format('Y-m-d'),
+					'to' => $current_q_start->modify('-1 day')->format('Y-m-d'),
+				];
+			case 'vorletztes_quartal':
+				$year = (int) $now->format('Y');
+				$month = (int) $now->format('n');
+				$start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+				$current_q_start = $now->setDate($year, $start_month, 1);
+				return [
+					'from' => $current_q_start->modify('-6 months')->format('Y-m-d'),
+					'to' => $current_q_start->modify('-3 months')->modify('-1 day')->format('Y-m-d'),
+				];
+			case 'dieses_jahr':
+				$year = (int) $now->format('Y');
+				return ['from' => \sprintf('%04d-01-01', $year), 'to' => \sprintf('%04d-12-31', $year)];
+			case 'letztes_jahr':
+				$year = ((int) $now->format('Y')) - 1;
+				return ['from' => \sprintf('%04d-01-01', $year), 'to' => \sprintf('%04d-12-31', $year)];
+			case 'vorletztes_jahr':
+				$year = ((int) $now->format('Y')) - 2;
+				return ['from' => \sprintf('%04d-01-01', $year), 'to' => \sprintf('%04d-12-31', $year)];
+			default:
+				return ['from' => '', 'to' => ''];
+		}
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_taxonomy')) {
 	function cmx_beleg_zahlungsgrund_taxonomy(): string {
 		$candidates = [];
@@ -186,6 +296,9 @@ add_filter('query_vars', function(array $vars){
 	}
 	if (!in_array('cmx_zahlungsartfilter', $vars, true)) {
 		$vars[] = 'cmx_zahlungsartfilter';
+	}
+	if (!in_array('cmx_zeitraumfilter', $vars, true)) {
+		$vars[] = 'cmx_zeitraumfilter';
 	}
 	return $vars;
 });
@@ -462,6 +575,7 @@ add_action('restrict_manage_posts', function($post_type){
 	$dir_selected = isset($_GET['cmx_richtungfilter']) ? sanitize_key($_GET['cmx_richtungfilter']) : '';
 	$za_selected = isset($_GET['cmx_zahlungsartfilter']) ? sanitize_text_field($_GET['cmx_zahlungsartfilter']) : '';
 	$zg_selected = isset($_GET['cmx_zahlungsgrundfilter']) ? sanitize_text_field($_GET['cmx_zahlungsgrundfilter']) : '';
+	$zeitraum_selected = cmx_beleg_admin_zeitraum_selected();
 	$cat_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_kategorie_taxonomy')
 		? cmx_beleg_admin_kategorie_taxonomy()
 		: '';
@@ -471,6 +585,13 @@ add_action('restrict_manage_posts', function($post_type){
 		echo '<option value="">' . esc_html__('Alle Zahlstatus', 'cmx') . '</option>';
 		echo '<option value="bezahlt" ' . selected($selected, 'bezahlt', false) . '>' . esc_html__('Nur bezahlte', 'cmx') . '</option>';
 		echo '<option value="offen" '    . selected($selected, 'offen', false)    . '>' . esc_html__('Nur offene', 'cmx') . '</option>';
+	echo '</select>';
+
+	echo '<select name="cmx_zeitraumfilter" id="cmx_zeitraumfilter" class="postform">';
+		echo '<option value="">' . esc_html__('Alle Zeiträume', 'cmx') . '</option>';
+		foreach (cmx_beleg_admin_zeitraum_options() as $value => $label) {
+			echo '<option value="' . esc_attr((string) $value) . '" ' . selected($zeitraum_selected, (string) $value, false) . '>' . esc_html((string) $label) . '</option>';
+		}
 	echo '</select>';
 
 	$show_category_filter = true;
@@ -599,6 +720,13 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	$za_filter = sanitize_title((string) $za_filter);
 	$q->set('cmx_zahlungsartfilter', $za_filter);
 
+	$zeitraum_filter = $q->get('cmx_zeitraumfilter');
+	if ($zeitraum_filter === null || $zeitraum_filter === '') {
+		$zeitraum_filter = cmx_beleg_admin_zeitraum_selected();
+	}
+	$zeitraum_filter = \sanitize_key((string) $zeitraum_filter);
+	$q->set('cmx_zeitraumfilter', $zeitraum_filter);
+
 	$paid_keys = array_values(array_unique([
 		CMX_BELEG_META_BEZAHLT,              // typischer Key mit Unterstrich
 		ltrim(CMX_BELEG_META_BEZAHLT, '_'), // Fallback ohne Unterstrich
@@ -646,6 +774,20 @@ add_action('pre_get_posts', function(\WP_Query $q){
 			'value'   => $richtung_filter,
 			'compare' => '=',
 		];
+	}
+
+	if ($zeitraum_filter !== '' && isset(cmx_beleg_admin_zeitraum_options()[$zeitraum_filter])) {
+		$range = cmx_beleg_admin_zeitraum_range($zeitraum_filter);
+		$from = (string) ($range['from'] ?? '');
+		$to = (string) ($range['to'] ?? '');
+		if ($from !== '' && $to !== '') {
+			$meta_query[] = [
+				'key'     => CMX_BELEG_META_DATUM,
+				'value'   => [$from, $to],
+				'compare' => 'BETWEEN',
+				'type'    => 'DATE',
+			];
+		}
 	}
 
 	$q->set('meta_query', $meta_query);
