@@ -35,10 +35,9 @@ foreach ($positions as $row) {
 	$line_total = (float)($row['line_total'] ?? 0);
 	if ($item !== '' || $qty > 0 || $unit_price > 0 || $line_total > 0) {
 		$has_positions = true;
-		break;
 	}
 }
-$show_position_index = true;
+$show_position_index = ($position_row_count > 1);
 $show_sku = false;
 $show_discount = false;
 $show_unit_column = false;
