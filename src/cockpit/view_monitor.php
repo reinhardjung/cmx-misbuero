@@ -263,7 +263,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			}
 			.mb-monitor-card-head h3{
 				margin:0;
+				display:inline-flex;
+				align-items:center;
+				gap:8px;
 				cursor:pointer;
+			}
+			.mb-monitor-cpt-link{
+				display:inline-flex;
+				align-items:center;
+				justify-content:center;
+				width:18px;
+				height:18px;
+				color:#667085;
+				text-decoration:none;
+			}
+			.mb-monitor-cpt-link:hover{
+				color:#2271b1;
+			}
+			.mb-monitor-cpt-link .dashicons{
+				font-size:16px;
+				width:16px;
+				height:16px;
+				line-height:16px;
 			}
 			.mb-monitor-card-toggle{
 				display:inline-flex;
@@ -1681,7 +1702,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<div class="mb-monitor-deckungsbeitrag-group">
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Artikel</h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=artikel')); ?>" target="_blank" rel="noopener noreferrer" title="Artikel öffnen"><span class="dashicons dashicons-cart" aria-hidden="true"></span></a><span>Artikel</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Artikel einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -1714,7 +1735,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Kunde</h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=kontakte')); ?>" target="_blank" rel="noopener noreferrer" title="Kontakte öffnen"><span class="dashicons dashicons-businessman" aria-hidden="true"></span></a><span>Kunde</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-customer-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Kunde einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -1747,7 +1768,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3>Projekt</h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=projekte')); ?>" target="_blank" rel="noopener noreferrer" title="Projekte öffnen"><span class="dashicons dashicons-portfolio" aria-hidden="true"></span></a><span>Projekt</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-project-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Projekt einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -3175,7 +3196,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				if (!toggleButton) return;
 				card.classList.toggle("is-collapsed", toggleButton.getAttribute("aria-expanded") === "false");
 				if (cardTitle) {
-					cardTitle.addEventListener("click", function(){
+					cardTitle.addEventListener("click", function(event){
+						if (event.target.closest(".mb-monitor-cpt-link")) {
+							return;
+						}
 						toggleMonitorCard(toggleButton);
 					});
 				}
