@@ -6,9 +6,9 @@ function cmx_remove_comments_menu() {
 	global $menu, $submenu;
 
 	if (isset($menu[2][0])) { $menu[2][0] = 'Dashboard'; }	// "Dashboard" -> Übersicht
-	// if (isset($submenu['index.php'][0][0])) { Unterpunkt "Startseite" unter Dashboard umbenennen
-	// 	 $submenu['index.php'][0][0] = 'Übersicht';
-	// }
+	if (isset($submenu['index.php'][0][0])) {
+		$submenu['index.php'][0][0] = 'Übersicht';
+	}
 
 	remove_menu_page('edit.php');									// Beiträge
 	remove_menu_page('upload.php');               // Medien
@@ -25,7 +25,6 @@ function cmx_remove_comments_menu() {
 	remove_menu_page('analyticswp');
 	remove_menu_page('page=fluent-snippets');
 
-	remove_submenu_page('index.php', 'index.php');				// "Startseite"
 	remove_submenu_page('index.php', 'update-core.php');	// "Aktualisierungen"
 
 	remove_menu_page('acpt-lite'); // Advanced Custom Post Types Lite

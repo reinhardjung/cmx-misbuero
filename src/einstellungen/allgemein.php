@@ -154,7 +154,7 @@ function cmx_register_general_tab(): void {
 
 	\add_settings_field(
 		'mis_buero_openai_key',
-		'OpenAI API Key',
+		'Paddle API Key',
 		function () {
 			$val = \get_option( 'mis_buero_openai_key', '' );
 			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr( $val ) . '">';
