@@ -323,6 +323,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			.mb-monitor-article-table th.is-num .mb-monitor-sort-button{
 				width:100%;
 				justify-content:flex-end;
+				position:relative;
+				left:20px;
 			}
 			.mb-monitor-article-table td:first-child{
 				padding-right:24px;
@@ -918,6 +920,72 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_contact_meta')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_project_meta')) {
+	function cmx_cockpit_view_monitor_project_meta(int $post_id): array {
+		$projekt_id_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_ID')) {
+			$projekt_id_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_ID');
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_meta_projekt_ids')) {
+			$projekt_id_keys = \array_merge($projekt_id_keys, (array) cmx_meta_projekt_ids());
+		}
+		$projekt_id_keys = \array_merge($projekt_id_keys, [
+			'_cmx_beleg_projekt_id',
+			'_cmx_projekt_id',
+			'_projekt_id',
+		]);
+
+		$projekt_id = 0;
+		foreach (\array_unique($projekt_id_keys) as $meta_key) {
+			$projekt_id = (int) \get_post_meta($post_id, $meta_key, true);
+			if ($projekt_id > 0) {
+				break;
+			}
+		}
+
+		if ($projekt_id > 0 && !cmx_cockpit_view_monitor_post_is_published($projekt_id)) {
+			return [
+				'project_id' => 0,
+				'project_title' => '',
+				'edit_link' => '',
+			];
+		}
+
+		$projekt_title = '';
+		if ($projekt_id > 0) {
+			$projekt_title = (string) (\get_the_title($projekt_id) ?: '');
+		}
+
+		if ($projekt_title === '') {
+			$projekt_label_keys = [];
+			if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_LABEL')) {
+				$projekt_label_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_PROJEKT_LABEL');
+			}
+			$projekt_label_keys = \array_merge($projekt_label_keys, [
+				'_cmx_beleg_projekt_label',
+				'_cmx_beleg_projekt',
+			]);
+
+			foreach (\array_unique($projekt_label_keys) as $meta_key) {
+				$projekt_title = \trim((string) \get_post_meta($post_id, $meta_key, true));
+				if ($projekt_title !== '') {
+					break;
+				}
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$projekt_title = (string) cmx_beleg_decode_label_text($projekt_title);
+		}
+
+		return [
+			'project_id' => $projekt_id,
+			'project_title' => \trim($projekt_title),
+			'edit_link' => $projekt_id > 0 ? (string) (\get_edit_post_link($projekt_id, '') ?: '') : '',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_post_is_published')) {
 	function cmx_cockpit_view_monitor_post_is_published(int $post_id): bool {
 		return $post_id > 0 && \get_post_status($post_id) === 'publish';
@@ -943,6 +1011,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$counts_monthly_by_type = [];
 		$article_rows = [];
 		$contact_rows = [];
+		$project_rows = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
@@ -1010,6 +1079,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$type_slug = (string) ($type_info['slug'] ?? '__without_type__');
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
 			$contact_meta = cmx_cockpit_view_monitor_contact_meta((int) $post->ID);
+			$project_meta = cmx_cockpit_view_monitor_project_meta((int) $post->ID);
 			$series[$year][$month_index] += $total;
 			$daily_series[$year][$month_number][$day_index] += $total;
 			$cost_series[$year][$month_index] += $cost_total;
@@ -1062,6 +1132,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'contact_id' => (int) ($contact_meta['contact_id'] ?? 0),
 					'contact_title' => (string) ($contact_meta['contact_title'] ?? ''),
 					'edit_link' => (string) ($contact_meta['edit_link'] ?? ''),
+					'revenue' => (float) $total,
+					'cost' => (float) $cost_total,
+				];
+			}
+			if ((int) ($project_meta['project_id'] ?? 0) > 0) {
+				$project_rows[] = [
+					'year' => $year,
+					'month' => $month_number,
+					'type' => $type_slug,
+					'project_id' => (int) ($project_meta['project_id'] ?? 0),
+					'project_title' => (string) ($project_meta['project_title'] ?? ''),
+					'edit_link' => (string) ($project_meta['edit_link'] ?? ''),
 					'revenue' => (float) $total,
 					'cost' => (float) $cost_total,
 				];
@@ -1231,6 +1313,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'counts_monthly_by_type' => $counts_monthly_by_type,
 			'article_rows' => $article_rows,
 			'contact_rows' => $contact_rows,
+			'project_rows' => $project_rows,
 		];
 	}
 }
@@ -1443,6 +1526,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						<p class="mb-monitor-article-empty" id="cmx-monitor-customer-empty" hidden>Keine Kundendaten im aktuellen Filter.</p>
 					</div>
 				</section>
+				<section class="mb-card mb-card--soft mb-span-8">
+					<h3>Deckungsbeitrag pro Projekt</h3>
+					<p class="mb-monitor-chart-intro">Projekte im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<div class="mb-monitor-article-table-wrap">
+						<table class="mb-monitor-article-table" id="cmx-monitor-project-table">
+							<colgroup>
+								<col class="col-article">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+							</colgroup>
+							<thead>
+								<tr>
+									<th><button type="button" class="mb-monitor-sort-button" data-table="project" data-key="title">Projekt<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project" data-key="revenue">Umsatz<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project" data-key="cost">Aufwand<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project" data-key="profit">Deckungsbeitrag<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project" data-key="margin">Marge %<span class="mb-monitor-sort-indicator"></span></button></th>
+								</tr>
+							</thead>
+							<tbody id="cmx-monitor-project-rows"></tbody>
+						</table>
+						<p class="mb-monitor-article-empty" id="cmx-monitor-project-empty" hidden>Keine Projektdaten im aktuellen Filter.</p>
+					</div>
+				</section>
 
 			</div>
 		</div>
@@ -1504,9 +1613,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var articleEmptyEl = document.getElementById("cmx-monitor-article-empty");
 			var customerRowsEl = document.getElementById("cmx-monitor-customer-rows");
 			var customerEmptyEl = document.getElementById("cmx-monitor-customer-empty");
+			var projectRowsEl = document.getElementById("cmx-monitor-project-rows");
+			var projectEmptyEl = document.getElementById("cmx-monitor-project-empty");
 			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
 			var articleSort = { key: "profit", direction: "desc" };
 			var customerSort = { key: "profit", direction: "desc" };
+			var projectSort = { key: "profit", direction: "desc" };
 			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
@@ -1736,7 +1848,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					.replace(/\'/g, "&#039;");
 			};
 			var getSortState = function(tableName){
-				return tableName === "customer" ? customerSort : articleSort;
+				if (tableName === "customer") return customerSort;
+				if (tableName === "project") return projectSort;
+				return articleSort;
 			};
 			var updateSortButtons = function(tableName){
 				var sortState = getSortState(tableName);
@@ -2614,6 +2728,82 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					customerRowsEl.appendChild(tr);
 				});
 			};
+			var renderProjectTable = function(context){
+				if (!projectRowsEl || !projectEmptyEl) return;
+
+				var selectedYear = String(context.selectedYear || "");
+				var selectedQuarter = String(context.selectedQuarter || "all");
+				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedType = String(context.selectedType || "all");
+				var sourceRows = Array.isArray(payload.project_rows) ? payload.project_rows : [];
+				var projects = {};
+
+				sourceRows.forEach(function(row){
+					var rowYear = String(row.year || "");
+					var rowMonth = Number(row.month || 0);
+					var rowType = String(row.type || "");
+					if (rowYear !== selectedYear) return;
+					if (selectedType !== "all" && rowType !== selectedType) return;
+					if (selectedMonth !== "all") {
+						if (rowMonth !== Number(selectedMonth || 0)) return;
+					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
+						return;
+					}
+
+					var projectId = Number(row.project_id || 0);
+					var projectTitle = String(row.project_title || "").trim();
+					var key = projectId > 0 ? ("id:" + String(projectId)) : "";
+					if (!key && projectTitle !== "") {
+						key = "label:" + projectTitle.toLowerCase();
+					}
+					if (!key) return;
+
+					if (!projects[key]) {
+						projects[key] = {
+							id: projectId,
+							title: projectTitle,
+							editLink: String(row.edit_link || ""),
+							revenue: 0,
+							cost: 0
+						};
+					}
+					projects[key].revenue += Number(row.revenue || 0);
+					projects[key].cost += Number(row.cost || 0);
+				});
+
+				var rows = Object.keys(projects).map(function(key){
+					var item = projects[key];
+					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
+					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
+					return item;
+				});
+
+				rows = sortTableRows(rows, "project");
+				updateSortButtons("project");
+
+				projectRowsEl.innerHTML = "";
+				if (!rows.length) {
+					projectEmptyEl.hidden = false;
+					return;
+				}
+
+				projectEmptyEl.hidden = true;
+				rows.slice(0, 12).forEach(function(item){
+					var tr = document.createElement("tr");
+					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
+					var projectLabel = item.title || "Unbekanntes Projekt";
+					var projectInner = item.editLink
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(projectLabel) + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(projectLabel) + \'</span>\';
+					tr.innerHTML =
+						\'<td>\' + projectInner + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
+						\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatPercent(item.margin)) + \'</td>\';
+					projectRowsEl.appendChild(tr);
+				});
+			};
 			sortButtons.forEach(function(button){
 				button.addEventListener("click", function(){
 					var tableName = String(button.getAttribute("data-table") || "");
@@ -2637,6 +2827,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateProfitChart(context);
 				renderArticleTable(context);
 				renderCustomerTable(context);
+				renderProjectTable(context);
 			};
 
 			yearSelect.addEventListener("change", function(){
