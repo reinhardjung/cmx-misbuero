@@ -259,6 +259,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_month_labels')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_month_options')) {
+	function cmx_cockpit_view_monitor_month_options(): array {
+		$options = ['all' => 'alle Monate'];
+		foreach (cmx_cockpit_view_monitor_month_labels() as $index => $label) {
+			$options[(string) ($index + 1)] = (string) $label;
+		}
+		return $options;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_total')) {
 	function cmx_cockpit_view_monitor_beleg_total(int $post_id): float {
 		$total = 0.0;
@@ -355,7 +365,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$labels = cmx_cockpit_view_monitor_month_labels();
 		$years = [];
 		$series = [];
+		$daily_series = [];
 		$counts = [];
+		$counts_monthly = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
@@ -389,17 +401,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 			$year = (int) \date('Y', $timestamp);
 			$month_index = ((int) \date('n', $timestamp)) - 1;
+			$month_number = $month_index + 1;
+			$day_index = ((int) \date('j', $timestamp)) - 1;
 			if ($month_index < 0 || $month_index > 11) {
+				continue;
+			}
+			if ($day_index < 0 || $day_index > 30) {
 				continue;
 			}
 
 			if (!isset($series[$year])) {
 				$series[$year] = \array_fill(0, 12, 0.0);
 				$counts[$year] = 0;
+				$counts_monthly[$year] = \array_fill(1, 12, 0);
+			}
+			if (!isset($daily_series[$year])) {
+				$daily_series[$year] = [];
+			}
+			if (!isset($daily_series[$year][$month_number])) {
+				$daily_series[$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 
-			$series[$year][$month_index] += cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
+			$total = cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
+			$series[$year][$month_index] += $total;
+			$daily_series[$year][$month_number][$day_index] += $total;
 			$counts[$year] = (int) ($counts[$year] ?? 0) + 1;
+			$counts_monthly[$year][$month_number] = (int) (($counts_monthly[$year][$month_number] ?? 0) + 1);
 		}
 
 		\wp_reset_postdata();
@@ -414,20 +441,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				static fn($value): float => \round((float) $value, 2),
 				(array) $values
 			);
+			if (isset($daily_series[$year]) && \is_array($daily_series[$year])) {
+				foreach ($daily_series[$year] as $month_number => $day_values) {
+					$daily_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
 		}
 
 		if ($years === []) {
 			$current_year = (int) \wp_date('Y');
 			$years = [$current_year];
 			$series[$current_year] = \array_fill(0, 12, 0.0);
+			$daily_series[$current_year] = [];
 			$counts[$current_year] = 0;
+			$counts_monthly[$current_year] = \array_fill(1, 12, 0);
 		}
 
 		return [
 			'labels' => $labels,
 			'years' => $years,
 			'series' => $series,
+			'daily_series' => $daily_series,
 			'counts' => $counts,
+			'counts_monthly' => $counts_monthly,
 		];
 	}
 }
@@ -436,11 +475,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 	function cmx_render_view_main_page(): void {
 		$chart_payload = cmx_cockpit_view_monitor_chart_payload();
 		$years = \array_values((array) ($chart_payload['years'] ?? []));
+		$month_options = cmx_cockpit_view_monitor_month_options();
+		$selected_month = 'all';
 		$selected_year = (int) ($years[0] ?? \wp_date('Y'));
 		$selected_series = (array) (($chart_payload['series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
 		$selected_total = \array_sum($selected_series);
 		$selected_count = (int) (($chart_payload['counts'] ?? [])[$selected_year] ?? 0);
-		$compare_year = isset($years[1]) ? (int) $years[1] : 0;
+		$compare_year = isset($chart_payload['series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
 		$compare_series = $compare_year > 0
 			? (array) (($chart_payload['series'] ?? [])[$compare_year] ?? \array_fill(0, 12, 0.0))
 			: \array_fill(0, 12, 0.0);
@@ -462,6 +503,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 								<select id="cmx-monitor-chart-year">
 									<?php foreach ($years as $year_option) : ?>
 										<option value="<?php echo \esc_attr((string) $year_option); ?>"<?php selected($year_option, $selected_year); ?>><?php echo \esc_html((string) $year_option); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<label class="mb-demo-linechart-control">
+								<span>Monat</span>
+								<select id="cmx-monitor-chart-month">
+									<?php foreach ($month_options as $month_value => $month_label) : ?>
+										<option value="<?php echo \esc_attr((string) $month_value); ?>"<?php selected((string) $month_value, $selected_month); ?>><?php echo \esc_html((string) $month_label); ?></option>
 									<?php endforeach; ?>
 								</select>
 							</label>
@@ -519,8 +568,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		var init = function(){
 			var canvas = document.getElementById("cmx-monitor-multi-axis-chart");
 			var yearSelect = document.getElementById("cmx-monitor-chart-year");
+			var monthSelect = document.getElementById("cmx-monitor-chart-month");
 			var compareCheckbox = document.getElementById("cmx-monitor-chart-compare");
-			if (!canvas || !yearSelect || !compareCheckbox || typeof Chart === "undefined") return;
+			if (!canvas || !yearSelect || !monthSelect || !compareCheckbox || typeof Chart === "undefined") return;
 
 			var ctx = canvas.getContext("2d");
 			if (!ctx) return;
@@ -552,6 +602,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var getFilters = function(){
 				return {
 					year: String(yearSelect.value || ""),
+					month: String(monthSelect.value || "all"),
 					compare: !!compareCheckbox.checked
 				};
 			};
@@ -565,6 +616,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var previousYear = String(Number(selectedYear || 0) - 1);
 				if (!previousYear || previousYear === "0") return "";
 				return payload.series && payload.series[previousYear] ? previousYear : "";
+			};
+			var daysInMonth = function(year, month){
+				var y = Number(year || 0);
+				var m = Number(month || 0);
+				if (!y || !m) return 31;
+				return new Date(y, m, 0).getDate();
+			};
+			var rangeLabelsForMonth = function(totalDays){
+				var labels = [];
+				for (var day = 1; day <= totalDays; day += 1) {
+					labels.push(String(day));
+				}
+				return labels;
 			};
 			var chart = new Chart(ctx, {
 				type: "line",
@@ -632,9 +696,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var updateChart = function(){
 				var filters = getFilters();
 				var selectedYear = filters.year;
+				var selectedMonth = filters.month;
 				var selectedSeries = (payload.series && payload.series[selectedYear]) ? payload.series[selectedYear] : [];
 				var compareYear = filters.compare ? compareYearFor(selectedYear) : "";
 				var compareSeries = compareYear && payload.series && payload.series[compareYear] ? payload.series[compareYear] : [];
+				var labels = Array.isArray(payload.labels) ? payload.labels : [];
+				var selectedCount = (payload.counts && payload.counts[selectedYear]) ? payload.counts[selectedYear] : countSeries(selectedSeries);
+				var compareLabelText = compareYear ? ("Umsatz " + compareYear) : "Vergleich";
+
+				if (selectedMonth !== "all") {
+					var monthNumber = Number(selectedMonth || 0);
+					var selectedDaily = payload.daily_series && payload.daily_series[selectedYear] && payload.daily_series[selectedYear][monthNumber]
+						? payload.daily_series[selectedYear][monthNumber]
+						: [];
+					var compareDaily = compareYear && payload.daily_series && payload.daily_series[compareYear] && payload.daily_series[compareYear][monthNumber]
+						? payload.daily_series[compareYear][monthNumber]
+						: [];
+					var totalDays = daysInMonth(selectedYear, monthNumber);
+					if (compareYear) {
+						totalDays = Math.max(totalDays, daysInMonth(compareYear, monthNumber));
+					}
+					labels = rangeLabelsForMonth(totalDays);
+					selectedSeries = selectedDaily.slice(0, totalDays);
+					compareSeries = compareDaily.slice(0, totalDays);
+					selectedCount = payload.counts_monthly && payload.counts_monthly[selectedYear] && payload.counts_monthly[selectedYear][monthNumber]
+						? payload.counts_monthly[selectedYear][monthNumber]
+						: countSeries(selectedSeries);
+					var monthLabels = Array.isArray(payload.labels) ? payload.labels : [];
+					var monthLabel = monthLabels[monthNumber - 1] || String(monthNumber);
+					if (totalLabelEl) totalLabelEl.textContent = "Umsatz " + monthLabel + " " + selectedYear;
+					compareLabelText = compareYear ? ("Umsatz " + monthLabel + " " + compareYear) : "Vergleich";
+				} else if (totalLabelEl) {
+					totalLabelEl.textContent = "Umsatz " + selectedYear;
+				}
 				var datasets = [
 					{
 						label: selectedYear,
@@ -665,18 +759,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					});
 				}
 
+				chart.data.labels = labels;
 				chart.data.datasets = datasets;
 				chart.update();
 
 				if (totalEl) totalEl.textContent = formatNumber(sumSeries(selectedSeries));
-				if (totalLabelEl) totalLabelEl.textContent = "Umsatz " + selectedYear;
 				if (compareEl) compareEl.textContent = compareYear ? formatNumber(sumSeries(compareSeries)) : "0.00";
-				if (compareLabelEl) compareLabelEl.textContent = compareYear ? ("Umsatz " + compareYear) : "Vergleich";
-				if (countEl) countEl.textContent = String((payload.counts && payload.counts[selectedYear]) ? payload.counts[selectedYear] : countSeries(selectedSeries));
+				if (compareLabelEl) compareLabelEl.textContent = compareLabelText;
+				if (countEl) countEl.textContent = String(selectedCount);
 				if (modeEl) modeEl.textContent = compareYear ? "aktiv" : "aus";
 			};
 
 			yearSelect.addEventListener("change", function(){
+				updateChart();
+				emitFiltersChanged();
+			});
+			monthSelect.addEventListener("change", function(){
 				updateChart();
 				emitFiltersChanged();
 			});
