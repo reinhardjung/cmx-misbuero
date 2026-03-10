@@ -8,6 +8,12 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MEHRWERT')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MEHRWERT', '_cmx_artikel_mehrwert');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN', '_cmx_artikel_selbstkosten');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_DECKUNGSBEITRAG')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_DECKUNGSBEITRAG', '_cmx_artikel_deckungsbeitrag');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG', '_cmx_artikel_katalog');
 }
@@ -27,6 +33,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$ek          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_EK, '');
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
+	$selbstkosten = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SELBSTKOSTEN, '');
+	$deckungsbeitrag = cmx_meta_get($post->ID, CMX_ARTIKEL_META_DECKUNGSBEITRAG, '');
 	$marge       = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MARGE, '');
 	$not_verkaufbar = (int) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, 0) === 1;
 	$verkaufbar     = !$not_verkaufbar;
@@ -36,7 +44,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
 	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
 	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
-	$vk_hidden_value  = ($vk === '' || $vk === null) ? '' : (string) \round(cmx_parse_number($vk), 2);
+	$selbstkosten_display = ($selbstkosten === '' || $selbstkosten === null) ? '' : cmx_format_swiss_number($selbstkosten, 2);
+	$deckungsbeitrag_display = ($deckungsbeitrag === '' || $deckungsbeitrag === null) ? '' : cmx_format_swiss_number($deckungsbeitrag, 2);
 	$marge_display    = ($marge === '' || $marge === null) ? '' : cmx_format_swiss_number($marge, 2);
 
 	$sel_einheit = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_EINHEITEN);
@@ -48,16 +57,17 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '<style>
 		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 		.cmx-price-row .cmx-f{display:flex;flex-direction:column;min-width:140px;flex:1 1 180px;max-width:320px}
-		.cmx-price-row .cmx-f--xs{min-width:110px;max-width:160px;flex:1 1 140px}
+		.cmx-price-row .cmx-f--xs{min-width:96px;max-width:132px;flex:1 1 112px}
 		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px;flex:1 1 180px}
 		.cmx-price-row .cmx-f--md{min-width:220px;max-width:320px;flex:1 1 220px}
 		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px;flex:1 1 260px}
-		.cmx-price-row .cmx-f--half{min-width:130px;max-width:180px;flex:1 1 140px}
+		.cmx-price-row .cmx-f--half{min-width:118px;max-width:150px;flex:1 1 124px}
 		.cmx-price-row .cmx-f label{font-weight:600;margin-bottom:4px}
 		.cmx-price-row .cmx-f input[type="number"],
 		.cmx-price-row .cmx-f input[type="text"],
 		.cmx-price-row .cmx-f select{width:100%}
-		.cmx-price-row .cmx-check{display:flex;align-items:center;gap:14px;margin-left:8px;white-space:nowrap;flex:1 1 300px}
+		.cmx-price-row .cmx-f input[readonly]{background:#f6f7f7;color:#2c3338}
+		.cmx-price-row .cmx-check{display:flex;align-items:center;gap:14px;white-space:nowrap;flex:0 0 100%;margin:2px 0 0}
 		@media (max-width: 1200px){
 			.cmx-price-row{gap:10px}
 			.cmx-price-row .cmx-f{max-width:100%}
@@ -111,11 +121,20 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		<input type="text" inputmode="decimal" id="cmx_artikel_aufwand" name="cmx_artikel_aufwand" value="' . esc_attr($aufwand_display) . '">
 	</div>';
 
+	echo '<div class="cmx-f cmx-f--xs">
+		<label for="cmx_artikel_selbstkosten">Selbstkosten</label>
+		<input type="text" inputmode="decimal" id="cmx_artikel_selbstkosten" value="' . esc_attr($selbstkosten_display) . '" readonly>
+	</div>';
+
 	// Verkaufspreis
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_vk">Verkaufspreis</label>
 		<input type="text" inputmode="decimal" id="cmx_artikel_vk" name="cmx_artikel_vk" value="' . esc_attr($vk_display) . '">
-		<input type="hidden" id="cmx_artikel_vk_prev" name="cmx_artikel_vk_prev" value="' . esc_attr($vk_hidden_value) . '">
+	</div>';
+
+	echo '<div class="cmx-f cmx-f--xs">
+		<label for="cmx_artikel_deckungsbeitrag">Deckungsbeitrag</label>
+		<input type="text" inputmode="decimal" id="cmx_artikel_deckungsbeitrag" value="' . esc_attr($deckungsbeitrag_display) . '" readonly>
 	</div>';
 
 	// Marge
@@ -134,15 +153,16 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '</div>';
 
 	// Kalkulation:
-	// A/F: EK + Aufwand => VK
-	// E:   Wenn VK manuell geändert wird, bleibt EK und Aufwand wird auf (VK - EK) gesetzt.
+	// EK, Aufwand und VK bleiben manuell.
+	// Daraus werden Selbstkosten, Deckungsbeitrag und Marge nur angezeigt.
 	echo '<script>
 	document.addEventListener("DOMContentLoaded", function(){
 		const ek  = document.getElementById("cmx_artikel_ek");
 		const aw  = document.getElementById("cmx_artikel_aufwand");
 		const vk  = document.getElementById("cmx_artikel_vk");
+		const sk  = document.getElementById("cmx_artikel_selbstkosten");
+		const db  = document.getElementById("cmx_artikel_deckungsbeitrag");
 		const mg  = document.getElementById("cmx_artikel_marge");
-		const vkPrev = document.getElementById("cmx_artikel_vk_prev");
 
 		function num(v){
 			let s = (v ?? "0").toString().trim();
@@ -173,40 +193,13 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			return left + out + "." + parts[1];
 		}
 
-		function recalcVK(){
-			const v = num(ek?.value) + num(aw?.value);
-			if (vk) vk.value = formatCH(v);
-			recalcMargin();
-		}
-
-		function syncAufwandFromVK(){
-			if (!aw || !vk) { recalcMargin(); return; }
-			const newAw = num(vk.value) - num(ek?.value);
-			aw.value = formatCH(newAw);
-			recalcMargin();
-		}
-
-		function recalcMargin(){
-			if (!mg) return;
+		function recalcDerived(){
+			const selbstkosten = num(ek?.value) + num(aw?.value);
+			const deckungsbeitrag = num(vk?.value) - selbstkosten;
 			const margin = num(vk?.value) - num(ek?.value);
-			mg.value = formatCH(margin);
-		}
-
-		function ensureVkBeforeSubmit(){
-			if (!vk) return;
-			const rawVk = (vk.value ?? "").toString().trim();
-			if (rawVk !== "") return;
-			const hasEk = (ek?.value ?? "").toString().trim() !== "";
-			const hasAw = (aw?.value ?? "").toString().trim() !== "";
-			if (!hasEk && !hasAw) return;
-			recalcVK();
-		}
-
-		function syncVkPrev(){
-			if (!vkPrev || !vk) return;
-			const raw = (vk.value ?? "").toString().trim();
-			if (raw === "") return;
-			vkPrev.value = (Math.round(num(raw) * 100) / 100).toFixed(2);
+			if (sk) sk.value = formatCH(selbstkosten);
+			if (db) db.value = formatCH(deckungsbeitrag);
+			if (mg) mg.value = formatCH(margin);
 		}
 
 		function enableAutoSelect(el) {
@@ -215,20 +208,16 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			el.addEventListener("click", function(){ this.select(); });
 		}
 
-		// VK manuell: Aufwand wird entsprechend angepasst (EK bleibt).
-		["input","change","keydown","paste"].forEach(evt=>{
-			vk?.addEventListener(evt, syncAufwandFromVK, {passive:true});
-		});
-
-		// EK/Aufwand geändert: VK neu berechnen.
+		// Alle manuellen Eingaben aktualisieren die readonly-Kennzahlen.
 		["input","change"].forEach(evt=>{
-			ek?.addEventListener(evt, recalcVK, {passive:true});
-			aw?.addEventListener(evt, recalcVK, {passive:true});
+			ek?.addEventListener(evt, recalcDerived, {passive:true});
+			aw?.addEventListener(evt, recalcDerived, {passive:true});
+			vk?.addEventListener(evt, recalcDerived, {passive:true});
 		});
 
 		// Alle numerischen Felder automatisch selektieren bei Fokus
-		[ek, aw, vk, mg].forEach(enableAutoSelect);
-		[ek, aw, vk, mg].forEach(el => {
+		[ek, aw, vk, sk, db, mg].forEach(enableAutoSelect);
+		[ek, aw, vk].forEach(el => {
 			if (!el) return;
 			if (el.value !== "") el.value = formatCH(num(el.value));
 		});
@@ -236,42 +225,22 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			if (!el) return;
 			el.addEventListener("blur", function(){
 				const raw = (this.value ?? "").toString().trim();
-				if (raw === "") return;
+				if (raw !== "") {
 					this.value = formatCH(num(raw));
-					if (this === vk) {
-						syncAufwandFromVK();
-						syncVkPrev();
-						return;
-					}
-				recalcVK();
-				syncVkPrev();
+				}
+				recalcDerived();
 			});
 		});
 
-		const postForm = document.getElementById("post");
-		postForm?.addEventListener("submit", function(){
-			ensureVkBeforeSubmit();
-			syncVkPrev();
-		});
-
 		// Initialzustand:
-		// Wenn bereits manuell ein VK existiert, der nicht EK+Aufwand entspricht,
-		// Aufwand daran angleichen; sonst VK aus EK+Aufwand berechnen.
-		const hasVk = vk && ((vk.value ?? "").toString().trim() !== "");
-		const delta = hasVk ? Math.abs(num(vk.value) - (num(ek?.value) + num(aw?.value))) : 0;
-		if (hasVk && delta > 0.005) {
-			syncAufwandFromVK();
-		} else {
-			recalcVK();
-		}
-		syncVkPrev();
+		recalcDerived();
 	});
 	</script>';
 }
 
 // Save-Handler:
-// A/F: EK+Aufwand berechnet VK.
-// E:   Wenn VK manuell vom Auto-Wert abweicht, wird Aufwand auf (VK - EK) angepasst.
+// EK, Aufwand und VK werden manuell gespeichert.
+// Selbstkosten, Deckungsbeitrag und Marge werden daraus serverseitig berechnet.
 // ZUSÄTZLICH: Artikel-Nr. (SKU) und Währung speichern.
 \add_action('save_post_artikel', function (int $post_id, \WP_Post $post) {
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -309,12 +278,6 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		$current_ek      = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_EK, true)), 2);
 		$current_aufwand = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, true)), 2);
 		$current_vk      = \round($norm((string) \get_post_meta($post_id, CMX_ARTIKEL_META_VK, true)), 2);
-		$posted_prev_vk  = $has('cmx_artikel_vk_prev')
-			? \round($norm((string) $in('cmx_artikel_vk_prev', '')), 2)
-			: $current_vk;
-		if (!$is_finite($posted_prev_vk) || $posted_prev_vk < 0) {
-			$posted_prev_vk = $current_vk;
-		}
 
 		$ek = $has_ek ? \round($norm($in('cmx_artikel_ek', '')), 2) : $current_ek;
 		if (!$is_finite($ek) || $ek < 0) $ek = 0.00;
@@ -322,42 +285,16 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		$aufwand = $has_aufwand ? \round($norm($in('cmx_artikel_aufwand', '')), 2) : $current_aufwand;
 		if (!$is_finite($aufwand)) $aufwand = 0.00;
 
-		$vk_post = null;
-		if ($has_vk) {
-			$vk_post_s = (string) $in('cmx_artikel_vk', '');
-			$vk_post_raw = \html_entity_decode(\trim($vk_post_s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-			if ($vk_post_raw === '') {
-				$vk_post = $posted_prev_vk;
-			} else {
-				$vk_post = \round($norm($vk_post_raw), 2);
-				$looks_numeric = \preg_match('/\d/u', $vk_post_raw) === 1;
-				if ((!$is_finite($vk_post) || $vk_post < 0) || ($vk_post === 0.0 && $looks_numeric && $posted_prev_vk > 0)) {
-					$vk_post = $posted_prev_vk;
-				}
-			}
-		}
-
-		$vk_auto = \round($ek + $aufwand, 2);
-		$epsilon = 0.005;
-		$manual_vk = ($vk_post !== null && \abs($vk_post - $vk_auto) > $epsilon);
-
-		if ($manual_vk && $vk_post !== null) {
-			$vk = $vk_post;
-			$aufwand = \round($vk - $ek, 2);
-			if (!$is_finite($aufwand)) $aufwand = 0.00;
-		} else {
-			$vk = \round($ek + $aufwand, 2);
-		}
-		if ($has_vk && $vk === 0.0 && $posted_prev_vk > 0) {
-			$vk = $posted_prev_vk;
-			$aufwand = \round($vk - $ek, 2);
-			if (!$is_finite($aufwand)) $aufwand = 0.00;
-		}
+		$vk = $has_vk ? \round($norm($in('cmx_artikel_vk', '')), 2) : $current_vk;
 		if (!$is_finite($vk) || $vk < 0) $vk = 0.00;
+		$selbstkosten = \round($ek + $aufwand, 2);
+		$deckungsbeitrag = \round($vk - $selbstkosten, 2);
 
 		\update_post_meta($post_id, CMX_ARTIKEL_META_EK, $ek);
 		\update_post_meta($post_id, CMX_ARTIKEL_META_AUFWAND, $aufwand);
 		\update_post_meta($post_id, CMX_ARTIKEL_META_VK, $vk);
+		\update_post_meta($post_id, CMX_ARTIKEL_META_SELBSTKOSTEN, $selbstkosten);
+		\update_post_meta($post_id, CMX_ARTIKEL_META_DECKUNGSBEITRAG, $deckungsbeitrag);
 		\update_post_meta($post_id, CMX_ARTIKEL_META_MARGE, \round($vk - $ek, 2));
 		\delete_post_meta($post_id, CMX_ARTIKEL_META_MEHRWERT);
 		\delete_post_meta($post_id, '_cmx_artikel_vk_lock');
