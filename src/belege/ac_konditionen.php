@@ -475,7 +475,10 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 					}
 
 					if ($show_btn) {
-						echo '<a href="#" class="button cmx-mark-paid" data-beleg="'.esc_attr($post_id).'" style="margin-left:8px;">bezahlen</a>';
+						echo '<span class="cmx-admin-pay-wrap" style="position:relative;display:inline-flex;align-items:center;gap:6px;margin-left:8px;">';
+						echo '<button type="button" class="button cmx-mark-paid" data-beleg="' . \esc_attr($post_id) . '">bezahlen</button>';
+						echo '<input type="date" class="cmx-admin-pay-date" data-beleg="' . \esc_attr($post_id) . '" aria-label="Bezahlt am wählen" style="position:absolute;inset:0;opacity:0;pointer-events:none;width:100%;height:100%;border:0;padding:0;margin:0;">';
+						echo '</span>';
 					}
 				}
 				break;
@@ -940,26 +943,63 @@ add_action('admin_footer-edit.php', function () {
 	?>
 	<script>
 	(function($){
-		// Button "Als bezahlt markieren" per AJAX
-		$(document).on('click', '.cmx-mark-paid', function(e){
-			e.preventDefault();
-			var $btn = $(this);
-			var bid  = $btn.data('beleg');
-			if (!bid) return;
-
+		function submitPaidDate(bid, paidDate, $btn){
 			$.post(ajaxurl, {
 				action: 'cmx_mark_beleg_paid',
 				post_id: bid,
-				_wpnonce: '<?php echo esc_js($nonce); ?>'
+				paid_date: paidDate,
+				_ajax_nonce: '<?php echo esc_js($nonce); ?>'
 			}).done(function(resp){
 				if (resp && resp.success) {
 					location.reload();
-				} else {
-					alert(resp && resp.data ? resp.data : 'Fehler beim Speichern.');
+					return;
 				}
+				alert(resp && resp.data ? resp.data : 'Fehler beim Speichern.');
+				$btn.data('loading', 0).prop('disabled', false);
 			}).fail(function(){
 				alert('Fehler beim Speichern.');
+				$btn.data('loading', 0).prop('disabled', false);
 			});
+		}
+
+		$(document).on('click', '.cmx-mark-paid', function(e){
+			e.preventDefault();
+			var $btn = $(this);
+			var bid = parseInt($btn.data('beleg'), 10);
+			if (!bid) return;
+
+			var $wrap = $btn.closest('.cmx-admin-pay-wrap');
+			var $input = $wrap.find('.cmx-admin-pay-date').first();
+			if (!$input.length) return;
+
+			if (!$input.val()) {
+				var now = new Date();
+				var month = String(now.getMonth() + 1).padStart(2, '0');
+				var day = String(now.getDate()).padStart(2, '0');
+				$input.val(String(now.getFullYear()) + '-' + month + '-' + day);
+			}
+
+			var input = $input.get(0);
+			if (input && typeof input.showPicker === 'function') {
+				input.showPicker();
+				return;
+			}
+
+			$input.trigger('focus').trigger('click');
+		});
+
+		$(document).on('change', '.cmx-admin-pay-date', function(){
+			var $input = $(this);
+			var bid = parseInt($input.data('beleg'), 10);
+			var paidDate = String($input.val() || '');
+			var $wrap = $input.closest('.cmx-admin-pay-wrap');
+			var $btn = $wrap.find('.cmx-mark-paid').first();
+			if (!bid || !$btn.length || $btn.data('loading') === 1 || !/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) {
+				return;
+			}
+
+			$btn.data('loading', 1).prop('disabled', true);
+			submitPaidDate(bid, paidDate, $btn);
 		});
 	})(jQuery);
 	</script>
