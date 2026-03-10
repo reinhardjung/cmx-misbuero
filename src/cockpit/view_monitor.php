@@ -825,6 +825,65 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_article_meta')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_contact_meta')) {
+	function cmx_cockpit_view_monitor_contact_meta(int $post_id): array {
+		$kontakt_id_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')) {
+			$kontakt_id_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID');
+		}
+		$kontakt_id_keys = \array_merge($kontakt_id_keys, [
+			'_cmx_beleg_kontakt_id',
+			'cmx_beleg_kontakt_id',
+		]);
+
+		$kontakt_id = 0;
+		foreach (\array_unique($kontakt_id_keys) as $meta_key) {
+			$kontakt_id = (int) \get_post_meta($post_id, $meta_key, true);
+			if ($kontakt_id > 0) {
+				break;
+			}
+		}
+
+		$kontakt_title = '';
+		if ($kontakt_id > 0) {
+			$kontakt_title = (string) (\get_the_title($kontakt_id) ?: '');
+		}
+
+		if ($kontakt_title === '') {
+			$kontakt_label_keys = [];
+			if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL')) {
+				$kontakt_label_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL');
+			}
+			$kontakt_label_keys = \array_merge($kontakt_label_keys, [
+				'_cmx_beleg_kontakt_label',
+				'cmx_beleg_kontakt_label',
+			]);
+
+			foreach (\array_unique($kontakt_label_keys) as $meta_key) {
+				$kontakt_title = \trim((string) \get_post_meta($post_id, $meta_key, true));
+				if ($kontakt_title !== '') {
+					break;
+				}
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$kontakt_title = (string) cmx_beleg_decode_label_text($kontakt_title);
+		}
+
+		$kontakt_title = \trim($kontakt_title);
+		if ($kontakt_title === '' && $kontakt_id > 0) {
+			$kontakt_title = 'Kontakt #' . $kontakt_id;
+		}
+
+		return [
+			'contact_id' => $kontakt_id,
+			'contact_title' => $kontakt_title,
+			'edit_link' => $kontakt_id > 0 ? (string) (\get_edit_post_link($kontakt_id, '') ?: '') : '',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -843,6 +902,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
 		$article_rows = [];
+		$contact_rows = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
@@ -909,6 +969,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$type_info = cmx_cockpit_view_monitor_beleg_type_info($post);
 			$type_slug = (string) ($type_info['slug'] ?? '__without_type__');
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
+			$contact_meta = cmx_cockpit_view_monitor_contact_meta((int) $post->ID);
 			$series[$year][$month_index] += $total;
 			$daily_series[$year][$month_number][$day_index] += $total;
 			$cost_series[$year][$month_index] += $cost_total;
@@ -952,6 +1013,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
+
+			if ((int) ($contact_meta['contact_id'] ?? 0) > 0 || (string) ($contact_meta['contact_title'] ?? '') !== '') {
+				$contact_rows[] = [
+					'year' => $year,
+					'month' => $month_number,
+					'type' => $type_slug,
+					'contact_id' => (int) ($contact_meta['contact_id'] ?? 0),
+					'contact_title' => (string) ($contact_meta['contact_title'] ?? ''),
+					'edit_link' => (string) ($contact_meta['edit_link'] ?? ''),
+					'revenue' => (float) $total,
+					'cost' => (float) $cost_total,
+				];
+			}
 
 			foreach (cmx_cockpit_view_monitor_position_rows((int) $post->ID) as $row) {
 				if (!\is_array($row)) {
@@ -1113,6 +1187,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
 			'article_rows' => $article_rows,
+			'contact_rows' => $contact_rows,
 		];
 	}
 }
@@ -1299,6 +1374,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						<p class="mb-monitor-article-empty" id="cmx-monitor-article-empty" hidden>Keine Artikeldaten im aktuellen Filter.</p>
 					</div>
 				</section>
+				<section class="mb-card mb-card--soft mb-span-8">
+					<h3>Deckungsbeitrag pro Kunde</h3>
+					<p class="mb-monitor-chart-intro">Kunden im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
+					<div class="mb-monitor-article-table-wrap">
+						<table class="mb-monitor-article-table">
+							<colgroup>
+								<col class="col-article">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+							</colgroup>
+							<thead>
+								<tr>
+									<th>Kunde</th>
+									<th class="is-num">Umsatz</th>
+									<th class="is-num">Aufwand</th>
+									<th class="is-num">Deckungsbeitrag</th>
+									<th class="is-num">Marge %</th>
+								</tr>
+							</thead>
+							<tbody id="cmx-monitor-customer-rows"></tbody>
+						</table>
+						<p class="mb-monitor-article-empty" id="cmx-monitor-customer-empty" hidden>Keine Kundendaten im aktuellen Filter.</p>
+					</div>
+				</section>
 
 			</div>
 		</div>
@@ -1358,6 +1459,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var modeEl = document.getElementById("cmx-monitor-stat-mode");
 			var articleRowsEl = document.getElementById("cmx-monitor-article-rows");
 			var articleEmptyEl = document.getElementById("cmx-monitor-article-empty");
+			var customerRowsEl = document.getElementById("cmx-monitor-customer-rows");
+			var customerEmptyEl = document.getElementById("cmx-monitor-customer-empty");
 			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
@@ -2336,6 +2439,84 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					articleRowsEl.appendChild(tr);
 				});
 			};
+			var renderCustomerTable = function(context){
+				if (!customerRowsEl || !customerEmptyEl) return;
+
+				var selectedYear = String(context.selectedYear || "");
+				var selectedQuarter = String(context.selectedQuarter || "all");
+				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedType = String(context.selectedType || "all");
+				var sourceRows = Array.isArray(payload.contact_rows) ? payload.contact_rows : [];
+				var customers = {};
+
+				sourceRows.forEach(function(row){
+					var rowYear = String(row.year || "");
+					var rowMonth = Number(row.month || 0);
+					var rowType = String(row.type || "");
+					if (rowYear !== selectedYear) return;
+					if (selectedType !== "all" && rowType !== selectedType) return;
+					if (selectedMonth !== "all") {
+						if (rowMonth !== Number(selectedMonth || 0)) return;
+					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
+						return;
+					}
+
+					var contactId = Number(row.contact_id || 0);
+					var contactTitle = String(row.contact_title || "").trim();
+					var key = contactId > 0 ? ("id:" + String(contactId)) : "";
+					if (!key && contactTitle !== "") {
+						key = "label:" + contactTitle.toLowerCase();
+					}
+					if (!key) return;
+
+					if (!customers[key]) {
+						customers[key] = {
+							id: contactId,
+							title: contactTitle,
+							editLink: String(row.edit_link || ""),
+							revenue: 0,
+							cost: 0
+						};
+					}
+					customers[key].revenue += Number(row.revenue || 0);
+					customers[key].cost += Number(row.cost || 0);
+				});
+
+				var rows = Object.keys(customers).map(function(key){
+					var item = customers[key];
+					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
+					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
+					return item;
+				}).sort(function(a, b){
+					if (b.profit !== a.profit) return b.profit - a.profit;
+					if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+					return String(a.title || "").localeCompare(String(b.title || ""), "de");
+				});
+
+				customerRowsEl.innerHTML = "";
+				if (!rows.length) {
+					customerEmptyEl.hidden = false;
+					return;
+				}
+
+				customerEmptyEl.hidden = true;
+				rows.slice(0, 12).forEach(function(item){
+					var tr = document.createElement("tr");
+					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
+					var customerLabel = item.title || (item.id > 0 ? ("Kontakt #" + String(item.id)) : "Ohne Kontakt");
+					var customerInner = item.editLink
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(customerLabel) + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(customerLabel) + \'</span>\';
+					var metaInner = item.id > 0 ? \'<span class="mb-monitor-article-meta">#\' + escapeHtml(String(item.id)) + \'</span>\' : "";
+					tr.innerHTML =
+						\'<td>\' + customerInner + metaInner + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
+						\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatPercent(item.margin)) + \'</td>\';
+					customerRowsEl.appendChild(tr);
+				});
+			};
 			var updateDashboard = function(){
 				var context = buildContextData();
 				updateOverview(context);
@@ -2343,6 +2524,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateCostChart(context);
 				updateProfitChart(context);
 				renderArticleTable(context);
+				renderCustomerTable(context);
 			};
 
 			yearSelect.addEventListener("change", function(){
