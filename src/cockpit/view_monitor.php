@@ -1,7 +1,6 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 
-if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
 // if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
 
 
