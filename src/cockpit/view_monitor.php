@@ -287,6 +287,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				color:#98a2b3;
 				font-weight:700;
 			}
+			.mb-monitor-sort-button{
+				display:inline-flex;
+				align-items:center;
+				gap:6px;
+				padding:0;
+				border:0;
+				background:transparent;
+				color:inherit;
+				font:inherit;
+				letter-spacing:inherit;
+				text-transform:inherit;
+				cursor:pointer;
+			}
+			.mb-monitor-sort-button:hover{
+				color:#667085;
+			}
+			.mb-monitor-sort-button.is-active{
+				color:#667085;
+			}
+			.mb-monitor-sort-button .mb-monitor-sort-indicator{
+				display:inline-block;
+				min-width:10px;
+				font-size:10px;
+				line-height:1;
+			}
 			.mb-monitor-article-table td.is-num{
 				text-align:right;
 				white-space:nowrap;
@@ -294,6 +319,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			}
 			.mb-monitor-article-table th.is-num{
 				text-align:right;
+			}
+			.mb-monitor-article-table th.is-num .mb-monitor-sort-button{
+				width:100%;
+				justify-content:flex-end;
 			}
 			.mb-monitor-article-table td:first-child{
 				padding-right:24px;
@@ -844,6 +873,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_contact_meta')
 			}
 		}
 
+		if ($kontakt_id > 0 && !cmx_cockpit_view_monitor_post_is_published($kontakt_id)) {
+			return [
+				'contact_id' => 0,
+				'contact_title' => '',
+				'edit_link' => '',
+			];
+		}
+
 		$kontakt_title = '';
 		if ($kontakt_id > 0) {
 			$kontakt_title = (string) (\get_the_title($kontakt_id) ?: '');
@@ -884,6 +921,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_contact_meta')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_post_is_published')) {
+	function cmx_cockpit_view_monitor_post_is_published(int $post_id): bool {
+		return $post_id > 0 && \get_post_status($post_id) === 'publish';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -909,7 +952,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 		$query = new \WP_Query([
 			'post_type' => $post_type,
-			'post_status' => 'any',
+			'post_status' => 'publish',
 			'posts_per_page' => -1,
 			'orderby' => 'date',
 			'order' => 'ASC',
@@ -1014,7 +1057,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
 
-			if ((int) ($contact_meta['contact_id'] ?? 0) > 0 || (string) ($contact_meta['contact_title'] ?? '') !== '') {
+			if ((int) ($contact_meta['contact_id'] ?? 0) > 0) {
 				$contact_rows[] = [
 					'year' => $year,
 					'month' => $month_number,
@@ -1039,6 +1082,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 				$artikel_id = (int) ($row['artikel_id'] ?? 0);
 				if ($artikel_id <= 0) {
+					continue;
+				}
+				if (!cmx_cockpit_view_monitor_post_is_published($artikel_id)) {
 					continue;
 				}
 
@@ -1352,7 +1398,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<h3>Deckungsbeitrag pro Artikel</h3>
 					<p class="mb-monitor-chart-intro">Artikel im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
-						<table class="mb-monitor-article-table">
+						<table class="mb-monitor-article-table" id="cmx-monitor-article-table">
 							<colgroup>
 								<col class="col-article">
 								<col class="col-num">
@@ -1362,11 +1408,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							</colgroup>
 							<thead>
 								<tr>
-									<th>Artikel</th>
-									<th class="is-num">Umsatz</th>
-									<th class="is-num">Aufwand</th>
-									<th class="is-num">Deckungsbeitrag</th>
-									<th class="is-num">Marge %</th>
+									<th><button type="button" class="mb-monitor-sort-button" data-table="article" data-key="title">Artikel<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="article" data-key="revenue">Umsatz<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="article" data-key="cost">Aufwand<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="article" data-key="profit">Deckungsbeitrag<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="article" data-key="margin">Marge %<span class="mb-monitor-sort-indicator"></span></button></th>
 								</tr>
 							</thead>
 							<tbody id="cmx-monitor-article-rows"></tbody>
@@ -1378,7 +1424,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<h3>Deckungsbeitrag pro Kunde</h3>
 					<p class="mb-monitor-chart-intro">Kunden im gewählten Zeitraum, sortiert nach Deckungsbeitrag.</p>
 					<div class="mb-monitor-article-table-wrap">
-						<table class="mb-monitor-article-table">
+						<table class="mb-monitor-article-table" id="cmx-monitor-customer-table">
 							<colgroup>
 								<col class="col-article">
 								<col class="col-num">
@@ -1388,11 +1434,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							</colgroup>
 							<thead>
 								<tr>
-									<th>Kunde</th>
-									<th class="is-num">Umsatz</th>
-									<th class="is-num">Aufwand</th>
-									<th class="is-num">Deckungsbeitrag</th>
-									<th class="is-num">Marge %</th>
+									<th><button type="button" class="mb-monitor-sort-button" data-table="customer" data-key="title">Kunde<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="customer" data-key="revenue">Umsatz<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="customer" data-key="cost">Aufwand<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="customer" data-key="profit">Deckungsbeitrag<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="customer" data-key="margin">Marge %<span class="mb-monitor-sort-indicator"></span></button></th>
 								</tr>
 							</thead>
 							<tbody id="cmx-monitor-customer-rows"></tbody>
@@ -1461,6 +1507,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var articleEmptyEl = document.getElementById("cmx-monitor-article-empty");
 			var customerRowsEl = document.getElementById("cmx-monitor-customer-rows");
 			var customerEmptyEl = document.getElementById("cmx-monitor-customer-empty");
+			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
+			var articleSort = { key: "profit", direction: "desc" };
+			var customerSort = { key: "profit", direction: "desc" };
 			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
@@ -1688,6 +1737,61 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					.replace(/>/g, "&gt;")
 					.replace(/"/g, "&quot;")
 					.replace(/\'/g, "&#039;");
+			};
+			var getSortState = function(tableName){
+				return tableName === "customer" ? customerSort : articleSort;
+			};
+			var updateSortButtons = function(tableName){
+				var sortState = getSortState(tableName);
+				sortButtons.forEach(function(button){
+					if (String(button.getAttribute("data-table") || "") !== tableName) {
+						return;
+					}
+					var isActive = String(button.getAttribute("data-key") || "") === String(sortState.key || "");
+					button.classList.toggle("is-active", isActive);
+					button.setAttribute("aria-pressed", isActive ? "true" : "false");
+					var indicator = button.querySelector(".mb-monitor-sort-indicator");
+					if (indicator) {
+						indicator.textContent = isActive ? (sortState.direction === "asc" ? "▲" : "▼") : "";
+					}
+					var th = button.closest("th");
+					if (th) {
+						th.setAttribute("aria-sort", isActive ? (sortState.direction === "asc" ? "ascending" : "descending") : "none");
+					}
+				});
+			};
+			var sortTableRows = function(rows, tableName){
+				var sortState = getSortState(tableName);
+				var key = String(sortState.key || "profit");
+				var direction = String(sortState.direction || "desc") === "asc" ? 1 : -1;
+				return rows.slice().sort(function(a, b){
+					var valueA;
+					var valueB;
+
+					switch (key) {
+						case "title":
+							valueA = String(a.title || "");
+							valueB = String(b.title || "");
+							return valueA.localeCompare(valueB, "de") * direction;
+						case "revenue":
+						case "cost":
+						case "profit":
+						case "margin":
+							valueA = Number(a[key] || 0);
+							valueB = Number(b[key] || 0);
+							if (valueA !== valueB) {
+								return (valueA - valueB) * direction;
+							}
+							break;
+					}
+
+					var fallbackTitleA = String(a.title || "");
+					var fallbackTitleB = String(b.title || "");
+					if (fallbackTitleA !== fallbackTitleB) {
+						return fallbackTitleA.localeCompare(fallbackTitleB, "de");
+					}
+					return Number(b.revenue || 0) - Number(a.revenue || 0);
+				});
 			};
 			var updateYearOptions = function(){
 				var selectedQuarter = String(quarterSelect.value || "all");
@@ -2409,11 +2513,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
 					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
 					return item;
-				}).sort(function(a, b){
-					if (b.profit !== a.profit) return b.profit - a.profit;
-					if (b.revenue !== a.revenue) return b.revenue - a.revenue;
-					return String(a.title || "").localeCompare(String(b.title || ""), "de");
 				});
+
+				rows = sortTableRows(rows, "article");
+				updateSortButtons("article");
 
 				articleRowsEl.innerHTML = "";
 				if (!rows.length) {
@@ -2487,11 +2590,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
 					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
 					return item;
-				}).sort(function(a, b){
-					if (b.profit !== a.profit) return b.profit - a.profit;
-					if (b.revenue !== a.revenue) return b.revenue - a.revenue;
-					return String(a.title || "").localeCompare(String(b.title || ""), "de");
 				});
+
+				rows = sortTableRows(rows, "customer");
+				updateSortButtons("customer");
 
 				customerRowsEl.innerHTML = "";
 				if (!rows.length) {
@@ -2517,6 +2619,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					customerRowsEl.appendChild(tr);
 				});
 			};
+			sortButtons.forEach(function(button){
+				button.addEventListener("click", function(){
+					var tableName = String(button.getAttribute("data-table") || "");
+					var key = String(button.getAttribute("data-key") || "");
+					if (!tableName || !key) return;
+					var sortState = getSortState(tableName);
+					if (sortState.key === key) {
+						sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+					} else {
+						sortState.key = key;
+						sortState.direction = key === "title" ? "asc" : "desc";
+					}
+					updateDashboard();
+				});
+			});
 			var updateDashboard = function(){
 				var context = buildContextData();
 				updateOverview(context);
