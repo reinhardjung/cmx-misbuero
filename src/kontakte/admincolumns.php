@@ -29,6 +29,215 @@ function cmx_stufen_tax(): string {
 	return 'stufen';
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_view_active')) {
+	function cmx_admin_deckungsbeitrag_view_active(string $post_type): bool {
+		$current_post_type = isset($_GET['post_type']) ? \sanitize_key((string) \wp_unslash($_GET['post_type'])) : '';
+		if ($current_post_type !== $post_type) {
+			return false;
+		}
+
+		$current_view = isset($_GET['cmx_view']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_view'])) : '';
+		return $current_view === 'deckungsbeitrag';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_format_number')) {
+	function cmx_admin_deckungsbeitrag_format_number(float $value): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')) {
+			return (string) cmx_format_swiss_number($value, 2);
+		}
+
+		return \number_format($value, 2, '.', '\'');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_insert_column')) {
+	function cmx_admin_deckungsbeitrag_insert_column(array $columns, string $column_key, string $label): array {
+		if (isset($columns[$column_key])) {
+			return $columns;
+		}
+
+		$new = [];
+		$inserted = false;
+		foreach ($columns as $key => $column_label) {
+			$new[$key] = $column_label;
+			if ($key === 'title') {
+				$new[$column_key] = $label;
+				$inserted = true;
+			}
+		}
+
+		if (!$inserted) {
+			$new[$column_key] = $label;
+		}
+
+		return $new;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_map')) {
+	function cmx_admin_deckungsbeitrag_map(string $kind): array {
+		static $cache = [];
+
+		if (isset($cache[$kind])) {
+			return $cache[$kind];
+		}
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
+			$cache[$kind] = [];
+			return [];
+		}
+
+		$payload = (array) cmx_cockpit_view_monitor_chart_payload();
+		$rows = [];
+		$id_key = '';
+		$title_key = '';
+
+		switch ($kind) {
+			case 'artikel':
+				$rows = (array) ($payload['article_rows'] ?? []);
+				$id_key = 'article_id';
+				$title_key = 'article_title';
+				break;
+			case 'kontakte':
+				$rows = (array) ($payload['contact_rows'] ?? []);
+				$id_key = 'contact_id';
+				$title_key = 'contact_title';
+				break;
+			case 'projekte':
+				$rows = (array) ($payload['project_rows'] ?? []);
+				$id_key = 'project_id';
+				$title_key = 'project_title';
+				break;
+			default:
+				$cache[$kind] = [];
+				return [];
+		}
+
+		$items = [];
+		foreach ($rows as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+
+			$object_id = (int) ($row[$id_key] ?? 0);
+			if ($object_id <= 0) {
+				continue;
+			}
+
+			if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_post_is_published')) {
+				if (!cmx_cockpit_view_monitor_post_is_published($object_id)) {
+					continue;
+				}
+			} elseif (\get_post_status($object_id) !== 'publish') {
+				continue;
+			}
+
+			if (!isset($items[$object_id])) {
+				$title = \trim((string) ($row[$title_key] ?? ''));
+				if ($title === '') {
+					$title = (string) (\get_the_title($object_id) ?: '');
+				}
+				$items[$object_id] = [
+					'title' => $title,
+					'revenue' => 0.0,
+					'cost' => 0.0,
+					'profit' => 0.0,
+					'margin' => 0.0,
+				];
+			}
+
+			$items[$object_id]['revenue'] += (float) ($row['revenue'] ?? 0.0);
+			$items[$object_id]['cost'] += (float) ($row['cost'] ?? 0.0);
+		}
+
+		foreach ($items as &$item) {
+			$item['revenue'] = \round((float) $item['revenue'], 2);
+			$item['cost'] = \round((float) $item['cost'], 2);
+			$item['profit'] = \round((float) $item['revenue'] - (float) $item['cost'], 2);
+			$item['margin'] = (float) $item['revenue'] !== 0.0
+				? \round((((float) $item['profit']) / ((float) $item['revenue'])) * 100, 2)
+				: 0.0;
+		}
+		unset($item);
+
+		\uasort($items, static function (array $left, array $right): int {
+			if ((float) $left['profit'] !== (float) $right['profit']) {
+				return ((float) $right['profit'] <=> (float) $left['profit']);
+			}
+			if ((float) $left['revenue'] !== (float) $right['revenue']) {
+				return ((float) $right['revenue'] <=> (float) $left['revenue']);
+			}
+			return \strnatcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
+		});
+
+		$cache[$kind] = $items;
+		return $items;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_add_view')) {
+	function cmx_admin_deckungsbeitrag_add_view(array $views, string $post_type, string $kind): array {
+		if (!\current_user_can('edit_posts')) {
+			return $views;
+		}
+
+		$args = $_GET ?? [];
+		unset($args['paged'], $args['orderby'], $args['order'], $args['_wpnonce'], $args['_wp_http_referer']);
+		$args['post_type'] = $post_type;
+		$args['cmx_view'] = 'deckungsbeitrag';
+
+		$url = \add_query_arg($args, \admin_url('edit.php'));
+		$count = \count(cmx_admin_deckungsbeitrag_map($kind));
+		$is_current = cmx_admin_deckungsbeitrag_view_active($post_type);
+
+		$views['cmx_deckungsbeitrag'] = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>Deckungsbeitrag <span class="count">(' . (int) $count . ')</span></a>';
+		return $views;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_apply_query_sort')) {
+	function cmx_admin_deckungsbeitrag_apply_query_sort(\WP_Query $query, string $post_type, string $kind): void {
+		if (!\is_admin() || !$query->is_main_query() || !cmx_admin_deckungsbeitrag_view_active($post_type)) {
+			return;
+		}
+
+		$query_post_type = $query->get('post_type');
+		$matches_post_type = ((string) $query_post_type === $post_type)
+			|| (\is_array($query_post_type) && \in_array($post_type, $query_post_type, true))
+			|| ($query_post_type === null && isset($_GET['post_type']) && \sanitize_key((string) \wp_unslash($_GET['post_type'])) === $post_type);
+		if (!$matches_post_type) {
+			return;
+		}
+
+		$ids = \array_map('intval', \array_keys(cmx_admin_deckungsbeitrag_map($kind)));
+		if ($ids === []) {
+			$ids = [0];
+		}
+
+		$query->set('post__in', $ids);
+		$query->set('orderby', 'post__in');
+		$query->set('order', 'ASC');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_render_value')) {
+	function cmx_admin_deckungsbeitrag_render_value(string $kind, int $post_id): void {
+		$item = cmx_admin_deckungsbeitrag_map($kind)[$post_id] ?? null;
+		if (!\is_array($item)) {
+			echo '';
+			return;
+		}
+
+		$profit = (float) ($item['profit'] ?? 0.0);
+		$margin = (float) ($item['margin'] ?? 0.0);
+		$color = $profit < 0 ? '#b42318' : ($profit > 0 ? '#166534' : '#344054');
+
+		echo '<strong style="color:' . \esc_attr($color) . ';">' . \esc_html(cmx_admin_deckungsbeitrag_format_number($profit)) . '</strong>';
+		echo '<span style="display:block;margin-top:2px;font-size:11px;color:#98a2b3;">' . \esc_html(cmx_admin_deckungsbeitrag_format_number($margin)) . '%</span>';
+	}
+}
+
 /* ==========================================================
  * Admin-Columns (Firmenname → Kundenart → Telefon 1 → E-Mail 1 → Karte)
  * + "Datum" entfernen
@@ -713,3 +922,27 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	$query->set('s', '');
 	$query->set('post__in', empty($matched_ids) ? [0] : $matched_ids);
 }
+
+\add_filter('views_edit-kontakte', function(array $views): array {
+	return cmx_admin_deckungsbeitrag_add_view($views, 'kontakte', 'kontakte');
+}, 30);
+
+\add_filter('manage_edit-kontakte_columns', function(array $columns): array {
+	if (!cmx_admin_deckungsbeitrag_view_active('kontakte')) {
+		return $columns;
+	}
+
+	return cmx_admin_deckungsbeitrag_insert_column($columns, 'cmx_deckungsbeitrag', 'Deckungsbeitrag');
+}, 900);
+
+\add_action('manage_kontakte_posts_custom_column', function(string $column, int $post_id): void {
+	if ($column !== 'cmx_deckungsbeitrag' || !cmx_admin_deckungsbeitrag_view_active('kontakte')) {
+		return;
+	}
+
+	cmx_admin_deckungsbeitrag_render_value('kontakte', $post_id);
+}, 20, 2);
+
+\add_action('pre_get_posts', function(\WP_Query $query): void {
+	cmx_admin_deckungsbeitrag_apply_query_sort($query, 'kontakte', 'kontakte');
+}, 999);

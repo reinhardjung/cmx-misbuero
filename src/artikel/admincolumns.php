@@ -845,3 +845,27 @@ function cmx_lieferanten_args(): array {
 
 	return $clauses;
 }, 9999, 2);
+
+\add_filter('views_edit-artikel', function(array $views): array {
+	return cmx_admin_deckungsbeitrag_add_view($views, 'artikel', 'artikel');
+}, 30);
+
+\add_filter('manage_edit-artikel_columns', function(array $columns): array {
+	if (!cmx_admin_deckungsbeitrag_view_active('artikel')) {
+		return $columns;
+	}
+
+	return cmx_admin_deckungsbeitrag_insert_column($columns, 'cmx_deckungsbeitrag', 'Deckungsbeitrag');
+}, 900);
+
+\add_action('manage_artikel_posts_custom_column', function(string $column, int $post_id): void {
+	if ($column !== 'cmx_deckungsbeitrag' || !cmx_admin_deckungsbeitrag_view_active('artikel')) {
+		return;
+	}
+
+	cmx_admin_deckungsbeitrag_render_value('artikel', $post_id);
+}, 20, 2);
+
+\add_action('pre_get_posts', function(\WP_Query $query): void {
+	cmx_admin_deckungsbeitrag_apply_query_sort($query, 'artikel', 'artikel');
+}, 99999);

@@ -793,3 +793,27 @@ add_action('manage_projekte_posts_custom_column', function($column, $post_id) {
 		. '<span class="cmx-umsatz-frac">' . esc_html($parts['frac']) . '</span>'
 		. '</span>';
 }, 10, 2);
+
+add_filter('views_edit-projekte', function(array $views): array {
+	return cmx_admin_deckungsbeitrag_add_view($views, 'projekte', 'projekte');
+}, 30);
+
+add_filter('manage_edit-projekte_columns', function(array $columns): array {
+	if (!cmx_admin_deckungsbeitrag_view_active('projekte')) {
+		return $columns;
+	}
+
+	return cmx_admin_deckungsbeitrag_insert_column($columns, 'cmx_deckungsbeitrag', 'Deckungsbeitrag');
+}, 900);
+
+add_action('manage_projekte_posts_custom_column', function(string $column, int $post_id): void {
+	if ($column !== 'cmx_deckungsbeitrag' || !cmx_admin_deckungsbeitrag_view_active('projekte')) {
+		return;
+	}
+
+	cmx_admin_deckungsbeitrag_render_value('projekte', $post_id);
+}, 20, 2);
+
+add_action('pre_get_posts', function(\WP_Query $query): void {
+	cmx_admin_deckungsbeitrag_apply_query_sort($query, 'projekte', 'projekte');
+}, 999);
