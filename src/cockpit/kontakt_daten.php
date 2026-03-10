@@ -62,8 +62,9 @@ function cmx_render_kontakt_wichtige_daten(): void {
 
 	echo '<style>
 		#cmx_kontakt_wichtige_daten .cmx-wd-list { margin:0; padding:0; list-style:none; }
-		#cmx_kontakt_wichtige_daten .cmx-wd-item { padding:6px 0; border-bottom:1px solid #f0f0f0; }
+		#cmx_kontakt_wichtige_daten .cmx-wd-item { padding:6px 8px; margin:0 -8px; border-bottom:1px solid #f0f0f0; border-radius:8px; transition:background-color .15s ease; }
 		#cmx_kontakt_wichtige_daten .cmx-wd-item:last-child { border-bottom:none; }
+		#cmx_kontakt_wichtige_daten .cmx-wd-item:hover { background:#f7fbff; }
 		#cmx_kontakt_wichtige_daten .cmx-wd-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; align-items:start; }
 		#cmx_kontakt_wichtige_daten .cmx-wd-main { min-width:0; }
 		#cmx_kontakt_wichtige_daten .cmx-wd-title { font-weight:600; display:block; }
