@@ -170,6 +170,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				gap:10px;
 				margin-top:12px;
 			}
+			.mb-monitor-overview-grid{
+				display:grid;
+				grid-template-columns:repeat(4,minmax(0,1fr));
+				gap:18px;
+			}
+			.mb-monitor-overview-card{
+				min-height:122px;
+			}
+			.mb-monitor-overview-card .mb-kpi-value{
+				font-size:28px;
+			}
+			.mb-monitor-chart-intro{
+				margin:-2px 0 12px;
+				color:#667085;
+				font-size:13px;
+			}
 			.mb-demo-linechart-stats strong{
 				display:block;
 				font-size:16px;
@@ -260,7 +276,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				.mb-span-8{grid-column:span 1}
 			}
 			@media (max-width: 640px){
+				.mb-monitor-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 				.mb-demo-linechart-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+			}
+			@media (max-width: 520px){
+				.mb-monitor-overview-grid{grid-template-columns:1fr}
 			}
 		';
 	}
@@ -476,6 +496,135 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_has_paid
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_parse_number')) {
+	function cmx_cockpit_view_monitor_parse_number($value): float {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
+			return (float) cmx_norm_decimal((string) $value);
+		}
+
+		$raw = \trim((string) $value);
+		if ($raw === '') {
+			return 0.0;
+		}
+
+		$raw = \str_replace(["\xE2\x88\x92", '−', '\'', ' '], ['-', '-', '', ''], $raw);
+		$raw = \str_replace(',', '.', $raw);
+
+		return \is_numeric($raw) ? (float) $raw : 0.0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_position_rows')) {
+	function cmx_cockpit_view_monitor_position_rows(int $post_id): array {
+		$raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
+
+		if (\is_string($raw) && $raw !== '') {
+			$tmp = \json_decode($raw, true);
+			if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+				return $tmp;
+			}
+			$tmp = @\unserialize($raw);
+			return \is_array($tmp) ? $tmp : [];
+		}
+
+		return \is_array($raw) ? $raw : [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_artikel_unit_cost')) {
+	function cmx_cockpit_view_monitor_artikel_unit_cost(int $artikel_id): float {
+		static $cache = [];
+
+		if ($artikel_id <= 0) {
+			return 0.0;
+		}
+		if (isset($cache[$artikel_id])) {
+			return (float) $cache[$artikel_id];
+		}
+
+		$selfcost_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN')) {
+			$selfcost_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN');
+		}
+		$selfcost_keys[] = '_cmx_artikel_selbstkosten';
+		foreach (\array_unique($selfcost_keys) as $meta_key) {
+			$raw = \get_post_meta($artikel_id, $meta_key, true);
+			if ($raw === '' || $raw === null) {
+				continue;
+			}
+			$cache[$artikel_id] = \round(cmx_cockpit_view_monitor_parse_number($raw), 2);
+			return (float) $cache[$artikel_id];
+		}
+
+		$ek_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK')) {
+			$ek_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK');
+		}
+		$ek_keys[] = '_cmx_artikel_ek';
+
+		$aufwand_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')) {
+			$aufwand_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND');
+		}
+		$aufwand_keys[] = '_cmx_artikel_aufwand';
+
+		$ek = 0.0;
+		foreach (\array_unique($ek_keys) as $meta_key) {
+			$raw = \get_post_meta($artikel_id, $meta_key, true);
+			if ($raw === '' || $raw === null) {
+				continue;
+			}
+			$ek = cmx_cockpit_view_monitor_parse_number($raw);
+			break;
+		}
+
+		$aufwand = 0.0;
+		foreach (\array_unique($aufwand_keys) as $meta_key) {
+			$raw = \get_post_meta($artikel_id, $meta_key, true);
+			if ($raw === '' || $raw === null) {
+				continue;
+			}
+			$aufwand = cmx_cockpit_view_monitor_parse_number($raw);
+			break;
+		}
+
+		$cache[$artikel_id] = \round($ek + $aufwand, 2);
+		return (float) $cache[$artikel_id];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_cost')) {
+	function cmx_cockpit_view_monitor_beleg_cost(int $post_id): float {
+		$rows = cmx_cockpit_view_monitor_position_rows($post_id);
+		$total_cost = 0.0;
+
+		foreach ($rows as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+
+			$row_type = \sanitize_key((string) ($row['typ'] ?? $row['row_type'] ?? ''));
+			if ($row_type === 'abschnitt') {
+				continue;
+			}
+
+			$artikel_id = (int) ($row['artikel_id'] ?? 0);
+			if ($artikel_id <= 0) {
+				continue;
+			}
+
+			$qty = cmx_cockpit_view_monitor_parse_number($row['menge'] ?? 0);
+			if ($qty === 0.0) {
+				continue;
+			}
+
+			$total_cost += $qty * cmx_cockpit_view_monitor_artikel_unit_cost($artikel_id);
+		}
+
+		return \round($total_cost, 2);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -483,10 +632,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$types = [];
 		$series = [];
 		$daily_series = [];
+		$cost_series = [];
+		$daily_cost_series = [];
 		$counts = [];
 		$counts_monthly = [];
 		$series_by_type = [];
 		$daily_series_by_type = [];
+		$cost_series_by_type = [];
+		$daily_cost_series_by_type = [];
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
@@ -533,22 +686,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 			if (!isset($series[$year])) {
 				$series[$year] = \array_fill(0, 12, 0.0);
+				$cost_series[$year] = \array_fill(0, 12, 0.0);
 				$counts[$year] = 0;
 				$counts_monthly[$year] = \array_fill(1, 12, 0);
 			}
 			if (!isset($daily_series[$year])) {
 				$daily_series[$year] = [];
 			}
+			if (!isset($daily_cost_series[$year])) {
+				$daily_cost_series[$year] = [];
+			}
 			if (!isset($daily_series[$year][$month_number])) {
 				$daily_series[$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
+			if (!isset($daily_cost_series[$year][$month_number])) {
+				$daily_cost_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
 
 			$total = cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
+			$cost_total = cmx_cockpit_view_monitor_beleg_cost((int) $post->ID);
 			$type_info = cmx_cockpit_view_monitor_beleg_type_info($post);
 			$type_slug = (string) ($type_info['slug'] ?? '__without_type__');
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
 			$series[$year][$month_index] += $total;
 			$daily_series[$year][$month_number][$day_index] += $total;
+			$cost_series[$year][$month_index] += $cost_total;
+			$daily_cost_series[$year][$month_number][$day_index] += $cost_total;
 			$counts[$year] = (int) ($counts[$year] ?? 0) + 1;
 			$counts_monthly[$year][$month_number] = (int) (($counts_monthly[$year][$month_number] ?? 0) + 1);
 
@@ -558,23 +721,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($series_by_type[$type_slug])) {
 				$series_by_type[$type_slug] = [];
 				$daily_series_by_type[$type_slug] = [];
+				$cost_series_by_type[$type_slug] = [];
+				$daily_cost_series_by_type[$type_slug] = [];
 				$counts_by_type[$type_slug] = [];
 				$counts_monthly_by_type[$type_slug] = [];
 			}
 			if (!isset($series_by_type[$type_slug][$year])) {
 				$series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+				$cost_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
 				$counts_by_type[$type_slug][$year] = 0;
 				$counts_monthly_by_type[$type_slug][$year] = \array_fill(1, 12, 0);
 			}
 			if (!isset($daily_series_by_type[$type_slug][$year])) {
 				$daily_series_by_type[$type_slug][$year] = [];
 			}
+			if (!isset($daily_cost_series_by_type[$type_slug][$year])) {
+				$daily_cost_series_by_type[$type_slug][$year] = [];
+			}
 			if (!isset($daily_series_by_type[$type_slug][$year][$month_number])) {
 				$daily_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
+			if (!isset($daily_cost_series_by_type[$type_slug][$year][$month_number])) {
+				$daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 
 			$series_by_type[$type_slug][$year][$month_index] += $total;
 			$daily_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+			$cost_series_by_type[$type_slug][$year][$month_index] += $cost_total;
+			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
 		}
@@ -591,9 +765,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				static fn($value): float => \round((float) $value, 2),
 				(array) $values
 			);
+			$cost_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($cost_series[$year] ?? [])
+			);
 			if (isset($daily_series[$year]) && \is_array($daily_series[$year])) {
 				foreach ($daily_series[$year] as $month_number => $day_values) {
 					$daily_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($daily_cost_series[$year]) && \is_array($daily_cost_series[$year])) {
+				foreach ($daily_cost_series[$year] as $month_number => $day_values) {
+					$daily_cost_series[$year][$month_number] = \array_map(
 						static fn($value): float => \round((float) $value, 2),
 						(array) $day_values
 					);
@@ -607,11 +793,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					static fn($value): float => \round((float) $value, 2),
 					(array) $values
 				);
+				$cost_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($cost_series_by_type[$type_slug][$year] ?? [])
+				);
 			}
 			if (isset($daily_series_by_type[$type_slug]) && \is_array($daily_series_by_type[$type_slug])) {
 				foreach ($daily_series_by_type[$type_slug] as $year => $months) {
 					foreach ((array) $months as $month_number => $day_values) {
 						$daily_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($daily_cost_series_by_type[$type_slug]) && \is_array($daily_cost_series_by_type[$type_slug])) {
+				foreach ($daily_cost_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_map(
 							static fn($value): float => \round((float) $value, 2),
 							(array) $day_values
 						);
@@ -625,6 +825,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$years = [$current_year];
 			$series[$current_year] = \array_fill(0, 12, 0.0);
 			$daily_series[$current_year] = [];
+			$cost_series[$current_year] = \array_fill(0, 12, 0.0);
+			$daily_cost_series[$current_year] = [];
 			$counts[$current_year] = 0;
 			$counts_monthly[$current_year] = \array_fill(1, 12, 0);
 		}
@@ -663,10 +865,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'types' => $type_options,
 			'series' => $series,
 			'daily_series' => $daily_series,
+			'cost_series' => $cost_series,
+			'daily_cost_series' => $daily_cost_series,
 			'counts' => $counts,
 			'counts_monthly' => $counts_monthly,
 			'series_by_type' => $series_by_type,
 			'daily_series_by_type' => $daily_series_by_type,
+			'cost_series_by_type' => $cost_series_by_type,
+			'daily_cost_series_by_type' => $daily_cost_series_by_type,
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
 		];
@@ -685,7 +891,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		$selected_month = 'all';
 		$selected_year = (int) ($years[0] ?? \wp_date('Y'));
 		$selected_series = (array) (($chart_payload['series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
+		$selected_cost_series = (array) (($chart_payload['cost_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
 		$selected_total = \array_sum($selected_series);
+		$selected_cost_total = \array_sum($selected_cost_series);
+		$selected_profit_total = $selected_total - $selected_cost_total;
+		$selected_margin_total = $selected_total != 0.0 ? (($selected_profit_total / $selected_total) * 100) : 0.0;
 		$selected_count = (int) (($chart_payload['counts'] ?? [])[$selected_year] ?? 0);
 		$compare_year = isset($chart_payload['series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
 		$compare_series = $compare_year > 0
@@ -758,6 +968,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 					</div>
 				</section>
+				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
+					<strong class="mb-kpi-value" id="cmx-monitor-overview-total"><?php echo \esc_html(\number_format($selected_total, 2, '.', '\'')); ?></strong>
+					<span class="mb-kpi-label">Umsatz</span>
+				</section>
+				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
+					<strong class="mb-kpi-value" id="cmx-monitor-overview-cost"><?php echo \esc_html(\number_format($selected_cost_total, 2, '.', '\'')); ?></strong>
+					<span class="mb-kpi-label">Aufwand / Einkauf</span>
+				</section>
+				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
+					<strong class="mb-kpi-value" id="cmx-monitor-overview-profit"><?php echo \esc_html(\number_format($selected_profit_total, 2, '.', '\'')); ?></strong>
+					<span class="mb-kpi-label">Deckungsbeitrag / Gewinn</span>
+				</section>
+				<section class="mb-card mb-card--soft mb-card--kpi mb-monitor-overview-card mb-span-2">
+					<strong class="mb-kpi-value" id="cmx-monitor-overview-margin"><?php echo \esc_html(\number_format($selected_margin_total, 2, '.', '\'')); ?>%</strong>
+					<span class="mb-kpi-label">Marge in %</span>
+				</section>
+				<section class="mb-card mb-card--soft mb-span-4">
+					<h3>Aufwand vs. Umsatz</h3>
+					<p class="mb-monitor-chart-intro">Vergleich von Umsatz und Aufwand auf Basis derselben Filter oben.</p>
+					<div class="mb-demo-linechart">
+						<div class="mb-demo-linechart-canvas">
+							<canvas id="cmx-monitor-cost-chart" aria-label="Aufwand und Umsatz"></canvas>
+						</div>
+					</div>
+				</section>
+				<section class="mb-card mb-card--soft mb-span-4">
+					<h3>Deckungsbeitrag und Marge</h3>
+					<p class="mb-monitor-chart-intro">Deckungsbeitrag in Währung und Marge in Prozent als eigene Auswertung.</p>
+					<div class="mb-demo-linechart">
+						<div class="mb-demo-linechart-canvas">
+							<canvas id="cmx-monitor-profit-chart" aria-label="Deckungsbeitrag und Marge"></canvas>
+						</div>
+					</div>
+				</section>
 
 			</div>
 		</div>
@@ -793,6 +1037,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 	$chart_script = '(function(){
 		var init = function(){
 			var canvas = document.getElementById("cmx-monitor-multi-axis-chart");
+			var costCanvas = document.getElementById("cmx-monitor-cost-chart");
+			var profitCanvas = document.getElementById("cmx-monitor-profit-chart");
 			var yearSelect = document.getElementById("cmx-monitor-chart-year");
 			var quarterSelect = document.getElementById("cmx-monitor-chart-quarter");
 			var monthSelect = document.getElementById("cmx-monitor-chart-month");
@@ -804,6 +1050,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var ctx = canvas.getContext("2d");
 			if (!ctx) return;
 
+			var costCtx = costCanvas ? costCanvas.getContext("2d") : null;
+			var profitCtx = profitCanvas ? profitCanvas.getContext("2d") : null;
 			var payload = ' . \wp_json_encode($chart_payload) . ';
 			var totalEl = document.getElementById("cmx-monitor-stat-total");
 			var totalLabelEl = document.getElementById("cmx-monitor-stat-total-label");
@@ -811,12 +1059,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var compareLabelEl = document.getElementById("cmx-monitor-stat-compare-label");
 			var countEl = document.getElementById("cmx-monitor-stat-count");
 			var modeEl = document.getElementById("cmx-monitor-stat-mode");
+			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
+			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
+			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
+			var overviewMarginEl = document.getElementById("cmx-monitor-overview-margin");
 			var typeMeta = Array.isArray(payload.types) ? payload.types : [];
 			var formatNumber = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0));
 			};
 			var formatAxisNumber = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 0, maximumFractionDigits: 0}).format(Number(value || 0));
+			};
+			var formatPercent = function(value){
+				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0)) + "%";
+			};
+			var formatPercentAxis = function(value){
+				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 0, maximumFractionDigits: 1}).format(Number(value || 0));
 			};
 			var sumSeries = function(series){
 				return (Array.isArray(series) ? series : []).reduce(function(sum, value){
@@ -832,6 +1090,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				return (Array.isArray(series) ? series : []).reduce(function(sum, value){
 					return sum + (Number(value || 0) !== 0 ? 1 : 0);
 				}, 0);
+			};
+			var differenceSeries = function(primary, secondary){
+				var length = Math.max(Array.isArray(primary) ? primary.length : 0, Array.isArray(secondary) ? secondary.length : 0);
+				var out = [];
+				for (var i = 0; i < length; i += 1) {
+					out.push(Number((primary && primary[i]) || 0) - Number((secondary && secondary[i]) || 0));
+				}
+				return out;
+			};
+			var marginSeries = function(revenueSeries, costSeries){
+				var length = Math.max(Array.isArray(revenueSeries) ? revenueSeries.length : 0, Array.isArray(costSeries) ? costSeries.length : 0);
+				var out = [];
+				for (var i = 0; i < length; i += 1) {
+					var revenue = Number((revenueSeries && revenueSeries[i]) || 0);
+					var cost = Number((costSeries && costSeries[i]) || 0);
+					var profit = revenue - cost;
+					out.push(revenue !== 0 ? ((profit / revenue) * 100) : 0);
+				}
+				return out;
 			};
 			var typeLabelFor = function(type){
 				var normalizedType = String(type || "all");
@@ -853,6 +1130,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				}
 				return payload.series && payload.series[selectedYear] ? payload.series[selectedYear] : [];
 			};
+			var getCostSeriesForYear = function(year, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				if (selectedType !== "all") {
+					return payload.cost_series_by_type && payload.cost_series_by_type[selectedType] && payload.cost_series_by_type[selectedType][selectedYear]
+						? payload.cost_series_by_type[selectedType][selectedYear]
+						: [];
+				}
+				return payload.cost_series && payload.cost_series[selectedYear] ? payload.cost_series[selectedYear] : [];
+			};
 			var getDailySeriesForMonth = function(year, monthNumber, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
@@ -864,6 +1151,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				}
 				return payload.daily_series && payload.daily_series[selectedYear] && payload.daily_series[selectedYear][normalizedMonth]
 					? payload.daily_series[selectedYear][normalizedMonth]
+					: [];
+			};
+			var getDailyCostSeriesForMonth = function(year, monthNumber, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = Number(monthNumber || 0);
+				if (selectedType !== "all") {
+					return payload.daily_cost_series_by_type && payload.daily_cost_series_by_type[selectedType] && payload.daily_cost_series_by_type[selectedType][selectedYear] && payload.daily_cost_series_by_type[selectedType][selectedYear][normalizedMonth]
+						? payload.daily_cost_series_by_type[selectedType][selectedYear][normalizedMonth]
+						: [];
+				}
+				return payload.daily_cost_series && payload.daily_cost_series[selectedYear] && payload.daily_cost_series[selectedYear][normalizedMonth]
+					? payload.daily_cost_series[selectedYear][normalizedMonth]
 					: [];
 			};
 			var getCountForYear = function(year, type){
@@ -889,10 +1189,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					? Number(payload.counts_monthly[selectedYear][normalizedMonth])
 					: 0;
 			};
+			var getQuarterMonths = function(quarter){
+				switch (String(quarter || "all")) {
+					case "1":
+						return [1, 2, 3];
+					case "2":
+						return [4, 5, 6];
+					case "3":
+						return [7, 8, 9];
+					case "4":
+						return [10, 11, 12];
+					default:
+						return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+				}
+			};
 			var monthBelongsToQuarter = function(monthNumber, quarter){
 				var normalizedMonth = Number(monthNumber || 0);
 				if (String(quarter || "all") === "all") return true;
 				return getQuarterMonths(quarter).indexOf(normalizedMonth) !== -1;
+			};
+			var quarterLabelFor = function(quarter){
+				switch (String(quarter || "all")) {
+					case "1":
+						return "1. Quartal";
+					case "2":
+						return "2. Quartal";
+					case "3":
+						return "3. Quartal";
+					case "4":
+						return "4. Quartal";
+					default:
+						return "";
+				}
+			};
+			var countForQuarter = function(year, quarter, type){
+				return sumIntegerSeries(getQuarterMonths(quarter).map(function(monthNumber){
+					return getCountForMonth(year, monthNumber, type);
+				}));
 			};
 			var getContextCount = function(year, quarter, month, type){
 				var selectedYear = String(year || "");
@@ -913,39 +1246,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				}
 
 				return getCountForYear(selectedYear, selectedType);
-			};
-			var getQuarterMonths = function(quarter){
-				switch (String(quarter || "all")) {
-					case "1":
-						return [1, 2, 3];
-					case "2":
-						return [4, 5, 6];
-					case "3":
-						return [7, 8, 9];
-					case "4":
-						return [10, 11, 12];
-					default:
-						return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-				}
-			};
-			var quarterLabelFor = function(quarter){
-				switch (String(quarter || "all")) {
-					case "1":
-						return "1. Quartal";
-					case "2":
-						return "2. Quartal";
-					case "3":
-						return "3. Quartal";
-					case "4":
-						return "4. Quartal";
-					default:
-						return "";
-				}
-			};
-			var countForQuarter = function(year, quarter, type){
-				return sumIntegerSeries(getQuarterMonths(quarter).map(function(monthNumber){
-					return getCountForMonth(year, monthNumber, type);
-				}));
 			};
 			var formatOptionLabel = function(label, count){
 				var normalizedCount = Number(count || 0);
@@ -1065,6 +1365,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				}
 				return labels;
 			};
+			var buildContextData = function(){
+				var filters = getFilters();
+				var selectedYear = filters.year;
+				var selectedQuarter = filters.quarter;
+				var selectedMonth = filters.month;
+				var selectedType = filters.type;
+				var selectedTypeLabel = typeLabelFor(selectedType);
+				var revenueSeries = Array.isArray(getSeriesForYear(selectedYear, selectedType)) ? getSeriesForYear(selectedYear, selectedType).slice() : [];
+				var costSeries = Array.isArray(getCostSeriesForYear(selectedYear, selectedType)) ? getCostSeriesForYear(selectedYear, selectedType).slice() : [];
+				var compareYear = filters.compare ? compareYearFor(selectedYear, selectedType) : "";
+				var compareRevenueSeries = compareYear ? (Array.isArray(getSeriesForYear(compareYear, selectedType)) ? getSeriesForYear(compareYear, selectedType).slice() : []) : [];
+				var compareCostSeries = compareYear ? (Array.isArray(getCostSeriesForYear(compareYear, selectedType)) ? getCostSeriesForYear(compareYear, selectedType).slice() : []) : [];
+				var labels = Array.isArray(payload.labels) ? payload.labels.slice() : [];
+				var selectedCount = getCountForYear(selectedYear, selectedType) || countSeries(revenueSeries);
+				var totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedYear;
+				var compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + compareYear) : "Vergleich";
+
+				if (selectedMonth !== "all") {
+					var monthNumber = Number(selectedMonth || 0);
+					var totalDays = daysInMonth(selectedYear, monthNumber);
+					if (compareYear) {
+						totalDays = Math.max(totalDays, daysInMonth(compareYear, monthNumber));
+					}
+					labels = rangeLabelsForMonth(totalDays);
+					revenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+					costSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+					compareRevenueSeries = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+					compareCostSeries = compareYear ? getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+					selectedCount = getCountForMonth(selectedYear, monthNumber, selectedType) || countSeries(revenueSeries);
+					var monthLabel = Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
+						? payload.labels[monthNumber - 1]
+						: String(monthNumber);
+					totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + selectedYear;
+					compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + compareYear) : "Vergleich";
+				} else if (selectedQuarter !== "all") {
+					var quarterMonths = getQuarterMonths(selectedQuarter);
+					var quarterLabel = quarterLabelFor(selectedQuarter);
+					labels = quarterMonths.map(function(monthNumber){
+						return Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
+							? payload.labels[monthNumber - 1]
+							: String(monthNumber);
+					});
+					revenueSeries = quarterMonths.map(function(monthNumber){
+						return Number(revenueSeries[monthNumber - 1] || 0);
+					});
+					costSeries = quarterMonths.map(function(monthNumber){
+						return Number(costSeries[monthNumber - 1] || 0);
+					});
+					compareRevenueSeries = quarterMonths.map(function(monthNumber){
+						return Number(compareRevenueSeries[monthNumber - 1] || 0);
+					});
+					compareCostSeries = quarterMonths.map(function(monthNumber){
+						return Number(compareCostSeries[monthNumber - 1] || 0);
+					});
+					selectedCount = sumIntegerSeries(quarterMonths.map(function(monthNumber){
+						return getCountForMonth(selectedYear, monthNumber, selectedType);
+					}));
+					totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + selectedYear;
+					compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + compareYear) : "Vergleich";
+				}
+
+				return {
+					labels: labels,
+					selectedYear: selectedYear,
+					compareYear: compareYear,
+					selectedTypeLabel: selectedTypeLabel,
+					revenueSeries: revenueSeries,
+					costSeries: costSeries,
+					compareRevenueSeries: compareRevenueSeries,
+					compareCostSeries: compareCostSeries,
+					selectedCount: selectedCount,
+					totalLabelText: totalLabelText,
+					compareRevenueLabelText: compareRevenueLabelText
+				};
+			};
 			var chart = new Chart(ctx, {
 				type: "line",
 				data: {
@@ -1127,63 +1502,164 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					}
 				}
 			});
-
-			var updateChart = function(){
-				var filters = getFilters();
-				var selectedYear = filters.year;
-				var selectedQuarter = filters.quarter;
-				var selectedMonth = filters.month;
-				var selectedType = filters.type;
-				var selectedTypeLabel = typeLabelFor(selectedType);
-				var selectedSeries = getSeriesForYear(selectedYear, selectedType);
-				var compareYear = filters.compare ? compareYearFor(selectedYear, selectedType) : "";
-				var compareSeries = compareYear ? getSeriesForYear(compareYear, selectedType) : [];
-				var labels = Array.isArray(payload.labels) ? payload.labels : [];
-				var selectedCount = getCountForYear(selectedYear, selectedType) || countSeries(selectedSeries);
-				var compareLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + compareYear) : "Vergleich";
-
-				if (selectedMonth !== "all") {
-					var monthNumber = Number(selectedMonth || 0);
-					var selectedDaily = getDailySeriesForMonth(selectedYear, monthNumber, selectedType);
-					var compareDaily = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType) : [];
-					var totalDays = daysInMonth(selectedYear, monthNumber);
-					if (compareYear) {
-						totalDays = Math.max(totalDays, daysInMonth(compareYear, monthNumber));
+			var costChart = costCtx ? new Chart(costCtx, {
+				type: "line",
+				data: {
+					labels: payload.labels,
+					datasets: []
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					interaction: {
+						mode: "index",
+						intersect: false
+					},
+					plugins: {
+						legend: {
+							position: "top",
+							labels: {
+								usePointStyle: true,
+								boxWidth: 10,
+								color: "#344054"
+							}
+						},
+						tooltip: {
+							backgroundColor: "rgba(22,32,51,0.92)",
+							padding: 10,
+							callbacks: {
+								label: function(context){
+									var label = context.dataset && context.dataset.label ? String(context.dataset.label) : "";
+									return label + ": " + formatNumber(context.parsed && typeof context.parsed.y !== "undefined" ? context.parsed.y : 0);
+								}
+							}
+						}
+					},
+					scales: {
+						x: {
+							grid: {
+								color: "#eef3f8"
+							},
+							ticks: {
+								color: "#667085"
+							}
+						},
+						y: {
+							type: "linear",
+							position: "left",
+							grid: {
+								color: "#e7eef7"
+							},
+							ticks: {
+								color: "#4f86c6",
+								callback: function(value){
+									return formatAxisNumber(value);
+								}
+							},
+							title: {
+								display: true,
+								text: "Betrag"
+							}
+						}
 					}
-					labels = rangeLabelsForMonth(totalDays);
-					selectedSeries = selectedDaily.slice(0, totalDays);
-					compareSeries = compareDaily.slice(0, totalDays);
-					selectedCount = getCountForMonth(selectedYear, monthNumber, selectedType) || countSeries(selectedSeries);
-					var monthLabels = Array.isArray(payload.labels) ? payload.labels : [];
-					var monthLabel = monthLabels[monthNumber - 1] || String(monthNumber);
-					if (totalLabelEl) totalLabelEl.textContent = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + selectedYear;
-					compareLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + compareYear) : "Vergleich";
-				} else if (selectedQuarter !== "all") {
-					var quarterMonths = getQuarterMonths(selectedQuarter);
-					var quarterLabel = quarterLabelFor(selectedQuarter);
-					labels = quarterMonths.map(function(monthNumber){
-						return Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
-							? payload.labels[monthNumber - 1]
-							: String(monthNumber);
-					});
-					selectedSeries = quarterMonths.map(function(monthNumber){
-						return Number(selectedSeries[monthNumber - 1] || 0);
-					});
-					compareSeries = quarterMonths.map(function(monthNumber){
-						return Number(compareSeries[monthNumber - 1] || 0);
-					});
-					selectedCount = sumIntegerSeries(quarterMonths.map(function(monthNumber){
-						return getCountForMonth(selectedYear, monthNumber, selectedType);
-					}));
-					if (totalLabelEl) totalLabelEl.textContent = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + selectedYear;
-					compareLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + compareYear) : "Vergleich";
-				} else if (totalLabelEl) {
-					totalLabelEl.textContent = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedYear;
 				}
+			}) : null;
+			var profitChart = profitCtx ? new Chart(profitCtx, {
+				type: "line",
+				data: {
+					labels: payload.labels,
+					datasets: []
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					interaction: {
+						mode: "index",
+						intersect: false
+					},
+					plugins: {
+						legend: {
+							position: "top",
+							labels: {
+								usePointStyle: true,
+								boxWidth: 10,
+								color: "#344054"
+							}
+						},
+						tooltip: {
+							backgroundColor: "rgba(22,32,51,0.92)",
+							padding: 10,
+							callbacks: {
+								label: function(context){
+									var label = context.dataset && context.dataset.label ? String(context.dataset.label) : "";
+									var value = context.parsed && typeof context.parsed.y !== "undefined" ? context.parsed.y : 0;
+									return label + ": " + (String(context.dataset.yAxisID || "") === "y1" ? formatPercent(value) : formatNumber(value));
+								}
+							}
+						}
+					},
+					scales: {
+						x: {
+							grid: {
+								color: "#eef3f8"
+							},
+							ticks: {
+								color: "#667085"
+							}
+						},
+						y: {
+							type: "linear",
+							position: "left",
+							grid: {
+								color: "#e7eef7"
+							},
+							ticks: {
+								color: "#0f766e",
+								callback: function(value){
+									return formatAxisNumber(value);
+								}
+							},
+							title: {
+								display: true,
+								text: "Deckungsbeitrag"
+							}
+						},
+						y1: {
+							type: "linear",
+							position: "right",
+							grid: {
+								drawOnChartArea: false
+							},
+							ticks: {
+								color: "#7c3aed",
+								callback: function(value){
+									return formatPercentAxis(value) + "%";
+								}
+							},
+							title: {
+								display: true,
+								text: "Marge %"
+							}
+						}
+					}
+				}
+			}) : null;
+			var updateOverview = function(context){
+				var revenueTotal = sumSeries(context.revenueSeries);
+				var costTotal = sumSeries(context.costSeries);
+				var profitTotal = revenueTotal - costTotal;
+				var marginTotal = revenueTotal !== 0 ? ((profitTotal / revenueTotal) * 100) : 0;
+
+				if (overviewTotalEl) overviewTotalEl.textContent = formatNumber(revenueTotal);
+				if (overviewCostEl) overviewCostEl.textContent = formatNumber(costTotal);
+				if (overviewProfitEl) overviewProfitEl.textContent = formatNumber(profitTotal);
+				if (overviewMarginEl) overviewMarginEl.textContent = formatPercent(marginTotal);
+			};
+			var updateMainChart = function(context){
 				var datasets = [
 					{
-						label: selectedYear,
-						data: selectedSeries,
+						label: context.selectedYear,
+						data: context.revenueSeries,
 						yAxisID: "y",
 						borderColor: "#4f86c6",
 						backgroundColor: "rgba(79,134,198,0.14)",
@@ -1195,10 +1671,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					}
 				];
 
-				if (compareYear && compareSeries.length) {
+				if (context.compareYear && context.compareRevenueSeries.length) {
 					datasets.push({
-						label: compareYear,
-						data: compareSeries,
+						label: context.compareYear,
+						data: context.compareRevenueSeries,
 						yAxisID: "y",
 						borderColor: "#ef7d00",
 						backgroundColor: "rgba(239,125,0,0.10)",
@@ -1210,15 +1686,147 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					});
 				}
 
-				chart.data.labels = labels;
+				chart.data.labels = context.labels;
 				chart.data.datasets = datasets;
 				chart.update();
 
-				if (totalEl) totalEl.textContent = formatNumber(sumSeries(selectedSeries));
-				if (compareEl) compareEl.textContent = compareYear ? formatNumber(sumSeries(compareSeries)) : "0.00";
-				if (compareLabelEl) compareLabelEl.textContent = compareLabelText;
-				if (countEl) countEl.textContent = String(selectedCount);
-				if (modeEl) modeEl.textContent = compareYear ? "aktiv" : "aus";
+				if (totalEl) totalEl.textContent = formatNumber(sumSeries(context.revenueSeries));
+				if (totalLabelEl) totalLabelEl.textContent = context.totalLabelText;
+				if (compareEl) compareEl.textContent = context.compareYear ? formatNumber(sumSeries(context.compareRevenueSeries)) : "0.00";
+				if (compareLabelEl) compareLabelEl.textContent = context.compareRevenueLabelText;
+				if (countEl) countEl.textContent = String(context.selectedCount);
+				if (modeEl) modeEl.textContent = context.compareYear ? "aktiv" : "aus";
+			};
+			var updateCostChart = function(context){
+				if (!costChart) return;
+
+				var datasets = [
+					{
+						label: "Umsatz " + context.selectedYear,
+						data: context.revenueSeries,
+						borderColor: "#4f86c6",
+						backgroundColor: "rgba(79,134,198,0.10)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 3,
+						pointRadius: 3,
+						pointHoverRadius: 5
+					},
+					{
+						label: "Aufwand " + context.selectedYear,
+						data: context.costSeries,
+						borderColor: "#d92d20",
+						backgroundColor: "rgba(217,45,32,0.10)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 3,
+						pointRadius: 3,
+						pointHoverRadius: 5
+					}
+				];
+
+				if (context.compareYear) {
+					datasets.push({
+						label: "Umsatz " + context.compareYear,
+						data: context.compareRevenueSeries,
+						borderColor: "#9fc5ee",
+						backgroundColor: "rgba(159,197,238,0.08)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 2,
+						borderDash: [6, 5],
+						pointRadius: 2,
+						pointHoverRadius: 4
+					});
+					datasets.push({
+						label: "Aufwand " + context.compareYear,
+						data: context.compareCostSeries,
+						borderColor: "#f97066",
+						backgroundColor: "rgba(249,112,102,0.08)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 2,
+						borderDash: [6, 5],
+						pointRadius: 2,
+						pointHoverRadius: 4
+					});
+				}
+
+				costChart.data.labels = context.labels;
+				costChart.data.datasets = datasets;
+				costChart.update();
+			};
+			var updateProfitChart = function(context){
+				if (!profitChart) return;
+
+				var profitSeries = differenceSeries(context.revenueSeries, context.costSeries);
+				var marginValues = marginSeries(context.revenueSeries, context.costSeries);
+				var datasets = [
+					{
+						label: "Deckungsbeitrag " + context.selectedYear,
+						data: profitSeries,
+						yAxisID: "y",
+						borderColor: "#0f766e",
+						backgroundColor: "rgba(15,118,110,0.10)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 3,
+						pointRadius: 3,
+						pointHoverRadius: 5
+					},
+					{
+						label: "Marge % " + context.selectedYear,
+						data: marginValues,
+						yAxisID: "y1",
+						borderColor: "#7c3aed",
+						backgroundColor: "rgba(124,58,237,0.10)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 3,
+						pointRadius: 3,
+						pointHoverRadius: 5
+					}
+				];
+
+				if (context.compareYear) {
+					datasets.push({
+						label: "Deckungsbeitrag " + context.compareYear,
+						data: differenceSeries(context.compareRevenueSeries, context.compareCostSeries),
+						yAxisID: "y",
+						borderColor: "#6dd3c8",
+						backgroundColor: "rgba(109,211,200,0.08)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 2,
+						borderDash: [6, 5],
+						pointRadius: 2,
+						pointHoverRadius: 4
+					});
+					datasets.push({
+						label: "Marge % " + context.compareYear,
+						data: marginSeries(context.compareRevenueSeries, context.compareCostSeries),
+						yAxisID: "y1",
+						borderColor: "#b692f6",
+						backgroundColor: "rgba(182,146,246,0.08)",
+						fill: false,
+						tension: 0.35,
+						borderWidth: 2,
+						borderDash: [6, 5],
+						pointRadius: 2,
+						pointHoverRadius: 4
+					});
+				}
+
+				profitChart.data.labels = context.labels;
+				profitChart.data.datasets = datasets;
+				profitChart.update();
+			};
+			var updateDashboard = function(){
+				var context = buildContextData();
+				updateOverview(context);
+				updateMainChart(context);
+				updateCostChart(context);
+				updateProfitChart(context);
 			};
 
 			yearSelect.addEventListener("change", function(){
@@ -1228,7 +1836,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateYearOptions();
 				updateQuarterOptions();
 				updateMonthOptions();
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			quarterSelect.addEventListener("change", function(){
@@ -1236,25 +1844,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateYearOptions();
 				updateQuarterOptions();
 				updateMonthOptions();
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			monthSelect.addEventListener("change", function(){
 				updateTypeOptions();
 				updateYearOptions();
 				updateQuarterOptions();
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			typeSelect.addEventListener("change", function(){
 				updateYearOptions();
 				updateQuarterOptions();
 				updateMonthOptions();
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			compareCheckbox.addEventListener("change", function(){
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			resetLink.addEventListener("click", function(event){
@@ -1270,14 +1878,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateYearOptions();
 				updateQuarterOptions();
 				updateMonthOptions();
-				updateChart();
+				updateDashboard();
 				emitFiltersChanged();
 			});
 			updateTypeOptions();
 			updateYearOptions();
 			updateQuarterOptions();
 			updateMonthOptions();
-			updateChart();
+			updateDashboard();
 			emitFiltersChanged();
 		};
 
