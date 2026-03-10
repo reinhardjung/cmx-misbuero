@@ -761,6 +761,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_artikel_unit_c
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_artikel_unit_price')) {
+	function cmx_cockpit_view_monitor_artikel_unit_price(int $artikel_id): float {
+		static $cache = [];
+
+		if ($artikel_id <= 0) {
+			return 0.0;
+		}
+		if (isset($cache[$artikel_id])) {
+			return (float) $cache[$artikel_id];
+		}
+
+		$vk_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK')) {
+			$vk_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK');
+		}
+		$vk_keys[] = '_cmx_artikel_vk';
+
+		foreach (\array_unique($vk_keys) as $meta_key) {
+			$raw = \get_post_meta($artikel_id, $meta_key, true);
+			if ($raw === '' || $raw === null) {
+				continue;
+			}
+			$cache[$artikel_id] = \round(cmx_cockpit_view_monitor_parse_number($raw), 2);
+			return (float) $cache[$artikel_id];
+		}
+
+		$cache[$artikel_id] = 0.0;
+		return 0.0;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_cost')) {
 	function cmx_cockpit_view_monitor_beleg_cost(int $post_id): float {
 		$rows = cmx_cockpit_view_monitor_position_rows($post_id);
@@ -790,6 +821,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_cost')) 
 		}
 
 		return \round($total_cost, 2);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_project_task_timestamp')) {
+	function cmx_cockpit_view_monitor_project_task_timestamp(array $task): int {
+		$raw = \trim((string) ($task['datum'] ?? ''));
+		if ($raw === '') {
+			return 0;
+		}
+
+		foreach (['Y-m-d', 'd.m.Y', 'Ymd', 'Y-m-d H:i:s'] as $format) {
+			$dt = \DateTime::createFromFormat($format, $raw);
+			if ($dt instanceof \DateTime) {
+				return (int) $dt->getTimestamp();
+			}
+		}
+
+		$ts = \strtotime($raw);
+		return $ts ? (int) $ts : 0;
 	}
 }
 
@@ -1012,6 +1062,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$article_rows = [];
 		$contact_rows = [];
 		$project_rows = [];
+		$project_task_rows = [];
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
@@ -1191,6 +1242,97 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 		\wp_reset_postdata();
 
+		$project_post_type = \defined(__NAMESPACE__ . '\\CMX_PT_PROJEKTE')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_PROJEKTE')
+			: 'projekte';
+		$project_tasks_meta_key = \defined(__NAMESPACE__ . '\\CMX_PROJEKT_TASK_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_PROJEKT_TASK_META')
+			: '_cmx_projekt_tasks';
+
+		$project_query = new \WP_Query([
+			'post_type' => $project_post_type,
+			'post_status' => 'publish',
+			'posts_per_page' => -1,
+			'orderby' => 'title',
+			'order' => 'ASC',
+			'no_found_rows' => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+		]);
+
+		foreach ((array) $project_query->posts as $project_post) {
+			if (!$project_post instanceof \WP_Post) {
+				continue;
+			}
+			$project_id = (int) $project_post->ID;
+			if (!cmx_cockpit_view_monitor_post_is_published($project_id)) {
+				continue;
+			}
+
+			$tasks = \get_post_meta($project_id, $project_tasks_meta_key, true);
+			if (!\is_array($tasks) || $tasks === []) {
+				continue;
+			}
+
+			$project_title = (string) (\get_the_title($project_id) ?: '');
+			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+				$project_title = (string) cmx_beleg_decode_label_text($project_title);
+			}
+			$project_title = \trim($project_title);
+			$project_edit_link = (string) (\get_edit_post_link($project_id, '') ?: '');
+
+			foreach ($tasks as $task) {
+				if (!\is_array($task)) {
+					continue;
+				}
+
+				$timestamp = cmx_cockpit_view_monitor_project_task_timestamp($task);
+				if ($timestamp <= 0) {
+					continue;
+				}
+
+				$year = (int) \date('Y', $timestamp);
+				$month_number = (int) \date('n', $timestamp);
+				if ($month_number < 1 || $month_number > 12) {
+					continue;
+				}
+
+				$artikel_id = (int) ($task['artikel_id'] ?? 0);
+				if ($artikel_id <= 0 || !cmx_cockpit_view_monitor_post_is_published($artikel_id)) {
+					continue;
+				}
+
+				$dauer = cmx_cockpit_view_monitor_parse_number($task['dauer'] ?? 0);
+				if ($dauer <= 0) {
+					continue;
+				}
+
+				$vk = cmx_cockpit_view_monitor_artikel_unit_price($artikel_id);
+				$unit_cost = cmx_cockpit_view_monitor_artikel_unit_cost($artikel_id);
+				$task_value = \round($dauer * $vk, 2);
+				$task_cost = \round($dauer * $unit_cost, 2);
+				$is_billable = \array_key_exists('verrechenbar', $task)
+					? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($task['verrechenbar']) : !empty($task['verrechenbar']))
+					: true;
+				$is_invoiced = \array_key_exists('abgerechnet', $task)
+					? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($task['abgerechnet']) : !empty($task['abgerechnet']))
+					: false;
+
+				$project_task_rows[] = [
+					'year' => $year,
+					'month' => $month_number,
+					'project_id' => $project_id,
+					'project_title' => $project_title,
+					'edit_link' => $project_edit_link,
+					'billed' => $is_billable && $is_invoiced ? (float) $task_value : 0.0,
+					'open' => $is_billable && !$is_invoiced ? (float) $task_value : 0.0,
+					'internal' => !$is_billable ? (float) $task_cost : 0.0,
+				];
+			}
+		}
+
+		\wp_reset_postdata();
+
 		if ($series !== []) {
 			\krsort($series, \SORT_NUMERIC);
 		}
@@ -1314,6 +1456,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'article_rows' => $article_rows,
 			'contact_rows' => $contact_rows,
 			'project_rows' => $project_rows,
+			'project_task_rows' => $project_task_rows,
 		];
 	}
 }
@@ -1552,6 +1695,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						<p class="mb-monitor-article-empty" id="cmx-monitor-project-empty" hidden>Keine Projektdaten im aktuellen Filter.</p>
 					</div>
 				</section>
+				<section class="mb-card mb-card--soft mb-span-8">
+					<h3>Projekt-Tätigkeiten</h3>
+					<p class="mb-monitor-chart-intro">Auf Basis der Tätigkeiten im Projekt: bereits fakturiert, noch nicht fakturiert und interner Aufwand.</p>
+					<div class="mb-monitor-article-table-wrap">
+						<table class="mb-monitor-article-table" id="cmx-monitor-project-task-table">
+							<colgroup>
+								<col class="col-article">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+							</colgroup>
+							<thead>
+								<tr>
+									<th><button type="button" class="mb-monitor-sort-button" data-table="project-task" data-key="title">Projekt<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project-task" data-key="billed">Bereits fakturiert<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project-task" data-key="open">Noch nicht fakturiert<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="project-task" data-key="internal">Interner Aufwand<span class="mb-monitor-sort-indicator"></span></button></th>
+								</tr>
+							</thead>
+							<tbody id="cmx-monitor-project-task-rows"></tbody>
+						</table>
+						<p class="mb-monitor-article-empty" id="cmx-monitor-project-task-empty" hidden>Keine Projekt-Tätigkeiten im aktuellen Filter.</p>
+					</div>
+				</section>
 
 			</div>
 		</div>
@@ -1615,10 +1782,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var customerEmptyEl = document.getElementById("cmx-monitor-customer-empty");
 			var projectRowsEl = document.getElementById("cmx-monitor-project-rows");
 			var projectEmptyEl = document.getElementById("cmx-monitor-project-empty");
+			var projectTaskRowsEl = document.getElementById("cmx-monitor-project-task-rows");
+			var projectTaskEmptyEl = document.getElementById("cmx-monitor-project-task-empty");
 			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
 			var articleSort = { key: "profit", direction: "desc" };
 			var customerSort = { key: "profit", direction: "desc" };
 			var projectSort = { key: "profit", direction: "desc" };
+			var projectTaskSort = { key: "billed", direction: "desc" };
 			var overviewTotalEl = document.getElementById("cmx-monitor-overview-total");
 			var overviewCostEl = document.getElementById("cmx-monitor-overview-cost");
 			var overviewProfitEl = document.getElementById("cmx-monitor-overview-profit");
@@ -1850,6 +2020,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var getSortState = function(tableName){
 				if (tableName === "customer") return customerSort;
 				if (tableName === "project") return projectSort;
+				if (tableName === "project-task") return projectTaskSort;
 				return articleSort;
 			};
 			var updateSortButtons = function(tableName){
@@ -1888,6 +2059,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						case "cost":
 						case "profit":
 						case "margin":
+						case "billed":
+						case "open":
+						case "internal":
 							valueA = Number(a[key] || 0);
 							valueB = Number(b[key] || 0);
 							if (valueA !== valueB) {
@@ -2804,6 +2978,76 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					projectRowsEl.appendChild(tr);
 				});
 			};
+			var renderProjectTaskTable = function(context){
+				if (!projectTaskRowsEl || !projectTaskEmptyEl) return;
+
+				var selectedYear = String(context.selectedYear || "");
+				var selectedQuarter = String(context.selectedQuarter || "all");
+				var selectedMonth = String(context.selectedMonth || "all");
+				var sourceRows = Array.isArray(payload.project_task_rows) ? payload.project_task_rows : [];
+				var projects = {};
+
+				sourceRows.forEach(function(row){
+					var rowYear = String(row.year || "");
+					var rowMonth = Number(row.month || 0);
+					if (rowYear !== selectedYear) return;
+					if (selectedMonth !== "all") {
+						if (rowMonth !== Number(selectedMonth || 0)) return;
+					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
+						return;
+					}
+
+					var projectId = Number(row.project_id || 0);
+					var projectTitle = String(row.project_title || "").trim();
+					var key = projectId > 0 ? ("id:" + String(projectId)) : "";
+					if (!key && projectTitle !== "") {
+						key = "label:" + projectTitle.toLowerCase();
+					}
+					if (!key) return;
+
+					if (!projects[key]) {
+						projects[key] = {
+							id: projectId,
+							title: projectTitle,
+							editLink: String(row.edit_link || ""),
+							billed: 0,
+							open: 0,
+							internal: 0
+						};
+					}
+					projects[key].billed += Number(row.billed || 0);
+					projects[key].open += Number(row.open || 0);
+					projects[key].internal += Number(row.internal || 0);
+				});
+
+				var rows = Object.keys(projects).map(function(key){
+					return projects[key];
+				});
+
+				rows = sortTableRows(rows, "project-task");
+				updateSortButtons("project-task");
+
+				projectTaskRowsEl.innerHTML = "";
+				if (!rows.length) {
+					projectTaskEmptyEl.hidden = false;
+					return;
+				}
+
+				projectTaskEmptyEl.hidden = true;
+				rows.slice(0, 12).forEach(function(item){
+					var tr = document.createElement("tr");
+					var projectLabel = item.title || "Unbekanntes Projekt";
+					var projectInner = item.editLink
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(projectLabel) + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(projectLabel) + \'</span>\';
+					tr.innerHTML =
+						\'<td>\' + projectInner + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.billed)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.open)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.internal)) + \'</td>\';
+					projectTaskRowsEl.appendChild(tr);
+				});
+			};
 			sortButtons.forEach(function(button){
 				button.addEventListener("click", function(){
 					var tableName = String(button.getAttribute("data-table") || "");
@@ -2828,6 +3072,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				renderArticleTable(context);
 				renderCustomerTable(context);
 				renderProjectTable(context);
+				renderProjectTaskTable(context);
 			};
 
 			yearSelect.addEventListener("change", function(){
