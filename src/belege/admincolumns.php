@@ -184,3 +184,44 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 
 	return " AND (({$search_sql}) OR {$contact_sql}) ";
 }, 20, 2);
+
+\add_filter('views_edit-belege', function(array $views): array {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_add_view')) {
+		return $views;
+	}
+
+	return cmx_admin_deckungsbeitrag_add_view($views, 'belege', 'belege');
+}, 30);
+
+\add_filter('manage_edit-belege_columns', function(array $columns): array {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_view_active') || !\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_insert_column')) {
+		return $columns;
+	}
+	if (!cmx_admin_deckungsbeitrag_view_active('belege')) {
+		return $columns;
+	}
+
+	return cmx_admin_deckungsbeitrag_insert_column($columns, 'cmx_deckungsbeitrag', 'Deckungsbeitrag');
+}, 900);
+
+\add_action('manage_belege_posts_custom_column', function(string $column, int $post_id): void {
+	if ($column !== 'cmx_deckungsbeitrag') {
+		return;
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_view_active') || !\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_render_value')) {
+		return;
+	}
+	if (!cmx_admin_deckungsbeitrag_view_active('belege')) {
+		return;
+	}
+
+	cmx_admin_deckungsbeitrag_render_value('belege', $post_id);
+}, 20, 2);
+
+\add_action('pre_get_posts', function(\WP_Query $query): void {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_apply_query_sort')) {
+		return;
+	}
+
+	cmx_admin_deckungsbeitrag_apply_query_sort($query, 'belege', 'belege');
+}, 999);

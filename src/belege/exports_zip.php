@@ -504,7 +504,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			th.col-belegnummer, td.col-belegnummer{white-space:nowrap}
 			td.col-kontakt{font-size:9.2px}
 			th.col-open, td.col-open{text-align:center}
-			tr.beleg-last-row td{page-break-inside:avoid;page-break-after:avoid}
 			.result-block{page-break-inside:avoid;break-inside:avoid}
 			.pdf-icon-link{display:inline-block;text-decoration:none;line-height:1}
 			.pdf-link-text{display:inline-block;color:#a42c24;font-weight:700;font-size:8px;line-height:1;white-space:nowrap}
@@ -529,9 +528,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		<?php
 		$render_rows_indexed = \array_values((array) $render_rows);
 		$render_row_count = \count($render_rows_indexed);
-		// Heuristik: nur bei voraussichtlichem Überlauf die letzte Zeile mit Kopf in den Ergebnisblock verschieben.
-		// 18 Zeilen passen im Regelfall noch zusammen mit Ergebnisblock auf eine Seite.
-		$carry_last_row_with_result = ($render_row_count > 18);
+		$carry_last_row_with_result = ($render_row_count >= 20);
 		$render_last_row = ($carry_last_row_with_result && $render_row_count > 0)
 			? (array) $render_rows_indexed[$render_row_count - 1]
 			: null;

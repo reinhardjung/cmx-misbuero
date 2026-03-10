@@ -1137,6 +1137,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$daily_cost_series_by_type = [];
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
+		$beleg_rows = [];
 		$article_rows = [];
 		$contact_rows = [];
 		$project_rows = [];
@@ -1209,6 +1210,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
 			$contact_meta = cmx_cockpit_view_monitor_contact_meta((int) $post->ID);
 			$project_meta = cmx_cockpit_view_monitor_project_meta((int) $post->ID);
+			$beleg_title = \trim((string) (\get_the_title((int) $post->ID) ?: ''));
+			if ($beleg_title === '') {
+				$beleg_title = 'Beleg #' . (int) $post->ID;
+			}
+			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+				$beleg_title = (string) cmx_beleg_decode_label_text($beleg_title);
+			}
 			$series[$year][$month_index] += $total;
 			$daily_series[$year][$month_number][$day_index] += $total;
 			$cost_series[$year][$month_index] += $cost_total;
@@ -1252,6 +1260,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
+			$beleg_rows[] = [
+				'year' => $year,
+				'month' => $month_number,
+				'type' => $type_slug,
+				'beleg_id' => (int) $post->ID,
+				'beleg_title' => $beleg_title,
+				'edit_link' => (string) (\get_edit_post_link((int) $post->ID, '') ?: ''),
+				'revenue' => (float) $total,
+				'cost' => (float) $cost_total,
+			];
 
 			if ((int) ($contact_meta['contact_id'] ?? 0) > 0) {
 				$contact_rows[] = [
@@ -1531,6 +1549,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'daily_cost_series_by_type' => $daily_cost_series_by_type,
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
+			'beleg_rows' => $beleg_rows,
 			'article_rows' => $article_rows,
 			'contact_rows' => $contact_rows,
 			'project_rows' => $project_rows,
@@ -1702,7 +1721,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<div class="mb-monitor-deckungsbeitrag-group">
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=artikel')); ?>" target="_blank" rel="noopener noreferrer" title="Artikel öffnen"><span class="dashicons dashicons-cart" aria-hidden="true"></span></a><span>Artikel</span></h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=artikel&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Artikel öffnen"><span class="dashicons dashicons-cart" aria-hidden="true"></span></a><span>Artikel</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Artikel einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -1735,7 +1754,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=kontakte')); ?>" target="_blank" rel="noopener noreferrer" title="Kontakte öffnen"><span class="dashicons dashicons-businessman" aria-hidden="true"></span></a><span>Kunde</span></h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=kontakte&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Kontakte öffnen"><span class="dashicons dashicons-businessman" aria-hidden="true"></span></a><span>Kunde</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-customer-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Kunde einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -1768,7 +1787,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				</section>
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=projekte')); ?>" target="_blank" rel="noopener noreferrer" title="Projekte öffnen"><span class="dashicons dashicons-portfolio" aria-hidden="true"></span></a><span>Projekt</span></h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=projekte&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Projekte öffnen"><span class="dashicons dashicons-portfolio" aria-hidden="true"></span></a><span>Projekt</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-project-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Projekt einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>
@@ -1796,6 +1815,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							<tbody id="cmx-monitor-project-rows"></tbody>
 						</table>
 						<p class="mb-monitor-article-empty" id="cmx-monitor-project-empty" hidden>Keine Projektdaten im aktuellen Filter.</p>
+					</div>
+					</div>
+				</section>
+				<section class="mb-card mb-card--soft mb-monitor-nested-card">
+					<div class="mb-monitor-card-head">
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=belege&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Belege öffnen"><span class="dashicons dashicons-media-text" aria-hidden="true"></span></a><span>Beleg</span></h3>
+						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-beleg-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Beleg einklappen">
+							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="mb-monitor-collapsible-body is-collapsed" id="cmx-monitor-beleg-card-body">
+					<div class="mb-monitor-article-table-wrap">
+						<table class="mb-monitor-article-table" id="cmx-monitor-beleg-table">
+							<colgroup>
+								<col class="col-article">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+								<col class="col-num">
+							</colgroup>
+							<thead>
+								<tr>
+									<th><button type="button" class="mb-monitor-sort-button" data-table="beleg" data-key="title">Beleg<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="beleg" data-key="revenue">Umsatz<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="beleg" data-key="cost">Aufwand<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="beleg" data-key="profit">Deckungsbeitrag<span class="mb-monitor-sort-indicator"></span></button></th>
+									<th class="is-num"><button type="button" class="mb-monitor-sort-button" data-table="beleg" data-key="margin">Marge %<span class="mb-monitor-sort-indicator"></span></button></th>
+								</tr>
+							</thead>
+							<tbody id="cmx-monitor-beleg-rows"></tbody>
+						</table>
+						<p class="mb-monitor-article-empty" id="cmx-monitor-beleg-empty" hidden>Keine Belegdaten im aktuellen Filter.</p>
 					</div>
 					</div>
 				</section>
@@ -1882,6 +1933,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var compareLabelEl = document.getElementById("cmx-monitor-stat-compare-label");
 			var countEl = document.getElementById("cmx-monitor-stat-count");
 			var modeEl = document.getElementById("cmx-monitor-stat-mode");
+			var belegRowsEl = document.getElementById("cmx-monitor-beleg-rows");
+			var belegEmptyEl = document.getElementById("cmx-monitor-beleg-empty");
 			var articleRowsEl = document.getElementById("cmx-monitor-article-rows");
 			var articleEmptyEl = document.getElementById("cmx-monitor-article-empty");
 			var customerRowsEl = document.getElementById("cmx-monitor-customer-rows");
@@ -1893,6 +1946,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var sortButtons = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-sort-button"));
 			var cardToggles = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-card-toggle"));
 			var collapsibleCards = Array.prototype.slice.call(document.querySelectorAll(".mb-monitor-nested-card"));
+			var belegSort = { key: "profit", direction: "desc" };
 			var articleSort = { key: "profit", direction: "desc" };
 			var customerSort = { key: "profit", direction: "desc" };
 			var projectSort = { key: "profit", direction: "desc" };
@@ -2126,6 +2180,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					.replace(/\'/g, "&#039;");
 			};
 			var getSortState = function(tableName){
+				if (tableName === "beleg") return belegSort;
 				if (tableName === "customer") return customerSort;
 				if (tableName === "project") return projectSort;
 				if (tableName === "project-task") return projectTaskSort;
@@ -2863,6 +2918,82 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				profitChart.data.datasets = datasets;
 				profitChart.update();
 			};
+			var renderBelegTable = function(context){
+				if (!belegRowsEl || !belegEmptyEl) return;
+
+				var selectedYear = String(context.selectedYear || "");
+				var selectedQuarter = String(context.selectedQuarter || "all");
+				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedType = String(context.selectedType || "all");
+				var sourceRows = Array.isArray(payload.beleg_rows) ? payload.beleg_rows : [];
+				var belege = {};
+
+				sourceRows.forEach(function(row){
+					var rowYear = String(row.year || "");
+					var rowMonth = Number(row.month || 0);
+					var rowType = String(row.type || "");
+					if (rowYear !== selectedYear) return;
+					if (selectedType !== "all" && rowType !== selectedType) return;
+					if (selectedMonth !== "all") {
+						if (rowMonth !== Number(selectedMonth || 0)) return;
+					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
+						return;
+					}
+
+					var belegId = Number(row.beleg_id || 0);
+					var belegTitle = String(row.beleg_title || "").trim();
+					var key = belegId > 0 ? ("id:" + String(belegId)) : "";
+					if (!key && belegTitle !== "") {
+						key = "label:" + belegTitle.toLowerCase();
+					}
+					if (!key) return;
+
+					if (!belege[key]) {
+						belege[key] = {
+							id: belegId,
+							title: belegTitle,
+							editLink: String(row.edit_link || ""),
+							revenue: 0,
+							cost: 0
+						};
+					}
+					belege[key].revenue += Number(row.revenue || 0);
+					belege[key].cost += Number(row.cost || 0);
+				});
+
+				var rows = Object.keys(belege).map(function(key){
+					var item = belege[key];
+					item.profit = Number(item.revenue || 0) - Number(item.cost || 0);
+					item.margin = Number(item.revenue || 0) !== 0 ? ((item.profit / item.revenue) * 100) : 0;
+					return item;
+				});
+
+				rows = sortTableRows(rows, "beleg");
+				updateSortButtons("beleg");
+
+				belegRowsEl.innerHTML = "";
+				if (!rows.length) {
+					belegEmptyEl.hidden = false;
+					return;
+				}
+
+				belegEmptyEl.hidden = true;
+				rows.slice(0, 12).forEach(function(item){
+					var tr = document.createElement("tr");
+					var profitClass = item.profit < 0 ? "mb-monitor-article-profit-negative" : "mb-monitor-article-profit-positive";
+					var belegLabel = item.title || "Unbekannter Beleg";
+					var belegInner = item.editLink
+						? \'<a class="mb-monitor-article-link" href="\' + escapeHtml(item.editLink) + \'">\' + escapeHtml(belegLabel) + \'</a>\'
+						: \'<span class="mb-monitor-article-link">\' + escapeHtml(belegLabel) + \'</span>\';
+					tr.innerHTML =
+						\'<td>\' + belegInner + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.revenue)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatNumber(item.cost)) + \'</td>\' +
+						\'<td class="is-num \' + profitClass + \'">\' + escapeHtml(formatNumber(item.profit)) + \'</td>\' +
+						\'<td class="is-num">\' + escapeHtml(formatPercent(item.margin)) + \'</td>\';
+					belegRowsEl.appendChild(tr);
+				});
+			};
 			var renderArticleTable = function(context){
 				if (!articleRowsEl || !articleEmptyEl) return;
 
@@ -3210,6 +3341,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateMainChart(context);
 				updateCostChart(context);
 				updateProfitChart(context);
+				renderBelegTable(context);
 				renderArticleTable(context);
 				renderCustomerTable(context);
 				renderProjectTable(context);

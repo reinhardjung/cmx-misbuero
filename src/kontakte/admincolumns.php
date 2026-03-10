@@ -99,6 +99,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_map')) {
 				$id_key = 'article_id';
 				$title_key = 'article_title';
 				break;
+			case 'belege':
+				$rows = (array) ($payload['beleg_rows'] ?? []);
+				$id_key = 'beleg_id';
+				$title_key = 'beleg_title';
+				break;
 			case 'kontakte':
 				$rows = (array) ($payload['contact_rows'] ?? []);
 				$id_key = 'contact_id';
