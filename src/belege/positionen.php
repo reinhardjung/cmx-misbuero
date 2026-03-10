@@ -35,6 +35,20 @@ if (!function_exists(__NAMESPACE__ . '\cmx_get_artikel_nr')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_beleg_decode_label_text')) {
+	function cmx_beleg_decode_label_text(string $value): string {
+		$value = \trim($value);
+		for ($i = 0; $i < 2; $i++) {
+			$decoded = \html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+			if (!\is_string($decoded) || $decoded === $value) {
+				break;
+			}
+			$value = $decoded;
+		}
+		return \str_replace("\u{00A0}", ' ', $value);
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomies')) {
 	function cmx_artikel_einheiten_taxonomies(): array {
 		static $cache = null;
@@ -446,7 +460,9 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 		$vk_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
 
 		foreach ($source_ids as $pid) {
-			$source_title = (string) \get_the_title($pid);
+			$source_title = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+				? cmx_beleg_decode_label_text((string) \get_the_title($pid))
+				: (string) \get_the_title($pid);
 			if ($source_title === '') $source_title = '#' . $pid;
 
 			$tasks = cmx_beleg_meta_array($pid, '_cmx_projekt_tasks');
@@ -471,7 +487,9 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_open_task_items')) {
 				$preis = (float) $vk_cache[$artikel_id];
 				if (!\is_finite($preis)) $preis = 0.0;
 
-				$artikel_title = (string) \get_the_title($artikel_id);
+				$artikel_title = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+					? cmx_beleg_decode_label_text((string) \get_the_title($artikel_id))
+					: (string) \get_the_title($artikel_id);
 				if ($artikel_title === '') $artikel_title = '#' . $artikel_id;
 				$artikel_nr = \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')
 					? (string) cmx_get_artikel_nr($artikel_id)
@@ -866,8 +884,14 @@ add_action('cmx_beleg_positionen_after_add_button', function(): void {
 function cmx_render_position_row($i, $pos) {
 	$artikel_id   = isset($pos['artikel_id']) ? (int)$pos['artikel_id'] : 0;
 	$title        = $artikel_id ? get_the_title($artikel_id) : '';
+	$title        = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+		? cmx_beleg_decode_label_text((string) $title)
+		: (string) $title;
 	$nr           = $artikel_id ? cmx_get_artikel_nr($artikel_id) : '';
-	$display      = esc_html( ($nr ? $nr.' – ' : '') . ($title ?: ($pos['artikel_name'] ?? '')) );
+	$display_name = $title ?: (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+		? cmx_beleg_decode_label_text((string) ($pos['artikel_name'] ?? ''))
+		: (string) ($pos['artikel_name'] ?? ''));
+	$display      = esc_html( ($nr ? $nr.' – ' : '') . $display_name );
 	$textbaustein_edit_url = \function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')
 		? (string) cmx_beleg_textbaustein_admin_url()
 		: '';
@@ -1245,7 +1269,9 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 
 	$items = [];
 	foreach ($ids as $id) {
-		$title = (string) get_the_title($id);
+		$title = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+			? cmx_beleg_decode_label_text((string) get_the_title($id))
+			: (string) get_the_title($id);
 		$nr    = cmx_get_artikel_nr($id);
 
 		$items[] = [

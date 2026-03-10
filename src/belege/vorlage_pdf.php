@@ -688,6 +688,18 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_mwst_term_data')) {
 }
 
 if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
+	function cmxbu_pdf_decode_label_text(string $value): string {
+		$value = \trim($value);
+		for ($i = 0; $i < 2; $i++) {
+			$decoded = \html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+			if (!\is_string($decoded) || $decoded === $value) {
+				break;
+			}
+			$value = $decoded;
+		}
+		return \str_replace("\u{00A0}", ' ', $value);
+	}
+
 	function cmxbu_get_beleg_positionen_calc(int $post_id, array $opts=[]): array {
 		$opts = array_replace([
 			'round_decimals'=>2,
@@ -754,7 +766,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			if (!is_array($r)) $r=['artikel_id'=>0,'menge'=>1,'preis'=>0.0,'rabatt'=>'','beschreibung'=>''];
 			$row_type = \sanitize_key((string)($r['typ'] ?? $r['row_type'] ?? ''));
 			if ($row_type === 'abschnitt') {
-				$section_title = \trim((string)($r['abschnitt_titel'] ?? $r['section_title'] ?? ''));
+				$section_title = cmxbu_pdf_decode_label_text(\trim((string)($r['abschnitt_titel'] ?? $r['section_title'] ?? '')));
 				$section_text_raw = $r['abschnitt_text'] ?? $r['section_text'] ?? $r['beschreibung'] ?? '';
 				$section_text = cmxbu_sanitize_note_html($section_text_raw);
 				if ($section_title === '' && $section_text['text'] === '') {
@@ -792,8 +804,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 			$einheit_id = (int) ($unit_data['einheit_id'] ?? 0);
 
 			// C: Gespeicherten Titel bevorzugen; nur wenn leer, aus Artikel holen
-			$title_saved = $to_str($r['artikel_name'] ?? $r['item'] ?? $r['title'] ?? '');
-			$title       = $title_saved !== '' ? $title_saved : ($artikel_id ? (get_the_title($artikel_id) ?: '') : '');
+			$title_saved = cmxbu_pdf_decode_label_text($to_str($r['artikel_name'] ?? $r['item'] ?? $r['title'] ?? ''));
+			$title       = $title_saved !== '' ? $title_saved : ($artikel_id ? cmxbu_pdf_decode_label_text((string) (get_the_title($artikel_id) ?: '')) : '');
 
 			$artnr      = '';
 
@@ -834,7 +846,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 					]);
 					if (!empty($sku_post)) {
 						$artikel_id = (int)$sku_post[0];
-						if ($title === '') $title = get_the_title($artikel_id) ?: '';
+						if ($title === '') $title = cmxbu_pdf_decode_label_text((string) (get_the_title($artikel_id) ?: ''));
 						$belegtext_raw = cmxbu_get_article_belegtext($artikel_id);
 					}
 				}
@@ -942,7 +954,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 		foreach ($rows as $row) {
 			if (!is_array($row)) continue;
 			if (\sanitize_key((string)($row['typ'] ?? '')) === 'abschnitt') continue;
-			$item = trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
+			$item = cmxbu_pdf_decode_label_text(trim((string)($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? '')));
 			$qty = $to_float($row['menge'] ?? $row['qty'] ?? 0);
 			$price = $to_float($row['preis'] ?? $row['unit_price'] ?? 0);
 			$total = $to_float($row['line_total'] ?? 0);
