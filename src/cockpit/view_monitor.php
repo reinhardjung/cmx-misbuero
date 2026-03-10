@@ -104,13 +104,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				border-radius:12px;
 				background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
 			}
+			.mb-monitor-shared-filters{
+				display:flex;
+				align-items:center;
+				justify-content:space-between;
+				gap:12px;
+				flex-wrap:wrap;
+				margin:18px 0 0;
+				padding:12px 14px;
+				border:1px solid #d9e6f6;
+				border-radius:12px;
+				background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+			}
 			.mb-demo-linechart-toolbar{
 				display:flex;
 				align-items:center;
 				justify-content:space-between;
 				gap:12px;
 				flex-wrap:wrap;
-				margin:0 0 14px;
+				margin:0;
 			}
 			.mb-demo-linechart-control{
 				display:flex;
@@ -443,7 +455,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<!-- <span class="mb-note">Dashboard</span> -->
 					<h2>Meine Umsätze</h2>
 					<p>Deine Werte kannst Du auch gegenüber stellen.</p>
-					<div class="mb-demo-linechart" aria-label="Demo-Line-Chart">
+					<div class="mb-monitor-shared-filters" aria-label="Monitor-Filter">
 						<div class="mb-demo-linechart-toolbar">
 							<label class="mb-demo-linechart-control">
 								<span>Jahr</span>
@@ -458,6 +470,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 								<span>vorheriger Zeitraum</span>
 							</label>
 						</div>
+					</div>
+					<div class="mb-demo-linechart" aria-label="Demo-Line-Chart">
 						<div class="mb-demo-linechart-canvas">
 							<canvas id="cmx-monitor-multi-axis-chart" aria-label="Demo-Multi-Axis-Line-Chart"></canvas>
 						</div>
@@ -535,6 +549,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					return sum + (Number(value || 0) !== 0 ? 1 : 0);
 				}, 0);
 			};
+			var getFilters = function(){
+				return {
+					year: String(yearSelect.value || ""),
+					compare: !!compareCheckbox.checked
+				};
+			};
+			window.cmxMonitorGetFilters = getFilters;
+			var emitFiltersChanged = function(){
+				document.dispatchEvent(new CustomEvent("cmx-monitor-filters-changed", {
+					detail: getFilters()
+				}));
+			};
 			var compareYearFor = function(selectedYear){
 				var previousYear = String(Number(selectedYear || 0) - 1);
 				if (!previousYear || previousYear === "0") return "";
@@ -604,9 +630,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			});
 
 			var updateChart = function(){
-				var selectedYear = String(yearSelect.value || "");
+				var filters = getFilters();
+				var selectedYear = filters.year;
 				var selectedSeries = (payload.series && payload.series[selectedYear]) ? payload.series[selectedYear] : [];
-				var compareYear = compareCheckbox.checked ? compareYearFor(selectedYear) : "";
+				var compareYear = filters.compare ? compareYearFor(selectedYear) : "";
 				var compareSeries = compareYear && payload.series && payload.series[compareYear] ? payload.series[compareYear] : [];
 				var datasets = [
 					{
@@ -649,9 +676,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				if (modeEl) modeEl.textContent = compareYear ? "aktiv" : "aus";
 			};
 
-			yearSelect.addEventListener("change", updateChart);
-			compareCheckbox.addEventListener("change", updateChart);
+			yearSelect.addEventListener("change", function(){
+				updateChart();
+				emitFiltersChanged();
+			});
+			compareCheckbox.addEventListener("change", function(){
+				updateChart();
+				emitFiltersChanged();
+			});
 			updateChart();
+			emitFiltersChanged();
 		};
 
 		if (document.readyState === "loading") {
