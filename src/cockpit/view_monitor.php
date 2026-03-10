@@ -294,6 +294,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 			.mb-monitor-collapsible-body.is-collapsed{
 				display:none;
 			}
+			.mb-monitor-deckungsbeitrag-group{
+				display:flex;
+				flex-direction:column;
+				gap:14px;
+			}
+			.mb-monitor-nested-card{
+				background:rgba(255,255,255,.88);
+				border:1px solid #d9e6f6;
+				border-radius:12px;
+				padding:16px;
+				box-shadow:none;
+			}
 			.mb-monitor-article-table-wrap{
 				overflow:auto;
 			}
@@ -1661,7 +1673,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 					</div>
 				</section>
-				<section class="mb-card mb-card--soft mb-span-8">
+				<section class="mb-card mb-card--hero mb-span-8">
+					<h3>Deckungsbeiträge</h3>
+					<p class="mb-monitor-chart-intro">Artikel, Kunden und Projekte kompakt in einem gemeinsamen Bereich.</p>
+					<div class="mb-monitor-deckungsbeitrag-group">
+				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
 						<h3>Deckungsbeitrag pro Artikel</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Artikel einklappen">
@@ -1694,7 +1710,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					</div>
 					</div>
 				</section>
-				<section class="mb-card mb-card--soft mb-span-8">
+				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
 						<h3>Deckungsbeitrag pro Kunde</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-customer-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Kunde einklappen">
@@ -1727,7 +1743,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					</div>
 					</div>
 				</section>
-				<section class="mb-card mb-card--soft mb-span-8">
+				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
 						<h3>Deckungsbeitrag pro Projekt</h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-project-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Projekt einklappen">
@@ -1758,6 +1774,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</table>
 						<p class="mb-monitor-article-empty" id="cmx-monitor-project-empty" hidden>Keine Projektdaten im aktuellen Filter.</p>
 					</div>
+					</div>
+				</section>
 					</div>
 				</section>
 				<section class="mb-card mb-card--soft mb-span-8">
