@@ -88,6 +88,49 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_legacy_definitions')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
+	function cmx_bank_default_presets(): array {
+		return [
+			[
+				'id'        => 'legacy_zkb',
+				'bank_name' => 'ZKB',
+				'recipient' => '',
+				'iban'      => '',
+				'qr_iban'   => '',
+				'bic'       => '',
+				'api'       => '',
+			],
+			[
+				'id'        => 'legacy_ubs',
+				'bank_name' => 'UBS',
+				'recipient' => '',
+				'iban'      => '',
+				'qr_iban'   => '',
+				'bic'       => '',
+				'api'       => '',
+			],
+			[
+				'id'        => 'legacy_migros',
+				'bank_name' => 'Migros Bank',
+				'recipient' => '',
+				'iban'      => '',
+				'qr_iban'   => '',
+				'bic'       => '',
+				'api'       => '',
+			],
+			[
+				'id'        => 'legacy_eisen',
+				'bank_name' => 'Raiffeisen',
+				'recipient' => '',
+				'iban'      => '',
+				'qr_iban'   => '',
+				'bic'       => '',
+				'api'       => '',
+			],
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 	function cmx_normalize_bank_list($raw): array {
 		$rows = \is_array($raw) ? $raw : [];
@@ -139,21 +182,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_legacy_bank_list')) {
 		$inactive = [];
 
 		foreach ($definitions as $legacy_key => $definition) {
-			$bank_name = \trim((string) ($options[$definition['bank_name']] ?? $definition['label']));
+			$raw_bank_name = \trim((string) ($options[$definition['bank_name']] ?? ''));
 			$recipient = \trim((string) ($options[$definition['recipient']] ?? ''));
 			$iban = \trim((string) ($options[$definition['iban']] ?? ''));
 			$qr_iban = \trim((string) ($options[$definition['qr_iban']] ?? ''));
 			$bic = \trim((string) ($options[$definition['bic']] ?? ''));
 			$api = \trim((string) ($options[$definition['api']] ?? ''));
 			$is_enabled = !empty($options[$definition['enabled']]);
+			$is_configured = $is_enabled || $raw_bank_name !== '' || $recipient !== '' || $iban !== '' || $qr_iban !== '' || $bic !== '' || $api !== '';
 
-			if (!$is_enabled && $bank_name === '' && $recipient === '' && $iban === '' && $qr_iban === '' && $bic === '' && $api === '') {
+			if (!$is_configured) {
 				continue;
 			}
 
+			$bank_name = $raw_bank_name !== '' ? $raw_bank_name : (string) $definition['label'];
+
 			$entry = [
 				'id'        => 'legacy_' . $legacy_key,
-				'bank_name' => $bank_name !== '' ? $bank_name : (string) $definition['label'],
+				'bank_name' => $bank_name,
 				'recipient' => $recipient,
 				'iban'      => $iban,
 				'qr_iban'   => $qr_iban,
@@ -179,7 +225,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_bank_list')) {
 		if (!empty($stored)) {
 			return $stored;
 		}
-		return cmx_get_legacy_bank_list();
+		$legacy = cmx_get_legacy_bank_list();
+		if (!empty($legacy)) {
+			return $legacy;
+		}
+		return cmx_bank_default_presets();
 	}
 }
 
@@ -276,7 +326,7 @@ function cmx_render_banken_list_field(): void {
 
 	$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
 	$stored_list = cmx_normalize_bank_list($options['banken_liste'] ?? []);
-	$bank_list = !empty($stored_list) ? $stored_list : cmx_get_legacy_bank_list();
+	$bank_list = cmx_get_bank_list();
 	if (empty($bank_list)) {
 		$bank_list = [[
 			'id'        => 'bank_1',
