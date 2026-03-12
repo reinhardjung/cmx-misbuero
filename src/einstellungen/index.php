@@ -95,17 +95,6 @@ function cmx_get_tabs(): array {
 }
 
 function cmx_get_subtabs(string $tab): array {
-
-	if ($tab === 'banken') {
-		return [
-			'rev'    => 'Revolut',
-			'zkb'    => 'ZKB',
-			'ubs'    => 'UBS',
-			'migros' => 'Migros Bank',
-			'eisen'  => 'Raiffeisen',
-		];
-	}
-
 	if ($tab === 'belege') {
 		return [
 			'offerte'      => 'Offerte',
@@ -280,6 +269,20 @@ add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 		return $data;
 	};
 	$new = $normalize_due_days($new);
+	$normalize_bank_list = static function(array $data): array {
+		if (!\array_key_exists('banken_liste_present', $data) && !\array_key_exists('banken_liste', $data)) {
+			return $data;
+		}
+		$list = $data['banken_liste'] ?? [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
+			$data['banken_liste'] = cmx_normalize_bank_list($list);
+		} else {
+			$data['banken_liste'] = \is_array($list) ? $list : [];
+		}
+		unset($data['banken_liste_present']);
+		return $data;
+	};
+	$new = $normalize_bank_list($new);
 
 	$bank_keys = [
 		'rev_enabled',
