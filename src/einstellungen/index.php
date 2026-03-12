@@ -27,6 +27,7 @@ const CMX_SETTINGS_BELEG = 'cmx_belege';
  * INCLUDE FILES – jetzt korrekt, da Konstanten bereis existieren
  * ------------------------------------------------------------ */
 require_once 'allgemein.php';
+require_once 'vorgaben.php';
 require_once 'banken.php';
 require_once 'kontakte.php';
 require_once 'belege.php';
@@ -84,11 +85,12 @@ add_action('all_admin_notices', function (): void {
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
-		'general' => 'Allgemein',
-		'banken'  => 'Banken',
-		'belege'  => 'Belege',
-		'email'   => 'E-Mail',
-		'support' => 'Support',
+		'general'  => 'Allgemein',
+		'vorgaben' => 'Vorgaben',
+		'banken'   => 'Banken',
+		'belege'   => 'Belege',
+		'email'    => 'E-Mail',
+		'support'  => 'Support',
 	];
 }
 
