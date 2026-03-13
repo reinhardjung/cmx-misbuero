@@ -252,6 +252,9 @@ final class MIS_BUERO_BELEG_UPLOAD {
 			'gutschrift' => 'eingang',
 			'gutschriften' => 'eingang',
 		];
+		$logo_link = $upload_token !== ''
+			? 'https://cmx.misbuero.ch/mis-upload/?token=' . rawurlencode( $upload_token )
+			: 'https://cmx.misbuero.ch/mis-upload/';
 		$ini_kategorien = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
 			? (array) cmx_ini_get_value( 'Belege', 'Kategorien' )
 			: [];
@@ -489,7 +492,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 		<div class="wrap">
 			<div class="card">
-				<img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero Logo">
+				<a href="<?php echo esc_url( $logo_link ); ?>" rel="noopener"><img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="YouTube Logo"></a>
 				<!-- <h2>Beleg hochladen</h2> -->
 
 				<form method="post" enctype="multipart/form-data">
