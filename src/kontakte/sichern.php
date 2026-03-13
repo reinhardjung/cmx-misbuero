@@ -20,17 +20,24 @@ function cmx_prepare_kontakt_title_before_save(array $data, array $postarr) : ar
 		$url = 'https://'.ltrim($url, '/');
 	}
 
-	$person_title    = trim($vor . ' ' . $nach);
-	$is_person_title = ($person_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($person_title));
-	$should_fill     = ($incoming_title === '' || $is_missing || (!$priv && $url !== '' && $is_person_title));
+	$person_title      = trim($vor . ' ' . $nach);
+	$is_person_title   = ($person_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($person_title));
+	$url_core          = ($url !== '') ? cmx_domain_core_from_url($url) : '';
+	$url_company_title = ($url_core !== '') ? mb_strtoupper($url_core) : '';
+	$is_company_title  = ($url_company_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($url_company_title));
+	$should_fill       = (
+		$incoming_title === ''
+		|| $is_missing
+		|| (!$priv && $url !== '' && $is_person_title)
+		|| ($priv && $person_title !== '' && $is_company_title)
+	);
 
 	if (!$should_fill) return $data;
 
 	if ($priv && ($vor !== '' || $nach !== '')) {
 		$new_title = trim($vor.' '.$nach);
 	} elseif ($url !== '') {
-		$core = cmx_domain_core_from_url($url);
-		$new_title = ($core !== '') ? mb_strtoupper($core) : 'Firmenname fehlt';
+		$new_title = ($url_company_title !== '') ? $url_company_title : 'Firmenname fehlt';
 	} else {
 		$new_title = 'Firmenname fehlt';
 	}

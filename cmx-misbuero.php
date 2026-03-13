@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.13.1645
+ * Version: 3.13.1648
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -122,6 +122,13 @@ if (!\defined('UserDomain')) {
 		if ($kontakt_url !== '' && !\preg_match('~^https?://~i', $kontakt_url)) {
 			$kontakt_url = 'https://' . \ltrim($kontakt_url, '/');
 		}
+		$kontakt_company_title = '';
+		if ($kontakt_url !== '' && \function_exists(__NAMESPACE__ . '\\cmx_domain_core_from_url')) {
+			$kontakt_core = (string) \call_user_func(__NAMESPACE__ . '\\cmx_domain_core_from_url', $kontakt_url);
+			if ($kontakt_core !== '') {
+				$kontakt_company_title = \mb_strtoupper($kontakt_core);
+			}
+		}
 		if (
 			\mb_strtolower($request_title) === \mb_strtolower('Firmenname fehlt')
 			&& $kontakt_privat
@@ -129,16 +136,20 @@ if (!\defined('UserDomain')) {
 		) {
 			$request_title = \trim($kontakt_vorname . ' ' . $kontakt_nachname);
 		} elseif (
+			$kontakt_privat
+			&& $kontakt_person_title !== ''
+			&& $kontakt_company_title !== ''
+			&& \mb_strtolower($request_title) === \mb_strtolower($kontakt_company_title)
+		) {
+			$request_title = $kontakt_person_title;
+		} elseif (
 			!$kontakt_privat
 			&& $kontakt_url !== ''
 			&& $kontakt_person_title !== ''
 			&& \mb_strtolower($request_title) === \mb_strtolower($kontakt_person_title)
 		) {
-			$kontakt_core = \function_exists(__NAMESPACE__ . '\\cmx_domain_core_from_url')
-				? (string) \call_user_func(__NAMESPACE__ . '\\cmx_domain_core_from_url', $kontakt_url)
-				: '';
-			if ($kontakt_core !== '') {
-				$request_title = \mb_strtoupper($kontakt_core);
+			if ($kontakt_company_title !== '') {
+				$request_title = $kontakt_company_title;
 			}
 		}
 	}
