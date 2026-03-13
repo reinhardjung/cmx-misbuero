@@ -733,7 +733,7 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 
 		$href = cmx_normalize_url_for_href($raw);
 		$disp = cmx_domain_core_from_url($raw);
-		echo '<a href="' . \esc_url($href) . '" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-admin-site" style="font-size:14px;opacity:0.8"></span></a>';
+		echo '<a href="' . \esc_url($href) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($href) . '"><span class="dashicons dashicons-admin-site" style="font-size:14px;opacity:0.8;position:relative;top:7px;"></span></a>';
 		return;
 	}
 
