@@ -311,6 +311,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
+	function cmxal_export_lieferanten_rows(int $post_id): array {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_load_lieferanten_rows_unified')) {
+			return [];
+		}
+
+		$rows = (array) cmx_artikel_load_lieferanten_rows_unified($post_id);
+		return \array_values(\array_filter($rows, static function($row): bool {
+			return \is_array($row);
+		}));
+	}
+
+	function cmxal_export_lieferanten_name(int $kontakt_id): string {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+
+		$title = \trim((string) \get_the_title($kontakt_id));
+		return $title !== '' ? $title : '';
+	}
+
 	function cmxal_write_artikel_csv_to_handle($fh, array $ids): void {
 		$base_headers = [
 			'post_id',
@@ -335,7 +356,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 
 		$meta_keys = [];
 		$tax_headers = [];
+		$lieferanten_rows_map = [];
+		$max_lieferanten_rows = 0;
 		foreach ($ids as $post_id) {
+			$lieferanten_rows = \function_exists(__NAMESPACE__ . '\\cmxal_export_lieferanten_rows')
+				? (array) cmxal_export_lieferanten_rows((int) $post_id)
+				: [];
+			$lieferanten_rows_map[(int) $post_id] = $lieferanten_rows;
+			$max_lieferanten_rows = \max($max_lieferanten_rows, \count($lieferanten_rows));
+
 			foreach (\get_post_meta($post_id) as $meta_key => $values) {
 				if (\in_array((string) $meta_key, $meta_blacklist, true)) {
 					continue;
@@ -349,8 +378,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 			$tax_headers[] = 'tax__' . $taxonomy->name;
 		}
 
+		$lieferanten_headers = [];
+		for ($i = 1; $i <= $max_lieferanten_rows; $i++) {
+			$lieferanten_headers[] = 'lieferant_' . $i . '_name';
+		}
+
 		$meta_headers = \array_map(static fn(string $key): string => 'meta__' . $key, \array_keys($meta_keys));
-		$headers = \array_merge($base_headers, $meta_headers, $tax_headers);
+		$headers = \array_merge($base_headers, $lieferanten_headers, $meta_headers, $tax_headers);
 		\fputcsv($fh, $headers, ';');
 
 		foreach ($ids as $post_id) {
@@ -406,6 +440,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 				'featured_image_path'    => $featured_path,
 				'featured_image_zip_path'=> $featured_image_zip_path,
 			];
+
+			$lieferanten_rows = $lieferanten_rows_map[(int) $post_id] ?? [];
+			for ($i = 0; $i < $max_lieferanten_rows; $i++) {
+				$header = 'lieferant_' . ($i + 1) . '_name';
+				$kontakt_id = isset($lieferanten_rows[$i]['lieferant_id']) ? (int) $lieferanten_rows[$i]['lieferant_id'] : 0;
+				$row[$header] = \function_exists(__NAMESPACE__ . '\\cmxal_export_lieferanten_name')
+					? (string) cmxal_export_lieferanten_name($kontakt_id)
+					: '';
+			}
 
 			$all_meta = \get_post_meta($post_id);
 			foreach ($meta_headers as $header) {

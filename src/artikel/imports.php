@@ -18,6 +18,100 @@ function cmx_import_find_existing_artikel_id_by_title(string $title): int {
 	return $id > 0 ? $id : 0;
 }
 
+function cmx_artikel_import_normalize_name(string $value): string {
+	$value = \wp_strip_all_tags($value);
+	$value = \trim((string) \preg_replace('/\s+/u', ' ', $value));
+	if ($value === '') {
+		return '';
+	}
+	return \function_exists('\\mb_strtolower')
+		? (string) \mb_strtolower($value, 'UTF-8')
+		: (string) \strtolower($value);
+}
+
+function cmx_artikel_import_find_lieferant_id_by_name(string $name): int {
+	static $map = null;
+
+	$name = \trim($name);
+	if ($name === '') {
+		return 0;
+	}
+
+	if ($map === null) {
+		$map = [];
+		$kontakt_pt = \function_exists(__NAMESPACE__ . '\\cmx_first_existing_kontakt_cpt_unified')
+			? (string) cmx_first_existing_kontakt_cpt_unified()
+			: '';
+
+		if ($kontakt_pt !== '') {
+			$lieferanten_ids = \function_exists(__NAMESPACE__ . '\\cmx_fetch_lieferanten_ids_unified')
+				? \array_map('intval', (array) cmx_fetch_lieferanten_ids_unified($kontakt_pt))
+				: [];
+
+			if ($lieferanten_ids === []) {
+				$lieferanten_ids = \array_map('intval', (array) \get_posts([
+					'post_type'              => $kontakt_pt,
+					'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+					'posts_per_page'         => -1,
+					'fields'                 => 'ids',
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
+					'suppress_filters'       => true,
+				]));
+			}
+
+			foreach ($lieferanten_ids as $kontakt_id) {
+				$kontakt_id = (int) $kontakt_id;
+				if ($kontakt_id <= 0) {
+					continue;
+				}
+				$title = \trim((string) \get_the_title($kontakt_id));
+				$normalized = cmx_artikel_import_normalize_name($title);
+				if ($normalized !== '' && !isset($map[$normalized])) {
+					$map[$normalized] = $kontakt_id;
+				}
+			}
+		}
+	}
+
+	$normalized = cmx_artikel_import_normalize_name($name);
+	return $normalized !== '' ? (int) ($map[$normalized] ?? 0) : 0;
+}
+
+function cmx_artikel_import_apply_lieferanten_names(int $post_id, array $row): void {
+	$resolved_first_id = null;
+
+	foreach ($row as $key => $value) {
+		if (!\preg_match('/^lieferant_(\d+)_name$/i', (string) $key, $matches)) {
+			continue;
+		}
+
+		$row_index = \max(0, ((int) ($matches[1] ?? 0)) - 1);
+		$name = \trim((string) $value);
+		$kontakt_id = $name !== ''
+			? (int) cmx_artikel_import_find_lieferant_id_by_name($name)
+			: 0;
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_lieferanten_row_meta_key_unified')) {
+			\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($row_index, 'id'), $kontakt_id);
+		} else {
+			\update_post_meta($post_id, '_cmx_art_lieferant_' . $row_index . '_id', $kontakt_id);
+		}
+
+		if ($row_index === 0) {
+			$resolved_first_id = $kontakt_id;
+		}
+	}
+
+	if ($resolved_first_id !== null) {
+		$legacy_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID')
+			: '_cmx_art_lieferant_id';
+		\update_post_meta($post_id, $legacy_key, (int) $resolved_first_id);
+	}
+}
+
 function cmx_import_clear_lieferanten_meta(int $post_id): void {
 	foreach (\array_keys((array)\get_post_meta($post_id)) as $meta_key) {
 		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)$/', (string)$meta_key)) {
@@ -326,7 +420,10 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 
 	$has_lieferanten_meta_in_csv = false;
 	foreach ($header as $column) {
-		if (\preg_match('/^meta__(?:_cmx_art_lieferant_\d+_(?:id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)|_cmx_art_lieferanten_count|_cmx_art_lieferanten_liste)$/', (string) $column)) {
+		if (
+			\preg_match('/^meta__(?:_cmx_art_lieferant_\d+_(?:id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)|_cmx_art_lieferanten_count|_cmx_art_lieferanten_liste)$/', (string) $column)
+			|| \preg_match('/^lieferant_\d+_name$/i', (string) $column)
+		) {
 			$has_lieferanten_meta_in_csv = true;
 			break;
 		}
@@ -401,6 +498,7 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 			}
 		}
 
+		cmx_artikel_import_apply_lieferanten_names((int) $post_id, $row);
 		cmx_artikel_import_apply_image((int) $post_id, $row, $row_l, $zip_image_map);
 
 		if ($is_update) {
