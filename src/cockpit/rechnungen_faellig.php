@@ -1,5 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+require_once __DIR__ . '/../belege/vorlage_mail mahnung.php';
+
 /**
  * Dashboard-Widget: Faellige Rechnungen/Gutschriften (offen)
  * - zeigt max. 5 offene, faellige Rechnungen und Gutschriften
@@ -265,6 +267,267 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_direction_label')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_contact_id')) {
+	function cmx_cockpit_mahnwesen_contact_id(int $post_id): int {
+		$keys = ['_cmx_beleg_kontakt_id', 'cmx_beleg_kontakt_id'];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')) {
+			$keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID');
+		}
+
+		foreach (\array_values(\array_unique($keys)) as $key) {
+			$val = (int) \get_post_meta($post_id, $key, true);
+			if ($val > 0) {
+				return $val;
+			}
+		}
+
+		return 0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_contact_email')) {
+	function cmx_cockpit_mahnwesen_contact_email(int $post_id): string {
+		$kontakt_id = cmx_cockpit_mahnwesen_contact_id($post_id);
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
+			$email = \sanitize_email((string) cmxbu_get_contact_primary_email($kontakt_id));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+
+		$email = \sanitize_email((string) \get_post_meta($kontakt_id, '_cmx_email_1', true));
+		return \is_email($email) ? $email : '';
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_amount_value')) {
+	function cmx_cockpit_mahnwesen_amount_value(int $post_id): float {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+			$calc = (array) cmxbu_get_beleg_positionen_calc($post_id);
+			if (isset($calc['total']) && \is_numeric($calc['total'])) {
+				return (float) $calc['total'];
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_decimal')) {
+			return (float) cmx_cockpit_parse_decimal((string) \get_post_meta($post_id, '_cmx_beleg_summe_override', true));
+		}
+
+		return 0.0;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_amount_display')) {
+	function cmx_cockpit_mahnwesen_amount_display(int $post_id, float $amount_value): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')) {
+			$display = \trim((string) cmxbu_get_beleg_amount_display($post_id));
+			if ($display !== '') {
+				return $display;
+			}
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+			? (string) cmx_format_swiss_number($amount_value, 2)
+			: \number_format($amount_value, 2, '.', "'");
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_due_display')) {
+	function cmx_cockpit_mahnwesen_due_display(int $post_id, string $due_raw, int $due_ts): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_due_date_display')) {
+			$display = \trim((string) cmxbu_get_beleg_due_date_display($post_id));
+			if ($display !== '') {
+				return $display;
+			}
+		}
+
+		if ($due_ts > 0) {
+			return (string) \date_i18n('d.m.Y', $due_ts);
+		}
+
+		return \trim($due_raw);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_is_outgoing_invoice')) {
+	function cmx_cockpit_mahnwesen_is_outgoing_invoice(int $post_id): bool {
+		$richtung = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
+		if ($richtung !== 'ausgang') {
+			return false;
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_raw_type')) {
+			$post = \get_post($post_id);
+			if ($post instanceof \WP_Post) {
+				$type = (string) cmxbu_beleg_export_raw_type($post);
+				if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_type')) {
+					$type = (string) cmxbu_beleg_export_normalize_type($type);
+				}
+				if ($type !== '') {
+					return ($type === 'rechnung');
+				}
+			}
+		}
+
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_taxonomy')
+			? (string) cmx_cockpit_beleg_taxonomy()
+			: '';
+		if ($tax !== '' && \taxonomy_exists($tax)) {
+			$terms = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($terms)) {
+				foreach ((array) $terms as $slug) {
+					$slug = \sanitize_key((string) $slug);
+					if ($slug === 'rechnung' || $slug === 'rechnungen') {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
+	function cmx_cockpit_mahnwesen_send_mail(int $post_id) {
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || $post->post_type !== 'belege') {
+			return new \WP_Error('invalid_post', 'Beleg nicht gefunden.');
+		}
+
+		if (!cmx_cockpit_mahnwesen_is_outgoing_invoice($post_id)) {
+			return new \WP_Error('invalid_type', 'Zahlungserinnerung nur für Ausgangs-Rechnungen möglich.');
+		}
+
+		$to = cmx_cockpit_mahnwesen_contact_email($post_id);
+		if (!\is_email($to)) {
+			return new \WP_Error('missing_email', 'Keine gültige Empfänger-E-Mail gefunden.');
+		}
+
+		$opts_general = (array) \get_option('cmx_einstellungen', []);
+		$configured_sender = \sanitize_email((string) ($opts_general['email_address'] ?? ''));
+		if (!\is_email($configured_sender)) {
+			return new \WP_Error('missing_sender', 'Bitte hinterlege zuerst eine gültige Absender-E-Mail in den Einstellungen.');
+		}
+
+		$kontakt_id = cmx_cockpit_mahnwesen_contact_id($post_id);
+		$anrede_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+			: '_cmx_kontakte_anrede';
+		$anrede = $kontakt_id > 0 ? \trim((string) \get_post_meta($kontakt_id, $anrede_key, true)) : '';
+		$vorname = $kontakt_id > 0 ? \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true)) : '';
+		$nachname = $kontakt_id > 0 ? \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true)) : '';
+
+		$beleg_id = (string) ($post->post_title ?? '');
+		$beleg_label = 'Rechnung';
+		$token = \function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token')
+			? (string) cmxbu_get_stable_token($post_id)
+			: '';
+		$download_url = $token !== '' ? (string) \add_query_arg('beleg', $token, \home_url('/')) : '';
+		$faellig_bis = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_due_date_display')
+			? (string) cmxbu_get_beleg_due_date_display($post_id)
+			: '';
+		$betrag = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
+			? (string) cmxbu_get_beleg_amount_display($post_id)
+			: cmx_cockpit_mahnwesen_amount_display($post_id, cmx_cockpit_mahnwesen_amount_value($post_id));
+
+		$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+		$message = cmxbu_render_belegmail_mahnung_template([
+			'anrede' => $anrede,
+			'vorname' => $vorname,
+			'nachname' => $nachname,
+			'beleg_label' => $beleg_label,
+			'beleg_id' => $beleg_id,
+			'download_url' => $download_url,
+			'faellig_bis' => $faellig_bis,
+			'betrag' => $betrag,
+			'site_name' => \get_bloginfo('name'),
+			'catalog_url' => \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
+				? \home_url('/katalog/')
+				: '',
+		]);
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_belegmail_html')) {
+			$message = cmxbu_prepare_belegmail_html($message);
+		}
+
+		$headers = ['Content-Type: text/html; charset=UTF-8'];
+		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
+		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+		$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
+		$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
+		$wp_mail_failed_message = '';
+		$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
+			if (!$error instanceof \WP_Error) {
+				return;
+			}
+			$msg = \trim((string) $error->get_error_message());
+			if ($msg === '') {
+				$all = \array_map('strval', (array) $error->get_error_messages());
+				$msg = \trim(\implode(' | ', \array_filter($all, static function (string $item): bool {
+					return $item !== '';
+				})));
+			}
+			$wp_mail_failed_message = $msg;
+		};
+
+		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
+		$GLOBALS['cmx_mail_context'] = 'beleg_mahnung';
+		\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
+		try {
+			$sent = \wp_mail($to, $subject, $message, $headers);
+		} finally {
+			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
+			if ($had_sender_override) {
+				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
+			} else {
+				unset($GLOBALS['cmx_force_current_user_mail_sender']);
+			}
+			if ($had_mail_context) {
+				$GLOBALS['cmx_mail_context'] = $previous_mail_context;
+			} else {
+				unset($GLOBALS['cmx_mail_context']);
+			}
+		}
+
+		if (!$sent) {
+			return new \WP_Error('mail_failed', $wp_mail_failed_message !== '' ? $wp_mail_failed_message : 'E-Mail konnte nicht gesendet werden.');
+		}
+
+		return [
+			'email' => $to,
+			'subject' => $subject,
+		];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_ajax_send_mail')) {
+	function cmx_cockpit_mahnwesen_ajax_send_mail(): void {
+		if (!\current_user_can('edit_posts')) {
+			\wp_send_json_error('Keine Berechtigung.', 403);
+		}
+
+		\check_ajax_referer('cmx_mahnwesen_send_mail');
+
+		$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+		if ($post_id <= 0) {
+			\wp_send_json_error('Beleg-ID fehlt.', 400);
+		}
+
+		$result = cmx_cockpit_mahnwesen_send_mail($post_id);
+		if ($result instanceof \WP_Error) {
+			\wp_send_json_error((string) $result->get_error_message(), 400);
+		}
+
+		\wp_send_json_success($result);
+	}
+}
+\add_action('wp_ajax_cmx_mahnwesen_send_mail', __NAMESPACE__ . '\\cmx_cockpit_mahnwesen_ajax_send_mail');
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) {
 	function cmx_cockpit_faellige_rechnungen_data(): array {
 		static $cache = [];
@@ -383,6 +646,8 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 					$amount_display = cmx_cockpit_beleg_amount_display($post_id);
 					$type_label = cmx_cockpit_beleg_type_label($post_id);
 					$direction_label = cmx_cockpit_beleg_direction_label($post_id);
+					$kontakt_email = cmx_cockpit_mahnwesen_contact_email($post_id);
+					$can_send_reminder = $kontakt_email !== '' && cmx_cockpit_mahnwesen_is_outgoing_invoice($post_id);
 					$type_tooltip = $type_label !== '' ? ('Belegtyp: ' . $type_label) : '';
 					$group_label = $type_label !== '' ? $type_label : 'Ohne Belegtyp';
 					if ($direction_label !== '') {
@@ -396,10 +661,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				'kontakt_url' => (string) ($kontakt_data['url'] ?? ''),
 				'due_sort' => $due_sort,
 					'due_ts'   => $due_ts,
-					'due_date' => $due_ts > 0 ? \date_i18n('d.m.Y', $due_ts) : '',
+					'due_date' => cmx_cockpit_mahnwesen_due_display($post_id, $due_raw, $due_ts),
 						'edit_url' => (string) \get_edit_post_link($post_id, ''),
 						'amount_tooltip' => $amount_tooltip,
 						'amount_display' => $amount_display,
+						'kontakt_email' => $kontakt_email,
+						'can_send_reminder' => $can_send_reminder,
 						'type_label' => $type_label,
 						'direction_label' => $direction_label,
 						'group_label' => $group_label,
@@ -479,6 +746,9 @@ function cmx_render_rechnungen_faellig_widget(): void {
 			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link{text-decoration:none}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-contact-link:hover{text-decoration:underline}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn{display:inline-block;border:0;background:transparent;padding:0;margin:0;color:#2271b1;cursor:pointer;text-decoration:none;font:inherit}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn:hover{text-decoration:underline}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn[disabled]{color:#8c8f94;cursor:default;text-decoration:none}
 		</style>';
 		echo '<table class="cmx-faellig-table">';
 		echo '<colgroup>';
@@ -526,6 +796,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					$edit    = (string) ($row['edit_url'] ?? '');
 					$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
 					$amount_display = (string) ($row['amount_display'] ?? '');
+					$kontakt_email = (string) ($row['kontakt_email'] ?? '');
+					$can_send_reminder = !empty($row['can_send_reminder']);
 					$type_tooltip = (string) ($row['type_tooltip'] ?? '');
 					if ($amount_display === '' && $amount_tooltip !== '') {
 						$amount_display = (string) \str_replace('Betrag: CHF ', '', $amount_tooltip);
@@ -541,8 +813,16 @@ function cmx_render_rechnungen_faellig_widget(): void {
 						echo '<span class="cmx-faellig-title-text"' . $title_attr . '>' . \esc_html($title) . '</span>';
 					}
 					echo '</td>';
-					$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
-					echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;"' . $due_attr . '>' . \esc_html($due) . '</td>';
+					echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
+					if ($can_send_reminder) {
+						echo '<button type="button" class="cmx-faellig-due-btn" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
+						echo \esc_html($due);
+						echo '</button>';
+					} else {
+						$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+						echo '<span' . $due_attr . '>' . \esc_html($due) . '</span>';
+					}
+					echo '</td>';
 				echo '<td style="padding:4px 0;vertical-align:top;">';
 				$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
 				if ($kontakt !== '' && $kontakt_url !== '') {
@@ -582,6 +862,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		return;
 	}
 	$paid_nonce = \wp_create_nonce('cmx_mark_paid');
+	$reminder_nonce = \wp_create_nonce('cmx_mahnwesen_send_mail');
 	$ajax_url = \admin_url('admin-ajax.php');
 	?>
 		<script>
@@ -625,7 +906,49 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				});
 			}
 
+			function submitReminderMail(postId, btn){
+				var body = new URLSearchParams();
+				body.set('action', 'cmx_mahnwesen_send_mail');
+				body.set('post_id', String(postId));
+				body.set('_ajax_nonce', <?php echo \wp_json_encode($reminder_nonce); ?>);
+
+				fetch(<?php echo \wp_json_encode($ajax_url); ?>, {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+					body: body.toString()
+				}).then(function(resp){
+					return resp.json();
+				}).then(function(resp){
+					if (resp && resp.success) {
+						var email = resp.data && resp.data.email ? String(resp.data.email) : '';
+						window.alert(email !== '' ? ('Zahlungserinnerung gesendet an ' + email) : 'Zahlungserinnerung wurde gesendet.');
+						btn.disabled = false;
+						btn.dataset.loading = '';
+						return;
+					}
+					throw new Error(resp && resp.data ? String(resp.data) : 'E-Mail konnte nicht gesendet werden.');
+				}).catch(function(err){
+					window.alert(err && err.message ? err.message : 'E-Mail konnte nicht gesendet werden.');
+					btn.disabled = false;
+					btn.dataset.loading = '';
+				});
+			}
+
 			document.addEventListener('click', function(e){
+				var dueBtn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-due-btn') : null;
+				if (dueBtn) {
+					e.preventDefault();
+					e.stopPropagation();
+					if (dueBtn.dataset.loading === '1') return;
+					var reminderPostId = parseInt(dueBtn.getAttribute('data-post-id') || '0', 10);
+					if (!reminderPostId) return;
+					dueBtn.dataset.loading = '1';
+					dueBtn.disabled = true;
+					submitReminderMail(reminderPostId, dueBtn);
+					return;
+				}
+
 				var btn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-mark-paid') : null;
 				if (!btn) return;
 				e.preventDefault();
