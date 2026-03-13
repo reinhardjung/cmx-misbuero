@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../belege/vorlage_mail mahnung.php';
 
 /**
- * Dashboard-Widget: Faellige Rechnungen/Gutschriften (offen)
+ * Dashboard-Widget: Offene Belege
  * - zeigt max. 5 offene, faellige Rechnungen und Gutschriften
  * - Titel enthaelt die Gesamtanzahl aller offenen, faelligen Rechnungen und Gutschriften
  * - Klick auf Widget-Titel springt in die Belege-Liste mit aktivem Filter:
@@ -701,7 +701,7 @@ function cmx_register_rechnungen_faellig_widget(): void {
 	}
 
 	$data = cmx_cockpit_faellige_rechnungen_data();
-	$title = 'Fällige Belege (' . (int) ($data['total'] ?? 0) . ')';
+	$title = 'Offene Belege (' . (int) ($data['total'] ?? 0) . ')';
 	$title_link = '<a href="' . \esc_url((string) ($data['list_url'] ?? '')) . '" style="font-weight:700;font-size:14px;text-decoration:none;">' . \esc_html($title) . '</a>';
 
 	\wp_add_dashboard_widget(
@@ -722,7 +722,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 	$items = (array) ($data['items'] ?? []);
 
 	if ($total <= 0) {
-		echo '<p>Keine fälligen / offenen Belege</p>';
+		echo '<p>Keine offenen Belege</p>';
 		return;
 	}
 
