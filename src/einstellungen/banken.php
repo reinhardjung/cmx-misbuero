@@ -245,7 +245,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_payrexx_instanz_field')) {
 	function cmx_render_payrexx_instanz_field(): void {
 		$value = \esc_attr(cmx_get_payrexx_instanz());
 		echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[payrexx_instanz]" value="' . $value . '" placeholder="Name-Deiner-Instanz">';
-		echo '<p class="description">Wenn Du im Payrexx angemeldet bist siehst Du in der URL (<i>der Adressleiste im Browser</i>) <br><strong>https://<code>Name-Deiner-Instanz</code>.payrexx.com/...</strong></p>';
+		echo '<span style="margin-left:8px;">Der "Name-Deiner-Instanz" ist in der Regel Dein Firmenname</span>';
+		echo '<p class="description">Wenn Du im Payrexx korrekt angemeldet bist, siehst Du in der URL (<i>der Adressleiste im Browser</i>) <br><strong>https://<code>Name-Deiner-Instanz</code>.payrexx.com/...</strong></p>';
 	}
 }
 
