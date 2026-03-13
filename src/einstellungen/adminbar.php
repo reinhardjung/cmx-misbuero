@@ -480,9 +480,18 @@ function cmx65_katalog_copy_script(): void
         document.addEventListener("DOMContentLoaded", function () {
             var link = document.querySelector("#wp-admin-bar-cmx65_katalog_id > .ab-item");
             if (!link) return;
-            link.addEventListener("click", function () {
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
                 var url = link.getAttribute("href");
                 if (!url) return;
+                var target = link.getAttribute("target") || "";
+                var openLink = function () {
+                    if (target === "_blank") {
+                        window.open(url, "_blank", "noopener");
+                        return;
+                    }
+                    window.location.href = url;
+                };
                 var fallbackCopy = function () {
                     var textarea = document.createElement("textarea");
                     textarea.value = url;
@@ -493,14 +502,15 @@ function cmx65_katalog_copy_script(): void
                     textarea.select();
                     try {
                         document.execCommand("copy");
+                        openLink();
                     } catch (e) {
-                        // ignore
+                        openLink();
                     } finally {
                         document.body.removeChild(textarea);
                     }
                 };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).catch(fallbackCopy);
+                    navigator.clipboard.writeText(url).then(openLink, fallbackCopy);
                 } else {
                     fallbackCopy();
                 }
