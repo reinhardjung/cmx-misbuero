@@ -94,6 +94,39 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_collect_export_contact_ids')) {
 			}
 
 			$tax_query = [];
+			if (!empty($_REQUEST['filter_kontakt_type']) && \function_exists(__NAMESPACE__ . '\\cmx_kundenart_tax')) {
+				$term_id = (int) \sanitize_text_field((string) \wp_unslash($_REQUEST['filter_kontakt_type']));
+				if ($term_id > 0) {
+					$tax_query[] = [
+						'taxonomy' => (string) cmx_kundenart_tax(),
+						'field' => 'term_id',
+						'terms' => [$term_id],
+						'include_children' => false,
+					];
+				}
+			}
+			if (!empty($_REQUEST['filter_kundenkategorie']) && \function_exists(__NAMESPACE__ . '\\cmx_kundenkategorie_tax')) {
+				$term_id = (int) \sanitize_text_field((string) \wp_unslash($_REQUEST['filter_kundenkategorie']));
+				if ($term_id > 0) {
+					$tax_query[] = [
+						'taxonomy' => (string) cmx_kundenkategorie_tax(),
+						'field' => 'term_id',
+						'terms' => [$term_id],
+						'include_children' => false,
+					];
+				}
+			}
+			if (!empty($_REQUEST['filter_stufen']) && \function_exists(__NAMESPACE__ . '\\cmx_stufen_tax')) {
+				$term_id = (int) \sanitize_text_field((string) \wp_unslash($_REQUEST['filter_stufen']));
+				if ($term_id > 0) {
+					$tax_query[] = [
+						'taxonomy' => (string) cmx_stufen_tax(),
+						'field' => 'term_id',
+						'terms' => [$term_id],
+						'include_children' => false,
+					];
+				}
+			}
 			$taxos = \get_object_taxonomies('kontakte', 'objects');
 			foreach ($taxos as $tax) {
 				$candidates = \array_values(\array_unique(\array_filter([
@@ -119,6 +152,62 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_collect_export_contact_ids')) {
 				}
 			}
 			if ($tax_query) $qv['tax_query'] = \array_merge(['relation' => 'AND'], $tax_query);
+
+			$search_term = \trim((string) ($qv['s'] ?? ''));
+			if (
+				$search_term !== ''
+				&& \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_terms')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_email_meta_keys')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_address_meta_keys')
+			) {
+				$search_terms = (array) cmx_kontakte_search_terms($search_term);
+				if (!empty($search_terms)) {
+					$lookup_args = [
+						'post_type' => 'kontakte',
+						'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+						'posts_per_page' => -1,
+						'fields' => 'ids',
+						'no_found_rows' => true,
+						'orderby' => 'ID',
+						'order' => 'ASC',
+						'cmx_kontakte_search_lookup' => true,
+					];
+
+					$default_match_ids = [];
+					foreach ($search_terms as $lookup_term) {
+						$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
+							's' => $lookup_term,
+						])));
+					}
+
+					$meta_query = ['relation' => 'OR'];
+					foreach ($search_terms as $lookup_term) {
+						foreach (\array_merge(
+							(array) cmx_kontakte_search_email_meta_keys(),
+							(array) cmx_kontakte_search_address_meta_keys()
+						) as $meta_key) {
+							$meta_query[] = [
+								'key' => (string) $meta_key,
+								'value' => (string) $lookup_term,
+								'compare' => 'LIKE',
+							];
+						}
+					}
+
+					$email_match_ids = (array) \get_posts(\array_merge($lookup_args, [
+						's' => '',
+						'meta_query' => $meta_query,
+					]));
+
+					$matched_ids = \array_values(\array_unique(\array_map('intval', \array_merge(
+						(array) $default_match_ids,
+						(array) $email_match_ids
+					))));
+
+					$qv['s'] = '';
+					$qv['post__in'] = empty($matched_ids) ? [0] : $matched_ids;
+				}
+			}
 		}
 
 		$q = new \WP_Query($qv);

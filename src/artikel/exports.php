@@ -1,25 +1,28 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 
-/* =========================================================
- * 1. "exportieren"-Link oberhalb der Artikelliste
- * ========================================================= */
+/* ===== Export-Link in der Artikelliste ===== */
 \add_filter('views_edit-artikel', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
 
 	$args = $_GET ?? [];
 	unset(
-		$args['paged'], $args['action'], $args['action2'], $args['_wpnonce'],
-		$args['_wp_http_referer'], $args['orderby'], $args['order']
+		$args['paged'],
+		$args['action'],
+		$args['action2'],
+		$args['_wpnonce'],
+		$args['_wp_http_referer'],
+		$args['orderby'],
+		$args['order']
 	);
 	$args['action'] = 'cmx_export_artikel_list';
+	$args['cmx_export_format'] = 'zip';
 
 	$url  = \wp_nonce_url(\add_query_arg($args, \admin_url('admin-post.php')), 'cmx_export_artikel_list');
-	$link = '<a href="' . esc_url($url) . '">exportieren</a>';
+	$link = '<a href="' . \esc_url($url) . '">exportieren</a>';
 
 	$new_views = [];
-	$inserted  = false;
-
+	$inserted = false;
 	foreach ($views as $key => $html) {
 		$new_views[$key] = $html;
 		if ($key === 'trash' && !$inserted) {
@@ -35,202 +38,620 @@
 			}
 		}
 	}
-	if (!$inserted) $new_views['cmx_export_artikel_list'] = $link;
+	if (!$inserted) {
+		$new_views['cmx_export_artikel_list'] = $link;
+	}
+
 	return $new_views;
 });
 
-/* =========================================================
- * 2. Export-Handler (A–D-Logik + JSON-sicher)
- * ========================================================= */
+/* ===== Export-Handler ===== */
 \add_action('admin_post_cmx_export_artikel_list', function () {
 	if (!\current_user_can('edit_posts')) \wp_die('Keine Berechtigung.');
 	if (!\wp_verify_nonce($_REQUEST['_wpnonce'] ?? '', 'cmx_export_artikel_list')) \wp_die('Ungültige Anfrage.');
 
-	/* === A) Markierte Artikel === */
-	$selected_ids = [];
-	if (isset($_REQUEST['post'])) {
-		$selected_ids = array_filter(array_map('intval', (array) $_REQUEST['post']));
+	$post_ids = \function_exists(__NAMESPACE__ . '\\cmxal_collect_export_artikel_ids')
+		? (array) cmxal_collect_export_artikel_ids()
+		: [];
+	$format = \function_exists(__NAMESPACE__ . '\\cmxal_requested_export_format')
+		? (string) cmxal_requested_export_format()
+		: 'zip';
+
+	if ($format === 'zip') {
+		cmxal_stream_artikel_export_zip_from_ids($post_ids);
 	}
 
-	$query_vars = [
-		'post_type'      => 'artikel',
-		'posts_per_page' => -1,
-		'fields'         => 'ids',
-		'no_found_rows'  => true,
-		'orderby'        => 'ID',
-		'order'          => 'ASC',
-	];
-
-	/* === A priorisiert: bei Auswahl nur markierte Artikel exportieren === */
-	if ($selected_ids) {
-		$query_vars['post__in'] = $selected_ids;
-		$query_vars['orderby']  = 'post__in';
-		$query_vars['post_status'] = 'any';
-	} else {
-		/* === B) Ohne Auswahl: aktuelle Filter anwenden === */
-		$post_status = isset($_REQUEST['post_status']) ? sanitize_key((string) $_REQUEST['post_status']) : '';
-		if ($post_status !== '' && $post_status !== 'all') {
-			$query_vars['post_status'] = $post_status;
-		} else {
-			$query_vars['post_status'] = ['publish', 'future', 'draft', 'pending', 'private'];
-		}
-
-		foreach (['s', 'author', 'm'] as $f) {
-			$val = $_REQUEST[$f] ?? '';
-			if ($val !== '' && $val !== '0' && $val !== '-1') {
-				$query_vars[$f] = $val;
-			}
-		}
-
-		// Taxonomien
-		$tax_query = [];
-		$taxos = \get_object_taxonomies('artikel', 'objects');
-		foreach ($taxos as $tax) {
-			$keys = [];
-			if (!empty($tax->query_var) && is_string($tax->query_var)) $keys[] = $tax->query_var;
-			$keys[] = $tax->name;
-			$keys = array_values(array_unique(array_filter($keys)));
-			foreach ($keys as $key) {
-				$val = $_REQUEST[$key] ?? '';
-				if ($val === '' || $val === '0' || $val === '-1') continue;
-				$tax_query[] = [
-					'taxonomy' => $tax->name,
-					'field'    => is_numeric($val) ? 'term_id' : 'slug',
-					'terms'    => [$val],
-				];
-				break;
-			}
-		}
-		if ($tax_query) $query_vars['tax_query'] = array_merge(['relation' => 'AND'], $tax_query);
-
-		// cmx_lieferant (Taxonomie oder Meta)
-		$cmx_lieferant = $_REQUEST['cmx_lieferant'] ?? '';
-		if ($cmx_lieferant !== '' && $cmx_lieferant !== '0' && $cmx_lieferant !== '-1') {
-			if (\taxonomy_exists('cmx_lieferant')) {
-				$query_vars['tax_query'][] = [
-					'taxonomy' => 'cmx_lieferant',
-					'field'    => is_numeric($cmx_lieferant) ? 'term_id' : 'slug',
-					'terms'    => [$cmx_lieferant],
-				];
-			} else {
-				$query_vars['meta_query'][] = [
-					'key'     => 'cmx_lieferant',
-					'value'   => $cmx_lieferant,
-					'compare' => '=',
-				];
-			}
-		}
-	}
-
-	$taxos = \get_object_taxonomies('artikel', 'objects');
-
-	/* === Query === */
-	$q = new \WP_Query($query_vars);
-	$post_ids = $q->posts;
-
-	/* === CSV-Erzeugung === */
-	$base_headers = ['post_id','post_title','post_status','post_date','post_slug','permalink','featured_image'];
-	$meta_keys = [];
-	$tax_headers = [];
-
-	foreach ($post_ids as $pid) {
-		foreach (\get_post_meta($pid) as $k => $vals) $meta_keys[$k] = true;
-	}
-	foreach ($taxos as $tax) $tax_headers[] = 'tax__'.$tax->name;
-
-	$meta_headers = array_map(fn($k) => 'meta__'.$k, array_keys($meta_keys));
-	$headers = array_merge($base_headers, $meta_headers, $tax_headers);
-
-		$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_filename')
-			? (string) cmx_export_filename('artikel-export', 'csv')
-			: ('artikel-export-' . \gmdate('Ymd-His') . '.csv');
-		header('Content-Type: text/csv; charset=UTF-8');
-		header('Content-Disposition: attachment; filename="'.$filename.'"');
-	header('Pragma: no-cache');
-	header('Expires: 0');
-
-	$fh = fopen('php://output', 'w');
-	fwrite($fh, "\xEF\xBB\xBF");
-	fputcsv($fh, $headers, ';');
-
-	foreach ($post_ids as $pid) {
-		$post = get_post($pid);
-		$row = [
-			'post_id'     => $pid,
-			'post_title'  => $post->post_title,
-			'post_status' => $post->post_status,
-			'post_date'   => get_date_from_gmt($post->post_date_gmt, 'Y-m-d H:i:s'),
-			'post_slug'   => $post->post_name,
-			'permalink'   => get_permalink($pid),
-			'featured_image' => get_post_thumbnail_id($pid) ? wp_get_attachment_url(get_post_thumbnail_id($pid)) : '',
-		];
-
-		// --- Metafelder robust serialisieren ---
-		$all_meta = get_post_meta($pid);
-		foreach ($meta_headers as $mh) {
-			$key = substr($mh,6);
-			$vals = $all_meta[$key] ?? [];
-			$norm = array_map(static function($v){
-				if (is_array($v) || is_object($v)) {
-					return wp_json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-				}
-				return (string)$v;
-			}, (array)$vals);
-			$row[$mh] = implode(' | ', $norm);
-		}
-
-		// --- Taxonomien ---
-		foreach ($taxos as $tax) {
-			$key = 'tax__'.$tax->name;
-			$terms = wp_get_post_terms($pid,$tax->name,['fields'=>'names']);
-			$row[$key] = implode(', ',$terms);
-		}
-
-		// --- Zeilen schreiben ---
-		$out = [];
-		foreach ($headers as $h) {
-			$val = $row[$h] ?? '';
-			if (is_array($val) || is_object($val)) {
-				$val = wp_json_encode($val, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-			}
-			$out[] = str_replace(["\r","\n"],' ',$val);
-		}
-		fputcsv($fh, $out, ';');
-	}
-	fclose($fh);
-	exit;
+	cmxal_stream_artikel_csv_from_ids($post_ids);
 });
 
-/* =========================================================
- * 3. JS: Markierte Artikel per POST senden (A)
- * ========================================================= */
+/* ===== Helpers ===== */
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_requested_export_format')) {
+	function cmxal_requested_export_format(): string {
+		$format = isset($_REQUEST['cmx_export_format']) ? \sanitize_key((string) \wp_unslash($_REQUEST['cmx_export_format'])) : 'zip';
+		return \in_array($format, ['csv', 'zip'], true) ? $format : 'zip';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_export_stamp')) {
+	function cmxal_export_stamp(): string {
+		$raw = isset($_REQUEST['cmx_export_stamp']) ? \sanitize_text_field((string) \wp_unslash($_REQUEST['cmx_export_stamp'])) : '';
+		if (\preg_match('/^\d{8}-\d{6}$/', $raw)) {
+			return $raw;
+		}
+		return \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
+			? (string) cmx_export_now_stamp()
+			: (string) \gmdate('Ymd-His');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_export_base_filename')) {
+	function cmxal_export_base_filename(): string {
+		$prefix = \function_exists(__NAMESPACE__ . '\\cmx_export_actor_prefix')
+			? (string) cmx_export_actor_prefix()
+			: 'misbuero';
+		return $prefix . '-artikel-export-' . cmxal_export_stamp();
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_export_filename')) {
+	function cmxal_export_filename(string $ext = 'csv'): string {
+		$ext = \strtolower(\trim($ext, ". \t\n\r\0\x0B"));
+		if ($ext === '') $ext = 'dat';
+		return cmxal_export_base_filename() . '.' . $ext;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_collect_export_artikel_ids')) {
+	function cmxal_query_filtered_artikel_ids_from_current_request(array $base_query_vars): array {
+		$backup_get = $_GET ?? [];
+		foreach ((array) $_REQUEST as $key => $value) {
+			if (!\array_key_exists($key, $_GET)) {
+				$_GET[$key] = $value;
+			}
+		}
+
+		$query = new \WP_Query();
+		$old_wp_query = $GLOBALS['wp_query'] ?? null;
+		$old_wp_the_query = $GLOBALS['wp_the_query'] ?? null;
+		$GLOBALS['wp_query'] = $query;
+		$GLOBALS['wp_the_query'] = $query;
+
+		try {
+			$query->query($base_query_vars);
+			return \array_values(\array_filter(\array_map('intval', (array) $query->posts)));
+		} finally {
+			$_GET = $backup_get;
+			$GLOBALS['wp_query'] = $old_wp_query;
+			$GLOBALS['wp_the_query'] = $old_wp_the_query;
+		}
+	}
+
+	function cmxal_collect_export_artikel_ids(): array {
+		$selected_ids = isset($_REQUEST['post']) ? \array_filter(\array_map('intval', (array) $_REQUEST['post'])) : [];
+
+		$qv = [
+			'post_type'      => 'artikel',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
+		];
+
+		if ($selected_ids) {
+			$qv['post__in'] = $selected_ids;
+			$qv['orderby'] = 'post__in';
+			$qv['post_status'] = 'any';
+		} else {
+			$post_status = isset($_REQUEST['post_status']) ? \sanitize_key((string) $_REQUEST['post_status']) : '';
+			if ($post_status !== '' && $post_status !== 'all') {
+				$qv['post_status'] = $post_status;
+			} else {
+				$qv['post_status'] = ['publish', 'future', 'draft', 'pending', 'private'];
+			}
+
+			foreach (['s', 'author', 'm'] as $key) {
+				$value = $_REQUEST[$key] ?? '';
+				if ($value !== '' && $value !== '0' && $value !== '-1') {
+					$qv[$key] = $value;
+				}
+			}
+			foreach (['orderby', 'order'] as $key) {
+				$value = $_REQUEST[$key] ?? '';
+				if ($value !== '') {
+					$qv[$key] = \sanitize_text_field((string) $value);
+				}
+			}
+
+			return \function_exists(__NAMESPACE__ . '\\cmxal_query_filtered_artikel_ids_from_current_request')
+				? (array) cmxal_query_filtered_artikel_ids_from_current_request($qv)
+				: [];
+		}
+
+		$q = new \WP_Query($qv);
+		return \array_values(\array_filter(\array_map('intval', (array) $q->posts)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')) {
+	function cmxal_local_file_from_url(string $url): string {
+		$url = \trim($url);
+		if ($url === '') {
+			return '';
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$baseurl = isset($uploads['baseurl']) ? \rtrim((string) $uploads['baseurl'], '/') : '';
+		$basedir = isset($uploads['basedir']) ? \wp_normalize_path((string) $uploads['basedir']) : '';
+		if ($baseurl === '' || $basedir === '') {
+			return '';
+		}
+
+		$path = (string) (\parse_url($url, PHP_URL_PATH) ?? '');
+		if ($path === '') {
+			return '';
+		}
+
+		$base_path = (string) (\parse_url($baseurl, PHP_URL_PATH) ?? '');
+		$relative = '';
+		if ($base_path !== '' && \strpos($path, $base_path) === 0) {
+			$relative = \ltrim((string) \substr($path, \strlen($base_path)), '/');
+		} else {
+			$uploads_marker = '/wp-content/uploads/';
+			$marker_pos = \strpos($path, $uploads_marker);
+			if ($marker_pos !== false) {
+				$relative = \ltrim((string) \substr($path, $marker_pos + \strlen($uploads_marker)), '/');
+			}
+		}
+		if ($relative === '') {
+			return '';
+		}
+
+		$file = \wp_normalize_path(\trailingslashit($basedir) . $relative);
+		return \is_file($file) ? $file : '';
+	}
+
+	function cmxal_collect_candidate_image_paths(int $post_id): array {
+		$candidates = [];
+
+		$local_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_path', true));
+		if ($local_path !== '') {
+			$candidates[] = ['path' => $local_path, 'url' => '', 'suffix' => 'bild'];
+		}
+
+		$local_url = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true));
+		if ($local_url !== '') {
+			$resolved = cmxal_local_file_from_url($local_url);
+			$candidates[] = ['path' => $resolved, 'url' => $local_url, 'suffix' => 'bild'];
+		}
+
+		$thumb_id = (int) \get_post_thumbnail_id($post_id);
+		if ($thumb_id > 0) {
+			$thumb_path = (string) \get_attached_file($thumb_id);
+			if ($thumb_path !== '') {
+				$candidates[] = ['path' => $thumb_path, 'url' => '', 'suffix' => 'featured'];
+			}
+
+			$thumb_url = (string) \wp_get_attachment_url($thumb_id);
+			if ($thumb_url !== '') {
+				$resolved = cmxal_local_file_from_url($thumb_url);
+				$candidates[] = ['path' => $resolved, 'url' => $thumb_url, 'suffix' => 'featured'];
+			}
+		}
+
+		$extra_image_url = \trim((string) \get_post_meta($post_id, '_cmx_artikel_bild_url', true));
+		if ($extra_image_url !== '') {
+			$resolved = cmxal_local_file_from_url($extra_image_url);
+			$candidates[] = ['path' => $resolved, 'url' => $extra_image_url, 'suffix' => 'bild'];
+		}
+
+		return $candidates;
+	}
+
+	function cmxal_artikel_image_entries(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return [];
+		}
+
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post) {
+			return [];
+		}
+
+		$title = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+			? (string) cmx_export_slugify((string) $post->post_title, 'artikel-' . $post_id)
+			: ('artikel-' . $post_id);
+
+		$candidates = \function_exists(__NAMESPACE__ . '\\cmxal_collect_candidate_image_paths')
+			? (array) cmxal_collect_candidate_image_paths($post_id)
+			: [];
+
+		$entries = [];
+		$used_names = [];
+		$seen_real = [];
+		foreach ($candidates as $candidate) {
+			$path = (string) ($candidate['path'] ?? '');
+			$url = \trim((string) ($candidate['url'] ?? ''));
+			$real = '';
+			if ($path !== '' && \is_file($path)) {
+				$real = (string) \realpath($path);
+				if ($real !== '' && isset($seen_real[$real])) {
+					continue;
+				}
+			}
+
+			$ext_source = $real !== '' ? $real : ((string) (\parse_url($url, PHP_URL_PATH) ?? ''));
+			$ext = \strtolower((string) \pathinfo($ext_source, PATHINFO_EXTENSION));
+			if ($ext === '') continue;
+
+			$filename = $title . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
+			$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+				? (string) cmx_export_slugify((string) \pathinfo($filename, PATHINFO_FILENAME), 'artikel-' . $post_id) . '.' . $ext
+				: ('artikel-' . $post_id . '.' . $ext);
+
+			if (isset($used_names[$filename])) {
+				$filename = 'artikel-' . $post_id . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
+			}
+
+			$used_names[$filename] = true;
+			if ($real !== '') {
+				$seen_real[$real] = true;
+			}
+			$entries[] = [
+				'abs_path'   => $real,
+				'source_url' => $url,
+				'zip_name'   => 'bilder/' . \ltrim($filename, '/'),
+				'suffix'     => (string) ($candidate['suffix'] ?? 'bild'),
+			];
+		}
+
+		return $entries;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
+	function cmxal_write_artikel_csv_to_handle($fh, array $ids): void {
+		$base_headers = [
+			'post_id',
+			'post_title',
+			'post_status',
+			'post_date',
+			'post_slug',
+			'permalink',
+			'local_image_url',
+			'local_image_path',
+			'local_image_zip_path',
+			'featured_image',
+			'featured_image_path',
+			'featured_image_zip_path',
+		];
+
+		$meta_blacklist = [
+			'_cmx_local_image_artikel_path',
+			'_cmx_local_image_artikel_url',
+			'_thumbnail_id',
+		];
+
+		$meta_keys = [];
+		$tax_headers = [];
+		foreach ($ids as $post_id) {
+			foreach (\get_post_meta($post_id) as $meta_key => $values) {
+				if (\in_array((string) $meta_key, $meta_blacklist, true)) {
+					continue;
+				}
+				$meta_keys[(string) $meta_key] = true;
+			}
+		}
+
+		$taxonomies = \get_object_taxonomies('artikel', 'objects');
+		foreach ($taxonomies as $taxonomy) {
+			$tax_headers[] = 'tax__' . $taxonomy->name;
+		}
+
+		$meta_headers = \array_map(static fn(string $key): string => 'meta__' . $key, \array_keys($meta_keys));
+		$headers = \array_merge($base_headers, $meta_headers, $tax_headers);
+		\fputcsv($fh, $headers, ';');
+
+		foreach ($ids as $post_id) {
+			$post = \get_post($post_id);
+			if (!$post instanceof \WP_Post) continue;
+
+			$thumb_id = (int) \get_post_thumbnail_id($post_id);
+			$featured_url = $thumb_id > 0 ? (string) \wp_get_attachment_url($thumb_id) : '';
+			$local_image_url = (string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true);
+			$local_image_path = '';
+			$featured_path = '';
+			$candidate_paths = \function_exists(__NAMESPACE__ . '\\cmxal_collect_candidate_image_paths')
+				? (array) cmxal_collect_candidate_image_paths((int) $post_id)
+				: [];
+			foreach ($candidate_paths as $candidate) {
+				$suffix = (string) ($candidate['suffix'] ?? '');
+				$path = (string) ($candidate['path'] ?? '');
+				if ($path === '' || !\is_file($path)) continue;
+				if ($suffix === 'bild' && $local_image_path === '') {
+					$local_image_path = \wp_normalize_path($path);
+				}
+				if ($suffix === 'featured' && $featured_path === '') {
+					$featured_path = \wp_normalize_path($path);
+				}
+			}
+			$image_entries = \function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')
+				? (array) cmxal_artikel_image_entries((int) $post_id)
+				: [];
+			$local_image_zip_path = '';
+			$featured_image_zip_path = '';
+			foreach ($image_entries as $entry) {
+				$suffix = (string) ($entry['suffix'] ?? '');
+				$zip_name = (string) ($entry['zip_name'] ?? '');
+				if ($suffix === 'bild' && $local_image_zip_path === '') {
+					$local_image_zip_path = $zip_name;
+				}
+				if ($suffix === 'featured' && $featured_image_zip_path === '') {
+					$featured_image_zip_path = $zip_name;
+				}
+			}
+
+			$row = [
+				'post_id'                => (string) $post_id,
+				'post_title'             => (string) $post->post_title,
+				'post_status'            => (string) $post->post_status,
+				'post_date'              => \get_date_from_gmt($post->post_date_gmt, 'Y-m-d H:i:s'),
+				'post_slug'              => (string) $post->post_name,
+				'permalink'              => (string) \get_permalink($post_id),
+				'local_image_url'        => $local_image_url,
+				'local_image_path'       => $local_image_path,
+				'local_image_zip_path'   => $local_image_zip_path,
+				'featured_image'         => $featured_url,
+				'featured_image_path'    => $featured_path,
+				'featured_image_zip_path'=> $featured_image_zip_path,
+			];
+
+			$all_meta = \get_post_meta($post_id);
+			foreach ($meta_headers as $header) {
+				$meta_key = \substr($header, 6);
+				$values = $all_meta[$meta_key] ?? [];
+				$normalized = \array_map(static function($value) {
+					$value = \maybe_unserialize($value);
+					if (\is_array($value) || \is_object($value)) {
+						return \wp_json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+					}
+					return (string) $value;
+				}, (array) $values);
+				$row[$header] = \implode(' | ', $normalized);
+			}
+
+			foreach ($taxonomies as $taxonomy) {
+				$key = 'tax__' . $taxonomy->name;
+				$terms = \wp_get_post_terms($post_id, $taxonomy->name, ['fields' => 'names']);
+				$row[$key] = \is_wp_error($terms) ? '' : \implode(', ', $terms);
+			}
+
+			$out = [];
+			foreach ($headers as $header) {
+				$value = $row[$header] ?? '';
+				if (\is_array($value) || \is_object($value)) {
+					$value = \wp_json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+				}
+				$out[] = \str_replace(["\r", "\n"], ' ', (string) $value);
+			}
+			\fputcsv($fh, $out, ';');
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_csv_string_from_ids')) {
+	function cmxal_artikel_csv_string_from_ids(array $ids): string {
+		$fh = \fopen('php://temp', 'w+');
+		if ($fh === false) {
+			return '';
+		}
+
+		\fwrite($fh, "\xEF\xBB\xBF");
+		cmxal_write_artikel_csv_to_handle($fh, $ids);
+		\rewind($fh);
+		$content = (string) \stream_get_contents($fh);
+		\fclose($fh);
+		return $content;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_stream_artikel_csv_from_ids')) {
+	function cmxal_stream_artikel_csv_from_ids(array $ids): void {
+		\ignore_user_abort(true);
+		if (\function_exists('set_time_limit')) @\set_time_limit(0);
+		while (\ob_get_level() > 0) { @\ob_end_clean(); }
+		\nocache_headers();
+
+		$filename = \function_exists(__NAMESPACE__ . '\\cmxal_export_filename')
+			? (string) cmxal_export_filename('csv')
+			: ('artikel-export-' . \gmdate('Ymd-His') . '.csv');
+		$content = \function_exists(__NAMESPACE__ . '\\cmxal_artikel_csv_string_from_ids')
+			? (string) cmxal_artikel_csv_string_from_ids($ids)
+			: '';
+
+		\header('Content-Type: text/csv; charset=UTF-8');
+		\header('Content-Disposition: attachment; filename="' . $filename . '"');
+		\header('Pragma: no-cache');
+		\header('Expires: 0');
+		echo $content;
+		exit;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_collect_artikel_image_entries')) {
+	function cmxal_collect_artikel_image_entries(array $ids): array {
+		$entries = [];
+		$seen_sources = [];
+
+		foreach ($ids as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0) continue;
+			$artikel_entries = \function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')
+				? (array) cmxal_artikel_image_entries($post_id)
+				: [];
+			foreach ($artikel_entries as $entry) {
+				$real = (string) ($entry['abs_path'] ?? '');
+				$url = (string) ($entry['source_url'] ?? '');
+				$key = $real !== '' ? ('file:' . $real) : ($url !== '' ? ('url:' . $url) : '');
+				if ($key === '' || isset($seen_sources[$key])) continue;
+				if ($real !== '' && !\is_file($real) && $url === '') continue;
+				$seen_sources[$key] = true;
+				$entries[] = [
+					'abs_path'   => $real,
+					'source_url' => $url,
+					'zip_name'   => (string) ($entry['zip_name'] ?? ''),
+				];
+			}
+		}
+
+		return $entries;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_fetch_image_binary')) {
+	function cmxal_fetch_image_binary(string $url): string {
+		$url = \trim($url);
+		if ($url === '') {
+			return '';
+		}
+
+		$response = \wp_remote_get($url, [
+			'timeout'     => 20,
+			'redirection' => 5,
+		]);
+		if (!\is_wp_error($response)) {
+			$code = (int) \wp_remote_retrieve_response_code($response);
+			$body = (string) \wp_remote_retrieve_body($response);
+			if ($code >= 200 && $code < 300 && $body !== '') {
+				return $body;
+			}
+		}
+
+		$raw = @\file_get_contents($url);
+		return \is_string($raw) ? $raw : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxal_stream_artikel_export_zip_from_ids')) {
+	function cmxal_stream_artikel_export_zip_from_ids(array $ids): void {
+		if (!\class_exists('\\ZipArchive')) {
+			\wp_die('ZIP-Export nicht verfügbar (ZipArchive fehlt).');
+		}
+
+		\ignore_user_abort(true);
+		if (\function_exists('set_time_limit')) @\set_time_limit(0);
+		while (\ob_get_level() > 0) { @\ob_end_clean(); }
+		\nocache_headers();
+
+		$tmpZip = \function_exists('\\wp_tempnam') ? \wp_tempnam('artikel-export-') : \tempnam(\sys_get_temp_dir(), 'artikel-export-');
+		if (!$tmpZip) {
+			\wp_die('Temporäre ZIP-Datei konnte nicht erstellt werden.');
+		}
+
+		$zip = new \ZipArchive();
+		if ($zip->open($tmpZip, \ZipArchive::OVERWRITE) !== true) {
+			@unlink($tmpZip);
+			\wp_die('ZIP-Datei konnte nicht erstellt werden.');
+		}
+
+		$csv_content = \function_exists(__NAMESPACE__ . '\\cmxal_artikel_csv_string_from_ids')
+			? (string) cmxal_artikel_csv_string_from_ids($ids)
+			: '';
+		$csv_name = \function_exists(__NAMESPACE__ . '\\cmxal_export_filename')
+			? (string) cmxal_export_filename('csv')
+			: ('artikel-export-' . \gmdate('Ymd-His') . '.csv');
+		if ($csv_content !== '') {
+			$zip->addFromString($csv_name, $csv_content);
+		}
+
+		$entries = \function_exists(__NAMESPACE__ . '\\cmxal_collect_artikel_image_entries')
+			? (array) cmxal_collect_artikel_image_entries($ids)
+			: [];
+		foreach ($entries as $entry) {
+			$abs_path = (string) ($entry['abs_path'] ?? '');
+			$source_url = (string) ($entry['source_url'] ?? '');
+			$zip_name = (string) ($entry['zip_name'] ?? '');
+			if ($zip_name === '') continue;
+			if ($abs_path !== '' && \is_file($abs_path)) {
+				$zip->addFile($abs_path, \ltrim($zip_name, '/'));
+				continue;
+			}
+			if ($source_url !== '') {
+				$binary = \function_exists(__NAMESPACE__ . '\\cmxal_fetch_image_binary')
+					? (string) cmxal_fetch_image_binary($source_url)
+					: '';
+				if ($binary !== '') {
+					$zip->addFromString(\ltrim($zip_name, '/'), $binary);
+				}
+			}
+		}
+		$zip->close();
+
+		$filename = \function_exists(__NAMESPACE__ . '\\cmxal_export_filename')
+			? (string) cmxal_export_filename('zip')
+			: ('artikel-export-' . \gmdate('Ymd-His') . '.zip');
+		\header('Content-Type: application/zip');
+		\header('Content-Disposition: attachment; filename="' . $filename . '"');
+		\header('Content-Length: ' . (string) \filesize($tmpZip));
+		\header('Pragma: no-cache');
+		\header('Expires: 0');
+		\readfile($tmpZip);
+		@unlink($tmpZip);
+		exit;
+	}
+}
+
+/* ===== JS: markierte Artikel per POST mitsenden ===== */
 \add_action('admin_footer-edit.php', function () {
 	if (($_GET['post_type'] ?? '') !== 'artikel') return;
-	$action = esc_js(admin_url('admin-post.php'));
-	$nonce  = esc_js(wp_create_nonce('cmx_export_artikel_list'));
+	$action = \esc_js(\admin_url('admin-post.php'));
+	$nonce = \esc_js(\wp_create_nonce('cmx_export_artikel_list'));
 	?>
 	<script>
-	document.addEventListener('DOMContentLoaded',function(){
-		const exportLink=[...document.querySelectorAll('.subsubsub a')]
-			.find(a=>a.textContent.trim().toLowerCase()==='exportieren'||/action=cmx_export_artikel_list/i.test(a.href));
-		if(!exportLink) return;
+	document.addEventListener('DOMContentLoaded', function () {
+		const exportLink = [...document.querySelectorAll('.subsubsub a')]
+			.find(a => a.textContent.trim().toLowerCase() === 'exportieren' || /action=cmx_export_artikel_list/i.test(a.href));
+		if (!exportLink) return;
 
-		exportLink.addEventListener('click',function(e){
-			const checked=[...document.querySelectorAll('tbody input[name="post[]"]:checked')]
-				.map(el=>parseInt(el.value)).filter(v=>!isNaN(v)&&v>0);
-			if(checked.length){
-				e.preventDefault();
-				const f=document.createElement('form');
-				f.method='POST';f.action='<?php echo $action; ?>';
-				f.innerHTML='<input type="hidden" name="action" value="cmx_export_artikel_list">'+
-				            '<input type="hidden" name="_wpnonce" value="<?php echo $nonce; ?>">';
-				checked.forEach(id=>{
-					const h=document.createElement('input');
-					h.type='hidden';h.name='post[]';h.value=id;
-					f.appendChild(h);
-				});
-				document.body.appendChild(f);f.submit();
+		exportLink.addEventListener('click', function (e) {
+			e.preventDefault();
+			const form = document.createElement('form');
+			form.method = 'POST';
+			form.action = '<?php echo $action; ?>';
+
+			const appendField = function (name, value) {
+				if (!name || value === null || value === undefined || value === '') return;
+				const input = document.createElement('input');
+				input.type = 'hidden';
+				input.name = String(name);
+				input.value = String(value);
+				form.appendChild(input);
+			};
+
+			appendField('action', 'cmx_export_artikel_list');
+			appendField('_wpnonce', '<?php echo $nonce; ?>');
+			appendField('cmx_export_format', 'zip');
+
+			const params = new URLSearchParams(window.location.search);
+			params.forEach(function (value, key) {
+				if (!key || key === 'action' || key === 'action2' || key === '_wpnonce' || key === '_wp_http_referer') return;
+				appendField(key, value);
+			});
+
+			const postsFilter = document.getElementById('posts-filter');
+			if (postsFilter) {
+				const data = new FormData(postsFilter);
+				for (const pair of data.entries()) {
+					const key = pair[0];
+					const value = pair[1];
+					if (!key || key === 'action' || key === 'action2' || key === '_wpnonce' || key === '_wp_http_referer') continue;
+					appendField(key, value);
+				}
 			}
+
+			document.body.appendChild(form);
+			form.submit();
 		});
 	});
 	</script>

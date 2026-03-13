@@ -242,8 +242,19 @@ function cmx_download_to_local_and_save_meta(int $post_id, string $image_url, ?f
 		@unlink($target);
 	}
 
-	// Datei final speichern
-	if (!@rename($tmp, $target)) {
+	// Temp-Dateien koennen auf manchen Systemen nicht per rename() in uploads verschoben werden.
+	// Deshalb zuerst sicher kopieren und nur bei Bedarf auf rename() zurueckfallen.
+	$stored = false;
+	if (\is_readable($tmp)) {
+		$stored = @copy($tmp, $target);
+		if ($stored) {
+			@unlink($tmp);
+		}
+	}
+	if (!$stored) {
+		$stored = @rename($tmp, $target);
+	}
+	if (!$stored || !\is_file($target)) {
 		@unlink($tmp);
 		return new \WP_Error('move_failed', 'Speichern fehlgeschlagen');
 	}
