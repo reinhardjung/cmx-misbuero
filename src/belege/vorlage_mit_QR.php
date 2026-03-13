@@ -302,8 +302,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.invoice-meta td,
 	.invoice-meta tr { border: 0 !important; }
 	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
-	.invoice-meta .cmx-payrexx-spacer td { height: 5mm; line-height: 0; font-size: 0; }
-	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 3mm; }
+	.invoice-meta .cmx-payrexx-spacer td { height: 11mm; line-height: 0; font-size: 0; }
+	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
 	.invoice-meta .cmx-payrexx-box {
 		display: inline-block;
 		width: 59mm;
