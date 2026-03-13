@@ -24,7 +24,12 @@ function cmx_register_general_tab(): void {
 		'mis_buero_openai_key',
 		[
 			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
+			'sanitize_callback' => static function($value): string {
+				if ($value === null) {
+					$value = \get_option('mis_buero_openai_key', '');
+				}
+				return \sanitize_text_field((string) $value);
+			},
 		]
 	);
 
@@ -32,7 +37,7 @@ function cmx_register_general_tab(): void {
 		'mis_buero_openai_key',
 		'Paddle API Key',
 		function () {
-			$val = \get_option( 'mis_buero_openai_key', '' );
+			$val = (string) \get_option( 'mis_buero_openai_key', '' );
 			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr( $val ) . '">';
 			echo '<p class="description">Wird für OCR und Produkttexte verwendet</p>';
 		},
@@ -141,7 +146,7 @@ function cmx_register_general_tab(): void {
 		}
 		$fallback_file = ($best_domain !== '') ? $best_domain : $best_any;
 		if ($fallback_file !== '') {
-			$backup_file = \sanitize_file_name($fallback_file);
+			$backup_file = \sanitize_file_name((string) $fallback_file);
 			$backup_found_path = \wp_normalize_path(\rtrim($backup_dir, '/\\') . '/' . $backup_file);
 			$backup_exists = \is_file($backup_found_path);
 		}

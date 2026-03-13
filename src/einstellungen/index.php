@@ -242,6 +242,10 @@ function cmx_render_settings_page(): void {
 	/* ALLE ANDEREN */
 	echo '<form method="post" action="options.php">';
 	settings_fields(CMX_SETTINGS_MAIN);
+	if ($tab !== 'general') {
+		$openai_key = (string) \get_option('mis_buero_openai_key', '');
+		echo '<input type="hidden" name="mis_buero_openai_key" value="' . \esc_attr($openai_key) . '">';
+	}
 	do_settings_sections($page_id);
 	submit_button();
 	echo '</form>';
