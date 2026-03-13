@@ -33,7 +33,7 @@ function cmx_bank_import_render_log_page(): void {
 
 	echo '<div class="wrap">';
 	echo '<h1>Banken Auto-Import</h1>';
-	echo '<p>Die CAMT-Log-Seite ist wieder erreichbar. Ein Live-Protokoll wird nur angezeigt, wenn eine Logdatei vorhanden ist.</p>';
+	echo '<p>Ein Live-Protokoll wird nur angezeigt, wenn eine Logdatei vorhanden ist.</p>';
 
 	if ($log_exists) {
 		echo '<p><a class="button" href="' . \esc_url($open_log_url) . '" target="_blank" rel="noopener noreferrer">Logdatei öffnen</a></p>';

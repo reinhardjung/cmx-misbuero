@@ -111,6 +111,8 @@ function cmxbu_handle_beleg_send(): void {
 		? CMX_KONTAKTE_META_ANREDE
 		: '_cmx_kontakte_anrede';
 	$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
+	$vorname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+	$nachname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
 	$faellig_bis = cmxbu_get_beleg_due_date_display($post_id);
 	$betrag = cmxbu_get_beleg_amount_display($post_id);
 
@@ -133,6 +135,8 @@ function cmxbu_handle_beleg_send(): void {
 	if (trim($message) === '') {
 		$message = cmxbu_render_belegmail_template([
 			'anrede' => $anrede,
+			'vorname' => $vorname,
+			'nachname' => $nachname,
 			'beleg_label' => $beleg_label,
 			'beleg_id' => $beleg_id,
 			'download_url' => $download_url,
