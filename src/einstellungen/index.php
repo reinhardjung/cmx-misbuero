@@ -87,7 +87,7 @@ function cmx_get_tabs(): array {
 	return [
 		'general'  => 'Allgemein',
 		'vorgaben' => 'Vorgaben',
-		'banken'   => 'Banken',
+		'banken'   => 'Zahlungen',
 		'belege'   => 'Belege',
 		'email'    => 'E-Mail',
 		'support'  => 'Support',

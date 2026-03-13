@@ -304,7 +304,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 function cmx_register_banken_tab(): void {
 	\add_settings_section(
 		'cmx_sec_banken',
-		__('Banken', 'default'),
+		__('Zahlungen', 'default'),
 		'__return_false',
 		'cmx_tab_banken'
 	);
