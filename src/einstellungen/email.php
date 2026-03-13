@@ -155,6 +155,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		$page,
 		'cmx_sec_email_imap'
 	);
+
+	\add_settings_section(
+		'cmx_sec_email_links',
+		'Links',
+		static function (): void {},
+		$page
+	);
+
+	\add_settings_field(
+		'cmx_email_agb_link',
+		'AGB',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('agb_link'));
+			echo '<input type="url" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[agb_link]" value="' . $value . '" placeholder="https://beispiel.ch/agb" autocomplete="off">';
+			echo '<span style="margin-left:8px;">Link zu Deinen AGB.</span>';
+		},
+		$page,
+		'cmx_sec_email_links'
+	);
 });
 
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
@@ -180,6 +199,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	$new['email_bcc'] = \implode(', ', \array_values($bcc_clean));
 	$new['smtp_host'] = \sanitize_text_field((string) ($new['smtp_host'] ?? ''));
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
+	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
 	$new['smtp_port'] = '587';
 	$new['imap_port'] = '993';
 
