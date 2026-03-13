@@ -306,13 +306,34 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
 	.invoice-meta .cmx-payrexx-box {
 		display: inline-block;
-		width: 42mm;
+		width: 59mm;
+		text-align: right;
+	}
+	.invoice-meta .cmx-payrexx-layout {
+		width: 59mm;
+		border-collapse: collapse;
+		border-spacing: 0;
+		table-layout: fixed;
+		margin-top: 0;
+	}
+	.invoice-meta .cmx-payrexx-layout td {
+		border: 0;
+		padding: 0;
+		vertical-align: middle;
+	}
+	.invoice-meta .cmx-payrexx-actions {
+		width: 34mm;
+		padding-right: 2.4mm;
+		text-align: center;
+	}
+	.invoice-meta .cmx-payrexx-code {
+		width: 22.6mm;
 		text-align: right;
 	}
 	.invoice-meta .cmx-payrexx-qr {
 		width: 22.6mm;
 		height: 22.6mm;
-		margin: 0 0 1.6mm auto;
+		margin: 0 0 0 auto;
 	}
 	.invoice-meta .cmx-payrexx-qr img {
 		display: block;
@@ -338,12 +359,15 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		width: auto;
 	}
 	.invoice-meta .cmx-payrexx-note {
-		font-size: 10px;
+		font-size: 9px;
 		line-height: 1.25;
 		margin-top: 1mm;
 		color: #4b5563;
 		width: 34mm;
-		margin-left: auto;
+		box-sizing: border-box;
+		padding-right: 4mm;
+		text-align: center;
+		white-space: nowrap;
 	}
 	.recipient-window {
 		position: absolute;
@@ -555,11 +579,19 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					<tr class="cmx-payrexx-row">
 						<td colspan="2" class="text-right" style="border:0; padding:0;">
 							<div class="cmx-payrexx-box">
-								<?php if ($payrexx_qr_data_uri !== ''): ?>
-									<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
-								<?php endif; ?>
-								<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
-								<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
+								<table class="cmx-payrexx-layout" role="presentation">
+									<tr>
+										<td class="cmx-payrexx-actions">
+											<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
+											<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
+										</td>
+										<?php if ($payrexx_qr_data_uri !== ''): ?>
+											<td class="cmx-payrexx-code">
+												<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
+											</td>
+										<?php endif; ?>
+									</tr>
+								</table>
 							</div>
 						</td>
 					</tr>
