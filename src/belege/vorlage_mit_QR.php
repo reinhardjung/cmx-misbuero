@@ -1,7 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 /*
- * Schweizer Rechnungs-Layout (mit QR)
+ * Schweizer Rechnungs-Layout
  * Erwartet $tpl und ggf. $cmx_beleg_adress.
  */
 
@@ -280,6 +280,7 @@ if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
 $document_due = trim((string)($tpl['document']['due'] ?? ''));
 $show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
 $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
+$qr_will_print = !empty($tpl['qr']['will_print']);
 $payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
 $payrexx_qr_data_uri = \trim((string)($tpl['document']['payrexx_qr_data_uri'] ?? ''));
 $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
@@ -493,6 +494,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 .positions-table td.col-sku {
 	width: 66px;
 	min-width: 66px;
+	white-space: nowrap;
 }
 .positions-table th.col-qty,
 .positions-table td.col-qty {
@@ -538,7 +540,17 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 			.beleg-booking-note { margin-top: -2px; font-size: 11px; color: #c00; }
 		.mwst-note { margin-top: 8px; font-size: 11px; }
 		.totals { width: 40%; float: right; margin-top: 16px; }
-	.footer { margin-top: 20px; font-size: 11px; }
+	.footer {
+		<?php if ($qr_will_print): ?>
+			margin-top: 20px;
+		<?php else: ?>
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 20px;
+		<?php endif; ?>
+		font-size: 11px;
+	}
 	.mwst-footer-group {
 		width: 100%;
 		border-collapse: collapse;
@@ -558,6 +570,12 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		margin-top: 0;
 	}
 		.footer-inline {
+			<?php if (!$qr_will_print): ?>
+			position: static;
+			left: auto;
+			right: auto;
+			bottom: auto;
+			<?php endif; ?>
 			margin-top: 20px;
 			page-break-inside: avoid;
 			break-inside: avoid;
@@ -569,7 +587,11 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		.clear { clear: both; }
 	.text-right { text-align: right; }
 	.logo-link { text-decoration: none; }
-	.qr-reserve { height: 105mm; }
+	.qr-reserve {
+		height: <?= $qr_will_print ? '105mm' : '0'; ?>;
+		line-height: 0;
+		font-size: 0;
+	}
 </style>
 </head>
 <body>
