@@ -89,10 +89,10 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 					<tr>
 						<td style="padding:0 24px 24px 24px;">
 							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
+							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">
 								Diese E-Mail wurde von <a href="' . $catalog_url_esc . '" style="color:#8b98a5;text-decoration:underline;">' . $site_name_esc . '</a> automatisch generiert.
 							</p>
-							' . ($agb_footer_html !== '' ? '<p style="margin:6px 0 0 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
 						</td>
 					</tr>
 				</table>

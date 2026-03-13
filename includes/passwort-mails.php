@@ -28,8 +28,10 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
 		. $body_html
 		. $button_html
-		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">Diese E-Mail wurde von Mis Buero automatisch generiert.</div>'
-		. ($agb_footer_html !== '' ? '<div style="margin-top:6px;font-size:12px;color:#7a7a7a;">' . $agb_footer_html . '</div>' : '')
+		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">'
+		. ($agb_footer_html !== '' ? '<div style="margin:0 0 6px 0;">' . $agb_footer_html . '</div>' : '')
+		. '<div>Diese E-Mail wurde von Mis Buero automatisch generiert.</div>'
+		. '</div>'
 		. '</td></tr>'
 		. '</table>'
 		. '</td></tr>'

@@ -1102,13 +1102,13 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	if ($sender_name !== '') {
 		$message .= "\n\nGesendet von: " . $sender_name;
 	}
-	$message .= "\n\nDiese E-Mail wurde von Mis Buero automatisch generiert.";
 	if (\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_text')) {
 		$agb_footer_text = \trim((string) cmx_email_agb_footer_text());
 		if ($agb_footer_text !== '') {
-			$message .= "\n" . $agb_footer_text;
+			$message .= "\n\n" . $agb_footer_text;
 		}
 	}
+	$message .= "\n\nDiese E-Mail wurde von Mis Buero automatisch generiert.";
 
 	$headers = ['Content-Type: text/plain; charset=UTF-8'];
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
