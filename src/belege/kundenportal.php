@@ -472,6 +472,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		if ($kontakt_name === '') {
 			$kontakt_name = 'Kontakt';
 		}
+		$reload_url = cmx_kontakt_belege_share_url($kontakt_id);
 		$rows = cmx_kontakt_all_belege_rows($kontakt_id);
 		$show_online_column = false;
 		foreach ($rows as $row) {
@@ -503,6 +504,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 			.cmx-kontakt-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
 			.cmx-kontakt-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+			.cmx-kontakt-kicker a{color:inherit;text-decoration:none}
+			.cmx-kontakt-kicker a:hover{color:#1d2327}
 			.cmx-kontakt-title{margin:0;font-size:30px;line-height:1.1}
 			.cmx-kontakt-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
 			.cmx-kontakt-tools{padding:18px 28px 0}
@@ -517,6 +520,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-head-online{display:inline-block;padding-left:2ch}
 			.cmx-kontakt-sort-indicator{font-size:11px;opacity:.55;min-width:10px;text-align:center}
 			.cmx-kontakt-table tbody tr:nth-child(even){background:#fcfcfc}
+			.cmx-kontakt-table tbody tr:hover{background:#eaf5ff}
 			.cmx-kontakt-table a{color:#135e96;text-decoration:none;font-weight:600}
 			.cmx-kontakt-table a:hover{color:#0a4b79}
 			.cmx-kontakt-amount,.cmx-kontakt-date,.cmx-kontakt-status{white-space:nowrap}
@@ -542,7 +546,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '</head><body>';
 		echo '<div class="cmx-kontakt-page"><div class="cmx-kontakt-card">';
 		echo '<div class="cmx-kontakt-head">';
-		echo '<p class="cmx-kontakt-kicker">Belegübersicht</p>';
+		echo '<p class="cmx-kontakt-kicker"><a href="' . \esc_url($reload_url) . '">Belegübersicht</a></p>';
 		echo '<h1 class="cmx-kontakt-title">' . \esc_html($kontakt_name) . '</h1>';
 		echo '<p class="cmx-kontakt-sub">' . \esc_html(\count($rows) . ' Belege') . '</p>';
 		echo '</div>';
