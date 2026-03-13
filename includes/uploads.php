@@ -148,7 +148,7 @@ function cmx_belege_next_suffix(string $dir, string $prefix): int {
 		return;
 	}
 	$scanner_url = \admin_url('edit.php?post_type=scanner');
-	$uploads_title = '<a href="' . \esc_url($scanner_url) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Uploads</a>';
+	$uploads_title = '<a href="' . \esc_url($scanner_url) . '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;" onclick="event.stopPropagation();">Originalbeleg</a>';
 	\add_meta_box(
 		'cmx_uploads_box',
 		$uploads_title,
@@ -206,7 +206,7 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 
 	echo '<div id="cmx-belege-upload-box">';
 	echo '<div id="cmx-belege-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
-	echo '<strong>Datei hier ablegen oder auswählen</strong><br><small>PDF, PNG, JPG, CSV, XML</small>';
+	echo '<strong>Datei hier ablegen oder auswählen</strong><br><small>PDF, PNG, JPG</small>';
 	echo '</div>';
 	echo '<input type="file" id="cmx-belege-file" style="display:none" accept=".pdf,.png,.jpg,.jpeg">';
 	echo '</div>';
