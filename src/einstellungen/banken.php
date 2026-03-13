@@ -233,6 +233,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_bank_list')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_instanz')) {
+	function cmx_get_payrexx_instanz(): string {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		$value = $options['payrexx_instanz'] ?? '';
+		return \is_scalar($value) ? (string) $value : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_payrexx_instanz_field')) {
+	function cmx_render_payrexx_instanz_field(): void {
+		$value = \esc_attr(cmx_get_payrexx_instanz());
+		echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[payrexx_instanz]" value="' . $value . '" placeholder="Name-Deiner-Instanz">';
+		echo '<p class="description">Wenn Du im Payrexx angemeldet bist siehst Du in der URL (<i>der Adressleiste im Browser</i>) <br><strong>https://<code>Name-Deiner-Instanz</code>.payrexx.com/...</strong></p>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 	function cmx_render_bank_row_markup(string $index, array $bank, string $recipient_placeholder): string {
 		$defaults = [
@@ -303,6 +319,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_banken_tab');
 function cmx_register_banken_tab(): void {
 	\add_settings_section(
+		'cmx_sec_payrexx',
+		'Payrexx',
+		'__return_false',
+		'cmx_tab_banken'
+	);
+
+	\add_settings_field(
+		'payrexx_instanz',
+		'Instanz',
+		__NAMESPACE__ . '\\cmx_render_payrexx_instanz_field',
+		'cmx_tab_banken',
+		'cmx_sec_payrexx'
+	);
+
+	\add_settings_section(
 		'cmx_sec_banken',
 		__('Zahlungen', 'default'),
 		'__return_false',
@@ -317,6 +348,16 @@ function cmx_register_banken_tab(): void {
 		'cmx_sec_banken'
 	);
 }
+
+\add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, static function ($new, $old) {
+	if (!\is_array($new)) {
+		return $new;
+	}
+	if (\array_key_exists('payrexx_instanz', $new)) {
+		$new['payrexx_instanz'] = \sanitize_text_field((string) $new['payrexx_instanz']);
+	}
+	return $new;
+}, 20, 2);
 
 function cmx_render_banken_list_field(): void {
 	$recipient_placeholder = cmx_get_das_bin_ich_company_name();
