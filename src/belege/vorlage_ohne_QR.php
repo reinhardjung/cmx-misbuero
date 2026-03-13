@@ -307,12 +307,12 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.invoice-meta .cmx-payrexx-box {
 		display: inline-block;
 		width: 42mm;
-		text-align: center;
+		text-align: right;
 	}
 	.invoice-meta .cmx-payrexx-qr {
 		width: 21mm;
 		height: 21mm;
-		margin: 0 0 1.6mm 0;
+		margin: 0 0 1.6mm auto;
 	}
 	.invoice-meta .cmx-payrexx-qr img {
 		display: block;
@@ -335,14 +335,16 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		font-size: 10px;
 		text-decoration: none;
 		white-space: nowrap;
-		width: 42mm;
+		width: 30mm;
+		margin: 0 auto;
 	}
 	.invoice-meta .cmx-payrexx-note {
 		font-size: 10px;
 		line-height: 1.25;
 		margin-top: 1mm;
 		color: #4b5563;
-		width: 42mm;
+		width: 34mm;
+		margin-left: auto;
 	}
 	.recipient-window {
 		position: absolute;
@@ -362,6 +364,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	}
 	.recipient-window .recipient-lines { line-height: 1.3; }
 	h1 { margin-top: 0; font-size: 20px; }
+	.beleg-content > h1 { margin-top: <?= $show_payrexx_vpos_link ? '4mm' : '0'; ?>; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
 	.beleg-content {
