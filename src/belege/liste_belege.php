@@ -548,7 +548,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<div class="cmx-kontakt-head">';
 		echo '<p class="cmx-kontakt-kicker"><a href="' . \esc_url($reload_url) . '">Belegübersicht</a></p>';
 		echo '<h1 class="cmx-kontakt-title">' . \esc_html($kontakt_name) . '</h1>';
-		echo '<p class="cmx-kontakt-sub">' . \esc_html(\count($rows) . ' Belege') . '</p>';
+		echo '<p class="cmx-kontakt-sub" id="cmx-kontakt-count">' . \esc_html(\count($rows) . ' Belege') . '</p>';
 		echo '</div>';
 
 		if (empty($rows)) {
@@ -657,16 +657,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			(function(){
 				var input=document.getElementById("cmx-kontakt-search");
 				var body=document.getElementById("cmx-kontakt-table-body");
+				var countNode=document.getElementById("cmx-kontakt-count");
 				var sortButtons=document.querySelectorAll(".cmx-kontakt-table thead button[data-sort-key]");
 				if(!body){return;}
 				function normalize(txt){return String(txt||"").toLowerCase().trim();}
 				function getRows(){return Array.prototype.slice.call(body.querySelectorAll("tr[data-search]"));}
+				function updateCount(){
+					if(!countNode){return;}
+					var visible=getRows().filter(function(row){ return row.style.display!=="none"; }).length;
+					countNode.textContent=visible + (visible===1 ? " Beleg" : " Belege");
+				}
 				function applyFilter(){
 					var term=normalize(input?input.value:"");
 					getRows().forEach(function(row){
 						var hay=(row.getAttribute("data-search")||"") + " " + normalize(row.textContent||"");
 						row.style.display=(term===""||hay.indexOf(term)!==-1)?"":"none";
 					});
+					updateCount();
 				}
 				function sortRows(key,type,dir){
 					var rows=getRows();
@@ -712,6 +719,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 						if(indicator){ indicator.textContent="▼"; }
 					}
 				});
+				updateCount();
 			})();
 		</script>';
 		echo '</body></html>';

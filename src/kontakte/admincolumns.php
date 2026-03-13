@@ -670,9 +670,15 @@ function cmx_kontakte_apply_tax_filters($query) {
 			box-shadow:0 2px 6px rgba(0,0,0,0.08);
 			display:inline-block;
 		}
-		.column-cmx_gmaps { width:56px; text-align:center; }
+		.column-cmx_gmaps,
+		.column-cmx_hersteller_url,
+		.column-cmx_kontakt_belege { width:56px; text-align:center; padding-left:0 !important; padding-right:0 !important; }
+		.column-cmx_stufen { width:56px; max-width:56px; }
+		.column-cmx_email_1 { width:220px; min-width:220px; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
+		.column-cmx_hersteller_url a,
+		.column-cmx_kontakt_belege a { display:inline-block; padding:2px; }
 	</style>';
 	\wp_enqueue_style('dashicons');
 });
@@ -695,7 +701,6 @@ function cmx_kontakte_apply_tax_filters($query) {
 function cmx_kontakte_add_columns(array $columns): array {
 	$new = [];
 	$logo_label = null;
-	$inserted_after_url = false;
 
 	foreach ($columns as $key => $label) {
 		// Original übernehmen
@@ -707,9 +712,10 @@ function cmx_kontakte_add_columns(array $columns): array {
 	}
 
 	// Falls weder URL noch Karte existiert: ans Ende anhängen
-	if (!$inserted_after_url && !isset($new['cmx_hersteller_url'])) {
+	if (!isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
 	}
+	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = '';
 	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Firmengründung';
 	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburtsdatum';
 
@@ -737,6 +743,22 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 		return;
 	}
 
+	if ($column === 'cmx_kontakt_belege') {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
+			echo '';
+			return;
+		}
+
+		$url = (string) cmx_kontakt_belege_share_url($post_id);
+		if ($url === '') {
+			echo '';
+			return;
+		}
+
+		echo '<a href="' . \esc_url($url) . '" class="cmx-kontakt-belege-link" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . \esc_attr($url) . '"><span class="dashicons dashicons-portfolio" style="font-size:14px;opacity:0.8;position:relative;top:4px;"></span></a>';
+		return;
+	}
+
 	if ($column === 'cmx_firmengruendung' || $column === 'cmx_geburtsdatum') {
 		$meta_key = ($column === 'cmx_firmengruendung')
 			? CMX_KONTAKTE_META_FIRMENGRUENDUNG
@@ -752,6 +774,43 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 		}
 		return;
 	}
+}
+
+\add_action('admin_footer-edit.php', __NAMESPACE__ . '\\cmx_kontakte_admin_list_copy_share_link');
+function cmx_kontakte_admin_list_copy_share_link(): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'kontakte' || (string) ($screen->base ?? '') !== 'edit') {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		function copyFallback(text){
+			var input=document.createElement('textarea');
+			input.value=text;
+			input.setAttribute('readonly','readonly');
+			input.style.position='fixed';
+			input.style.opacity='0';
+			document.body.appendChild(input);
+			input.focus();
+			input.select();
+			try { document.execCommand('copy'); } catch (e) {}
+			document.body.removeChild(input);
+		}
+		document.addEventListener('click', function(ev){
+			var link = ev.target.closest('.cmx-kontakt-belege-link');
+			if (!link) return;
+			var text = (link.getAttribute('data-copy-url') || link.href || '').trim();
+			if (!text) return;
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).catch(function(){ copyFallback(text); });
+				return;
+			}
+			copyFallback(text);
+		});
+	})();
+	</script>
+	<?php
 }
 
 \add_action('pre_get_posts', __NAMESPACE__ . '\\cmx_kontakte_orderby_columns');
