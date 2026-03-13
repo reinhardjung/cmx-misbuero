@@ -446,6 +446,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			? (string) cmxbu_get_beleg_amount_display($post_id)
 			: cmx_cockpit_mahnwesen_amount_display($post_id, cmx_cockpit_mahnwesen_amount_value($post_id));
 		$is_overdue = cmx_cockpit_mahnwesen_is_overdue($post_id);
+		$beleg_mail_date = \function_exists(__NAMESPACE__ . '\\cmxbu_get_mail_subject_beleg_date')
+			? (string) cmxbu_get_mail_subject_beleg_date($post_id)
+			: '';
 
 		$mail_data = [
 			'anrede' => $anrede,
@@ -464,10 +467,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 
 		if ($is_overdue) {
 			$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+			if ($beleg_mail_date !== '') {
+				$subject .= ' vom ' . $beleg_mail_date;
+			}
 			$message = cmxbu_render_belegmail_mahnung_template($mail_data);
 			$mail_action_label = 'Zahlungserinnerung';
 		} else {
 			$subject = 'Rechnung erneut: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+			if ($beleg_mail_date !== '') {
+				$subject .= ' vom ' . $beleg_mail_date;
+			}
 			$message = cmxbu_render_belegmail_template($mail_data);
 			$mail_action_label = 'Rechnung erneut';
 		}

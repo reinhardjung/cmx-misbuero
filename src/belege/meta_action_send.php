@@ -2,6 +2,34 @@
 
 require_once __DIR__ . '/vorlage_mail.php';
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_mail_subject_beleg_date')) {
+	function cmxbu_get_mail_subject_beleg_date(int $post_id): string {
+		$raw = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_first_meta')) {
+			$raw = (string) cmxbu_first_meta($post_id, ['_cmx_beleg_rng_datum', '_cmx_rechnungsdatum', '_invoice_date', '_date']);
+		} else {
+			foreach (['_cmx_beleg_rng_datum', '_cmx_rechnungsdatum', '_invoice_date', '_date'] as $meta_key) {
+				$candidate = \trim((string) \get_post_meta($post_id, $meta_key, true));
+				if ($candidate !== '') {
+					$raw = $candidate;
+					break;
+				}
+			}
+		}
+
+		if ($raw === '') {
+			return '';
+		}
+
+		$ts = \strtotime($raw);
+		if (!$ts) {
+			return '';
+		}
+
+		return \date('d.m.Y', $ts);
+	}
+}
+
 
 /**
  * Metabox-Teil: "versenden"-Button
@@ -130,6 +158,10 @@ function cmxbu_handle_beleg_send(): void {
 		'gutschrift'   => 'Gutschrift',
 	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');
 	$subject = $beleg_label . ': ' . $beleg_id;
+	$beleg_mail_date = cmxbu_get_mail_subject_beleg_date($post_id);
+	if ($beleg_mail_date !== '') {
+		$subject .= ' vom ' . $beleg_mail_date;
+	}
 
 	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
 	if (trim($message) === '') {
