@@ -36,6 +36,9 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$site_name_esc = esc_html($site_name);
 	$catalog_url_esc = esc_url($catalog_url);
 	$preheader_esc = esc_html($preheader);
+	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
+		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
+		: '';
 
 	return '<!doctype html>
 <html lang="de">
@@ -89,6 +92,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">
 								Diese E-Mail wurde von <a href="' . $catalog_url_esc . '" style="color:#8b98a5;text-decoration:underline;">' . $site_name_esc . '</a> automatisch generiert.
 							</p>
+							' . ($agb_footer_html !== '' ? '<p style="margin:6px 0 0 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
 						</td>
 					</tr>
 				</table>

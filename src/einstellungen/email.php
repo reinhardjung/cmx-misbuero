@@ -19,6 +19,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')) {
+	function cmx_email_agb_link(): string {
+		$link = \trim((string) cmx_email_option_value('agb_link'));
+		if ($link === '') {
+			return '';
+		}
+		return \esc_url_raw($link);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')) {
+	function cmx_email_agb_footer_html(string $link_style = ''): string {
+		$link = cmx_email_agb_link();
+		if ($link === '') {
+			return '';
+		}
+
+		$link_attr = $link_style !== '' ? ' style="' . \esc_attr($link_style) . '"' : '';
+		return 'Es gelten unsere Allgemeinen Geschäftsbedingungen: <a href="' . \esc_url($link) . '"' . $link_attr . '>' . \esc_html($link) . '</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_text')) {
+	function cmx_email_agb_footer_text(): string {
+		$link = cmx_email_agb_link();
+		if ($link === '') {
+			return '';
+		}
+
+		return 'Es gelten unsere Allgemeinen Geschäftsbedingungen: ' . $link;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_placeholder')) {
 	function cmx_email_agb_placeholder(): string {
 		$fallback = 'https://beispiel.ch/agb';

@@ -13,6 +13,10 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 			. '</p>';
 	}
 
+	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
+		? (string) cmx_email_agb_footer_html('color:#7a7a7a;text-decoration:underline;')
+		: '';
+
 	return '<!doctype html><html><body style="margin:0;padding:0;background:#dcdcdc;">'
 		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#dcdcdc;padding:24px 0;">'
 		. '<tr><td align="center">'
@@ -25,6 +29,7 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. $body_html
 		. $button_html
 		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">Diese E-Mail wurde von Mis Buero automatisch generiert.</div>'
+		. ($agb_footer_html !== '' ? '<div style="margin-top:6px;font-size:12px;color:#7a7a7a;">' . $agb_footer_html . '</div>' : '')
 		. '</td></tr>'
 		. '</table>'
 		. '</td></tr>'
