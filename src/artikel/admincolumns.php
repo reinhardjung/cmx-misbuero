@@ -13,6 +13,58 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG'))        \define(__NA
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE', '_cmx_artikel_bezugsquelle_url');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID', '_cmx_artikel_lieferant_id');
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_image_url_exists')) {
+	function cmx_artikel_admin_image_url_exists(string $url): bool {
+		$url = \trim($url);
+		if ($url === '') {
+			return false;
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$baseurl = \rtrim((string) ($uploads['baseurl'] ?? ''), '/');
+		$basedir = \rtrim((string) ($uploads['basedir'] ?? ''), '/');
+		if ($baseurl !== '' && $basedir !== '' && \strpos($url, $baseurl . '/') === 0) {
+			$parsed_path = (string) (\wp_parse_url($url, PHP_URL_PATH) ?: '');
+			$base_path = (string) (\wp_parse_url($baseurl, PHP_URL_PATH) ?: '');
+			if ($parsed_path !== '' && $base_path !== '' && \strpos($parsed_path, $base_path . '/') === 0) {
+				$rel = \ltrim((string) \substr($parsed_path, \strlen($base_path)), '/');
+			} else {
+				$rel = \ltrim((string) \substr($url, \strlen($baseurl)), '/');
+				$rel = (string) \preg_replace('/\?.*$/', '', $rel);
+			}
+			return $rel !== '' && \is_file($basedir . '/' . $rel);
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_image_src')) {
+	function cmx_artikel_admin_image_src(int $post_id): string {
+		$local_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_path', true));
+		$local_img = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true));
+		if ($local_path !== '' && \is_file($local_path) && $local_img !== '') {
+			return $local_img;
+		}
+		if ($local_img !== '' && cmx_artikel_admin_image_url_exists($local_img)) {
+			return $local_img;
+		}
+
+		$thumb_id = (int) \get_post_thumbnail_id($post_id);
+		if ($thumb_id > 0) {
+			$attached_file = (string) \get_attached_file($thumb_id);
+			if ($attached_file !== '' && \is_file($attached_file)) {
+				$thumb_url = (string) \wp_get_attachment_image_url($thumb_id, 'thumbnail');
+				if ($thumb_url !== '') {
+					return $thumb_url;
+				}
+			}
+		}
+
+		return '';
+	}
+}
+
 function cmx_artikel_is_verkaufbar(int $post_id): bool {
 	return (int) \get_post_meta($post_id, CMX_ARTIKEL_META_VERKAUFBAR, true) !== 1;
 }
@@ -234,14 +286,14 @@ function cmx_lieferanten_args(): array {
 
 		case 'featimg':
 			// Zeige kleines Thumbnail: erst lokales Artikelbild, sonst Beitragsbild. Klick = Download.
-			$local_img = (string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true);
-			$fallback  = \get_the_post_thumbnail_url($post_id, 'thumbnail');
-			$src       = $local_img !== '' ? $local_img : ($fallback ?: '');
+			$src = \function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_image_src')
+				? (string) cmx_artikel_admin_image_src($post_id)
+				: '';
 
 			if ($src !== '') {
 				$path     = \parse_url($src, PHP_URL_PATH);
 				$filename = $path ? basename($path) : ('artikel-' . (int) $post_id . '.jpg');
-				$img_tag  = '<img class="cmx-ac-thumb" src="' . \esc_url($src) . '" alt="" />';
+				$img_tag  = '<img class="cmx-ac-thumb" src="' . \esc_url($src) . '" alt="" onerror="this.onerror=null; if(this.parentNode){ this.parentNode.remove(); }">';
 				echo '<a href="' . \esc_url($src) . '" download="' . \esc_attr($filename) . '" title="Bild herunterladen" style="text-decoration:none;">' . $img_tag . '</a>';
 			// } else {
 			// 	echo '<span class="dashicons dashicons-format-image" style="opacity:0.35;" title="Kein Bild"></span>';
