@@ -883,6 +883,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn[disabled]{color:#8c8f94;cursor:default;text-decoration:none}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-overdue{color:#b32d2e}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn.cmx-faellig-due-overdue:hover{color:#8f2424}
+			.cmx-mahnwesen-notice-email{font-weight:700 !important;color:#1d2327 !important;display:inline-block}
 		</style>';
 		echo '<table class="cmx-faellig-table">';
 		echo '<colgroup>';
@@ -970,11 +971,11 @@ function cmx_render_rechnungen_faellig_widget(): void {
 						var actionLabel = resp.data && resp.data.action_label ? String(resp.data.action_label) : 'E-Mail';
 						var successMessage = '';
 						if (actionLabel === 'Rechnung erneut') {
-							successMessage = email !== '' ? ('Rechnung wurde erneut an ' + email + ' gesendet.') : 'Rechnung wurde erneut gesendet.';
+							successMessage = email !== '' ? ('Rechnung wurde erneut an <span class="cmx-mahnwesen-notice-email">' + escapeHtml(email) + '</span> gesendet.') : 'Rechnung wurde erneut gesendet.';
 						} else {
-							successMessage = email !== '' ? (actionLabel + ' wurde an ' + email + ' gesendet.') : (actionLabel + ' wurde gesendet.');
+							successMessage = email !== '' ? (escapeHtml(actionLabel) + ' wurde an <span class="cmx-mahnwesen-notice-email">' + escapeHtml(email) + '</span> gesendet.') : (escapeHtml(actionLabel) + ' wurde gesendet.');
 						}
-						showAdminNotice(successMessage, 'success');
+						showAdminNotice(successMessage, 'success', true);
 						btn.disabled = false;
 						btn.dataset.loading = '';
 						return;
@@ -987,14 +988,27 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				});
 			}
 
-			function showAdminNotice(message, type){
+			function escapeHtml(value){
+				return String(value || '')
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;')
+					.replace(/'/g, '&#039;');
+			}
+
+			function showAdminNotice(message, type, allowHtml){
 				var text = String(message || '').trim();
 				if (text === '') return;
 				var noticeType = type === 'error' ? 'error' : 'success';
 				var notice = document.createElement('div');
 				notice.className = 'notice notice-' + noticeType + ' is-dismissible';
 				notice.innerHTML = '<p></p>';
-				notice.querySelector('p').textContent = text;
+				if (allowHtml) {
+					notice.querySelector('p').innerHTML = text;
+				} else {
+					notice.querySelector('p').textContent = text;
+				}
 
 				var target = document.querySelector('#wpbody-content .wrap')
 					|| document.querySelector('#wpbody-content')
