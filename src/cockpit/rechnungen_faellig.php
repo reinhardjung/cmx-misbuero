@@ -968,7 +968,7 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					if (resp && resp.success) {
 						var email = resp.data && resp.data.email ? String(resp.data.email) : '';
 						var actionLabel = resp.data && resp.data.action_label ? String(resp.data.action_label) : 'E-Mail';
-						window.alert(email !== '' ? (actionLabel + ' gesendet an ' + email) : (actionLabel + ' wurde gesendet.'));
+						showAdminNotice(email !== '' ? (actionLabel + ' wurde an ' + email + ' gesendet.') : (actionLabel + ' wurde gesendet.'), 'success');
 						btn.disabled = false;
 						btn.dataset.loading = '';
 						return;
@@ -981,6 +981,30 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				});
 			}
 
+			function showAdminNotice(message, type){
+				var text = String(message || '').trim();
+				if (text === '') return;
+				var noticeType = type === 'error' ? 'error' : 'success';
+				var notice = document.createElement('div');
+				notice.className = 'notice notice-' + noticeType + ' is-dismissible';
+				notice.innerHTML = '<p></p>';
+				notice.querySelector('p').textContent = text;
+
+				var target = document.querySelector('#wpbody-content .wrap')
+					|| document.querySelector('#wpbody-content')
+					|| document.body;
+				target.insertBefore(notice, target.firstChild);
+
+				if (window.jQuery && window.jQuery.fn && typeof window.jQuery(notice).on === 'function') {
+					window.jQuery(notice).append('<button type="button" class="notice-dismiss"><span class="screen-reader-text">Dismiss this notice.</span></button>');
+					window.jQuery(notice).on('click', '.notice-dismiss', function(){
+						notice.remove();
+					});
+				}
+
+				window.scrollTo({top: 0, behavior: 'smooth'});
+			}
+
 			document.addEventListener('click', function(e){
 				var dueBtn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-due-btn') : null;
 				if (dueBtn) {
@@ -989,6 +1013,12 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					if (dueBtn.dataset.loading === '1') return;
 					var reminderPostId = parseInt(dueBtn.getAttribute('data-post-id') || '0', 10);
 					if (!reminderPostId) return;
+					var confirmText = dueBtn.classList.contains('cmx-faellig-due-overdue')
+						? 'Willst Du wirklich diese Zahlungserinnerung versenden?'
+						: 'Willst Du wirklich diesen Beleg nochmals versenden?';
+					if (!window.confirm(confirmText)) {
+						return;
+					}
 					dueBtn.dataset.loading = '1';
 					dueBtn.disabled = true;
 					submitReminderMail(reminderPostId, dueBtn);
