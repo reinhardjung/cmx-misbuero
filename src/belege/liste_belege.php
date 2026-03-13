@@ -508,6 +508,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-kicker a:hover{color:#1d2327}
 			.cmx-kontakt-title{margin:0;font-size:30px;line-height:1.1}
 			.cmx-kontakt-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
+			.cmx-kontakt-sub a{color:inherit;text-decoration:none}
+			.cmx-kontakt-sub a:hover{color:#1d2327}
 			.cmx-kontakt-tools{padding:18px 28px 0}
 			.cmx-kontakt-tools input{width:100%;max-width:340px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;font:inherit}
 			.cmx-kontakt-table-wrap{padding:18px 28px 28px;overflow-x:auto}
@@ -518,12 +520,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-table th button:hover{color:#1d2327}
 			.cmx-kontakt-head-pdf{display:inline-block;padding-left:1ch}
 			.cmx-kontakt-head-online{display:inline-block;padding-left:2ch}
+			.cmx-kontakt-head-amount{display:inline-block;padding-left:6ch}
 			.cmx-kontakt-sort-indicator{font-size:11px;opacity:.55;min-width:10px;text-align:center}
 			.cmx-kontakt-table tbody tr:nth-child(even){background:#fcfcfc}
 			.cmx-kontakt-table tbody tr:hover{background:#eaf5ff}
 			.cmx-kontakt-table a{color:#135e96;text-decoration:none;font-weight:600}
 			.cmx-kontakt-table a:hover{color:#0a4b79}
 			.cmx-kontakt-amount,.cmx-kontakt-date,.cmx-kontakt-status{white-space:nowrap}
+			.cmx-kontakt-table td.cmx-kontakt-amount{text-align:right;font-variant-numeric:tabular-nums}
 			.cmx-kontakt-status .is-paid{color:#2f7d32;font-weight:700}
 			.cmx-kontakt-status .is-overdue{color:#b32d2e;font-weight:700}
 			.cmx-kontakt-pdf,.cmx-kontakt-online,.cmx-kontakt-question{white-space:nowrap}
@@ -548,7 +552,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<div class="cmx-kontakt-head">';
 		echo '<p class="cmx-kontakt-kicker"><a href="' . \esc_url($reload_url) . '">Belegübersicht</a></p>';
 		echo '<h1 class="cmx-kontakt-title">' . \esc_html($kontakt_name) . '</h1>';
-		echo '<p class="cmx-kontakt-sub" id="cmx-kontakt-count">' . \esc_html(\count($rows) . ' Belege') . '</p>';
+		echo '<p class="cmx-kontakt-sub"><a href="' . \esc_url($reload_url) . '" id="cmx-kontakt-count">' . \esc_html(\count($rows) . ' Belege') . '</a></p>';
 		echo '</div>';
 
 		if (empty($rows)) {
@@ -567,7 +571,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<th><button type="button" data-sort-key="type" data-sort-type="string">Typ<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="due" data-sort-type="number">Fällig am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Bezahlt am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
-		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number">Betrag<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number"><span class="cmx-kontakt-head-amount">Betrag</span><span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><span class="cmx-kontakt-head-pdf">PDF</span></th>';
 		if ($show_online_column) {
 			echo '<th><button type="button" data-sort-key="online" data-sort-type="number"><span class="cmx-kontakt-head-online">online</span><span class="cmx-kontakt-sort-indicator"> </span></button></th>';
@@ -593,6 +597,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			$online_sort = (int) ($row['online_sort'] ?? 0);
 			$state_slug = (string) ($state['slug'] ?? 'offen');
 			$state_label = (string) ($state['label'] ?? 'Offen');
+			$default_sort = ($state_slug === 'bezahlt' ? 0 : 10000000000000) + $due_sort;
 			$is_overdue = cmx_kontakt_beleg_due_is_overdue($due_label);
 			$display_status = $state_slug === 'bezahlt'
 				? $state_label
@@ -618,6 +623,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 				. ' data-sort-amount="' . \esc_attr(\number_format($amount_raw, 2, '.', '')) . '"'
 				. ' data-sort-due="' . \esc_attr((string) $due_sort) . '"'
 				. ' data-sort-status="' . \esc_attr(\function_exists('mb_strtolower') ? \mb_strtolower($display_status, 'UTF-8') : \strtolower($display_status)) . '"'
+				. ' data-sort-default="' . \esc_attr((string) $default_sort) . '"'
 				. ' data-sort-online="' . \esc_attr((string) $online_sort) . '">';
 			echo '<td class="cmx-kontakt-date">' . \esc_html($date) . '</td>';
 			echo '<td>';
@@ -630,7 +636,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			echo '<td>' . \esc_html($type) . '</td>';
 			echo '<td class="cmx-kontakt-status"><span' . ($is_overdue ? ' class="is-overdue"' : '') . '>' . \esc_html($due_label) . '</span></td>';
 			echo '<td class="cmx-kontakt-status"><span' . ($status_class !== '' ? ' class="' . \esc_attr($status_class) . '"' : '') . '>' . \esc_html($display_status) . '</span></td>';
-			echo '<td class="cmx-kontakt-amount">' . \esc_html($amount) . '</td>';
+			echo '<td class="cmx-kontakt-amount">' . \esc_html($amount) . '&nbsp;&nbsp;</td>';
 			echo '<td class="cmx-kontakt-pdf">';
 			if ($public_url !== '') {
 				echo '<a href="' . \esc_url($public_url) . '" class="cmx-kontakt-pdf-btn" target="_blank" rel="noopener noreferrer" title="Beleg anzeigen"><span class="cmx-kontakt-pdf-icon dashicons dashicons-media-document" aria-hidden="true"></span></a>';
@@ -711,14 +717,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 						sortRows(key,type,next);
 					});
 				});
-				sortRows("date","number","desc");
-				Array.prototype.forEach.call(sortButtons,function(btn){
-					if((btn.getAttribute("data-sort-key")||"")==="date"){
-						btn.setAttribute("data-sort-dir","desc");
-						var indicator=btn.querySelector(".cmx-kontakt-sort-indicator");
-						if(indicator){ indicator.textContent="▼"; }
-					}
-				});
+				sortRows("default","number","desc");
 				updateCount();
 			})();
 		</script>';

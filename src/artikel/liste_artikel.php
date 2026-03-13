@@ -4,6 +4,53 @@ if (!\defined(__NAMESPACE__ . '\\CMX_PT_ARTIKEL')) {
 	\define(__NAMESPACE__ . '\\CMX_PT_ARTIKEL', 'artikel');
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_uuid_option_key')) {
+	function cmx_artikel_liste_uuid_option_key(): string {
+		return 'cmx_artikel_liste_uuid';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_get_stable_uuid')) {
+	function cmx_artikel_liste_get_stable_uuid(): string {
+		$uuid = \trim((string) \get_option(cmx_artikel_liste_uuid_option_key(), ''));
+		if ($uuid !== '') {
+			return $uuid;
+		}
+
+		$uuid = \function_exists('\\wp_generate_uuid4')
+			? (string) \wp_generate_uuid4()
+			: '';
+		if ($uuid === '') {
+			return '';
+		}
+
+		\update_option(cmx_artikel_liste_uuid_option_key(), $uuid, false);
+		return $uuid;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_matches_uuid')) {
+	function cmx_artikel_liste_matches_uuid(string $uuid): bool {
+		$uuid = \trim($uuid);
+		if ($uuid === '') {
+			return false;
+		}
+
+		return \hash_equals(cmx_artikel_liste_get_stable_uuid(), $uuid);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')) {
+	function cmx_artikel_liste_url(): string {
+		$uuid = cmx_artikel_liste_get_stable_uuid();
+		if ($uuid === '') {
+			return (string) \home_url('/katalog/');
+		}
+
+		return (string) \add_query_arg(['katalog' => $uuid], \home_url('/'));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_meta_query')) {
 	function cmx_artikel_liste_meta_query(): array {
 		$verkaufbar_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR')
@@ -212,6 +259,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_is_artikel_liste_request')) {
 			return false;
 		}
 
+		$uuid = isset($_GET['katalog']) ? \sanitize_text_field((string) \wp_unslash($_GET['katalog'])) : '';
+		if ($uuid !== '' && cmx_artikel_liste_matches_uuid($uuid)) {
+			return true;
+		}
+
 		if (\function_exists(__NAMESPACE__ . '\\cmx_is_katalog_request')) {
 			return cmx_is_katalog_request();
 		}
@@ -229,7 +281,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		}
 
 		$rows = cmx_artikel_liste_rows();
-		$reload_url = (string) \home_url('/katalog/');
+		$reload_url = cmx_artikel_liste_url();
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -270,6 +322,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			.cmx-artikel-table a{color:#135e96;text-decoration:none;font-weight:600}
 			.cmx-artikel-table a:hover{color:#0a4b79}
 			.cmx-artikel-price,.cmx-artikel-sku,.cmx-artikel-unit{white-space:nowrap}
+			.cmx-artikel-table td.cmx-artikel-price,.cmx-artikel-table th.cmx-artikel-price-head{text-align:right;font-variant-numeric:tabular-nums}
+			.cmx-artikel-price-head button{justify-content:flex-end;width:100%}
 			.cmx-artikel-desc{min-width:320px}
 			.cmx-artikel-thumb-wrap{width:76px}
 			.cmx-artikel-thumb{display:block;width:60px;height:60px;object-fit:contain;border-radius:10px;border:1px solid #e0e0e0;background:#fff;padding:4px}
@@ -307,7 +361,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		echo '<th><button type="button" data-sort-key="title" data-sort-type="string">Artikel<span class="cmx-artikel-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="description" data-sort-type="string">Beschreibung<span class="cmx-artikel-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="unit" data-sort-type="string">Einheit<span class="cmx-artikel-sort-indicator"> </span></button></th>';
-		echo '<th><button type="button" data-sort-key="price" data-sort-type="number">CHF<span class="cmx-artikel-sort-indicator"> </span></button></th>';
+		echo '<th class="cmx-artikel-price-head"><button type="button" data-sort-key="price" data-sort-type="number">CHF<span class="cmx-artikel-sort-indicator"> </span></button></th>';
 		echo '</tr></thead><tbody id="cmx-artikel-table-body">';
 
 		foreach ($rows as $row) {

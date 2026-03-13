@@ -8,6 +8,14 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_katalog_online')) {
 
 function cmx_is_katalog_request(): bool {
 	if (is_admin()) return false;
+	$uuid = isset($_GET['katalog']) ? \sanitize_text_field((string) \wp_unslash($_GET['katalog'])) : '';
+	if (
+		$uuid !== ''
+		&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_matches_uuid')
+		&& cmx_artikel_liste_matches_uuid($uuid)
+	) {
+		return true;
+	}
 	$req_path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
 	$req_path = is_string($req_path) ? trim($req_path, '/') : '';
 	return $req_path === 'katalog' || \is_page('katalog');

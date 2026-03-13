@@ -95,7 +95,7 @@ function cmx65_render_front_quicklinks(): void {
 		['label' => 'Home', 'href' => \home_url('/wp-admin/')],
 		['label' => 'Mis Büro', 'href' => 'https://misbuero.ch/', 'target' => '_blank'],
 		['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'],
-		['label' => 'Katalog', 'href' => \home_url('/katalog/')],
+		['label' => 'Katalog', 'href' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/')],
 		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/')],
 		['label' => 'Archiv', 'href' => \home_url('/archiv/')],
 		['label' => 'Scanner', 'href' => \home_url('/scanner/')],
@@ -211,7 +211,7 @@ function cmx65_adminbar($wp_admin_bar) {
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_katalog_id',
 		'title' => 'Katalog',
-		'href'  => '/katalog/',
+		'href'  => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/'),
 		'meta'  => [
 			'title'  => __('Dein Online Katalog', 'textdomain'),
 			'target' => '_blank',
@@ -363,6 +363,8 @@ function cmx65_adminbar($wp_admin_bar) {
 
 	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
 	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
 	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
 	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
 }
@@ -463,6 +465,42 @@ function cmx65_upload_copy_script(): void
                 };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(url).then(done, fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
+}
+
+function cmx65_katalog_copy_script(): void
+{
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-cmx65_katalog_id > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function () {
+                var url = link.getAttribute("href");
+                if (!url) return;
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                    } catch (e) {
+                        // ignore
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(fallbackCopy);
                 } else {
                     fallbackCopy();
                 }
