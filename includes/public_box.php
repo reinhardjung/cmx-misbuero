@@ -25,6 +25,7 @@ add_action('add_meta_boxes', function() {
 			$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
 			$post_type    = $screen->post_type;
 			$is_belege    = ($post_type === 'belege');
+			$is_kontakte  = ($post_type === 'kontakte');
 			$is_add_screen = (($screen->action ?? '') === 'add');
 			$pt_obj       = get_post_type_object($post_type);
 			$singular     = $pt_obj->labels->singular_name ?? '';
@@ -56,6 +57,7 @@ add_action('add_meta_boxes', function() {
 			$save_as_val = 'rechnung';
 			$send_href = '';
 			$download_url = '';
+			$kontakt_belege_url = '';
 			$has_pdf = false;
 			$send_tooltip = 'PDF-Link per Mail versendern';
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
@@ -75,6 +77,9 @@ add_action('add_meta_boxes', function() {
 						$download_url = esc_url(add_query_arg('beleg', $token, home_url('/')));
 					}
 				}
+			}
+			if ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
+				$kontakt_belege_url = (string) cmx_kontakt_belege_share_url((int) $post->ID);
 			}
 
 			echo '<div style="padding:12px 0;">';
@@ -336,11 +341,14 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
-				if ($delete_link || $dup_link !== '' || $show_pdf_icons) {
+				if ($delete_link || $dup_link !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
 					$justify = $is_belege ? 'space-between' : 'flex-start';
 					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
+					}
+					if ($kontakt_belege_url !== '') {
+						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
 					}
 						if ($show_pdf_icons) {
 							echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Anzeigen als PDF (DL/C5/C4)" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
@@ -427,6 +435,43 @@ add_action('admin_footer', function () {
 			clearInterval(killer);
 			killPrompt();
 		}, { capture:true });
+	})();
+	</script>
+	<?php
+});
+
+add_action('admin_footer', function () {
+	$screen = function_exists('get_current_screen') ? get_current_screen() : null;
+	if (!$screen || !in_array((string) $screen->base, ['post', 'post-new'], true)) return;
+	if ((string) ($screen->post_type ?? '') !== 'kontakte') return;
+	?>
+	<script>
+	(function(){
+		function copyFallback(text){
+			var input = document.createElement('textarea');
+			input.value = text;
+			input.setAttribute('readonly', 'readonly');
+			input.style.position = 'fixed';
+			input.style.opacity = '0';
+			document.body.appendChild(input);
+			input.focus();
+			input.select();
+			var ok = false;
+			try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+			document.body.removeChild(input);
+			return ok;
+		}
+		document.addEventListener('click', function(ev){
+			var link = ev.target.closest('.cmx-kontakt-belege-link');
+			if (!link) return;
+			var text = (link.getAttribute('data-copy-url') || link.href || '').trim();
+			if (!text) return;
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).catch(function(){ copyFallback(text); });
+				return;
+			}
+			copyFallback(text);
+		});
 	})();
 	</script>
 	<?php

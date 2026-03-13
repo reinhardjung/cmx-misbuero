@@ -27,7 +27,9 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 	}
 
 	// ---- Parameter einsammeln (sanitizen) ----
-	$kontakt_id   = isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0;
+	$kontakt_id   = \function_exists(__NAMESPACE__ . '\\cmx_kontakt_request_kontakt_id')
+		? (int) cmx_kontakt_request_kontakt_id()
+		: (isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0);
 	$proj_id      = isset($_GET['cmx_proj_id']) ? (int) $_GET['cmx_proj_id'] : 0;
 
 	// Kategorie (Taxonomie kann belege_kategorien oder beleg_kategorie heißen)

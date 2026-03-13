@@ -79,7 +79,9 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 		return;
 	}
 
-	$selected = isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0;
+	$selected = \function_exists(__NAMESPACE__ . '\\cmx_kontakt_request_kontakt_id')
+		? (int) cmx_kontakt_request_kontakt_id()
+		: (isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0);
 
 	// ALLE Kontakte laden – performant
 	$kontakte = \get_posts([
@@ -122,7 +124,9 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 		return;
 	}
 
-	$kontakt_id = isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0;
+	$kontakt_id = \function_exists(__NAMESPACE__ . '\\cmx_kontakt_request_kontakt_id')
+		? (int) cmx_kontakt_request_kontakt_id()
+		: (isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0);
 	if ($kontakt_id > 0) {
 		$meta_query   = (array) $q->get('meta_query');
 		$meta_query[] = [
