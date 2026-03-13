@@ -439,6 +439,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_all_belege_rows')) {
 				'online_sort' => $payrexx_url !== '' ? 1 : 0,
 				'question_url' => $question_url,
 				'question_email' => $question_email,
+				'question_subject' => $question_subject,
 			];
 		}
 
@@ -512,6 +513,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-table th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;background:#fafafa}
 			.cmx-kontakt-table th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:inherit}
 			.cmx-kontakt-table th button:hover{color:#1d2327}
+			.cmx-kontakt-head-pdf{display:inline-block;padding-left:1ch}
+			.cmx-kontakt-head-online{display:inline-block;padding-left:2ch}
 			.cmx-kontakt-sort-indicator{font-size:11px;opacity:.55;min-width:10px;text-align:center}
 			.cmx-kontakt-table tbody tr:nth-child(even){background:#fcfcfc}
 			.cmx-kontakt-table a{color:#135e96;text-decoration:none;font-weight:600}
@@ -561,9 +564,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<th><button type="button" data-sort-key="due" data-sort-type="number">Fällig am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Bezahlt am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number">Betrag<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
-		echo '<th>PDF</th>';
+		echo '<th><span class="cmx-kontakt-head-pdf">PDF</span></th>';
 		if ($show_online_column) {
-			echo '<th><button type="button" data-sort-key="online" data-sort-type="number">online<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+			echo '<th><button type="button" data-sort-key="online" data-sort-type="number"><span class="cmx-kontakt-head-online">online</span><span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		}
 		echo '<th>Fragen?</th>';
 		echo '</tr></thead><tbody id="cmx-kontakt-table-body">';
@@ -579,6 +582,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			$due_label = (string) ($row['due_label'] ?? '');
 			$payrexx_url = (string) ($row['payrexx_url'] ?? '');
 			$question_url = (string) ($row['question_url'] ?? '');
+			$question_subject = (string) ($row['question_subject'] ?? '');
 			$type_slug = (string) ($row['type_slug'] ?? '');
 			$date_sort = (int) ($row['date_sort'] ?? 0);
 			$due_sort = cmx_kontakt_parse_display_date_to_ts($due_label);
@@ -637,7 +641,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			}
 			echo '<td class="cmx-kontakt-question">';
 			if ($question_url !== '') {
-				echo '<a href="' . \esc_url($question_url) . '" class="cmx-kontakt-mail-btn" title="' . \esc_attr('Fragen zur Rechnung ' . $title) . '"><span class="cmx-kontakt-mail-icon dashicons dashicons-email-alt" aria-hidden="true"></span></a>';
+				echo '<a href="' . \esc_url($question_url) . '" class="cmx-kontakt-mail-btn" title="' . \esc_attr($question_subject) . '"><span class="cmx-kontakt-mail-icon dashicons dashicons-email-alt" aria-hidden="true"></span></a>';
 			}
 			echo '</td>';
 			echo '</tr>';
