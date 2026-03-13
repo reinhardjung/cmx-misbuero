@@ -363,10 +363,10 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		line-height: 1.25;
 		margin-top: 1mm;
 		color: #4b5563;
-		width: 34mm;
-		box-sizing: border-box;
-		padding-right: 4mm;
-		text-align: center;
+		display: inline-block;
+		width: auto;
+		margin-left: -3px;
+		text-align: left;
 		white-space: nowrap;
 	}
 	.recipient-window {
