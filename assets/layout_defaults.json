@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-03-13T01:47:22+00:00",
+    "exported_at": "2026-03-13T10:05:52+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -37,7 +37,7 @@
             false
         ],
         "meta-box-order_belege": {
-            "side": "cmx_savebox,cmx_dokumente_box,cmx_uploads_box,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmxbu_logfile_box",
+            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box,cmxbu_logfile_box",
             "normal": "cmx_beleg_details,cmx_beleg_positionen,cmx_internenotizen_central",
             "advanced": ""
         },

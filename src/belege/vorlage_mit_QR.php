@@ -196,6 +196,7 @@ if ($position_row_count > 0) {
 	}
 }
 $use_closing_group = ($show_mwst_footer_group && !$is_lieferschein && $closing_start_index >= 0);
+$render_primary_positions_table = (!$use_closing_group || $closing_start_index > 0);
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
 if ($sender_country_code === '') $sender_country_code = 'CH';
@@ -430,7 +431,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	}
 	.recipient-window .recipient-lines { line-height: 1.3; }
 	h1 { margin-top: 0; font-size: 20px; }
-	.beleg-content > h1 { margin-top: <?= $show_payrexx_vpos_link ? '4mm' : '0'; ?>; }
+	.beleg-content > h1 { margin-top: <?= $show_payrexx_vpos_link ? '12mm' : '0'; ?>; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
 	.beleg-content {
@@ -530,10 +531,11 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.totals-table td { border: 0 !important; }
 	.totals-table tr { line-height: 1.1; }
 	.totals-table td { padding: 2px 8px; }
-		.totals-table .total-row td { padding-top: 8px; }
-		.beleg-subject { margin-top: 6px; font-size: 13px; }
-		.beleg-desc { margin-top: 2px; }
-		.beleg-booking-note { margin-top: -2px; font-size: 11px; color: #c00; }
+			.totals-table .total-row td { padding-top: 8px; }
+			.beleg-subject { margin-top: 6px; font-size: 13px; }
+			.beleg-desc { margin-top: 2px; }
+			.beleg-pre-positions-spacer { height: 4.5mm; line-height: 0; font-size: 0; }
+			.beleg-booking-note { margin-top: -2px; font-size: 11px; color: #c00; }
 		.mwst-note { margin-top: 8px; font-size: 11px; }
 		.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { margin-top: 20px; font-size: 11px; }
@@ -705,14 +707,19 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 			<?php if ($beleg_subject !== ''): ?>
 				<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
 			<?php endif; ?>
-		<?php if ($beleg_description !== ''): ?>
-			<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
-		<?php endif; ?>
+			<?php if ($beleg_description !== ''): ?>
+				<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
+			<?php endif; ?>
 
-	<?php if ($has_positions || $has_section_rows): ?>
-			<table class="positions-table">
-		<thead>
-			<tr>
+			<?php if (($beleg_subject !== '' || $beleg_description !== '') && ($has_positions || $has_section_rows)): ?>
+				<div class="beleg-pre-positions-spacer"></div>
+			<?php endif; ?>
+
+			<?php if ($has_positions || $has_section_rows): ?>
+			<?php if ($render_primary_positions_table): ?>
+				<table class="positions-table">
+			<thead>
+				<tr>
 				<?php if ($show_position_index): ?>
 					<th class="col-pos">Pos.</th>
 				<?php endif; ?>
@@ -821,10 +828,11 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 						<?php endif; ?>
 					</tr>
 				<?php endforeach; ?>
-			<?php endif; ?>
-			</tbody>
-			<?php if ($use_closing_group): ?>
+				<?php endif; ?>
+				</tbody>
 			</table>
+			<?php endif; ?>
+			<?php if ($use_closing_group): ?>
 			<table class="positions-table cmx-pdf-closing-table">
 				<thead>
 					<tr>
@@ -1033,7 +1041,6 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					</tr>
 				</tbody>
 			<?php endif; ?>
-			</table>
 		<?php endif; ?>
 	</div>
 
