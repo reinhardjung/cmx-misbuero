@@ -635,6 +635,8 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				continue;
 			}
 			$due_sort = $due_ts > 0 ? $due_ts : PHP_INT_MAX;
+			$today_start_ts = (int) \strtotime(\current_time('Y-m-d') . ' 00:00:00');
+			$is_overdue = $due_ts > 0 && $today_start_ts > 0 && $due_ts < $today_start_ts;
 
 			$title = \trim((string) \get_the_title($post_id));
 			if ($title === '') {
@@ -662,6 +664,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 				'due_sort' => $due_sort,
 					'due_ts'   => $due_ts,
 					'due_date' => cmx_cockpit_mahnwesen_due_display($post_id, $due_raw, $due_ts),
+						'is_overdue' => $is_overdue,
 						'edit_url' => (string) \get_edit_post_link($post_id, ''),
 						'amount_tooltip' => $amount_tooltip,
 						'amount_display' => $amount_display,
@@ -736,6 +739,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_render_faellige_rechnungen_rows')) {
 				$amount_display = (string) ($row['amount_display'] ?? '');
 				$kontakt_email = (string) ($row['kontakt_email'] ?? '');
 				$can_send_reminder = !empty($row['can_send_reminder']);
+				$is_overdue = !empty($row['is_overdue']);
 				$type_tooltip = (string) ($row['type_tooltip'] ?? '');
 				if ($amount_display === '' && $amount_tooltip !== '') {
 					$amount_display = (string) \str_replace('Betrag: CHF ', '', $amount_tooltip);
@@ -752,13 +756,14 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_render_faellige_rechnungen_rows')) {
 				}
 				echo '</td>';
 				echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
+				$due_class = $is_overdue ? ' cmx-faellig-due-overdue' : '';
 				if ($can_send_reminder) {
-					echo '<button type="button" class="cmx-faellig-due-btn" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
+					echo '<button type="button" class="cmx-faellig-due-btn' . $due_class . '" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
 					echo \esc_html($due);
 					echo '</button>';
 				} else {
 					$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
-					echo '<span' . $due_attr . '>' . \esc_html($due) . '</span>';
+					echo '<span class="cmx-faellig-due-text' . $due_class . '"' . $due_attr . '>' . \esc_html($due) . '</span>';
 				}
 				echo '</td>';
 				echo '<td style="padding:4px 0;vertical-align:top;">';
@@ -840,6 +845,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn{display:inline-block;border:0;background:transparent;padding:0;margin:0;color:#2271b1;cursor:pointer;text-decoration:none;font:inherit}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn:hover{text-decoration:underline}
 			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn[disabled]{color:#8c8f94;cursor:default;text-decoration:none}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-due-overdue{color:#b32d2e}
+			#cmx_rechnungen_faellig_widget .cmx-faellig-due-btn.cmx-faellig-due-overdue:hover{color:#8f2424}
 		</style>';
 		echo '<table class="cmx-faellig-table">';
 		echo '<colgroup>';
