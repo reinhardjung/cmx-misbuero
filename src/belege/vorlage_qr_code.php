@@ -81,6 +81,57 @@ function cmx_qr_normalize_line(string $line): string
 }
 
 /**
+ * QR-Payload auf ein robust scanbares Zeichenset begrenzen.
+ */
+function cmx_qr_sanitize_payload_text(string $value, int $max_len = 0): string
+{
+    $value = cmx_qr_normalize_line($value);
+    if ($value === '') {
+        return '';
+    }
+
+    $value = \strtr($value, [
+        "\u{00A0}" => ' ',
+        "\u{2007}" => ' ',
+        "\u{202F}" => ' ',
+        "\u{2010}" => '-',
+        "\u{2011}" => '-',
+        "\u{2012}" => '-',
+        "\u{2013}" => '-',
+        "\u{2014}" => '-',
+        "\u{2212}" => '-',
+        "\u{2018}" => "'",
+        "\u{2019}" => "'",
+        "\u{201A}" => "'",
+        "\u{201B}" => "'",
+        "\u{2032}" => "'",
+        "\u{0060}" => "'",
+        "\u{201C}" => '"',
+        "\u{201D}" => '"',
+        "\u{201E}" => '"',
+        "\u{2033}" => '"',
+        "\u{2022}" => '-',
+        "\u{00B7}" => '-',
+        "\u{2026}" => '...',
+        '|' => '/',
+        '\\' => '/',
+    ]);
+
+    $value = (string) \preg_replace('/[\x00-\x1F\x7F]/u', '', $value);
+    $value = (string) \preg_replace('/[^0-9A-Za-zÀ-ÖØ-öø-ÿ .,\-\/+:\(\)\'"\?!&;%*@=_#]/u', '', $value);
+    $value = cmx_qr_normalize_line($value);
+
+    if ($max_len > 0) {
+        $value = \function_exists('mb_substr')
+            ? (string) \mb_substr($value, 0, $max_len)
+            : (string) \substr($value, 0, $max_len);
+        $value = \rtrim($value);
+    }
+
+    return $value;
+}
+
+/**
  * Vergleichsschluessel (ohne Akzente, lowercase) fuer Textvergleiche.
  */
 function cmx_qr_text_key(string $value): string
@@ -537,12 +588,7 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     }
 
     // SIX-Payload bleibt einzeilig; fuer den Druck behalten wir die einzelnen Zeilen.
-    $additional_info = trim((string) preg_replace('/\s+/', ' ', implode(' | ', $additional_info_lines)));
-    if ($additional_info !== '') {
-        $additional_info = \function_exists('mb_substr')
-            ? mb_substr($additional_info, 0, 140)
-            : substr($additional_info, 0, 140);
-    }
+    $additional_info = cmx_qr_sanitize_payload_text(implode(' / ', $additional_info_lines), 140);
     $additional_info_print_lines = [];
     if (!empty($additional_info_lines)) {
         foreach ($additional_info_lines as $line) {
@@ -558,6 +604,17 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $additional_info_print_lines[] = $additional_info;
     }
 
+    $cr_name_payload = cmx_qr_sanitize_payload_text($cr_name, 70);
+    $cr_street_payload = cmx_qr_sanitize_payload_text($cr_street, 70);
+    $cr_house_no_payload = cmx_qr_sanitize_payload_text($cr_house_no, 16);
+    $cr_plz_payload = cmx_qr_sanitize_payload_text($cr_plz, 16);
+    $cr_ort_payload = cmx_qr_sanitize_payload_text($cr_ort, 35);
+    $db_name_payload = cmx_qr_sanitize_payload_text($db_name, 70);
+    $db_street_payload = cmx_qr_sanitize_payload_text($db_street, 70);
+    $db_house_no_payload = cmx_qr_sanitize_payload_text($db_house_no, 16);
+    $db_plz_payload = cmx_qr_sanitize_payload_text($db_plz, 16);
+    $db_ort_payload = cmx_qr_sanitize_payload_text($db_ort, 35);
+
     /** ----------------------------------------------------------------
      * 3) EMV-QR-Payload bauen
      * ---------------------------------------------------------------- */
@@ -570,11 +627,11 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         '1',                    // Codierung
         $iban,                  // IBAN
         'S',                    // Strukturierte Adresse
-        $cr_name,
-        $cr_street,
-        $cr_house_no,
-        $cr_plz,
-        $cr_ort,
+        $cr_name_payload,
+        $cr_street_payload,
+        $cr_house_no_payload,
+        $cr_plz_payload,
+        $cr_ort_payload,
         $cr_country,
         '',                     // Ult. Creditor Address Type
         '',                     // Ult. Creditor Name
@@ -586,11 +643,11 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $betrag_emv,            // Betrag
         $w,
         'S',                    // Debtor Address Type
-        $db_name,
-        $db_street,
-        $db_house_no,
-        $db_plz,
-        $db_ort,
+        $db_name_payload,
+        $db_street_payload,
+        $db_house_no_payload,
+        $db_plz_payload,
+        $db_ort_payload,
         $db_country,
         $ref_type,
         $ref_value,
