@@ -290,6 +290,39 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_standard_import_notice_lines')) {
+	function cmx_standard_import_notice_lines(string $heading, array $notice): array {
+		$sections = [
+			'imported' => 'Importiert',
+			'updated' => 'Aktualisiert',
+			'skipped' => 'Übersprungen',
+		];
+		$lines = ['<strong>' . \esc_html($heading) . ':</strong>'];
+
+		foreach ($sections as $key => $label) {
+			$items = \array_values(\array_filter(\array_map('trim', (array) ($notice[$key] ?? []))));
+			if ($items === []) {
+				$lines[] = '<strong>' . \esc_html($label) . ' (0):</strong> -';
+				continue;
+			}
+			$lines[] = '<strong>' . \esc_html($label) . ' (' . \count($items) . '):</strong> ' . \esc_html(\implode(', ', $items));
+		}
+
+		$failed = \array_values(\array_filter(\array_map('trim', (array) ($notice['failed'] ?? []))));
+		if ($failed !== []) {
+			$lines[] = '<strong>Fehlgeschlagen (' . \count($failed) . '):</strong> ' . \esc_html(\implode(', ', $failed));
+		}
+
+		return $lines;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_notice_key')) {
+	function cmx_artikel_import_notice_key(): string {
+		return 'cmx_import_notice_artikel';
+	}
+}
+
 /**
  * 1. Import-Link oben in der Liste einfügen
  */
@@ -429,20 +462,35 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 		}
 	}
 
-	$imported = 0;
-	$updated = 0;
+	$notice = [
+		'imported' => [],
+		'updated' => [],
+		'skipped' => [],
+		'failed' => [],
+	];
+	$row_number = 1;
 
 	while (($line = \fgetcsv($handle, 0, $sep)) !== false) {
+		$row_number++;
 		if (!\array_filter($line, static fn($value) => $value !== null && $value !== '')) continue;
 
 		$row = @\array_combine($header, $line);
-		if (!$row) continue;
+		if (!$row) {
+			$notice['skipped'][] = 'Zeile ' . $row_number;
+			continue;
+		}
 		$row_l = \array_change_key_case($row, CASE_LOWER);
 
 		$title_raw = \trim((string) ($row['post_title'] ?? ($row_l['post_title'] ?? '')));
-		if ($title_raw === '') continue;
+		if ($title_raw === '') {
+			$notice['skipped'][] = 'Zeile ' . $row_number;
+			continue;
+		}
 		$title = \sanitize_text_field($title_raw);
-		if ($title === '') continue;
+		if ($title === '') {
+			$notice['skipped'][] = 'Zeile ' . $row_number;
+			continue;
+		}
 
 		$postarr = [
 			'post_type'   => CMX_PT_ARTIKEL,
@@ -462,7 +510,10 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 		}
 
 		$post_id = \wp_insert_post($postarr, true);
-		if (\is_wp_error($post_id)) continue;
+		if (\is_wp_error($post_id)) {
+			$notice['failed'][] = $title;
+			continue;
+		}
 
 		if ($is_update && $has_lieferanten_meta_in_csv) {
 			cmx_import_clear_lieferanten_meta((int) $post_id);
@@ -501,37 +552,50 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 		cmx_artikel_import_apply_lieferanten_names((int) $post_id, $row);
 		cmx_artikel_import_apply_image((int) $post_id, $row, $row_l, $zip_image_map);
 
+		$stored_title = \trim((string) \get_the_title($post_id));
+		$label = $stored_title !== '' ? $stored_title : $title;
 		if ($is_update) {
-			$updated++;
+			$notice['updated'][] = $label;
 		} else {
-			$imported++;
+			$notice['imported'][] = $label;
 		}
 	}
 
 	\fclose($handle);
 	if ($cleanup_dir !== '') cmx_artikel_import_cleanup_dir($cleanup_dir);
 
-	\set_transient('cmx_import_notice_artikel', [
-		'imported' => $imported,
-		'updated'  => $updated,
-	], 30);
+	\update_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key(), $notice);
 
-	\wp_safe_redirect(\admin_url('edit.php?post_type=' . CMX_PT_ARTIKEL));
+	\wp_safe_redirect(\add_query_arg([
+		'post_type' => CMX_PT_ARTIKEL,
+		'cmx_import_notice_artikel' => 1,
+	], \admin_url('edit.php')));
 	exit;
 });
 
 /**
  * 4. Notice nach Redirect anzeigen
  */
-\add_action('admin_notices', function() {
-	global $typenow;
-	if ($typenow !== CMX_PT_ARTIKEL) return;
+\add_action('all_admin_notices', function() {
+	if (empty($_GET['cmx_import_notice_artikel'])) return;
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	$current_post_type = '';
+	if ($screen && !empty($screen->post_type)) {
+		$current_post_type = (string) $screen->post_type;
+	} elseif (!empty($_GET['post_type'])) {
+		$current_post_type = \sanitize_key((string) \wp_unslash($_GET['post_type']));
+	}
+	if ($current_post_type !== CMX_PT_ARTIKEL) return;
 
-	$notice = \get_transient('cmx_import_notice_artikel');
+	$notice = \get_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key(), true);
 	if (!$notice) return;
 
-	\delete_transient('cmx_import_notice_artikel');
+	\delete_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key());
 
-	echo '<div class="notice notice-success is-dismissible"><p><strong>Import abgeschlossen:</strong> ' .
-		\intval($notice['imported']) . ' neu, ' . \intval($notice['updated']) . ' aktualisiert.</p></div>';
+	$lines = cmx_standard_import_notice_lines('Import abgeschlossen', (array) $notice);
+	echo '<div class="notice notice-success is-dismissible">';
+	foreach ($lines as $line) {
+		echo '<p>' . \wp_kses_post($line) . '</p>';
+	}
+	echo '</div>';
 });

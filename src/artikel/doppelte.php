@@ -344,7 +344,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_duplicate_trash_candidates'
 		return $views;
 	}
 
-	$link = '<a href="' . \esc_url($url) . '">doppelt löschen</a>';
+	$link = '<a href="' . \esc_url($url) . '">doppelte löschen</a>';
 	$new_views = [];
 	$inserted = false;
 	foreach ($views as $key => $html) {

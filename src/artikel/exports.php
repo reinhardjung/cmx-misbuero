@@ -559,6 +559,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_fetch_image_binary')) {
 			return '';
 		}
 
+		$local_file = \function_exists(__NAMESPACE__ . '\\cmxal_local_file_from_url')
+			? (string) cmxal_local_file_from_url($url)
+			: '';
+		if ($local_file !== '' && \is_readable($local_file) && \is_file($local_file)) {
+			$raw = \file_get_contents($local_file);
+			return \is_string($raw) ? $raw : '';
+		}
+
+		if (\is_readable($url) && \is_file($url)) {
+			$raw = \file_get_contents($url);
+			return \is_string($raw) ? $raw : '';
+		}
+
+		if (!\preg_match('~^https?://~i', $url)) {
+			return '';
+		}
+
 		$response = \wp_remote_get($url, [
 			'timeout'     => 20,
 			'redirection' => 5,
@@ -570,9 +587,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_fetch_image_binary')) {
 				return $body;
 			}
 		}
-
-		$raw = @\file_get_contents($url);
-		return \is_string($raw) ? $raw : '';
+		
+		return '';
 	}
 }
 
