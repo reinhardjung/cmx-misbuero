@@ -456,6 +456,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			'nachname' => $nachname,
 			'beleg_label' => $beleg_label,
 			'beleg_id' => $beleg_id,
+			'beleg_date' => $beleg_mail_date,
 			'download_url' => $download_url,
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,

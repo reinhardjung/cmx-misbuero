@@ -8,6 +8,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 		: 'Guten Tag';
 	$beleg_label = trim((string) ($data['beleg_label'] ?? 'Beleg'));
 	$beleg_id = trim((string) ($data['beleg_id'] ?? ''));
+	$beleg_date = trim((string) ($data['beleg_date'] ?? ''));
 	$download_url = (string) ($data['download_url'] ?? '');
 	$site_name = trim((string) ($data['site_name'] ?? ''));
 	$catalog_url = (string) ($data['catalog_url'] ?? '');
@@ -31,6 +32,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$download_url = esc_url($download_url);
 	$beleg_label_esc = esc_html($beleg_label);
 	$beleg_id_esc = esc_html($beleg_id);
+	$beleg_date_esc = esc_html($beleg_date);
 	$title_esc = esc_html($title);
 	$anrede_esc = esc_html($anrede);
 	$site_name_esc = esc_html($site_name);
@@ -56,6 +58,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 						<td style="padding:20px 24px;background:linear-gradient(135deg,#a42c24,#d84a3a);color:#ffffff;">
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $site_name_esc . '</div>
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>
+							' . ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '') . '
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>
 						</td>
 					</tr>

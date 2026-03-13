@@ -171,6 +171,7 @@ function cmxbu_handle_beleg_send(): void {
 			'nachname' => $nachname,
 			'beleg_label' => $beleg_label,
 			'beleg_id' => $beleg_id,
+			'beleg_date' => $beleg_mail_date,
 			'download_url' => $download_url,
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,
@@ -185,6 +186,9 @@ function cmxbu_handle_beleg_send(): void {
 	}
 	if ($betrag !== '') {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{betrag}', esc_html($betrag));
+	}
+	if ($beleg_mail_date !== '') {
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', esc_html($beleg_mail_date));
 	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
