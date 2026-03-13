@@ -163,12 +163,17 @@ function cmxbu_handle_beleg_send(): void {
 		$subject .= ' vom ' . $beleg_mail_date;
 	}
 
-	$message = cmx_get_belegmail($beleg_slug, $kontakt_id);
-	if (trim($message) === '') {
+	$catalog_url = \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
+		? \home_url('/katalog/')
+		: '';
+	$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+	$message = $custom_message;
+	if (\trim($message) === '') {
 		$message = cmxbu_render_belegmail_template([
 			'anrede' => $anrede,
 			'vorname' => $vorname,
 			'nachname' => $nachname,
+			'kontakt_id' => (int) $kontakt_id,
 			'beleg_label' => $beleg_label,
 			'beleg_id' => $beleg_id,
 			'beleg_date' => $beleg_mail_date,
@@ -176,9 +181,7 @@ function cmxbu_handle_beleg_send(): void {
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,
 			'site_name' => \get_bloginfo('name'),
-			'catalog_url' => \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
-				? \home_url('/katalog/')
-				: '',
+			'catalog_url' => $catalog_url,
 		]);
 	}
 	if ($faellig_bis !== '') {
@@ -198,6 +201,13 @@ function cmxbu_handle_beleg_send(): void {
 	// cmx_get_belegfuss($beleg_type);
 	$headers = ['Content-Type: text/html; charset=UTF-8'];
 	$message = cmxbu_prepare_belegmail_html($message);
+	if (\trim($custom_message) !== '') {
+		$message = cmxbu_append_belegmail_footer_html($message, [
+			'kontakt_id' => (int) $kontakt_id,
+			'site_name' => \get_bloginfo('name'),
+			'catalog_url' => $catalog_url,
+		]);
+	}
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
 	$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
@@ -380,6 +390,44 @@ function cmxbu_prepare_belegmail_html(string $message): string {
 	// Plain text: preserve new lines.
 	$message = esc_html($message);
 	return nl2br($message);
+}
+
+function cmxbu_append_belegmail_footer_html(string $message, array $args = []): string {
+	if (\strpos($message, 'Diese E-Mail wurde von') !== false) {
+		return $message;
+	}
+
+	$kontakt_id = (int) ($args['kontakt_id'] ?? 0);
+	$site_name = \trim((string) ($args['site_name'] ?? ''));
+	$catalog_url = \esc_url((string) ($args['catalog_url'] ?? ''));
+	if ($site_name === '') {
+		$site_name = 'MisBüro';
+	}
+
+	$portal_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
+		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
+		: '';
+	$agb_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
+		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
+		: '';
+
+	$footer = '<div style="margin-top:24px;">';
+	if ($portal_html !== '') {
+		$footer .= '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $portal_html . '</p>';
+	}
+	$footer .= '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">';
+	if ($agb_html !== '') {
+		$footer .= '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_html . '</p>';
+	}
+	$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Diese E-Mail wurde von ';
+	if ($catalog_url !== '') {
+		$footer .= '<a href="' . $catalog_url . '" style="color:#8b98a5;text-decoration:underline;">' . \esc_html($site_name) . '</a>';
+	} else {
+		$footer .= \esc_html($site_name);
+	}
+	$footer .= ' automatisch generiert.</p></div>';
+
+	return $message . $footer;
 }
 
 if (!function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {

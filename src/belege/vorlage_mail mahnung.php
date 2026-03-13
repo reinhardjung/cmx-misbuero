@@ -12,6 +12,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$download_url = (string) ($data['download_url'] ?? '');
 	$site_name = trim((string) ($data['site_name'] ?? ''));
 	$catalog_url = (string) ($data['catalog_url'] ?? '');
+	$kontakt_id = (int) ($data['kontakt_id'] ?? 0);
 	if ($site_name === '') {
 		$site_name = 'MisBüro';
 	}
@@ -41,6 +42,10 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
 		: '';
+	$kundenportal_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
+		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
+		: '';
+	$thank_you_margin_bottom = $kundenportal_footer_html !== '' ? '16px' : '0';
 
 	return '<!doctype html>
 <html lang="de">
@@ -81,7 +86,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 									</td>
 								</tr>
 							</table>
-							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
+							<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
 							<!---
 							<p style="margin:0 0 10px 0;font-size:14px;color:#52616b;line-height:1.5;">
 								<a href="' . $download_url . '" style="color:#a42c24;text-decoration:underline;">' . $download_url . '</a>
@@ -91,6 +96,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 					</tr>
 					<tr>
 						<td style="padding:0 24px 24px 24px;">
+							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
 							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
 							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">

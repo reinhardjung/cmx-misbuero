@@ -91,7 +91,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_placeholder')) {
 			return \rtrim($base, '/') . '/agb';
 		}
 
-		return \rtrim($raw_url, '/') . '/agb';
+	return \rtrim($raw_url, '/') . '/agb';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_link_enabled')) {
+	function cmx_email_kundenportal_link_enabled(): bool {
+		return cmx_email_option_value('kundenportal_link') === '1';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_url')) {
+	function cmx_email_kundenportal_url(int $kontakt_id): string {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0 || !cmx_email_kundenportal_link_enabled()) {
+			return '';
+		}
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
+			return '';
+		}
+
+		$url = (string) cmx_kontakt_belege_share_url($kontakt_id);
+		return $url !== '' ? \esc_url_raw($url) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
+	function cmx_email_kundenportal_footer_html(int $kontakt_id, string $link_style = ''): string {
+		$link = cmx_email_kundenportal_url($kontakt_id);
+		if ($link === '') {
+			return '';
+		}
+
+		$link_attr = $link_style !== '' ? ' style="' . \esc_attr($link_style) . '"' : '';
+		return '<a href="' . \esc_url($link) . '"' . $link_attr . '>Link zum Kundenportal</a>';
 	}
 }
 
@@ -251,6 +285,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_placeholder')) {
 		$page,
 		'cmx_sec_email_links'
 	);
+
+	\add_settings_field(
+		'cmx_email_kundenportal_link',
+		'',
+		static function (): void {
+			$checked = cmx_email_option_value('kundenportal_link') === '1';
+			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[kundenportal_link]" value="0">';
+			echo '<label><input type="checkbox" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[kundenportal_link]" value="1" ' . \checked($checked, true, false) . '> Link zum Kunden Portal</label>';
+		},
+		$page,
+		'cmx_sec_email_links'
+	);
 });
 
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
@@ -277,6 +323,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_placeholder')) {
 	$new['smtp_host'] = \sanitize_text_field((string) ($new['smtp_host'] ?? ''));
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
 	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
+	$new['kundenportal_link'] = !empty($new['kundenportal_link']) ? '1' : '0';
 	$new['smtp_port'] = '587';
 	$new['imap_port'] = '993';
 
