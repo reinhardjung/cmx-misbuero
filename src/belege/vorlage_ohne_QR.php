@@ -153,6 +153,18 @@ if ($footer_block !== '') {
 		$footer_html = nl2br(esc_html($footer_block));
 	}
 }
+$mwst_note_html = '';
+if (!$is_lieferantenrechnung) {
+	if ($is_mwst_pflichtig) {
+		$mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? ''));
+		if ($mwst_nr !== '') {
+			$mwst_note_html = 'MWST-Nr: ' . htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8');
+		}
+	} elseif ($mwst_exempt_note_html !== '') {
+		$mwst_note_html = $mwst_exempt_note_html;
+	}
+}
+$show_mwst_footer_group = ($mwst_note_html !== '' && $footer_html !== '');
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
 if ($sender_country_code === '') $sender_country_code = 'CH';
@@ -476,6 +488,33 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		.mwst-note { margin-top: 8px; font-size: 11px; }
 		.totals { width: 40%; float: right; margin-top: 16px; }
 	.footer { position: fixed; left: 0; right: 0; bottom: 20px; font-size: 11px; }
+	.mwst-footer-group {
+		width: 100%;
+		border-collapse: collapse;
+		border-spacing: 0;
+		margin-top: 20px;
+		page-break-inside: avoid;
+		break-inside: avoid;
+	}
+	.mwst-footer-group tr,
+	.mwst-footer-group td {
+		border: 0;
+		padding: 0;
+		page-break-inside: avoid;
+		break-inside: avoid;
+	}
+	.mwst-footer-group .mwst-note {
+		margin-top: 0;
+	}
+	.footer-inline {
+		position: static;
+		left: auto;
+		right: auto;
+		bottom: auto;
+		margin-top: 20px;
+		page-break-inside: avoid;
+		break-inside: avoid;
+	}
 	.clear { clear: both; }
 	.text-right { text-align: right; }
 	.logo-link { text-decoration: none; }
@@ -790,15 +829,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 				</td>
 			</tr>
 			</table>
-			<?php if ($is_mwst_pflichtig && !$is_lieferantenrechnung): ?>
-				<?php $mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? '')); ?>
-				<?php if ($mwst_nr !== ''): ?>
-					<div class="mwst-note">MWST-Nr: <?= htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8'); ?></div>
-				<?php endif; ?>
-			<?php elseif (!$is_lieferantenrechnung): ?>
-				<div class="mwst-note">
-					<?= $mwst_exempt_note_html; ?>
-				</div>
+			<?php if (!$show_mwst_footer_group && $mwst_note_html !== ''): ?>
+				<div class="mwst-note"><?= $mwst_note_html; ?></div>
 			<?php endif; ?>
 
 			<?php endif; ?>
@@ -844,9 +876,22 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 
 	<div class="clear"></div>
 
-	<div class="footer">
-		<?= $footer_html; ?>
-	</div>
+	<?php if ($show_mwst_footer_group): ?>
+		<table class="mwst-footer-group" role="presentation">
+			<tr>
+				<td>
+					<div class="mwst-note"><?= $mwst_note_html; ?></div>
+					<div class="footer footer-inline">
+						<?= $footer_html; ?>
+					</div>
+				</td>
+			</tr>
+		</table>
+	<?php elseif ($footer_html !== ''): ?>
+		<div class="footer">
+			<?= $footer_html; ?>
+		</div>
+	<?php endif; ?>
 </div>
 </body>
 </html>
