@@ -146,7 +146,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
 		'E-Mail Adresse*',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('email_address'));
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_address]" value="' . $value . '" autocomplete="username">';
+			echo '<input type="email" class="regular-text" id="cmx-email-address-input" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_address]" value="' . $value . '" autocomplete="username">';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -208,7 +208,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
 				$email_address = 'E-Mail-Adresse';
 			}
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[supplier]" value="' . $value . '" placeholder="rechnung@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) muss dann an die <code>' . \esc_html($email_address) . '</code> weitergeleitet werden</span>';
+			echo '<span style="margin-left:8px;">(optional) muss dann an die <code id="cmx-email-supplier-forward-target">' . \esc_html($email_address) . '</code> weitergeleitet werden</span>';
+			echo '<script>(function(){var source=document.getElementById("cmx-email-address-input");var target=document.getElementById("cmx-email-supplier-forward-target");if(!source||!target||target.dataset.bound==="1"){return;}var fallback="E-Mail-Adresse";var update=function(){var value=(source.value||"").trim();target.textContent=value!==""?value:fallback;};target.dataset.bound="1";source.addEventListener("input",update);source.addEventListener("change",update);update();})();</script>';
 		},
 		$page,
 		'cmx_sec_email_account'
