@@ -19,6 +19,49 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_placeholder')) {
+	function cmx_email_agb_placeholder(): string {
+		$fallback = 'https://beispiel.ch/agb';
+		$posts = \get_posts([
+			'post_type'        => ['kontakte', 'kontakt', 'contact'],
+			'post_status'      => ['publish', 'private'],
+			'posts_per_page'   => 1,
+			'tax_query'        => [
+				'relation' => 'OR',
+				['taxonomy' => 'kontakte_kategorien', 'field' => 'slug', 'terms' => ['das-bin-ich', 'ich']],
+				['taxonomy' => 'kontakte_kategorien', 'field' => 'name', 'terms' => ['Das bin ich']],
+			],
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+		]);
+
+		if (empty($posts) || empty($posts[0])) {
+			return $fallback;
+		}
+
+		$raw_url = \trim((string) \get_post_meta((int) $posts[0]->ID, '_cmx_kontakte_url', true));
+		if ($raw_url === '') {
+			return $fallback;
+		}
+
+		if (!\preg_match('~^https?://~i', $raw_url)) {
+			$raw_url = 'https://' . \ltrim($raw_url, '/');
+		}
+
+		$parts = \wp_parse_url($raw_url);
+		if (!empty($parts['host'])) {
+			$scheme = \strtolower((string) ($parts['scheme'] ?? 'https'));
+			$base = $scheme . '://' . $parts['host'];
+			if (!empty($parts['port'])) {
+				$base .= ':' . (int) $parts['port'];
+			}
+			return \rtrim($base, '/') . '/agb';
+		}
+
+		return \rtrim($raw_url, '/') . '/agb';
+	}
+}
+
 \add_action('admin_init', function (): void {
 	$page = 'cmx_tab_email';
 
@@ -168,7 +211,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 		'AGB',
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('agb_link'));
-			echo '<input type="url" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[agb_link]" value="' . $value . '" placeholder="https://beispiel.ch/agb" autocomplete="off">';
+			$placeholder = \esc_attr(cmx_email_agb_placeholder());
+			echo '<input type="url" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[agb_link]" value="' . $value . '" placeholder="' . $placeholder . '" autocomplete="off">';
 			echo '<span style="margin-left:8px;">Link zu Deinen AGB.</span>';
 		},
 		$page,
