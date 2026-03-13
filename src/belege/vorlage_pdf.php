@@ -545,6 +545,55 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_take_first_token')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_kontakt_id')) {
+	function cmxbu_get_beleg_kontakt_id(int $post_id): int {
+		$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			: '_cmx_beleg_kontakt_id';
+		$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
+		if ($kontakt_id <= 0 && $kontakt_meta_key !== '_cmx_beleg_kontakt_id') {
+			$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+		}
+		return $kontakt_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_payrexx_contact_data')) {
+	function cmxbu_get_payrexx_contact_data(int $kontakt_id): array {
+		if ($kontakt_id <= 0) {
+			return [
+				'company' => '',
+				'forename' => '',
+				'surname' => '',
+				'email' => '',
+			];
+		}
+
+		$company = \trim((string) \get_post_meta($kontakt_id, '_company', true));
+		if ($company === '') {
+			$company = \trim((string) \get_the_title($kontakt_id));
+		}
+		$company_lc = \function_exists('mb_strtolower') ? \mb_strtolower($company) : \strtolower($company);
+		if ($company_lc === 'firmenname fehlt') {
+			$company = '';
+		}
+
+		$email = \sanitize_email(cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+			'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
+		])));
+		if (!\is_email($email)) {
+			$email = '';
+		}
+
+		return [
+			'company' => $company,
+			'forename' => \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true)),
+			'surname' => \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true)),
+			'email' => $email,
+		];
+	}
+}
+
 
 
 if (!function_exists(__NAMESPACE__.'\\cmxbu_get_preferred_bank')) {
@@ -1068,19 +1117,15 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$opts=(array)get_option('cmx_einstellungen',[]);
 		$branding_logo = \CLOUDMEISTER\CMX\Buero\cmx_get_branding_logo();
 		$beleg_richtung = \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true));
+		$kontakt_id = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_kontakt_id')
+			? cmxbu_get_beleg_kontakt_id($post_id)
+			: 0;
 		$counterparty_contact = [
 			'phone' => '',
 			'email' => '',
 			'website' => '',
 		];
 		if ($beleg_richtung === 'eingang') {
-			$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
-				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
-				: '_cmx_beleg_kontakt_id';
-			$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
-			if ($kontakt_id <= 0 && $kontakt_meta_key !== '_cmx_beleg_kontakt_id') {
-				$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
-			}
 			if ($kontakt_id > 0) {
 				$counterparty_contact = [
 					'phone' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
@@ -1261,7 +1306,22 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			&& $beleg_richtung === 'ausgang'
 			&& \function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_vpos_url')
 		) {
-			$payrexx_vpos_url = (string) cmx_get_payrexx_vpos_url();
+			$payrexx_base_url = (string) cmx_get_payrexx_vpos_url();
+			if ($payrexx_base_url !== '') {
+				$payrexx_contact = \function_exists(__NAMESPACE__ . '\\cmxbu_get_payrexx_contact_data')
+					? cmxbu_get_payrexx_contact_data($kontakt_id)
+					: ['company' => '', 'forename' => '', 'surname' => '', 'email' => ''];
+				$payrexx_query = \http_build_query([
+					'amount' => \number_format((float) ($calc['total'] ?? 0.0), 2, '.', ''),
+					'currency' => \strtoupper(\trim((string) ($dates['currency'] ?? ($fmt['currency'] ?? 'CHF')))),
+					'purpose' => \trim((string) $title_safe),
+					'contact_company' => (string) ($payrexx_contact['company'] ?? ''),
+					'contact_forename' => (string) ($payrexx_contact['forename'] ?? ''),
+					'contact_surname' => (string) ($payrexx_contact['surname'] ?? ''),
+					'contact_email' => (string) ($payrexx_contact['email'] ?? ''),
+				], '', '&', \PHP_QUERY_RFC3986);
+				$payrexx_vpos_url = $payrexx_base_url . $payrexx_query;
+			}
 		}
 		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
 		$qr_user_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));

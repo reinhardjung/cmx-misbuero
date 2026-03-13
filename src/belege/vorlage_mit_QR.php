@@ -304,14 +304,25 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.invoice-meta .cmx-payrexx-spacer td { height: 5mm; line-height: 0; font-size: 0; }
 	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
 	.invoice-meta .cmx-payrexx-row a {
-		color: #1858a8;
-		text-decoration: underline;
-		word-break: break-all;
-		white-space: normal;
+		background: #1858a8;
+		border: 1px solid #134781;
+		border-radius: 4px;
+		color: #fff;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+		padding: 2.2mm 3.6mm;
 		display: inline-block;
 		text-align: right;
 		line-height: 1.25;
 		font-size: 10px;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.invoice-meta .cmx-payrexx-note {
+		font-size: 10px;
+		line-height: 1.25;
+		margin-top: 1mm;
+		color: #4b5563;
 	}
 	.recipient-window {
 		position: absolute;
@@ -521,7 +532,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					</tr>
 					<tr class="cmx-payrexx-row">
 						<td colspan="2" class="text-right" style="border:0; padding:0;">
-							<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?></a>
+							<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
+							<div class="cmx-payrexx-note">Bezahle bequem mit TWINT, Visa, Apple Pay etc.</div>
 						</td>
 					</tr>
 				<?php endif; ?>
