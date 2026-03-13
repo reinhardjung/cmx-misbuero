@@ -174,6 +174,55 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_date_sort_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_parse_display_date_to_ts')) {
+	function cmx_kontakt_parse_display_date_to_ts(string $date): int {
+		$date = \trim($date);
+		if ($date === '') {
+			return 0;
+		}
+		if (\preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $date, $m)) {
+			$ts = \strtotime($m[3] . '-' . $m[2] . '-' . $m[1] . ' 00:00:00');
+			return $ts ? (int) $ts : 0;
+		}
+		$ts = \strtotime($date);
+		return $ts ? (int) $ts : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_due_is_overdue')) {
+	function cmx_kontakt_beleg_due_is_overdue(string $due_label): bool {
+		$due_ts = cmx_kontakt_parse_display_date_to_ts($due_label);
+		if ($due_ts <= 0) {
+			return false;
+		}
+		$today_ts = \strtotime(\wp_date('Y-m-d') . ' 00:00:00');
+		return $today_ts ? ($due_ts < $today_ts) : false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kundenportal_question_email')) {
+	function cmx_kundenportal_question_email(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
+			foreach (['email_alias_belege', 'reply', 'email_alias', 'email_address'] as $key) {
+				$email = \sanitize_email((string) cmx_email_option_value($key));
+				if (\is_email($email)) {
+					return $email;
+				}
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact_reply_to')) {
+			$reply = (array) cmxbu_get_me_contact_reply_to('');
+			$email = \sanitize_email((string) ($reply['email'] ?? ''));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_currency')) {
 	function cmx_kontakt_beleg_currency(int $beleg_id): string {
 		$currency = '';
@@ -363,6 +412,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_all_belege_rows')) {
 				? (string) cmx_kontakt_beleg_due_label($beleg_id)
 				: '';
 			$payrexx_url = cmx_kontakt_beleg_payrexx_url($beleg_id);
+			$question_email = cmx_kundenportal_question_email();
+			$question_subject = 'Fragen zur Rechnung ' . $title;
+			$question_url = '';
+			if (\is_email($question_email)) {
+				$question_url = 'mailto:' . \rawurlencode($question_email) . '?subject=' . \rawurlencode($question_subject);
+			}
 
 			$rows[] = [
 				'id'         => $beleg_id,
@@ -378,6 +433,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_all_belege_rows')) {
 				'due_label'  => $due_label,
 				'payrexx_url' => $payrexx_url,
 				'online_sort' => $payrexx_url !== '' ? 1 : 0,
+				'question_url' => $question_url,
+				'question_email' => $question_email,
 			];
 		}
 
@@ -446,7 +503,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-tools input{width:100%;max-width:340px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;font:inherit}
 			.cmx-kontakt-table-wrap{padding:18px 28px 28px;overflow-x:auto}
 			.cmx-kontakt-table{width:100%;border-collapse:collapse;min-width:760px}
-			.cmx-kontakt-table th,.cmx-kontakt-table td{padding:12px 10px;border-bottom:1px solid #ececec;text-align:left;vertical-align:top}
+			.cmx-kontakt-table th,.cmx-kontakt-table td{padding:8px 10px;border-bottom:1px solid #ececec;text-align:left;vertical-align:middle;line-height:1.15}
 			.cmx-kontakt-table th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;background:#fafafa}
 			.cmx-kontakt-table th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:inherit}
 			.cmx-kontakt-table th button:hover{color:#1d2327}
@@ -456,10 +513,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-table a:hover{color:#0a4b79}
 			.cmx-kontakt-amount,.cmx-kontakt-date,.cmx-kontakt-status{white-space:nowrap}
 			.cmx-kontakt-status .is-paid{color:#2f7d32;font-weight:700}
-			.cmx-kontakt-status .is-open{color:#b32d2e;font-weight:700}
-			.cmx-kontakt-online{white-space:nowrap}
-			.cmx-kontakt-pay-btn{display:inline-block;padding:8px 12px;border-radius:9px;background:#135e96;color:#fff!important;font-weight:700;text-decoration:none}
+			.cmx-kontakt-status .is-overdue{color:#b32d2e;font-weight:700}
+			.cmx-kontakt-pdf,.cmx-kontakt-online,.cmx-kontakt-question{white-space:nowrap}
+			.cmx-kontakt-pay-btn,.cmx-kontakt-pdf-btn,.cmx-kontakt-mail-btn{display:inline-flex;align-items:center;justify-content:center;height:24px;padding:0 10px;border-radius:8px;font-size:12px;line-height:1;font-weight:700;text-decoration:none;vertical-align:middle}
+			.cmx-kontakt-pay-btn{background:#135e96;color:#fff!important}
 			.cmx-kontakt-pay-btn:hover{background:#0f4d7b;color:#fff!important}
+			.cmx-kontakt-pdf-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:24px}
+			.cmx-kontakt-pdf-btn:hover{background:#ebebeb;color:#1d2327!important}
+			.cmx-kontakt-mail-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:24px}
+			.cmx-kontakt-mail-btn:hover{background:#ebebeb;color:#1d2327!important}
+			.cmx-kontakt-pdf-icon,.cmx-kontakt-mail-icon{font-size:16px;line-height:1}
+			.cmx-kontakt-pdf-icon.dashicons,.cmx-kontakt-mail-icon.dashicons{width:16px;height:16px;font-size:16px}
 			.cmx-kontakt-empty{padding:28px;color:#6b7280}
 			@media (max-width:720px){
 				.cmx-kontakt-page{padding:18px 12px 24px}
@@ -489,11 +553,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<th><button type="button" data-sort-key="date" data-sort-type="number">Datum<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="title" data-sort-type="string">Beleg<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="type" data-sort-type="string">Typ<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+		echo '<th><button type="button" data-sort-key="due" data-sort-type="number">Fällig am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Bezahlt am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number">Betrag<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
-		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Status<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+		echo '<th><span class="cmx-kontakt-pdf-icon dashicons dashicons-media-document" title="Beleg anzeigen" aria-hidden="true"></span></th>';
 		if ($show_online_column) {
 			echo '<th><button type="button" data-sort-key="online" data-sort-type="number">online<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		}
+		echo '<th>Fragen?</th>';
 		echo '</tr></thead><tbody id="cmx-kontakt-table-body">';
 
 		foreach ($rows as $row) {
@@ -506,15 +573,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			$state = (array) ($row['state'] ?? []);
 			$due_label = (string) ($row['due_label'] ?? '');
 			$payrexx_url = (string) ($row['payrexx_url'] ?? '');
+			$question_url = (string) ($row['question_url'] ?? '');
 			$type_slug = (string) ($row['type_slug'] ?? '');
 			$date_sort = (int) ($row['date_sort'] ?? 0);
+			$due_sort = cmx_kontakt_parse_display_date_to_ts($due_label);
 			$online_sort = (int) ($row['online_sort'] ?? 0);
 			$state_slug = (string) ($state['slug'] ?? 'offen');
 			$state_label = (string) ($state['label'] ?? 'Offen');
+			$is_overdue = cmx_kontakt_beleg_due_is_overdue($due_label);
 			$display_status = $state_slug === 'bezahlt'
 				? $state_label
 				: ($due_label !== '' ? $due_label : $state_label);
-			$status_class = $state_slug === 'bezahlt' ? 'is-paid' : 'is-open';
+			$status_class = $state_slug === 'bezahlt' ? 'is-paid' : ($is_overdue ? 'is-overdue' : '');
 			$search_blob = \implode(' ', \array_filter([
 				$date,
 				$title,
@@ -533,19 +603,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 				. ' data-sort-title="' . \esc_attr(\function_exists('mb_strtolower') ? \mb_strtolower($title, 'UTF-8') : \strtolower($title)) . '"'
 				. ' data-sort-type="' . \esc_attr(\function_exists('mb_strtolower') ? \mb_strtolower($type, 'UTF-8') : \strtolower($type)) . '"'
 				. ' data-sort-amount="' . \esc_attr(\number_format($amount_raw, 2, '.', '')) . '"'
+				. ' data-sort-due="' . \esc_attr((string) $due_sort) . '"'
 				. ' data-sort-status="' . \esc_attr(\function_exists('mb_strtolower') ? \mb_strtolower($display_status, 'UTF-8') : \strtolower($display_status)) . '"'
 				. ' data-sort-online="' . \esc_attr((string) $online_sort) . '">';
 			echo '<td class="cmx-kontakt-date">' . \esc_html($date) . '</td>';
 			echo '<td>';
 			if ($public_url !== '') {
-				echo '<a href="' . \esc_url($public_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($title) . '</a>';
+				echo '<a href="' . \esc_url($public_url) . '" target="_blank" rel="noopener noreferrer" title="Beleg anzeigen">' . \esc_html($title) . '</a>';
 			} else {
 				echo \esc_html($title);
 			}
 			echo '</td>';
 			echo '<td>' . \esc_html($type) . '</td>';
+			echo '<td class="cmx-kontakt-status"><span' . ($is_overdue ? ' class="is-overdue"' : '') . '>' . \esc_html($due_label) . '</span></td>';
+			echo '<td class="cmx-kontakt-status"><span' . ($status_class !== '' ? ' class="' . \esc_attr($status_class) . '"' : '') . '>' . \esc_html($display_status) . '</span></td>';
 			echo '<td class="cmx-kontakt-amount">' . \esc_html($amount) . '</td>';
-			echo '<td class="cmx-kontakt-status"><span class="' . \esc_attr($status_class) . '">' . \esc_html($display_status) . '</span></td>';
+			echo '<td class="cmx-kontakt-pdf">';
+			if ($public_url !== '') {
+				echo '<a href="' . \esc_url($public_url) . '" class="cmx-kontakt-pdf-btn" target="_blank" rel="noopener noreferrer" title="Beleg anzeigen"><span class="cmx-kontakt-pdf-icon dashicons dashicons-media-document" aria-hidden="true"></span></a>';
+			}
+			echo '</td>';
 			if ($show_online_column) {
 				echo '<td class="cmx-kontakt-online">';
 				if ($payrexx_url !== '') {
@@ -553,6 +630,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 				}
 				echo '</td>';
 			}
+			echo '<td class="cmx-kontakt-question">';
+			if ($question_url !== '') {
+				echo '<a href="' . \esc_url($question_url) . '" class="cmx-kontakt-mail-btn" title="' . \esc_attr('Fragen zur Rechnung ' . $title) . '"><span class="cmx-kontakt-mail-icon">&#9993;</span></a>';
+			}
+			echo '</td>';
 			echo '</tr>';
 		}
 
