@@ -474,10 +474,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			$message = cmxbu_render_belegmail_mahnung_template($mail_data);
 			$mail_action_label = 'Zahlungserinnerung';
 		} else {
-			$subject = 'Rechnung erneut: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+			$subject = $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
 			if ($beleg_mail_date !== '') {
 				$subject .= ' vom ' . $beleg_mail_date;
 			}
+			$subject .= ' (erneute Zustellung)';
 			$message = cmxbu_render_belegmail_template($mail_data);
 			$mail_action_label = 'Rechnung erneut';
 		}
