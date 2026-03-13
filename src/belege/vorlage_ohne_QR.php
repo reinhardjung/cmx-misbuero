@@ -237,6 +237,7 @@ $document_due = trim((string)($tpl['document']['due'] ?? ''));
 $show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
 $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
 $payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
+$payrexx_qr_data_uri = \trim((string)($tpl['document']['payrexx_qr_data_uri'] ?? ''));
 $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
 ?>
 <!DOCTYPE html>
@@ -303,6 +304,22 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
 	.invoice-meta .cmx-payrexx-spacer td { height: 5mm; line-height: 0; font-size: 0; }
 	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
+	.invoice-meta .cmx-payrexx-box {
+		display: inline-block;
+		width: 42mm;
+		text-align: center;
+	}
+	.invoice-meta .cmx-payrexx-qr {
+		width: 42mm;
+		height: 42mm;
+		margin: 0 0 1.6mm 0;
+	}
+	.invoice-meta .cmx-payrexx-qr img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
 	.invoice-meta .cmx-payrexx-row a {
 		background: #1858a8;
 		border: 1px solid #134781;
@@ -311,18 +328,21 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		font-weight: 700;
 		letter-spacing: 0.01em;
 		padding: 2.2mm 3.6mm;
-		display: inline-block;
-		text-align: right;
+		box-sizing: border-box;
+		display: block;
+		text-align: center;
 		line-height: 1.25;
 		font-size: 10px;
 		text-decoration: none;
 		white-space: nowrap;
+		width: 42mm;
 	}
 	.invoice-meta .cmx-payrexx-note {
 		font-size: 10px;
 		line-height: 1.25;
 		margin-top: 1mm;
 		color: #4b5563;
+		width: 42mm;
 	}
 	.recipient-window {
 		position: absolute;
@@ -531,8 +551,13 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					</tr>
 					<tr class="cmx-payrexx-row">
 						<td colspan="2" class="text-right" style="border:0; padding:0;">
-							<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
-							<div class="cmx-payrexx-note">Bezahle bequem mit TWINT, Visa, Apple Pay etc.</div>
+							<div class="cmx-payrexx-box">
+								<?php if ($payrexx_qr_data_uri !== ''): ?>
+									<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
+								<?php endif; ?>
+								<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
+								<div class="cmx-payrexx-note">Bezahle bequem mit TWINT, Visa, Apple Pay etc.</div>
+							</div>
 						</td>
 					</tr>
 				<?php endif; ?>

@@ -594,6 +594,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_payrexx_contact_data')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_generate_payrexx_qr_data_uri')) {
+	function cmxbu_generate_payrexx_qr_data_uri(string $data, int $size_px = 260): string {
+		$data = \trim($data);
+		if ($data === '') {
+			return '';
+		}
+
+		$size_px = \max(120, \min(800, (int) $size_px));
+
+		try {
+			if (!\class_exists(\Endroid\QrCode\QrCode::class) || !\class_exists(\Endroid\QrCode\Writer\PngWriter::class)) {
+				return '';
+			}
+
+			$qr = \Endroid\QrCode\QrCode::create($data)
+				->setSize($size_px)
+				->setMargin(0);
+
+			$writer = new \Endroid\QrCode\Writer\PngWriter();
+			$result = $writer->write($qr);
+			$png = $result->getString();
+
+			if (!\is_string($png) || $png === '') {
+				return '';
+			}
+
+			return 'data:image/png;base64,' . \base64_encode($png);
+		} catch (\Throwable $e) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+				cmxbu_log('Payrexx-QR konnte nicht erzeugt werden', ['error' => $e->getMessage()]);
+			}
+			return '';
+		}
+	}
+}
+
 
 
 if (!function_exists(__NAMESPACE__.'\\cmxbu_get_preferred_bank')) {
@@ -1301,6 +1337,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
 		$bank_iban = trim((string)($bank['iban'] ?? ''));
 		$payrexx_vpos_url = '';
+		$payrexx_qr_data_uri = '';
 		if (
 			$beleg_type === 'rechnung'
 			&& $beleg_richtung === 'ausgang'
@@ -1321,6 +1358,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					'contact_email' => (string) ($payrexx_contact['email'] ?? ''),
 				], '', '&', \PHP_QUERY_RFC3986);
 				$payrexx_vpos_url = $payrexx_base_url . $payrexx_query;
+				if (\function_exists(__NAMESPACE__ . '\\cmxbu_generate_payrexx_qr_data_uri')) {
+					$payrexx_qr_data_uri = (string) cmxbu_generate_payrexx_qr_data_uri($payrexx_vpos_url);
+				}
 			}
 		}
 		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
@@ -1356,13 +1396,14 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'number' => $title_safe,
 				'title' => $doc_label . ' ' . $title_safe,
 				'date' => $doc_date,
-				'due' => $doc_due,
-				'currency' => $dates['currency'],
-				'period' => $dates['period'],
-				'payrexx_vpos_url' => $payrexx_vpos_url,
-				'subtotal' => $calc['subtotal'],
-				'total' => $calc['total'],
-				'manual_total' => $manual_total_value,
+					'due' => $doc_due,
+					'currency' => $dates['currency'],
+					'period' => $dates['period'],
+					'payrexx_vpos_url' => $payrexx_vpos_url,
+					'payrexx_qr_data_uri' => $payrexx_qr_data_uri,
+					'subtotal' => $calc['subtotal'],
+					'total' => $calc['total'],
+					'manual_total' => $manual_total_value,
 				'subject' => (string) get_post_meta($post_id, '_cmx_beleg_betreff', true),
 				'description' => (string) get_post_meta($post_id, '_cmx_beleg_beschreibung', true),
 			],
