@@ -62,139 +62,313 @@ function cmx_kontakte_vcard_handle(): void {
 		return;
 	}
 
-	$d = cmx_parse_single_vcard($_FILES['cmx_vcf_file']['tmp_name']);
-	if (is_wp_error($d)) {
-		cmx_kontakte_vcard_redirect($d->get_error_message());
+	$cards = cmx_parse_vcard_file($_FILES['cmx_vcf_file']['tmp_name']);
+	if (is_wp_error($cards)) {
+		cmx_kontakte_vcard_redirect($cards->get_error_message());
 		return;
 	}
-	if (CMX_VCARD_DEBUG) error_log('[VCARD parsed] '. print_r($d, true));
 
-	// --- Titel-Logik: nur ORG als Titel, sonst FN
-	$company = trim($d['company'] ?? '');
-	$first   = trim($d['first_name'] ?? '');
-	$last    = trim($d['last_name'] ?? '');
+	$total_cards = \count($cards);
+	$results = [
+		'imported' => [],
+		'updated' => [],
+		'skipped' => [],
+		'failed' => [],
+	];
+	$single_post_id = 0;
 
-	if ($company !== '') {
-		$post_title = $company;
-	} elseif (($first.$last) !== '') {
-		$post_title = trim($first . ' ' . $last);
-	} else {
-		$post_title = 'Kontakt ' . current_time('Y-m-d H:i:s');
+	foreach ($cards as $card) {
+		if (CMX_VCARD_DEBUG) error_log('[VCARD parsed] ' . print_r($card, true));
+		$result = cmx_kontakte_vcard_import_contact((array) $card);
+		if (is_wp_error($result)) {
+			$results['failed'][] = cmx_kontakte_vcard_prepare_title((array) $card);
+			continue;
+		}
+
+		$status = (string) ($result['status'] ?? '');
+		$post_id = (int) ($result['post_id'] ?? 0);
+		$label = trim((string) ($result['label'] ?? ''));
+		if ($label === '') {
+			$label = 'Kontakt #' . $post_id;
+		}
+		if (!isset($results[$status])) {
+			$results['failed'][] = $label;
+			continue;
+		}
+
+		$results[$status][] = $label;
+		if ($total_cards === 1 && $post_id > 0) {
+			$single_post_id = $post_id;
+		}
 	}
 
-	// --- NOTE in interne Notizen übernehmen
-	if (!empty($d['notes'])) {
-		update_post_meta($post_id, '_cmx_interne_notizen', wp_kses_post($d['notes']));
+	if ($results['imported'] === [] && $results['updated'] === [] && $results['skipped'] === []) {
+		cmx_kontakte_vcard_redirect($results);
+		return;
 	}
 
-	$post_id = wp_insert_post([
+	if ($total_cards === 1 && $single_post_id > 0) {
+		cmx_kontakte_vcard_redirect($results, $single_post_id);
+		return;
+	}
+
+	cmx_kontakte_vcard_redirect($results);
+}
+
+/** ---------- Helpers (Label-Slugs, Länder, Redirect, Parser) ---------- */
+
+function cmx_kontakte_vcard_import_contact(array $d) {
+	$post_title = cmx_kontakte_vcard_prepare_title($d);
+	$post_id = cmx_kontakte_vcard_find_existing_contact_id($post_title);
+
+	if ($post_id > 0) {
+		$changed = cmx_kontakte_vcard_apply_contact_data($post_id, $d, false);
+		if (\is_wp_error($changed)) {
+			return $changed;
+		}
+
+		return [
+			'status' => $changed ? 'updated' : 'skipped',
+			'post_id' => $post_id,
+			'label' => (string) \get_the_title($post_id),
+		];
+	}
+
+	$post_id = \wp_insert_post([
 		'post_type'   => 'kontakte',
 		'post_status' => 'publish',
 		'post_title'  => $post_title,
 	], true);
-	if (is_wp_error($post_id) || !$post_id) {
-		cmx_kontakte_vcard_redirect('Kontakt konnte nicht angelegt werden.');
-		return;
+	if (\is_wp_error($post_id) || !$post_id) {
+		return new \WP_Error('vcf_save', 'Kontakt konnte nicht angelegt werden.');
 	}
 
-	/** ---------------- Stammdaten (DEIN CPT) ---------------- */
-	// Vorname/Nachname (N/FN)
-	if (!empty($d['first_name'])) update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, sanitize_text_field($d['first_name']));
-	if (!empty($d['last_name']))  update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, sanitize_text_field($d['last_name']));
+	$changed = cmx_kontakte_vcard_apply_contact_data((int) $post_id, $d, true);
+	if (\is_wp_error($changed)) {
+		return $changed;
+	}
 
-	// URL
-	if (!empty($d['website']))     update_post_meta($post_id, CMX_KONTAKTE_META_URL, esc_url_raw($d['website']));
+	return [
+		'status' => 'imported',
+		'post_id' => (int) $post_id,
+		'label' => (string) \get_the_title((int) $post_id),
+	];
+}
 
-	// BDAY → YYYY-MM-DD
-	if (!empty($d['bday']))        update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, $d['bday']);
+function cmx_kontakte_vcard_prepare_title(array $d): string {
+	$company = trim((string) ($d['company'] ?? ''));
+	$first   = trim((string) ($d['first_name'] ?? ''));
+	$last    = trim((string) ($d['last_name'] ?? ''));
 
-	// OPTIONAL (heuristisch): PRIVAT = true, wenn keine ORG vorhanden
-	if (empty($d['company']))      update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT, 1);
+	if ($company !== '') {
+		return \sanitize_text_field($company);
+	} elseif (($first . $last) !== '') {
+		return \sanitize_text_field(trim($first . ' ' . $last));
+	}
 
-	/** ---------------- Kommunikation ---------------- */
-	// Term-Slugs ermitteln, die es bei Dir gibt
-	$email_label_map  = cmx_find_label_slugs(['privat','geschaeft','home','work','other'], CMX_TAX_MAIL_LABELS);
-	$phone_label_map  = cmx_find_label_slugs(['privat','geschaeft','mobile','home','work','other'], CMX_TAX_PHONE_LABELS);
+	return 'Kontakt ' . \current_time('Y-m-d H:i:s');
+}
 
-	// Emails → _cmx_email_1..3 + Bündel _cmx_kommunikation[email]
-	$bundle = get_post_meta($post_id, '_cmx_kommunikation', true);
-	if (!is_array($bundle)) $bundle = ['telefon'=>[], 'email'=>[]];
+function cmx_kontakte_vcard_find_existing_contact_id(string $post_title): int {
+	$post_title = trim($post_title);
+	if ($post_title === '') {
+		return 0;
+	}
 
-	$emails = array_slice($d['emails'] ?? [], 0, 3);
+	if (\function_exists(__NAMESPACE__ . '\\cmx_import_find_existing_kontakt_id_by_title')) {
+		return (int) \call_user_func(__NAMESPACE__ . '\\cmx_import_find_existing_kontakt_id_by_title', $post_title);
+	}
+
+	$query = new \WP_Query([
+		'post_type' => 'kontakte',
+		'post_status' => ['publish', 'draft', 'pending', 'private'],
+		'title' => $post_title,
+		'posts_per_page' => 1,
+		'fields' => 'ids',
+		'no_found_rows' => true,
+	]);
+
+	if (!empty($query->posts[0])) {
+		return (int) $query->posts[0];
+	}
+
+	return 0;
+}
+
+function cmx_kontakte_vcard_apply_contact_data(int $post_id, array $d, bool $is_new) {
+	$changed = $is_new;
+	$post_title = cmx_kontakte_vcard_prepare_title($d);
+	$current_title = (string) \get_the_title($post_id);
+	if ($post_title !== '' && $post_title !== $current_title) {
+		$updated_post_id = \wp_update_post([
+			'ID' => $post_id,
+			'post_title' => $post_title,
+		], true);
+		if (\is_wp_error($updated_post_id)) {
+			return $updated_post_id;
+		}
+		$changed = true;
+	}
+
+	$notes = \wp_kses_post((string) ($d['notes'] ?? ''));
+	if ($notes !== '') {
+		$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, '_cmx_interne_notizen', $notes) || $changed;
+	}
+
+	$first_name = \sanitize_text_field((string) ($d['first_name'] ?? ''));
+	if ($first_name !== '') {
+		$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, CMX_KONTAKTE_META_VORNAME, $first_name) || $changed;
+	}
+
+	$last_name = \sanitize_text_field((string) ($d['last_name'] ?? ''));
+	if ($last_name !== '') {
+		$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, CMX_KONTAKTE_META_NACHNAME, $last_name) || $changed;
+	}
+
+	$website = \esc_url_raw((string) ($d['website'] ?? ''));
+	if ($website !== '') {
+		$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, CMX_KONTAKTE_META_URL, $website) || $changed;
+	}
+
+	$bday = trim((string) ($d['bday'] ?? ''));
+	if ($bday !== '') {
+		$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, CMX_KONTAKTE_META_DATUM, $bday) || $changed;
+	}
+
+	$privat = empty($d['company']) ? '1' : '0';
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, CMX_KONTAKTE_META_PRIVAT, $privat) || $changed;
+
+	$email_label_map = cmx_find_label_slugs(['privat','geschaeft','home','work','other'], CMX_TAX_MAIL_LABELS);
+	$phone_label_map = cmx_find_label_slugs(['privat','geschaeft','mobile','home','work','other'], CMX_TAX_PHONE_LABELS);
+	$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+	if (!is_array($bundle)) $bundle = ['telefon' => [], 'email' => []];
+	$bundle['telefon'] = \is_array($bundle['telefon'] ?? null) ? $bundle['telefon'] : [];
+	$bundle['email'] = \is_array($bundle['email'] ?? null) ? $bundle['email'] : [];
+	$original_bundle = $bundle;
+
+	$emails = array_slice((array) ($d['emails'] ?? []), 0, 3);
 	foreach ($emails as $i => $row) {
-		$n = $i + 1;
-		$val  = sanitize_email($row['value'] ?? '');
-		$type = strtolower($row['type'] ?? 'other');
-
-		// Einzelspalte
-		update_post_meta($post_id, "_cmx_email_{$n}", $val);
-
-		// Label-Slug (Taxonomien)
-		$label = cmx_pick_slug_for_type($type, $email_label_map); // 'privat'/'geschaeft' oder 'home'/'work'
-
-		// Bündel
-		$bundle['email'][$n] = [
-			'label' => $label,
-			'value' => $val,
-			'valid' => (bool)is_email($val) ? '1' : '0',
-		];
+		$changed = cmx_kontakte_vcard_apply_email_row($post_id, $i + 1, (array) $row, $bundle, $email_label_map) || $changed;
 	}
-	// Telefone → _cmx_telefon_1..3 + Bündel _cmx_kommunikation[telefon]
-	$tels = array_slice($d['tels'] ?? [], 0, 3);
+
+	$tels = array_slice((array) ($d['tels'] ?? []), 0, 3);
 	foreach ($tels as $i => $row) {
-		$n = $i + 1;
-		$val  = sanitize_text_field($row['value'] ?? '');
-		$type = strtolower($row['type'] ?? 'other');
-
-		update_post_meta($post_id, "_cmx_telefon_{$n}", $val);
-
-		$label = cmx_pick_slug_for_type($type, $phone_label_map); // 'privat'/'geschaeft'/'mobile' …
-
-		$bundle['telefon'][$n] = [
-			'label' => $label,
-			'value' => $val,
-		];
+		$changed = cmx_kontakte_vcard_apply_phone_row($post_id, $i + 1, (array) $row, $bundle, $phone_label_map) || $changed;
 	}
-	update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 
-	/** ---------------- Adressen (1 = Rechnung, 2 = Liefer) ---------------- */
+	if ($bundle !== $original_bundle) {
+		\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+		$changed = true;
+	}
+
 	$addr1 = $d['addresses'][0] ?? null;
 	$addr2 = $d['addresses'][1] ?? null;
-
 	if ($addr1) {
-		update_post_meta($post_id, CMX_RECHNUNG_META_STRASSE, sanitize_text_field($addr1['street']  ?? ''));
-		update_post_meta($post_id, CMX_RECHNUNG_META_ZUSATZ,  ''); // vCard hat ggf. Extended → hier leer lassen oder ergänzen
-		update_post_meta($post_id, CMX_RECHNUNG_META_PLZ,     sanitize_text_field($addr1['zip']     ?? ''));
-		update_post_meta($post_id, CMX_RECHNUNG_META_ORT,     sanitize_text_field($addr1['city']    ?? ''));
-		update_post_meta($post_id, CMX_RECHNUNG_META_LAND,    cmx_normalize_country_slug($addr1['country'] ?? ''));
+		$changed = cmx_kontakte_vcard_apply_address($post_id, (array) $addr1, [
+			'street' => CMX_RECHNUNG_META_STRASSE,
+			'extended' => CMX_RECHNUNG_META_ZUSATZ,
+			'zip' => CMX_RECHNUNG_META_PLZ,
+			'city' => CMX_RECHNUNG_META_ORT,
+			'country' => CMX_RECHNUNG_META_LAND,
+		]) || $changed;
 	}
 	if ($addr2) {
-		update_post_meta($post_id, CMX_LIEFER_META_STRASSE,   sanitize_text_field($addr2['street']  ?? ''));
-		update_post_meta($post_id, CMX_LIEFER_META_ZUSATZ,    '');
-		update_post_meta($post_id, CMX_LIEFER_META_PLZ,       sanitize_text_field($addr2['zip']     ?? ''));
-		update_post_meta($post_id, CMX_LIEFER_META_ORT,       sanitize_text_field($addr2['city']    ?? ''));
-		update_post_meta($post_id, CMX_LIEFER_META_LAND,      cmx_normalize_country_slug($addr2['country'] ?? ''));
+		$changed = cmx_kontakte_vcard_apply_address($post_id, (array) $addr2, [
+			'street' => CMX_LIEFER_META_STRASSE,
+			'extended' => CMX_LIEFER_META_ZUSATZ,
+			'zip' => CMX_LIEFER_META_PLZ,
+			'city' => CMX_LIEFER_META_ORT,
+			'country' => CMX_LIEFER_META_LAND,
+		]) || $changed;
 	}
 
 	if (CMX_VCARD_DEBUG) {
-		error_log('[VCARD saved] post_id='.$post_id);
+		error_log('[VCARD saved] post_id=' . $post_id);
 		foreach ([
 			CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_URL, CMX_KONTAKTE_META_DATUM,
 			'_cmx_email_1','_cmx_email_2','_cmx_email_3',
 			'_cmx_telefon_1','_cmx_telefon_2','_cmx_telefon_3',
-			CMX_RECHNUNG_META_STRASSE, CMX_RECHNUNG_META_PLZ, CMX_RECHNUNG_META_ORT, CMX_RECHNUNG_META_LAND,
-			CMX_LIEFER_META_STRASSE, CMX_LIEFER_META_PLZ, CMX_LIEFER_META_ORT, CMX_LIEFER_META_LAND,
+			CMX_RECHNUNG_META_STRASSE, CMX_RECHNUNG_META_ZUSATZ, CMX_RECHNUNG_META_PLZ, CMX_RECHNUNG_META_ORT, CMX_RECHNUNG_META_LAND,
+			CMX_LIEFER_META_STRASSE, CMX_LIEFER_META_ZUSATZ, CMX_LIEFER_META_PLZ, CMX_LIEFER_META_ORT, CMX_LIEFER_META_LAND,
 			'_cmx_kommunikation',
 		] as $k) {
-			error_log("  meta[$k]=". print_r(get_post_meta($post_id, $k, true), true));
+			error_log("  meta[$k]=" . print_r(get_post_meta($post_id, $k, true), true));
 		}
 	}
 
-	// Redirect
-	cmx_kontakte_vcard_redirect('Import erfolgreich – Kontakt angelegt.', intval($post_id));
+	return $changed;
 }
 
-/** ---------- Helpers (Label-Slugs, Länder, Redirect, Parser) ---------- */
+function cmx_kontakte_vcard_update_meta_if_changed(int $post_id, string $meta_key, string $value): bool {
+	$current = (string) \get_post_meta($post_id, $meta_key, true);
+	if ($current === $value) {
+		return false;
+	}
+	\update_post_meta($post_id, $meta_key, $value);
+	return true;
+}
+
+function cmx_kontakte_vcard_apply_email_row(int $post_id, int $slot, array $row, array &$bundle, array $label_map): bool {
+	$val = \sanitize_email((string) ($row['value'] ?? ''));
+	if ($val === '') {
+		return false;
+	}
+
+	$type = strtolower((string) ($row['type'] ?? 'other'));
+	$label = cmx_pick_slug_for_type($type, $label_map);
+	$target_entry = [
+		'label' => $label,
+		'value' => $val,
+		'valid' => \is_email($val) ? '1' : '0',
+	];
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, "_cmx_email_{$slot}", $val);
+	$current_entry = $bundle['email'][$slot] ?? [];
+	if (!\is_array($current_entry) || $current_entry !== $target_entry) {
+		$bundle['email'][$slot] = $target_entry;
+		$changed = true;
+	}
+
+	return $changed;
+}
+
+function cmx_kontakte_vcard_apply_phone_row(int $post_id, int $slot, array $row, array &$bundle, array $label_map): bool {
+	$val = \sanitize_text_field((string) ($row['value'] ?? ''));
+	if ($val === '') {
+		return false;
+	}
+
+	$type = strtolower((string) ($row['type'] ?? 'other'));
+	$label = cmx_pick_slug_for_type($type, $label_map);
+	$target_entry = [
+		'label' => $label,
+		'value' => $val,
+	];
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, "_cmx_telefon_{$slot}", $val);
+	$current_entry = $bundle['telefon'][$slot] ?? [];
+	if (!\is_array($current_entry) || $current_entry !== $target_entry) {
+		$bundle['telefon'][$slot] = $target_entry;
+		$changed = true;
+	}
+
+	return $changed;
+}
+
+function cmx_kontakte_vcard_apply_address(int $post_id, array $address, array $meta_map): bool {
+	$changed = false;
+	$street = \sanitize_text_field((string) ($address['street'] ?? ''));
+	$extended = \sanitize_text_field((string) ($address['extended'] ?? ''));
+	$zip = \sanitize_text_field((string) ($address['zip'] ?? ''));
+	$city = \sanitize_text_field((string) ($address['city'] ?? ''));
+	$country = cmx_normalize_country_slug((string) ($address['country'] ?? ''));
+
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, $meta_map['street'], $street) || $changed;
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, $meta_map['extended'], $extended) || $changed;
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, $meta_map['zip'], $zip) || $changed;
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, $meta_map['city'], $city) || $changed;
+	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, $meta_map['country'], $country) || $changed;
+
+	return $changed;
+}
 
 /** ermittelt vorhandene Slugs aus Taxonomie in gegebener Präferenzreihenfolge */
 function cmx_find_label_slugs(array $candidates, string $taxonomy): array {
@@ -241,22 +415,99 @@ function cmx_normalize_country_slug(string $country): string {
 }
 
 /** Redirect in Edit-Ansicht oder zurück zur Liste */
-function cmx_kontakte_vcard_redirect(string $msg, ?int $post_id = null): void {
+function cmx_kontakte_vcard_redirect($notice, ?int $post_id = null): void {
+	if (\is_string($notice)) {
+		$notice = ['failed' => [trim($notice)]];
+	}
+	if (!\is_array($notice)) {
+		$notice = ['failed' => ['Der vCard-Import konnte nicht abgeschlossen werden.']];
+	}
+	\set_transient(cmx_kontakte_vcard_notice_key(), $notice, 60);
+
 	if ($post_id && $post_id > 0) {
 		$edit_url = get_edit_post_link($post_id, '');
 		if ($edit_url) {
-			$edit_url = add_query_arg(['cmx_notice' => rawurlencode($msg)], $edit_url);
+			$edit_url = add_query_arg(['cmx_vcard_notice' => 1], $edit_url);
 			wp_safe_redirect($edit_url);
 			exit;
 		}
 	}
-	$url = add_query_arg(['cmx_notice' => rawurlencode($msg)], admin_url('edit.php?post_type=kontakte'));
+	$url = add_query_arg(['cmx_vcard_notice' => 1], admin_url('edit.php?post_type=kontakte'));
 	wp_safe_redirect($url);
 	exit;
 }
 
-/** vCard-Parser (ein Kontakt) – N, FN, ORG, EMAIL, TEL, ADR, URL, NOTE, BDAY */
+add_action('all_admin_notices', function (): void {
+	if (!\is_admin() || empty($_GET['cmx_vcard_notice'])) {
+		return;
+	}
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen) {
+		return;
+	}
+	$is_kontakte_screen = ((string) ($screen->post_type ?? '') === 'kontakte')
+		&& \in_array((string) ($screen->base ?? ''), ['edit', 'post'], true);
+	if (!$is_kontakte_screen) {
+		return;
+	}
+	$notice = \get_transient(cmx_kontakte_vcard_notice_key());
+	if (!\is_array($notice)) {
+		return;
+	}
+	\delete_transient(cmx_kontakte_vcard_notice_key());
+	$lines = cmx_kontakte_vcard_notice_lines($notice);
+	if ($lines === []) {
+		return;
+	}
+	echo '<div class="notice notice-success is-dismissible">';
+	foreach ($lines as $line) {
+		echo '<p>' . wp_kses_post($line) . '</p>';
+	}
+	echo '</div>';
+});
+
+function cmx_kontakte_vcard_notice_key(): string {
+	return 'cmx_vcard_notice_kontakte_' . (int) \get_current_user_id();
+}
+
+function cmx_kontakte_vcard_notice_lines(array $notice): array {
+	$sections = [
+		'imported' => 'Importiert',
+		'updated' => 'Aktualisiert',
+		'skipped' => 'Übersprungen',
+	];
+	$lines = ['<strong>vCard-Import abgeschlossen:</strong>'];
+
+	foreach ($sections as $key => $label) {
+		$items = array_values(array_filter(array_map('trim', (array) ($notice[$key] ?? []))));
+		if ($items === []) {
+			$lines[] = '<strong>' . \esc_html($label) . ' (0):</strong> -';
+			continue;
+		}
+		$lines[] = '<strong>' . \esc_html($label) . ' (' . \count($items) . '):</strong> ' . \esc_html(implode(', ', $items));
+	}
+
+	$failed = array_values(array_filter(array_map('trim', (array) ($notice['failed'] ?? []))));
+	if ($failed !== []) {
+		$lines[] = '<strong>Fehlgeschlagen (' . \count($failed) . '):</strong> ' . \esc_html(implode(', ', $failed));
+	}
+
+	return $lines;
+}
+
 function cmx_parse_single_vcard(string $filepath) {
+	$cards = cmx_parse_vcard_file($filepath);
+	if (is_wp_error($cards)) {
+		return $cards;
+	}
+	if (\count($cards) !== 1) {
+		return new \WP_Error('vcf_count', 'Die vCard-Datei muss genau einen Kontakt enthalten.');
+	}
+	return $cards[0];
+}
+
+/** vCard-Parser (ein oder mehrere Kontakte) – Apple + Google kompatibel */
+function cmx_parse_vcard_file(string $filepath) {
 	$raw = file_get_contents($filepath);
 	if ($raw === false || $raw === '') return new \WP_Error('vcf_empty', 'vCard ist leer oder nicht lesbar.');
 
@@ -272,13 +523,49 @@ function cmx_parse_single_vcard(string $filepath) {
 			$unfolded[] = $line;
 		}
 	}
-	$begin = array_keys(array_filter($unfolded, fn($l) => strtoupper(trim($l)) === 'BEGIN:VCARD'));
-	$end   = array_keys(array_filter($unfolded, fn($l) => strtoupper(trim($l)) === 'END:VCARD'));
-	if (count($begin) !== 1 || count($end) !== 1 || ($end[0] <= $begin[0])) {
-		return new \WP_Error('vcf_count', 'Die vCard-Datei muss genau einen Kontakt enthalten.');
+	$blocks = [];
+	$current = [];
+	$inside = false;
+	foreach ($unfolded as $line) {
+		$upper = strtoupper(trim((string) $line));
+		if ($upper === 'BEGIN:VCARD') {
+			$inside = true;
+			$current = [];
+			continue;
+		}
+		if ($upper === 'END:VCARD') {
+			if ($inside && $current !== []) {
+				$blocks[] = $current;
+			}
+			$inside = false;
+			$current = [];
+			continue;
+		}
+		if ($inside) {
+			$current[] = $line;
+		}
 	}
-	$block = array_slice($unfolded, $begin[0] + 1, $end[0] - $begin[0] - 1);
 
+	if ($blocks === []) {
+		return new \WP_Error('vcf_count', 'Die vCard-Datei enthält keinen gültigen Kontakt.');
+	}
+
+	$out = [];
+	foreach ($blocks as $block) {
+		$parsed = cmx_parse_single_vcard_block($block);
+		if (\is_array($parsed)) {
+			$out[] = $parsed;
+		}
+	}
+
+	if ($out === []) {
+		return new \WP_Error('vcf_parse', 'Die vCard-Datei konnte nicht gelesen werden.');
+	}
+
+	return $out;
+}
+
+function cmx_parse_single_vcard_block(array $block): array {
 	$out = [
 		'company'    => '',
 		'first_name' => '',
@@ -290,6 +577,7 @@ function cmx_parse_single_vcard(string $filepath) {
 		'tels'       => [], // [['type'=>'home|work|mobile|other', 'value'=>'...']]
 		'addresses'  => [], // [['street','zip','city','country']]
 	];
+	$full_name = '';
 
 	foreach ($block as $line) {
 		$pos = strpos($line, ':');
@@ -301,6 +589,9 @@ function cmx_parse_single_vcard(string $filepath) {
 		$parts = explode(';', $left);
 		$prop  = strtoupper(array_shift($parts));
 		$prop  = preg_replace('/^ITEM\d+\./i', '', $prop);
+		if (strpos($prop, 'X-AB') === 0) {
+			continue;
+		}
 
 		$params = ['TYPE' => []];
 		foreach ($parts as $p) {
@@ -324,20 +615,17 @@ function cmx_parse_single_vcard(string $filepath) {
 
 		switch ($prop) {
 			case 'N': {
-				$bits = explode(';', $value);
-				if ($out['last_name']  === '') $out['last_name']  = sanitize_text_field($bits[0] ?? '');
-				if ($out['first_name'] === '') $out['first_name'] = sanitize_text_field($bits[1] ?? '');
+				$name_parts = cmx_vcard_parse_n_value($value);
+				if ($out['last_name'] === '' && $name_parts['last_name'] !== '') {
+					$out['last_name'] = sanitize_text_field($name_parts['last_name']);
+				}
+				if ($out['first_name'] === '' && $name_parts['first_name'] !== '') {
+					$out['first_name'] = sanitize_text_field($name_parts['first_name']);
+				}
 				break;
 			}
 			case 'FN': {
-				if ($out['first_name'] === '' && $out['last_name'] === '') {
-					$fn = trim($value);
-					if ($fn !== '') {
-						$names = preg_split('/\s+/', $fn);
-						$out['first_name'] = sanitize_text_field(array_shift($names) ?? '');
-						$out['last_name']  = sanitize_text_field(implode(' ', $names));
-					}
-				}
+				$full_name = trim((string) $value);
 				break;
 			}
 			case 'ORG':
@@ -381,15 +669,20 @@ function cmx_parse_single_vcard(string $filepath) {
 
 			case 'ADR': {
 				// ADR: PO Box;Extended;Street;City;Region;PostalCode;Country
-				$adr = explode(';', $value);
-				$street  = trim($adr[2] ?? '');
-				$city    = trim($adr[3] ?? '');
-				$zip     = trim($adr[5] ?? '');
-				$country = trim($adr[6] ?? '');
-				if ($street !== '' || $zip !== '' || $city !== '' || $country !== '') {
+				$adr = \array_pad(\explode(';', $value), 7, '');
+				$extended = trim((string) ($adr[1] ?? ''));
+				$street = trim((string) ($adr[2] ?? ''));
+				$street_full = trim(implode("\n", array_values(array_filter([$extended, $street], static function(string $v): bool {
+					return $v !== '';
+				}))));
+				$city = trim((string) ($adr[3] ?? ''));
+				$zip = trim((string) ($adr[5] ?? ''));
+				$country = trim((string) ($adr[6] ?? ''));
+				if ($street_full !== '' || $zip !== '' || $city !== '' || $country !== '') {
 					if (count($out['addresses']) < 2) {
 						$out['addresses'][] = [
-							'street'  => sanitize_text_field($street),
+							'street'  => sanitize_text_field($street_full),
+							'extended'=> sanitize_text_field($extended),
 							'zip'     => sanitize_text_field($zip),
 							'city'    => sanitize_text_field($city),
 							'country' => sanitize_text_field($country),
@@ -401,11 +694,71 @@ function cmx_parse_single_vcard(string $filepath) {
 		}
 	}
 
+	if ($full_name !== '') {
+		$fn_parts = cmx_vcard_parse_fn_value($full_name);
+		if ($out['first_name'] === '' && $fn_parts['first_name'] !== '') {
+			$out['first_name'] = sanitize_text_field($fn_parts['first_name']);
+		}
+		if ($out['last_name'] === '' && $fn_parts['last_name'] !== '') {
+			$out['last_name'] = sanitize_text_field($fn_parts['last_name']);
+		}
+	}
+
 	// Begrenzen
 	if (count($out['emails']) > 3)    $out['emails']    = array_slice($out['emails'], 0, 3);
 	if (count($out['addresses']) > 2) $out['addresses'] = array_slice($out['addresses'], 0, 2);
 
 	return $out;
+}
+
+function cmx_vcard_parse_n_value(string $value): array {
+	$bits = \array_pad(\explode(';', $value), 5, '');
+	$family = cmx_vcard_clean_name_part((string) ($bits[0] ?? ''));
+	$given = cmx_vcard_clean_name_part((string) ($bits[1] ?? ''));
+	$additional = cmx_vcard_clean_name_part((string) ($bits[2] ?? ''));
+	$first = trim(implode(' ', array_values(array_filter([$given, $additional], static function(string $v): bool {
+		return $v !== '';
+	}))));
+
+	return [
+		'first_name' => $first,
+		'last_name'  => $family,
+	];
+}
+
+function cmx_vcard_parse_fn_value(string $value): array {
+	$full = cmx_vcard_clean_name_part($value);
+	if ($full === '') {
+		return ['first_name' => '', 'last_name' => ''];
+	}
+
+	$parts = \preg_split('/\s+/u', $full) ?: [];
+	if (\count($parts) <= 1) {
+		return ['first_name' => $full, 'last_name' => ''];
+	}
+
+	$last_part = (string) \end($parts);
+	if (\count($parts) === 2 && cmx_vcard_is_initial_token($last_part)) {
+		return ['first_name' => $full, 'last_name' => ''];
+	}
+
+	$last_name = (string) \array_pop($parts);
+	$first_name = \trim(\implode(' ', $parts));
+
+	return [
+		'first_name' => $first_name,
+		'last_name'  => $last_name,
+	];
+}
+
+function cmx_vcard_clean_name_part(string $value): string {
+	$value = \trim((string) \preg_replace('/\s+/u', ' ', $value));
+	return $value;
+}
+
+function cmx_vcard_is_initial_token(string $value): bool {
+	$value = \trim($value);
+	return $value !== '' && (bool) \preg_match('/^[[:alpha:]]\.$/u', $value);
 }
 
 /** Value-Decoding (Quoted-Printable/Charset) + vCard-Unescapes */
