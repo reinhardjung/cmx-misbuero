@@ -241,6 +241,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_instanz')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_terminal_id')) {
+	function cmx_get_payrexx_terminal_id(): string {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		$value = $options['payrexx_terminal_id'] ?? '';
+		return \is_scalar($value) ? (string) $value : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_instanz_slug')) {
 	function cmx_get_payrexx_instanz_slug(): string {
 		$value = \trim(cmx_get_payrexx_instanz());
@@ -275,7 +283,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_payrexx_instanz_field')) {
 		$value = \esc_attr(cmx_get_payrexx_instanz());
 		echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[payrexx_instanz]" value="' . $value . '" placeholder="Name-Deiner-Instanz">';
 		echo '<span style="margin-left:8px;">Der "Name-Deiner-Instanz" ist in der Regel Dein Firmenname</span>';
-		echo '<p class="description">Wenn Du im Payrexx korrekt angemeldet bist, siehst Du in der URL (<i>der Adressleiste im Browser</i>) <br><strong>https://<code>Name-Deiner-Instanz</code>.payrexx.com/...</strong></p>';
+		echo '<p class="description">Wenn Du im Payrexx korrekt angemeldet bist, siehst Du in der URL (<i>der Adressleiste im Browser</i>)<br><strong>https://<code>Name-Deiner-Instanz</code>.payrexx.com/...</strong></p>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_payrexx_terminal_id_field')) {
+	function cmx_render_payrexx_terminal_id_field(): void {
+		$value = \esc_attr(cmx_get_payrexx_terminal_id());
+		echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[payrexx_terminal_id]" value="' . $value . '" placeholder="Terminal-ID">';
+		echo '<p class="description">Die <code>Terminal-ID</code> findest Du im linken Payrexx-Menü unter:<br><code>ADMIN → Einstellungen → Look & Feel</code></p>';
 	}
 }
 
@@ -363,6 +379,14 @@ function cmx_register_banken_tab(): void {
 		'cmx_sec_payrexx'
 	);
 
+	\add_settings_field(
+		'payrexx_terminal_id',
+		'Terminal-ID',
+		__NAMESPACE__ . '\\cmx_render_payrexx_terminal_id_field',
+		'cmx_tab_banken',
+		'cmx_sec_payrexx'
+	);
+
 	\add_settings_section(
 		'cmx_sec_banken',
 		__('Finanzinstitut', 'default'),
@@ -385,6 +409,9 @@ function cmx_register_banken_tab(): void {
 	}
 	if (\array_key_exists('payrexx_instanz', $new)) {
 		$new['payrexx_instanz'] = \sanitize_text_field((string) $new['payrexx_instanz']);
+	}
+	if (\array_key_exists('payrexx_terminal_id', $new)) {
+		$new['payrexx_terminal_id'] = \sanitize_text_field((string) $new['payrexx_terminal_id']);
 	}
 	return $new;
 }, 20, 2);
