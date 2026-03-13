@@ -101,15 +101,14 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 		$docs = array_values(array_filter(array_map('intval', $docs)));
 	}
 
-	$upload_hint = $is_scanner ? 'PDF, PNG, JPG, CSV, XML' : 'PDF, PNG, JPG, CSV';
+	$upload_hint = 'PDF, PNG, JPG, CSV, XML';
 	$upload_accept = $is_scanner ? '.pdf,.png,.jpg,.jpeg,.csv,.xml' : '.pdf,.png,.jpg,.jpeg';
 
 	echo '<div id="cmx-dokumente-upload-box">';
 	echo '<label for="cmx-dokumente-file" id="cmx-dokumente-drop" style="display:block;border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
-	echo '<strong>Datei hier ablegen</strong><br><small>' . \esc_html($upload_hint) . '</small>';
+	echo '<strong>Datei hier ablegen oder auswählen</strong><br><small>' . \esc_html($upload_hint) . '</small>';
 	echo '</label>';
 	echo '<input type="file" id="cmx-dokumente-file" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;" multiple accept="' . \esc_attr($upload_accept) . '">';
-	echo '<label for="cmx-dokumente-file" class="button" style="display:block;margin-top:8px;text-align:center;">Datei auswaehlen</label>';
 	echo '<div id="cmx-dokumente-list" style="margin-top:8px;max-height:160px;overflow:auto;"></div>';
 	echo '</div>';
 

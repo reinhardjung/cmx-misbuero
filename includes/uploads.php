@@ -206,7 +206,7 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 
 	echo '<div id="cmx-belege-upload-box">';
 	echo '<div id="cmx-belege-drop" style="border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
-	echo '<strong>Datei hier ablegen</strong><br><small>PDF, PNG, JPG, CSV</small>';
+	echo '<strong>Datei hier ablegen oder auswählen</strong><br><small>PDF, PNG, JPG, CSV, XML</small>';
 	echo '</div>';
 	echo '<input type="file" id="cmx-belege-file" style="display:none" accept=".pdf,.png,.jpg,.jpeg">';
 	echo '</div>';
