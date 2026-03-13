@@ -165,6 +165,37 @@ if (!$is_lieferantenrechnung) {
 	}
 }
 $show_mwst_footer_group = ($mwst_note_html !== '' && $footer_html !== '');
+$position_numbers = [];
+$position_row_classes = [];
+$position_row_indices = [];
+$position_display_no = 0;
+$zebra_block_pos = 0;
+$closing_start_index = -1;
+foreach ($positions as $idx => $row) {
+	$row_type = (string)($row['row_type'] ?? 'position');
+	if ($row_type === 'abschnitt') {
+		$zebra_block_pos = 0;
+		continue;
+	}
+	$position_display_no++;
+	$zebra_block_pos++;
+	$position_numbers[$idx] = $position_display_no;
+	$position_row_classes[$idx] = ($zebra_block_pos % 2 === 0) ? 'cmx-pdf-pos-even' : '';
+	$position_row_indices[] = $idx;
+}
+$position_row_count = count($position_row_indices);
+if ($position_row_count > 0) {
+	$closing_start_index = $position_row_indices[$position_row_count - 1];
+	while ($closing_start_index > 0) {
+		$prev_index = $closing_start_index - 1;
+		$prev_row_type = (string)(($positions[$prev_index]['row_type'] ?? 'position'));
+		if ($prev_row_type !== 'abschnitt') {
+			break;
+		}
+		$closing_start_index = $prev_index;
+	}
+}
+$use_closing_group = ($show_mwst_footer_group && !$is_lieferschein && $closing_start_index >= 0);
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
 if ($sender_country_code === '') $sender_country_code = 'CH';
@@ -415,14 +446,32 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		height: 0;
 		border-top: 1px solid #999;
 	}
-	.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
-	.positions-table tbody tr { border-bottom: 1px solid #777; }
+		.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
+		.positions-table.cmx-pdf-closing-table {
+			margin-top: 0;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.positions-table tbody tr { border-bottom: 1px solid #777; }
 .positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
 		.positions-table tbody tr.cmx-pdf-pos-even { background: #f3f3f3; }
 		.positions-table tbody tr.cmx-pdf-pos-even td.col-qty,
 		.positions-table tbody tr.cmx-pdf-pos-even td.col-unit { background: #f3f3f3; }
-	.positions-table tbody td { vertical-align: top; }
-	.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
+		.positions-table tbody td { vertical-align: top; }
+		.positions-table tbody.cmx-pdf-closing-group,
+		.positions-table tbody.cmx-pdf-closing-group tr,
+		.positions-table tbody.cmx-pdf-closing-group td {
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.positions-table tbody.cmx-pdf-closing-group tr.cmx-pdf-closing-summary-row {
+			border-bottom: 0 !important;
+		}
+		.positions-table tbody.cmx-pdf-closing-group td.cmx-pdf-closing-summary-cell {
+			padding: 10px 0 0 0;
+			border: 0 !important;
+		}
+		.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
 	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
 		font-weight: 600;
 		border-top: 1px solid #999;
@@ -496,26 +545,30 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		page-break-inside: avoid;
 		break-inside: avoid;
 	}
-	.mwst-footer-group tr,
-	.mwst-footer-group td {
-		border: 0;
-		padding: 0;
-		page-break-inside: avoid;
-		break-inside: avoid;
-	}
+		.mwst-footer-group tr,
+		.mwst-footer-group td {
+			border: 0 !important;
+			padding: 0;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
 	.mwst-footer-group .mwst-note {
 		margin-top: 0;
 	}
-	.footer-inline {
-		position: static;
-		left: auto;
-		right: auto;
-		bottom: auto;
-		margin-top: 20px;
-		page-break-inside: avoid;
-		break-inside: avoid;
-	}
-	.clear { clear: both; }
+		.footer-inline {
+			position: static;
+			left: auto;
+			right: auto;
+			bottom: auto;
+			margin-top: 20px;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.cmx-pdf-closing-summary {
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.clear { clear: both; }
 	.text-right { text-align: right; }
 	.logo-link { text-decoration: none; }
 </style>
@@ -691,18 +744,17 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					<?php endif; ?>
 				</tr>
 			</thead>
-			<tbody>
-			<?php if (empty($positions)): ?>
-				<tr>
-					<td colspan="<?= $col_count; ?>">—</td>
-				</tr>
+				<tbody>
+				<?php if (empty($positions)): ?>
+					<tr>
+						<td colspan="<?= $col_count; ?>">—</td>
+					</tr>
 				<?php else: ?>
-					<?php
-					$pos_no = 0;
-					$zebra_block_pos = 0;
-					?>
 					<?php foreach ($positions as $i => $row): ?>
 						<?php
+						if ($use_closing_group && $i >= $closing_start_index) {
+							continue;
+						}
 						$row_type = (string)($row['row_type'] ?? 'position');
 						if ($row_type === 'abschnitt') {
 							$section_title = (string)($row['section_title'] ?? '');
@@ -718,57 +770,55 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 										<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
 									<?php endif; ?>
 								</td>
-								</tr>
-								<?php
-								$zebra_block_pos = 0;
-								continue;
-							}
-							$pos_no++;
-							$zebra_block_pos++;
-							$qty = (float)($row['qty'] ?? 0);
-							$unit = (string)($row['unit'] ?? '');
-							$unit_price = (float)($row['unit_price'] ?? 0);
-					$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
-					$line_subtotal = $qty * $unit_price;
-					$line_discount = $line_subtotal - $line_total;
-					$item = (string)($row['item'] ?? '');
-					$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+							</tr>
+							<?php continue; ?>
+						<?php }
+						$pos_no = (int)($position_numbers[$i] ?? 0);
+						$qty = (float)($row['qty'] ?? 0);
+						$unit = (string)($row['unit'] ?? '');
+						$unit_price = (float)($row['unit_price'] ?? 0);
+						$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+						$line_subtotal = $qty * $unit_price;
+						$line_discount = $line_subtotal - $line_total;
+						$item = (string)($row['item'] ?? '');
+						$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
 						$desc_html = (string)($row['desc_html'] ?? '');
 						$sku = (string)($row['article_number'] ?? '');
 						$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
-						$row_class = ($zebra_block_pos % 2 === 0) ? ' class="cmx-pdf-pos-even"' : '';
+						$row_class_name = (string)($position_row_classes[$i] ?? '');
+						$row_class = $row_class_name !== '' ? ' class="' . $row_class_name . '"' : '';
 						?>
-							<tr<?= $row_class; ?>>
+						<tr<?= $row_class; ?>>
 							<?php if ($show_position_index): ?>
 								<td class="col-pos"><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
 							<?php endif; ?>
-						<?php if ($show_sku): ?>
-							<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
-						<?php endif; ?>
-						<td>
-							<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
-							<?php if ($desc_html !== ''): ?>
-								<?= $desc_html; ?>
-							<?php else: ?>
-								<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+							<?php if ($show_sku): ?>
+								<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 							<?php endif; ?>
-						</td>
-						<td class="text-right col-qty">
+							<td>
+								<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
+								<?php if ($desc_html !== ''): ?>
+									<?= $desc_html; ?>
+								<?php else: ?>
+									<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+								<?php endif; ?>
+							</td>
+							<td class="text-right col-qty">
+								<?php if ($show_unit_column): ?>
+									<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
+								<?php else: ?>
+									<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+								<?php endif; ?>
+							</td>
 							<?php if ($show_unit_column): ?>
-								<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
-							<?php else: ?>
-								<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+								<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
 							<?php endif; ?>
-						</td>
-						<?php if ($show_unit_column): ?>
-							<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
-						<?php endif; ?>
-						<?php if ($show_unit_price): ?>
-							<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
-						<?php endif; ?>
-						<?php if ($show_discount): ?>
-							<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
-						<?php endif; ?>
+							<?php if ($show_unit_price): ?>
+								<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+							<?php if ($show_discount): ?>
+								<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
 							<?php if ($show_line_total): ?>
 								<td class="text-right col-line-total"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
 							<?php endif; ?>
@@ -776,11 +826,221 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					<?php endforeach; ?>
 				<?php endif; ?>
 				</tbody>
+				<?php if ($use_closing_group): ?>
+				</table>
+				<table class="positions-table cmx-pdf-closing-table">
+					<thead>
+						<tr>
+							<?php if ($show_position_index): ?>
+								<th class="col-pos">Pos.</th>
+							<?php endif; ?>
+							<?php if ($show_sku): ?>
+								<th class="col-sku">SKU</th>
+							<?php endif; ?>
+							<th>Artikel</th>
+							<th class="col-num col-qty">
+								<?php if ($show_unit_column): ?>
+									<span class="cmx-pdf-shift-qty">Menge</span>
+								<?php else: ?>
+									Menge
+								<?php endif; ?>
+							</th>
+							<?php if ($show_unit_column): ?>
+								<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
+							<?php endif; ?>
+							<?php if ($show_unit_price): ?>
+								<th class="col-num col-unit-price">Einzelpreis</th>
+							<?php endif; ?>
+							<?php if ($show_discount): ?>
+								<th class="col-num">Rabatt</th>
+							<?php endif; ?>
+							<?php if ($show_line_total): ?>
+								<th class="col-num col-line-total">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+							<?php endif; ?>
+						</tr>
+					</thead>
+					<tbody class="cmx-pdf-closing-group">
+						<?php for ($i = $closing_start_index; $i < count($positions); $i++): ?>
+							<?php
+							$row = (array)$positions[$i];
+							$row_type = (string)($row['row_type'] ?? 'position');
+							if ($row_type === 'abschnitt') {
+								$section_title = (string)($row['section_title'] ?? '');
+								$section_text = (string)($row['section_text'] ?? '');
+								$section_text_html = (string)($row['section_text_html'] ?? '');
+								?>
+								<tr class="cmx-pdf-abschnitt-row">
+									<td colspan="<?= $col_count; ?>"><br>
+										<?= htmlspecialchars($section_title, ENT_QUOTES, 'UTF-8'); ?>
+										<?php if ($section_text_html !== ''): ?>
+											<span class="cmx-pdf-abschnitt-text"><?= $section_text_html; ?></span>
+										<?php elseif ($section_text !== ''): ?>
+											<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
+										<?php endif; ?>
+									</td>
+								</tr>
+								<?php continue; ?>
+							<?php }
+							$pos_no = (int)($position_numbers[$i] ?? 0);
+							$qty = (float)($row['qty'] ?? 0);
+							$unit = (string)($row['unit'] ?? '');
+							$unit_price = (float)($row['unit_price'] ?? 0);
+							$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+							$line_subtotal = $qty * $unit_price;
+							$line_discount = $line_subtotal - $line_total;
+							$item = (string)($row['item'] ?? '');
+							$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+							$desc_html = (string)($row['desc_html'] ?? '');
+							$sku = (string)($row['article_number'] ?? '');
+							$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
+							$row_class_name = (string)($position_row_classes[$i] ?? '');
+							$row_class = $row_class_name !== '' ? ' class="' . $row_class_name . '"' : '';
+							?>
+							<tr<?= $row_class; ?>>
+								<?php if ($show_position_index): ?>
+									<td class="col-pos"><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
+								<?php endif; ?>
+								<?php if ($show_sku): ?>
+									<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+								<?php endif; ?>
+								<td>
+									<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
+									<?php if ($desc_html !== ''): ?>
+										<?= $desc_html; ?>
+									<?php else: ?>
+										<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+									<?php endif; ?>
+								</td>
+								<td class="text-right col-qty">
+									<?php if ($show_unit_column): ?>
+										<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
+									<?php else: ?>
+										<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+									<?php endif; ?>
+								</td>
+								<?php if ($show_unit_column): ?>
+									<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
+								<?php endif; ?>
+								<?php if ($show_unit_price): ?>
+									<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+								<?php endif; ?>
+								<?php if ($show_discount): ?>
+									<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+								<?php endif; ?>
+								<?php if ($show_line_total): ?>
+									<td class="text-right col-line-total"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+								<?php endif; ?>
+							</tr>
+						<?php endfor; ?>
+						<tr class="cmx-pdf-closing-summary-row">
+							<td colspan="<?= $col_count; ?>" class="cmx-pdf-closing-summary-cell">
+								<div class="cmx-pdf-closing-summary">
+									<table class="totals-table" border="0">
+										<?php
+										$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+										$show_mwst_row = ($mwst_rate > 0.0);
+										if ($show_mwst_row) {
+											$round_5rp = static function(float $amount): float {
+												if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
+												return round($amount * 20) / 20;
+											};
+											$totals['total'] = $round_5rp((float)($totals['total'] ?? 0.0));
+										}
+										$mwst_amount = round((float)($totals['tax_amount'] ?? 0), 2);
+										$mwst_rate_pct = $mwst_rate * 100;
+										$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+										$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
+											&& $tpl['document']['manual_total'] !== null
+											&& $tpl['document']['manual_total'] !== '';
+										if (!isset($subtotal_value)) {
+											$subtotal_value = $has_positions
+												? (float)$positions_sum
+												: ($manual_total_defined
+													? (float)$tpl['document']['manual_total']
+													: (float)($totals['subtotal'] ?? 0));
+										}
+										$show_subtotal_row = $show_mwst_row;
+										?>
+										<?php if ($show_subtotal_row): ?>
+											<tr>
+												<td colspan="<?= $col_count; ?>" class="text-right">
+													Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?>
+												</td>
+											</tr>
+										<?php endif; ?>
+										<?php if ($show_mwst_row): ?>
+											<tr>
+												<td colspan="<?= $col_count; ?>" class="text-right">
+													<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
+													<?= $mwst_label; ?>
+													<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
+												</td>
+											</tr>
+										<?php endif; ?>
+										<tr class="total-row">
+											<td colspan="<?= $col_count; ?>" class="text-right">
+												<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
+											</td>
+										</tr>
+									</table>
+									<?php if (!$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+										<?php
+										$anz_base_total = (float)($totals['total'] ?? 0);
+										$anzahlungen_sum = 0.0;
+										foreach ($tpl['anzahlungen'] as $row) {
+											$anz_amount_raw = (string)($row['betrag'] ?? 0);
+											$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+											$anzahlungen_sum += $anz_amount;
+										}
+										$offen_betrag = $anz_base_total - $anzahlungen_sum;
+										?>
+										<div style="margin-top:16px;text-align:right;">
+											<em>Bereits erhaltene Zahlungen</em>
+											<table style="width:200px; border-collapse:collapse; margin-top:4px; margin-left:auto;">
+												<?php foreach ($tpl['anzahlungen'] as $row): ?>
+													<?php
+													$anz_date = trim((string)($row['datum'] ?? ''));
+													$anz_amount_raw = (string)($row['betrag'] ?? 0);
+													$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+													if ($anz_date === '') continue;
+													$anz_date_fmt = date('d.m.Y', strtotime($anz_date));
+													?>
+													<tr>
+														<td style="padding:0 0 2px 0; text-align:right;"><?= htmlspecialchars($anz_date_fmt, ENT_QUOTES, 'UTF-8'); ?></td>
+														<td style="padding:0 0 2px 12px; text-align:right;"><?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></td>
+													</tr>
+												<?php endforeach; ?>
+											</table>
+											<div>- <?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
+											<?php
+											$offen_fmt = $__fmt_num($offen_betrag);
+											if (str_starts_with($offen_fmt, '-')) {
+												$offen_fmt = '- ' . ltrim($offen_fmt, '-');
+											}
+											?>
+											<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($offen_fmt, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+										</div>
+									<?php endif; ?>
+									<table class="mwst-footer-group" role="presentation">
+										<tr>
+											<td>
+												<div class="mwst-note"><?= $mwst_note_html; ?></div>
+												<div class="footer footer-inline">
+													<?= $footer_html; ?>
+												</div>
+											</td>
+										</tr>
+									</table>
+								</div>
+							</td>
+						</tr>
+					</tbody>
+				<?php endif; ?>
 			</table>
 		<?php endif; ?>
 	</div>
 
-			<?php if (!$is_lieferschein): ?>
+				<?php if (!$use_closing_group && !$is_lieferschein): ?>
 				<table class="totals-table" border="0">
 					<?php
 					$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
@@ -835,7 +1095,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 
 			<?php endif; ?>
 
-		<?php if (!$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+		<?php if (!$use_closing_group && !$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
 		$anz_base_total = (float)($totals['total'] ?? 0);
 		$anzahlungen_sum = 0.0;
@@ -876,7 +1136,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 
 	<div class="clear"></div>
 
-	<?php if ($show_mwst_footer_group): ?>
+	<?php if (!$use_closing_group && $show_mwst_footer_group): ?>
 		<table class="mwst-footer-group" role="presentation">
 			<tr>
 				<td>
@@ -887,7 +1147,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 				</td>
 			</tr>
 		</table>
-	<?php elseif ($footer_html !== ''): ?>
+	<?php elseif (!$use_closing_group && $footer_html !== ''): ?>
 		<div class="footer">
 			<?= $footer_html; ?>
 		</div>
