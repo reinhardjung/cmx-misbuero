@@ -57,11 +57,19 @@ add_action('add_meta_boxes', function() {
 			$send_href = '';
 			$download_url = '';
 			$has_pdf = false;
+			$send_tooltip = 'PDF-Link per Mail versendern';
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
 				[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
 				$has_pdf = is_file($pdf_abs_path);
 				if ($has_pdf) {
 					$send_href = esc_url(admin_url('admin-post.php?action=cmxbu_beleg_send&post_id='.(int)$post->ID));
+					$kontakt_id = (int) get_post_meta((int) $post->ID, '_cmx_beleg_kontakt_id', true);
+					if ($kontakt_id > 0) {
+						$recipient_mail = \sanitize_email((string) get_post_meta($kontakt_id, '_cmx_email_1', true));
+						if (\is_email($recipient_mail)) {
+							$send_tooltip .= ' an: ' . $recipient_mail;
+						}
+					}
 					if (function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token')) {
 						$token = cmxbu_get_stable_token($post->ID);
 						$download_url = esc_url(add_query_arg('beleg', $token, home_url('/')));
@@ -104,7 +112,7 @@ add_action('add_meta_boxes', function() {
 				esc_attr($btn_label)
 			);
 			if ($is_belege && $send_href !== '') {
-				echo '<a href="'.$send_href.'" title="PDF-Link per Mail versenden" class="button button-secondary" style="height:36px; display:inline-flex; align-items:center; justify-content:center;"><span class="dashicons dashicons-email" style="margin-top:2px;"></span></a>';
+				echo '<a href="'.$send_href.'" title="' . esc_attr($send_tooltip) . '" class="button button-secondary" style="height:36px; display:inline-flex; align-items:center; justify-content:center;"><span class="dashicons dashicons-email" style="margin-top:2px;"></span></a>';
 			}
 			echo '</div>';
 			echo '</div>';
