@@ -57,7 +57,7 @@ function cmx_import_find_existing_kontakt_id_by_title(string $title): int {
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
 		<h2>Kontakte Import</h2>
-		<p>Wähle Deine Mis Büro <code>CSV-Datei</code> aus, welche Du zuvor exportiert hast.</p>
+		<p>Wähle Deine Mis Büro <code>CSV- oder ZIP-Datei</code> aus, welche Du zuvor exportiert hast.</p>
 		<p><code>DEMO-Daten</code> <a href="https://misbuero.ch/wp-content/uploads/demo_kontakte.csv">https://misbuero.ch/wp-content/uploads/demo_kontakte.csv</a> runterladen (danach diese CSV-Datei auswählen zum importieren)</p>
 		<form method="post" enctype="multipart/form-data" action="">
 			<?php \wp_nonce_field('cmx_kontakte_import'); ?>
@@ -74,8 +74,8 @@ function cmx_import_find_existing_kontakt_id_by_title(string $title): int {
 							</td>
 						</tr>
 						<tr>
-							<th scope="row"><label for="cmx_csv_file">CSV-Datei</label></th>
-							<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv" required></td>
+							<th scope="row"><label for="cmx_csv_file">CSV- oder ZIP-Datei</label></th>
+							<td><input type="file" id="cmx_csv_file" name="csv_file" accept=".csv,.zip" required></td>
 						</tr>
 					</tbody>
 				</table>
@@ -176,6 +176,143 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 	}
 }
 
+function cmx_kontakte_import_cleanup_dir(string $dir): void {
+	$dir = \wp_normalize_path($dir);
+	if ($dir === '' || !\is_dir($dir)) {
+		return;
+	}
+
+	$items = \scandir($dir);
+	if (!\is_array($items)) {
+		@rmdir($dir);
+		return;
+	}
+
+	foreach ($items as $item) {
+		if ($item === '.' || $item === '..') continue;
+		$path = \wp_normalize_path($dir . '/' . $item);
+		if (\is_dir($path)) {
+			cmx_kontakte_import_cleanup_dir($path);
+		} elseif (\is_file($path)) {
+			@unlink($path);
+		}
+	}
+
+	@rmdir($dir);
+}
+
+function cmx_kontakte_import_extract_zip(string $zip_file) {
+	if (!\class_exists('\\ZipArchive')) {
+		return new \WP_Error('zip_missing', 'ZIP-Import nicht verfügbar (ZipArchive fehlt).');
+	}
+
+	$tmpDir = \function_exists('\\wp_tempnam') ? \wp_tempnam('cmx-kontakte-import-') : \tempnam(\sys_get_temp_dir(), 'cmx-kontakte-import-');
+	if (!$tmpDir) {
+		return new \WP_Error('zip_temp', 'Temporärer Import-Ordner konnte nicht erstellt werden.');
+	}
+	if (\is_file($tmpDir)) {
+		@unlink($tmpDir);
+	}
+	if (!\wp_mkdir_p($tmpDir)) {
+		return new \WP_Error('zip_temp', 'Temporärer Import-Ordner konnte nicht erstellt werden.');
+	}
+
+	$zip = new \ZipArchive();
+	if ($zip->open($zip_file) !== true) {
+		cmx_kontakte_import_cleanup_dir($tmpDir);
+		return new \WP_Error('zip_open', 'ZIP-Datei konnte nicht geöffnet werden.');
+	}
+	if (!$zip->extractTo($tmpDir)) {
+		$zip->close();
+		cmx_kontakte_import_cleanup_dir($tmpDir);
+		return new \WP_Error('zip_extract', 'ZIP-Datei konnte nicht entpackt werden.');
+	}
+	$zip->close();
+
+	$csvPath = '';
+	$imageMap = [];
+	$iterator = new \RecursiveIteratorIterator(
+		new \RecursiveDirectoryIterator($tmpDir, \FilesystemIterator::SKIP_DOTS)
+	);
+	foreach ($iterator as $fileInfo) {
+		if (!$fileInfo instanceof \SplFileInfo || !$fileInfo->isFile()) continue;
+		$path = \wp_normalize_path($fileInfo->getPathname());
+		$rel = \ltrim(\str_replace('\\', '/', (string) \substr($path, \strlen(\wp_normalize_path($tmpDir)))), '/');
+		$ext = \strtolower((string) $fileInfo->getExtension());
+		if ($ext === 'csv' && $csvPath === '') {
+			$csvPath = $path;
+		}
+		if (\in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'ico'], true)) {
+			$imageMap[$rel] = $path;
+			$base = \basename($rel);
+			if (!isset($imageMap[$base])) {
+				$imageMap[$base] = $path;
+			}
+		}
+	}
+
+	if ($csvPath === '') {
+		cmx_kontakte_import_cleanup_dir($tmpDir);
+		return new \WP_Error('zip_csv_missing', 'In der ZIP wurde keine CSV-Datei gefunden.');
+	}
+
+	return [
+		'csv_path' => $csvPath,
+		'image_map' => $imageMap,
+		'extract_dir' => $tmpDir,
+	];
+}
+
+function cmx_kontakte_import_copy_logo_file_to_contact(int $post_id, string $source_path): bool {
+	$source_path = \wp_normalize_path(\trim($source_path));
+	if ($source_path === '' || !\is_readable($source_path) || !\is_file($source_path)) {
+		return false;
+	}
+
+	$base_dir = cmx_local_base_path();
+	if (!\is_dir($base_dir) && !\wp_mkdir_p($base_dir)) {
+		return false;
+	}
+
+	$basename = 'kontakt-' . (int) $post_id . '-' . \basename($source_path);
+	$target = \wp_normalize_path(\trailingslashit($base_dir) . $basename);
+	if (!@copy($source_path, $target)) {
+		return false;
+	}
+
+	@chmod($target, 0644);
+	$version = @filemtime($target) ?: time();
+	$base_url = cmx_local_base_url();
+	$url_out = \trailingslashit($base_url) . \rawurlencode($basename) . '?v=' . $version;
+	\update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
+	\update_post_meta($post_id, '_cmx_local_image_kontakte_url', $url_out);
+	return true;
+}
+
+function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, array $zip_image_map = []): void {
+	$logo_zip_path = isset($row['logo_zip_path']) ? \trim((string) $row['logo_zip_path']) : (isset($row_l['logo_zip_path']) ? \trim((string) $row_l['logo_zip_path']) : '');
+	if ($logo_zip_path !== '') {
+		$normalized = \ltrim(\str_replace('\\', '/', $logo_zip_path), '/');
+		$zip_source = $zip_image_map[$normalized] ?? $zip_image_map[\basename($normalized)] ?? '';
+		if ($zip_source !== '' && cmx_kontakte_import_copy_logo_file_to_contact($post_id, (string) $zip_source)) {
+			return;
+		}
+	}
+
+	$logo_url  = isset($row['logo_url'])  ? \trim((string)$row['logo_url'])  : (isset($row_l['logo_url'])  ? \trim((string)$row_l['logo_url'])  : '');
+	$logo_path = isset($row['logo_path']) ? \trim((string)$row['logo_path']) : (isset($row_l['logo_path']) ? \trim((string)$row_l['logo_path']) : '');
+	if ($logo_url !== '' && \function_exists(__NAMESPACE__.'\\cmx_download_to_local_and_save_meta')) {
+		$res = cmx_download_to_local_and_save_meta($post_id, $logo_url);
+		if (!\is_wp_error($res)) {
+			return;
+		}
+	}
+
+	if ($logo_path !== '' && cmx_kontakte_import_copy_logo_file_to_contact($post_id, $logo_path)) {
+		return;
+	}
+}
+
 
 /**
  * 3) Import ausführen und nach Erfolg zurückleiten
@@ -191,18 +328,44 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 	}
 
 	$file = $_FILES['csv_file']['tmp_name'];
+	$file_name = isset($_FILES['csv_file']['name']) ? (string) $_FILES['csv_file']['name'] : '';
+	$file_ext = \strtolower((string) \pathinfo($file_name, PATHINFO_EXTENSION));
 	$sep  = ';';
 	$update_mode = !empty($_POST['update_mode']); // optional
+	$import_file = $file;
+	$zip_image_map = [];
+	$cleanup_dir = '';
 
-	$h = @\fopen($file, 'r');
-	if (!$h) { \add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Datei konnte nicht gelesen werden.</p></div>'; }); return; }
+	if ($file_ext === 'zip') {
+		$zip_import = cmx_kontakte_import_extract_zip($file);
+		if (\is_wp_error($zip_import)) {
+			$message = (string) $zip_import->get_error_message();
+			\add_action('admin_notices', static function() use ($message){ echo '<div class="notice notice-error"><p>' . \esc_html($message) . '</p></div>'; });
+			return;
+		}
+		$import_file = (string) ($zip_import['csv_path'] ?? '');
+		$zip_image_map = (array) ($zip_import['image_map'] ?? []);
+		$cleanup_dir = (string) ($zip_import['extract_dir'] ?? '');
+	}
+
+	$h = @\fopen($import_file, 'r');
+	if (!$h) {
+		if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
+		\add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Datei konnte nicht gelesen werden.</p></div>'; });
+		return;
+	}
 
 	// UTF-8 BOM
 	$first = fread($h, 3);
 	if ($first !== "\xEF\xBB\xBF") fseek($h, 0);
 
 	$header = \fgetcsv($h, 0, $sep);
-	if (!$header) { \fclose($h); \add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Leere oder ungültige CSV.</p></div>'; }); return; }
+	if (!$header) {
+		\fclose($h);
+		if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
+		\add_action('admin_notices', function(){ echo '<div class="notice notice-error"><p>Leere oder ungültige CSV.</p></div>'; });
+		return;
+	}
 	$header = array_map('trim', $header);
 
 	$imported = 0; $updated = 0;
@@ -263,45 +426,7 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 		\update_post_meta($post_id, CMX_LIEFER_META_ORT,     (string)($row['liefer_ort'] ?? ($row_l['liefer_ort'] ?? '')));
 		\update_post_meta($post_id, CMX_LIEFER_META_LAND,    strtolower((string)($row['liefer_land_slug'] ?? ($row['_cmx_liefer_land'] ?? ($row_l['liefer_land_slug'] ?? ($row_l['_cmx_liefer_land'] ?? ''))))));
 
-		// Logo-Übernahme: bevorzugt URL, sonst lokaler Pfad (Header groß/klein tolerant)
-		$logo_url  = isset($row['logo_url'])  ? trim((string)$row['logo_url'])  : (isset($row_l['logo_url'])  ? trim((string)$row_l['logo_url'])  : '');
-		$logo_path = isset($row['logo_path']) ? trim((string)$row['logo_path']) : (isset($row_l['logo_path']) ? trim((string)$row_l['logo_path']) : '');
-		if ($logo_url !== '' && function_exists(__NAMESPACE__.'\\cmx_download_to_local_and_save_meta')) {
-			$res = cmx_download_to_local_and_save_meta($post_id, $logo_url);
-			if (is_wp_error($res) && $logo_path !== '' && is_readable($logo_path)) {
-				// Fallback: Kopie von lokalem Pfad
-				$base_dir = cmx_local_base_path();
-				if (!is_dir($base_dir)) { wp_mkdir_p($base_dir); }
-				$basename = 'kontakt-' . (int) $post_id . '-' . basename($logo_path);
-				$target   = wp_normalize_path(trailingslashit($base_dir) . $basename);
-				if (@copy($logo_path, $target)) {
-					@chmod($target, 0644);
-					$version = @filemtime($target) ?: time();
-					$base_url = cmx_local_base_url();
-					$url_out  = trailingslashit($base_url) . rawurlencode($basename) . '?v=' . $version;
-					update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
-					update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url_out);
-				} else {
-					// Fallback: Remote-URL direkt setzen, damit wenigstens angezeigt werden kann
-					update_post_meta($post_id, '_cmx_local_image_kontakte_url', $logo_url);
-				}
-			} elseif (is_wp_error($res)) {
-				update_post_meta($post_id, '_cmx_local_image_kontakte_url', $logo_url);
-			}
-		} elseif ($logo_path !== '' && is_readable($logo_path)) {
-			$base_dir = cmx_local_base_path();
-			if (!is_dir($base_dir)) { wp_mkdir_p($base_dir); }
-			$basename = 'kontakt-' . (int) $post_id . '-' . basename($logo_path);
-			$target   = wp_normalize_path(trailingslashit($base_dir) . $basename);
-			if (@copy($logo_path, $target)) {
-				@chmod($target, 0644);
-				$version = @filemtime($target) ?: time();
-				$base_url = cmx_local_base_url();
-				$url_out  = trailingslashit($base_url) . rawurlencode($basename) . '?v=' . $version;
-				update_post_meta($post_id, '_cmx_local_image_kontakte_path', $target);
-				update_post_meta($post_id, '_cmx_local_image_kontakte_url',  $url_out);
-			}
-		}
+		cmx_kontakte_import_apply_logo($post_id, $row, $row_l, $zip_image_map);
 
 		// Stufe
 		cmx_assign_stufe($post_id, (string)($row['stufe_slug'] ?? ''), (string)($row['stufe_name'] ?? ''));
@@ -401,6 +526,7 @@ function cmx_assign_categories(int $post_id, array $values, ?string $explicit_ta
 	}
 
 	\fclose($h);
+	if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
 
 	\set_transient('cmx_import_notice_kontakte', ['imported'=>$imported, 'updated'=>$updated], 30);
 

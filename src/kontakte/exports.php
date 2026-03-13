@@ -156,6 +156,70 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_export_filename')) {
 		return cmxkl_export_base_filename() . '.' . $ext;
 	}
 }
+if (!function_exists(__NAMESPACE__.'\\cmxkl_contact_image_entries')) {
+	function cmxkl_contact_image_entries(int $pid): array {
+		$pid = (int) $pid;
+		if ($pid <= 0) {
+			return [];
+		}
+
+		$post = \get_post($pid);
+		if (!$post instanceof \WP_Post) {
+			return [];
+		}
+
+		$title = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+			? (string) cmx_export_slugify((string) $post->post_title, 'kontakt-' . $pid)
+			: ('kontakt-' . $pid);
+
+		$candidates = [];
+		$local_path = \trim((string) \get_post_meta($pid, '_cmx_local_image_kontakte_path', true));
+		if ($local_path !== '') {
+			$candidates[] = ['path' => $local_path, 'suffix' => 'logo'];
+		}
+
+		$thumb_id = (int) \get_post_thumbnail_id($pid);
+		if ($thumb_id > 0) {
+			$thumb_path = (string) \get_attached_file($thumb_id);
+			if ($thumb_path !== '') {
+				$candidates[] = ['path' => $thumb_path, 'suffix' => 'bild'];
+			}
+		}
+
+		$entries = [];
+		$used_names = [];
+		foreach ($candidates as $candidate) {
+			$path = (string) ($candidate['path'] ?? '');
+			if ($path === '' || !\is_file($path)) continue;
+			$real = \realpath($path);
+			if (!$real || !\is_file($real)) continue;
+
+			$ext = \strtolower((string) \pathinfo($real, PATHINFO_EXTENSION));
+			if ($ext === '') continue;
+
+			$filename = $title . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
+			$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+				? (string) cmx_export_slugify((string) \pathinfo($filename, PATHINFO_FILENAME), 'kontakt-' . $pid) . '.' . $ext
+				: ('kontakt-' . $pid . '.' . $ext);
+
+			if (isset($used_names[$filename])) {
+				$filename = (\function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
+					? (string) cmx_export_slugify($title, 'kontakt-' . $pid)
+					: ('kontakt-' . $pid)
+				) . '-' . $pid . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
+			}
+
+			$used_names[$filename] = true;
+			$entries[] = [
+				'abs_path' => $real,
+				'zip_name' => 'bilder/' . \ltrim($filename, '/'),
+				'suffix' => (string) ($candidate['suffix'] ?? 'bild'),
+			];
+		}
+
+		return $entries;
+	}
+}
 if (!function_exists(__NAMESPACE__.'\\cmxkl_term_name_by_slug')) {
 	function cmxkl_term_name_by_slug(string $tax, string $slug): string {
 		if ($tax==='' || $slug==='' || !\taxonomy_exists($tax)) return '';
@@ -207,7 +271,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 		$headers = [
 			'ID','Titel','Status','Erstellt_am',
 			'vorname','nachname','privat','url','url_domain_core','datum',
-			'logo_url','logo_path',
+			'logo_url','logo_path','logo_zip_path',
 			'kontakt_laender_ids','kontakt_laender_slugs','kontakt_laender_names',
 			// NEU: Kategorien
 			'kategorien_ids','kategorien_slugs','kategorien_names',
@@ -240,6 +304,10 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 			$datum    = (string)\get_post_meta($pid, CMX_KONTAKTE_META_DATUM, true);
 			$logo_url = (string)\get_post_meta($pid, '_cmx_local_image_kontakte_url', true);
 			$logo_path= (string)\get_post_meta($pid, '_cmx_local_image_kontakte_path', true);
+			$image_entries = \function_exists(__NAMESPACE__ . '\\cmxkl_contact_image_entries')
+				? (array) cmxkl_contact_image_entries((int) $pid)
+				: [];
+			$logo_zip_path = (string) (($image_entries[0]['zip_name'] ?? ''));
 
 			// Kontakt-Länder (Taxo)
 			$land_ids=$land_slugs=$land_names='';
@@ -326,6 +394,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 				$datum,
 				$logo_url,
 				$logo_path,
+				$logo_zip_path,
 
 				$land_ids,
 				$land_slugs,
@@ -419,56 +488,21 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_collect_kontakte_image_entries')) {
 	function cmxkl_collect_kontakte_image_entries(array $ids): array {
 		$entries = [];
 		$seen_real = [];
-		$used_names = [];
 
 		foreach ($ids as $pid) {
 			$pid = (int) $pid;
 			if ($pid <= 0) continue;
-			$post = \get_post($pid);
-			if (!$post instanceof \WP_Post) continue;
-
-			$title = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
-				? (string) cmx_export_slugify((string) $post->post_title, 'kontakt-' . $pid)
-				: ('kontakt-' . $pid);
-
-			$candidates = [];
-			$local_path = \trim((string) \get_post_meta($pid, '_cmx_local_image_kontakte_path', true));
-			if ($local_path !== '') {
-				$candidates[] = ['path' => $local_path, 'suffix' => 'logo'];
-			}
-
-			$thumb_id = (int) \get_post_thumbnail_id($pid);
-			if ($thumb_id > 0) {
-				$thumb_path = (string) \get_attached_file($thumb_id);
-				if ($thumb_path !== '') {
-					$candidates[] = ['path' => $thumb_path, 'suffix' => 'bild'];
-				}
-			}
-
-			foreach ($candidates as $candidate) {
-				$path = (string) ($candidate['path'] ?? '');
-				if ($path === '' || !\is_file($path)) continue;
-				$real = \realpath($path);
-				if (!$real || !\is_file($real) || isset($seen_real[$real])) continue;
-
-				$ext = \strtolower((string) \pathinfo($real, PATHINFO_EXTENSION));
-				if ($ext === '') continue;
-
-				$filename = $title . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
-				$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
-					? (string) cmx_export_slugify((string) \pathinfo($filename, PATHINFO_FILENAME), 'kontakt-' . $pid) . '.' . $ext
-					: ('kontakt-' . $pid . '.' . $ext);
-
-				if (isset($used_names[$filename])) {
-					$filename = (\function_exists(__NAMESPACE__ . '\\cmx_export_slugify')
-						? (string) cmx_export_slugify($title, 'kontakt-' . $pid)
-						: ('kontakt-' . $pid)
-					) . '-' . $pid . '-' . (string) ($candidate['suffix'] ?? 'bild') . '.' . $ext;
-				}
-
-				$used_names[$filename] = true;
+			$contact_entries = \function_exists(__NAMESPACE__ . '\\cmxkl_contact_image_entries')
+				? (array) cmxkl_contact_image_entries($pid)
+				: [];
+			foreach ($contact_entries as $entry) {
+				$real = (string) ($entry['abs_path'] ?? '');
+				if ($real === '' || !\is_file($real) || isset($seen_real[$real])) continue;
 				$seen_real[$real] = true;
-				$entries[] = ['abs_path' => $real, 'zip_name' => $filename];
+				$entries[] = [
+					'abs_path' => $real,
+					'zip_name' => (string) ($entry['zip_name'] ?? ''),
+				];
 			}
 		}
 
@@ -513,7 +547,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_export_zip_from_ids'
 			$abs_path = (string) ($entry['abs_path'] ?? '');
 			$zip_name = (string) ($entry['zip_name'] ?? '');
 			if ($abs_path === '' || $zip_name === '' || !\is_file($abs_path)) continue;
-			$zip->addFile($abs_path, 'bilder/' . \ltrim($zip_name, '/'));
+			$zip->addFile($abs_path, \ltrim($zip_name, '/'));
 		}
 		$zip->close();
 
