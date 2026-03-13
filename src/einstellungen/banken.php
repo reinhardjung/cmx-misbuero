@@ -241,6 +241,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_instanz')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_instanz_slug')) {
+	function cmx_get_payrexx_instanz_slug(): string {
+		$value = \trim(cmx_get_payrexx_instanz());
+		if ($value === '') {
+			return '';
+		}
+
+		$value = (string) \preg_replace('~^https?://~i', '', $value);
+		$value = (string) \preg_replace('~\.payrexx\.com.*$~i', '', $value);
+		$value = \trim($value, " \t\n\r\0\x0B./");
+		$value = \strtolower($value);
+		$value = (string) \preg_replace('~[^a-z0-9-]+~', '-', $value);
+		$value = \trim($value, '-');
+
+		return $value;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_vpos_url')) {
+	function cmx_get_payrexx_vpos_url(): string {
+		$instanz = cmx_get_payrexx_instanz_slug();
+		if ($instanz === '') {
+			return '';
+		}
+
+		return 'https://' . $instanz . '.payrexx.com/de/vpos?';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_payrexx_instanz_field')) {
 	function cmx_render_payrexx_instanz_field(): void {
 		$value = \esc_attr(cmx_get_payrexx_instanz());
@@ -336,7 +365,7 @@ function cmx_register_banken_tab(): void {
 
 	\add_settings_section(
 		'cmx_sec_banken',
-		__('Zahlungen', 'default'),
+		__('Finanzinstitut', 'default'),
 		'__return_false',
 		'cmx_tab_banken'
 	);

@@ -1255,6 +1255,14 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$bank  = cmxbu_get_preferred_bank();
 		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
 		$bank_iban = trim((string)($bank['iban'] ?? ''));
+		$payrexx_vpos_url = '';
+		if (
+			$beleg_type === 'rechnung'
+			&& $beleg_richtung === 'ausgang'
+			&& \function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_vpos_url')
+		) {
+			$payrexx_vpos_url = (string) cmx_get_payrexx_vpos_url();
+		}
 		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
 		$qr_user_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));
 		$qr_payment_iban = $qr_iban !== '' ? $qr_iban : $bank_iban;
@@ -1291,6 +1299,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'due' => $doc_due,
 				'currency' => $dates['currency'],
 				'period' => $dates['period'],
+				'payrexx_vpos_url' => $payrexx_vpos_url,
 				'subtotal' => $calc['subtotal'],
 				'total' => $calc['total'],
 				'manual_total' => $manual_total_value,

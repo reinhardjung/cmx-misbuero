@@ -236,6 +236,8 @@ if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
 $document_due = trim((string)($tpl['document']['due'] ?? ''));
 $show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
 $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
+$payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
+$show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -299,6 +301,18 @@ $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'F�
 	.invoice-meta td,
 	.invoice-meta tr { border: 0 !important; }
 	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
+	.invoice-meta .cmx-payrexx-spacer td { height: 5mm; line-height: 0; font-size: 0; }
+	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
+	.invoice-meta .cmx-payrexx-row a {
+		color: #1858a8;
+		text-decoration: underline;
+		word-break: break-all;
+		white-space: normal;
+		display: inline-block;
+		text-align: right;
+		line-height: 1.25;
+		font-size: 10px;
+	}
 	.recipient-window {
 		position: absolute;
 		left: <?= htmlspecialchars($recipient_x_css, ENT_QUOTES, 'UTF-8'); ?>;
@@ -499,6 +513,16 @@ $due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'F�
 					<tr>
 						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
 						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($period_value, ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endif; ?>
+				<?php if ($show_payrexx_vpos_link): ?>
+					<tr class="cmx-payrexx-spacer">
+						<td colspan="2">&nbsp;</td>
+					</tr>
+					<tr class="cmx-payrexx-row">
+						<td colspan="2" class="text-right" style="border:0; padding:0;">
+							<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?></a>
+						</td>
 					</tr>
 				<?php endif; ?>
 			</table>
