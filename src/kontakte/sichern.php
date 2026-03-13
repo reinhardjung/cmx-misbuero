@@ -10,9 +10,6 @@ function cmx_prepare_kontakt_title_before_save(array $data, array $postarr) : ar
 
 	$incoming_title = trim((string)($data['post_title'] ?? ''));
 	$is_missing     = (mb_strtolower($incoming_title) === mb_strtolower('Firmenname fehlt'));
-	$should_fill    = ($incoming_title === '' || $is_missing);
-
-	if (!$should_fill) return $data;
 
 	$vor  = isset($_POST['cmx_vorname'])  ? sanitize_text_field(wp_unslash($_POST['cmx_vorname']))  : '';
 	$nach = isset($_POST['cmx_nachname']) ? sanitize_text_field(wp_unslash($_POST['cmx_nachname'])) : '';
@@ -22,6 +19,12 @@ function cmx_prepare_kontakt_title_before_save(array $data, array $postarr) : ar
 	if ($url !== '' && !preg_match('~^https?://~i', $url)) {
 		$url = 'https://'.ltrim($url, '/');
 	}
+
+	$person_title    = trim($vor . ' ' . $nach);
+	$is_person_title = ($person_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($person_title));
+	$should_fill     = ($incoming_title === '' || $is_missing || (!$priv && $url !== '' && $is_person_title));
+
+	if (!$should_fill) return $data;
 
 	if ($priv && ($vor !== '' || $nach !== '')) {
 		$new_title = trim($vor.' '.$nach);
