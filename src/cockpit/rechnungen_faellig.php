@@ -1,5 +1,6 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+require_once __DIR__ . '/../belege/vorlage_mail.php';
 require_once __DIR__ . '/../belege/vorlage_mail mahnung.php';
 
 /**
@@ -392,6 +393,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_is_outgoing_invoic
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_is_overdue')) {
+	function cmx_cockpit_mahnwesen_is_overdue(int $post_id): bool {
+		$due_raw = cmx_cockpit_due_raw($post_id);
+		$due_ts = cmx_cockpit_parse_date_to_ts($due_raw);
+		$today_start_ts = (int) \strtotime(\current_time('Y-m-d') . ' 00:00:00');
+
+		return $due_ts > 0 && $today_start_ts > 0 && $due_ts < $today_start_ts;
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 	function cmx_cockpit_mahnwesen_send_mail(int $post_id) {
 		$post = \get_post($post_id);
@@ -400,7 +411,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		}
 
 		if (!cmx_cockpit_mahnwesen_is_outgoing_invoice($post_id)) {
-			return new \WP_Error('invalid_type', 'Zahlungserinnerung nur für Ausgangs-Rechnungen möglich.');
+			return new \WP_Error('invalid_type', 'Versand nur für Ausgangs-Rechnungen möglich.');
 		}
 
 		$to = cmx_cockpit_mahnwesen_contact_email($post_id);
@@ -434,9 +445,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		$betrag = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
 			? (string) cmxbu_get_beleg_amount_display($post_id)
 			: cmx_cockpit_mahnwesen_amount_display($post_id, cmx_cockpit_mahnwesen_amount_value($post_id));
+		$is_overdue = cmx_cockpit_mahnwesen_is_overdue($post_id);
 
-		$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
-		$message = cmxbu_render_belegmail_mahnung_template([
+		$mail_data = [
 			'anrede' => $anrede,
 			'vorname' => $vorname,
 			'nachname' => $nachname,
@@ -449,7 +460,17 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			'catalog_url' => \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
 				? \home_url('/katalog/')
 				: '',
-		]);
+		];
+
+		if ($is_overdue) {
+			$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+			$message = cmxbu_render_belegmail_mahnung_template($mail_data);
+			$mail_action_label = 'Zahlungserinnerung';
+		} else {
+			$subject = 'Rechnung erneut: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
+			$message = cmxbu_render_belegmail_template($mail_data);
+			$mail_action_label = 'Rechnung erneut';
+		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_belegmail_html')) {
 			$message = cmxbu_prepare_belegmail_html($message);
@@ -501,6 +522,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		return [
 			'email' => $to,
 			'subject' => $subject,
+			'action_label' => $mail_action_label,
 		];
 	}
 }
@@ -757,8 +779,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_render_faellige_rechnungen_rows')) {
 				echo '</td>';
 				echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
 				$due_class = $is_overdue ? ' cmx-faellig-due-overdue' : '';
+				$due_title = $is_overdue
+					? ('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email)
+					: ('Klicken um Rechnung erneut zu senden an ' . $kontakt_email);
 				if ($can_send_reminder) {
-					echo '<button type="button" class="cmx-faellig-due-btn' . $due_class . '" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
+					echo '<button type="button" class="cmx-faellig-due-btn' . $due_class . '" data-post-id="' . (int) $post_id . '" title="' . \esc_attr($due_title) . '">';
 					echo \esc_html($due);
 					echo '</button>';
 				} else {
@@ -931,7 +956,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				}).then(function(resp){
 					if (resp && resp.success) {
 						var email = resp.data && resp.data.email ? String(resp.data.email) : '';
-						window.alert(email !== '' ? ('Zahlungserinnerung gesendet an ' + email) : 'Zahlungserinnerung wurde gesendet.');
+						var actionLabel = resp.data && resp.data.action_label ? String(resp.data.action_label) : 'E-Mail';
+						window.alert(email !== '' ? (actionLabel + ' gesendet an ' + email) : (actionLabel + ' wurde gesendet.'));
 						btn.disabled = false;
 						btn.dataset.loading = '';
 						return;
