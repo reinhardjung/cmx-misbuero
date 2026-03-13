@@ -310,8 +310,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		text-align: center;
 	}
 	.invoice-meta .cmx-payrexx-qr {
-		width: 42mm;
-		height: 42mm;
+		width: 21mm;
+		height: 21mm;
 		margin: 0 0 1.6mm 0;
 	}
 	.invoice-meta .cmx-payrexx-qr img {
@@ -556,7 +556,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 									<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
 								<?php endif; ?>
 								<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
-								<div class="cmx-payrexx-note">Bezahle bequem mit TWINT, Visa, Apple Pay etc.</div>
+								<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
 							</div>
 						</td>
 					</tr>
