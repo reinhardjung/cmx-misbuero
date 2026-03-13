@@ -794,7 +794,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_render_faellige_rechnungen_rows')) {
 					? ('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email)
 					: ('Klicken um Rechnung erneut zu senden an ' . $kontakt_email);
 				if ($can_send_reminder) {
-					echo '<button type="button" class="cmx-faellig-due-btn' . $due_class . '" data-post-id="' . (int) $post_id . '" title="' . \esc_attr($due_title) . '">';
+					echo '<button type="button" class="cmx-faellig-due-btn' . $due_class . '" data-post-id="' . (int) $post_id . '" data-recipient-email="' . \esc_attr($kontakt_email) . '" title="' . \esc_attr($due_title) . '">';
 					echo \esc_html($due);
 					echo '</button>';
 				} else {
@@ -968,7 +968,13 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					if (resp && resp.success) {
 						var email = resp.data && resp.data.email ? String(resp.data.email) : '';
 						var actionLabel = resp.data && resp.data.action_label ? String(resp.data.action_label) : 'E-Mail';
-						showAdminNotice(email !== '' ? (actionLabel + ' wurde an ' + email + ' gesendet.') : (actionLabel + ' wurde gesendet.'), 'success');
+						var successMessage = '';
+						if (actionLabel === 'Rechnung erneut') {
+							successMessage = email !== '' ? ('Rechnung wurde erneut an ' + email + ' gesendet.') : 'Rechnung wurde erneut gesendet.';
+						} else {
+							successMessage = email !== '' ? (actionLabel + ' wurde an ' + email + ' gesendet.') : (actionLabel + ' wurde gesendet.');
+						}
+						showAdminNotice(successMessage, 'success');
 						btn.disabled = false;
 						btn.dataset.loading = '';
 						return;
@@ -1005,6 +1011,81 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				window.scrollTo({top: 0, behavior: 'smooth'});
 			}
 
+			function showReminderConfirm(htmlMessage){
+				return new Promise(function(resolve){
+					var overlay = document.createElement('div');
+					overlay.style.position = 'fixed';
+					overlay.style.inset = '0';
+					overlay.style.background = 'rgba(0, 0, 0, 0.35)';
+					overlay.style.zIndex = '100000';
+					overlay.style.display = 'flex';
+					overlay.style.alignItems = 'center';
+					overlay.style.justifyContent = 'center';
+					overlay.style.padding = '16px';
+
+					var dialog = document.createElement('div');
+					dialog.style.background = '#fff';
+					dialog.style.border = '1px solid #c3c4c7';
+					dialog.style.borderRadius = '8px';
+					dialog.style.boxShadow = '0 10px 30px rgba(0,0,0,0.18)';
+					dialog.style.width = '100%';
+					dialog.style.maxWidth = '420px';
+					dialog.style.padding = '18px 20px';
+					dialog.style.boxSizing = 'border-box';
+
+					var text = document.createElement('div');
+					text.style.fontSize = '14px';
+					text.style.lineHeight = '1.5';
+					text.innerHTML = htmlMessage;
+
+					var buttons = document.createElement('div');
+					buttons.style.display = 'flex';
+					buttons.style.justifyContent = 'flex-end';
+					buttons.style.gap = '8px';
+					buttons.style.marginTop = '16px';
+
+					var cancelBtn = document.createElement('button');
+					cancelBtn.type = 'button';
+					cancelBtn.className = 'button button-secondary';
+					cancelBtn.textContent = 'Abbrechen';
+
+					var okBtn = document.createElement('button');
+					okBtn.type = 'button';
+					okBtn.className = 'button button-primary';
+					okBtn.textContent = 'OK';
+
+					function close(result){
+						document.removeEventListener('keydown', onKeyDown, true);
+						overlay.remove();
+						resolve(result);
+					}
+
+					function onKeyDown(event){
+						if (event.key === 'Escape') {
+							event.preventDefault();
+							close(false);
+						}
+					}
+
+					cancelBtn.addEventListener('click', function(){ close(false); });
+					okBtn.addEventListener('click', function(){ close(true); });
+					overlay.addEventListener('click', function(event){
+						if (event.target === overlay) {
+							close(false);
+						}
+					});
+					document.addEventListener('keydown', onKeyDown, true);
+
+					buttons.appendChild(cancelBtn);
+					buttons.appendChild(okBtn);
+					dialog.appendChild(text);
+					dialog.appendChild(buttons);
+					overlay.appendChild(dialog);
+					document.body.appendChild(overlay);
+					okBtn.focus();
+				});
+			}
+
 			document.addEventListener('click', function(e){
 				var dueBtn = e.target && e.target.closest ? e.target.closest('.cmx-faellig-due-btn') : null;
 				if (dueBtn) {
@@ -1012,16 +1093,17 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					e.stopPropagation();
 					if (dueBtn.dataset.loading === '1') return;
 					var reminderPostId = parseInt(dueBtn.getAttribute('data-post-id') || '0', 10);
+					var recipientEmail = String(dueBtn.getAttribute('data-recipient-email') || '').trim();
 					if (!reminderPostId) return;
-					var confirmText = dueBtn.classList.contains('cmx-faellig-due-overdue')
-						? 'Willst Du wirklich diese Zahlungserinnerung versenden?'
-						: 'Willst Du wirklich diesen Beleg nochmals versenden?';
-					if (!window.confirm(confirmText)) {
-						return;
-					}
-					dueBtn.dataset.loading = '1';
-					dueBtn.disabled = true;
-					submitReminderMail(reminderPostId, dueBtn);
+					var confirmHtml = dueBtn.classList.contains('cmx-faellig-due-overdue')
+						? ('Willst Du wirklich diese Zahlungserinnerung versenden</br>an <strong>' + recipientEmail.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</strong>')
+						: ('Möchstest Du wirklich diesen Beleg nochmals versenden</br>an <strong>' + recipientEmail.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</strong>');
+					showReminderConfirm(confirmHtml).then(function(confirmed){
+						if (!confirmed) return;
+						dueBtn.dataset.loading = '1';
+						dueBtn.disabled = true;
+						submitReminderMail(reminderPostId, dueBtn);
+					});
 					return;
 				}
 
