@@ -4,7 +4,7 @@ require_once __DIR__ . '/../belege/vorlage_mail mahnung.php';
 
 /**
  * Dashboard-Widget: Offene Belege
- * - zeigt max. 5 offene, faellige Rechnungen und Gutschriften
+ * - zeigt alle offenen, faelligen Rechnungen und Gutschriften
  * - Titel enthaelt die Gesamtanzahl aller offenen, faelligen Rechnungen und Gutschriften
  * - Klick auf Widget-Titel springt in die Belege-Liste mit aktivem Filter:
  *   offen + Rechnungen/Gutschriften
@@ -683,7 +683,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 		});
 
 		$total = \count($rows);
-		$items = \array_slice($rows, 0, 5);
+		$items = $rows;
 
 		$cache[$preset] = [
 			'total'    => $total,
@@ -691,6 +691,97 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')) 
 			'list_url' => $list_url,
 		];
 		return $cache[$preset];
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_render_faellige_rechnungen_rows')) {
+	function cmx_render_faellige_rechnungen_rows(array $items): void {
+		$grouped_items = [];
+		foreach ($items as $row) {
+			$type_label = \trim((string) ($row['type_label'] ?? ''));
+			if ($type_label === '') {
+				$type_label = 'Ohne Belegtyp';
+			}
+			$direction_label = \trim((string) ($row['direction_label'] ?? ''));
+			$group_key = $type_label . '|' . $direction_label;
+			if (!isset($grouped_items[$group_key])) {
+				$grouped_items[$group_key] = [
+					'type_label' => $type_label,
+					'direction_label' => $direction_label,
+					'rows' => [],
+				];
+			}
+			$grouped_items[$group_key]['rows'][] = $row;
+		}
+
+		foreach ($grouped_items as $group) {
+			$group = (array) $group;
+			$group_type = (string) ($group['type_label'] ?? '');
+			$group_direction = (string) ($group['direction_label'] ?? '');
+			$group_rows = (array) ($group['rows'] ?? []);
+			echo '<tr class="cmx-faellig-group-row"><td colspan="4">';
+			echo '<span class="cmx-faellig-group-type">' . \esc_html($group_type) . '</span>';
+			if ($group_direction !== '') {
+				echo ' / <span class="cmx-faellig-group-direction">' . \esc_html($group_direction) . '</span>';
+			}
+			echo '</td></tr>';
+			foreach ($group_rows as $row) {
+				$post_id = (int) ($row['id'] ?? 0);
+				$title   = (string) ($row['title'] ?? ('#' . $post_id));
+				$due     = (string) ($row['due_date'] ?? '');
+				$kontakt = (string) ($row['kontakt'] ?? '');
+				$kontakt_url = (string) ($row['kontakt_url'] ?? '');
+				$edit    = (string) ($row['edit_url'] ?? '');
+				$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
+				$amount_display = (string) ($row['amount_display'] ?? '');
+				$kontakt_email = (string) ($row['kontakt_email'] ?? '');
+				$can_send_reminder = !empty($row['can_send_reminder']);
+				$type_tooltip = (string) ($row['type_tooltip'] ?? '');
+				if ($amount_display === '' && $amount_tooltip !== '') {
+					$amount_display = (string) \str_replace('Betrag: CHF ', '', $amount_tooltip);
+				}
+
+				echo '<tr>';
+				echo '<td class="cmx-faellig-title-cell" style="padding:4px 10px 4px 5px;vertical-align:top;white-space:nowrap;">';
+				if ($edit !== '') {
+					$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
+					echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
+				} else {
+					$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
+					echo '<span class="cmx-faellig-title-text"' . $title_attr . '>' . \esc_html($title) . '</span>';
+				}
+				echo '</td>';
+				echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
+				if ($can_send_reminder) {
+					echo '<button type="button" class="cmx-faellig-due-btn" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
+					echo \esc_html($due);
+					echo '</button>';
+				} else {
+					$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
+					echo '<span' . $due_attr . '>' . \esc_html($due) . '</span>';
+				}
+				echo '</td>';
+				echo '<td style="padding:4px 0;vertical-align:top;">';
+				$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
+				if ($kontakt !== '' && $kontakt_url !== '') {
+					echo '<a class="cmx-faellig-contact-link" href="' . \esc_url($kontakt_url) . '"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</a>';
+				} else {
+					echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
+				}
+				echo '</td>';
+				echo '<td class="cmx-faellig-pay-cell" style="padding:4px 5px 4px 0;vertical-align:top;">';
+				if ($post_id > 0) {
+					echo '<span class="cmx-faellig-pay-wrap">';
+					echo '<button type="button" class="cmx-faellig-mark-paid cmx-faellig-pay-btn" data-beleg="' . (int) $post_id . '" title="Bezahlt am wählen" aria-label="Bezahlt am wählen">';
+					echo \esc_html($amount_display);
+					echo '</button>';
+					echo '<input type="date" class="cmx-faellig-pay-date" data-beleg="' . (int) $post_id . '" aria-label="Bezahlt am wählen">';
+					echo '</span>';
+				}
+				echo '</td>';
+				echo '</tr>';
+			}
+		}
 	}
 }
 
@@ -758,97 +849,8 @@ function cmx_render_rechnungen_faellig_widget(): void {
 		echo '<col style="width:88px;">';
 		echo '</colgroup>';
 		echo '<tbody>';
-		$grouped_items = [];
-			foreach ($items as $row) {
-				$type_label = \trim((string) ($row['type_label'] ?? ''));
-				if ($type_label === '') {
-					$type_label = 'Ohne Belegtyp';
-				}
-				$direction_label = \trim((string) ($row['direction_label'] ?? ''));
-				$group_key = $type_label . '|' . $direction_label;
-			if (!isset($grouped_items[$group_key])) {
-				$grouped_items[$group_key] = [
-					'type_label' => $type_label,
-					'direction_label' => $direction_label,
-					'rows' => [],
-				];
-			}
-			$grouped_items[$group_key]['rows'][] = $row;
-		}
-
-		foreach ($grouped_items as $group) {
-			$group = (array) $group;
-			$group_type = (string) ($group['type_label'] ?? '');
-			$group_direction = (string) ($group['direction_label'] ?? '');
-			$group_rows = (array) ($group['rows'] ?? []);
-			echo '<tr class="cmx-faellig-group-row"><td colspan="4">';
-			echo '<span class="cmx-faellig-group-type">' . \esc_html($group_type) . '</span>';
-			if ($group_direction !== '') {
-				echo ' / <span class="cmx-faellig-group-direction">' . \esc_html($group_direction) . '</span>';
-			}
-			echo '</td></tr>';
-			foreach ($group_rows as $row) {
-				$post_id = (int) ($row['id'] ?? 0);
-				$title   = (string) ($row['title'] ?? ('#' . $post_id));
-				$due     = (string) ($row['due_date'] ?? '');
-				$kontakt = (string) ($row['kontakt'] ?? '');
-				$kontakt_url = (string) ($row['kontakt_url'] ?? '');
-					$edit    = (string) ($row['edit_url'] ?? '');
-					$amount_tooltip = (string) ($row['amount_tooltip'] ?? '');
-					$amount_display = (string) ($row['amount_display'] ?? '');
-					$kontakt_email = (string) ($row['kontakt_email'] ?? '');
-					$can_send_reminder = !empty($row['can_send_reminder']);
-					$type_tooltip = (string) ($row['type_tooltip'] ?? '');
-					if ($amount_display === '' && $amount_tooltip !== '') {
-						$amount_display = (string) \str_replace('Betrag: CHF ', '', $amount_tooltip);
-					}
-
-				echo '<tr>';
-					echo '<td class="cmx-faellig-title-cell" style="padding:4px 10px 4px 5px;vertical-align:top;white-space:nowrap;">';
-					if ($edit !== '') {
-						$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
-						echo '<a class="cmx-faellig-title-link" href="' . \esc_url($edit) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
-					} else {
-						$title_attr = $type_tooltip !== '' ? (' title="' . \esc_attr($type_tooltip) . '"') : '';
-						echo '<span class="cmx-faellig-title-text"' . $title_attr . '>' . \esc_html($title) . '</span>';
-					}
-					echo '</td>';
-					echo '<td style="padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;">';
-					if ($can_send_reminder) {
-						echo '<button type="button" class="cmx-faellig-due-btn" data-post-id="' . (int) $post_id . '" title="' . \esc_attr('Klicken um Zahlungserinnerung zu senden an ' . $kontakt_email) . '">';
-						echo \esc_html($due);
-						echo '</button>';
-					} else {
-						$due_attr = $amount_tooltip !== '' ? (' title="' . \esc_attr($amount_tooltip) . '"') : '';
-						echo '<span' . $due_attr . '>' . \esc_html($due) . '</span>';
-					}
-					echo '</td>';
-				echo '<td style="padding:4px 0;vertical-align:top;">';
-				$kontakt_attr = $kontakt !== '' ? (' title="' . \esc_attr($kontakt) . '"') : '';
-				if ($kontakt !== '' && $kontakt_url !== '') {
-					echo '<a class="cmx-faellig-contact-link" href="' . \esc_url($kontakt_url) . '"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</a>';
-				} else {
-					echo '<span class="cmx-faellig-contact"' . $kontakt_attr . '>' . \esc_html($kontakt) . '</span>';
-				}
-					echo '</td>';
-					echo '<td class="cmx-faellig-pay-cell" style="padding:4px 5px 4px 0;vertical-align:top;">';
-					if ($post_id > 0) {
-						echo '<span class="cmx-faellig-pay-wrap">';
-						echo '<button type="button" class="cmx-faellig-mark-paid cmx-faellig-pay-btn" data-beleg="' . (int) $post_id . '" title="Bezahlt am wählen" aria-label="Bezahlt am wählen">';
-						echo \esc_html($amount_display);
-						echo '</button>';
-						echo '<input type="date" class="cmx-faellig-pay-date" data-beleg="' . (int) $post_id . '" aria-label="Bezahlt am wählen">';
-						echo '</span>';
-					}
-					echo '</td>';
-				echo '</tr>';
-			}
-		}
+		cmx_render_faellige_rechnungen_rows($items);
 		echo '</tbody></table>';
-
-	if ($total > \count($items)) {
-		echo '<p style="margin:8px 0 0; color:#666;">+' . \esc_html((string) ($total - \count($items))) . ' weitere.</p>';
-	}
 }
 
 \add_action('admin_footer-index.php', function (): void {
