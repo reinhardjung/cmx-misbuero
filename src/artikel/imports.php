@@ -488,7 +488,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 		if ($cleanup_dir !== '') cmx_artikel_import_cleanup_dir($cleanup_dir);
 		cmx_artikel_import_redirect_notice([
 			'type' => 'error',
-			'message' => 'Falches Format.',
+			'message' => 'Falsches Format',
 		]);
 	}
 

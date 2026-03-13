@@ -438,7 +438,7 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
 		cmx_kontakte_import_redirect_notice([
 			'type' => 'error',
-			'message' => 'Falches Format.',
+			'message' => 'Falsches Format',
 		]);
 	}
 
