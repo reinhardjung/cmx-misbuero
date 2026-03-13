@@ -1345,10 +1345,14 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		) {
 			$payrexx_base_url = (string) cmx_get_payrexx_vpos_url();
 			if ($payrexx_base_url !== '') {
+				$payrexx_terminal_id = \function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_terminal_id')
+					? \trim((string) cmx_get_payrexx_terminal_id())
+					: '';
 				$payrexx_contact = \function_exists(__NAMESPACE__ . '\\cmxbu_get_payrexx_contact_data')
 					? cmxbu_get_payrexx_contact_data($kontakt_id)
 					: ['company' => '', 'forename' => '', 'surname' => '', 'email' => ''];
 				$payrexx_query = \http_build_query([
+					'tid' => $payrexx_terminal_id,
 					'amount' => \number_format((float) ($calc['total'] ?? 0.0), 2, '.', ''),
 					'currency' => \strtoupper(\trim((string) ($dates['currency'] ?? ($fmt['currency'] ?? 'CHF')))),
 					'purpose' => \trim((string) $title_safe),

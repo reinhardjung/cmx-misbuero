@@ -310,8 +310,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		text-align: right;
 	}
 	.invoice-meta .cmx-payrexx-qr {
-		width: 21mm;
-		height: 21mm;
+		width: 21.8mm;
+		height: 21.8mm;
 		margin: 0 0 1.6mm auto;
 	}
 	.invoice-meta .cmx-payrexx-qr img {
@@ -336,7 +336,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 		text-decoration: none;
 		white-space: nowrap;
 		width: 30mm;
-		margin: 0 auto;
+		margin-left: auto;
 	}
 	.invoice-meta .cmx-payrexx-note {
 		font-size: 10px;
