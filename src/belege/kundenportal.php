@@ -414,6 +414,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_all_belege_rows')) {
 			$payrexx_url = cmx_kontakt_beleg_payrexx_url($beleg_id);
 			$question_email = cmx_kundenportal_question_email();
 			$question_subject = 'Fragen zur Rechnung ' . $title;
+			$question_date = cmx_kontakt_beleg_date_label($beleg_id);
+			if ($question_date !== '') {
+				$question_subject .= ' vom ' . $question_date;
+			}
 			$question_url = '';
 			if (\is_email($question_email)) {
 				$question_url = 'mailto:' . \rawurlencode($question_email) . '?subject=' . \rawurlencode($question_subject);
@@ -489,6 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<!doctype html><html lang="de"><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
 		echo '<title>' . \esc_html($kontakt_name . ' - Belege') . '</title>';
+		echo '<link rel="stylesheet" href="' . \esc_url(\includes_url('css/dashicons.min.css')) . '">';
 		echo '<style>
 			:root{color-scheme:light}
 			*{box-sizing:border-box}
@@ -518,12 +523,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-pay-btn,.cmx-kontakt-pdf-btn,.cmx-kontakt-mail-btn{display:inline-flex;align-items:center;justify-content:center;height:24px;padding:0 10px;border-radius:8px;font-size:12px;line-height:1;font-weight:700;text-decoration:none;vertical-align:middle}
 			.cmx-kontakt-pay-btn{background:#135e96;color:#fff!important}
 			.cmx-kontakt-pay-btn:hover{background:#0f4d7b;color:#fff!important}
-			.cmx-kontakt-pdf-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:24px}
+			.cmx-kontakt-pdf-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:26px}
 			.cmx-kontakt-pdf-btn:hover{background:#ebebeb;color:#1d2327!important}
-			.cmx-kontakt-mail-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:24px}
+			.cmx-kontakt-mail-btn{background:#f4f4f4;color:#1d2327!important;border:1px solid #d6d6d6;padding:0 8px;min-width:26px}
 			.cmx-kontakt-mail-btn:hover{background:#ebebeb;color:#1d2327!important}
-			.cmx-kontakt-pdf-icon,.cmx-kontakt-mail-icon{font-size:16px;line-height:1}
-			.cmx-kontakt-pdf-icon.dashicons,.cmx-kontakt-mail-icon.dashicons{width:16px;height:16px;font-size:16px}
+			.cmx-kontakt-pdf-icon,.cmx-kontakt-mail-icon{font-size:18px;line-height:1}
+			.cmx-kontakt-pdf-icon.dashicons,.cmx-kontakt-mail-icon.dashicons{width:18px;height:18px;font-size:18px}
 			.cmx-kontakt-empty{padding:28px;color:#6b7280}
 			@media (max-width:720px){
 				.cmx-kontakt-page{padding:18px 12px 24px}
@@ -556,7 +561,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<th><button type="button" data-sort-key="due" data-sort-type="number">Fällig am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Bezahlt am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number">Betrag<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
-		echo '<th><span class="cmx-kontakt-pdf-icon dashicons dashicons-media-document" title="Beleg anzeigen" aria-hidden="true"></span></th>';
+		echo '<th>PDF</th>';
 		if ($show_online_column) {
 			echo '<th><button type="button" data-sort-key="online" data-sort-type="number">online<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		}
@@ -632,7 +637,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			}
 			echo '<td class="cmx-kontakt-question">';
 			if ($question_url !== '') {
-				echo '<a href="' . \esc_url($question_url) . '" class="cmx-kontakt-mail-btn" title="' . \esc_attr('Fragen zur Rechnung ' . $title) . '"><span class="cmx-kontakt-mail-icon">&#9993;</span></a>';
+				echo '<a href="' . \esc_url($question_url) . '" class="cmx-kontakt-mail-btn" title="' . \esc_attr('Fragen zur Rechnung ' . $title) . '"><span class="cmx-kontakt-mail-icon dashicons dashicons-email-alt" aria-hidden="true"></span></a>';
 			}
 			echo '</td>';
 			echo '</tr>';
