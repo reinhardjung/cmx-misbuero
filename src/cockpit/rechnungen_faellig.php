@@ -971,9 +971,9 @@ function cmx_render_rechnungen_faellig_widget(): void {
 						var actionLabel = resp.data && resp.data.action_label ? String(resp.data.action_label) : 'E-Mail';
 						var successMessage = '';
 						if (actionLabel === 'Rechnung erneut') {
-							successMessage = email !== '' ? ('Rechnung wurde erneut an <span class="cmx-mahnwesen-notice-email">' + escapeHtml(email) + '</span> gesendet.') : 'Rechnung wurde erneut gesendet.';
+							successMessage = email !== '' ? ('Rechnung wurde erneut an <a class="cmx-mahnwesen-notice-email" href="mailto:' + encodeURIComponent(email) + '">' + escapeHtml(email) + '</a> gesendet.') : 'Rechnung wurde erneut gesendet.';
 						} else {
-							successMessage = email !== '' ? (escapeHtml(actionLabel) + ' wurde an <span class="cmx-mahnwesen-notice-email">' + escapeHtml(email) + '</span> gesendet.') : (escapeHtml(actionLabel) + ' wurde gesendet.');
+							successMessage = email !== '' ? (escapeHtml(actionLabel) + ' wurde an <a class="cmx-mahnwesen-notice-email" href="mailto:' + encodeURIComponent(email) + '">' + escapeHtml(email) + '</a> gesendet.') : (escapeHtml(actionLabel) + ' wurde gesendet.');
 						}
 						showAdminNotice(successMessage, 'success', true);
 						btn.disabled = false;
