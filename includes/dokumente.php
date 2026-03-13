@@ -102,7 +102,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 	}
 
 	$upload_hint = 'PDF, PNG, JPG, CSV, XML';
-	$upload_accept = $is_scanner ? '.pdf,.png,.jpg,.jpeg,.csv,.xml' : '.pdf,.png,.jpg,.jpeg';
+	$upload_accept = '.pdf,.png,.jpg,.jpeg,.csv,.xml';
 
 	echo '<div id="cmx-dokumente-upload-box">';
 	echo '<label for="cmx-dokumente-file" id="cmx-dokumente-drop" style="display:block;border:2px dashed #ccd0d4;padding:10px;text-align:center;background:#fafafa;cursor:pointer;">';
@@ -377,11 +377,7 @@ function cmx_dokumente_upload_file(): void {
 	}
 
 	$incoming_filename = (string) ($_FILES['file']['name'] ?? '');
-	$allowed = ['pdf','png','jpg','jpeg'];
-	if ($is_scanner) {
-		$allowed[] = 'csv';
-		$allowed[] = 'xml';
-	}
+	$allowed = ['pdf','png','jpg','jpeg','csv','xml'];
 	$ext = strtolower(pathinfo($incoming_filename, PATHINFO_EXTENSION));
 	if (!in_array($ext, $allowed, true)) {
 		\wp_send_json_error(['message'=>'bad_type'], 400);
@@ -501,11 +497,9 @@ function cmx_dokumente_upload_file(): void {
 		'png'  => 'image/png',
 		'jpg'  => 'image/jpeg',
 		'jpeg' => 'image/jpeg',
+		'csv'  => 'text/csv',
+		'xml'  => 'text/xml',
 	];
-	if ($is_scanner) {
-		$allowed_mimes['csv'] = 'text/csv';
-		$allowed_mimes['xml'] = 'text/xml';
-	}
 	$uploaded = \wp_handle_upload($_FILES['file'], ['test_form' => false, 'mimes' => $allowed_mimes]);
 
 	if (!isset($uploaded['file'])) {
