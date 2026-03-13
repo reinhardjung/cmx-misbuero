@@ -156,6 +156,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_notice_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_header_is_valid')) {
+	function cmx_kontakte_import_header_is_valid(array $header): bool {
+		$normalized = [];
+		foreach ($header as $column) {
+			$key = \function_exists('\\mb_strtolower')
+				? (string) \mb_strtolower(\trim((string) $column), 'UTF-8')
+				: (string) \strtolower(\trim((string) $column));
+			if ($key !== '') {
+				$normalized[$key] = true;
+			}
+		}
+
+		foreach (['titel', 'vorname', 'nachname', 'rechnung_strasse', 'liefer_strasse', 'telefon_1', 'email_1'] as $required) {
+			if (!isset($normalized[$required])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_redirect_notice')) {
+	function cmx_kontakte_import_redirect_notice(array $notice): void {
+		\update_user_meta(\get_current_user_id(), cmx_kontakte_import_notice_key(), $notice);
+		\wp_safe_redirect(\add_query_arg([
+			'post_type' => CMX_PT_KONTAKTE,
+			'cmx_import_notice_kontakte' => 1,
+		], \admin_url('edit.php')));
+		exit;
+	}
+}
+
 /**
  * Kategorien-Taxonomien für Kontakte erkennen:
  *  - bevorzuge Taxonomien, deren Name 'kategor' enthält
@@ -400,6 +433,14 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		return;
 	}
 	$header = array_map('trim', $header);
+	if (!cmx_kontakte_import_header_is_valid($header)) {
+		\fclose($h);
+		if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
+		cmx_kontakte_import_redirect_notice([
+			'type' => 'error',
+			'message' => 'Falches Format.',
+		]);
+	}
 
 	$notice = [
 		'imported' => [],
@@ -584,13 +625,7 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 	\fclose($h);
 	if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
 
-	\update_user_meta(\get_current_user_id(), cmx_kontakte_import_notice_key(), $notice);
-
-	\wp_safe_redirect(\add_query_arg([
-		'post_type' => CMX_PT_KONTAKTE,
-		'cmx_import_notice_kontakte' => 1,
-	], \admin_url('edit.php')));
-	exit;
+	cmx_kontakte_import_redirect_notice($notice);
 });
 
 /**
@@ -610,6 +645,11 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 	$notice = \get_user_meta(\get_current_user_id(), cmx_kontakte_import_notice_key(), true);
 	if (!$notice) return;
 	\delete_user_meta(\get_current_user_id(), cmx_kontakte_import_notice_key());
+	$notice_type = \sanitize_key((string) ($notice['type'] ?? 'success'));
+	if (!empty($notice['message'])) {
+		echo '<div class="notice notice-' . \esc_attr($notice_type === 'error' ? 'error' : 'success') . ' is-dismissible"><p>' . \esc_html((string) $notice['message']) . '</p></div>';
+		return;
+	}
 	$lines = cmx_standard_import_notice_lines('Import abgeschlossen', (array) $notice);
 	echo '<div class="notice notice-success is-dismissible">';
 	foreach ($lines as $line) {

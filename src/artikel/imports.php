@@ -323,6 +323,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_notice_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_header_is_valid')) {
+	function cmx_artikel_import_header_is_valid(array $header): bool {
+		$normalized = [];
+		foreach ($header as $column) {
+			$key = \function_exists('\\mb_strtolower')
+				? (string) \mb_strtolower(\trim((string) $column), 'UTF-8')
+				: (string) \strtolower(\trim((string) $column));
+			if ($key !== '') {
+				$normalized[$key] = true;
+			}
+		}
+
+		foreach (['post_id', 'post_title', 'post_status', 'post_date', 'post_slug'] as $required) {
+			if (!isset($normalized[$required])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
+	function cmx_artikel_import_redirect_notice(array $notice): void {
+		\update_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key(), $notice);
+		\wp_safe_redirect(\add_query_arg([
+			'post_type' => CMX_PT_ARTIKEL,
+			'cmx_import_notice_artikel' => 1,
+		], \admin_url('edit.php')));
+		exit;
+	}
+}
+
 /**
  * 1. Import-Link oben in der Liste einfügen
  */
@@ -450,6 +483,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_notice_key')) {
 		return;
 	}
 	$header = \array_map('trim', $header);
+	if (!cmx_artikel_import_header_is_valid($header)) {
+		\fclose($handle);
+		if ($cleanup_dir !== '') cmx_artikel_import_cleanup_dir($cleanup_dir);
+		cmx_artikel_import_redirect_notice([
+			'type' => 'error',
+			'message' => 'Falches Format.',
+		]);
+	}
 
 	$has_lieferanten_meta_in_csv = false;
 	foreach ($header as $column) {
@@ -564,13 +605,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_notice_key')) {
 	\fclose($handle);
 	if ($cleanup_dir !== '') cmx_artikel_import_cleanup_dir($cleanup_dir);
 
-	\update_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key(), $notice);
-
-	\wp_safe_redirect(\add_query_arg([
-		'post_type' => CMX_PT_ARTIKEL,
-		'cmx_import_notice_artikel' => 1,
-	], \admin_url('edit.php')));
-	exit;
+	cmx_artikel_import_redirect_notice($notice);
 });
 
 /**
@@ -591,6 +626,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_notice_key')) {
 	if (!$notice) return;
 
 	\delete_user_meta(\get_current_user_id(), cmx_artikel_import_notice_key());
+	$notice_type = \sanitize_key((string) ($notice['type'] ?? 'success'));
+	if (!empty($notice['message'])) {
+		echo '<div class="notice notice-' . \esc_attr($notice_type === 'error' ? 'error' : 'success') . ' is-dismissible"><p>' . \esc_html((string) $notice['message']) . '</p></div>';
+		return;
+	}
 
 	$lines = cmx_standard_import_notice_lines('Import abgeschlossen', (array) $notice);
 	echo '<div class="notice notice-success is-dismissible">';
