@@ -117,6 +117,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_belegtext')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_logo_url')) {
+	function cmx_artikel_detail_me_logo_url(): string {
+		$query = new \WP_Query([
+			'post_type'              => 'kontakte',
+			'post_status'            => 'publish',
+			'posts_per_page'         => 1,
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'ignore_sticky_posts'    => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'tax_query'              => [[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'name',
+				'terms'    => ['Das bin ich', 'Ich'],
+			]],
+		]);
+
+		$post_id = !empty($query->posts[0]->ID) ? (int) $query->posts[0]->ID : 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		return \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_sort_state')) {
 	function cmx_artikel_detail_sort_state(): array {
 		$key = isset($_GET['sort_key']) ? \sanitize_key((string) \wp_unslash($_GET['sort_key'])) : 'title';
@@ -353,6 +380,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		$prev_item = \is_array($neighbors['prev'] ?? null) ? (array) $neighbors['prev'] : null;
 		$next_item = \is_array($neighbors['next'] ?? null) ? (array) $neighbors['next'] : null;
 		$image_url = \trim((string) \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true));
+		$me_logo_url = cmx_artikel_detail_me_logo_url();
 		$price_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_label')
 			&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_raw')
 			? cmx_artikel_liste_price_label(cmx_artikel_liste_price_raw($artikel_id))
@@ -376,6 +404,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			.cmx-artikel-detail-nav-left .cmx-artikel-detail-nav-icon{transform:rotate(-135deg);margin-left:5px}
 			.cmx-artikel-detail-nav-right .cmx-artikel-detail-nav-icon{transform:rotate(45deg);margin-right:5px}
 			.cmx-artikel-detail-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
+			.cmx-artikel-detail-head-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+			.cmx-artikel-detail-head-copy{flex:1 1 auto;min-width:0}
+			.cmx-artikel-detail-head-brand{flex:0 0 190px;display:flex;align-items:flex-start;justify-content:flex-end;min-height:84px}
+			.cmx-artikel-detail-head-logo{display:block;max-width:190px;max-height:84px;width:auto;height:auto;object-fit:contain;object-position:right top}
 			.cmx-artikel-detail-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
 			.cmx-artikel-detail-kicker a{color:inherit;text-decoration:none}
 			.cmx-artikel-detail-kicker a:hover{color:#1d2327}
@@ -404,6 +436,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			.cmx-artikel-detail-content p:last-child{margin-bottom:0}
 			@media (max-width:860px){
 				.cmx-artikel-detail-nav{display:none}
+				.cmx-artikel-detail-head-inner{flex-direction:column}
+				.cmx-artikel-detail-head-brand{justify-content:flex-start;min-height:0}
 				.cmx-artikel-detail-stage{grid-template-columns:1fr}
 				.cmx-artikel-detail-title{font-size:30px}
 				.cmx-artikel-detail-media{height:auto;min-height:320px}
@@ -426,11 +460,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 		echo '<div class="cmx-artikel-detail-page"><div class="cmx-artikel-detail-card">';
 		echo '<div class="cmx-artikel-detail-head">';
+		echo '<div class="cmx-artikel-detail-head-inner">';
+		echo '<div class="cmx-artikel-detail-head-copy">';
 		echo '<p class="cmx-artikel-detail-kicker"><a href="' . \esc_url($reload_url) . '">Zurück zum Katalog</a></p>';
 		echo '<h1 class="cmx-artikel-detail-title">' . \esc_html($title) . '</h1>';
 		if ($intro_text !== '') {
 			echo '<p class="cmx-artikel-detail-sub">' . \wp_kses(\nl2br(\esc_html($intro_text)), ['br' => []]) . '</p>';
 		}
+		echo '</div>';
+		if ($me_logo_url !== '') {
+			echo '<div class="cmx-artikel-detail-head-brand"><img class="cmx-artikel-detail-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo"></div>';
+		}
+		echo '</div>';
 		echo '</div>';
 
 		echo '<div class="cmx-artikel-detail-stage" id="cmx-artikel-detail-stage">';
