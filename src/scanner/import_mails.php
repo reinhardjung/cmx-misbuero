@@ -2123,8 +2123,8 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 		'skipped_messages' => (int) ($manual_state['skipped_messages'] ?? 0),
 		'unseen_messages' => (int) ($manual_state['unseen_messages'] ?? 0),
 		'skip_reasons' => \is_array($manual_state['skip_reasons'] ?? null) ? (array) $manual_state['skip_reasons'] : [],
-		'max_messages' => 100,
-		'max_runtime_seconds' => 20,
+		'max_messages' => 25,
+		'max_runtime_seconds' => 8,
 	]);
 	cmx_mail_import_log('manual run', $result);
 
