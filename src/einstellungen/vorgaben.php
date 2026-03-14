@@ -156,4 +156,22 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_tab_vorgaben',
 		'cmx_sec_vorgaben'
 	);
+
+	\add_settings_field(
+		'powered_by',
+		'Powered by Mis Büro',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$enabled = \array_key_exists('powered_by', $opts)
+				? !empty($opts['powered_by'])
+				: true;
+			echo '<label>';
+			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[powered_by]" value="0">';
+			echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[powered_by]" value="1" '.\checked($enabled, true, false).'> ';
+			echo 'Werbung zeigen';
+			echo '</label>';
+		},
+		'cmx_tab_vorgaben',
+		'cmx_sec_vorgaben'
+	);
 }
