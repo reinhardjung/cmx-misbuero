@@ -1100,7 +1100,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 			$message .= "\n\n" . $agb_footer_text;
 		}
 	}
-	$message .= "\n\nErstellt mit MisBüro (https://misbuero.ch/) – der einfachen Bürosoftware für Selbständige.";
+	$message .= "\n\nErstellt mit MisBüro (https://misbuero.ch/) – der einfachen Bürosoftware für Selbständige in der Schweiz.";
 
 	$headers = ['Content-Type: text/plain; charset=UTF-8'];
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
