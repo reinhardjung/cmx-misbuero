@@ -382,9 +382,19 @@ function cmxbu_replace_placeholder_with_spacing(string $message, string $placeho
 }
 
 function cmxbu_prepare_belegmail_html(string $message): string {
-	// If message already contains HTML, leave it as-is.
-	if (preg_match('/<[^>]+>/', $message)) {
+	// Full HTML templates must stay untouched.
+	if (preg_match('/<(?:!doctype|html|body|table)\b/i', $message)) {
 		return $message;
+	}
+
+	// Existing block HTML from the editor already carries its own spacing.
+	if (preg_match('/<(?:p|div|ul|ol|li|table|thead|tbody|tr|td|th|h[1-6]|blockquote|br)\b/i', $message)) {
+		return $message;
+	}
+
+	// Inline HTML snippets should still preserve entered line breaks.
+	if (preg_match('/<[^>]+>/', $message)) {
+		return nl2br($message);
 	}
 
 	// Plain text: preserve new lines.

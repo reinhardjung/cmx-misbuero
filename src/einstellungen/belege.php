@@ -82,7 +82,8 @@ function cmx_field_textarea_beleg(array $args): void {
 			],
 			'tinymce' => [
 				'menubar' => false,
-				'statusbar' => false,
+				'statusbar' => true,
+				'resize' => true,
 				'toolbar1' => 'bold,italic,link,unlink,bullist,numlist,undo,redo',
 				'toolbar2' => '',
 				'toolbar3' => '',
@@ -158,7 +159,7 @@ function cmx_field_textarea_beleg(array $args): void {
 	echo '<textarea
 		name="cmx_belege[' . esc_attr($key) . ']"
 		rows="' . esc_attr($rows) . '"
-		style="width:100%;">' . esc_textarea($display) . '</textarea>';
+		style="width:100%;resize:both;">' . esc_textarea($display) . '</textarea>';
 }
 
 function cmx_field_select_briefbogen(array $args): void {

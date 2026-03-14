@@ -118,7 +118,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 								</tr>
 							</table>
 							<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->
-							<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
+							<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Dienstleistungen.</p>
 							<!---
 							<p style="margin:0 0 10px 0;font-size:14px;color:#52616b;line-height:1.5;">
 								<a href="' . $download_url . '" style="color:#a42c24;text-decoration:underline;">' . $download_url . '</a>
