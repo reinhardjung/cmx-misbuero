@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.14.136
+ * Version: 3.14.140
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -366,41 +366,6 @@ function cmx_check_and_create_subdomain_admin() {
 				$reply_to_email = $from_email;
 			}
 			$reply_to_name = $name;
-
-			$force_current_user_sender = !empty($GLOBALS['cmx_force_current_user_mail_sender']);
-			if ($force_current_user_sender && !\is_email((string) ($smtp['reply'] ?? ''))) {
-				$current_user = \wp_get_current_user();
-				$current_user_email = ($current_user instanceof \WP_User && $current_user->exists())
-					? \sanitize_email((string) $current_user->user_email)
-					: '';
-				$current_user_name = ($current_user instanceof \WP_User && $current_user->exists())
-					? \trim((string) $current_user->display_name)
-					: '';
-				if ($current_user_name === '' && $current_user instanceof \WP_User && $current_user->exists()) {
-					$current_user_name = \trim((string) $current_user->user_login);
-				}
-
-				$preferred_reply_email = '';
-				$preferred_reply_name = '';
-				if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact_reply_to')) {
-					$me_contact = (array) cmxbu_get_me_contact_reply_to('');
-					$candidate_email = \sanitize_email((string) ($me_contact['email'] ?? ''));
-					if (\is_email($candidate_email)) {
-						$preferred_reply_email = $candidate_email;
-						$preferred_reply_name = \trim((string) ($me_contact['name'] ?? ''));
-					}
-				}
-				if ($preferred_reply_email === '' && \is_email($current_user_email)) {
-					$preferred_reply_email = $current_user_email;
-					$preferred_reply_name = $current_user_name;
-				}
-				if (\is_email($preferred_reply_email)) {
-					$reply_to_email = $preferred_reply_email;
-					if ($preferred_reply_name !== '') {
-						$reply_to_name = $preferred_reply_name;
-					}
-				}
-			}
 
 			$envelope_email = \is_email((string) ($smtp['email_address'] ?? ''))
 				? (string) $smtp['email_address']
