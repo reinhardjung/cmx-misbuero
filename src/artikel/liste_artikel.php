@@ -216,7 +216,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_description_pair')) {
 			return ['', ''];
 		}
 
-		$short = cmx_artikel_liste_description_short($content_full, 50);
+		$short = cmx_artikel_liste_description_short($content_full, 110);
 		return [$short, $content_full];
 	}
 }
@@ -258,7 +258,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_rows')) {
 			$rows[] = [
 				'id' => $artikel_id,
 				'title' => $title,
-				'url' => (string) \get_permalink($artikel_id),
+				'url' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_url')
+					? (string) cmx_artikel_detail_url($artikel_id)
+					: (string) \get_permalink($artikel_id),
 				'sku' => \trim((string) \get_post_meta($artikel_id, $sku_key, true)),
 				'description' => $description_short,
 				'description_full' => $description_full,
@@ -327,7 +329,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			:root{color-scheme:light}
 			*{box-sizing:border-box}
 			body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#efefef;color:#1d2327}
-			.cmx-artikel-page{max-width:1180px;margin:0 auto;padding:32px 18px 40px}
+			.cmx-artikel-page{max-width:1570px;margin:0 auto;padding:32px 18px 40px}
 			.cmx-artikel-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 			.cmx-artikel-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
 			.cmx-artikel-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
