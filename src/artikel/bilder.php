@@ -285,7 +285,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 		}
 		echo '</div>';
 
-		echo '<p class="cmx-li-save-wrap" style="margin:10px 0 0 0;display:none;"><button type="submit" class="button button-primary">Artikel speichern</button></p>';
+		echo '<p class="cmx-li-save-wrap" style="margin:10px 0 0 0;display:none;"><button type="submit" class="button button-primary cmx-li-save-button">Artikel speichern</button></p>';
 		echo '</div>';
 
 		echo '<script>
@@ -304,6 +304,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 			var status = root.querySelector(".cmx-li-status");
 			var saveWrap = root.querySelector(".cmx-li-save-wrap");
 			var form = root.closest("form");
+			var restoreKey = "cmx-li-scroll-restore:" + root.id;
 
 			var draggedRow = null;
 			var initialOrder = [];
@@ -322,6 +323,51 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 
 			function markInitialState() {
 				initialOrder = currentOrderIds();
+			}
+
+			function getRootTopAbsolute() {
+				var rect = root.getBoundingClientRect();
+				return rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+			}
+
+			function persistScrollRestore() {
+				if (!window.sessionStorage) return;
+				try {
+					var payload = {
+						offset: (window.pageYOffset || document.documentElement.scrollTop || 0) - getRootTopAbsolute()
+					};
+					window.sessionStorage.setItem(restoreKey, JSON.stringify(payload));
+				} catch (err) {}
+			}
+
+			function restoreScrollPosition() {
+				if (!window.sessionStorage) return;
+				var raw = null;
+				try {
+					raw = window.sessionStorage.getItem(restoreKey);
+				} catch (err) {
+					return;
+				}
+				if (!raw) return;
+				try {
+					window.sessionStorage.removeItem(restoreKey);
+				} catch (err) {}
+
+				var payload = null;
+				try {
+					payload = JSON.parse(raw);
+				} catch (err) {
+					return;
+				}
+				if (!payload || typeof payload.offset !== "number") return;
+
+				var targetY = Math.max(0, getRootTopAbsolute() + payload.offset);
+				window.requestAnimationFrame(function(){
+					window.scrollTo(0, targetY);
+					window.setTimeout(function(){
+						window.scrollTo(0, targetY);
+					}, 80);
+				});
 			}
 
 			function openPicker() {
@@ -531,6 +577,14 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 				});
 			}
 
+			if (saveWrap) {
+				saveWrap.addEventListener("click", function(e){
+					var saveButton = e.target.closest ? e.target.closest(".cmx-li-save-button") : null;
+					if (!saveButton) return;
+					persistScrollRestore();
+				});
+			}
+
 			if (fileList) {
 				Array.prototype.slice.call(fileList.querySelectorAll(".cmx-li-file-row")).forEach(attachRowDnD);
 				fileList.addEventListener("click", function(e){
@@ -610,6 +664,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 
 			markInitialState();
 			refreshState();
+			restoreScrollPosition();
 		})();
 		</script>';
 	}
