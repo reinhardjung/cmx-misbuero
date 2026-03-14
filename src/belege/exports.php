@@ -1094,13 +1094,16 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 
 	$user = \wp_get_current_user();
 	$sender_name = '';
-	if ($user instanceof \WP_User && $user->exists()) {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailbox_text')) {
+		$sender_name = \trim((string) cmx_email_sender_mailbox_text());
+	}
+	if ($sender_name === '' && $user instanceof \WP_User && $user->exists()) {
 		$sender_name = \trim((string) ($user->display_name ?: $user->user_login));
 	}
 	$subject = 'ZIP-Export Milchbüchli';
 	$message = "Guten Tag,\n\nhier ist der ZIP-Download-Link:\n" . $share_url;
 	if ($sender_name !== '') {
-		$message .= "\n\nGesendet von: " . $sender_name;
+		$message .= "\n\nAbsender: " . $sender_name;
 	}
 	if (\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_text')) {
 		$agb_footer_text = \trim((string) cmx_email_agb_footer_text());

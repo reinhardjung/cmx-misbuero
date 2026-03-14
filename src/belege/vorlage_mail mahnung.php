@@ -61,6 +61,11 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$beleg_date_esc = esc_html($beleg_date);
 	$title_esc = esc_html($title);
 	$anrede_esc = esc_html($anrede);
+	$sender_name = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+		? \trim((string) cmx_email_option_value('email_name'))
+		: '';
+	$header_kicker = $sender_name !== '' ? $sender_name : $site_name;
+	$header_kicker_esc = esc_html($header_kicker);
 	$site_name_esc = esc_html($site_name);
 	$catalog_url_esc = esc_url($catalog_url);
 	$preheader_esc = esc_html($preheader);
@@ -69,6 +74,9 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 		: '';
 	$kundenportal_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
+		: '';
+	$sender_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')
+		? (string) cmx_email_sender_mailto_html('color:#8b98a5;text-decoration:none;')
 		: '';
 	$thank_you_margin_bottom = $kundenportal_footer_html !== '' ? '16px' : '0';
 	$mail_head_html = cmx_mail_outlook_head_html();
@@ -96,7 +104,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 				<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 					<tr>
 						<td style="padding:20px 24px;background:#b53a30;background-image:linear-gradient(135deg,#a42c24,#d84a3a);color:#ffffff;">
-							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $site_name_esc . '</div>
+							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_esc . '</div>
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>
 							' . ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '') . '
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>
@@ -126,6 +134,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
 							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
 							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
+							' . ($sender_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Absender: ' . $sender_footer_html . '</p>' : '') . '
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">
 								Diese E-Mail wurde von <a href="' . $catalog_url_esc . '" style="color:#8b98a5;text-decoration:underline;">' . $site_name_esc . '</a> automatisch generiert.
 							</p>

@@ -129,6 +129,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailbox_text')) {
+	function cmx_email_sender_mailbox_text(): string {
+		$name = \trim((string) cmx_email_option_value('email_name'));
+		$email = \sanitize_email((string) cmx_email_option_value('email_address'));
+		if (\is_email($email) && $name !== '') {
+			return '"' . $name . '" <' . $email . '>';
+		}
+		if (\is_email($email)) {
+			return $email;
+		}
+		if ($name !== '') {
+			return $name;
+		}
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
+	function cmx_email_sender_mailto_html(string $link_style = ''): string {
+		$label = cmx_email_sender_mailbox_text();
+		if ($label === '') {
+			return '';
+		}
+
+		$email = \sanitize_email((string) cmx_email_option_value('email_address'));
+		$attr = $link_style !== '' ? ' style="' . \esc_attr($link_style) . '"' : '';
+		if (\is_email($email)) {
+			return '<a href="mailto:' . \esc_attr($email) . '"' . $attr . '>' . \esc_html($label) . '</a>';
+		}
+
+		return '<span' . $attr . '>' . \esc_html($label) . '</span>';
+	}
+}
+
 \add_action('admin_init', function (): void {
 	$page = 'cmx_tab_email';
 
