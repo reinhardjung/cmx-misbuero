@@ -101,6 +101,7 @@ function cmx_get_subtabs(string $tab): array {
 			'gutschrift'   => 'Gutschrift',
 			'lieferschein' => 'Lieferschein',
 			'rechnung'     => 'Rechnung',
+			'mahnung'      => 'Mahnung',
 		];
 	}
 

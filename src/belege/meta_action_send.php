@@ -167,23 +167,21 @@ function cmxbu_handle_beleg_send(): void {
 		? \home_url('/katalog/')
 		: '';
 	$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
-	$message = $custom_message;
-	if (\trim($message) === '') {
-		$message = cmxbu_render_belegmail_template([
-			'anrede' => $anrede,
-			'vorname' => $vorname,
-			'nachname' => $nachname,
-			'kontakt_id' => (int) $kontakt_id,
-			'beleg_label' => $beleg_label,
-			'beleg_id' => $beleg_id,
-			'beleg_date' => $beleg_mail_date,
-			'download_url' => $download_url,
-			'faellig_bis' => $faellig_bis,
-			'betrag' => $betrag,
-			'site_name' => \get_bloginfo('name'),
-			'catalog_url' => $catalog_url,
-		]);
-	}
+	$message = cmxbu_render_belegmail_template([
+		'anrede' => $anrede,
+		'vorname' => $vorname,
+		'nachname' => $nachname,
+		'kontakt_id' => (int) $kontakt_id,
+		'beleg_label' => $beleg_label,
+		'beleg_id' => $beleg_id,
+		'beleg_date' => $beleg_mail_date,
+		'download_url' => $download_url,
+		'faellig_bis' => $faellig_bis,
+		'betrag' => $betrag,
+		'site_name' => \get_bloginfo('name'),
+		'catalog_url' => $catalog_url,
+		'custom_content' => $custom_message,
+	]);
 	if ($faellig_bis !== '') {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{faellig_bis}', esc_html($faellig_bis));
 	}
@@ -193,6 +191,16 @@ function cmxbu_handle_beleg_send(): void {
 	if ($beleg_mail_date !== '') {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', esc_html($beleg_mail_date));
 	}
+	$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
+		? (string) cmxbu_belegmail_salutation_text([
+			'anrede' => $anrede,
+			'vorname' => $vorname,
+			'nachname' => $nachname,
+		])
+		: 'Guten Tag';
+	if ($anrede_text !== '') {
+		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede_text));
+	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
@@ -201,13 +209,6 @@ function cmxbu_handle_beleg_send(): void {
 	// cmx_get_belegfuss($beleg_type);
 	$headers = ['Content-Type: text/html; charset=UTF-8'];
 	$message = cmxbu_prepare_belegmail_html($message);
-	if (\trim($custom_message) !== '') {
-		$message = cmxbu_append_belegmail_footer_html($message, [
-			'kontakt_id' => (int) $kontakt_id,
-			'site_name' => \get_bloginfo('name'),
-			'catalog_url' => $catalog_url,
-		]);
-	}
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
 	$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
@@ -345,14 +346,6 @@ function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
 
 	if (isset($options[$key]) && is_string($options[$key])) {
 		$message = $options[$key];
-	}
-
-	if ($kontakt_id) {
-		$anrede_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
-			? CMX_KONTAKTE_META_ANREDE
-			: '_cmx_kontakte_anrede';
-		$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede));
 	}
 
 	return $message;

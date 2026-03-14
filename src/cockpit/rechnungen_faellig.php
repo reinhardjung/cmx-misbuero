@@ -468,20 +468,41 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		];
 
 		if ($is_overdue) {
+			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
+				? (string) cmx_get_belegmail('mahnung', $kontakt_id)
+				: '';
 			$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
 			if ($beleg_mail_date !== '') {
 				$subject .= ' vom ' . $beleg_mail_date;
 			}
-			$message = cmxbu_render_belegmail_mahnung_template($mail_data);
+			$message = cmxbu_render_belegmail_mahnung_template($mail_data + [
+				'custom_content' => $custom_message,
+			]);
 			$mail_action_label = 'Zahlungserinnerung';
 		} else {
+			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
+				? (string) cmx_get_belegmail('rechnung', $kontakt_id)
+				: '';
 			$subject = $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
 			if ($beleg_mail_date !== '') {
 				$subject .= ' vom ' . $beleg_mail_date;
 			}
 			$subject .= ' (erneute Zustellung)';
-			$message = cmxbu_render_belegmail_template($mail_data);
+			$message = cmxbu_render_belegmail_template($mail_data + [
+				'custom_content' => $custom_message,
+			]);
 			$mail_action_label = 'Rechnung erneut';
+		}
+
+		$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
+			? (string) cmxbu_belegmail_salutation_text([
+				'anrede' => $anrede,
+				'vorname' => $vorname,
+				'nachname' => $nachname,
+			])
+			: 'Guten Tag';
+		if ($anrede_text !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_replace_placeholder_with_spacing')) {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', \esc_html($anrede_text));
 		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_belegmail_html')) {

@@ -8,10 +8,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_outlook_head_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
-	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = ''): string {
+	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = '', int $label_offset_px = 0): string {
 		$url = \esc_url($url);
 		$label_esc = \esc_html($label);
 		$width = \max(140, $width);
+		$label_html = $label_offset_px !== 0
+			? '<span style="position:relative;top:' . $label_offset_px . 'px;">' . $label_esc . '</span>'
+			: $label_esc;
 
 		return '<!--[if mso]>'
 			. '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>'
@@ -20,7 +23,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
 			. '</v:roundrect>'
 			. '</td></tr></table>'
 			. '<![endif]--><!--[if !mso]><!-->'
-			. '<a href="' . $url . '" style="mso-hide:all;background:' . $background . ';color:' . $color . ';text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;font-weight:600;">' . $inner_html . $label_esc . '</a>'
+			. '<a href="' . $url . '" style="mso-hide:all;background:' . $background . ';color:' . $color . ';text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;font-weight:600;">' . $inner_html . $label_html . '</a>'
 			. '<!--<![endif]-->';
 	}
 }

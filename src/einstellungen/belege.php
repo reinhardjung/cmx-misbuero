@@ -218,7 +218,8 @@ add_action('admin_init', function() {
 		'offerte'      => 'Offerte',
 		'gutschrift'   => 'Gutschrift',
 		'lieferschein' => 'Lieferschein',
-		'rechnung'     => 'Rechnung'
+		'rechnung'     => 'Rechnung',
+		'mahnung'      => 'Mahnung',
 	];
 
 	foreach ($tabs as $sub => $label) {
