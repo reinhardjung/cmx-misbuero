@@ -230,33 +230,90 @@ function cmx_artikel_import_image_basename_for_post(int $post_id): string {
 	return $title !== '' ? $title : ('artikel-' . (int) $post_id);
 }
 
-function cmx_artikel_import_copy_image_file_to_post(int $post_id, string $source_path): bool {
+function cmx_artikel_import_gallery_meta_key(): string {
+	if (\function_exists('\\CLOUDMEISTER\\CMX\\MisBuero\\cmx_li_gallery_meta_key')) {
+		return (string) \CLOUDMEISTER\CMX\MisBuero\cmx_li_gallery_meta_key();
+	}
+	return '_cmx_local_image_artikel_gallery';
+}
+
+function cmx_artikel_import_gallery_get(int $post_id): array {
+	if (\function_exists('\\CLOUDMEISTER\\CMX\\MisBuero\\cmx_li_gallery_get')) {
+		$items = \CLOUDMEISTER\CMX\MisBuero\cmx_li_gallery_get($post_id, '_cmx_local_image_artikel');
+		return \is_array($items) ? \array_values(\array_filter($items, static function($item): bool {
+			return \is_array($item);
+		})) : [];
+	}
+
+	$legacy_path = (string) \get_post_meta($post_id, '_cmx_local_image_artikel_path', true);
+	$legacy_url = (string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true);
+	if ($legacy_path === '' && $legacy_url === '') {
+		return [];
+	}
+	return [[
+		'id' => 'legacy',
+		'path' => $legacy_path,
+		'url' => $legacy_url,
+	]];
+}
+
+function cmx_artikel_import_delete_existing_gallery_images(int $post_id): void {
+	$gallery = cmx_artikel_import_gallery_get($post_id);
+	foreach ($gallery as $item) {
+		$path = \wp_normalize_path((string) ($item['path'] ?? ''));
+		if ($path !== '' && \is_file($path)) {
+			@unlink($path);
+		}
+	}
+
+	\delete_post_meta($post_id, cmx_artikel_import_gallery_meta_key());
+	\delete_post_meta($post_id, '_cmx_local_image_artikel_path');
+	\delete_post_meta($post_id, '_cmx_local_image_artikel_url');
+}
+
+function cmx_artikel_import_unique_target_path(string $base_dir, string $base_name, string $ext): string {
+	$base_name = \sanitize_file_name($base_name);
+	$base_name = \trim((string) \preg_replace('~\.[a-z0-9]+$~i', '', $base_name), "-_. \t\n\r\0\x0B");
+	if ($base_name === '') {
+		$base_name = 'bild';
+	}
+	$ext = \ltrim(\strtolower($ext), '.');
+	$ext = $ext !== '' ? '.' . $ext : '';
+
+	$target = \wp_normalize_path(\trailingslashit($base_dir) . $base_name . $ext);
+	if (!\is_file($target)) {
+		return $target;
+	}
+
+	$counter = 2;
+	do {
+		$target = \wp_normalize_path(\trailingslashit($base_dir) . $base_name . '-' . $counter . $ext);
+		$counter++;
+	} while (\is_file($target));
+
+	return $target;
+}
+
+function cmx_artikel_import_copy_image_file_to_post(int $post_id, string $source_path): array {
 	$source_path = \wp_normalize_path(\trim($source_path));
 	if ($source_path === '' || !\is_readable($source_path) || !\is_file($source_path)) {
-		return false;
+		return [];
 	}
 
 	$ext = \strtolower((string) \pathinfo($source_path, PATHINFO_EXTENSION));
 	if (!\in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'ico'], true)) {
-		return false;
+		return [];
 	}
 
 	$base_dir = cmx_artikel_import_image_base_path();
 	if (!\is_dir($base_dir) && !\wp_mkdir_p($base_dir)) {
-		return false;
+		return [];
 	}
 
-	$basename = cmx_artikel_import_image_basename_for_post($post_id);
-	foreach (['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'ico'] as $candidate_ext) {
-		$existing = \wp_normalize_path(\trailingslashit($base_dir) . $basename . '.' . $candidate_ext);
-		if (\is_file($existing)) {
-			@unlink($existing);
-		}
-	}
-
-	$target = \wp_normalize_path(\trailingslashit($base_dir) . $basename . '.' . $ext);
+	$source_name = (string) \pathinfo($source_path, PATHINFO_FILENAME);
+	$target = cmx_artikel_import_unique_target_path($base_dir, $source_name, $ext);
 	if (!@copy($source_path, $target)) {
-		return false;
+		return [];
 	}
 
 	@chmod($target, 0644);
@@ -264,9 +321,32 @@ function cmx_artikel_import_copy_image_file_to_post(int $post_id, string $source
 	$base_url = cmx_artikel_import_image_base_url();
 	$url = \trailingslashit($base_url) . \rawurlencode(\basename($target)) . '?v=' . $version;
 
-	\update_post_meta($post_id, '_cmx_local_image_artikel_path', $target);
-	\update_post_meta($post_id, '_cmx_local_image_artikel_url', $url);
-	return true;
+	return [
+		'id' => 'img_' . \wp_generate_password(12, false, false),
+		'path' => $target,
+		'url' => $url,
+	];
+}
+
+function cmx_artikel_import_update_gallery(int $post_id, array $items): void {
+	if (\function_exists('\\CLOUDMEISTER\\CMX\\MisBuero\\cmx_li_gallery_update')) {
+		\CLOUDMEISTER\CMX\MisBuero\cmx_li_gallery_update($post_id, '_cmx_local_image_artikel', $items);
+		return;
+	}
+
+	$items = \array_values(\array_filter($items, static function($item): bool {
+		return \is_array($item) && (((string) ($item['path'] ?? '')) !== '' || ((string) ($item['url'] ?? '')) !== '');
+	}));
+	if ($items === []) {
+		\delete_post_meta($post_id, cmx_artikel_import_gallery_meta_key());
+		\delete_post_meta($post_id, '_cmx_local_image_artikel_path');
+		\delete_post_meta($post_id, '_cmx_local_image_artikel_url');
+		return;
+	}
+
+	\update_post_meta($post_id, cmx_artikel_import_gallery_meta_key(), $items);
+	\update_post_meta($post_id, '_cmx_local_image_artikel_path', (string) ($items[0]['path'] ?? ''));
+	\update_post_meta($post_id, '_cmx_local_image_artikel_url', (string) ($items[0]['url'] ?? ''));
 }
 
 function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, array $zip_image_map = []): void {
@@ -274,19 +354,52 @@ function cmx_artikel_import_apply_image(int $post_id, array $row, array $row_l, 
 		return;
 	}
 
-	$candidates = [
-		(string) ($row['local_image_zip_path'] ?? ($row_l['local_image_zip_path'] ?? '')),
-		(string) ($row['featured_image_zip_path'] ?? ($row_l['featured_image_zip_path'] ?? '')),
-	];
+	$raw_gallery = (string) ($row['gallery_image_zip_paths'] ?? ($row_l['gallery_image_zip_paths'] ?? ''));
+	$candidates = [];
+	if ($raw_gallery !== '') {
+		$candidates = \array_values(\array_filter(\array_map('trim', \explode('|', $raw_gallery))));
+	}
+	if ($candidates === []) {
+		$candidates = [
+			(string) ($row['local_image_zip_path'] ?? ($row_l['local_image_zip_path'] ?? '')),
+			(string) ($row['featured_image_zip_path'] ?? ($row_l['featured_image_zip_path'] ?? '')),
+		];
+	}
 
+	$resolved_sources = [];
 	foreach ($candidates as $candidate) {
-		$candidate = \trim($candidate);
-		if ($candidate === '') continue;
+		$candidate = \trim((string) $candidate);
+		if ($candidate === '') {
+			continue;
+		}
 		$normalized = \ltrim(\str_replace('\\', '/', $candidate), '/');
 		$zip_source = $zip_image_map[$normalized] ?? $zip_image_map[\basename($normalized)] ?? '';
-		if ($zip_source !== '' && cmx_artikel_import_copy_image_file_to_post($post_id, (string) $zip_source)) {
-			return;
+		if ($zip_source === '') {
+			continue;
 		}
+		$resolved = \wp_normalize_path((string) $zip_source);
+		if ($resolved === '' || isset($resolved_sources[$resolved])) {
+			continue;
+		}
+		$resolved_sources[$resolved] = true;
+	}
+
+	if ($resolved_sources === []) {
+		return;
+	}
+
+	cmx_artikel_import_delete_existing_gallery_images($post_id);
+
+	$items = [];
+	foreach (\array_keys($resolved_sources) as $source_path) {
+		$item = cmx_artikel_import_copy_image_file_to_post($post_id, (string) $source_path);
+		if ($item !== []) {
+			$items[] = $item;
+		}
+	}
+
+	if ($items !== []) {
+		cmx_artikel_import_update_gallery($post_id, $items);
 	}
 }
 
@@ -577,7 +690,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 
 			if (\strpos($key, 'meta__') === 0) {
 				$meta_key = \substr($key, 6);
-				if ($meta_key === '_cmx_local_image_artikel_path' || $meta_key === '_cmx_local_image_artikel_url' || $meta_key === '_thumbnail_id') {
+				if ($meta_key === '_cmx_local_image_artikel_gallery' || $meta_key === '_cmx_local_image_artikel_path' || $meta_key === '_cmx_local_image_artikel_url' || $meta_key === '_thumbnail_id') {
 					continue;
 				}
 

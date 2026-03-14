@@ -174,6 +174,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_collect_export_artikel_ids')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')) {
+	function cmxal_get_artikel_gallery_items(int $post_id): array {
+		if (\function_exists('\\CLOUDMEISTER\\CMX\\MisBuero\\cmx_li_gallery_get')) {
+			$items = \CLOUDMEISTER\CMX\MisBuero\cmx_li_gallery_get($post_id, '_cmx_local_image_artikel');
+			return \is_array($items) ? \array_values(\array_filter($items, static function($item): bool {
+				return \is_array($item);
+			})) : [];
+		}
+
+		$legacy_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_path', true));
+		$legacy_url = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_url', true));
+		if ($legacy_path === '' && $legacy_url === '') {
+			return [];
+		}
+
+		return [[
+			'id' => 'legacy',
+			'path' => $legacy_path,
+			'url' => $legacy_url,
+		]];
+	}
+
 	function cmxal_local_file_from_url(string $url): string {
 		$url = \trim($url);
 		if ($url === '') {
@@ -213,6 +234,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')) {
 
 	function cmxal_collect_candidate_image_paths(int $post_id): array {
 		$candidates = [];
+		$gallery_items = \function_exists(__NAMESPACE__ . '\\cmxal_get_artikel_gallery_items')
+			? (array) cmxal_get_artikel_gallery_items($post_id)
+			: [];
+
+		foreach ($gallery_items as $index => $item) {
+			$path = \trim((string) ($item['path'] ?? ''));
+			$url = \trim((string) ($item['url'] ?? ''));
+			if ($path === '' && $url === '') {
+				continue;
+			}
+			$candidates[] = [
+				'path' => $path,
+				'url' => $url,
+				'suffix' => $index === 0 ? 'bild' : ('bild-' . ($index + 1)),
+			];
+		}
 
 		$local_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_artikel_path', true));
 		if ($local_path !== '') {
@@ -343,12 +380,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 			'local_image_url',
 			'local_image_path',
 			'local_image_zip_path',
+			'gallery_image_zip_paths',
 			'featured_image',
 			'featured_image_path',
 			'featured_image_zip_path',
 		];
 
 		$meta_blacklist = [
+			'_cmx_local_image_artikel_gallery',
 			'_cmx_local_image_artikel_path',
 			'_cmx_local_image_artikel_url',
 			'_thumbnail_id',
@@ -414,12 +453,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 				? (array) cmxal_artikel_image_entries((int) $post_id)
 				: [];
 			$local_image_zip_path = '';
+			$gallery_image_zip_paths = [];
 			$featured_image_zip_path = '';
 			foreach ($image_entries as $entry) {
 				$suffix = (string) ($entry['suffix'] ?? '');
 				$zip_name = (string) ($entry['zip_name'] ?? '');
 				if ($suffix === 'bild' && $local_image_zip_path === '') {
 					$local_image_zip_path = $zip_name;
+				}
+				if ($suffix === 'bild' || \strpos($suffix, 'bild-') === 0) {
+					$gallery_image_zip_paths[] = $zip_name;
 				}
 				if ($suffix === 'featured' && $featured_image_zip_path === '') {
 					$featured_image_zip_path = $zip_name;
@@ -436,6 +479,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 				'local_image_url'        => $local_image_url,
 				'local_image_path'       => $local_image_path,
 				'local_image_zip_path'   => $local_image_zip_path,
+				'gallery_image_zip_paths'=> \implode(' | ', \array_values(\array_filter($gallery_image_zip_paths))),
 				'featured_image'         => $featured_url,
 				'featured_image_path'    => $featured_path,
 				'featured_image_zip_path'=> $featured_image_zip_path,
