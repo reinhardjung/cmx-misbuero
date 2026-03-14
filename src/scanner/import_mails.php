@@ -390,6 +390,43 @@ function cmx_mail_import_support_user_switch_enabled(): bool {
 	return \in_array((string) $value, ['1', 'true', 'yes', 'on'], true);
 }
 
+function cmx_mail_import_manual_state_key(string $run_id): string {
+	$run_id = \trim($run_id);
+	if ($run_id === '') {
+		return '';
+	}
+
+	return 'cmx_mail_import_state_' . (int) \get_current_user_id() . '_' . \md5($run_id);
+}
+
+function cmx_mail_import_get_manual_state(string $run_id): array {
+	$key = cmx_mail_import_manual_state_key($run_id);
+	if ($key === '') {
+		return [];
+	}
+
+	$state = \get_transient($key);
+	return \is_array($state) ? $state : [];
+}
+
+function cmx_mail_import_save_manual_state(string $run_id, array $state): void {
+	$key = cmx_mail_import_manual_state_key($run_id);
+	if ($key === '') {
+		return;
+	}
+
+	\set_transient($key, $state, 30 * \MINUTE_IN_SECONDS);
+}
+
+function cmx_mail_import_delete_manual_state(string $run_id): void {
+	$key = cmx_mail_import_manual_state_key($run_id);
+	if ($key === '') {
+		return;
+	}
+
+	\delete_transient($key);
+}
+
 function cmx_mail_import_normalize_email(string $raw): string {
 	$email = \sanitize_email((string) $raw);
 	return \is_email($email) ? \strtolower($email) : '';
@@ -1344,6 +1381,21 @@ function cmx_mail_import_open_mailbox(array $settings) {
 		return false;
 	}
 
+	if (\function_exists('imap_timeout')) {
+		if (\defined('OPENTIMEOUT')) {
+			@\imap_timeout(\OPENTIMEOUT, 12);
+		}
+		if (\defined('READTIMEOUT')) {
+			@\imap_timeout(\READTIMEOUT, 20);
+		}
+		if (\defined('WRITETIMEOUT')) {
+			@\imap_timeout(\WRITETIMEOUT, 20);
+		}
+		if (\defined('CLOSETIMEOUT')) {
+			@\imap_timeout(\CLOSETIMEOUT, 10);
+		}
+	}
+
 	$mailboxes = [
 		'{' . $host . ':' . $port . '/imap/ssl}INBOX',
 		'{' . $host . ':' . $port . '/imap/ssl/novalidate-cert}INBOX',
@@ -1360,21 +1412,28 @@ function cmx_mail_import_open_mailbox(array $settings) {
 }
 
 function cmx_mail_import_run(array $run_context = []): array {
-	$run_id = cmx_mail_import_build_run_id();
+	$run_id = \sanitize_text_field((string) ($run_context['run_id'] ?? ''));
+	if ($run_id === '') {
+		$run_id = cmx_mail_import_build_run_id();
+	}
 	$source = \sanitize_key((string) ($run_context['source'] ?? 'runtime'));
 	if ($source === '') {
 		$source = 'runtime';
 	}
+	$max_messages = \max(0, (int) ($run_context['max_messages'] ?? 0));
+	$max_runtime_seconds = \max(0.0, (float) ($run_context['max_runtime_seconds'] ?? 0));
+	$started_at = \microtime(true);
 
 	$result = [
-		'processed_messages' => 0,
-		'imported_items' => 0,
-		'skipped_messages' => 0,
-		'unseen_messages' => 0,
-		'skip_reasons' => [],
+		'processed_messages' => \max(0, (int) ($run_context['processed_messages'] ?? 0)),
+		'imported_items' => \max(0, (int) ($run_context['imported_items'] ?? 0)),
+		'skipped_messages' => \max(0, (int) ($run_context['skipped_messages'] ?? 0)),
+		'unseen_messages' => \max(0, (int) ($run_context['unseen_messages'] ?? 0)),
+		'skip_reasons' => \is_array($run_context['skip_reasons'] ?? null) ? (array) ($run_context['skip_reasons'] ?? []) : [],
 		'status' => 'idle',
 		'run_id' => $run_id,
 		'source' => $source,
+		'remaining_messages' => 0,
 	];
 	cmx_mail_import_log('run start', [
 		'run_id' => $run_id,
@@ -1422,7 +1481,9 @@ function cmx_mail_import_run(array $run_context = []): array {
 	try {
 		$messages = \imap_search($imap, 'UNSEEN UNDELETED');
 		if (!\is_array($messages) || empty($messages)) {
-			$result['status'] = 'no_unseen';
+			$result['status'] = ((int) $result['processed_messages'] > 0 || (int) $result['imported_items'] > 0 || (int) $result['skipped_messages'] > 0)
+				? 'done'
+				: 'no_unseen';
 			cmx_mail_import_register_run($result);
 			cmx_mail_import_log('run stop', [
 				'run_id' => $run_id,
@@ -1432,10 +1493,28 @@ function cmx_mail_import_run(array $run_context = []): array {
 		}
 
 		\sort($messages, \SORT_NUMERIC);
-		$result['unseen_messages'] = \count($messages);
+		if ((int) $result['unseen_messages'] <= 0) {
+			$result['unseen_messages'] = \count($messages);
+		}
 		$result['status'] = 'running';
+		$handled_this_chunk = 0;
 
-		foreach ($messages as $msg_no) {
+		foreach ($messages as $index => $msg_no) {
+			if ($max_messages > 0 && $handled_this_chunk >= $max_messages) {
+				$result['status'] = 'partial';
+				$result['remaining_messages'] = \max(0, \count($messages) - (int) $index);
+				cmx_mail_import_register_run($result);
+				cmx_mail_import_log('run partial', $result);
+				return $result;
+			}
+			if ($max_runtime_seconds > 0 && $handled_this_chunk > 0 && (\microtime(true) - $started_at) >= $max_runtime_seconds) {
+				$result['status'] = 'partial';
+				$result['remaining_messages'] = \max(0, \count($messages) - (int) $index);
+				cmx_mail_import_register_run($result);
+				cmx_mail_import_log('run partial', $result);
+				return $result;
+			}
+
 			$msg_no = (int) $msg_no;
 			if ($msg_no <= 0) {
 				continue;
@@ -1449,6 +1528,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 				]);
 				continue;
 			}
+			$handled_this_chunk++;
 
 			$info = cmx_mail_import_process_message($imap, $msg_no, $settings, $keywords, [
 				'run_id' => $run_id,
@@ -2027,10 +2107,49 @@ function cmx_mail_import_render_auto_import_meta_box(\WP_Post $post): void {
 	if (!\current_user_can('manage_options')) {
 		\wp_die('forbidden');
 	}
+	if (\function_exists('set_time_limit')) {
+		@\set_time_limit(0);
+	}
+	@\ignore_user_abort(true);
 
 	$redirect_target = \sanitize_key((string) ($_GET['redirect'] ?? $_POST['redirect'] ?? ''));
-	$result = cmx_mail_import_run(['source' => 'manual_admin']);
+	$run_id = \sanitize_text_field((string) ($_GET['run_id'] ?? $_POST['run_id'] ?? ''));
+	$manual_state = $run_id !== '' ? cmx_mail_import_get_manual_state($run_id) : [];
+	$result = cmx_mail_import_run([
+		'source' => 'manual_admin',
+		'run_id' => $run_id,
+		'processed_messages' => (int) ($manual_state['processed_messages'] ?? 0),
+		'imported_items' => (int) ($manual_state['imported_items'] ?? 0),
+		'skipped_messages' => (int) ($manual_state['skipped_messages'] ?? 0),
+		'unseen_messages' => (int) ($manual_state['unseen_messages'] ?? 0),
+		'skip_reasons' => \is_array($manual_state['skip_reasons'] ?? null) ? (array) $manual_state['skip_reasons'] : [],
+		'max_messages' => 100,
+		'max_runtime_seconds' => 20,
+	]);
 	cmx_mail_import_log('manual run', $result);
+
+	if ((string) ($result['status'] ?? '') === 'partial' && (int) ($result['remaining_messages'] ?? 0) > 0) {
+		$continue_run_id = \sanitize_text_field((string) ($result['run_id'] ?? ''));
+		if ($continue_run_id !== '') {
+			cmx_mail_import_save_manual_state($continue_run_id, [
+				'processed_messages' => (int) ($result['processed_messages'] ?? 0),
+				'imported_items' => (int) ($result['imported_items'] ?? 0),
+				'skipped_messages' => (int) ($result['skipped_messages'] ?? 0),
+				'unseen_messages' => (int) ($result['unseen_messages'] ?? 0),
+				'skip_reasons' => \is_array($result['skip_reasons'] ?? null) ? (array) $result['skip_reasons'] : [],
+			]);
+			\wp_safe_redirect(\add_query_arg([
+				'action' => 'cmx_mail_import_run_now',
+				'redirect' => $redirect_target !== '' ? $redirect_target : 'log',
+				'run_id' => $continue_run_id,
+			], \admin_url('admin-post.php')));
+			exit;
+		}
+	}
+
+	if ((string) ($result['run_id'] ?? '') !== '') {
+		cmx_mail_import_delete_manual_state((string) $result['run_id']);
+	}
 
 	$redirect_args = [
 		'cmx_mail_import_status' => (string) ($result['status'] ?? 'unknown'),
