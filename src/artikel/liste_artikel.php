@@ -426,11 +426,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 
 			echo '<td class="cmx-artikel-thumb-wrap">';
 			if ($url !== '' && $image_url !== '') {
-				echo '<a href="' . \esc_url($url) . '" title="Artikel anzeigen"><img src="' . \esc_url($image_url) . '" alt="' . \esc_attr($title) . '" class="cmx-artikel-thumb"></a>';
+				echo '<a href="' . \esc_url($url) . '" data-detail-url="' . \esc_attr($url) . '" title="Artikel anzeigen"><img src="' . \esc_url($image_url) . '" alt="' . \esc_attr($title) . '" class="cmx-artikel-thumb"></a>';
 			} elseif ($image_url !== '') {
 				echo '<img src="' . \esc_url($image_url) . '" alt="' . \esc_attr($title) . '" class="cmx-artikel-thumb">';
 			} elseif ($url !== '') {
-				echo '<a href="' . \esc_url($url) . '" title="Artikel anzeigen"><span class="cmx-artikel-thumb-placeholder" aria-hidden="true"></span></a>';
+				echo '<a href="' . \esc_url($url) . '" data-detail-url="' . \esc_attr($url) . '" title="Artikel anzeigen"><span class="cmx-artikel-thumb-placeholder" aria-hidden="true"></span></a>';
 			} else {
 				echo '<span class="cmx-artikel-thumb-placeholder" aria-hidden="true"></span>';
 			}
@@ -439,7 +439,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			if ($show_sku_column) {
 				echo '<td class="cmx-artikel-sku">';
 				if ($url !== '' && $sku !== '') {
-					echo '<a href="' . \esc_url($url) . '" title="Artikel anzeigen">' . \esc_html($sku) . '</a>';
+					echo '<a href="' . \esc_url($url) . '" data-detail-url="' . \esc_attr($url) . '" title="Artikel anzeigen">' . \esc_html($sku) . '</a>';
 				} else {
 					echo \esc_html($sku);
 				}
@@ -448,7 +448,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 
 			echo '<td>';
 			if ($url !== '') {
-				echo '<a href="' . \esc_url($url) . '" title="Artikel anzeigen">' . \esc_html($title) . '</a>';
+				echo '<a href="' . \esc_url($url) . '" data-detail-url="' . \esc_attr($url) . '" title="Artikel anzeigen">' . \esc_html($title) . '</a>';
 			} else {
 				echo \esc_html($title);
 			}
@@ -484,6 +484,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 					});
 					updateCount();
 				}
+				function currentSortType(key){
+					var activeButton=document.querySelector(".cmx-artikel-table thead button[data-sort-key=\\"" + key + "\\"]");
+					return activeButton ? (activeButton.getAttribute("data-sort-type")||"string") : "string";
+				}
+				function syncDetailLinks(key,dir){
+					var links=body.querySelectorAll("a[data-detail-url]");
+					Array.prototype.forEach.call(links,function(link){
+						var base=link.getAttribute("data-detail-url")||"";
+						if(!base){return;}
+						try{
+							var url=new URL(base, window.location.href);
+							url.searchParams.set("sort_key", key);
+							url.searchParams.set("sort_dir", dir);
+							link.href=url.toString();
+						}catch(e){}
+					});
+				}
+				function updateSortQuery(key,dir){
+					try{
+						var url=new URL(window.location.href);
+						url.searchParams.set("sort_key", key);
+						url.searchParams.set("sort_dir", dir);
+						window.history.replaceState(null,"",url.toString());
+					}catch(e){}
+					syncDetailLinks(key,dir);
+				}
+				function setActiveSort(key,dir){
+					Array.prototype.forEach.call(sortButtons,function(other){
+						var active=(other.getAttribute("data-sort-key")||"")===key;
+						other.setAttribute("data-sort-dir", active ? dir : "");
+						var indicator=other.querySelector(".cmx-artikel-sort-indicator");
+						if(indicator){ indicator.textContent = active ? (dir==="asc" ? "▲" : "▼") : " "; }
+					});
+				}
 				function sortRows(key,type,dir){
 					var rows=getRows();
 					rows.sort(function(a,b){
@@ -502,6 +536,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 					});
 					rows.forEach(function(row){ body.appendChild(row); });
 					applyFilter();
+					syncDetailLinks(key,dir);
 				}
 				if(input){
 					input.addEventListener("input",applyFilter);
@@ -512,22 +547,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 						var type=btn.getAttribute("data-sort-type")||"string";
 						var current=btn.getAttribute("data-sort-dir")||"";
 						var next=current==="asc"?"desc":"asc";
-						Array.prototype.forEach.call(sortButtons,function(other){
-							other.setAttribute("data-sort-dir", other===btn ? next : "");
-							var indicator=other.querySelector(".cmx-artikel-sort-indicator");
-							if(indicator){ indicator.textContent = other===btn ? (next==="asc" ? "▲" : "▼") : " "; }
-						});
+						setActiveSort(key,next);
 						sortRows(key,type,next);
+						updateSortQuery(key,next);
 					});
 				});
-				sortRows("title","string","asc");
-				Array.prototype.forEach.call(sortButtons,function(btn){
-					if((btn.getAttribute("data-sort-key")||"")==="title"){
-						btn.setAttribute("data-sort-dir","asc");
-						var indicator=btn.querySelector(".cmx-artikel-sort-indicator");
-						if(indicator){ indicator.textContent="▲"; }
-					}
-				});
+				var params;
+				try{
+					params=new URL(window.location.href).searchParams;
+				}catch(e){
+					params={ get:function(){ return ""; } };
+				}
+				var initialKey=params.get("sort_key")||"title";
+				var initialDir=params.get("sort_dir")==="desc"?"desc":"asc";
+				if(!document.querySelector(".cmx-artikel-table thead button[data-sort-key=\\"" + initialKey + "\\"]")){
+					initialKey="title";
+				}
+				setActiveSort(initialKey,initialDir);
+				sortRows(initialKey,currentSortType(initialKey),initialDir);
+				updateSortQuery(initialKey,initialDir);
 				updateCount();
 			})();
 		</script>';

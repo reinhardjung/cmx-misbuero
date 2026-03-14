@@ -117,6 +117,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_belegtext')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_sort_state')) {
+	function cmx_artikel_detail_sort_state(): array {
+		$key = isset($_GET['sort_key']) ? \sanitize_key((string) \wp_unslash($_GET['sort_key'])) : 'title';
+		$dir = isset($_GET['sort_dir']) ? \sanitize_key((string) \wp_unslash($_GET['sort_dir'])) : 'asc';
+
+		$allowed_keys = ['sku', 'title', 'description', 'unit', 'price'];
+		if (!\in_array($key, $allowed_keys, true)) {
+			$key = 'title';
+		}
+
+		if ($dir !== 'desc') {
+			$dir = 'asc';
+		}
+
+		return ['key' => $key, 'dir' => $dir];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_term_name')) {
 	function cmx_artikel_detail_term_name(int $artikel_id, string $taxonomy): string {
 		if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
@@ -186,12 +204,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_meta_items')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_neighbors')) {
-	function cmx_artikel_detail_neighbors(int $artikel_id): array {
+	function cmx_artikel_detail_neighbors(int $artikel_id, array $sort_state): array {
 		if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_rows')) {
 			return ['prev' => null, 'next' => null];
 		}
 
 		$rows = \array_values((array) cmx_artikel_liste_rows());
+		$key = (string) ($sort_state['key'] ?? 'title');
+		$dir = (string) ($sort_state['dir'] ?? 'asc');
+
+		$extract_value = static function (array $row, string $key) {
+			if ($key === 'price') {
+				return (float) ($row['price_raw'] ?? 0.0);
+			}
+
+			if ($key === 'description') {
+				$value = (string) ($row['description_full'] ?? '');
+				if (\trim($value) === '') {
+					$value = (string) ($row['description'] ?? '');
+				}
+				return \function_exists('mb_strtolower') ? \mb_strtolower(\trim($value), 'UTF-8') : \strtolower(\trim($value));
+			}
+
+			$value = (string) ($row[$key] ?? '');
+			return \function_exists('mb_strtolower') ? \mb_strtolower(\trim($value), 'UTF-8') : \strtolower(\trim($value));
+		};
+
+		\usort($rows, static function (array $a, array $b) use ($key, $dir, $extract_value): int {
+			$av = $extract_value($a, $key);
+			$bv = $extract_value($b, $key);
+
+			if ($key === 'price') {
+				$result = $av <=> $bv;
+			} else {
+				$result = $av <=> $bv;
+			}
+
+			if ($result === 0) {
+				$at = \function_exists('mb_strtolower') ? \mb_strtolower((string) ($a['title'] ?? ''), 'UTF-8') : \strtolower((string) ($a['title'] ?? ''));
+				$bt = \function_exists('mb_strtolower') ? \mb_strtolower((string) ($b['title'] ?? ''), 'UTF-8') : \strtolower((string) ($b['title'] ?? ''));
+				$result = $at <=> $bt;
+			}
+
+			if ($result === 0) {
+				$result = ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+			}
+
+			return $dir === 'desc' ? -$result : $result;
+		});
 		$current_index = null;
 
 		foreach ($rows as $index => $row) {
@@ -212,6 +272,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_neighbors')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_url_with_sort')) {
+	function cmx_artikel_detail_url_with_sort(int $artikel_id, array $sort_state): string {
+		$url = cmx_artikel_detail_url($artikel_id);
+		return (string) \add_query_arg([
+			'sort_key' => (string) ($sort_state['key'] ?? 'title'),
+			'sort_dir' => (string) ($sort_state['dir'] ?? 'asc'),
+		], $url);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 	function cmx_render_artikel_detail_page(): void {
 		if (!cmx_is_artikel_detail_request()) {
@@ -219,9 +289,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 
 		$artikel = cmx_artikel_detail_find_post();
+		$sort_state = cmx_artikel_detail_sort_state();
 		$reload_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')
 			? cmx_artikel_liste_url()
 			: (string) \home_url('/katalog/');
+		$reload_url = (string) \add_query_arg([
+			'sort_key' => (string) $sort_state['key'],
+			'sort_dir' => (string) $sort_state['dir'],
+		], $reload_url);
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -274,7 +349,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		$intro_text = $belegtext !== '' ? $belegtext : $excerpt;
 		$content_html = cmx_artikel_detail_content_html($artikel_id);
 		$meta_items = cmx_artikel_detail_meta_items($artikel_id);
-		$neighbors = cmx_artikel_detail_neighbors($artikel_id);
+		$neighbors = cmx_artikel_detail_neighbors($artikel_id, $sort_state);
 		$prev_item = \is_array($neighbors['prev'] ?? null) ? (array) $neighbors['prev'] : null;
 		$next_item = \is_array($neighbors['next'] ?? null) ? (array) $neighbors['next'] : null;
 		$image_url = \trim((string) \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true));
@@ -293,10 +368,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			.cmx-artikel-detail-shell{position:relative;max-width:1360px;margin:0 auto}
 			.cmx-artikel-detail-page{max-width:1180px;margin:0 auto;padding:32px 18px 40px}
 			.cmx-artikel-detail-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
-			.cmx-artikel-detail-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:999px;background:linear-gradient(180deg,#1f6fad 0%,#135e96 100%);box-shadow:0 14px 30px rgba(19,94,150,.24);text-decoration:none}
-			.cmx-artikel-detail-nav:hover{background:linear-gradient(180deg,#257dc0 0%,#1568a5 100%)}
-			.cmx-artikel-detail-nav-left{left:12px}
-			.cmx-artikel-detail-nav-right{right:12px}
+			.cmx-artikel-detail-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:62px;height:62px;border-radius:999px;background:linear-gradient(180deg,#1f6fad 0%,#135e96 100%);box-shadow:0 14px 30px rgba(19,94,150,.24);text-decoration:none;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+			.cmx-artikel-detail-nav:hover{background:linear-gradient(180deg,#257dc0 0%,#1568a5 100%);box-shadow:0 18px 34px rgba(19,94,150,.32)}
+			.cmx-artikel-detail-nav-left{left:18px}
+			.cmx-artikel-detail-nav-right{right:18px}
 			.cmx-artikel-detail-nav-icon{display:block;width:18px;height:18px;border-top:4px solid #fff;border-right:4px solid #fff}
 			.cmx-artikel-detail-nav-left .cmx-artikel-detail-nav-icon{transform:rotate(-135deg);margin-left:5px}
 			.cmx-artikel-detail-nav-right .cmx-artikel-detail-nav-icon{transform:rotate(45deg);margin-right:5px}
@@ -343,11 +418,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		</style>';
 		echo '</head><body>';
 		echo '<div class="cmx-artikel-detail-shell">';
-		if ($prev_item !== null && !empty($prev_item['url'])) {
-			echo '<a class="cmx-artikel-detail-nav cmx-artikel-detail-nav-left" href="' . \esc_url((string) $prev_item['url']) . '" title="' . \esc_attr((string) ($prev_item['title'] ?? 'Vorheriger Artikel')) . '" aria-label="' . \esc_attr('Vorheriger Artikel: ' . (string) ($prev_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
+		if ($prev_item !== null && !empty($prev_item['id'])) {
+			echo '<a id="cmx-artikel-detail-nav-left" class="cmx-artikel-detail-nav cmx-artikel-detail-nav-left" href="' . \esc_url(cmx_artikel_detail_url_with_sort((int) $prev_item['id'], $sort_state)) . '" title="' . \esc_attr((string) ($prev_item['title'] ?? 'Vorheriger Artikel')) . '" aria-label="' . \esc_attr('Vorheriger Artikel: ' . (string) ($prev_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
 		}
-		if ($next_item !== null && !empty($next_item['url'])) {
-			echo '<a class="cmx-artikel-detail-nav cmx-artikel-detail-nav-right" href="' . \esc_url((string) $next_item['url']) . '" title="' . \esc_attr((string) ($next_item['title'] ?? 'Nächster Artikel')) . '" aria-label="' . \esc_attr('Nächster Artikel: ' . (string) ($next_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
+		if ($next_item !== null && !empty($next_item['id'])) {
+			echo '<a id="cmx-artikel-detail-nav-right" class="cmx-artikel-detail-nav cmx-artikel-detail-nav-right" href="' . \esc_url(cmx_artikel_detail_url_with_sort((int) $next_item['id'], $sort_state)) . '" title="' . \esc_attr((string) ($next_item['title'] ?? 'Nächster Artikel')) . '" aria-label="' . \esc_attr('Nächster Artikel: ' . (string) ($next_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
 		}
 		echo '<div class="cmx-artikel-detail-page"><div class="cmx-artikel-detail-card">';
 		echo '<div class="cmx-artikel-detail-head">';
@@ -358,7 +433,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 		echo '</div>';
 
-		echo '<div class="cmx-artikel-detail-stage">';
+		echo '<div class="cmx-artikel-detail-stage" id="cmx-artikel-detail-stage">';
 		echo '<div class="cmx-artikel-detail-media" id="cmx-artikel-detail-media">';
 		if ($image_url !== '') {
 			echo '<img class="cmx-artikel-detail-image" src="' . \esc_url($image_url) . '" alt="' . \esc_attr($title) . '">';
@@ -413,17 +488,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			(function(){
 				var media=document.getElementById("cmx-artikel-detail-media");
 				var panel=document.getElementById("cmx-artikel-detail-panel");
+				var stage=document.getElementById("cmx-artikel-detail-stage");
+				var navLeft=document.getElementById("cmx-artikel-detail-nav-left");
+				var navRight=document.getElementById("cmx-artikel-detail-nav-right");
 				if(!media||!panel){return;}
-				function syncHeight(){
+				function syncLayout(){
 					if(window.innerWidth<=860){
 						media.style.height="";
+						if(navLeft){ navLeft.style.top=""; }
+						if(navRight){ navRight.style.top=""; }
 						return;
 					}
 					media.style.height=panel.offsetHeight + "px";
+					if(stage){
+						var navTop=stage.offsetTop + (stage.offsetHeight / 2);
+						if(navLeft){ navLeft.style.top=navTop + "px"; }
+						if(navRight){ navRight.style.top=navTop + "px"; }
+					}
 				}
-				window.addEventListener("load", syncHeight);
-				window.addEventListener("resize", syncHeight);
-				syncHeight();
+				window.addEventListener("load", syncLayout);
+				window.addEventListener("resize", syncLayout);
+				syncLayout();
 			})();
 		</script>';
 		echo '</div></div></div></body></html>';
