@@ -42,6 +42,8 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#7a7a7a;text-decoration:underline;')
 		: '';
+	$show_powered_by = \function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled();
+	$show_footer_meta = ($agb_footer_html !== '' || $show_powered_by);
 	$mail_head_html = cmx_mail_outlook_head_html();
 
 	return '<!doctype html><html lang="de" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' . $mail_head_html . '</head><body style="margin:0;padding:0;background:#dcdcdc;">'
@@ -55,12 +57,14 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border:1px solid #d8d8d8;border-top:none;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
 		. $body_html
 		. $button_html
-		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">'
-		. ($agb_footer_html !== '' ? '<div style="margin:0 0 6px 0;">' . $agb_footer_html . '</div>' : '')
-		. ((\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled())
-			? '<div>Erstellt mit <a href="https://misbuero.ch/" style="color:#7a7a7a;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</div>'
+		. ($show_footer_meta
+			? '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">'
+				. ($agb_footer_html !== '' ? '<div style="margin:0 0 6px 0;">' . $agb_footer_html . '</div>' : '')
+				. ($show_powered_by
+					? '<div>Erstellt mit <a href="https://misbuero.ch/" style="color:#7a7a7a;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</div>'
+					: '')
+				. '</div>'
 			: '')
-		. '</div>'
 		. '</td></tr>'
 		. '</table>'
 		. '</td></tr>'

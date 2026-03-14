@@ -37,11 +37,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
 
 		$vorname = \trim((string) ($data['vorname'] ?? ''));
 		$nachname = \trim((string) ($data['nachname'] ?? ''));
-		if ($vorname !== '' && $nachname !== '') {
+		if ($vorname !== '' || $nachname !== '') {
 			return 'Guten Tag ' . \trim($vorname . ' ' . $nachname);
 		}
 
-		return 'Guten Tag';
+		return '';
 	}
 }
 
@@ -67,10 +67,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 			'{beleg_id}' => \trim((string) ($data['beleg_id'] ?? '')),
 			'{beleg_label}' => \trim((string) ($data['beleg_label'] ?? '')),
 		];
-		$replacements = \array_filter($replacements, static function (string $value): bool {
-			return $value !== '';
-		});
-		return $replacements !== [] ? \strtr($text, $replacements) : $text;
+		return \strtr($text, $replacements);
 	}
 }
 
@@ -124,7 +121,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 				$margin_bottom = '12px';
 			}
 
+			$had_anrede_token = \strpos($block, '{anrede}') !== false;
 			$text = cmxbu_belegmail_replace_content_tokens($block, $data);
+			$text_trimmed = \trim($text);
+			if ($text_trimmed === '') {
+				continue;
+			}
+			if (
+				$had_anrede_token
+				&& \trim((string) ($data['anrede_text'] ?? '')) === ''
+				&& (string) \preg_replace('/[\s,;:.\-–—]+/u', '', $text_trimmed) === ''
+			) {
+				continue;
+			}
 			$html .= '<p style="margin:0 0 ' . $margin_bottom . ' 0;font-size:16px;line-height:1.6;">' . \nl2br(\esc_html($text)) . '</p>';
 		}
 
@@ -176,6 +185,8 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
 		: '';
+	$show_powered_by = \function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled();
+	$show_footer_meta = ($agb_footer_html !== '' || $show_powered_by);
 	$kundenportal_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
 		: '';
@@ -189,7 +200,10 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		. '<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>'
 		. '</svg></span>';
 	$download_button_html = cmx_mail_button_html($download_url, 'PDF Beleg herunterladen', '#a42c24', '#ffffff', 240, $button_icon_html, 2);
-	$default_body_html = '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
+	$salutation_line_html = $anrede_esc !== ''
+		? '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
+		: '';
+	$default_body_html = $salutation_line_html
 		. '<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst ihn jetzt bequem als PDF herunterladen.</p>'
 		. '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>'
 		. '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->'
@@ -237,9 +251,9 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 					<tr>
 						<td style="padding:0 24px 24px 24px;">
 							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
-							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
+							' . ($show_footer_meta ? '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">' : '') . '
 							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
-							' . (\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled()
+							' . ($show_powered_by
 								? '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</p>'
 								: '') . '
 						</td>

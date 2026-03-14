@@ -74,6 +74,8 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
 		: '';
+	$show_powered_by = \function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled();
+	$show_footer_meta = ($agb_footer_html !== '' || $show_powered_by);
 	$kundenportal_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
 		: '';
@@ -87,7 +89,10 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 		. '<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>'
 		. '</svg></span>';
 	$download_button_html = cmx_mail_button_html($download_url, 'PDF Beleg herunterladen', '#a42c24', '#ffffff', 240, $button_icon_html, 2);
-	$default_body_html = '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
+	$salutation_line_html = $anrede_esc !== ''
+		? '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
+		: '';
+	$default_body_html = $salutation_line_html
 		. '<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Gem&auml;ss meinen Unterlagen ist die folgende Rechnung noch offen.<br>Kannst Du das bitte kurz pr&uuml;fen?</p>'
 		. '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>'
 		. '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->'
@@ -133,9 +138,9 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 					<tr>
 						<td style="padding:0 24px 24px 24px;">
 							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
-							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
+							' . ($show_footer_meta ? '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">' : '') . '
 							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
-							' . (\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled()
+							' . ($show_powered_by
 								? '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</p>'
 								: '') . '
 						</td>

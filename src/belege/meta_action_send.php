@@ -197,9 +197,11 @@ function cmxbu_handle_beleg_send(): void {
 			'vorname' => $vorname,
 			'nachname' => $nachname,
 		])
-		: 'Guten Tag';
+		: '';
 	if ($anrede_text !== '') {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede_text));
+	} elseif (\strpos($message, '{anrede}') !== false) {
+		$message = \str_replace('{anrede}', '', $message);
 	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
@@ -407,16 +409,20 @@ function cmxbu_append_belegmail_footer_html(string $message, array $args = []): 
 	$agb_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
 		: '';
+	$show_powered_by = \function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled();
+	$show_footer_meta = ($agb_html !== '' || $show_powered_by);
 
 	$footer = '<div data-cmx-mail-footer="1" style="margin-top:24px;">';
 	if ($portal_html !== '') {
 		$footer .= '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $portal_html . '</p>';
 	}
-	$footer .= '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">';
+	if ($show_footer_meta) {
+		$footer .= '<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">';
+	}
 	if ($agb_html !== '') {
 		$footer .= '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_html . '</p>';
 	}
-	if (\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled()) {
+	if ($show_powered_by) {
 		$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</p>';
 	}
 	$footer .= '</div>';

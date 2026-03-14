@@ -500,9 +500,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 				'vorname' => $vorname,
 				'nachname' => $nachname,
 			])
-			: 'Guten Tag';
+			: '';
 		if ($anrede_text !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_replace_placeholder_with_spacing')) {
 			$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', \esc_html($anrede_text));
+		} elseif (\strpos($message, '{anrede}') !== false) {
+			$message = \str_replace('{anrede}', '', $message);
 		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_belegmail_html')) {
