@@ -611,6 +611,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 				clearPendingRemovals();
 				updateHiddenState();
 				setStatus("Bilder werden hochgeladen ...");
+				persistScrollRestore();
 				form.submit();
 			}
 
