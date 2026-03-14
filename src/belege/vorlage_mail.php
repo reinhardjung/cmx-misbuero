@@ -71,6 +71,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')) {
+	function cmxbu_belegmail_content_has_placeholder(string $content, string $placeholder): bool {
+		$content = \trim($content);
+		if ($content === '' || $placeholder === '') {
+			return false;
+		}
+		if (\strpos($content, $placeholder) !== false) {
+			return true;
+		}
+		return \strpos(cmxbu_belegmail_editor_to_text($content), $placeholder) !== false;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 	function cmxbu_render_belegmail_body_html(array $data, string $default_html, string $download_button_html, string $thank_you_margin_bottom): string {
 		$custom_content = \trim((string) ($data['custom_content'] ?? ''));

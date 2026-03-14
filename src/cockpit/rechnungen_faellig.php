@@ -471,6 +471,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
 				? (string) cmx_get_belegmail('mahnung', $kontakt_id)
 				: '';
+			$custom_has_anrede_token = $custom_message !== ''
+				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
+				&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
 			$subject = 'Zahlungserinnerung: ' . $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
 			if ($beleg_mail_date !== '') {
 				$subject .= ' vom ' . $beleg_mail_date;
@@ -483,6 +486,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
 				? (string) cmx_get_belegmail('rechnung', $kontakt_id)
 				: '';
+			$custom_has_anrede_token = $custom_message !== ''
+				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
+				&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
 			$subject = $beleg_label . ($beleg_id !== '' ? ' ' . $beleg_id : '');
 			if ($beleg_mail_date !== '') {
 				$subject .= ' vom ' . $beleg_mail_date;
@@ -501,9 +507,13 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 				'nachname' => $nachname,
 			])
 			: '';
-		if ($anrede_text !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_replace_placeholder_with_spacing')) {
+		if (
+			(empty($custom_message) || !empty($custom_has_anrede_token))
+			&& $anrede_text !== ''
+			&& \function_exists(__NAMESPACE__ . '\\cmxbu_replace_placeholder_with_spacing')
+		) {
 			$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', \esc_html($anrede_text));
-		} elseif (\strpos($message, '{anrede}') !== false) {
+		} elseif (!empty($custom_has_anrede_token) && \strpos($message, '{anrede}') !== false) {
 			$message = \str_replace('{anrede}', '', $message);
 		}
 

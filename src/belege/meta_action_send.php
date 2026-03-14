@@ -167,6 +167,9 @@ function cmxbu_handle_beleg_send(): void {
 		? \home_url('/katalog/')
 		: '';
 	$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+	$custom_has_anrede_token = $custom_message !== ''
+		&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
+		&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
 	$message = cmxbu_render_belegmail_template([
 		'anrede' => $anrede,
 		'vorname' => $vorname,
@@ -198,9 +201,9 @@ function cmxbu_handle_beleg_send(): void {
 			'nachname' => $nachname,
 		])
 		: '';
-	if ($anrede_text !== '') {
+	if (($custom_message === '' || $custom_has_anrede_token) && $anrede_text !== '') {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede_text));
-	} elseif (\strpos($message, '{anrede}') !== false) {
+	} elseif ($custom_has_anrede_token && \strpos($message, '{anrede}') !== false) {
 		$message = \str_replace('{anrede}', '', $message);
 	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
