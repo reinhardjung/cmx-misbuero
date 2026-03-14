@@ -286,6 +286,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 		echo '</div>';
 
 		echo '<p class="cmx-li-save-wrap" style="margin:10px 0 0 0;display:none;"><button type="submit" class="button button-primary cmx-li-save-button">Artikel speichern</button></p>';
+		echo '<div class="cmx-li-hover-preview" style="display:none;position:fixed;top:0;left:0;z-index:100000;padding:8px;background:#fff;border:1px solid #c3c4c7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);pointer-events:none;"><img class="cmx-li-hover-preview-image" src="" alt="" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;"></div>';
 		echo '</div>';
 
 		echo '<script>
@@ -303,12 +304,13 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 			var orderField = root.querySelector(".cmx-li-order");
 			var status = root.querySelector(".cmx-li-status");
 			var saveWrap = root.querySelector(".cmx-li-save-wrap");
+			var hoverPreview = root.querySelector(".cmx-li-hover-preview");
+			var hoverPreviewImage = root.querySelector(".cmx-li-hover-preview-image");
 			var form = root.closest("form");
 			var restoreKey = "cmx-li-scroll-restore:" + root.id;
 
 			var draggedRow = null;
 			var initialOrder = [];
-			var hoveredPreviewUrl = "";
 
 			function visibleRows() {
 				return Array.prototype.slice.call(root.querySelectorAll(".cmx-li-file-row")).filter(function(row){
@@ -406,9 +408,9 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 			}
 
 			function updatePreview() {
-				var previewUrl = hoveredPreviewUrl;
+				var previewUrl = "";
 				var rows = visibleRows();
-				if (!previewUrl && rows.length) {
+				if (rows.length) {
 					previewUrl = rows[0].dataset.url || "";
 				}
 				if (!previewUrl) {
@@ -486,6 +488,34 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 				}
 			}
 
+			function moveHoverPreview(event) {
+				if (!hoverPreview || hoverPreview.style.display === "none" || !event) return;
+				var offset = 18;
+				var left = event.clientX + offset;
+				var top = event.clientY + offset;
+				var rect = hoverPreview.getBoundingClientRect();
+				var maxLeft = window.innerWidth - rect.width - 12;
+				var maxTop = window.innerHeight - rect.height - 12;
+				hoverPreview.style.left = Math.max(12, Math.min(left, maxLeft)) + "px";
+				hoverPreview.style.top = Math.max(12, Math.min(top, maxTop)) + "px";
+			}
+
+			function hideHoverPreview() {
+				if (!hoverPreview || !hoverPreviewImage) return;
+				hoverPreview.style.display = "none";
+				hoverPreviewImage.removeAttribute("src");
+			}
+
+			function showHoverPreview(row, event) {
+				if (!hoverPreview || !hoverPreviewImage || !row || row.dataset.removed === "1" || !row.dataset.url) {
+					hideHoverPreview();
+					return;
+				}
+				hoverPreviewImage.src = row.dataset.url;
+				hoverPreview.style.display = "block";
+				moveHoverPreview(event);
+			}
+
 			function toggleRemoveRow(row) {
 				var removing = row.dataset.removed !== "1";
 				setRemovedState(row, removing);
@@ -514,27 +544,20 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 				refreshState();
 			}
 
-			function setHoveredPreview(row) {
-				if (!row || row.dataset.removed === "1") {
-					hoveredPreviewUrl = "";
-					updatePreview();
-					return;
-				}
-				hoveredPreviewUrl = row.dataset.url || "";
-				updatePreview();
-			}
-
 			function attachRowDnD(row) {
 				if (!row || row.dataset.dragInit === "1") return;
 				row.dataset.dragInit = "1";
 
-				row.addEventListener("mouseenter", function(){
+				row.addEventListener("mouseenter", function(e){
 					setRowHover(row, true);
-					setHoveredPreview(row);
+					showHoverPreview(row, e);
+				});
+				row.addEventListener("mousemove", function(e){
+					moveHoverPreview(e);
 				});
 				row.addEventListener("mouseleave", function(){
 					setRowHover(row, false);
-					setHoveredPreview(null);
+					hideHoverPreview();
 				});
 				row.addEventListener("dragstart", function(e){
 					if (row.dataset.removed === "1") {
@@ -543,6 +566,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 					}
 					draggedRow = row;
 					row.style.opacity = "0.65";
+					hideHoverPreview();
 					if (e.dataTransfer) {
 						e.dataTransfer.effectAllowed = "move";
 						try {
@@ -554,6 +578,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 					row.style.opacity = row.dataset.removed === "1" ? "0.45" : "1";
 					draggedRow = null;
 					setRowHover(row, false);
+					hideHoverPreview();
 				});
 				row.addEventListener("dragover", function(e){
 					if (!draggedRow || draggedRow === row || row.dataset.removed === "1") {
@@ -597,9 +622,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 
 			if (form) {
 				form.addEventListener("submit", function(){
-					if (root.querySelector(".cmx-li-save-button")) {
-						persistScrollRestore();
-					}
+					persistScrollRestore();
 				});
 			}
 
