@@ -402,7 +402,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 				*{box-sizing:border-box}
 				body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#efefef;color:#1d2327}
 				.cmx-artikel-detail-page{max-width:900px;margin:0 auto;padding:32px 18px 40px}
-				.cmx-artikel-detail-card{background:#fff;border:1px solid orange;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
+				.cmx-artikel-detail-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 				.cmx-artikel-detail-head{padding:26px 28px 20px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
 				.cmx-artikel-detail-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
 				.cmx-artikel-detail-kicker a{color:inherit;text-decoration:none}
@@ -455,7 +455,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#efefef;color:#1d2327}
 			.cmx-artikel-detail-shell{position:relative;max-width:1360px;margin:0 auto}
 			.cmx-artikel-detail-page{max-width:1180px;margin:0 auto;padding:32px 18px 40px}
-			.cmx-artikel-detail-card{background:#fff;border:1px solid orange;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
+			.cmx-artikel-detail-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 			.cmx-artikel-detail-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:62px;height:62px;border-radius:999px;background:linear-gradient(180deg,#1f6fad 0%,#135e96 100%);box-shadow:0 14px 30px rgba(19,94,150,.24);text-decoration:none;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
 			.cmx-artikel-detail-nav:hover{background:linear-gradient(180deg,#257dc0 0%,#1568a5 100%);box-shadow:0 18px 34px rgba(19,94,150,.32)}
 			.cmx-artikel-detail-nav-left{left:18px}

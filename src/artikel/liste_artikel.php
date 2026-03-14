@@ -339,7 +339,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			*{box-sizing:border-box}
 			body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#efefef;color:#1d2327}
 			.cmx-artikel-page{max-width:1570px;margin:0 auto;padding:32px 18px 40px}
-			.cmx-artikel-card{background:#fff;border:1px solid orange;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
+			.cmx-artikel-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 			.cmx-artikel-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
 			.cmx-artikel-head-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
 			.cmx-artikel-head-copy{flex:1 1 auto;min-width:0}
