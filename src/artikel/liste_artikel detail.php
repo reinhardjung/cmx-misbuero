@@ -185,6 +185,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_meta_items')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_neighbors')) {
+	function cmx_artikel_detail_neighbors(int $artikel_id): array {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_rows')) {
+			return ['prev' => null, 'next' => null];
+		}
+
+		$rows = \array_values((array) cmx_artikel_liste_rows());
+		$current_index = null;
+
+		foreach ($rows as $index => $row) {
+			if ((int) ($row['id'] ?? 0) === $artikel_id) {
+				$current_index = $index;
+				break;
+			}
+		}
+
+		if ($current_index === null) {
+			return ['prev' => null, 'next' => null];
+		}
+
+		$prev = $current_index > 0 ? (array) $rows[$current_index - 1] : null;
+		$next = isset($rows[$current_index + 1]) ? (array) $rows[$current_index + 1] : null;
+
+		return ['prev' => $prev, 'next' => $next];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 	function cmx_render_artikel_detail_page(): void {
 		if (!cmx_is_artikel_detail_request()) {
@@ -247,6 +274,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		$intro_text = $belegtext !== '' ? $belegtext : $excerpt;
 		$content_html = cmx_artikel_detail_content_html($artikel_id);
 		$meta_items = cmx_artikel_detail_meta_items($artikel_id);
+		$neighbors = cmx_artikel_detail_neighbors($artikel_id);
+		$prev_item = \is_array($neighbors['prev'] ?? null) ? (array) $neighbors['prev'] : null;
+		$next_item = \is_array($neighbors['next'] ?? null) ? (array) $neighbors['next'] : null;
 		$image_url = \trim((string) \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true));
 		$price_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_label')
 			&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_raw')
@@ -260,8 +290,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			:root{color-scheme:light}
 			*{box-sizing:border-box}
 			body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#efefef;color:#1d2327}
+			.cmx-artikel-detail-shell{position:relative;max-width:1360px;margin:0 auto}
 			.cmx-artikel-detail-page{max-width:1180px;margin:0 auto;padding:32px 18px 40px}
 			.cmx-artikel-detail-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
+			.cmx-artikel-detail-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:999px;background:linear-gradient(180deg,#1f6fad 0%,#135e96 100%);box-shadow:0 14px 30px rgba(19,94,150,.24);text-decoration:none}
+			.cmx-artikel-detail-nav:hover{background:linear-gradient(180deg,#257dc0 0%,#1568a5 100%)}
+			.cmx-artikel-detail-nav-left{left:12px}
+			.cmx-artikel-detail-nav-right{right:12px}
+			.cmx-artikel-detail-nav-icon{display:block;width:18px;height:18px;border-top:4px solid #fff;border-right:4px solid #fff}
+			.cmx-artikel-detail-nav-left .cmx-artikel-detail-nav-icon{transform:rotate(-135deg);margin-left:5px}
+			.cmx-artikel-detail-nav-right .cmx-artikel-detail-nav-icon{transform:rotate(45deg);margin-right:5px}
 			.cmx-artikel-detail-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
 			.cmx-artikel-detail-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
 			.cmx-artikel-detail-kicker a{color:inherit;text-decoration:none}
@@ -290,6 +328,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			.cmx-artikel-detail-content p{margin:0 0 14px}
 			.cmx-artikel-detail-content p:last-child{margin-bottom:0}
 			@media (max-width:860px){
+				.cmx-artikel-detail-nav{display:none}
 				.cmx-artikel-detail-stage{grid-template-columns:1fr}
 				.cmx-artikel-detail-title{font-size:30px}
 				.cmx-artikel-detail-media{height:auto;min-height:320px}
@@ -303,6 +342,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			}
 		</style>';
 		echo '</head><body>';
+		echo '<div class="cmx-artikel-detail-shell">';
+		if ($prev_item !== null && !empty($prev_item['url'])) {
+			echo '<a class="cmx-artikel-detail-nav cmx-artikel-detail-nav-left" href="' . \esc_url((string) $prev_item['url']) . '" title="' . \esc_attr((string) ($prev_item['title'] ?? 'Vorheriger Artikel')) . '" aria-label="' . \esc_attr('Vorheriger Artikel: ' . (string) ($prev_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
+		}
+		if ($next_item !== null && !empty($next_item['url'])) {
+			echo '<a class="cmx-artikel-detail-nav cmx-artikel-detail-nav-right" href="' . \esc_url((string) $next_item['url']) . '" title="' . \esc_attr((string) ($next_item['title'] ?? 'Nächster Artikel')) . '" aria-label="' . \esc_attr('Nächster Artikel: ' . (string) ($next_item['title'] ?? '')) . '"><span class="cmx-artikel-detail-nav-icon" aria-hidden="true"></span></a>';
+		}
 		echo '<div class="cmx-artikel-detail-page"><div class="cmx-artikel-detail-card">';
 		echo '<div class="cmx-artikel-detail-head">';
 		echo '<p class="cmx-artikel-detail-kicker"><a href="' . \esc_url($reload_url) . '">Zurück zum Katalog</a></p>';
@@ -380,7 +426,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 				syncHeight();
 			})();
 		</script>';
-		echo '</div></div></body></html>';
+		echo '</div></div></div></body></html>';
 		exit;
 	}
 }
