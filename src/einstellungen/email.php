@@ -142,6 +142,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
 	);
 
 	\add_settings_field(
+		'cmx_email_name',
+		'E-Mail Name',
+		static function (): void {
+			$value = \esc_attr(cmx_email_option_value('email_name'));
+			echo '<input type="text" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_name]" value="' . $value . '" autocomplete="organization">';
+		},
+		$page,
+		'cmx_sec_email_account'
+	);
+
+	\add_settings_field(
 		'cmx_email_address',
 		'E-Mail Adresse*',
 		static function (): void {
@@ -305,6 +316,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')) {
 		return $new;
 	}
 
+	$new['email_name'] = \sanitize_text_field((string) ($new['email_name'] ?? ''));
 	$new['email_address'] = \sanitize_email((string) ($new['email_address'] ?? ''));
 	$new['email_password'] = (string) ($new['email_password'] ?? '');
 	$new['email_alias'] = \sanitize_email((string) ($new['email_alias'] ?? ''));

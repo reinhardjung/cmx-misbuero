@@ -1,5 +1,30 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_outlook_head_html')) {
+	function cmx_mail_outlook_head_html(): string {
+		return '<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->'
+			. '<!--[if mso]><style type="text/css">body,table,td,p,a,div,span{font-family:Arial,sans-serif !important;}table{border-collapse:collapse !important;mso-table-lspace:0pt !important;mso-table-rspace:0pt !important;}a{text-decoration:none !important;}</style><![endif]-->';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
+	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = ''): string {
+		$url = \esc_url($url);
+		$label_esc = \esc_html($label);
+		$width = \max(140, $width);
+
+		return '<!--[if mso]>'
+			. '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>'
+			. '<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="' . $url . '" style="height:44px;v-text-anchor:middle;width:' . $width . 'px;" arcsize="12%" strokecolor="' . $background . '" fillcolor="' . $background . '">'
+			. '<w:anchorlock/><center style="color:' . $color . ';font-family:Arial,sans-serif;font-size:14px;font-weight:700;">' . $label_esc . '</center>'
+			. '</v:roundrect>'
+			. '</td></tr></table>'
+			. '<![endif]--><!--[if !mso]><!-->'
+			. '<a href="' . $url . '" style="mso-hide:all;display:inline-block;padding:12px 20px;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;line-height:1.2;color:' . $color . ';text-decoration:none;font-weight:600;background:' . $background . ';border:1px solid ' . $background . ';border-radius:8px;">' . $inner_html . $label_esc . '</a>'
+			. '<!--<![endif]-->';
+	}
+}
+
 function cmxbu_render_belegmail_template(array $data = []): string {
 	$vorname = \trim((string) ($data['vorname'] ?? ''));
 	$nachname = \trim((string) ($data['nachname'] ?? ''));
@@ -46,21 +71,31 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
 		: '';
 	$thank_you_margin_bottom = $kundenportal_footer_html !== '' ? '16px' : '0';
+	$mail_head_html = cmx_mail_outlook_head_html();
+	$button_icon_html = '<span style="vertical-align:middle;display:inline-block;margin-right:8px;">'
+		. '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;display:inline-block;">'
+		. '<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>'
+		. '<path d="M15 2v6h6" fill="#e7e9ef"/>'
+		. '<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="#d84a3a"/>'
+		. '<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>'
+		. '</svg></span>';
+	$download_button_html = cmx_mail_button_html($download_url, 'PDF Beleg herunterladen', '#a42c24', '#ffffff', 240, $button_icon_html);
 
 	return '<!doctype html>
-<html lang="de">
+<html lang="de" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>' . $title_esc . '</title>
+	' . $mail_head_html . '
 </head>
 <body style="margin:0;padding:0;background:#f5f6f8;">
-	<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f5f6f8;">
+	<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f5f6f8;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 		<tr>
 			<td align="center" style="padding:24px 12px;">
-				<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+				<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 					<tr>
-						<td style="padding:20px 24px;background:linear-gradient(135deg,#a42c24,#d84a3a);color:#ffffff;">
+						<td style="padding:20px 24px;background:#b53a30;background-image:linear-gradient(135deg,#a42c24,#d84a3a);color:#ffffff;">
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $site_name_esc . '</div>
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>
 							' . ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '') . '
@@ -74,18 +109,10 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 							<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst ihn jetzt bequem als PDF herunterladen.</p>
 							<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;">
 								<tr>
-									<td bgcolor="#a42c24" style="border-radius:8px;">
-										<a href="' . $download_url . '" style="display:inline-block;padding:12px 20px;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;color:#ffffff;text-decoration:none;font-weight:600;" aria-label="PDF Beleg downloaden" title="PDF Beleg downloaden">
-											<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;display:inline-block;margin-right:8px;">
-												<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>
-												<path d="M15 2v6h6" fill="#e7e9ef"/>
-												<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="#d84a3a"/>
-												<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>
-											</svg>PDF Beleg herunterladen
-										</a>
-									</td>
+									<td>' . $download_button_html . '</td>
 								</tr>
 							</table>
+							<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->
 							<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Diestleistungen.</p>
 							<!---
 							<p style="margin:0 0 10px 0;font-size:14px;color:#52616b;line-height:1.5;">

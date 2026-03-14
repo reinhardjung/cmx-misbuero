@@ -1,5 +1,30 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || exit;
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_outlook_head_html')) {
+	function cmx_mail_outlook_head_html(): string {
+		return '<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->'
+			. '<!--[if mso]><style type="text/css">body,table,td,p,a,div,span{font-family:Arial,sans-serif !important;}table{border-collapse:collapse !important;mso-table-lspace:0pt !important;mso-table-rspace:0pt !important;}a{text-decoration:none !important;}</style><![endif]-->';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
+	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = ''): string {
+		$url = \esc_url($url);
+		$label_esc = \esc_html($label);
+		$width = \max(140, $width);
+
+		return '<!--[if mso]>'
+			. '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>'
+			. '<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="' . $url . '" style="height:44px;v-text-anchor:middle;width:' . $width . 'px;" arcsize="12%" strokecolor="' . $background . '" fillcolor="' . $background . '">'
+			. '<w:anchorlock/><center style="color:' . $color . ';font-family:Arial,sans-serif;font-size:14px;font-weight:700;">' . $label_esc . '</center>'
+			. '</v:roundrect>'
+			. '</td></tr></table>'
+			. '<![endif]--><!--[if !mso]><!-->'
+			. '<a href="' . $url . '" style="mso-hide:all;background:' . $background . ';color:' . $color . ';text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;font-weight:600;">' . $inner_html . $label_esc . '</a>'
+			. '<!--<![endif]-->';
+	}
+}
+
 /**
  * Passwort-Mails im gleichen Karten-Layout wie im Plugin cmx-plesk.
  */
@@ -7,25 +32,24 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 	$button_html = '';
 	if (\is_array($button) && !empty($button['url']) && !empty($button['label'])) {
 		$button_html = '<p style="margin:0 0 18px;">'
-			. '<a href="' . \esc_url((string) $button['url']) . '" style="background:#b1342b;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;font-weight:600;">'
-			. \esc_html((string) $button['label'])
-			. '</a>'
+			. cmx_mail_button_html((string) $button['url'], (string) $button['label'], '#b1342b', '#ffffff', 230)
 			. '</p>';
 	}
 
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#7a7a7a;text-decoration:underline;')
 		: '';
+	$mail_head_html = cmx_mail_outlook_head_html();
 
-	return '<!doctype html><html><body style="margin:0;padding:0;background:#dcdcdc;">'
-		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#dcdcdc;padding:24px 0;">'
+	return '<!doctype html><html lang="de" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' . $mail_head_html . '</head><body style="margin:0;padding:0;background:#dcdcdc;">'
+		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#dcdcdc;padding:24px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">'
 		. '<tr><td align="center">'
 		. '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;">'
-		. '<tr><td style="background:#c0392b;color:#ffffff;padding:24px 28px;border-radius:14px 14px 0 0;font-family:Arial, sans-serif;">'
+		. '<tr><td style="background:#c0392b;color:#ffffff;padding:24px 28px;border:1px solid #d8d8d8;border-bottom:none;border-radius:14px 14px 0 0;font-family:Arial, sans-serif;">'
 		. '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;">MIS BUERO</div>'
 		. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;">' . \esc_html($title) . '</div>'
 		. '</td></tr>'
-		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
+		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border:1px solid #d8d8d8;border-top:none;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
 		. $body_html
 		. $button_html
 		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">'

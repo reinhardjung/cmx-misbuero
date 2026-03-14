@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 3.14.30
+ * Version: 3.14.103
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -302,6 +302,7 @@ function cmx_check_and_create_subdomain_admin() {
 			if (!\is_email($reply)) {
 				$reply = '';
 			}
+			$email_name = \sanitize_text_field((string) ($opts['email_name'] ?? ''));
 
 			return [
 				'host' => $host,
@@ -313,6 +314,7 @@ function cmx_check_and_create_subdomain_admin() {
 				'alias_general' => $alias_general,
 				'alias_belege' => $alias_belege,
 				'reply' => $reply,
+				'email_name' => $email_name,
 				'bcc' => $parse_email_list((string) ($opts['email_bcc'] ?? '')),
 				'enabled' => ($host !== '' && $user !== '' && $pass !== ''),
 			];
@@ -343,12 +345,12 @@ function cmx_check_and_create_subdomain_admin() {
 				}
 			}
 
-			$name = '';
+			$name = \trim((string) ($smtp['email_name'] ?? ''));
 			$site_name = \trim((string) \get_option('blogname'));
-			if ($site_name === '') {
+			if ($name === '' && $site_name === '') {
 				$site_name = \trim((string) \get_bloginfo('name'));
 			}
-			if ($site_name !== '') {
+			if ($name === '' && $site_name !== '') {
 				$customer_from_site = (string) \preg_replace('/^\s*mis\s*b(?:u|ue|ü)ro\s*[-–:]\s*/iu', '', $site_name);
 				$customer_from_site = \trim((string) \preg_replace('/\s+/', ' ', (string) $customer_from_site));
 				$name = 'Mis Büro - ' . ($customer_from_site !== '' ? $customer_from_site : $site_name);
