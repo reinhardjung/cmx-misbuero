@@ -304,6 +304,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 
 		$rows = cmx_artikel_liste_rows();
 		$reload_url = cmx_artikel_liste_url();
+		$me_logo_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_logo_url')
+			? (string) cmx_artikel_detail_me_logo_url()
+			: '';
+		$me_contact_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_contact_url')
+			? (string) cmx_artikel_detail_me_contact_url()
+			: '';
+		$me_contact_title = \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_contact_title')
+			? (string) cmx_artikel_detail_me_contact_title()
+			: '';
 		$show_sku_column = false;
 		foreach ($rows as $row) {
 			if (\trim((string) ($row['sku'] ?? '')) !== '') {
@@ -332,6 +341,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			.cmx-artikel-page{max-width:1570px;margin:0 auto;padding:32px 18px 40px}
 			.cmx-artikel-card{background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.06);overflow:hidden}
 			.cmx-artikel-head{padding:24px 28px 18px;background:linear-gradient(135deg,#f7f7f7 0%,#ededed 100%);border-bottom:1px solid #e2e2e2}
+			.cmx-artikel-head-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+			.cmx-artikel-head-copy{flex:1 1 auto;min-width:0}
+			.cmx-artikel-head-brand{flex:0 0 190px;display:flex;align-items:flex-start;justify-content:flex-end;min-height:84px}
+			.cmx-artikel-head-logo{display:block;max-width:190px;max-height:84px;width:auto;height:auto;object-fit:contain;object-position:right top}
 			.cmx-artikel-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
 			.cmx-artikel-kicker a{color:inherit;text-decoration:none}
 			.cmx-artikel-kicker a:hover{color:#1d2327}
@@ -362,6 +375,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 			.cmx-artikel-empty{padding:28px;color:#6b7280}
 			@media (max-width:720px){
 				.cmx-artikel-page{padding:18px 12px 24px}
+				.cmx-artikel-head-inner{flex-direction:column}
+				.cmx-artikel-head-brand{justify-content:flex-start;min-height:0}
 				.cmx-artikel-head,.cmx-artikel-tools,.cmx-artikel-table-wrap{padding-left:16px;padding-right:16px}
 				.cmx-artikel-title{font-size:24px}
 				.cmx-artikel-thumb-wrap{width:68px}
@@ -371,9 +386,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		echo '</head><body>';
 		echo '<div class="cmx-artikel-page"><div class="cmx-artikel-card">';
 		echo '<div class="cmx-artikel-head">';
+		echo '<div class="cmx-artikel-head-inner">';
+		echo '<div class="cmx-artikel-head-copy">';
 		echo '<p class="cmx-artikel-kicker"><a href="' . \esc_url($reload_url) . '">Artikelübersicht</a></p>';
 		echo '<h1 class="cmx-artikel-title">Katalog</h1>';
 		echo '<p class="cmx-artikel-sub"><a href="' . \esc_url($reload_url) . '" id="cmx-artikel-count">' . \esc_html(\count($rows) . ' Artikel') . '</a></p>';
+		echo '</div>';
+		if ($me_logo_url !== '') {
+			echo '<div class="cmx-artikel-head-brand">';
+			if ($me_contact_url !== '') {
+				echo '<a href="' . \esc_url($me_contact_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($me_contact_title) . '">';
+			}
+			echo '<img class="cmx-artikel-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo">';
+			if ($me_contact_url !== '') {
+				echo '</a>';
+			}
+			echo '</div>';
+		}
+		echo '</div>';
 		echo '</div>';
 
 		if (empty($rows)) {
