@@ -142,7 +142,7 @@ function cmxbu_handle_beleg_send(): void {
 	$vorname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
 	$nachname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
 	$faellig_bis = cmxbu_get_beleg_due_date_display($post_id);
-	$betrag = cmxbu_get_beleg_amount_display($post_id);
+	$betrag = cmxbu_get_beleg_mail_amount_display($post_id);
 
 	if (empty($to) || !\is_email($to)) {
 		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
@@ -393,7 +393,7 @@ function cmxbu_prepare_belegmail_html(string $message): string {
 }
 
 function cmxbu_append_belegmail_footer_html(string $message, array $args = []): string {
-	if (\strpos($message, 'Erstellt mit <a href="https://misbuero.ch/"') !== false) {
+	if (\strpos($message, 'data-cmx-mail-footer="1"') !== false) {
 		return $message;
 	}
 
@@ -405,7 +405,7 @@ function cmxbu_append_belegmail_footer_html(string $message, array $args = []): 
 		? (string) cmx_email_agb_footer_html('color:#8b98a5;text-decoration:underline;')
 		: '';
 
-	$footer = '<div style="margin-top:24px;">';
+	$footer = '<div data-cmx-mail-footer="1" style="margin-top:24px;">';
 	if ($portal_html !== '') {
 		$footer .= '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $portal_html . '</p>';
 	}
@@ -413,7 +413,10 @@ function cmxbu_append_belegmail_footer_html(string $message, array $args = []): 
 	if ($agb_html !== '') {
 		$footer .= '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_html . '</p>';
 	}
-	$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</p></div>';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled()) {
+		$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige in der Schweiz.</p>';
+	}
+	$footer .= '</div>';
 
 	return $message . $footer;
 }
@@ -723,4 +726,17 @@ function cmxbu_get_beleg_amount_display(int $post_id): string {
 	$formatted = cmx_format_swiss_number($total, 2);
 
 	return trim($formatted . ' ' . $currency);
+}
+
+function cmxbu_get_beleg_mail_amount_display(int $post_id): string {
+	$display = \trim(cmxbu_get_beleg_amount_display($post_id));
+	if ($display === '') {
+		return '';
+	}
+
+	$display = (string) \preg_replace('/\s+[A-Z]{3}$/u', '', $display);
+	$display = (string) \preg_replace('/^[\p{Sc}]+\s*/u', '', $display);
+	$display = (string) \preg_replace('/\s*[\p{Sc}]+$/u', '', $display);
+
+	return \trim($display);
 }

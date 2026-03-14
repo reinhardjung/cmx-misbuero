@@ -229,6 +229,15 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_export_host_prefix')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled')) {
+	function cmx_powered_by_enabled(): bool {
+		$opts = (array) \get_option('cmx_einstellungen', []);
+		return \array_key_exists('powered_by', $opts)
+			? !empty($opts['powered_by'])
+			: true;
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_export_user_prefix')) {
 	function cmx_export_user_prefix(): string {
 		$user = \wp_get_current_user();

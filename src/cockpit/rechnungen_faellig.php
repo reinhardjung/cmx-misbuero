@@ -442,8 +442,8 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		$faellig_bis = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_due_date_display')
 			? (string) cmxbu_get_beleg_due_date_display($post_id)
 			: '';
-		$betrag = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
-			? (string) cmxbu_get_beleg_amount_display($post_id)
+		$betrag = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_mail_amount_display')
+			? (string) cmxbu_get_beleg_mail_amount_display($post_id)
 			: cmx_cockpit_mahnwesen_amount_display($post_id, cmx_cockpit_mahnwesen_amount_value($post_id));
 		$is_overdue = cmx_cockpit_mahnwesen_is_overdue($post_id);
 		$beleg_mail_date = \function_exists(__NAMESPACE__ . '\\cmxbu_get_mail_subject_beleg_date')
