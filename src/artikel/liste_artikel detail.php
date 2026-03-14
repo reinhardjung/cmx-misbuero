@@ -144,6 +144,64 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_logo_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_contact_url')) {
+	function cmx_artikel_detail_me_contact_url(): string {
+		$query = new \WP_Query([
+			'post_type'              => 'kontakte',
+			'post_status'            => 'publish',
+			'posts_per_page'         => 1,
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'ignore_sticky_posts'    => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'tax_query'              => [[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'name',
+				'terms'    => ['Das bin ich', 'Ich'],
+			]],
+		]);
+
+		$post_id = !empty($query->posts[0]->ID) ? (int) $query->posts[0]->ID : 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$meta_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_URL')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_URL')
+			: '_cmx_kontakte_url';
+
+		return \trim((string) \get_post_meta($post_id, $meta_key, true));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_contact_title')) {
+	function cmx_artikel_detail_me_contact_title(): string {
+		$query = new \WP_Query([
+			'post_type'              => 'kontakte',
+			'post_status'            => 'publish',
+			'posts_per_page'         => 1,
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'ignore_sticky_posts'    => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'tax_query'              => [[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'name',
+				'terms'    => ['Das bin ich', 'Ich'],
+			]],
+		]);
+
+		$post_id = !empty($query->posts[0]->ID) ? (int) $query->posts[0]->ID : 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		return \trim((string) \get_the_title($post_id));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_sort_state')) {
 	function cmx_artikel_detail_sort_state(): array {
 		$key = isset($_GET['sort_key']) ? \sanitize_key((string) \wp_unslash($_GET['sort_key'])) : 'title';
@@ -381,6 +439,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		$next_item = \is_array($neighbors['next'] ?? null) ? (array) $neighbors['next'] : null;
 		$image_url = \trim((string) \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true));
 		$me_logo_url = cmx_artikel_detail_me_logo_url();
+		$me_contact_url = cmx_artikel_detail_me_contact_url();
+		$me_contact_title = cmx_artikel_detail_me_contact_title();
 		$price_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_label')
 			&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_raw')
 			? cmx_artikel_liste_price_label(cmx_artikel_liste_price_raw($artikel_id))
@@ -469,7 +529,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 		echo '</div>';
 		if ($me_logo_url !== '') {
-			echo '<div class="cmx-artikel-detail-head-brand"><img class="cmx-artikel-detail-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo"></div>';
+			echo '<div class="cmx-artikel-detail-head-brand">';
+			if ($me_contact_url !== '') {
+				echo '<a href="' . \esc_url($me_contact_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($me_contact_title) . '">';
+			}
+			echo '<img class="cmx-artikel-detail-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo">';
+			if ($me_contact_url !== '') {
+				echo '</a>';
+			}
+			echo '</div>';
 		}
 		echo '</div>';
 		echo '</div>';
