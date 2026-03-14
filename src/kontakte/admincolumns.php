@@ -725,6 +725,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_gmaps,
 		.column-cmx_hersteller_url,
 		.column-cmx_kontakt_belege { width:56px; text-align:center; padding-left:0 !important; padding-right:0 !important; }
+		th#cmx_kontakt_belege { text-indent:2ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
 		.column-cmx_email_1 { width:220px; min-width:220px; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
@@ -767,7 +768,7 @@ function cmx_kontakte_add_columns(array $columns): array {
 	if (!isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
 	}
-	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = '';
+	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = 'P';
 	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Firmengründung';
 	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburtsdatum';
 
