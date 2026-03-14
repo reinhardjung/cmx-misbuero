@@ -393,17 +393,11 @@ function cmxbu_prepare_belegmail_html(string $message): string {
 }
 
 function cmxbu_append_belegmail_footer_html(string $message, array $args = []): string {
-	if (\strpos($message, 'Diese E-Mail wurde von') !== false) {
+	if (\strpos($message, 'Erstellt mit <a href="https://misbuero.ch/"') !== false) {
 		return $message;
 	}
 
 	$kontakt_id = (int) ($args['kontakt_id'] ?? 0);
-	$site_name = \trim((string) ($args['site_name'] ?? ''));
-	$catalog_url = \esc_url((string) ($args['catalog_url'] ?? ''));
-	if ($site_name === '') {
-		$site_name = 'MisBüro';
-	}
-
 	$portal_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
 		: '';
@@ -419,13 +413,7 @@ function cmxbu_append_belegmail_footer_html(string $message, array $args = []): 
 	if ($agb_html !== '') {
 		$footer .= '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_html . '</p>';
 	}
-	$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Diese E-Mail wurde von ';
-	if ($catalog_url !== '') {
-		$footer .= '<a href="' . $catalog_url . '" style="color:#8b98a5;text-decoration:underline;">' . \esc_html($site_name) . '</a>';
-	} else {
-		$footer .= \esc_html($site_name);
-	}
-	$footer .= ' automatisch generiert.</p></div>';
+	$footer .= '<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige.</p></div>';
 
 	return $message . $footer;
 }

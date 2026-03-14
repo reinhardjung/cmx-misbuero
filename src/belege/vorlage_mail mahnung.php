@@ -75,9 +75,6 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 	$kundenportal_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_kundenportal_footer_html')
 		? (string) cmx_email_kundenportal_footer_html($kontakt_id, 'color:#8b98a5;text-decoration:underline;')
 		: '';
-	$sender_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')
-		? (string) cmx_email_sender_mailto_html('color:#8b98a5;text-decoration:none;')
-		: '';
 	$thank_you_margin_bottom = $kundenportal_footer_html !== '' ? '16px' : '0';
 	$mail_head_html = cmx_mail_outlook_head_html();
 	$button_icon_html = '<span style="vertical-align:middle;display:inline-block;margin-right:8px;">'
@@ -134,9 +131,8 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
 							<hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
 							' . ($agb_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $agb_footer_html . '</p>' : '') . '
-							' . ($sender_footer_html !== '' ? '<p style="margin:0 0 6px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">Absender: ' . $sender_footer_html . '</p>' : '') . '
 							<p style="margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">
-								Diese E-Mail wurde von <a href="' . $catalog_url_esc . '" style="color:#8b98a5;text-decoration:underline;">' . $site_name_esc . '</a> automatisch generiert.
+								Erstellt mit <a href="https://misbuero.ch/" style="color:#8b98a5;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige.
 							</p>
 						</td>
 					</tr>

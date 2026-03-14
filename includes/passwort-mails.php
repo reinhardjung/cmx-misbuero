@@ -39,9 +39,6 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
 		? (string) cmx_email_agb_footer_html('color:#7a7a7a;text-decoration:underline;')
 		: '';
-	$sender_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')
-		? (string) cmx_email_sender_mailto_html('color:#7a7a7a;text-decoration:none;')
-		: '';
 	$mail_head_html = cmx_mail_outlook_head_html();
 
 	return '<!doctype html><html lang="de" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' . $mail_head_html . '</head><body style="margin:0;padding:0;background:#dcdcdc;">'
@@ -57,8 +54,7 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. $button_html
 		. '<div style="border-top:1px solid #d8d8d8;margin-top:16px;padding-top:12px;font-size:12px;color:#7a7a7a;">'
 		. ($agb_footer_html !== '' ? '<div style="margin:0 0 6px 0;">' . $agb_footer_html . '</div>' : '')
-		. ($sender_footer_html !== '' ? '<div style="margin:0 0 6px 0;">Absender: ' . $sender_footer_html . '</div>' : '')
-		. '<div>Diese E-Mail wurde von Mis Buero automatisch generiert.</div>'
+		. '<div>Erstellt mit <a href="https://misbuero.ch/" style="color:#7a7a7a;text-decoration:underline;">MisBüro</a> – der einfachen Bürosoftware für Selbständige.</div>'
 		. '</div>'
 		. '</td></tr>'
 		. '</table>'

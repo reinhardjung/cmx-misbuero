@@ -1092,26 +1092,15 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 		\wp_send_json_error(['message' => 'Es ist aktuell kein ZIP-Link verfügbar.'], 400);
 	}
 
-	$user = \wp_get_current_user();
-	$sender_name = '';
-	if (\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailbox_text')) {
-		$sender_name = \trim((string) cmx_email_sender_mailbox_text());
-	}
-	if ($sender_name === '' && $user instanceof \WP_User && $user->exists()) {
-		$sender_name = \trim((string) ($user->display_name ?: $user->user_login));
-	}
 	$subject = 'ZIP-Export Milchbüchli';
 	$message = "Guten Tag,\n\nhier ist der ZIP-Download-Link:\n" . $share_url;
-	if ($sender_name !== '') {
-		$message .= "\n\nAbsender: " . $sender_name;
-	}
 	if (\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_text')) {
 		$agb_footer_text = \trim((string) cmx_email_agb_footer_text());
 		if ($agb_footer_text !== '') {
 			$message .= "\n\n" . $agb_footer_text;
 		}
 	}
-	$message .= "\n\nDiese E-Mail wurde von Mis Buero automatisch generiert.";
+	$message .= "\n\nErstellt mit MisBüro (https://misbuero.ch/) – der einfachen Bürosoftware für Selbständige.";
 
 	$headers = ['Content-Type: text/plain; charset=UTF-8'];
 	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
