@@ -66,6 +66,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 			'{betrag}' => \trim((string) ($data['betrag'] ?? '')),
 			'{beleg_id}' => \trim((string) ($data['beleg_id'] ?? '')),
 			'{beleg_label}' => \trim((string) ($data['beleg_label'] ?? '')),
+			'{logo}' => '',
 		];
 		return \strtr($text, $replacements);
 	}
@@ -111,7 +112,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 		$first_text_index = null;
 		$last_text_index = null;
 		foreach ($blocks as $index => $block) {
-			if (\trim($block) === '{beleg}') {
+			if (\in_array(\trim($block), ['{beleg}', '{logo}'], true)) {
 				continue;
 			}
 			if ($first_text_index === null) {
@@ -122,16 +123,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 
 		$html = '';
 		foreach ($blocks as $index => $block) {
-			if (\trim($block) === '{beleg}') {
-				$html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>';
-				continue;
-			}
-
+			$block_key = \trim($block);
 			$margin_bottom = '16px';
 			if ($index === $last_text_index) {
 				$margin_bottom = $thank_you_margin_bottom;
 			} elseif ($index === $first_text_index) {
 				$margin_bottom = '12px';
+			}
+
+			if ($block_key === '{logo}') {
+				$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
+					? (string) cmx_email_self_logo_block_html('margin:0 0 ' . $margin_bottom . ' 0;')
+					: '';
+				if ($logo_html !== '') {
+					$html .= $logo_html;
+				}
+				continue;
+			}
+			if ($block_key === '{beleg}') {
+				$html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>';
+				continue;
 			}
 
 			$had_anrede_token = \strpos($block, '{anrede}') !== false;

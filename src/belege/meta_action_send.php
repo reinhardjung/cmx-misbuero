@@ -206,6 +206,12 @@ function cmxbu_handle_beleg_send(): void {
 	} elseif ($custom_has_anrede_token && \strpos($message, '{anrede}') !== false) {
 		$message = \str_replace('{anrede}', '', $message);
 	}
+	if (\strpos($message, '{logo}') !== false) {
+		$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
+			? (string) cmx_email_self_logo_block_html('margin:0 0 16px 0;')
+			: '';
+		$message = \str_replace('{logo}', $logo_html, $message);
+	}
 	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
 	if (strpos($message, '{beleg}') !== false) {
 		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);

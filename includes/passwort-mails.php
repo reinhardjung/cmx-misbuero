@@ -32,6 +32,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
  * Passwort-Mails im gleichen Karten-Layout wie im Plugin cmx-plesk.
  */
 function cmx_passwort_mails_build_html(string $title, string $body_html, ?array $button = null): string {
+	if (\strpos($body_html, '{logo}') !== false) {
+		$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
+			? (string) cmx_email_self_logo_block_html('margin:0 0 18px 0;')
+			: '';
+		$body_html = \str_replace('{logo}', $logo_html, $body_html);
+	}
+
 	$button_html = '';
 	if (\is_array($button) && !empty($button['url']) && !empty($button['label'])) {
 		$button_html = '<p style="margin:0 0 18px;">'

@@ -95,6 +95,8 @@ function cmx_field_textarea_beleg(array $args): void {
 				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{anrede}">{anrede}</button>'
 				. ' · '
 				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{beleg}">{beleg}</button>'
+				. ' · '
+				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{logo}">{logo}</button>'
 				. '</p>';
 			echo '<script>
 			(function(){

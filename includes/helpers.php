@@ -238,6 +238,85 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')) {
+	function cmx_email_self_contact_id(): int {
+		$query = new \WP_Query([
+			'post_type'              => 'kontakte',
+			'post_status'            => ['publish', 'private'],
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'ignore_sticky_posts'    => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'tax_query'              => [[
+				'taxonomy' => 'kontakte_kategorien',
+				'field'    => 'name',
+				'terms'    => ['Das bin ich', 'Ich'],
+			]],
+		]);
+
+		return !empty($query->posts[0]) ? (int) $query->posts[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
+	function cmx_email_self_logo_url(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$local_url = \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true));
+		if ($local_url !== '') {
+			return $local_url;
+		}
+
+		$thumb_id = (int) \get_post_thumbnail_id($post_id);
+		if ($thumb_id > 0) {
+			$thumb_url = (string) \wp_get_attachment_image_url($thumb_id, 'full');
+			if ($thumb_url !== '') {
+				return $thumb_url;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
+	function cmx_email_self_logo_html(string $img_style = ''): string {
+		$logo_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')
+			? (string) cmx_email_self_logo_url()
+			: '';
+		if ($logo_url === '') {
+			return '';
+		}
+
+		if ($img_style === '') {
+			$img_style = 'display:block;max-width:180px;width:100%;height:auto;border:0;outline:none;text-decoration:none;';
+		}
+
+		return '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo" style="' . \esc_attr($img_style) . '">';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')) {
+	function cmx_email_self_logo_block_html(string $table_style = 'margin:0 0 16px 0;', string $img_style = ''): string {
+		$logo_img = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
+			? (string) cmx_email_self_logo_html($img_style)
+			: '';
+		if ($logo_img === '') {
+			return '';
+		}
+
+		return '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($table_style) . '"><tr><td>' . $logo_img . '</td></tr></table>';
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_export_user_prefix')) {
 	function cmx_export_user_prefix(): string {
 		$user = \wp_get_current_user();

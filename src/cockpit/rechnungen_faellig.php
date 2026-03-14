@@ -516,6 +516,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		} elseif (!empty($custom_has_anrede_token) && \strpos($message, '{anrede}') !== false) {
 			$message = \str_replace('{anrede}', '', $message);
 		}
+		if (\strpos($message, '{logo}') !== false) {
+			$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
+				? (string) cmx_email_self_logo_block_html('margin:0 0 16px 0;')
+				: '';
+			$message = \str_replace('{logo}', $logo_html, $message);
+		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_prepare_belegmail_html')) {
 			$message = cmxbu_prepare_belegmail_html($message);
