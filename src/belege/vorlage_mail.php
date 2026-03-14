@@ -107,6 +107,8 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>
 						</td>
 					</tr>
+
+
 					<tr>
 						<td style="padding:24px 24px 8px 24px;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1f2933;">
 							<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>
@@ -126,6 +128,8 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 							 -->
 						</td>
 					</tr>
+
+
 					<tr>
 						<td style="padding:0 24px 24px 24px;">
 							' . ($kundenportal_footer_html !== '' ? '<p style="margin:0 0 10px 0;font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#8b98a5;line-height:1.5;">' . $kundenportal_footer_html . '</p>' : '') . '
