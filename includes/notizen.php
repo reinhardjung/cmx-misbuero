@@ -198,7 +198,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		echo '<span class="cmx-intern-notiz-label-inline">Uhrzeit <a href="#" class="cmx-notiz-jetzt">jetzt</a></span>';
 		echo '<input type="time" name="cmx_intern_notizen_rows[' . $name_index . '][zeit]" value="' . $zeit . '" />';
 		echo '</label>';
-		echo '<p class="cmx-intern-notiz-remove-wrap"><button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen">x</button></p>';
+		echo '<p class="cmx-intern-notiz-remove-wrap"><button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash" style=""></span></button></p>';
 		echo '</div>';
 		echo '</div>';
 	}

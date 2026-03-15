@@ -660,7 +660,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 			echo '<div class="cmx-kl-date-panel" style="display:none;flex:0 0 100%;padding:8px 0 0 44px;">';
 			echo '<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">';
 			echo '<label class="cmx-kl-date-label-from" style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:#50575e;cursor:pointer;">Datum von<input type="date" class="cmx-kl-date-from" name="cmx_kl_date_from[' . \esc_attr($item_id) . ']" value="' . \esc_attr($date_from) . '" style="min-height:34px;padding:4px 8px;"></label>';
-			echo '<label style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:#50575e;">Datum bis<input type="date" class="cmx-kl-date-to" name="cmx_kl_date_to[' . \esc_attr($item_id) . ']" value="' . \esc_attr($date_to) . '" style="min-height:34px;padding:4px 8px;"></label>';
+			echo '<label class="cmx-kl-date-label-to" style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:#50575e;cursor:pointer;">Datum bis<input type="date" class="cmx-kl-date-to" name="cmx_kl_date_to[' . \esc_attr($item_id) . ']" value="' . \esc_attr($date_to) . '" style="min-height:34px;padding:4px 8px;"></label>';
 			echo '</div>';
 			echo '</div>';
 			echo '</div>';
@@ -1055,6 +1055,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 
 				var fromLabel = row.querySelector(".cmx-kl-date-label-from");
 				var fromInput = row.querySelector(".cmx-kl-date-from");
+				var toLabel = row.querySelector(".cmx-kl-date-label-to");
+				var toInput = row.querySelector(".cmx-kl-date-to");
 				if (fromLabel && fromInput) {
 					fromLabel.addEventListener("click", function(e){
 						if (e.target && e.target.closest && e.target.closest("input")) {
@@ -1062,6 +1064,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 						}
 						fromInput.value = todayYmd;
 						fromInput.dispatchEvent(new Event("change", { bubbles: true }));
+					});
+				}
+				if (toLabel && toInput) {
+					toLabel.addEventListener("click", function(e){
+						if (e.target && e.target.closest && e.target.closest("input")) {
+							return;
+						}
+						toInput.value = todayYmd;
+						toInput.dispatchEvent(new Event("change", { bubbles: true }));
 					});
 				}
 			}
