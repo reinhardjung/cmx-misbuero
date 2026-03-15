@@ -727,6 +727,15 @@ add_action('admin_head', function() {
 		vertical-align: middle;
 	}
 
+	body.post-type-kontakte .wp-list-table td,
+	body.post-type-kontakte .wp-list-table th,
+	body.post-type-artikel .wp-list-table td,
+	body.post-type-artikel .wp-list-table th,
+	body.post-type-belege .wp-list-table td,
+	body.post-type-belege .wp-list-table th {
+		vertical-align: top;
+	}
+
 	.wp-list-table tr:nth-child(even) td {
 		background: #fcfdff;
 	}
