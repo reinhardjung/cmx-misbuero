@@ -837,7 +837,7 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 					<th><a href="' . esc_url($artikel_list_url) . '" target="_blank" rel="noopener noreferrer">Artikel</a></th>
 					<th class="cmx-pos-qty-head"><span class="cmx-pos-qty-head-menge">&nbsp;Menge</span><span class="cmx-pos-qty-head-einheit">&nbsp;' . $einheiten_head . '</span></th>
 					<th>&nbsp;&nbsp;Einzelpreis</th>
-					<th>&nbsp;&nbsp;Rabatt</th>
+					<th>&nbsp;&nbsp;<a href="#" class="cmx-rabatt-fill-db" title="Deckungsbeitrag des Artikels in das Rabattfeld der aktiven Position übernehmen" style="color:inherit;text-decoration:none;cursor:pointer;">Rabatt</a></th>
 					<th style="text-align:right;">Gesamt</th>
 					<th style="padding-left:25px;">zus&auml;tzliche Notiz</th>
 				<th></th>
@@ -1200,6 +1200,16 @@ add_action('wp_ajax_cmx_get_artikel_vk', function() {
 	]);
 });
 
+add_action('wp_ajax_cmx_get_artikel_deckungsbeitrag', function() {
+	if (!current_user_can('edit_posts')) wp_send_json_error(['msg' => 'forbidden'], 403);
+	$artikel_id = isset($_POST['artikel_id']) ? (int) $_POST['artikel_id'] : 0;
+	if ($artikel_id <= 0) wp_send_json_error(['msg' => 'no_id'], 400);
+	$deckungsbeitrag = get_post_meta($artikel_id, '_cmx_artikel_deckungsbeitrag', true);
+	wp_send_json_success([
+		'deckungsbeitrag' => ($deckungsbeitrag === '' || $deckungsbeitrag === null) ? '' : (string) $deckungsbeitrag,
+	]);
+});
+
 /* ------------------------------
  * AJAX: Artikel-Suche
  * ------------------------------ */
@@ -1348,7 +1358,8 @@ function cmx_beleg_positionen_js() {
 	?>
 	<script>
 	jQuery(function($){
-		const table   = $('#cmx-positionen-table tbody');
+		const $positionTable = $('#cmx-positionen-table');
+		const table   = $positionTable.find('tbody');
 		const AJAX_URL = <?php echo wp_json_encode($ajax_url); ?>;
 		const ARTICLE_EDIT_BASE = <?php echo wp_json_encode(admin_url('post.php?post=')); ?>;
 		const INITIAL_ARTICLE_ROW_HTML = (function(){
@@ -1364,6 +1375,7 @@ function cmx_beleg_positionen_js() {
 		let taskPickerTimer = null;
 		let taskPickerSeq = 0;
 		let dragMode = 'row';
+		let $lastActivePositionRow = $();
 
 		// ROBUSTER Parser: akzeptiert u. a. 1'234.56, 1'234,56, 1.234,56, 1,234.56, 1.000
 		function parseNumberFlexible(val){
@@ -1444,6 +1456,12 @@ function cmx_beleg_positionen_js() {
 			txt = txt.replace(/chf|fr\.?/gi, '').trim();
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
+		}
+		function rememberActivePositionRow(el){
+			const $row = $(el).closest('tr.cmx-pos-row');
+			if ($row.length && !$row.hasClass('cmx-pos-row-abschnitt')) {
+				$lastActivePositionRow = $row;
+			}
 		}
 			function escHtml(s){
 				return (s ?? '').toString()
@@ -2176,6 +2194,22 @@ function cmx_beleg_positionen_js() {
 			});
 		table.on('focus', selectorMRP, function(){ const el=this; setTimeout(()=>{ try{ el.select(); }catch(e){} }, 0); });
 		table.on('mouseup', selectorMRP, function(e){ e.preventDefault(); });
+		$positionTable.on('focusin mousedown', 'tr.cmx-pos-row:not(.cmx-pos-row-abschnitt) input, tr.cmx-pos-row:not(.cmx-pos-row-abschnitt) textarea, tr.cmx-pos-row:not(.cmx-pos-row-abschnitt) select', function(){
+			rememberActivePositionRow(this);
+		});
+		$positionTable.on('click', '.cmx-rabatt-fill-db', function(e){
+			e.preventDefault();
+			const $row = ($lastActivePositionRow && $lastActivePositionRow.length) ? $lastActivePositionRow : $();
+			if (!$row.length) return;
+			const artikelId = parseInt((($row.find('.cmx-artikel-id').first().val() || '').toString().trim()), 10) || 0;
+			if (artikelId <= 0) return;
+			const $rabatt = $row.find('input[name*="[rabatt]"]').first();
+			if (!$rabatt.length) return;
+			$.post(AJAX_URL, { action:'cmx_get_artikel_deckungsbeitrag', artikel_id: artikelId }, function(resp){
+				if (!(resp && resp.success && resp.data)) return;
+				$rabatt.val(formatRabattValue(resp.data.deckungsbeitrag || '')).trigger('input').trigger('change').trigger('focus');
+			}, 'json');
+		});
 
 			initArtikelSuggest(table);
 			initTextbausteinSuggest(table);
