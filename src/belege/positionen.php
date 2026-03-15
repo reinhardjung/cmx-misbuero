@@ -2425,6 +2425,8 @@ function cmx_beleg_positionen_js() {
 				#cmx-positionen-table > thead > tr > th:last-child,
 				#cmx-positionen-table > tbody > tr > td:last-child{
 					border-right:0 !important;
+					width:56px;
+					min-width:56px;
 				}
 				#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
 					#cmx-positionen-table th:first-child,
@@ -2506,10 +2508,11 @@ function cmx_beleg_positionen_js() {
 			.cmx-pos-total{ font-weight:600; text-align:right; }
 			#cmx-positionen-table td.cmx-pos-controls{
 				white-space:nowrap;
-				width:1%;
-				text-align:right;
+				width:56px;
+				min-width:56px;
+				text-align:left;
 				vertical-align:top;
-				padding-left:12px;
+				padding-left:0;
 				padding-right:0;
 			}
 			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos,
@@ -2518,8 +2521,8 @@ function cmx_beleg_positionen_js() {
 				vertical-align:top;
 			}
 			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos{
-				margin-left:4px;
-				transform:translateX(-10px);
+				margin-left:2px;
+				transform:none;
 			}
 			#cmx-positionen-table .cmx-pos-drag-handle{
 				cursor:move;
@@ -2528,7 +2531,7 @@ function cmx_beleg_positionen_js() {
 				justify-content:center;
 				width:20px;
 				height:20px;
-				margin-right:4px;
+				margin-right:2px;
 				color:#646970;
 				border-radius:3px;
 				user-select:none;

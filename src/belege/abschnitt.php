@@ -44,8 +44,9 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 		: '';
 
 	echo '<tr class="cmx-pos-row cmx-pos-row-abschnitt">';
-	echo '<td colspan="6">';
+	echo '<td colspan="7" class="cmx-pos-abschnitt-cell">';
 	echo '<input type="hidden" name="cmx_positionen[' . $i . '][typ]" value="abschnitt">';
+	echo '<div class="cmx-abschnitt-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></div>';
 	echo '<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' . $i . '][abschnitt_titel]" value="' . \esc_attr($titel) . '" placeholder="Abschnitt" style="width:calc(100% - 14px); margin-left:20px; box-sizing:border-box;">';
 	echo '<div class="cmx-abschnitt-text-wrap">';
 	if ($textbaustein_edit_url !== '') {
@@ -54,7 +55,6 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 14px); margin-top:6px; margin-left:20px; box-sizing:border-box;">' . \esc_textarea($text) . '</textarea>';
 	echo '</div>';
 	echo '</td>';
-	echo '<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></td>';
 	echo '</tr>';
 
 	return true;
@@ -121,15 +121,15 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 				const i = nextRowIndex();
 				const rowHtml = '' +
 							'<tr class="cmx-pos-row cmx-pos-row-abschnitt">' +
-								'<td colspan="6">' +
+								'<td colspan="7" class="cmx-pos-abschnitt-cell">' +
 									'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
+									'<div class="cmx-abschnitt-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></div>' +
 									'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:calc(100% - 14px); margin-left:20px; box-sizing:border-box;">' +
 									'<div class="cmx-abschnitt-text-wrap">' +
 										TEXTBAUSTEIN_EDIT_LINK +
 										'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 14px); margin-top:6px; margin-left:20px; box-sizing:border-box;"></textarea>' +
 									'</div>' +
 								'</td>' +
-								'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></td>' +
 							'</tr>';
 
 				const $row = $(rowHtml);
@@ -149,7 +149,18 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 		<style>
 			.cmx-pos-actions #cmx-add-abschnitt { margin-left: 8px; }
 			#cmx-positionen-table .cmx-pos-row-abschnitt td { background: #f8f9fa; }
-			#cmx-positionen-table .cmx-pos-row-abschnitt > td:first-child { padding-right: 6px !important; }
+			#cmx-positionen-table .cmx-pos-row-abschnitt > td.cmx-pos-abschnitt-cell {
+				position: relative;
+				padding-right: 78px !important;
+			}
+			#cmx-positionen-table .cmx-abschnitt-controls{
+				position:absolute;
+				top:0;
+				right:0;
+				display:flex;
+				align-items:flex-start;
+				gap:4px;
+			}
 			#cmx-positionen-table .cmx-abschnitt-titel {
 				font-weight: 600;
 				border-left: 3px solid #2271b1;
