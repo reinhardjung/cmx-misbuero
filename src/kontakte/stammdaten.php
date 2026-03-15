@@ -15,6 +15,7 @@ const CMX_KONTAKTE_META_KUNDEN_NR = '_cmx_kontakte_kunden_nr';
 const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
 const CMX_KONTAKTE_META_FIRMENGRUENDUNG = '_cmx_kontakte_firmengruendung';
 const CMX_KONTAKTE_META_GEBURTSDATUM    = '_cmx_kontakte_geburtsdatum';
+const CMX_KONTAKTE_META_KUNDE_SEIT      = '_cmx_kontakte_kunde_seit';
 
 /**
  * ------------------------------------------------------------
@@ -73,6 +74,14 @@ function cmx_register_kontakte_stammdaten_meta() {
 		'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_date_ymd',
 		'auth_callback'     => fn() => \current_user_can('edit_posts'),
 	]);
+	// Kunde seit (YYYY-MM-DD)
+	\register_post_meta('kontakte', CMX_KONTAKTE_META_KUNDE_SEIT, [
+		'type'              => 'string',
+		'single'            => true,
+		'show_in_rest'      => true,
+		'sanitize_callback' => __NAMESPACE__ . '\\cmx_sanitize_date_ymd',
+		'auth_callback'     => fn() => \current_user_can('edit_posts'),
+	]);
 }
 
 /** Sanitizer: exakt YYYY-MM-DD, sonst '' */
@@ -81,6 +90,46 @@ function cmx_sanitize_date_ymd($v): string {
 	if ($v === '') return '';
 	$dt = \DateTime::createFromFormat('Y-m-d', $v);
 	return ($dt && $dt->format('Y-m-d') === $v) ? $v : '';
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_first_beleg_created_date')) {
+	function cmx_kontakt_first_beleg_created_date(int $kontakt_id): string {
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+		global $wpdb;
+		if (!($wpdb instanceof \wpdb)) {
+			return '';
+		}
+
+		$sql = $wpdb->prepare(
+			"SELECT DATE(MIN(p.post_date))
+			FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID
+			WHERE p.post_type = 'belege'
+			  AND p.post_status NOT IN ('trash','auto-draft','inherit')
+			  AND pm.meta_key = %s
+			  AND pm.meta_value = %d",
+			'_cmx_beleg_kontakt_id',
+			$kontakt_id
+		);
+		$raw = \is_string($sql) ? (string) $wpdb->get_var($sql) : '';
+		return cmx_sanitize_date_ymd($raw);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_kunde_seit_value')) {
+	function cmx_kontakt_kunde_seit_value(int $kontakt_id): string {
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+		$saved = (string) \get_post_meta($kontakt_id, CMX_KONTAKTE_META_KUNDE_SEIT, true);
+		$saved = cmx_sanitize_date_ymd($saved);
+		if ($saved !== '') {
+			return $saved;
+		}
+		return cmx_kontakt_first_beleg_created_date($kontakt_id);
+	}
 }
 
 /**
@@ -117,6 +166,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
 	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
 	$geburt   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_GEBURTSDATUM, true);
+	$kunde_seit = cmx_kontakt_kunde_seit_value((int) $post->ID);
 
 	// Für das Label (nur Anzeige) https:// ergänzen
 	$url_disp = \trim($url_raw);
@@ -128,10 +178,11 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .grid {
 		display: grid !important;
 		grid-template-columns:
-			minmax(240px, 1fr)
-			minmax(240px, 1fr)
-			minmax(120px, 0.6fr)
-			minmax(180px, 0.8fr);
+			minmax(220px, 1fr)
+			minmax(220px, 1fr)
+			minmax(170px, 0.8fr)
+			minmax(170px, 0.8fr)
+			minmax(170px, 0.8fr);
 		column-gap: 16px;
 		row-gap: 16px;
 		align-items: start;
@@ -140,6 +191,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .field--privat{width:120px !important}
 	#cmx-stammdaten .field--kunden-nr{min-width:160px;}
 	#cmx-stammdaten .field--anrede{min-width:200px;}
+	#cmx-stammdaten .field--url{grid-column:span 2}
 	#cmx-stammdaten .text,
 	#cmx-stammdaten .date {width:100% !important; max-width:100% !important}
 	#cmx-stammdaten .url-label a{text-decoration:none}
@@ -184,7 +236,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	</p>';
 
 	// URL (Label ist Link)
-	echo '<p class="field">
+	echo '<p class="field field--url">
 		<label class="url-label" for="cmx_url">';
 			if ($url_disp !== '') {
 				echo '<a href="' . \esc_url($url_disp) . '" target="_blank" rel="noopener noreferrer"><strong>URL</strong></a>';
@@ -196,7 +248,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 			onblur="if(this.value && !/^https?:\\/\\//i.test(this.value)){this.value=\'https://\'+this.value.trim().replace(/^\\/+/ , \'\');}">
 	</p>';
 
-	// Firmengründung + Geburtsdatum (gleiche Zeile)
+	// Firmengründung + Geburtsdatum + Kunde seit (gleiche Zeile)
 	echo '<p class="field field--datum">
 	<label for="cmx_firmengruendung"><strong>Firmengründung</strong></label><br>
 	<input id="cmx_firmengruendung" name="cmx_firmengruendung" type="date" class="date" value="' . \esc_attr($firmengr) . '">
@@ -204,6 +256,10 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	echo '<p class="field field--datum">
 	<label for="cmx_geburtsdatum"><strong>Geburtsdatum</strong></label><br>
 	<input id="cmx_geburtsdatum" name="cmx_geburtsdatum" type="date" class="date" value="' . \esc_attr($geburt) . '">
+	</p>';
+	echo '<p class="field field--datum">
+	<label for="cmx_kunde_seit"><strong>Kunde seit</strong></label><br>
+	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
 
 	echo '</div></div>';
@@ -258,8 +314,10 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	// Firmengründung / Geburtsdatum (YYYY-MM-DD)
 	$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) $_POST['cmx_firmengruendung'] : '';
 	$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) $_POST['cmx_geburtsdatum'] : '';
+	$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) $_POST['cmx_kunde_seit'] : '';
 	$firmengruendung = cmx_sanitize_date_ymd($firmengruendung);
 	$geburtsdatum    = cmx_sanitize_date_ymd($geburtsdatum);
+	$kunde_seit      = cmx_sanitize_date_ymd($kunde_seit);
 
 	if ($firmengruendung === '') {
 		\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
@@ -270,6 +328,11 @@ function cmx_save_kontakte_meta(int $post_id): void {
 		\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
 	} else {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $geburtsdatum);
+	}
+	if ($kunde_seit === '') {
+		\delete_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT);
+	} else {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT, $kunde_seit);
 	}
 
 	// Legacy-Feld für bestehende Integrationen

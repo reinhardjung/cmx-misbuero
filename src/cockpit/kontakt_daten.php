@@ -17,6 +17,9 @@ if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')) {
 if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
 	define(__NAMESPACE__.'\\CMX_KONTAKTE_META_GEBURTSDATUM', '_cmx_kontakte_geburtsdatum');
 }
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_KUNDE_SEIT')) {
+	define(__NAMESPACE__.'\\CMX_KONTAKTE_META_KUNDE_SEIT', '_cmx_kontakte_kunde_seit');
+}
 
 add_action('wp_dashboard_setup', function () {
 	\wp_add_dashboard_widget(
@@ -40,24 +43,6 @@ function cmx_render_kontakt_wichtige_daten(): void {
 		'no_found_rows'           => true,
 		'update_post_meta_cache'  => false,
 		'update_post_term_cache'  => false,
-		'meta_query'              => [
-			'relation' => 'OR',
-			[
-				'key'     => CMX_KONTAKTE_META_DATUM,
-				'value'   => '',
-				'compare' => '!=',
-			],
-			[
-				'key'     => CMX_KONTAKTE_META_FIRMENGRUENDUNG,
-				'value'   => '',
-				'compare' => '!=',
-			],
-			[
-				'key'     => CMX_KONTAKTE_META_GEBURTSDATUM,
-				'value'   => '',
-				'compare' => '!=',
-			],
-		],
 	]);
 
 	echo '<style>
@@ -107,20 +92,21 @@ function cmx_render_kontakt_wichtige_daten(): void {
 		$today = new \DateTimeImmutable('today', $tz);
 		$year  = (int) $today->format('Y');
 
-		for ($offset = 0; $offset <= 8; $offset++) {
-			$candidate = \DateTimeImmutable::createFromFormat(
-				'!Y-m-d',
-				sprintf('%04d-%02d-%02d', $year + $offset, $month, $day),
-				$tz
-			);
-			if (!$candidate) continue;
-			if ((int) $candidate->format('m') !== $month || (int) $candidate->format('d') !== $day) continue;
-			if ($candidate < $today) continue;
-			return (int) $candidate->getTimestamp();
+		$candidate = \DateTimeImmutable::createFromFormat(
+			'!Y-m-d',
+			sprintf('%04d-%02d-%02d', $year, $month, $day),
+			$tz
+		);
+		if (!$candidate) {
+			return PHP_INT_MAX;
 		}
-
-		$ts = strtotime($date);
-		return $ts ? (int) $ts : PHP_INT_MAX;
+		if ((int) $candidate->format('m') !== $month || (int) $candidate->format('d') !== $day) {
+			return PHP_INT_MAX;
+		}
+		if ($candidate < $today) {
+			return PHP_INT_MAX;
+		}
+		return (int) $candidate->getTimestamp();
 	};
 	$get_first_meta = static function(int $post_id, array $keys): string {
 		foreach ($keys as $key) {
@@ -131,6 +117,47 @@ function cmx_render_kontakt_wichtige_daten(): void {
 		}
 		return '';
 	};
+	$get_first_beleg_map = static function(array $kontakt_ids): array {
+		$kontakt_ids = array_values(array_filter(array_map('intval', $kontakt_ids), static function(int $id): bool {
+			return $id > 0;
+		}));
+		if (empty($kontakt_ids)) {
+			return [];
+		}
+		global $wpdb;
+		if (!($wpdb instanceof \wpdb)) {
+			return [];
+		}
+		$placeholders = implode(',', array_fill(0, count($kontakt_ids), '%d'));
+		$sql = $wpdb->prepare(
+			"SELECT CAST(pm.meta_value AS UNSIGNED) AS kontakt_id, DATE(MIN(p.post_date)) AS first_date
+			FROM {$wpdb->postmeta} pm
+			INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+			WHERE pm.meta_key = %s
+			  AND CAST(pm.meta_value AS UNSIGNED) IN ($placeholders)
+			  AND p.post_type = 'belege'
+			  AND p.post_status NOT IN ('trash','auto-draft','inherit')
+			GROUP BY CAST(pm.meta_value AS UNSIGNED)",
+			array_merge(['_cmx_beleg_kontakt_id'], $kontakt_ids)
+		);
+		if (!is_string($sql) || $sql === '') {
+			return [];
+		}
+		$rows = $wpdb->get_results($sql, ARRAY_A);
+		if (!is_array($rows)) {
+			return [];
+		}
+		$map = [];
+		foreach ($rows as $row) {
+			$kontakt_id = isset($row['kontakt_id']) ? (int) $row['kontakt_id'] : 0;
+			$first_date = isset($row['first_date']) ? trim((string) $row['first_date']) : '';
+			if ($kontakt_id > 0 && $first_date !== '') {
+				$map[$kontakt_id] = $first_date;
+			}
+		}
+		return $map;
+	};
+	$first_beleg_map = $get_first_beleg_map((array) $q->posts);
 
 	$rows = [];
 	foreach ((array) $q->posts as $pid) {
@@ -142,6 +169,8 @@ function cmx_render_kontakt_wichtige_daten(): void {
 			$legacy = (string) get_post_meta($pid, CMX_KONTAKTE_META_DATUM, true);
 			$firm   = (string) get_post_meta($pid, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
 			$birth  = (string) get_post_meta($pid, CMX_KONTAKTE_META_GEBURTSDATUM, true);
+			$kunde_seit_saved = (string) get_post_meta($pid, CMX_KONTAKTE_META_KUNDE_SEIT, true);
+			$kunde_seit = trim($kunde_seit_saved) !== '' ? trim($kunde_seit_saved) : ((string) ($first_beleg_map[$pid] ?? ''));
 			$email  = $get_first_meta($pid, ['_cmx_email_1','cmx_email_1','email_1','e_mail_1','kontakt_email','email','e_mail','mail']);
 			$phone  = $get_first_meta($pid, ['_cmx_telefon_1','cmx_telefon_1','telefon_1','tel_1','phone_1','telefon','tel','phone']);
 
@@ -162,19 +191,26 @@ function cmx_render_kontakt_wichtige_daten(): void {
 		if ($birth !== '') {
 			$entries[] = ['label' => 'Geburtsdatum', 'raw' => $birth];
 		}
+		if ($kunde_seit !== '') {
+			$entries[] = ['label' => 'Kunde seit', 'raw' => $kunde_seit];
+		}
 		if (empty($entries) && $legacy !== '') {
 			$entries[] = ['label' => $privat ? 'Geburtsdatum' : 'Firmengründung', 'raw' => $legacy];
 		}
 
 		foreach ($entries as $entry) {
 			$raw = (string) ($entry['raw'] ?? '');
+			$sort_ts = $next_occurrence_ts($raw);
+			if ($sort_ts === PHP_INT_MAX) {
+				continue;
+			}
 			$rows[] = [
 				'pid'      => $pid,
 				'title'    => $title,
 				'edit_url' => $edit_url,
 					'type'     => (string) ($entry['label'] ?? ''),
 					'disp'     => $format_date($raw),
-					'sort_ts'  => $next_occurrence_ts($raw),
+					'sort_ts'  => $sort_ts,
 					'email'    => $email,
 					'phone'    => $phone,
 				];
@@ -194,7 +230,7 @@ function cmx_render_kontakt_wichtige_daten(): void {
 		if ($cmp !== 0) return $cmp;
 		return strcasecmp((string) ($a['type'] ?? ''), (string) ($b['type'] ?? ''));
 	});
-	$rows = array_slice($rows, 0, 5);
+	$rows = array_slice($rows, 0, 10);
 
 	echo '<ul class="cmx-wd-list">';
 	foreach ($rows as $row) {

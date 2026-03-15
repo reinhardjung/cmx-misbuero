@@ -70,17 +70,21 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 			$url = 'https://'.ltrim($url, '/');
 		}
 
-		// NEU: Firmengründung / Geburtsdatum (YYYY-MM-DD), mit serverseitiger Validierung
+		// NEU: Firmengründung / Geburtsdatum / Kunde seit (YYYY-MM-DD), mit serverseitiger Validierung
 		$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) \wp_unslash($_POST['cmx_firmengruendung']) : '';
 		$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) \wp_unslash($_POST['cmx_geburtsdatum']) : '';
+		$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) \wp_unslash($_POST['cmx_kunde_seit']) : '';
 		if (function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
 			$firmengruendung = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $firmengruendung);
 			$geburtsdatum    = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $geburtsdatum);
+			$kunde_seit      = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $kunde_seit);
 		} else {
 			$dt = \DateTime::createFromFormat('Y-m-d', $firmengruendung);
 			$firmengruendung = ($dt && $dt->format('Y-m-d') === $firmengruendung) ? $firmengruendung : '';
 			$dt = \DateTime::createFromFormat('Y-m-d', $geburtsdatum);
 			$geburtsdatum = ($dt && $dt->format('Y-m-d') === $geburtsdatum) ? $geburtsdatum : '';
+			$dt = \DateTime::createFromFormat('Y-m-d', $kunde_seit);
+			$kunde_seit = ($dt && $dt->format('Y-m-d') === $kunde_seit) ? $kunde_seit : '';
 		}
 
 		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  $vor);
@@ -89,6 +93,7 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      esc_url_raw($url));
 		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
 		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM,    $geburtsdatum);
+		\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT,      $kunde_seit);
 		$legacy_val = $geburtsdatum !== '' ? $geburtsdatum : $firmengruendung;
 		\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM,    $legacy_val);
 	}
