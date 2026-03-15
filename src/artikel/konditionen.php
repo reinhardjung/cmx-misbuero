@@ -36,6 +36,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$selbstkosten = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SELBSTKOSTEN, '');
 	$deckungsbeitrag = cmx_meta_get($post->ID, CMX_ARTIKEL_META_DECKUNGSBEITRAG, '');
 	$marge       = cmx_meta_get($post->ID, CMX_ARTIKEL_META_MARGE, '');
+	$settings    = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+	$deckungsbeitrag_percent = isset($settings['artikel_deckungsbeitrag']) ? (string) $settings['artikel_deckungsbeitrag'] : '';
 	$not_verkaufbar = (int) cmx_meta_get($post->ID, CMX_ARTIKEL_META_VERKAUFBAR, 0) === 1;
 	$verkaufbar     = !$not_verkaufbar;
 	$katalog_raw    = (string) \get_post_meta($post->ID, CMX_ARTIKEL_META_KATALOG, true);
@@ -128,7 +130,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	// Verkaufspreis
 	echo '<div class="cmx-f cmx-f--xs">
-		<label for="cmx_artikel_vk">Verkaufspreis</label>
+		<label for="cmx_artikel_vk" id="cmx_artikel_vk_label" style="cursor:pointer;" title="Klicken, um den Vorgabe-Deckungsbeitrag als Vorschlag zu übernehmen">Verkaufspreis</label>
 		<input type="text" inputmode="decimal" id="cmx_artikel_vk" name="cmx_artikel_vk" value="' . esc_attr($vk_display) . '">
 	</div>';
 
@@ -160,9 +162,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		const ek  = document.getElementById("cmx_artikel_ek");
 		const aw  = document.getElementById("cmx_artikel_aufwand");
 		const vk  = document.getElementById("cmx_artikel_vk");
+		const vkLabel = document.getElementById("cmx_artikel_vk_label");
 		const sk  = document.getElementById("cmx_artikel_selbstkosten");
 		const db  = document.getElementById("cmx_artikel_deckungsbeitrag");
 		const mg  = document.getElementById("cmx_artikel_marge");
+		const defaultDeckungsbeitragPercent = num(' . \wp_json_encode($deckungsbeitrag_percent) . ');
 
 		function num(v){
 			let s = (v ?? "0").toString().trim();
@@ -206,6 +210,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			if (!el) return;
 			el.addEventListener("focus", function(){ this.select(); });
 			el.addEventListener("click", function(){ this.select(); });
+			el.addEventListener("mouseup", function(e){ e.preventDefault(); });
 		}
 
 		// Alle manuellen Eingaben aktualisieren die readonly-Kennzahlen.
@@ -215,8 +220,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			vk?.addEventListener(evt, recalcDerived, {passive:true});
 		});
 
-		// Alle numerischen Felder automatisch selektieren bei Fokus
-		[ek, aw, vk, sk, db, mg].forEach(enableAutoSelect);
+		// Alle Textfelder in der Konditionen-Box automatisch selektieren bei Klick/Fokus
+		document.querySelectorAll(".cmx-price-row input[type=\"text\"], .cmx-price-row input[type=\"number\"]").forEach(enableAutoSelect);
 		[ek, aw, vk].forEach(el => {
 			if (!el) return;
 			if (el.value !== "") el.value = formatCH(num(el.value));
@@ -231,6 +236,20 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 				recalcDerived();
 			});
 		});
+
+		if (vkLabel && vk) {
+			vkLabel.addEventListener("click", function(){
+				const selbstkosten = num(ek?.value) + num(aw?.value);
+				if (selbstkosten <= 0 || defaultDeckungsbeitragPercent <= 0) {
+					return;
+				}
+				const vkSuggestion = selbstkosten + (selbstkosten * defaultDeckungsbeitragPercent / 100);
+				vk.value = formatCH(vkSuggestion);
+				recalcDerived();
+				vk.focus();
+				try { vk.select(); } catch(e) {}
+			});
+		}
 
 		// Initialzustand:
 		recalcDerived();
