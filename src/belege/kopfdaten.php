@@ -747,7 +747,7 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		.cmx-col{flex:1 1 420px;min-width:320px}
 		.cmx-col input[type=text],.cmx-col textarea{width:100%}
 		.cmx-radio-inline label{display:inline-block;margin-right:12px}
-		.cmx-addr{white-space:pre-wrap}
+		.cmx-addr{white-space:pre-wrap;height:105px;min-height:105px}
 		.cmx-suggest{position:relative}
 		.cmx-input-row{display:flex;align-items:center;gap:6px}
 		.cmx-input-row input[type=text]{flex:1 1 auto;min-width:0}
