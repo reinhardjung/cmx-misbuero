@@ -839,7 +839,7 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 					<th>&nbsp;&nbsp;Einzelpreis</th>
 					<th>&nbsp;&nbsp;Rabatt</th>
 					<th style="text-align:right;">Gesamt</th>
-					<th>zus&auml;tzliche Notiz</th>
+					<th style="padding-left:1px;">zus&auml;tzliche Notiz</th>
 				<th></th>
 			</tr></thead>
 			<tbody>';
@@ -980,7 +980,7 @@ rel="noopener noreferrer">
 </a>';
 
 	}
-	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%;height:38px;min-height:38px;resize:vertical;overflow-y:auto;line-height:1.4;">'.$beschreibung.'</textarea>';
+	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:calc(100% + 10px);max-width:none;margin-right:-10px;box-sizing:border-box;height:38px;min-height:38px;resize:vertical;overflow-y:auto;line-height:1.4;">'.$beschreibung.'</textarea>';
 	echo '</td>';
 	echo '<td class="cmx-pos-controls">';
 	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
@@ -2482,8 +2482,8 @@ function cmx_beleg_positionen_js() {
 					#cmx-positionen-table td.cmx-pos-beschr-cell{
 						position:relative;
 						padding-left:26px;
-						width:calc(18% + 10px);
-						min-width:170px;
+						width:calc(18% + 35px);
+						min-width:195px;
 					}
 				#cmx-positionen-table .cmx-textbaustein-edit{
 					position:absolute;
@@ -2514,7 +2514,7 @@ function cmx_beleg_positionen_js() {
 			}
 			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos{
 				margin-left:4px;
-				margin-right:10px;
+				transform:translateX(-10px);
 			}
 			#cmx-positionen-table .cmx-pos-drag-handle{
 				cursor:move;
