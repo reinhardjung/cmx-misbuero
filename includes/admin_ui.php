@@ -539,3 +539,246 @@ add_action('admin_footer', function (): void {
 	</script>
 	<?php
 });
+
+
+// add_action('admin_head', function() {
+//     echo '<style>
+
+//     /* Metabox moderner */
+//     .postbox {
+//         border-radius: 8px;
+//         border: 1px solid #dcdcdc;
+//         box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+//         overflow: hidden;
+//     }
+
+//     /* Titelbereich */
+//     .postbox .hndle {
+//         background: #f7f7f7;
+//         font-weight: 600;
+//         padding: 12px 16px;
+//         border-bottom: 1px solid #e5e5e5;
+//     }
+
+//     /* Inhalt */
+//     .postbox .inside {
+//         padding: 16px;
+//         background: #ffffff;
+//     }
+
+//     </style>';
+// });
+
+
+add_action('admin_head', function() {
+	echo '<style>
+
+	/* Allgemein */
+	.wrap,
+	#wpbody-content {
+		background: #f6f7fb;
+	}
+
+	/* Metabox moderner */
+	.postbox {
+		border-radius: 12px;
+		border: 1px solid #d9e0e7;
+		box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+		overflow: hidden;
+		background: #ffffff;
+	}
+
+	/* Abstand zwischen Boxen */
+	.postbox,
+	.stuffbox {
+		margin-bottom: 18px;
+	}
+
+	/* Titelbereich */
+	.postbox .postbox-header {
+		background: #f8fafc;
+		border-bottom: 1px solid #e6ebf0;
+	}
+
+	.postbox .hndle,
+	.postbox .handlediv {
+		background: #f8fafc;
+	}
+
+	.postbox .postbox-header .handle-actions,
+	.postbox .postbox-header .handle-order-higher,
+	.postbox .postbox-header .handle-order-lower,
+	.postbox .postbox-header .handlediv button {
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.postbox .hndle {
+		font-weight: 600;
+		padding: 14px 18px;
+		border-bottom: 0;
+		font-size: 14px;
+		line-height: 1.4;
+	}
+
+	/* Inhalt */
+	.postbox .inside {
+		padding: 18px;
+		background: #ffffff;
+	}
+
+	/* Tabs in Metaboxen etwas schöner */
+	.postbox .nav-tab-wrapper {
+		padding: 12px 18px 0;
+		border-bottom: 1px solid #e6ebf0;
+		background: #ffffff;
+	}
+
+	.postbox .nav-tab {
+		border-radius: 8px 8px 0 0;
+		padding: 8px 14px;
+		font-weight: 500;
+	}
+
+	.postbox .nav-tab-active {
+		background: #ffffff;
+		border-bottom: 1px solid #ffffff;
+	}
+
+	/* Formularelemente */
+	.postbox input[type="text"],
+	.postbox input[type="number"],
+	.postbox input[type="email"],
+	.postbox input[type="url"],
+	.postbox input[type="password"],
+	.postbox input[type="date"],
+	.postbox input[type="time"],
+	.postbox input[type="search"],
+	.postbox select,
+	.postbox textarea,
+	.form-table input[type="text"],
+	.form-table input[type="number"],
+	.form-table input[type="email"],
+	.form-table input[type="url"],
+	.form-table input[type="password"],
+	.form-table select,
+	.form-table textarea {
+		border-radius: 8px;
+		border: 1px solid #cfd8e3;
+		padding: 8px 12px;
+		min-height: 40px;
+		box-shadow: none;
+		background: #ffffff;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.postbox textarea,
+	.form-table textarea {
+		min-height: 110px;
+	}
+
+	.postbox input:focus,
+	.postbox select:focus,
+	.postbox textarea:focus,
+	.form-table input:focus,
+	.form-table select:focus,
+	.form-table textarea:focus {
+		border-color: #2271b1;
+		box-shadow: 0 0 0 1px #2271b1;
+		outline: none;
+	}
+
+	/* Labels */
+	.postbox label,
+	.form-table th {
+		font-weight: 600;
+		color: #1d2327;
+	}
+
+	/* Buttons */
+	.button,
+	.button-secondary {
+		border-radius: 8px;
+		min-height: 36px;
+		padding: 0 14px;
+		box-shadow: none;
+	}
+
+	.button-primary {
+		border-radius: 8px;
+		min-height: 36px;
+		padding: 0 16px;
+		box-shadow: none;
+	}
+
+	/* Tabellen im Admin */
+	.wp-list-table {
+		border: 1px solid #d9e0e7;
+		border-radius: 12px;
+		overflow: hidden;
+		box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+		background: #ffffff;
+	}
+
+	.wp-list-table th {
+		background: #f8fafc;
+		font-weight: 600;
+		border-bottom: 1px solid #e6ebf0;
+	}
+
+	.wp-list-table td {
+		vertical-align: middle;
+	}
+
+	.wp-list-table tr:nth-child(even) td {
+		background: #fcfdff;
+	}
+
+	/* Notices moderner */
+	.notice,
+	div.updated,
+	div.error {
+		border-radius: 10px;
+		border-left-width: 4px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+	}
+
+	/* Cards / Einstellungen optisch ruhiger */
+	.form-table th {
+		padding-top: 18px;
+		padding-bottom: 18px;
+	}
+
+	.form-table td {
+		padding-top: 14px;
+		padding-bottom: 18px;
+	}
+
+	/* Dashboard Widgets */
+	#dashboard-widgets .postbox-container .postbox {
+		border-radius: 12px;
+	}
+
+	/* Kleinere Headline-Verbesserung */
+	.wrap h1,
+	.wrap h2 {
+		font-weight: 600;
+	}
+
+	/* Akkordeon / wiederkehrende Boxen */
+	.accordion-section {
+		border-radius: 10px;
+		overflow: hidden;
+		border: 1px solid #d9e0e7;
+		margin-bottom: 10px;
+		background: #ffffff;
+	}
+
+	/* Checkboxen / Radios etwas luftiger */
+	input[type="checkbox"],
+	input[type="radio"] {
+		margin-right: 6px;
+	}
+
+	</style>';
+});

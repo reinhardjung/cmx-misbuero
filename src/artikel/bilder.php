@@ -256,6 +256,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 		echo '<div class="cmx-li-preview-frame" style="position:relative;margin-bottom:10px;border:1px dashed #c3c4c7;background:#fff;padding:10px;height:220px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .15s ease, background-color .15s ease;">';
 		echo '<img class="cmx-li-preview-image" src="' . ($has_image ? esc_url($url) : '') . '" alt="" style="' . ($has_image ? 'display:block;' : 'display:none;') . 'max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;">';
 		echo '<div class="cmx-li-preview-empty" style="' . ($has_image ? 'display:none;' : 'display:block;') . 'color:#646970;font-style:italic;text-align:center;">Kein Artikelbild vorhanden.<br>Dateien hier ablegen oder klicken.</div>';
+		echo '<div class="cmx-li-drop-hint" style="display:none;position:absolute;inset:0;padding:18px;background:rgba(240,246,252,0.96);color:#135e96;font-weight:600;font-size:14px;line-height:1.5;text-align:center;align-items:center;justify-content:center;pointer-events:none;">Jetzt los lassen um es als weiteres neues Bild zu speichern</div>';
 		echo '</div>';
 
 		echo '<input type="hidden" name="cmx_li_remove_ids" value="" class="cmx-li-remove-ids">';
@@ -297,6 +298,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 			var previewFrame = root.querySelector(".cmx-li-preview-frame");
 			var previewImage = root.querySelector(".cmx-li-preview-image");
 			var previewEmpty = root.querySelector(".cmx-li-preview-empty");
+			var previewDropHint = root.querySelector(".cmx-li-drop-hint");
 			var fileList = root.querySelector(".cmx-li-file-list");
 			var fileInput = root.querySelector(".cmx-li-file-input");
 			var removeIdsField = root.querySelector(".cmx-li-remove-ids");
@@ -380,6 +382,9 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 				if (!previewFrame) return;
 				previewFrame.style.borderColor = active ? "#2271b1" : "#c3c4c7";
 				previewFrame.style.backgroundColor = active ? "#f0f6fc" : "#fff";
+				if (previewDropHint) {
+					previewDropHint.style.display = active ? "flex" : "none";
+				}
 			}
 
 			function setRowHover(row, active) {

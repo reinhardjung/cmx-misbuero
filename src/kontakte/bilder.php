@@ -499,6 +499,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 		echo '<div class="cmx-kl-preview-frame" style="position:relative;margin-bottom:10px;border:1px dashed #c3c4c7;background:#fff;padding:10px;height:220px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .15s ease, background-color .15s ease;">';
 		echo '<img class="cmx-kl-preview-image" src="' . ($has_image ? \esc_url($url) : '') . '" alt="" style="' . ($has_image ? 'display:block;' : 'display:none;') . 'max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;">';
 		echo '<div class="cmx-kl-preview-empty" style="' . ($has_image ? 'display:none;' : 'display:block;') . 'color:#646970;font-style:italic;text-align:center;">Kein ' . \esc_html($label) . ' vorhanden.<br>Dateien hier ablegen oder klicken.</div>';
+		echo '<div class="cmx-kl-drop-hint" style="display:none;position:absolute;inset:0;padding:18px;background:rgba(240,246,252,0.96);color:#135e96;font-weight:600;font-size:14px;line-height:1.5;text-align:center;align-items:center;justify-content:center;pointer-events:none;">Jetzt loslassen, um es als neues zusätzliches Logo zu speichern.
+</div>';
 		echo '</div>';
 		// echo '<p class="description cmx-kl-status" style="margin:0 0 10px 0;">' . \esc_html($status) . '</p>';
 		echo '<input type="hidden" name="cmx_kl_remove_ids" value="" class="cmx-kl-remove-ids">';
@@ -541,6 +543,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 			var previewFrame = root.querySelector(".cmx-kl-preview-frame");
 			var previewImage = root.querySelector(".cmx-kl-preview-image");
 			var previewEmpty = root.querySelector(".cmx-kl-preview-empty");
+			var previewDropHint = root.querySelector(".cmx-kl-drop-hint");
 			var fileList = root.querySelector(".cmx-kl-file-list");
 			var fileInput = root.querySelector(".cmx-kl-file-input");
 			var removeIdsField = root.querySelector(".cmx-kl-remove-ids");
@@ -630,6 +633,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 				if (!previewFrame) return;
 				previewFrame.style.borderColor = active ? "#2271b1" : "#c3c4c7";
 				previewFrame.style.backgroundColor = active ? "#f0f6fc" : "#fff";
+				if (previewDropHint) {
+					previewDropHint.style.display = active ? "flex" : "none";
+				}
 			}
 
 			function setRowHover(row, active) {
