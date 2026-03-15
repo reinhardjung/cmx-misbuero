@@ -54,7 +54,7 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;">' . \esc_textarea($text) . '</textarea>';
 	echo '</div>';
 	echo '</td>';
-	echo '<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
+	echo '<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></td>';
 	echo '</tr>';
 
 	return true;

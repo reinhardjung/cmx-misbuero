@@ -42,10 +42,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_manual_flag_meta_key')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_get_post_meta_raw')) {
 	function cmx_kl_get_post_meta_raw(int $post_id, string $meta_key, bool $single = true) {
-		if (\function_exists('get_metadata_raw')) {
-			return \get_metadata_raw('post', $post_id, $meta_key, $single);
-		}
-
 		global $wpdb;
 		$rows = $wpdb->get_col($wpdb->prepare(
 			"SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = %s ORDER BY meta_id ASC",
@@ -391,6 +387,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_maybe_migrate_contact_logo_to_archi
 }
 
 \add_filter('get_post_metadata', function ($value, $object_id, $meta_key, $single) {
+	static $in_filter = false;
+	if ($in_filter) {
+		return $value;
+	}
+
 	$meta_base = cmx_kl_meta_base();
 	if ($meta_key !== $meta_base . '_path' && $meta_key !== $meta_base . '_url') {
 		return $value;
@@ -399,7 +400,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_maybe_migrate_contact_logo_to_archi
 		return $value;
 	}
 
+	$in_filter = true;
 	$active_item = cmx_kl_active_gallery_item((int) $object_id, $meta_base);
+	$in_filter = false;
 	if (!\is_array($active_item)) {
 		return $value;
 	}

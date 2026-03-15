@@ -980,7 +980,7 @@ rel="noopener noreferrer">
 </a>';
 
 	}
-	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea>';
+	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%;height:38px;min-height:38px;resize:none;overflow-y:hidden;line-height:1.4;">'.$beschreibung.'</textarea>';
 	echo '</td>';
 	echo '<td class="cmx-pos-controls">';
 	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
@@ -2032,7 +2032,7 @@ function cmx_beleg_positionen_js() {
 					if(q.length<1){ doSearch(''); return; }
 					t = setTimeout(()=>doSearch(q), 120);
 				});
-				$input.on('focus click', function(){ doSearch($input.val()); });
+				$input.on('focus click', function(){ doSearch(''); });
 
 					$input.data('cmx-suggest-ready', true);
 				});
@@ -2400,13 +2400,35 @@ function cmx_beleg_positionen_js() {
 				.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
 				.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+				#cmx-positionen-wrap{
+					margin:0;
+					padding:0;
+				}
+				#cmx-positionen-table{
+					border:0 !important;
+					box-shadow:none !important;
+					border-collapse:collapse;
+				}
+				#cmx-positionen-table thead th{
+					border-top:0 !important;
+					padding-top:6px;
+				}
 				#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
 					#cmx-positionen-table th:first-child,
-					#cmx-positionen-table td:first-child{ padding-right:20px; }
+					#cmx-positionen-table td:first-child{ padding-right:10px; }
+					#cmx-positionen-table th:nth-child(3),
+					#cmx-positionen-table td:nth-child(3),
+					#cmx-positionen-table th:nth-child(4),
+					#cmx-positionen-table td:nth-child(4){
+						width:1%;
+						white-space:nowrap;
+						padding-left:4px;
+						padding-right:4px;
+					}
 					#cmx-positionen-table th.cmx-pos-qty-head,
 					#cmx-positionen-table td.cmx-pos-qty-cell{
 						white-space:nowrap;
-						min-width:220px;
+						min-width:214px;
 					}
 					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-menge{
 						display:inline-block;
@@ -2421,6 +2443,12 @@ function cmx_beleg_positionen_js() {
 						margin-left:6px;
 						width:120px;
 						max-width:48%;
+					}
+					#cmx-positionen-table td:nth-child(3) input,
+					#cmx-positionen-table td:nth-child(4) input{
+						width:92px !important;
+						min-width:92px;
+						box-sizing:border-box;
 					}
 					#cmx-positionen-table td textarea { resize: vertical; }
 					#cmx-positionen-table td.cmx-pos-beschr-cell{
@@ -2522,8 +2550,17 @@ function cmx_beleg_positionen_js() {
 		}
 		.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
 			padding-left:8px;
-			margin-left:22px;
-			width: calc(100% - 22px);
+			margin-left:18px;
+			width: calc(100% - 18px);
+		}
+		#cmx-positionen-table .cmx-pos-row-abschnitt > td:first-child{
+			padding-right:8px !important;
+		}
+		#cmx-positionen-table .cmx-pos-row-abschnitt .cmx-abschnitt-titel,
+		#cmx-positionen-table .cmx-pos-row-abschnitt .cmx-abschnitt-text{
+			width:calc(100% + 4px) !important;
+			margin-right:-4px;
+			box-sizing:border-box;
 		}
 	</style>
 	<?php

@@ -115,7 +115,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 			}
 			echo '<input type="hidden" name="cmx_zu_projekt_ids[]" value="' . (int) $projekt_id . '">';
 			echo '</div>';
-			echo '<button type="button" class="button-link-delete cmx-zu-projekt-remove" style="line-height:1;">x</button>';
+			echo '<button type="button" class="button-link-delete cmx-zu-projekt-remove" style="line-height:1;"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
 			echo '</li>';
 		}
 		echo '</ul>';

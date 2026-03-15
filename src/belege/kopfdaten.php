@@ -902,7 +902,7 @@ echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'
 	echo '    <input type="hidden" id="cmx_tasks_prefilled_js" name="cmx_tasks_prefilled_js" value="0">';
 	echo '    <input type="hidden" id="cmx_tasks_prefill_source_type" name="cmx_tasks_prefill_source_type" value="">';
 	echo '    <input type="hidden" id="cmx_tasks_prefill_source_id" name="cmx_tasks_prefill_source_id" value="0">';
-	echo '    <button type="button" class="button button-small" id="cmx_projekt_clear" title="Auswahl löschen">X</button>';
+	echo '    <button type="button" class="button button-small" id="cmx_projekt_clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
 	echo '  </div>';
 	echo '  <ul id="cmx_projekt_suggest" style="display:none"></ul>';
 	echo '</div>';
@@ -922,7 +922,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	echo '    <input type="text" id="cmx_kontakt_search" name="cmx_kontakt_search" autocomplete="off" value="'.\esc_attr($display_kontakt).'" placeholder="Kontakt suchen...">';
 	echo '    <input type="hidden" id="cmx_kontakt_id" name="cmx_kontakt_id" value="'.\esc_attr((string)$kontakt_id).'">';
 	echo '    <input type="hidden" id="cmx_kontakt_selected" name="cmx_kontakt_selected" value="0">';
-	echo '    <button type="button" class="button button-small" id="cmx_kontakt_clear" title="Auswahl löschen">X</button>';
+	echo '    <button type="button" class="button button-small" id="cmx_kontakt_clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
 	echo '  </div>';
 	echo '  <ul id="cmx_kontakt_suggest" style="display:none"></ul>';
 	echo '</div>';

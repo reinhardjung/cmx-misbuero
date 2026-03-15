@@ -165,7 +165,7 @@ function cmx_render_dokumente_upload_box(\WP_Post $post): void {
 			} else {
 				echo '<span title="' . \esc_attr($label) . '" style="min-width:0;text-align:center;justify-self:stretch;overflow:hidden;text-overflow:ellipsis;">' . \esc_html($label) . '</span>';
 			}
-			echo ' <button type="button" class="button-link cmx-dok-remove" style="color:#b32d2e;justify-self:end;padding:0;line-height:1;">X</button>';
+			echo ' <button type="button" class="button-link cmx-dok-remove" style="color:#b32d2e;justify-self:end;padding:0;line-height:1;"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
 			echo '</li>';
 		}
 		echo '</ul>';

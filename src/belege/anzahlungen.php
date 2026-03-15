@@ -109,7 +109,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		echo '<label style="margin-top:6px">Betrag</label>';
 		echo '<div class="cmx-anzahlung-betrag-row">';
 		echo '<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen['.$i.'][betrag]" value="'.$betrag.'">';
-		echo '<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>';
+		echo '<button type="button" class="button-link-delete cmx-anzahlung-del"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
 		echo '</div>';
 		echo '<label style="margin-top:6px">Zahlungsart</label>';
 		echo '<select class="cmx-anzahlung-zahlungsart" data-name="cmx_anzahlungen[__INDEX__][zahlungsart]" name="cmx_anzahlungen['.$i.'][zahlungsart]" style="width:100%;">';
@@ -133,7 +133,7 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			<label style="margin-top:6px">Betrag</label>
 			<div class="cmx-anzahlung-betrag-row">
 				<input type="text" data-name="cmx_anzahlungen[__INDEX__][betrag]" name="cmx_anzahlungen[__INDEX__][betrag]" value="">
-				<button type="button" class="button-link-delete cmx-anzahlung-del">X</button>
+				<button type="button" class="button-link-delete cmx-anzahlung-del"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>
 			</div>
 			<label style="margin-top:6px">Zahlungsart</label>
 			<select class="cmx-anzahlung-zahlungsart" data-name="cmx_anzahlungen[__INDEX__][zahlungsart]" name="cmx_anzahlungen[__INDEX__][zahlungsart]" style="width:100%;">

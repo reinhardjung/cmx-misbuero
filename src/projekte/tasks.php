@@ -342,8 +342,6 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
 	echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
 	echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 auto;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="2" style="width:100%;">'.$info.'</textarea></label>';
-	// echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:red; font-size:large;">x</button>';
-	// echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:#d63639; font-size:large;"><span class="dashicons dashicons-trash"></span></button>';
 	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:#d63639; font-size:large;"><span class="dashicons dashicons-trash" style="position:relative; top:8px;"></span></button>';
 	// echo '<button class="button"><span class="dashicons dashicons-trash"></span></button>';
 	echo '</div>';
