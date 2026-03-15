@@ -2532,6 +2532,7 @@ function cmx_beleg_positionen_js() {
 				width:20px;
 				height:20px;
 				margin-right:2px;
+				transform:translateY(5px);
 				color:#646970;
 				border-radius:3px;
 				user-select:none;
@@ -2549,6 +2550,7 @@ function cmx_beleg_positionen_js() {
 				min-height:20px;
 				line-height:1;
 				padding:0;
+				transform:translateY(5px);
 				font-weight:600;
 			}
 			#cmx-positionen-table .cmx-pos-drag-handle:hover{ background:#f0f0f1; color:#1d2327; }
