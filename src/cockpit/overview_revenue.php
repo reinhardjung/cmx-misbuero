@@ -540,13 +540,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 				#cmx_overview_revenue_widget .cmx-overview-revenue-details{margin-top:10px}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-details summary{cursor:pointer;color:#2271b1}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-list{margin-top:8px;border-top:1px solid #dcdcde}
-					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:6px;padding:3px 0;align-items:center}
+					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{display:grid;grid-template-columns:132px 92px 80px auto;gap:6px;padding:3px 0;align-items:center}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row{transition:background-color .15s ease}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-row:hover{background:#f7fbff}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title{color:#1d2327;min-width:0}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a{display:inline-block;color:#2271b1;text-decoration:none;white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
 					#cmx_overview_revenue_widget .cmx-overview-revenue-detail-title a:hover{text-decoration:underline}
-				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type{justify-self:start;text-align:left;white-space:nowrap}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-contact{width:80px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#646970;display:flex;align-items:center;justify-content:flex-start;justify-self:stretch;text-align:left;transform:translateX(-30px)}
+				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type{justify-self:start;text-align:left;white-space:nowrap;transform:translateX(-3ch)}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-badge{display:inline-flex;align-items:center;justify-content:center;padding:0 7px;border:1px solid #c8daf6;border-radius:4px;background:#eef5ff;color:#466792;line-height:1.25;text-align:center}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-link{text-decoration:none}
 				#cmx_overview_revenue_widget .cmx-overview-revenue-detail-type-link:hover .cmx-overview-revenue-detail-type-badge{background:#e4efff;border-color:#a8c6f0}
@@ -618,6 +619,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 					$edit_link = $post_id > 0 ? (string) \get_edit_post_link($post_id, '') : '';
 					$title_html = $title !== '' ? \esc_html($title) : '';
 					$title_attr = $kontakt_title !== '' ? ' title="' . \esc_attr($kontakt_title) . '"' : '';
+					$kontakt_html = $kontakt_title !== '' ? '<div class="cmx-overview-revenue-detail-contact" title="' . \esc_attr($kontakt_title) . '">' . \esc_html($kontakt_title) . '</div>' : '<div class="cmx-overview-revenue-detail-contact"></div>';
 					if ($title !== '' && $edit_link !== '') {
 						$title_html = '<a href="' . \esc_url($edit_link) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
 						} elseif ($title !== '') {
@@ -640,6 +642,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 								echo '<span class="cmx-overview-revenue-detail-type-badge">' . \esc_html($type_label) . '</span>';
 							}
 							echo '</div>';
+							echo $kontakt_html;
 							echo '<div class="cmx-overview-revenue-detail-value">' . \esc_html(cmx_cockpit_overview_revenue_format_money($amount)) . '</div>';
 						echo '</div>';
 					}
