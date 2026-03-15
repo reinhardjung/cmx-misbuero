@@ -467,6 +467,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_summary'))
 					$summary['items'][] = [
 						'post_id' => $post_id,
 						'title' => (string) $post->post_title,
+						'kontakt_title' => (static function(int $post_id): string {
+							$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+							if ($kontakt_id > 0) {
+								$kontakt_title = \trim((string) \get_the_title($kontakt_id));
+								if ($kontakt_title !== '') {
+									return $kontakt_title;
+								}
+							}
+							return \trim((string) \get_post_meta($post_id, '_cmx_beleg_kontakt_label', true));
+						})($post_id),
 						'type' => $post_type,
 						'type_label' => (string) cmx_cockpit_overview_revenue_type_label($post_type),
 						'amount' => (float) $display_amount,
@@ -604,10 +614,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_overview_revenue_widget')) {
 					$item = (array) $item;
 					$post_id = (int) ($item['post_id'] ?? 0);
 					$title = (string) ($item['title'] ?? '');
+					$kontakt_title = (string) ($item['kontakt_title'] ?? '');
 					$edit_link = $post_id > 0 ? (string) \get_edit_post_link($post_id, '') : '';
 					$title_html = $title !== '' ? \esc_html($title) : '';
+					$title_attr = $kontakt_title !== '' ? ' title="' . \esc_attr($kontakt_title) . '"' : '';
 					if ($title !== '' && $edit_link !== '') {
-						$title_html = '<a href="' . \esc_url($edit_link) . '">' . \esc_html($title) . '</a>';
+						$title_html = '<a href="' . \esc_url($edit_link) . '"' . $title_attr . '>' . \esc_html($title) . '</a>';
+						} elseif ($title !== '') {
+						$title_html = '<span' . $title_attr . '>' . \esc_html($title) . '</span>';
 						}
 							$amount = (float) ($item['amount'] ?? 0.0);
 							$type = (string) ($item['type'] ?? '');
