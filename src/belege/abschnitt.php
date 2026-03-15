@@ -47,12 +47,12 @@ add_filter('cmx_beleg_positionen_render_custom_row', function ($handled, int $i,
 	echo '<td colspan="7" class="cmx-pos-abschnitt-cell">';
 	echo '<input type="hidden" name="cmx_positionen[' . $i . '][typ]" value="abschnitt">';
 	echo '<div class="cmx-abschnitt-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></div>';
-	echo '<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' . $i . '][abschnitt_titel]" value="' . \esc_attr($titel) . '" placeholder="Abschnitt" style="width:calc(100% - 14px); margin-left:20px; box-sizing:border-box;">';
+	echo '<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' . $i . '][abschnitt_titel]" value="' . \esc_attr($titel) . '" placeholder="Abschnitt" style="width:calc(100% - 114px); margin-left:20px; box-sizing:border-box;">';
 	echo '<div class="cmx-abschnitt-text-wrap">';
 	if ($textbaustein_edit_url !== '') {
 		echo '<a href="' . \esc_url($textbaustein_edit_url) . '" class="cmx-textbaustein-edit cmx-abschnitt-text-edit" aria-label="Textbausteine bearbeiten" title="Textbausteine im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer">✎</a>';
 	}
-	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 14px); margin-top:6px; margin-left:20px; box-sizing:border-box;">' . \esc_textarea($text) . '</textarea>';
+	echo '<textarea class="cmx-abschnitt-text" name="cmx_positionen[' . $i . '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 114px); margin-top:6px; margin-left:20px; box-sizing:border-box;">' . \esc_textarea($text) . '</textarea>';
 	echo '</div>';
 	echo '</td>';
 	echo '</tr>';
@@ -124,10 +124,10 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 								'<td colspan="7" class="cmx-pos-abschnitt-cell">' +
 									'<input type="hidden" name="cmx_positionen[' + i + '][typ]" value="abschnitt">' +
 									'<div class="cmx-abschnitt-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></div>' +
-									'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:calc(100% - 14px); margin-left:20px; box-sizing:border-box;">' +
+									'<input type="text" class="regular-text cmx-abschnitt-titel" name="cmx_positionen[' + i + '][abschnitt_titel]" value="" placeholder="Abschnitt" style="width:calc(100% - 114px); margin-left:20px; box-sizing:border-box;">' +
 									'<div class="cmx-abschnitt-text-wrap">' +
 										TEXTBAUSTEIN_EDIT_LINK +
-										'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 14px); margin-top:6px; margin-left:20px; box-sizing:border-box;"></textarea>' +
+										'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:calc(100% - 114px); margin-top:6px; margin-left:20px; box-sizing:border-box;"></textarea>' +
 									'</div>' +
 								'</td>' +
 							'</tr>';
@@ -156,7 +156,7 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 			#cmx-positionen-table .cmx-abschnitt-controls{
 				position:absolute;
 				top:0;
-				right:0;
+				right:16px;
 				display:flex;
 				align-items:flex-start;
 				gap:4px;
