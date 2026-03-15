@@ -1203,7 +1203,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	]);
 });
 
-/* ===== Link „export“ in der Belege-Listenansicht ===== */
+/* ===== Link „Milchbüechli“ in der Belege-Listenansicht ===== */
 \add_filter('views_edit-belege', function(array $views){
 	if (!\current_user_can('edit_posts')) return $views;
 
@@ -1212,14 +1212,27 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 		'cmx_export'  => 1,
 		'ref'         => cmxbu_belege_export_current_list_ref(),
 	], \admin_url('edit.php'));
-	$links = '<a href="' . \esc_url($url) . '">exportieren</a>';
+	$is_current = !empty($_GET['cmx_export']);
+	$links = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>Milchbüechli</a>';
 
-	$new = []; $inserted=false;
-	foreach ($views as $key=>$html){ $new[$key]=$html; if ($key==='trash'&&!$inserted){$new['cmx_export_belege_list']=$links;$inserted=true;}}
-	if(!$inserted){foreach($new as $key=>$html){if($key==='all'&&!$inserted){$new['cmx_export_belege_list']=$links;$inserted=true;}}}
-	if(!$inserted)$new['cmx_export_belege_list']=$links;
+	if (\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_after')) {
+		return cmxbel_view_insert_after($views, 'cmx_deckungsbeitrag', 'cmx_milchbueechli_belege', $links);
+	}
+
+	$new = [];
+	$inserted = false;
+	foreach ($views as $key => $html) {
+		$new[$key] = $html;
+		if ($key === 'cmx_deckungsbeitrag' && !$inserted) {
+			$new['cmx_milchbueechli_belege'] = $links;
+			$inserted = true;
+		}
+	}
+	if (!$inserted) {
+		$new['cmx_milchbueechli_belege'] = $links;
+	}
 	return $new;
-});
+}, 40);
 
 /* ===== Export-Formular (Datum von/bis) in der Listenansicht ===== */
 \add_action('all_admin_notices', function () {
@@ -1246,8 +1259,8 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 	$pdf_appendix_selected = \array_fill_keys(cmxbu_belege_export_requested_pdf_appendices(), true);
 	?>
 	<div class="notice notice-info" style="padding:20px;margin-top:15px;">
-		<h2>Belege und Milchbüechli exportieren</h2>
-		<code>ZIP</code> exportiert Milchbüechli, Belege und zugeordnete Dokumente und erstellt einen Link zum Teilen mit Ihrem Treuhänder. <code>PDF</code> und <code>CSV</code> exportieren nur das Milchbüechli.</p>
+		<h2>Milchbüechli exportieren</h2>
+		<p><code>ZIP</code> exportiert Milchbüechli, Belege und zugeordnete Dokumente und erstellt einen Link zum Teilen mit Ihrem Treuhänder. <code>PDF</code> und <code>CSV</code> exportieren nur das Milchbüechli.</p>
 		<?php if ($has_error): ?>
 			<p style="color:#b32d2e;"><strong>Bitte Datum von und Datum bis ausfüllen.</strong></p>
 		<?php endif; ?>
