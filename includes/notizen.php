@@ -198,7 +198,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		echo '<span class="cmx-intern-notiz-label-inline">Uhrzeit <a href="#" class="cmx-notiz-jetzt">jetzt</a></span>';
 		echo '<input type="time" name="cmx_intern_notizen_rows[' . $name_index . '][zeit]" value="' . $zeit . '" />';
 		echo '</label>';
-		echo '<p class="cmx-intern-notiz-remove-wrap"><button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash" style=""></span></button></p>';
+		echo '<p class="cmx-intern-notiz-actions-wrap">';
+		echo '<button type="button" class="button cmx-notiz-add">' . \esc_html__('Notiz hinzufügen', 'cmx') . '</button>';
+		echo '<button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash" style=""></span></button>';
+		echo '</p>';
 		echo '</div>';
 		echo '</div>';
 	}
@@ -227,18 +230,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-side{display:flex;flex-direction:column;gap:8px;}';
 		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:120px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
-		echo '#cmx-intern-notizen-list .cmx-intern-notiz-remove-wrap{margin:0;text-align:right;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0;}';
+		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}';
-		echo '#cmx-intern-notizen-actions{display:flex;justify-content:flex-end;margin-top:10px;}';
-		echo '#cmx-intern-notizen-actions .button{min-width:220px;text-align:center;}';
-		echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-actions{justify-content:flex-start;}#cmx-intern-notizen-actions .button{min-width:0;}}';
+		echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:flex-start;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
 		echo '</style>';
 		echo '<div id="cmx-intern-notizen-list">';
 		foreach ($rows as $idx => $row) {
 			cmx_notizen_render_row((int) $idx, $row, false);
 		}
 		echo '</div>';
-		echo '<div id="cmx-intern-notizen-actions"><button type="button" class="button" id="cmx-intern-notizen-add">' . \esc_html__('Notiz hinzufügen', 'cmx') . '</button></div>';
 		?>
 		<script type="text/template" id="cmx-intern-notizen-template">
 			<?php cmx_notizen_render_row('__INDEX__', ['datum' => '', 'zeit' => '', 'text' => ''], true); ?>
@@ -246,9 +248,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		<script>
 		(function(){
 			const list = document.getElementById('cmx-intern-notizen-list');
-			const addBtn = document.getElementById('cmx-intern-notizen-add');
 			const tpl = document.getElementById('cmx-intern-notizen-template');
-			if (!list || !addBtn || !tpl || list.dataset.cmxBound === '1') return;
+			if (!list || !tpl || list.dataset.cmxBound === '1') return;
 			list.dataset.cmxBound = '1';
 
 			function today() {
@@ -275,11 +276,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 				list.appendChild(row);
 			}
 
-			addBtn.addEventListener('click', function(){
-				addRow({});
-			});
-
 			list.addEventListener('click', function(e){
+				const addBtn = e.target && e.target.closest ? e.target.closest('.cmx-notiz-add') : null;
+				if (addBtn) {
+					e.preventDefault();
+					addRow({});
+					return;
+				}
+
 				const removeBtn = e.target && e.target.closest ? e.target.closest('.cmx-notiz-remove') : null;
 				if (removeBtn) {
 					e.preventDefault();
