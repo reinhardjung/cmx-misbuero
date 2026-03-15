@@ -929,7 +929,7 @@ function cmx_render_position_row($i, $pos) {
 
 	echo '<tr class="cmx-pos-row">';
 
-	echo '<td style="min-width:260px">';
+	echo '<td style="min-width:320px">';
 	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
 	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
@@ -954,10 +954,10 @@ function cmx_render_position_row($i, $pos) {
 	echo '</td>';
 
 	// Preis als Text (Komma/Punkt erlaubt)
-	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.esc_attr($preis_display).'" style="width:100px"></td>';
+	echo '<td><input type="text" name="cmx_positionen['.$i.'][preis]" value="'.esc_attr($preis_display).'" style="width:88px"></td>';
 
-	echo '<td class="cmx-pos-rabatt-td" style="width:100px;">';
-	echo '<input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" placeholder="" style="width:100px">';
+	echo '<td class="cmx-pos-rabatt-td" style="width:88px;">';
+	echo '<input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" placeholder="" style="width:88px">';
 	echo '</td>';
 
 	// Initial total (robust normalisiert)
@@ -965,7 +965,7 @@ function cmx_render_position_row($i, $pos) {
 	$preis_f = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($preis);
 	$total_init = $menge_f * $preis_f;
 
-	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
+	echo '<td class="cmx-pos-total" style="width:78px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
 
 	echo '<td class="cmx-pos-beschr-cell">';
 	if ($textbaustein_edit_url !== '') {
@@ -2400,6 +2400,10 @@ function cmx_beleg_positionen_js() {
 				.cmx-ac-nr{ font-weight:600; white-space:nowrap; }
 				.cmx-ac-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+				#cmx_beleg_positionen .inside{
+					margin:0;
+					padding:0px;
+				}
 				#cmx-positionen-wrap{
 					margin:0;
 					padding:0;
@@ -2408,27 +2412,42 @@ function cmx_beleg_positionen_js() {
 					border:0 !important;
 					box-shadow:none !important;
 					border-collapse:collapse;
+					margin:0 !important;
 				}
 				#cmx-positionen-table thead th{
 					border-top:0 !important;
-					padding-top:6px;
+					padding-top:4px;
+				}
+				#cmx-positionen-table > thead > tr > th:first-child,
+				#cmx-positionen-table > tbody > tr > td:first-child{
+					border-left:0 !important;
+				}
+				#cmx-positionen-table > thead > tr > th:last-child,
+				#cmx-positionen-table > tbody > tr > td:last-child{
+					border-right:0 !important;
 				}
 				#cmx-positionen-table th, #cmx-positionen-table td { vertical-align: middle; }
 					#cmx-positionen-table th:first-child,
-					#cmx-positionen-table td:first-child{ padding-right:10px; }
+					#cmx-positionen-table td:first-child{
+						padding-left:0;
+						padding-right:6px;
+					}
+					#cmx-positionen-table th:first-child{
+						width:36%;
+					}
 					#cmx-positionen-table th:nth-child(3),
 					#cmx-positionen-table td:nth-child(3),
 					#cmx-positionen-table th:nth-child(4),
 					#cmx-positionen-table td:nth-child(4){
 						width:1%;
 						white-space:nowrap;
-						padding-left:4px;
-						padding-right:4px;
+						padding-left:2px;
+						padding-right:2px;
 					}
 					#cmx-positionen-table th.cmx-pos-qty-head,
 					#cmx-positionen-table td.cmx-pos-qty-cell{
 						white-space:nowrap;
-						min-width:214px;
+						min-width:206px;
 					}
 					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-menge{
 						display:inline-block;
@@ -2446,8 +2465,8 @@ function cmx_beleg_positionen_js() {
 					}
 					#cmx-positionen-table td:nth-child(3) input,
 					#cmx-positionen-table td:nth-child(4) input{
-						width:92px !important;
-						min-width:92px;
+						width:88px !important;
+						min-width:88px;
 						box-sizing:border-box;
 					}
 					#cmx-positionen-table td textarea { resize: vertical; }
@@ -2474,8 +2493,8 @@ function cmx_beleg_positionen_js() {
 				width:1%;
 				text-align:right;
 				vertical-align:top;
-				padding-left:4px;
-				padding-right:6px;
+				padding-left:2px;
+				padding-right:0;
 			}
 			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos,
 			#cmx-positionen-table .cmx-pos-controls .cmx-pos-drag-handle,
@@ -2550,17 +2569,8 @@ function cmx_beleg_positionen_js() {
 		}
 		.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
 			padding-left:8px;
-			margin-left:18px;
-			width: calc(100% - 18px);
-		}
-		#cmx-positionen-table .cmx-pos-row-abschnitt > td:first-child{
-			padding-right:8px !important;
-		}
-		#cmx-positionen-table .cmx-pos-row-abschnitt .cmx-abschnitt-titel,
-		#cmx-positionen-table .cmx-pos-row-abschnitt .cmx-abschnitt-text{
-			width:calc(100% + 4px) !important;
-			margin-right:-4px;
-			box-sizing:border-box;
+			margin-left:16px;
+			width: calc(100% - 16px);
 		}
 	</style>
 	<?php
