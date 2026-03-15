@@ -206,6 +206,17 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			if (mg) mg.value = formatCH(margin);
 		}
 
+		function suggestVkFromDefaults() {
+			const selbstkosten = num(ek?.value) + num(aw?.value);
+			if (selbstkosten <= 0 || defaultDeckungsbeitragPercent <= 0) {
+				return false;
+			}
+			const vkSuggestion = selbstkosten + (selbstkosten * defaultDeckungsbeitragPercent / 100);
+			vk.value = formatCH(vkSuggestion);
+			recalcDerived();
+			return true;
+		}
+
 		function enableAutoSelect(el) {
 			if (!el) return;
 			el.addEventListener("focus", function(){ this.select(); });
@@ -239,15 +250,17 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 		if (vkLabel && vk) {
 			vkLabel.addEventListener("click", function(){
-				const selbstkosten = num(ek?.value) + num(aw?.value);
-				if (selbstkosten <= 0 || defaultDeckungsbeitragPercent <= 0) {
-					return;
-				}
-				const vkSuggestion = selbstkosten + (selbstkosten * defaultDeckungsbeitragPercent / 100);
-				vk.value = formatCH(vkSuggestion);
-				recalcDerived();
+				suggestVkFromDefaults();
 				vk.focus();
 				try { vk.select(); } catch(e) {}
+			});
+		}
+		if (vk) {
+			vk.addEventListener("click", function(){
+				const raw = (vk.value ?? "").toString().trim();
+				if (raw === "" || num(raw) === 0) {
+					suggestVkFromDefaults();
+				}
 			});
 		}
 
