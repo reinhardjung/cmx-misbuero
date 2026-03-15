@@ -421,7 +421,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .col-nr{width:16%}
 	#cmx-artikel-lieferanten-table .col-ek{width:12%}
 	#cmx-artikel-lieferanten-table .col-quelle,
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){width:420px;min-width:420px}
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){width:490px;min-width:490px}
 	#cmx-artikel-lieferanten-table .col-ltage,
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5),
 	#cmx-artikel-lieferanten-table .col-lager,
@@ -438,7 +438,9 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-supplier-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
 	#cmx-artikel-lieferanten-table .cmx-url-wrap{display:flex;align-items:center;gap:6px}
-	#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{flex:1 1 auto}
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){overflow:visible}
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4) .cmx-url-wrap{width:540px;min-width:540px;position:relative;z-index:2}
+	#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{flex:0 0 585px;width:585px !important;min-width:585px}
 	#cmx-artikel-lieferanten-table .cmx-url-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px}
 	#cmx-artikel-lieferanten-table .cmx-url-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
 	#cmx-artikel-lieferanten-table .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
