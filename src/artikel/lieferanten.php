@@ -423,7 +423,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .col-quelle{width:22%}
 	#cmx-artikel-lieferanten-table .col-ltage{width:10%}
 	#cmx-artikel-lieferanten-table .col-lager{width:10%}
-	#cmx-artikel-lieferanten-table .col-actions{width:50px;min-width:50px;text-align:center}
+	#cmx-artikel-lieferanten-table .col-actions{width:56px;min-width:56px;text-align:center}
 	#cmx-artikel-lieferanten-table .widefat{width:100%}
 	#cmx-artikel-lieferanten-table tbody td{background:#fff}
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row td{padding-top:12px;padding-bottom:10px}
@@ -439,14 +439,16 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open.is-disabled,
 	#cmx-artikel-lieferanten-table .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-row td{padding:0 0 12px 0;background:#fff;border-top:0}
+	#cmx-artikel-lieferanten-table .cmx-lief-note-row td{background:#fff;border-top:0}
+	#cmx-artikel-lieferanten-table .cmx-lief-note-full-cell{padding:0 0 12px 0}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding:0;border:0;border-radius:0;background:transparent}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 4px}
-	#cmx-artikel-lieferanten-table .cmx-lief-note{width:100%;min-height:72px;resize:vertical;box-sizing:border-box}
-	#cmx-artikel-lieferanten-table .cmx-lief-actions-cell{padding-left:6px;padding-right:0;vertical-align:top}
-	#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{display:flex;align-items:flex-start;justify-content:center;padding-top:12px}
+	#cmx-artikel-lieferanten-table .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 6px}
+	#cmx-artikel-lieferanten-table .cmx-lief-note{width:100%;min-height:44px;height:44px;resize:vertical;box-sizing:border-box}
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-actions-cell{padding:0 0 0 8px}
+	#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin-top:8px}
+	#cmx-artikel-lieferanten-table .cmx-lief-add{display:none;min-width:170px}
+	#cmx-artikel-lieferanten-table tbody tr.cmx-lief-note-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
-	.cmx-lief-actions{margin:10px 0 0}
 	.cmx-lief-del{min-width:36px}
 	</style>';
 
@@ -487,20 +489,20 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		echo '<td><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
-		echo '<td class="cmx-lief-actions-cell" rowspan="2"><div class="cmx-lief-actions-stack"><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div></td>';
+		echo '<td class="cmx-lief-actions-cell"></td>';
 		echo '</tr>';
 		echo '<tr class="cmx-lief-note-row">';
-		echo '<td colspan="6">';
+		echo '<td colspan="7" class="cmx-lief-note-full-cell">';
 		echo '<div class="cmx-lief-note-panel">';
 		echo '<label class="cmx-lief-note-label" for="cmx_artikel_lieferanten_notiz_' . (int)$i . '">Notizen</label>';
 		echo '<textarea id="cmx_artikel_lieferanten_notiz_' . (int)$i . '" name="cmx_artikel_lieferanten['.(int)$i.'][notiz]" class="cmx-lief-note">' . \esc_textarea($r_notiz) . '</textarea>';
 		echo '</div>';
+		echo '<div class="cmx-lief-actions-stack"><button type="button" class="button button-secondary cmx-lief-add">Lieferant hinzufügen</button><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div>';
 		echo '</td>';
 		echo '</tr>';
 	}
 
 	echo '</tbody></table>';
-	echo '<p class="cmx-lief-actions"><button type="button" class="button button-secondary" id="cmx-artikel-lieferanten-add">+ Lieferant hinzufügen</button></p>';
 	if(!$kontakt_pt) echo '<span class="cmx-inline-help">Kein Kontakte-CPT gefunden (<code>kontakt</code> / <code>kontakte</code>).</span>';
 
 	echo <<<'HTML'
@@ -638,9 +640,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		});
 	}
 	var tbody=document.querySelector("#cmx-artikel-lieferanten-table tbody");
-	var add=document.getElementById("cmx-artikel-lieferanten-add");
-	if(tbody && add){
-		add.addEventListener("click", function(){
+	function addRow(){
 			var tpl=tbody.querySelector("tr.cmx-lief-item-row");
 			if(!tpl) return;
 			var tplNote=tpl.nextElementSibling && tpl.nextElementSibling.classList.contains("cmx-lief-note-row") ? tpl.nextElementSibling : null;
@@ -664,9 +664,14 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			bindEkFormat(row);
 			bindSupplier(row);
 			bindUrl(row);
-		});
-
+	}
+	if(tbody){
 		tbody.addEventListener("click", function(e){
+			var addBtn=e.target.closest(".cmx-lief-add");
+			if(addBtn){
+				addRow();
+				return;
+			}
 			var btn=e.target.closest(".cmx-lief-del");
 			if(!btn) return;
 			var rows=tbody.querySelectorAll("tr.cmx-lief-item-row");
@@ -683,9 +688,15 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			}
 			var tr=btn.closest("tr");
 			if(tr){
-				var noteRow=tr.nextElementSibling && tr.nextElementSibling.classList.contains("cmx-lief-note-row") ? tr.nextElementSibling : null;
-				tr.remove();
-				if(noteRow) noteRow.remove();
+				if(tr.classList.contains("cmx-lief-note-row")){
+					var itemRow=tr.previousElementSibling && tr.previousElementSibling.classList.contains("cmx-lief-item-row") ? tr.previousElementSibling : null;
+					tr.remove();
+					if(itemRow) itemRow.remove();
+				}else{
+					var noteRow=tr.nextElementSibling && tr.nextElementSibling.classList.contains("cmx-lief-note-row") ? tr.nextElementSibling : null;
+					tr.remove();
+					if(noteRow) noteRow.remove();
+				}
 			}
 			reindex();
 		});
