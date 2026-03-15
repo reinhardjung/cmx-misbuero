@@ -7,10 +7,24 @@
 function cmx_register_vorgaben_tab(): void {
 
 	\add_settings_section(
-		'cmx_sec_vorgaben',
-		__('Vorgaben', 'default'),
+		'cmx_sec_vorgaben_allgemein',
+		__('Allgemein', 'default'),
 		'__return_false',
-		'cmx_tab_vorgaben'
+		'cmx_tab_vorgaben__allgemein'
+	);
+
+	\add_settings_section(
+		'cmx_sec_vorgaben_belege',
+		__('Belege', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__belege'
+	);
+
+	\add_settings_section(
+		'cmx_sec_vorgaben_artikel',
+		__('Artikel', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__artikel'
 	);
 
 	\add_settings_field(
@@ -93,8 +107,8 @@ function cmx_register_vorgaben_tab(): void {
 			})();
 			</script>';
 		},
-		'cmx_tab_vorgaben',
-		'cmx_sec_vorgaben'
+		'cmx_tab_vorgaben__belege',
+		'cmx_sec_vorgaben_belege'
 	);
 
 	\add_settings_field(
@@ -111,8 +125,8 @@ function cmx_register_vorgaben_tab(): void {
 			echo 'Leistungszeitraum in Belegen verwenden';
 			echo '</label>';
 		},
-		'cmx_tab_vorgaben',
-		'cmx_sec_vorgaben'
+		'cmx_tab_vorgaben__belege',
+		'cmx_sec_vorgaben_belege'
 	);
 
 	\add_settings_field(
@@ -131,8 +145,8 @@ function cmx_register_vorgaben_tab(): void {
 			echo '<input type="number" min="0" max="3650" step="1" style="width:120px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_tage]" value="'.\esc_attr((string) $days).'">';
 			echo '<p class="description">Standard für "Fällig am" in Belegen. Beim Setzen des Belegdatums wird das Fälligkeitsdatum auf Belegdatum + diese Tage gesetzt.</p>';
 		},
-		'cmx_tab_vorgaben',
-		'cmx_sec_vorgaben'
+		'cmx_tab_vorgaben__belege',
+		'cmx_sec_vorgaben_belege'
 	);
 
 	\register_setting(
@@ -153,8 +167,8 @@ function cmx_register_vorgaben_tab(): void {
 			$val = \get_option('cmx_katalog_online', '0');
 			echo '<label><input type="checkbox" name="cmx_katalog_online" value="1" ' . checked($val, '1', false) . '> Katalog öffentlich sichtbar</label>';
 		},
-		'cmx_tab_vorgaben',
-		'cmx_sec_vorgaben'
+		'cmx_tab_vorgaben__allgemein',
+		'cmx_sec_vorgaben_allgemein'
 	);
 
 	\add_settings_field(
@@ -171,7 +185,20 @@ function cmx_register_vorgaben_tab(): void {
 			echo 'Werbung zeigen';
 			echo '</label>';
 		},
-		'cmx_tab_vorgaben',
-		'cmx_sec_vorgaben'
+		'cmx_tab_vorgaben__allgemein',
+		'cmx_sec_vorgaben_allgemein'
+	);
+
+	\add_settings_field(
+		'artikel_deckungsbeitrag',
+		'Deckungsbeitrag',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$value = isset($opts['artikel_deckungsbeitrag']) ? (string) $opts['artikel_deckungsbeitrag'] : '';
+			echo '<input type="number" step="0.01" min="0" style="width:140px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[artikel_deckungsbeitrag]" value="'.\esc_attr($value).'">';
+			echo '<p class="description">mein mind. gewünschter Gewinn in Prozent</p>';
+		},
+		'cmx_tab_vorgaben__artikel',
+		'cmx_sec_vorgaben_artikel'
 	);
 }

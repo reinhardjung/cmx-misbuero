@@ -95,6 +95,14 @@ function cmx_get_tabs(): array {
 }
 
 function cmx_get_subtabs(string $tab): array {
+	if ($tab === 'vorgaben') {
+		return [
+			'allgemein' => 'Allgemein',
+			'artikel'   => 'Artikel',
+			'belege'    => 'Belege',
+		];
+	}
+
 	if ($tab === 'belege') {
 		return [
 			'offerte'      => 'Offerte',
