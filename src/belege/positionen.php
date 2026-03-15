@@ -984,7 +984,7 @@ rel="noopener noreferrer">
 	echo '</td>';
 	echo '<td class="cmx-pos-controls">';
 	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
-	echo '<button type="button" class="button-link-delete cmx-del-pos">✕</button>';
+	echo '<button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button>';
 	echo '</td>';
 
 	echo '</tr>';

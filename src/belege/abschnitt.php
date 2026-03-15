@@ -129,7 +129,7 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 										'<textarea class="cmx-abschnitt-text" name="cmx_positionen[' + i + '][abschnitt_text]" rows="2" placeholder="Beschreibender Text" style="width:100%; margin-top:6px;"></textarea>' +
 									'</div>' +
 								'</td>' +
-								'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>' +
+								'<td class="cmx-pos-controls"><button type="button" class="button button-small cmx-section-drag-handle" title="Gesamten Abschnitt verschieben" aria-label="Gesamten Abschnitt verschieben">↕</button><span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style=""></span></button></td>' +
 							'</tr>';
 
 				const $row = $(rowHtml);

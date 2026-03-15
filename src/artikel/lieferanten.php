@@ -451,7 +451,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		echo '<td><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
-		echo '<td style="text-align:center;"><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen">✕</button></td>';
+		echo '<td style="text-align:center;"><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></td>';
 		echo '</tr>';
 	}
 
@@ -741,7 +741,7 @@ function cmx_render_beleg_position_row_unified($i, $pos): void {
 	echo '<td class="cmx-pos-rabatt-td" style="width:100px;"><input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" style="width:100px"></td>';
 	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number(cmx_parse_number($preis_raw) * cmx_parse_number($menge_raw), 2)).'</td>';
 	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
-	echo '<td><button type="button" class="button-link-delete cmx-del-pos">✕</button></td>';
+	echo '<td><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style="position:relative; top:8px;"></span>✕</button></td>';
 
 	echo '</tr>';
 }
