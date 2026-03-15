@@ -420,9 +420,14 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .col-lieferant{width:24%}
 	#cmx-artikel-lieferanten-table .col-nr{width:16%}
 	#cmx-artikel-lieferanten-table .col-ek{width:12%}
-	#cmx-artikel-lieferanten-table .col-quelle{width:22%}
-	#cmx-artikel-lieferanten-table .col-ltage{width:10%}
-	#cmx-artikel-lieferanten-table .col-lager{width:10%}
+	#cmx-artikel-lieferanten-table .col-quelle,
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){width:420px;min-width:420px}
+	#cmx-artikel-lieferanten-table .col-ltage,
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5),
+	#cmx-artikel-lieferanten-table .col-lager,
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6){width:75px;min-width:75px}
+	#cmx-artikel-lieferanten-table .col-ltage,
+	#cmx-artikel-lieferanten-table .col-lager{transform:translateX(80px)}
 	#cmx-artikel-lieferanten-table .col-actions{width:56px;min-width:56px;text-align:center}
 	#cmx-artikel-lieferanten-table .widefat{width:100%}
 	#cmx-artikel-lieferanten-table tbody td{background:#fff}
@@ -439,6 +444,8 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open.is-disabled,
 	#cmx-artikel-lieferanten-table .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
+	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:translateX(80px)}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-row td{background:#fff;border-top:0}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-full-cell{padding:0 0 12px 0}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding:0;border:0;border-radius:0;background:transparent}
@@ -458,8 +465,8 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	echo '<th class="col-nr">Artikel-Nr</th>';
 	echo '<th class="col-ek">Einkaufspreis</th>';
 	echo '<th class="col-quelle">Bezugsquelle</th>';
-	echo '<th class="col-ltage">Lieferzeit (Tage)</th>';
-	echo '<th class="col-lager">Lagerbestand</th>';
+	echo '<th class="col-ltage">Lieferzeit</th>';
+	echo '<th class="col-lager">E-Best</th>';
 	echo '<th class="col-actions"></th>';
 	echo '</tr></thead><tbody>';
 
