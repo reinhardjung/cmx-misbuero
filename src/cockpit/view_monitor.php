@@ -548,6 +548,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_month_options'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_day_options')) {
+	function cmx_cockpit_view_monitor_day_options(): array {
+		$options = ['all' => 'alle Tage'];
+		for ($day = 1; $day <= 31; $day += 1) {
+			$options[(string) $day] = (string) $day;
+		}
+		return $options;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_quarter_options')) {
 	function cmx_cockpit_view_monitor_quarter_options(): array {
 		return [
@@ -1131,12 +1141,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$daily_cost_series = [];
 		$counts = [];
 		$counts_monthly = [];
+		$counts_daily = [];
 		$series_by_type = [];
 		$daily_series_by_type = [];
 		$cost_series_by_type = [];
 		$daily_cost_series_by_type = [];
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
+		$counts_daily_by_type = [];
 		$beleg_rows = [];
 		$article_rows = [];
 		$contact_rows = [];
@@ -1176,6 +1188,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$year = (int) \date('Y', $timestamp);
 			$month_index = ((int) \date('n', $timestamp)) - 1;
 			$month_number = $month_index + 1;
+			$day_number = (int) \date('j', $timestamp);
 			$day_index = ((int) \date('j', $timestamp)) - 1;
 			if ($month_index < 0 || $month_index > 11) {
 				continue;
@@ -1196,11 +1209,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($daily_cost_series[$year])) {
 				$daily_cost_series[$year] = [];
 			}
+			if (!isset($counts_daily[$year])) {
+				$counts_daily[$year] = [];
+			}
 			if (!isset($daily_series[$year][$month_number])) {
 				$daily_series[$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 			if (!isset($daily_cost_series[$year][$month_number])) {
 				$daily_cost_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
+			if (!isset($counts_daily[$year][$month_number])) {
+				$counts_daily[$year][$month_number] = \array_fill(0, 31, 0);
 			}
 
 			$total = cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
@@ -1223,6 +1242,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$daily_cost_series[$year][$month_number][$day_index] += $cost_total;
 			$counts[$year] = (int) ($counts[$year] ?? 0) + 1;
 			$counts_monthly[$year][$month_number] = (int) (($counts_monthly[$year][$month_number] ?? 0) + 1);
+			$counts_daily[$year][$month_number][$day_index] = (int) (($counts_daily[$year][$month_number][$day_index] ?? 0) + 1);
 
 			if (!isset($types[$type_slug])) {
 				$types[$type_slug] = $type_label;
@@ -1234,6 +1254,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$daily_cost_series_by_type[$type_slug] = [];
 				$counts_by_type[$type_slug] = [];
 				$counts_monthly_by_type[$type_slug] = [];
+				$counts_daily_by_type[$type_slug] = [];
 			}
 			if (!isset($series_by_type[$type_slug][$year])) {
 				$series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
@@ -1247,11 +1268,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($daily_cost_series_by_type[$type_slug][$year])) {
 				$daily_cost_series_by_type[$type_slug][$year] = [];
 			}
+			if (!isset($counts_daily_by_type[$type_slug][$year])) {
+				$counts_daily_by_type[$type_slug][$year] = [];
+			}
 			if (!isset($daily_series_by_type[$type_slug][$year][$month_number])) {
 				$daily_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 			if (!isset($daily_cost_series_by_type[$type_slug][$year][$month_number])) {
 				$daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
+			if (!isset($counts_daily_by_type[$type_slug][$year][$month_number])) {
+				$counts_daily_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0);
 			}
 
 			$series_by_type[$type_slug][$year][$month_index] += $total;
@@ -1260,9 +1287,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
+			$counts_daily_by_type[$type_slug][$year][$month_number][$day_index] = (int) (($counts_daily_by_type[$type_slug][$year][$month_number][$day_index] ?? 0) + 1);
 			$beleg_rows[] = [
 				'year' => $year,
 				'month' => $month_number,
+				'day' => $day_number,
 				'type' => $type_slug,
 				'beleg_id' => (int) $post->ID,
 				'beleg_title' => $beleg_title,
@@ -1275,6 +1304,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$contact_rows[] = [
 					'year' => $year,
 					'month' => $month_number,
+					'day' => $day_number,
 					'type' => $type_slug,
 					'contact_id' => (int) ($contact_meta['contact_id'] ?? 0),
 					'contact_title' => (string) ($contact_meta['contact_title'] ?? ''),
@@ -1287,6 +1317,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$project_rows[] = [
 					'year' => $year,
 					'month' => $month_number,
+					'day' => $day_number,
 					'type' => $type_slug,
 					'project_id' => (int) ($project_meta['project_id'] ?? 0),
 					'project_title' => (string) ($project_meta['project_title'] ?? ''),
@@ -1325,6 +1356,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$article_rows[] = [
 					'year' => $year,
 					'month' => $month_number,
+					'day' => $day_number,
 					'type' => $type_slug,
 					'article_id' => $artikel_id,
 					'article_title' => (string) ($article_meta['title'] ?? ''),
@@ -1389,6 +1421,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 				$year = (int) \date('Y', $timestamp);
 				$month_number = (int) \date('n', $timestamp);
+				$day_number = (int) \date('j', $timestamp);
 				if ($month_number < 1 || $month_number > 12) {
 					continue;
 				}
@@ -1417,6 +1450,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$project_task_rows[] = [
 					'year' => $year,
 					'month' => $month_number,
+					'day' => $day_number,
 					'project_id' => $project_id,
 					'project_title' => $project_title,
 					'edit_link' => $project_edit_link,
@@ -1543,12 +1577,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'daily_cost_series' => $daily_cost_series,
 			'counts' => $counts,
 			'counts_monthly' => $counts_monthly,
+			'counts_daily' => $counts_daily,
 			'series_by_type' => $series_by_type,
 			'daily_series_by_type' => $daily_series_by_type,
 			'cost_series_by_type' => $cost_series_by_type,
 			'daily_cost_series_by_type' => $daily_cost_series_by_type,
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
+			'counts_daily_by_type' => $counts_daily_by_type,
 			'beleg_rows' => $beleg_rows,
 			'article_rows' => $article_rows,
 			'contact_rows' => $contact_rows,
@@ -1565,7 +1601,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		$type_options = \array_values((array) ($chart_payload['types'] ?? []));
 		$quarter_options = cmx_cockpit_view_monitor_quarter_options();
 		$month_options = cmx_cockpit_view_monitor_month_options();
+		$day_options = cmx_cockpit_view_monitor_day_options();
 		$selected_type = 'all';
+		$selected_day = 'all';
 		$selected_quarter = 'all';
 		$selected_month = 'all';
 		$selected_year = (int) ($years[0] ?? \wp_date('Y'));
@@ -1611,6 +1649,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 								<select id="cmx-monitor-chart-month">
 									<?php foreach ($month_options as $month_value => $month_label) : ?>
 										<option value="<?php echo \esc_attr((string) $month_value); ?>"<?php selected((string) $month_value, $selected_month); ?>><?php echo \esc_html((string) $month_label); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<label class="mb-demo-linechart-control">
+								<span>Tag</span>
+								<select id="cmx-monitor-chart-day">
+									<?php foreach ($day_options as $day_value => $day_label) : ?>
+										<option value="<?php echo \esc_attr((string) $day_value); ?>"<?php selected((string) $day_value, $selected_day); ?>><?php echo \esc_html((string) $day_label); ?></option>
 									<?php endforeach; ?>
 								</select>
 							</label>
@@ -1916,10 +1962,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var yearSelect = document.getElementById("cmx-monitor-chart-year");
 			var quarterSelect = document.getElementById("cmx-monitor-chart-quarter");
 			var monthSelect = document.getElementById("cmx-monitor-chart-month");
+			var daySelect = document.getElementById("cmx-monitor-chart-day");
 			var typeSelect = document.getElementById("cmx-monitor-chart-type");
 			var compareCheckbox = document.getElementById("cmx-monitor-chart-compare");
 			var resetLink = document.getElementById("cmx-monitor-reset-filters");
-			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !typeSelect || !compareCheckbox || !resetLink || typeof Chart === "undefined") return;
+			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !daySelect || !typeSelect || !compareCheckbox || !resetLink || typeof Chart === "undefined") return;
 
 			var ctx = canvas.getContext("2d");
 			if (!ctx) return;
@@ -2109,6 +2156,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					? Number(payload.counts_monthly[selectedYear][normalizedMonth])
 					: 0;
 			};
+			var getCountForDay = function(year, monthNumber, dayNumber, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = Number(monthNumber || 0);
+				var normalizedDayIndex = Number(dayNumber || 0) - 1;
+				if (normalizedDayIndex < 0 || normalizedDayIndex > 30) {
+					return 0;
+				}
+				if (selectedType !== "all") {
+					return payload.counts_daily_by_type
+						&& payload.counts_daily_by_type[selectedType]
+						&& payload.counts_daily_by_type[selectedType][selectedYear]
+						&& payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth]
+						&& typeof payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
+						? Number(payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth][normalizedDayIndex])
+						: 0;
+				}
+				return payload.counts_daily
+					&& payload.counts_daily[selectedYear]
+					&& payload.counts_daily[selectedYear][normalizedMonth]
+					&& typeof payload.counts_daily[selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
+					? Number(payload.counts_daily[selectedYear][normalizedMonth][normalizedDayIndex])
+					: 0;
+			};
 			var getQuarterMonths = function(quarter){
 				switch (String(quarter || "all")) {
 					case "1":
@@ -2147,10 +2218,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					return getCountForMonth(year, monthNumber, type);
 				}));
 			};
-			var getContextCount = function(year, quarter, month, type){
+			var countForDayAcrossMonths = function(year, months, day, type){
+				return sumIntegerSeries((Array.isArray(months) ? months : []).map(function(monthNumber){
+					return getCountForDay(year, monthNumber, day, type);
+				}));
+			};
+			var getContextCount = function(year, quarter, month, day, type){
 				var selectedYear = String(year || "");
 				var selectedQuarter = String(quarter || "all");
 				var selectedMonth = String(month || "all");
+				var selectedDay = String(day || "all");
 				var selectedType = String(type || "all");
 
 				if (selectedMonth !== "all") {
@@ -2158,11 +2235,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					if (!monthBelongsToQuarter(normalizedMonth, selectedQuarter)) {
 						return 0;
 					}
+					if (selectedDay !== "all") {
+						return getCountForDay(selectedYear, normalizedMonth, Number(selectedDay || 0), selectedType);
+					}
 					return getCountForMonth(selectedYear, normalizedMonth, selectedType);
 				}
 
 				if (selectedQuarter !== "all") {
+					if (selectedDay !== "all") {
+						return countForDayAcrossMonths(selectedYear, getQuarterMonths(selectedQuarter), Number(selectedDay || 0), selectedType);
+					}
 					return countForQuarter(selectedYear, selectedQuarter, selectedType);
+				}
+
+				if (selectedDay !== "all") {
+					return countForDayAcrossMonths(selectedYear, getQuarterMonths("all"), Number(selectedDay || 0), selectedType);
 				}
 
 				return getCountForYear(selectedYear, selectedType);
@@ -2244,42 +2331,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var updateYearOptions = function(){
 				var selectedQuarter = String(quarterSelect.value || "all");
 				var selectedMonth = String(monthSelect.value || "all");
+				var selectedDay = String(daySelect.value || "all");
 				var selectedType = String(typeSelect.value || "all");
 				Array.prototype.forEach.call(yearSelect.options, function(option){
 					var year = String(option.value || "");
-					var count = getContextCount(year, selectedQuarter, selectedMonth, selectedType);
+					var count = getContextCount(year, selectedQuarter, selectedMonth, selectedDay, selectedType);
 					option.textContent = formatOptionLabel(year, count);
 				});
 			};
 			var updateQuarterOptions = function(){
 				var selectedYear = String(yearSelect.value || "");
 				var selectedMonth = String(monthSelect.value || "all");
+				var selectedDay = String(daySelect.value || "all");
 				var selectedType = String(typeSelect.value || "all");
 				Array.prototype.forEach.call(quarterSelect.options, function(option){
 					if (option.value === "all") {
-						option.textContent = formatOptionLabel("alle Quartale", getContextCount(selectedYear, "all", selectedMonth, selectedType));
+						option.textContent = formatOptionLabel("alle Quartale", getContextCount(selectedYear, "all", selectedMonth, selectedDay, selectedType));
 						return;
 					}
-					option.textContent = formatOptionLabel(quarterLabelFor(option.value), getContextCount(selectedYear, option.value, selectedMonth, selectedType));
+					option.textContent = formatOptionLabel(quarterLabelFor(option.value), getContextCount(selectedYear, option.value, selectedMonth, selectedDay, selectedType));
 				});
 			};
 			var updateTypeOptions = function(){
 				var selectedYear = String(yearSelect.value || "");
 				var selectedQuarter = String(quarterSelect.value || "all");
 				var selectedMonth = String(monthSelect.value || "all");
+				var selectedDay = String(daySelect.value || "all");
 				var previousValue = String(typeSelect.value || "all");
 				typeSelect.innerHTML = "";
 
 				var allOption = document.createElement("option");
 				allOption.value = "all";
-				allOption.textContent = formatOptionLabel("alle Belegtypen", getContextCount(selectedYear, selectedQuarter, selectedMonth, "all"));
+				allOption.textContent = formatOptionLabel("alle Belegtypen", getContextCount(selectedYear, selectedQuarter, selectedMonth, selectedDay, "all"));
 				typeSelect.appendChild(allOption);
 
 				typeMeta.forEach(function(typeItem){
 					var option = document.createElement("option");
 					var typeValue = String(typeItem.value || "");
 					option.value = typeValue;
-					option.textContent = formatOptionLabel(String(typeItem.label || typeValue), getContextCount(selectedYear, selectedQuarter, selectedMonth, typeValue));
+					option.textContent = formatOptionLabel(String(typeItem.label || typeValue), getContextCount(selectedYear, selectedQuarter, selectedMonth, selectedDay, typeValue));
 					typeSelect.appendChild(option);
 				});
 
@@ -2290,6 +2380,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			};
 			var updateMonthOptions = function(){
 				var selectedYear = String(yearSelect.value || "");
+				var selectedDay = String(daySelect.value || "all");
 				var selectedType = String(typeSelect.value || "all");
 				var allowedMonths = getQuarterMonths(quarterSelect.value);
 				var previousValue = String(monthSelect.value || "all");
@@ -2297,7 +2388,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 				var allOption = document.createElement("option");
 				allOption.value = "all";
-				allOption.textContent = formatOptionLabel("alle Monate", getContextCount(selectedYear, quarterSelect.value, "all", selectedType));
+				allOption.textContent = formatOptionLabel("alle Monate", getContextCount(selectedYear, quarterSelect.value, "all", selectedDay, selectedType));
 				monthSelect.appendChild(allOption);
 
 				allowedMonths.forEach(function(monthNumber){
@@ -2306,7 +2397,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var monthLabel = Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
 						? payload.labels[monthNumber - 1]
 						: String(monthNumber);
-					var monthCount = getCountForMonth(selectedYear, monthNumber, selectedType);
+					var monthCount = selectedDay !== "all"
+						? getCountForDay(selectedYear, monthNumber, Number(selectedDay || 0), selectedType)
+						: getCountForMonth(selectedYear, monthNumber, selectedType);
 					option.textContent = formatOptionLabel(monthLabel, monthCount);
 					monthSelect.appendChild(option);
 				});
@@ -2317,8 +2410,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				});
 				monthSelect.value = hasValue ? normalizedValue : "all";
 			};
+			var updateDayOptions = function(){
+				var selectedYear = String(yearSelect.value || "");
+				var selectedQuarter = String(quarterSelect.value || "all");
+				var selectedMonth = String(monthSelect.value || "all");
+				var selectedType = String(typeSelect.value || "all");
+				var previousValue = String(daySelect.value || "all");
+				var maxDay = selectedMonth !== "all" ? daysInMonth(selectedYear, Number(selectedMonth || 0)) : 31;
+				var activeMonths = selectedMonth !== "all"
+					? [Number(selectedMonth || 0)]
+					: getQuarterMonths(selectedQuarter);
+
+				daySelect.innerHTML = "";
+
+				var allOption = document.createElement("option");
+				allOption.value = "all";
+				allOption.textContent = formatOptionLabel("alle Tage", getContextCount(selectedYear, selectedQuarter, selectedMonth, "all", selectedType));
+				daySelect.appendChild(allOption);
+
+				for (var dayNumber = 1; dayNumber <= maxDay; dayNumber += 1) {
+					var option = document.createElement("option");
+					option.value = String(dayNumber);
+					option.textContent = formatOptionLabel(String(dayNumber), countForDayAcrossMonths(selectedYear, activeMonths, dayNumber, selectedType));
+					daySelect.appendChild(option);
+				}
+
+				var normalizedValue = previousValue === "all" ? "all" : String(Number(previousValue || 0));
+				var hasValue = Array.prototype.some.call(daySelect.options, function(option){
+					return option.value === normalizedValue;
+				});
+				daySelect.value = hasValue ? normalizedValue : "all";
+			};
 			var getFilters = function(){
 				return {
+					day: String(daySelect.value || "all"),
 					year: String(yearSelect.value || ""),
 					quarter: String(quarterSelect.value || "all"),
 					month: String(monthSelect.value || "all"),
@@ -2360,6 +2485,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = filters.year;
 				var selectedQuarter = filters.quarter;
 				var selectedMonth = filters.month;
+				var selectedDay = filters.day;
 				var selectedType = filters.type;
 				var selectedTypeLabel = typeLabelFor(selectedType);
 				var revenueSeries = Array.isArray(getSeriesForYear(selectedYear, selectedType)) ? getSeriesForYear(selectedYear, selectedType).slice() : [];
@@ -2371,29 +2497,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var compareRevenueSeries = compareYear ? (Array.isArray(getSeriesForYear(compareYear, selectedType)) ? getSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var compareCostSeries = compareYear ? (Array.isArray(getCostSeriesForYear(compareYear, selectedType)) ? getCostSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var labels = Array.isArray(payload.labels) ? payload.labels.slice() : [];
-				var selectedCount = getCountForYear(selectedYear, selectedType) || countSeries(revenueSeries);
+				var selectedCount = getContextCount(selectedYear, selectedQuarter, selectedMonth, selectedDay, selectedType) || countSeries(revenueSeries);
 				var totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedYear;
 				var compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + compareYear) : "Vergleich";
 
 				if (selectedMonth !== "all") {
 					var monthNumber = Number(selectedMonth || 0);
+					var dayNumber = Number(selectedDay || 0);
 					var totalDays = daysInMonth(selectedYear, monthNumber);
 					if (compareYear) {
 						totalDays = Math.max(totalDays, daysInMonth(compareYear, monthNumber));
 					}
-					labels = rangeLabelsForMonth(totalDays);
-					revenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
-					costSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
-					indicatorRevenueSeries = indicatorCompareYear ? getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
-					indicatorCostSeries = indicatorCompareYear ? getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
-					compareRevenueSeries = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
-					compareCostSeries = compareYear ? getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
-					selectedCount = getCountForMonth(selectedYear, monthNumber, selectedType) || countSeries(revenueSeries);
 					var monthLabel = Array.isArray(payload.labels) && payload.labels[monthNumber - 1]
 						? payload.labels[monthNumber - 1]
 						: String(monthNumber);
-					totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + selectedYear;
-					compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + compareYear) : "Vergleich";
+
+					if (selectedDay !== "all") {
+						var dayRevenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType);
+						var dayCostSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType);
+						labels = [String(dayNumber)];
+						revenueSeries = [Number(dayRevenueSeries[dayNumber - 1] || 0)];
+						costSeries = [Number(dayCostSeries[dayNumber - 1] || 0)];
+						indicatorRevenueSeries = indicatorCompareYear ? [Number((getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						indicatorCostSeries = indicatorCompareYear ? [Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						compareRevenueSeries = compareYear ? [Number((getDailySeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						compareCostSeries = compareYear ? [Number((getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + dayNumber + ". " + monthLabel + " " + selectedYear;
+						compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + dayNumber + ". " + monthLabel + " " + compareYear) : "Vergleich";
+					} else {
+						labels = rangeLabelsForMonth(totalDays);
+						revenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+						costSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+						indicatorRevenueSeries = indicatorCompareYear ? getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						indicatorCostSeries = indicatorCompareYear ? getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						compareRevenueSeries = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						compareCostSeries = compareYear ? getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + selectedYear;
+						compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + compareYear) : "Vergleich";
+					}
 				} else if (selectedQuarter !== "all") {
 					var quarterMonths = getQuarterMonths(selectedQuarter);
 					var quarterLabel = quarterLabelFor(selectedQuarter);
@@ -2403,28 +2544,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							: String(monthNumber);
 					});
 					revenueSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailySeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(revenueSeries[monthNumber - 1] || 0);
 					});
 					costSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(costSeries[monthNumber - 1] || 0);
 					});
 					indicatorRevenueSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(indicatorRevenueSeries[monthNumber - 1] || 0);
 					});
 					indicatorCostSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(indicatorCostSeries[monthNumber - 1] || 0);
 					});
 					compareRevenueSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailySeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(compareRevenueSeries[monthNumber - 1] || 0);
 					});
 					compareCostSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
 						return Number(compareCostSeries[monthNumber - 1] || 0);
 					});
-					selectedCount = sumIntegerSeries(quarterMonths.map(function(monthNumber){
-						return getCountForMonth(selectedYear, monthNumber, selectedType);
-					}));
 					totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + selectedYear;
 					compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + quarterLabel + " " + compareYear) : "Vergleich";
+					if (selectedDay !== "all") {
+						totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedDay + ". im " + quarterLabel + " " + selectedYear;
+						compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedDay + ". im " + quarterLabel + " " + compareYear) : "Vergleich";
+					}
+				} else if (selectedDay !== "all") {
+					var allMonths = getQuarterMonths("all");
+					revenueSeries = allMonths.map(function(monthNumber){
+						return Number((getDailySeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					costSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					indicatorRevenueSeries = allMonths.map(function(monthNumber){
+						return Number((getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					indicatorCostSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					compareRevenueSeries = allMonths.map(function(monthNumber){
+						return Number((getDailySeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					compareCostSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedDay + ". im Jahr " + selectedYear;
+					compareRevenueLabelText = compareYear ? ("Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + selectedDay + ". im Jahr " + compareYear) : "Vergleich";
 				}
 
 				return {
@@ -2432,6 +2614,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					selectedYear: selectedYear,
 					selectedQuarter: selectedQuarter,
 					selectedMonth: selectedMonth,
+					selectedDay: selectedDay,
 					selectedType: selectedType,
 					compareYear: compareYear,
 					indicatorCompareYear: indicatorCompareYear,
@@ -2924,6 +3107,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedDay = String(context.selectedDay || "all");
 				var selectedType = String(context.selectedType || "all");
 				var sourceRows = Array.isArray(payload.beleg_rows) ? payload.beleg_rows : [];
 				var belege = {};
@@ -2931,6 +3115,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				sourceRows.forEach(function(row){
 					var rowYear = String(row.year || "");
 					var rowMonth = Number(row.month || 0);
+					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
@@ -2939,6 +3124,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
 						return;
 					}
+					if (selectedDay !== "all" && rowDay !== Number(selectedDay || 0)) return;
 
 					var belegId = Number(row.beleg_id || 0);
 					var belegTitle = String(row.beleg_title || "").trim();
@@ -3000,6 +3186,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedDay = String(context.selectedDay || "all");
 				var selectedType = String(context.selectedType || "all");
 				var sourceRows = Array.isArray(payload.article_rows) ? payload.article_rows : [];
 				var articles = {};
@@ -3007,6 +3194,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				sourceRows.forEach(function(row){
 					var rowYear = String(row.year || "");
 					var rowMonth = Number(row.month || 0);
+					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
@@ -3015,6 +3203,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
 						return;
 					}
+					if (selectedDay !== "all" && rowDay !== Number(selectedDay || 0)) return;
 
 					var key = String(row.article_id || "");
 					if (!key) return;
@@ -3071,6 +3260,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedDay = String(context.selectedDay || "all");
 				var selectedType = String(context.selectedType || "all");
 				var sourceRows = Array.isArray(payload.contact_rows) ? payload.contact_rows : [];
 				var customers = {};
@@ -3078,6 +3268,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				sourceRows.forEach(function(row){
 					var rowYear = String(row.year || "");
 					var rowMonth = Number(row.month || 0);
+					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
@@ -3086,6 +3277,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
 						return;
 					}
+					if (selectedDay !== "all" && rowDay !== Number(selectedDay || 0)) return;
 
 					var contactId = Number(row.contact_id || 0);
 					var contactTitle = String(row.contact_title || "").trim();
@@ -3147,6 +3339,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedDay = String(context.selectedDay || "all");
 				var selectedType = String(context.selectedType || "all");
 				var sourceRows = Array.isArray(payload.project_rows) ? payload.project_rows : [];
 				var projects = {};
@@ -3154,6 +3347,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				sourceRows.forEach(function(row){
 					var rowYear = String(row.year || "");
 					var rowMonth = Number(row.month || 0);
+					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
@@ -3162,6 +3356,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
 						return;
 					}
+					if (selectedDay !== "all" && rowDay !== Number(selectedDay || 0)) return;
 
 					var projectId = Number(row.project_id || 0);
 					var projectTitle = String(row.project_title || "").trim();
@@ -3223,18 +3418,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
+				var selectedDay = String(context.selectedDay || "all");
 				var sourceRows = Array.isArray(payload.project_task_rows) ? payload.project_task_rows : [];
 				var projects = {};
 
 				sourceRows.forEach(function(row){
 					var rowYear = String(row.year || "");
 					var rowMonth = Number(row.month || 0);
+					var rowDay = Number(row.day || 0);
 					if (rowYear !== selectedYear) return;
 					if (selectedMonth !== "all") {
 						if (rowMonth !== Number(selectedMonth || 0)) return;
 					} else if (selectedQuarter !== "all" && getQuarterMonths(selectedQuarter).indexOf(rowMonth) === -1) {
 						return;
 					}
+					if (selectedDay !== "all" && rowDay !== Number(selectedDay || 0)) return;
 
 					var projectId = Number(row.project_id || 0);
 					var projectTitle = String(row.project_title || "").trim();
@@ -3348,35 +3546,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				renderProjectTaskTable(context);
 			};
 
-			yearSelect.addEventListener("change", function(){
-				quarterSelect.value = "all";
-				monthSelect.value = "all";
+			var refreshFilterOptions = function(){
+				updateMonthOptions();
+				updateDayOptions();
 				updateTypeOptions();
 				updateYearOptions();
 				updateQuarterOptions();
 				updateMonthOptions();
+				updateDayOptions();
+			};
+			yearSelect.addEventListener("change", function(){
+				quarterSelect.value = "all";
+				monthSelect.value = "all";
+				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
 			});
 			quarterSelect.addEventListener("change", function(){
-				updateTypeOptions();
-				updateYearOptions();
-				updateQuarterOptions();
-				updateMonthOptions();
+				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
 			});
 			monthSelect.addEventListener("change", function(){
-				updateTypeOptions();
-				updateYearOptions();
-				updateQuarterOptions();
+				refreshFilterOptions();
+				updateDashboard();
+				emitFiltersChanged();
+			});
+			daySelect.addEventListener("change", function(){
+				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
 			});
 			typeSelect.addEventListener("change", function(){
-				updateYearOptions();
-				updateQuarterOptions();
-				updateMonthOptions();
+				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
 			});
@@ -3389,21 +3591,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				if (yearSelect.options.length > 0) {
 					yearSelect.selectedIndex = 0;
 				}
+				daySelect.value = "all";
 				quarterSelect.value = "all";
 				monthSelect.value = "all";
 				typeSelect.value = "all";
 				compareCheckbox.checked = false;
-				updateTypeOptions();
-				updateYearOptions();
-				updateQuarterOptions();
-				updateMonthOptions();
+				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
 			});
-			updateTypeOptions();
-			updateYearOptions();
-			updateQuarterOptions();
-			updateMonthOptions();
+			refreshFilterOptions();
 			updateDashboard();
 			emitFiltersChanged();
 		};
