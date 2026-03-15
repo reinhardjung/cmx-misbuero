@@ -2395,15 +2395,24 @@ function cmx_beleg_positionen_js() {
 	});
 	</script>
 		<style>
-			.cmx-art-suggest{ position:absolute; z-index:1000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
+			#cmx_beleg_positionen,
+			#cmx_beleg_positionen .inside,
+			#cmx-positionen-wrap,
+			#cmx-positionen-table,
+			#cmx-positionen-table tbody,
+			#cmx-positionen-table tr,
+			#cmx-positionen-table td{
+				overflow:visible !important;
+			}
+			.cmx-art-suggest{ position:absolute; z-index:100000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
 			.cmx-art-suggest li{ margin:0; padding:0; cursor:pointer; }
 			.cmx-art-suggest li.active, .cmx-art-suggest li:hover{ background:#e5f3ff; }
-			.cmx-task-picker-wrap{ position:relative; display:inline-block; margin-left:8px; }
+			.cmx-task-picker-wrap{ position:relative; z-index:100001; display:inline-block; margin-left:8px; }
 			.cmx-task-picker-panel{
 				position:absolute;
 				top:0;
 				left:calc(100% + 6px);
-				z-index:1200;
+				z-index:100002;
 				width:520px;
 				max-width:86vw;
 				padding:8px;
