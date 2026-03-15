@@ -40,6 +40,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_manual_flag_meta_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_get_post_meta_raw')) {
+	function cmx_kl_get_post_meta_raw(int $post_id, string $meta_key, bool $single = true) {
+		if (\function_exists('get_metadata_raw')) {
+			return \get_metadata_raw('post', $post_id, $meta_key, $single);
+		}
+
+		global $wpdb;
+		$rows = $wpdb->get_col($wpdb->prepare(
+			"SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = %s ORDER BY meta_id ASC",
+			$post_id,
+			$meta_key
+		));
+		if ($single) {
+			return isset($rows[0]) ? \maybe_unserialize($rows[0]) : '';
+		}
+		return \array_map('maybe_unserialize', $rows);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_label')) {
 	function cmx_kl_label(int $post_id): string {
 		$is_private = (bool) \get_post_meta($post_id, '_cmx_kontakte_privat', true);
@@ -60,6 +79,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_item_filename')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_sanitize_date_ymd')) {
+	function cmx_kl_sanitize_date_ymd($value): string {
+		$value = \is_string($value) ? \trim($value) : '';
+		if ($value === '') {
+			return '';
+		}
+		$dt = \DateTime::createFromFormat('Y-m-d', $value);
+		return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_format_date_display')) {
+	function cmx_kl_format_date_display(string $value): string {
+		$value = cmx_kl_sanitize_date_ymd($value);
+		if ($value === '') {
+			return '';
+		}
+		$parts = \explode('-', $value);
+		if (\count($parts) !== 3) {
+			return $value;
+		}
+		return $parts[2] . '.' . $parts[1] . '.' . $parts[0];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_item_tooltip')) {
+	function cmx_kl_gallery_item_tooltip(array $item): string {
+		$filename  = cmx_kl_gallery_item_filename($item);
+		$date_from = cmx_kl_format_date_display((string) ($item['date_from'] ?? ''));
+		$date_to   = cmx_kl_format_date_display((string) ($item['date_to'] ?? ''));
+
+		if ($date_from === '' && $date_to === '') {
+			return $filename;
+		}
+		if ($date_from !== '' && $date_to !== '') {
+			return $date_from . ' - ' . $date_to . ' ' . $filename;
+		}
+		if ($date_from !== '') {
+			return $date_from . ' - ' . $filename;
+		}
+		return '- ' . $date_to . ' ' . $filename;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_normalize')) {
 	function cmx_kl_gallery_normalize(array $items): array {
 		$out = [];
@@ -70,6 +133,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_normalize')) {
 			$id   = \sanitize_key((string) ($item['id'] ?? ''));
 			$path = \trim((string) ($item['path'] ?? ''));
 			$url  = \trim((string) ($item['url'] ?? ''));
+			$date_from = cmx_kl_sanitize_date_ymd($item['date_from'] ?? '');
+			$date_to   = cmx_kl_sanitize_date_ymd($item['date_to'] ?? '');
 
 			if ($id === '') {
 				$id = 'img_' . \wp_generate_password(12, false, false);
@@ -82,6 +147,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_normalize')) {
 				'id'   => $id,
 				'path' => $path,
 				'url'  => $url,
+				'date_from' => $date_from,
+				'date_to'   => $date_to,
 			];
 		}
 		return $out;
@@ -100,8 +167,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_get')) {
 			return $items;
 		}
 
-		$legacy_path = (string) \get_post_meta($post_id, $meta_base . '_path', true);
-		$legacy_url  = (string) \get_post_meta($post_id, $meta_base . '_url', true);
+		$legacy_path = (string) cmx_kl_get_post_meta_raw($post_id, $meta_base . '_path', true);
+		$legacy_url  = (string) cmx_kl_get_post_meta_raw($post_id, $meta_base . '_url', true);
 		if ($legacy_path === '' && $legacy_url === '') {
 			return [];
 		}
@@ -111,6 +178,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_get')) {
 			'path' => $legacy_path,
 			'url'  => $legacy_url,
 		]];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_gallery_item_matches_date')) {
+	function cmx_kl_gallery_item_matches_date(array $item, string $today): bool {
+		$date_from = cmx_kl_sanitize_date_ymd((string) ($item['date_from'] ?? ''));
+		$date_to   = cmx_kl_sanitize_date_ymd((string) ($item['date_to'] ?? ''));
+
+		if ($date_from === '' && $date_to === '') {
+			return false;
+		}
+		if ($date_from !== '' && $today < $date_from) {
+			return false;
+		}
+		if ($date_to !== '' && $today > $date_to) {
+			return false;
+		}
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_active_gallery_item')) {
+	function cmx_kl_active_gallery_item(int $post_id, string $meta_base = ''): ?array {
+		$gallery = cmx_kl_gallery_get($post_id, $meta_base);
+		if ($gallery === []) {
+			return null;
+		}
+
+		$today = \current_time('Y-m-d');
+		foreach ($gallery as $item) {
+			if (cmx_kl_gallery_item_matches_date($item, $today)) {
+				return $item;
+			}
+		}
+
+		return $gallery[0];
 	}
 }
 
@@ -233,8 +336,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_store_uploaded_files')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_maybe_migrate_contact_logo_to_archiv_path')) {
 	function cmx_maybe_migrate_contact_logo_to_archiv_path(int $post_id): void {
 		$meta_base = cmx_kl_meta_base();
-		$current_path = (string) \get_post_meta($post_id, $meta_base . '_path', true);
-		$current_url  = (string) \get_post_meta($post_id, $meta_base . '_url', true);
+		$current_path = (string) cmx_kl_get_post_meta_raw($post_id, $meta_base . '_path', true);
+		$current_url  = (string) cmx_kl_get_post_meta_raw($post_id, $meta_base . '_url', true);
 		$gallery      = cmx_kl_gallery_get($post_id, $meta_base);
 
 		if ($current_path !== '') {
@@ -286,6 +389,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_maybe_migrate_contact_logo_to_archi
 		}
 	}
 }
+
+\add_filter('get_post_metadata', function ($value, $object_id, $meta_key, $single) {
+	$meta_base = cmx_kl_meta_base();
+	if ($meta_key !== $meta_base . '_path' && $meta_key !== $meta_base . '_url') {
+		return $value;
+	}
+	if ((int) $object_id <= 0 || \get_post_type((int) $object_id) !== 'kontakte') {
+		return $value;
+	}
+
+	$active_item = cmx_kl_active_gallery_item((int) $object_id, $meta_base);
+	if (!\is_array($active_item)) {
+		return $value;
+	}
+
+	$result = $meta_key === $meta_base . '_path'
+		? (string) ($active_item['path'] ?? '')
+		: (string) ($active_item['url'] ?? '');
+
+	return $single ? $result : [$result];
+}, 10, 4);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_has_local_logo')) {
 	function cmx_has_local_logo(int $post_id): bool {
@@ -488,7 +612,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 		$label     = cmx_kl_label((int) $post->ID);
 		$meta_base = cmx_kl_meta_base();
 		$gallery   = cmx_kl_gallery_get((int) $post->ID, $meta_base);
-		$primary   = $gallery[0] ?? null;
+		$primary   = cmx_kl_active_gallery_item((int) $post->ID, $meta_base);
 		$url       = \is_array($primary) ? (string) ($primary['url'] ?? '') : '';
 		$box_id    = 'cmx-kl-box-' . (int) $post->ID;
 		$has_image = $url !== '';
@@ -513,19 +637,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 			$item_id   = (string) ($item['id'] ?? '');
 			$item_url  = (string) ($item['url'] ?? '');
 			$item_name = cmx_kl_gallery_item_filename($item);
+			$item_title = cmx_kl_gallery_item_tooltip($item);
+			$date_from = cmx_kl_sanitize_date_ymd((string) ($item['date_from'] ?? ''));
+			$date_to   = cmx_kl_sanitize_date_ymd((string) ($item['date_to'] ?? ''));
+			$has_dates = $date_from !== '' || $date_to !== '';
 			if ($item_name === '') {
 				$item_name = $label;
 			}
 			$up_style   = $index === 0 ? 'display:none;' : '';
 			$down_style = $index === $total - 1 ? 'display:none;' : '';
-			echo '<div class="cmx-kl-file-row" data-id="' . \esc_attr($item_id) . '" data-url="' . \esc_url($item_url) . '" draggable="true" title="' . \esc_attr($item_name) . '" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #f0f0f1;transition:background-color .15s ease;">';
+			echo '<div class="cmx-kl-file-row" data-id="' . \esc_attr($item_id) . '" data-url="' . \esc_url($item_url) . '" draggable="true" title="' . \esc_attr($item_title) . '" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #f0f0f1;transition:background-color .15s ease;">';
+			echo '<div class="cmx-kl-file-main" style="display:flex;align-items:center;gap:6px;width:100%;">';
 			echo '<span class="cmx-kl-drag-handle" title="Ziehen zum Verschieben" aria-label="Ziehen zum Verschieben" style="display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#8c8f94;cursor:grab;"><span class="dashicons dashicons-menu" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></span>';
-			echo '<span class="cmx-kl-file-name" title="' . \esc_attr($item_name) . '" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' . \esc_html($item_name) . '</span>';
+			echo '<button type="button" class="button-link cmx-kl-date-toggle" aria-label="Zeitraum bearbeiten" title="Zeitraum bearbeiten" style="text-decoration:none;color:' . ($has_dates ? '#2271b1' : '#8c8f94') . ';"><span class="dashicons dashicons-calendar-alt" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
+			echo '<span class="cmx-kl-file-name" title="' . \esc_attr($item_title) . '" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' . \esc_html($item_name) . '</span>';
 			echo '<span class="cmx-kl-file-actions" style="display:flex;align-items:center;gap:2px;margin-left:auto;">';
 			echo '<button type="button" class="button-link cmx-kl-move-up" aria-label="Nach oben" title="Nach oben" style="text-decoration:none;' . \esc_attr($up_style) . '"><span class="dashicons dashicons-arrow-up-alt2" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
 			echo '<button type="button" class="button-link cmx-kl-move-down" aria-label="Nach unten" title="Nach unten" style="text-decoration:none;' . \esc_attr($down_style) . '"><span class="dashicons dashicons-arrow-down-alt2" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
 			echo '<button type="button" class="button-link-delete cmx-kl-remove-file" aria-label="Bild entfernen" title="Bild entfernen"><span class="dashicons dashicons-trash" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
 			echo '</span>';
+			echo '</div>';
+			echo '<div class="cmx-kl-date-panel" style="display:none;flex:0 0 100%;padding:8px 0 0 44px;">';
+			echo '<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:#50575e;">Datum von<input type="date" class="cmx-kl-date-from" name="cmx_kl_date_from[' . \esc_attr($item_id) . ']" value="' . \esc_attr($date_from) . '" style="min-height:34px;padding:4px 8px;"></label>';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:#50575e;">Datum bis<input type="date" class="cmx-kl-date-to" name="cmx_kl_date_to[' . \esc_attr($item_id) . ']" value="' . \esc_attr($date_to) . '" style="min-height:34px;padding:4px 8px;"></label>';
+			echo '</div>';
+			echo '</div>';
 			echo '</div>';
 		}
 		echo '</div>';
@@ -557,6 +694,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 			var draggedRow = null;
 			var initialOrder = [];
 			var hoveredPreviewUrl = "";
+			var todayDate = new Date();
+			var todayYmd = [
+				todayDate.getFullYear(),
+				String(todayDate.getMonth() + 1).padStart(2, "0"),
+				String(todayDate.getDate()).padStart(2, "0")
+			].join("-");
 
 			function visibleRows() {
 				return Array.prototype.slice.call(root.querySelectorAll(".cmx-kl-file-row")).filter(function(row){
@@ -647,6 +790,64 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 				if (status) status.textContent = text;
 			}
 
+			function formatDateDisplay(value) {
+				if (!value) return "";
+				var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+				if (!match) return value;
+				return match[3] + "." + match[2] + "." + match[1];
+			}
+
+			function buildRowTooltip(row) {
+				if (!row) return "";
+				var fileNameEl = row.querySelector(".cmx-kl-file-name");
+				var fromInput = row.querySelector(".cmx-kl-date-from");
+				var toInput = row.querySelector(".cmx-kl-date-to");
+				var fileName = fileNameEl ? (fileNameEl.textContent || "").trim() : "";
+				var fromValue = fromInput ? (fromInput.value || "").trim() : "";
+				var toValue = toInput ? (toInput.value || "").trim() : "";
+				var fromText = formatDateDisplay(fromValue);
+				var toText = formatDateDisplay(toValue);
+				if (!fromText && !toText) return fileName;
+				if (fromText && toText) return fromText + " - " + toText + " " + fileName;
+				if (fromText) return fromText + " - " + fileName;
+				return "- " + toText + " " + fileName;
+			}
+
+			function updateRowTooltip(row) {
+				if (!row) return;
+				var tooltip = buildRowTooltip(row);
+				var fileNameEl = row.querySelector(".cmx-kl-file-name");
+				var toggleBtn = row.querySelector(".cmx-kl-date-toggle");
+				var fromInput = row.querySelector(".cmx-kl-date-from");
+				var toInput = row.querySelector(".cmx-kl-date-to");
+				var hasDates = !!((fromInput && fromInput.value) || (toInput && toInput.value));
+				row.title = tooltip;
+				if (fileNameEl) fileNameEl.title = tooltip;
+				if (toggleBtn) {
+					toggleBtn.style.color = hasDates ? "#2271b1" : "#8c8f94";
+				}
+			}
+
+			function rowMatchesToday(row) {
+				if (!row || row.dataset.removed === "1") return false;
+				var fromInput = row.querySelector(".cmx-kl-date-from");
+				var toInput = row.querySelector(".cmx-kl-date-to");
+				var fromValue = fromInput ? (fromInput.value || "").trim() : "";
+				var toValue = toInput ? (toInput.value || "").trim() : "";
+				if (!fromValue && !toValue) return false;
+				if (fromValue && todayYmd < fromValue) return false;
+				if (toValue && todayYmd > toValue) return false;
+				return true;
+			}
+
+			function getActiveRow() {
+				var rows = visibleRows();
+				for (var i = 0; i < rows.length; i++) {
+					if (rowMatchesToday(rows[i])) return rows[i];
+				}
+				return rows.length ? rows[0] : null;
+			}
+
 			function updateHiddenState() {
 				var removedIds = [];
 				var orderIds = [];
@@ -663,9 +864,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 
 			function updatePreview() {
 				var previewUrl = hoveredPreviewUrl;
-				var rows = visibleRows();
-				if (!previewUrl && rows.length) {
-					previewUrl = rows[0].dataset.url || "";
+				var activeRow = getActiveRow();
+				if (!previewUrl && activeRow) {
+					previewUrl = activeRow.dataset.url || "";
 				}
 				if (!previewUrl) {
 					if (previewImage) {
@@ -717,7 +918,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 				var hasRemoved = !!(removeIdsField && removeIdsField.value);
 				var orderNow = currentOrderIds();
 				var orderChanged = orderNow.join("|") !== initialOrder.join("|");
-				saveWrap.style.display = (hasRemoved || orderChanged) ? "block" : "none";
+				var hasDateChanges = !!(changeStateField && changeStateField.value === "1");
+				saveWrap.style.display = (hasRemoved || orderChanged || hasDateChanges) ? "block" : "none";
 			}
 
 			function refreshState() {
@@ -786,6 +988,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 				if (!row || row.dataset.dragInit === "1") return;
 				row.dataset.dragInit = "1";
 
+				updateRowTooltip(row);
+
 				row.addEventListener("mouseenter", function(){
 					setRowHover(row, true);
 					setHoveredPreview(row);
@@ -840,6 +1044,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 					markChanged();
 					refreshState();
 				});
+
+				Array.prototype.slice.call(row.querySelectorAll(".cmx-kl-date-from, .cmx-kl-date-to")).forEach(function(input){
+					input.addEventListener("change", function(){
+						markChanged();
+						updateRowTooltip(row);
+						refreshState();
+					});
+				});
 			}
 
 			function submitForUpload() {
@@ -867,6 +1079,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 			if (fileList) {
 				Array.prototype.slice.call(fileList.querySelectorAll(".cmx-kl-file-row")).forEach(attachRowDnD);
 				fileList.addEventListener("click", function(e){
+					var dateToggleBtn = e.target.closest ? e.target.closest(".cmx-kl-date-toggle") : null;
+					if (dateToggleBtn) {
+						e.preventDefault();
+						var dateRow = dateToggleBtn.closest(".cmx-kl-file-row");
+						var panel = dateRow ? dateRow.querySelector(".cmx-kl-date-panel") : null;
+						if (panel) {
+							panel.style.display = panel.style.display === "none" || panel.style.display === "" ? "block" : "none";
+						}
+						return;
+					}
+
 					var removeBtn = e.target.closest ? e.target.closest(".cmx-kl-remove-file") : null;
 					if (removeBtn) {
 						e.preventDefault();
@@ -1014,6 +1237,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 		}
 
 		$gallery = $ordered;
+	}
+
+	$date_from_map = isset($_POST['cmx_kl_date_from']) && \is_array($_POST['cmx_kl_date_from'])
+		? \wp_unslash($_POST['cmx_kl_date_from'])
+		: [];
+	$date_to_map = isset($_POST['cmx_kl_date_to']) && \is_array($_POST['cmx_kl_date_to'])
+		? \wp_unslash($_POST['cmx_kl_date_to'])
+		: [];
+	foreach ($gallery as $index => $item) {
+		$item_id = (string) ($item['id'] ?? '');
+		if ($item_id === '') {
+			continue;
+		}
+		$gallery[$index]['date_from'] = cmx_kl_sanitize_date_ymd($date_from_map[$item_id] ?? '');
+		$gallery[$index]['date_to']   = cmx_kl_sanitize_date_ymd($date_to_map[$item_id] ?? '');
 	}
 
 	$has_change_state = !empty($_POST['cmx_kl_change_state']);
