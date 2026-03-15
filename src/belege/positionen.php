@@ -2596,7 +2596,7 @@ function cmx_beleg_positionen_js() {
 			.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
 				padding-left:8px;
 				margin-left:33px;
-				width:calc(100% - 30px);
+				width:calc(100% - 20px);
 				max-width:none;
 			}
 			#cmx-positionen-table td.cmx-pos-qty-cell > input[type="text"]{
