@@ -2434,6 +2434,7 @@ function cmx_beleg_positionen_js() {
 					}
 					#cmx-positionen-table th:first-child{
 						width:36%;
+						padding-left:20px;
 					}
 					#cmx-positionen-table th:nth-child(3),
 					#cmx-positionen-table td:nth-child(3),
