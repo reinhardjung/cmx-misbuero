@@ -254,7 +254,7 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 	if ($count <= 0) {
 		$max_idx = -1;
 		foreach (\array_keys((array)\get_post_meta($post_id)) as $meta_key) {
-			if (\preg_match('/^_cmx_art_lieferant_(\d+)_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)$/', (string)$meta_key, $m)) {
+			if (\preg_match('/^_cmx_art_lieferant_(\d+)_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/', (string)$meta_key, $m)) {
 				$max_idx = max($max_idx, (int)$m[1]);
 			}
 		}
@@ -268,7 +268,8 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 			$rurl = \trim((string)\get_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'bezugsquelle'), true));
 			$rltage = max(0, (int)\get_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lieferzeit_tage'), true));
 			$rlager = max(0, (int)\get_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lagerbestand'), true));
-			if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0) continue;
+			$rnotiz = \trim((string)\get_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'notiz'), true));
+			if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0 && $rnotiz === '') continue;
 			$rows[] = [
 				'lieferant_id' => max(0, $rid),
 				'lieferant_nr' => $rnr,
@@ -276,6 +277,7 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 				'bezugsquelle' => $rurl,
 				'lieferzeit_tage' => $rltage,
 				'lagerbestand' => $rlager,
+				'notiz' => $rnotiz,
 			];
 		}
 		if (!empty($rows)) return $rows;
@@ -302,11 +304,12 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 		$rurl = \trim((string)($row['bezugsquelle'] ?? ''));
 		$has_ltage = \array_key_exists('lieferzeit_tage', $row) || \array_key_exists('lieferzeit', $row);
 		$has_lager = \array_key_exists('lagerbestand', $row);
+		$rnotiz = \sanitize_textarea_field((string)($row['notiz'] ?? ''));
 		$rltage = $has_ltage ? (int)($row['lieferzeit_tage'] ?? $row['lieferzeit'] ?? 0) : (($row_idx === 0) ? $legacy_ltage : 0);
 		$rlager = $has_lager ? (int)($row['lagerbestand'] ?? 0) : (($row_idx === 0) ? $legacy_lager : 0);
 		$rltage = max(0, $rltage);
 		$rlager = max(0, $rlager);
-		if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0) continue;
+		if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0 && $rnotiz === '') continue;
 		$rows[] = [
 			'lieferant_id' => max(0, $rid),
 			'lieferant_nr' => $rnr,
@@ -314,6 +317,7 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 			'bezugsquelle' => $rurl,
 			'lieferzeit_tage' => $rltage,
 			'lagerbestand' => $rlager,
+			'notiz' => $rnotiz,
 		];
 	}
 	if (!empty($rows)) return $rows;
@@ -326,13 +330,14 @@ function cmx_artikel_load_lieferanten_rows_unified(int $post_id): array {
 			'bezugsquelle' => $legacy_quelle,
 			'lieferzeit_tage' => max(0, $legacy_ltage),
 			'lagerbestand' => max(0, $legacy_lager),
+			'notiz' => '',
 		]];
 	}
 	return [];
 }
 function cmx_artikel_save_lieferanten_rows_unified(int $post_id, array $rows): void {
 	foreach (\array_keys((array)\get_post_meta($post_id)) as $meta_key) {
-		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)$/', (string)$meta_key)) {
+		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/', (string)$meta_key)) {
 			\delete_post_meta($post_id, $meta_key);
 		}
 	}
@@ -349,13 +354,15 @@ function cmx_artikel_save_lieferanten_rows_unified(int $post_id, array $rows): v
 		$rurl = cmx_normalize_url_for_label_unified($rurl);
 		$rltage = max(0, (int)($row['lieferzeit_tage'] ?? 0));
 		$rlager = max(0, (int)($row['lagerbestand'] ?? 0));
-		if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0) continue;
+		$rnotiz = \sanitize_textarea_field((string)($row['notiz'] ?? ''));
+		if ($rid <= 0 && $rnr === '' && $rek === null && $rurl === '' && $rltage === 0 && $rlager === 0 && $rnotiz === '') continue;
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'id'), $rid);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'nr'), $rnr);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'ek'), ($rek === null ? '' : \number_format($rek, 2, '.', '')));
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'bezugsquelle'), $rurl);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lieferzeit_tage'), $rltage);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lagerbestand'), $rlager);
+		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'notiz'), $rnotiz);
 		$i++;
 	}
 	\update_post_meta($post_id, '_cmx_art_lieferanten_count', $i);
@@ -372,6 +379,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			'bezugsquelle' => '',
 			'lieferzeit_tage' => 0,
 			'lagerbestand' => 0,
+			'notiz' => '',
 		];
 	}
 
@@ -411,6 +419,9 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open.is-disabled,
 	#cmx-artikel-lieferanten-table .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
+	#cmx-artikel-lieferanten-table .cmx-lief-note-row td{padding-top:0;padding-bottom:10px;background:#fff}
+	#cmx-artikel-lieferanten-table .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 4px}
+	#cmx-artikel-lieferanten-table .cmx-lief-note{width:100%;min-height:72px;resize:vertical;box-sizing:border-box}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
 	.cmx-lief-actions{margin-top:8px}
 	</style>';
@@ -436,6 +447,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		$r_quelle_open = cmx_normalize_url_for_label_unified($r_quelle);
 		$r_ltage = max(0, (int)($row['lieferzeit_tage'] ?? 0));
 		$r_lager = max(0, (int)($row['lagerbestand'] ?? 0));
+		$r_notiz = (string)($row['notiz'] ?? '');
 		echo '<tr class="cmx-lief-item-row">';
 		echo '<td><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><select name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="widefat cmx-lief-supplier"><option value="0" data-edit="">— auswählen —</option>';
 		if ($lieferanten_posts) {
@@ -452,6 +464,12 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
 		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
 		echo '<td style="text-align:center;"><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></td>';
+		echo '</tr>';
+		echo '<tr class="cmx-lief-note-row">';
+		echo '<td colspan="7">';
+		echo '<label class="cmx-lief-note-label" for="cmx_artikel_lieferanten_notiz_' . (int)$i . '">Notizen</label>';
+		echo '<textarea id="cmx_artikel_lieferanten_notiz_' . (int)$i . '" name="cmx_artikel_lieferanten['.(int)$i.'][notiz]" class="cmx-lief-note">' . \esc_textarea($r_notiz) . '</textarea>';
+		echo '</td>';
 		echo '</tr>';
 	}
 
@@ -495,11 +513,26 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		return "https://"+u.replace(/^\/+/, "");
 	}
 	function reindex(){
-		document.querySelectorAll("#cmx-artikel-lieferanten-table tbody tr").forEach(function(r,i){
+		var rowIndex = 0;
+		document.querySelectorAll("#cmx-artikel-lieferanten-table tbody tr").forEach(function(r){
+			if(r.classList.contains("cmx-lief-item-row")){
+				rowIndex++;
+			}
+			var currentIndex = Math.max(0, rowIndex - 1);
 			r.querySelectorAll("input,select,textarea").forEach(function(el){
 				var name=el.getAttribute("name")||"";
 				if(!name) return;
-				el.setAttribute("name", name.replace(/\[\d+\]/, "["+i+"]"));
+				el.setAttribute("name", name.replace(/\[\d+\]/, "["+currentIndex+"]"));
+			});
+			r.querySelectorAll("label[for]").forEach(function(el){
+				var val = el.getAttribute("for") || "";
+				el.setAttribute("for", val.replace(/_\d+$/, "_" + currentIndex));
+			});
+			r.querySelectorAll("[id]").forEach(function(el){
+				var val = el.getAttribute("id") || "";
+				if(/^cmx_artikel_lieferanten_notiz_\d+$/.test(val)){
+					el.setAttribute("id", val.replace(/_\d+$/, "_" + currentIndex));
+				}
 			});
 		});
 	}
@@ -582,9 +615,11 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	var add=document.getElementById("cmx-artikel-lieferanten-add");
 	if(tbody && add){
 		add.addEventListener("click", function(){
-			var tpl=tbody.querySelector("tr");
+			var tpl=tbody.querySelector("tr.cmx-lief-item-row");
 			if(!tpl) return;
+			var tplNote=tpl.nextElementSibling && tpl.nextElementSibling.classList.contains("cmx-lief-note-row") ? tpl.nextElementSibling : null;
 			var row=tpl.cloneNode(true);
+			var noteRow=tplNote ? tplNote.cloneNode(true) : null;
 			row.querySelectorAll("*").forEach(function(el){
 				delete el.dataset.cmxSelBound;
 				delete el.dataset.cmxEkBound;
@@ -593,7 +628,11 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			});
 			row.querySelectorAll("input").forEach(function(i){ i.value=""; });
 			row.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+			if(noteRow){
+				noteRow.querySelectorAll("textarea").forEach(function(t){ t.value=""; });
+			}
 			tbody.appendChild(row);
+			if(noteRow) tbody.appendChild(noteRow);
 			reindex();
 			bindSelect(row);
 			bindEkFormat(row);
@@ -604,18 +643,24 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		tbody.addEventListener("click", function(e){
 			var btn=e.target.closest(".cmx-lief-del");
 			if(!btn) return;
-			var rows=tbody.querySelectorAll("tr");
+			var rows=tbody.querySelectorAll("tr.cmx-lief-item-row");
 			if(rows.length<=1){
-				var r=rows[0];
+				var r=tbody.querySelector("tr.cmx-lief-item-row");
 				if(!r) return;
 				r.querySelectorAll("input").forEach(function(i){ i.value=""; });
 				r.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+				var note=r.nextElementSibling && r.nextElementSibling.classList.contains("cmx-lief-note-row") ? r.nextElementSibling : null;
+				if(note){ note.querySelectorAll("textarea").forEach(function(t){ t.value=""; }); }
 				r.querySelectorAll("select.cmx-lief-supplier").forEach(function(s){ s.dispatchEvent(new Event("change")); });
 				r.querySelectorAll("input.cmx-lief-url").forEach(function(i){ i.dispatchEvent(new Event("input")); });
 				return;
 			}
 			var tr=btn.closest("tr");
-			if(tr) tr.remove();
+			if(tr){
+				var noteRow=tr.nextElementSibling && tr.nextElementSibling.classList.contains("cmx-lief-note-row") ? tr.nextElementSibling : null;
+				tr.remove();
+				if(noteRow) noteRow.remove();
+			}
 			reindex();
 		});
 	}
@@ -649,6 +694,7 @@ HTML;
 		$rurl = cmx_normalize_url_for_label_unified($rurl);
 		$rltage = isset($row['lieferzeit_tage']) ? max(0, (int)$row['lieferzeit_tage']) : 0;
 		$rlager = isset($row['lagerbestand']) ? max(0, (int)$row['lagerbestand']) : 0;
+		$rnotiz = isset($row['notiz']) ? \sanitize_textarea_field((string)$row['notiz']) : '';
 
 		$rid_valid = 0;
 		if ($rid > 0 && $allowed_ids && \in_array($rid, $allowed_ids, true)) {
@@ -658,7 +704,7 @@ HTML;
 			if ($p && $kontakt_pt && $p->post_type === $kontakt_pt) $rid_valid = $rid;
 		}
 
-		if ($rid_valid <= 0 && $rnr === '' && $rek_num === null && $rurl === '' && $rltage === 0 && $rlager === 0) continue;
+		if ($rid_valid <= 0 && $rnr === '' && $rek_num === null && $rurl === '' && $rltage === 0 && $rlager === 0 && $rnotiz === '') continue;
 		$rows_out[] = [
 			'lieferant_id' => $rid_valid,
 			'lieferant_nr' => $rnr,
@@ -666,6 +712,7 @@ HTML;
 			'bezugsquelle' => $rurl,
 			'lieferzeit_tage' => $rltage,
 			'lagerbestand' => $rlager,
+			'notiz' => $rnotiz,
 		];
 	}
 	cmx_artikel_save_lieferanten_rows_unified($post_id, $rows_out);
