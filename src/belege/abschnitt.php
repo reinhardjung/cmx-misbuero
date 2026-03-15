@@ -153,10 +153,15 @@ function cmx_beleg_abschnitt_admin_footer(): void {
 				position: relative;
 				padding-right: 78px !important;
 			}
+			#cmx-positionen-table .cmx-pos-row-abschnitt > td.cmx-pos-abschnitt-cell > .cmx-abschnitt-controls,
+			#cmx-positionen-table .cmx-pos-row-abschnitt > td.cmx-pos-abschnitt-cell > .cmx-abschnitt-titel,
+			#cmx-positionen-table .cmx-pos-row-abschnitt > td.cmx-pos-abschnitt-cell > .cmx-abschnitt-text-wrap{
+				transform: translateX(11px);
+			}
 			#cmx-positionen-table .cmx-abschnitt-controls{
 				position:absolute;
 				top:0;
-				right:16px;
+				right:26px;
 				display:flex;
 				align-items:flex-start;
 				gap:4px;
