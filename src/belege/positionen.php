@@ -976,11 +976,11 @@ aria-label="Textbausteine bearbeiten"
 title="Textbausteine im neuen Tab bearbeiten"
 target="_blank"
 rel="noopener noreferrer">
-<span style="display:inline-block; transform:translateY(5px);">✎</span>
+<span style="display:inline-block; transform:translateY(12px);">✎</span>
 </a>';
 
 	}
-	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%;height:38px;min-height:38px;resize:none;overflow-y:hidden;line-height:1.4;">'.$beschreibung.'</textarea>';
+	echo '<textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%;height:38px;min-height:38px;resize:vertical;overflow-y:auto;line-height:1.4;">'.$beschreibung.'</textarea>';
 	echo '</td>';
 	echo '<td class="cmx-pos-controls">';
 	echo '<span class="cmx-pos-drag-handle" title="Zeile verschieben" aria-label="Zeile verschieben">↕</span>';
@@ -2431,10 +2431,10 @@ function cmx_beleg_positionen_js() {
 					#cmx-positionen-table td:first-child{
 						padding-left:0;
 						padding-right:6px;
+						width:calc(36% - 80px);
 					}
 					#cmx-positionen-table th:first-child{
-						width:36%;
-						padding-left:20px;
+						padding-left:45px;
 					}
 					#cmx-positionen-table th:nth-child(3),
 					#cmx-positionen-table td:nth-child(3),
@@ -2449,10 +2449,18 @@ function cmx_beleg_positionen_js() {
 					#cmx-positionen-table td.cmx-pos-qty-cell{
 						white-space:nowrap;
 						min-width:206px;
+						padding-left:12px;
+						padding-right:0;
+					}
+					#cmx-positionen-table th:nth-child(3),
+					#cmx-positionen-table td:nth-child(3){
+						padding-left:0;
+						transform:translateX(-5px);
 					}
 					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-menge{
 						display:inline-block;
 						width:90px;
+						margin-left:12px;
 					}
 					#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-einheit{
 						display:inline-block;
@@ -2466,15 +2474,17 @@ function cmx_beleg_positionen_js() {
 					}
 					#cmx-positionen-table td:nth-child(3) input,
 					#cmx-positionen-table td:nth-child(4) input{
-						width:88px !important;
-						min-width:88px;
+						width:83px !important;
+						min-width:83px;
 						box-sizing:border-box;
 					}
 					#cmx-positionen-table td textarea { resize: vertical; }
 					#cmx-positionen-table td.cmx-pos-beschr-cell{
 						position:relative;
-					padding-left:26px;
-				}
+						padding-left:26px;
+						width:calc(18% + 10px);
+						min-width:170px;
+					}
 				#cmx-positionen-table .cmx-textbaustein-edit{
 					position:absolute;
 					left:6px;
@@ -2494,7 +2504,7 @@ function cmx_beleg_positionen_js() {
 				width:1%;
 				text-align:right;
 				vertical-align:top;
-				padding-left:2px;
+				padding-left:12px;
 				padding-right:0;
 			}
 			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos,
@@ -2502,7 +2512,10 @@ function cmx_beleg_positionen_js() {
 			#cmx-positionen-table .cmx-pos-controls .cmx-section-drag-handle{
 				vertical-align:top;
 			}
-			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos{ margin-left:4px; }
+			#cmx-positionen-table .cmx-pos-controls .cmx-del-pos{
+				margin-left:4px;
+				margin-right:10px;
+			}
 			#cmx-positionen-table .cmx-pos-drag-handle{
 				cursor:move;
 				display:inline-flex;
@@ -2560,19 +2573,34 @@ function cmx_beleg_positionen_js() {
 			}
 			.cmx-artikel-edit{
 				position:absolute;
-			left:6px;
-			top:50%;
-			transform:translateY(-50%);
-			text-decoration:none;
-			font-size:12px;
-			color:#2271b1;
-			padding-right:6px;
-		}
-		.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
-			padding-left:8px;
-			margin-left:16px;
-			width: calc(100% - 16px);
-		}
+				left:26px;
+				top:50%;
+				transform:translateY(-50%);
+				display:inline-block;
+				width:12px;
+				text-align:center;
+				text-decoration:none;
+				font-size:12px;
+				color:#2271b1;
+			}
+			.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
+				padding-left:8px;
+				margin-left:43px;
+				width:calc(100% - 53px);
+			}
+			#cmx-positionen-table td.cmx-pos-qty-cell > input[type="text"]{
+				margin-left:12px;
+			}
+			#cmx-positionen-table th.cmx-pos-qty-head .cmx-pos-qty-head-einheit{
+				width:110px;
+			}
+			#cmx-positionen-table td.cmx-pos-qty-cell .cmx-einheit-select{
+				width:110px;
+				max-width:44%;
+			}
+			.cmx-pos-actions{
+				margin:10px 0 15px 20px;
+			}
 	</style>
 	<?php
 }

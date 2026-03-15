@@ -574,10 +574,7 @@ add_action('admin_head', function() {
 	echo '<style>
 
 	/* Allgemein */
-	.wrap,
-	#wpbody-content {
-		background: #f6f7fb;
-	}
+	/* .wrap, #wpbody-content { background: #f6f7fb; } */
 
 	/* Metabox moderner */
 	.postbox {
