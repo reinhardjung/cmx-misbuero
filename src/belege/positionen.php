@@ -839,7 +839,7 @@ function cmx_render_beleg_positionen(\WP_Post $post) {
 					<th>&nbsp;&nbsp;Einzelpreis</th>
 					<th>&nbsp;&nbsp;Rabatt</th>
 					<th style="text-align:right;">Gesamt</th>
-					<th style="padding-left:1px;">zus&auml;tzliche Notiz</th>
+					<th style="padding-left:25px;">zus&auml;tzliche Notiz</th>
 				<th></th>
 			</tr></thead>
 			<tbody>';
@@ -929,14 +929,14 @@ function cmx_render_position_row($i, $pos) {
 
 	echo '<tr class="cmx-pos-row">';
 
-	echo '<td style="min-width:320px">';
+	echo '<td style="min-width:290px">';
 	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
 	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_idx]" class="cmx-task-idx" value="'.($task_idx === null ? '' : esc_attr((string) $task_idx)).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_uid]" class="cmx-task-uid" value="'.esc_attr($task_uid).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_projekt_id]" class="cmx-task-projekt-id" value="'.($task_projekt_id === null ? '' : esc_attr((string) $task_projekt_id)).'">';
-	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off" style="width:100%">';
+	echo '<input type="text" class="regular-text cmx-artikel-autocomplete" data-cmx-help-key="beleg_artikel_suche" placeholder="Artikel suchen …" title="Artikel suchen" value="'.esc_attr($display).'" autocomplete="off">';
 	echo '</td>';
 
 	// negative Mengen zulassen (Komma/Punkt erlaubt) + Einheit
@@ -965,7 +965,7 @@ function cmx_render_position_row($i, $pos) {
 	$preis_f = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($preis);
 	$total_init = $menge_f * $preis_f;
 
-	echo '<td class="cmx-pos-total" style="width:78px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
+	echo '<td class="cmx-pos-total" style="width:98px;text-align:right;">'.esc_html(cmx_format_swiss_number($total_init, 2)).'</td>';
 
 	echo '<td class="cmx-pos-beschr-cell">';
 	if ($textbaustein_edit_url !== '') {
@@ -2431,10 +2431,10 @@ function cmx_beleg_positionen_js() {
 					#cmx-positionen-table td:first-child{
 						padding-left:0;
 						padding-right:6px;
-						width:calc(36% - 80px);
+						width:calc(36% - 140px);
 					}
 					#cmx-positionen-table th:first-child{
-						padding-left:45px;
+						padding-left:35px;
 					}
 					#cmx-positionen-table th:nth-child(3),
 					#cmx-positionen-table td:nth-child(3),
@@ -2477,6 +2477,11 @@ function cmx_beleg_positionen_js() {
 						width:83px !important;
 						min-width:83px;
 						box-sizing:border-box;
+					}
+					#cmx-positionen-table th:nth-child(5),
+					#cmx-positionen-table td.cmx-pos-total{
+						width:98px;
+						min-width:98px;
 					}
 					#cmx-positionen-table td textarea { resize: vertical; }
 					#cmx-positionen-table td.cmx-pos-beschr-cell{
@@ -2573,7 +2578,7 @@ function cmx_beleg_positionen_js() {
 			}
 			.cmx-artikel-edit{
 				position:absolute;
-				left:26px;
+				left:16px;
 				top:50%;
 				transform:translateY(-50%);
 				display:inline-block;
@@ -2585,8 +2590,9 @@ function cmx_beleg_positionen_js() {
 			}
 			.cmx-pos-row td:first-child .cmx-artikel-autocomplete{
 				padding-left:8px;
-				margin-left:43px;
-				width:calc(100% - 53px);
+				margin-left:33px;
+				width:calc(100% - 50px);
+				max-width:none;
 			}
 			#cmx-positionen-table td.cmx-pos-qty-cell > input[type="text"]{
 				margin-left:12px;
