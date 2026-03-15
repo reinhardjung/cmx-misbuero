@@ -931,7 +931,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	if ($addr_text === '' && $kontakt_id) {
 		$addr_text = cmx_build_kontakt_postanschrift($kontakt_id);
 	}
-	echo '<p><label><strong>Postanschrift</strong></label><br>';
+	echo '<p><label id="cmx_label_postanschrift" style="cursor:pointer;color:#2271b1;text-decoration:none;" title="Diese Adresse in Google Maps im neuen Tab öffnen"><strong>Postanschrift</strong></label><br>';
 	echo '<textarea id="cmx_kontakt_addr" name="cmx_kontakt_addr" class="cmx-addr" rows="5">'.\esc_textarea($addr_text).'</textarea></p>';
 
 	/* Inline JS */
@@ -991,9 +991,27 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 						openInNewTab(this.getAttribute("data-list") || listUrl || "#");
 					});
 				}
+				function wireMapsLabel(lblId, textareaId){
+					const lbl=document.getElementById(lblId);
+					const field=document.getElementById(textareaId);
+					if(!lbl || !field) return;
+					lbl.addEventListener("click", function(e){
+						e.preventDefault();
+						const query=(field.value||"")
+							.replace(/\s*\n+\s*/g, ", ")
+							.replace(/\s{2,}/g, " ")
+							.trim();
+						if(!query){
+							field.focus();
+							return;
+						}
+						openInNewTab("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query));
+					});
+				}
 			var editPrefix=' . \wp_json_encode($edit_post_prefix) . ';
 			wireLabel("cmx_label_projekt","cmx_projekt_id","edit.php?post_type=projekte", editPrefix);
 			wireLabel("cmx_label_kontakt","cmx_kontakt_id","edit.php?post_type=kontakte", editPrefix);
+			wireMapsLabel("cmx_label_postanschrift","cmx_kontakt_addr");
 
 				const betInput=document.getElementById("cmx_beleg_betreff");
 				const beschInput=document.getElementById("cmx_beleg_beschreibung");
