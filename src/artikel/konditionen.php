@@ -214,7 +214,19 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			const vkSuggestion = selbstkosten + (selbstkosten * defaultDeckungsbeitragPercent / 100);
 			vk.value = formatCH(vkSuggestion);
 			recalcDerived();
+			setTimeout(function(){
+				try { vk.focus(); vk.select(); } catch(e) {}
+			}, 0);
 			return true;
+		}
+
+		function maybeSuggestVkOnEmpty() {
+			if (!vk) return false;
+			const raw = (vk.value ?? "").toString().trim();
+			if (raw !== "" && num(raw) !== 0) {
+				return false;
+			}
+			return suggestVkFromDefaults();
 		}
 
 		function enableAutoSelect(el) {
@@ -256,11 +268,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			});
 		}
 		if (vk) {
-			vk.addEventListener("click", function(){
-				const raw = (vk.value ?? "").toString().trim();
-				if (raw === "" || num(raw) === 0) {
-					suggestVkFromDefaults();
-				}
+			vk.addEventListener("mousedown", function(){
+				maybeSuggestVkOnEmpty();
+			});
+			vk.addEventListener("focus", function(){
+				maybeSuggestVkOnEmpty();
 			});
 		}
 
