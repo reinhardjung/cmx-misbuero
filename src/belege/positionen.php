@@ -2001,7 +2001,7 @@ function cmx_beleg_positionen_js() {
 
 				const $cell = $input.closest('td');
 				if($cell.css('position')==='static'){ $cell.css('position','relative'); }
-				const $ul = $('<ul class="cmx-art-suggest" style="display:none"></ul>');
+				const $ul = $('<ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul>');
 				$input.after($ul);
 
 				const nav = makeNavigator($input[0], $ul[0], chooseItem);
@@ -2407,7 +2407,8 @@ function cmx_beleg_positionen_js() {
 			.cmx-art-suggest{ position:absolute; z-index:100000; left:0; right:0; max-height:280px; overflow:auto; margin:2px 0 0; padding:0; border:1px solid #ccd0d4; background:#fff; list-style:none; }
 			.cmx-art-suggest li{ margin:0; padding:0; cursor:pointer; }
 			.cmx-art-suggest li.active, .cmx-art-suggest li:hover{ background:#e5f3ff; }
-			.cmx-task-picker-wrap{ position:relative; z-index:100001; display:inline-block; margin-left:8px; }
+			.cmx-artikel-suggest{ transform:translateX(20px); width:calc(100% + 50px); right:auto; }
+			.cmx-task-picker-wrap{ position:relative; display:inline-block; margin-left:8px; }
 			.cmx-task-picker-panel{
 				position:absolute;
 				top:0;
