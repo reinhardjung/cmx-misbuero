@@ -1117,6 +1117,99 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_generate_pdf')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_auto_mail_enabled')) {
+	function cmx_woocommerce_auto_mail_enabled(): bool {
+		return cmx_woocommerce_normalize_checkbox(cmx_woocommerce_get_setting('misbuero_auto_mail', '0')) === '1';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_auto_mail_sent_meta_key')) {
+	function cmx_woocommerce_auto_mail_sent_meta_key(): string {
+		return '_cmx_wc_auto_mail_sent';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_auto_mail_sent_at_meta_key')) {
+	function cmx_woocommerce_auto_mail_sent_at_meta_key(): string {
+		return '_cmx_wc_auto_mail_sent_at';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_auto_mail_error_meta_key')) {
+	function cmx_woocommerce_auto_mail_error_meta_key(): string {
+		return '_cmx_wc_auto_mail_error';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_auto_mail_recipient_meta_key')) {
+	function cmx_woocommerce_auto_mail_recipient_meta_key(): string {
+		return '_cmx_wc_auto_mail_to';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_maybe_send_auto_mail')) {
+	function cmx_woocommerce_maybe_send_auto_mail(int $beleg_id): array {
+		if ($beleg_id <= 0) {
+			return [
+				'enabled' => false,
+				'status'  => 'skipped',
+			];
+		}
+
+		if (!cmx_woocommerce_auto_mail_enabled()) {
+			return [
+				'enabled' => false,
+				'status'  => 'disabled',
+			];
+		}
+
+		if ((string) \get_post_meta($beleg_id, cmx_woocommerce_auto_mail_sent_meta_key(), true) === '1') {
+			return [
+				'enabled'   => true,
+				'status'    => 'already_sent',
+				'recipient' => (string) \get_post_meta($beleg_id, cmx_woocommerce_auto_mail_recipient_meta_key(), true),
+			];
+		}
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+			require_once __DIR__ . '/meta_action_send.php';
+		}
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+			return [
+				'enabled' => true,
+				'status'  => 'unavailable',
+			];
+		}
+
+		$result = cmxbu_send_beleg_mail($beleg_id, ['regenerate_pdf' => false]);
+		if (\is_wp_error($result)) {
+			$message = \trim((string) $result->get_error_message());
+			\update_post_meta($beleg_id, cmx_woocommerce_auto_mail_sent_meta_key(), '0');
+			\update_post_meta($beleg_id, cmx_woocommerce_auto_mail_error_meta_key(), $message);
+
+			return [
+				'enabled' => true,
+				'status'  => 'failed',
+				'code'    => (string) $result->get_error_code(),
+				'message' => $message,
+			];
+		}
+
+		$recipient = \sanitize_email((string) ($result['to'] ?? ''));
+		\update_post_meta($beleg_id, cmx_woocommerce_auto_mail_sent_meta_key(), '1');
+		\update_post_meta($beleg_id, cmx_woocommerce_auto_mail_sent_at_meta_key(), (string) \current_time('mysql'));
+		\update_post_meta($beleg_id, cmx_woocommerce_auto_mail_recipient_meta_key(), $recipient);
+		\delete_post_meta($beleg_id, cmx_woocommerce_auto_mail_error_meta_key());
+
+		return [
+			'enabled'   => true,
+			'status'    => 'sent',
+			'recipient' => $recipient,
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 	function cmx_woocommerce_import_order(array $order, string $topic = ''): array {
 		$order_id = (int) ($order['id'] ?? 0);
@@ -1209,8 +1302,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 		cmx_woocommerce_assign_rechnung_term($beleg_id);
 		$invoice_no = cmx_woocommerce_finalize_beleg($beleg_id, $created);
 		cmx_woocommerce_generate_pdf($beleg_id);
+		$auto_mail = cmx_woocommerce_maybe_send_auto_mail($beleg_id);
 
-		return [
+		$response = [
 			'success'           => true,
 			'beleg_id'          => $beleg_id,
 			'created'           => $created,
@@ -1222,6 +1316,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 				: cmx_woocommerce_webhook_url(),
 			'woocommerce_order' => $order_id,
 		];
+
+		if (!empty($auto_mail['enabled'])) {
+			$response['auto_mail'] = $auto_mail;
+		}
+
+		return $response;
 	}
 }
 

@@ -50,6 +50,222 @@ function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
 	// }
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+	function cmxbu_send_beleg_mail(int $post_id, array $args = []) {
+		$args = \wp_parse_args($args, [
+			'regenerate_pdf' => true,
+		]);
+
+		$post = \get_post($post_id);
+		if (!$post || $post->post_type !== 'belege') {
+			return new \WP_Error('beleg_not_found', 'Beleg nicht gefunden.');
+		}
+
+		$opts_general = (array) \get_option('cmx_einstellungen', []);
+		$configured_sender = \sanitize_email((string) ($opts_general['email_address'] ?? ''));
+		if (!\is_email($configured_sender)) {
+			return new \WP_Error('missing_sender', 'Bitte hinterlege zuerst Deine E-Mail-Adresse.');
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: start', ['post_id' => $post_id, 'source' => 'shared_send']);
+		}
+
+		$beleg_id = (string) ($post->post_title ?? '');
+
+		if (!empty($args['regenerate_pdf']) && \current_user_can('edit_post', $post_id) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+			cmxbu_generate_document_on_save($post_id, $post, true);
+		}
+
+		[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+		if (!\is_file($pdf_abs_path)) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+				cmxbu_log('MAIL: pdf not found', ['post_id' => $post_id, 'pdf' => $pdf_abs_path]);
+			}
+
+			return new \WP_Error('missing_pdf', 'PDF nicht gefunden.');
+		}
+
+		$token = cmxbu_get_stable_token($post_id);
+		$download_url = \add_query_arg('beleg', $token, \home_url('/'));
+
+		$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+		if ($kontakt_id <= 0) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+				cmxbu_log('MAIL: missing kontakt_id', ['post_id' => $post_id]);
+			}
+
+			return new \WP_Error('missing_kontakt', 'Kontakt / Adresse fehlt.');
+		}
+
+		$to = \function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')
+			? (string) cmxbu_get_contact_primary_email($kontakt_id)
+			: (string) \get_post_meta($kontakt_id, '_cmx_email_1', true);
+
+		$anrede_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+			? CMX_KONTAKTE_META_ANREDE
+			: '_cmx_kontakte_anrede';
+		$anrede = \trim((string) \get_post_meta($kontakt_id, $anrede_key, true));
+		$vorname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+		$nachname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		$faellig_bis = cmxbu_get_beleg_due_date_display($post_id);
+		$betrag = cmxbu_get_beleg_mail_amount_display($post_id);
+
+		$to = \sanitize_email($to);
+		if ($to === '' || !\is_email($to)) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+				cmxbu_log('MAIL: invalid email', ['post_id' => $post_id, 'email' => (string) $to]);
+			}
+
+			return new \WP_Error('invalid_recipient', 'Keine gültige Empfänger-E-Mailadresse hinterlegt.');
+		}
+
+		[, $beleg_slug] = cmx_get_beleg_type($post);
+		$beleg_label = [
+			'rechnung'     => 'Rechnung',
+			'offerte'      => 'Offerte',
+			'lieferschein' => 'Lieferschein',
+			'gutschrift'   => 'Gutschrift',
+		][$beleg_slug] ?? ($beleg_slug !== '' ? \ucfirst($beleg_slug) : 'Beleg');
+		$subject = $beleg_label . ': ' . $beleg_id;
+		$beleg_mail_date = cmxbu_get_mail_subject_beleg_date($post_id);
+		if ($beleg_mail_date !== '') {
+			$subject .= ' vom ' . $beleg_mail_date;
+		}
+
+		$catalog_url = \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
+			? \home_url('/katalog/')
+			: '';
+		$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+		$custom_has_anrede_token = $custom_message !== ''
+			&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
+			&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
+		$message = cmxbu_render_belegmail_template([
+			'anrede' => $anrede,
+			'vorname' => $vorname,
+			'nachname' => $nachname,
+			'kontakt_id' => $kontakt_id,
+			'beleg_label' => $beleg_label,
+			'beleg_id' => $beleg_id,
+			'beleg_date' => $beleg_mail_date,
+			'download_url' => $download_url,
+			'faellig_bis' => $faellig_bis,
+			'betrag' => $betrag,
+			'site_name' => \get_bloginfo('name'),
+			'catalog_url' => $catalog_url,
+			'custom_content' => $custom_message,
+		]);
+		if ($faellig_bis !== '') {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{faellig_bis}', \esc_html($faellig_bis));
+		}
+		if ($betrag !== '') {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{betrag}', \esc_html($betrag));
+		}
+		if ($beleg_mail_date !== '') {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', \esc_html($beleg_mail_date));
+		}
+		$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
+			? (string) cmxbu_belegmail_salutation_text([
+				'anrede' => $anrede,
+				'vorname' => $vorname,
+				'nachname' => $nachname,
+			])
+			: '';
+		if (($custom_message === '' || $custom_has_anrede_token) && $anrede_text !== '') {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', \esc_html($anrede_text));
+		} elseif ($custom_has_anrede_token && \strpos($message, '{anrede}') !== false) {
+			$message = \str_replace('{anrede}', '', $message);
+		}
+		if (\strpos($message, '{logo}') !== false) {
+			$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
+				? (string) cmx_email_self_logo_block_html('margin:0 0 16px 0;')
+				: '';
+			$message = \str_replace('{logo}', $logo_html, $message);
+		}
+		$beleg_link = '<a href="' . \esc_url($download_url) . '">' . \esc_html($beleg_id) . '</a>';
+		if (\strpos($message, '{beleg}') !== false) {
+			$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
+		}
+
+		$headers = ['Content-Type: text/html; charset=UTF-8'];
+		$message = cmxbu_prepare_belegmail_html($message);
+		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
+		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+		$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
+		$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
+		$wp_mail_failed_message = '';
+		$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
+			if (!$error instanceof \WP_Error) {
+				return;
+			}
+			$msg = \trim((string) $error->get_error_message());
+			if ($msg === '') {
+				$all = \array_map('strval', (array) $error->get_error_messages());
+				$msg = \trim(\implode(' | ', \array_filter($all, static function (string $item): bool {
+					return $item !== '';
+				})));
+			}
+			$data = $error->get_error_data();
+			if (\is_array($data) && !empty($data['phpmailer_exception_code'])) {
+				$msg = $msg !== ''
+					? ($msg . ' (Code ' . (string) $data['phpmailer_exception_code'] . ')')
+					: ('PHPMailer-Fehler (Code ' . (string) $data['phpmailer_exception_code'] . ')');
+			}
+			$wp_mail_failed_message = $msg;
+		};
+		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
+		$GLOBALS['cmx_mail_context'] = 'beleg_send';
+		\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
+		try {
+			$sent = \wp_mail($to, $subject, $message, $headers);
+		} finally {
+			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
+			if ($had_sender_override) {
+				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
+			} else {
+				unset($GLOBALS['cmx_force_current_user_mail_sender']);
+			}
+			if ($had_mail_context) {
+				$GLOBALS['cmx_mail_context'] = $previous_mail_context;
+			} else {
+				unset($GLOBALS['cmx_mail_context']);
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+			cmxbu_log('MAIL: result', ['post_id' => $post_id, 'sent' => (bool) $sent, 'to' => (string) $to, 'subject' => (string) $subject]);
+		}
+
+		if (!$sent) {
+			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
+				cmxbu_log('MAIL: failed reason', ['post_id' => $post_id, 'reason' => (string) $wp_mail_failed_message]);
+			}
+
+			$error_message = \trim((string) $wp_mail_failed_message);
+			if ($error_message === '') {
+				$error_message = 'E-Mail konnte nicht gesendet werden.';
+			}
+
+			return new \WP_Error('mail_failed', $error_message, [
+				'post_id'    => $post_id,
+				'kontakt_id' => $kontakt_id,
+				'to'         => $to,
+				'subject'    => $subject,
+			]);
+		}
+
+		return [
+			'post_id'       => $post_id,
+			'kontakt_id'    => $kontakt_id,
+			'to'            => $to,
+			'subject'       => $subject,
+			'download_url'  => $download_url,
+			'beleg_label'   => $beleg_label,
+			'rechnungsnummer' => $beleg_id,
+		];
+	}
+}
+
 
 /**
  * Handler: Beleg per E-Mail versenden
@@ -71,222 +287,44 @@ function cmxbu_handle_beleg_send(): void {
 	if (!\is_string($redirect_base) || $redirect_base === '') {
 		$redirect_base = \admin_url('post.php?post=' . (int) $post_id . '&action=edit');
 	}
-	$opts_general = (array) \get_option('cmx_einstellungen', []);
-	$configured_sender = \sanitize_email((string) ($opts_general['email_address'] ?? ''));
-	if (!\is_email($configured_sender)) {
-		$redirect = \add_query_arg(
-			['cmx_beleg_mail_missing_sender' => '1'],
-			$redirect_base
-		);
-		\wp_safe_redirect($redirect);
-		exit;
-	}
-	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-		cmxbu_log('MAIL: start', ['post_id' => $post_id]);
-	}
-	$beleg_id = (string) ($post->post_title ?? '');
+	$result = \function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')
+		? cmxbu_send_beleg_mail($post_id, ['regenerate_pdf' => true])
+		: new \WP_Error('mail_unavailable', 'E-Mail-Versand ist aktuell nicht verfügbar.');
 
-	// Für Bearbeiter vor dem Versand neu generieren, damit aktuelle Berechnung/Layout gilt.
-	if (\current_user_can('edit_post', $post_id) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
-		cmxbu_generate_document_on_save($post_id, $post, true);
-	}
-
-	// PDF-Pfade
-	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
-	if (!is_file($pdf_abs_path)) {
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-			cmxbu_log('MAIL: pdf not found', ['post_id' => $post_id, 'pdf' => $pdf_abs_path]);
+	if (\is_wp_error($result)) {
+		$code = (string) $result->get_error_code();
+		if ($code === 'missing_sender') {
+			$redirect = \add_query_arg(
+				['cmx_beleg_mail_missing_sender' => '1'],
+				$redirect_base
+			);
+			\wp_safe_redirect($redirect);
+			exit;
 		}
-		\wp_die('PDF nicht gefunden.');
-	}
-
-	// Token → Download-Link
-	$token        = cmxbu_get_stable_token($post_id);
-	$download_url = \add_query_arg('beleg', $token, \home_url('/'));
-
-
-	/**
-	 * --------------------------
-	 * K O N T A K T   I D
-	 * warningsicher
-	 * --------------------------
-	 */
-	$kontakt_id = get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
-	if (empty($kontakt_id)) {
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-			cmxbu_log('MAIL: missing kontakt_id', ['post_id' => $post_id]);
+		if ($code === 'mail_failed') {
+			$args = ['cmx_beleg_mail_error' => '1'];
+			$error_message = \trim((string) $result->get_error_message());
+			if ($error_message !== '') {
+				$token = \wp_generate_password(12, false, false);
+				$key = 'cmx_beleg_mail_error_' . (int) \get_current_user_id() . '_' . $token;
+				\set_transient($key, \substr($error_message, 0, 400), 10 * MINUTE_IN_SECONDS);
+				$args['cmx_beleg_mail_error_token'] = $token;
+			}
+			\wp_safe_redirect(\add_query_arg($args, $redirect_base));
+			exit;
+		}
+		if ($code === 'missing_kontakt') {
+			\wp_safe_redirect(\get_edit_post_link($post_id, ''));
+			exit;
 		}
 
-		add_action('admin_notices', function () {
-			?>
-			<div class="notice notice-error is-dismissible">
-				<p><strong>Kontakt / Adresse fehlt.</strong></p>
-			</div>
-			<?php
-		});
-
-		\wp_safe_redirect(\get_edit_post_link($post_id, ''));
-		exit;
-	}
-
-
-	/**
-	 * E-Mail-Adresse des Kontakts
-	 */
-	$to = \get_post_meta($kontakt_id, '_cmx_email_1', true);
-
-	$anrede_key = defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
-		? CMX_KONTAKTE_META_ANREDE
-		: '_cmx_kontakte_anrede';
-	$anrede = trim((string) get_post_meta($kontakt_id, $anrede_key, true));
-	$vorname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
-	$nachname = trim((string) get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
-	$faellig_bis = cmxbu_get_beleg_due_date_display($post_id);
-	$betrag = cmxbu_get_beleg_mail_amount_display($post_id);
-
-	if (empty($to) || !\is_email($to)) {
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-			cmxbu_log('MAIL: invalid email', ['post_id' => $post_id, 'email' => (string) $to]);
-		}
-		\wp_die('Keine gültige Empfänger-E-Mailadresse hinterlegt.');
-	}
-	[, $beleg_slug] = cmx_get_beleg_type($post);
-	$beleg_label = [
-		'rechnung'     => 'Rechnung',
-		'offerte'      => 'Offerte',
-		'lieferschein' => 'Lieferschein',
-		'gutschrift'   => 'Gutschrift',
-	][$beleg_slug] ?? ($beleg_slug !== '' ? ucfirst($beleg_slug) : 'Beleg');
-	$subject = $beleg_label . ': ' . $beleg_id;
-	$beleg_mail_date = cmxbu_get_mail_subject_beleg_date($post_id);
-	if ($beleg_mail_date !== '') {
-		$subject .= ' vom ' . $beleg_mail_date;
-	}
-
-	$catalog_url = \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
-		? \home_url('/katalog/')
-		: '';
-	$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
-	$custom_has_anrede_token = $custom_message !== ''
-		&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
-		&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
-	$message = cmxbu_render_belegmail_template([
-		'anrede' => $anrede,
-		'vorname' => $vorname,
-		'nachname' => $nachname,
-		'kontakt_id' => (int) $kontakt_id,
-		'beleg_label' => $beleg_label,
-		'beleg_id' => $beleg_id,
-		'beleg_date' => $beleg_mail_date,
-		'download_url' => $download_url,
-		'faellig_bis' => $faellig_bis,
-		'betrag' => $betrag,
-		'site_name' => \get_bloginfo('name'),
-		'catalog_url' => $catalog_url,
-		'custom_content' => $custom_message,
-	]);
-	if ($faellig_bis !== '') {
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{faellig_bis}', esc_html($faellig_bis));
-	}
-	if ($betrag !== '') {
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{betrag}', esc_html($betrag));
-	}
-	if ($beleg_mail_date !== '') {
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', esc_html($beleg_mail_date));
-	}
-	$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
-		? (string) cmxbu_belegmail_salutation_text([
-			'anrede' => $anrede,
-			'vorname' => $vorname,
-			'nachname' => $nachname,
-		])
-		: '';
-	if (($custom_message === '' || $custom_has_anrede_token) && $anrede_text !== '') {
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', esc_html($anrede_text));
-	} elseif ($custom_has_anrede_token && \strpos($message, '{anrede}') !== false) {
-		$message = \str_replace('{anrede}', '', $message);
-	}
-	if (\strpos($message, '{logo}') !== false) {
-		$logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')
-			? (string) cmx_email_self_logo_block_html('margin:0 0 16px 0;')
-			: '';
-		$message = \str_replace('{logo}', $logo_html, $message);
-	}
-	$beleg_link = '<a href="' . esc_url($download_url) . '">' . esc_html($beleg_id) . '</a>';
-	if (strpos($message, '{beleg}') !== false) {
-		$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg}', $beleg_link);
-	}
-	// var_dump($message); exit;
-	// cmx_get_belegfuss($beleg_type);
-	$headers = ['Content-Type: text/html; charset=UTF-8'];
-	$message = cmxbu_prepare_belegmail_html($message);
-	$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
-	$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
-	$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
-	$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
-	$wp_mail_failed_message = '';
-	$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
-		if (!$error instanceof \WP_Error) {
-			return;
-		}
-		$msg = \trim((string) $error->get_error_message());
-		if ($msg === '') {
-			$all = \array_map('strval', (array) $error->get_error_messages());
-			$msg = \trim(\implode(' | ', \array_filter($all, static function (string $item): bool {
-				return $item !== '';
-			})));
-		}
-		$data = $error->get_error_data();
-		if (\is_array($data) && !empty($data['phpmailer_exception_code'])) {
-			$msg = $msg !== ''
-				? ($msg . ' (Code ' . (string) $data['phpmailer_exception_code'] . ')')
-				: ('PHPMailer-Fehler (Code ' . (string) $data['phpmailer_exception_code'] . ')');
-		}
-		$wp_mail_failed_message = $msg;
-	};
-	$GLOBALS['cmx_force_current_user_mail_sender'] = true;
-	$GLOBALS['cmx_mail_context'] = 'beleg_send';
-	\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
-	try {
-		$sent = \wp_mail($to, $subject, $message, $headers);
-	} finally {
-		\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
-		if ($had_sender_override) {
-			$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
-		} else {
-			unset($GLOBALS['cmx_force_current_user_mail_sender']);
-		}
-		if ($had_mail_context) {
-			$GLOBALS['cmx_mail_context'] = $previous_mail_context;
-		} else {
-			unset($GLOBALS['cmx_mail_context']);
-		}
-	}
-
-	if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-		cmxbu_log('MAIL: result', ['post_id' => $post_id, 'sent' => (bool) $sent, 'to' => (string) $to, 'subject' => (string) $subject]);
-	}
-
-	if (!$sent) {
-		if (function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
-			cmxbu_log('MAIL: failed reason', ['post_id' => $post_id, 'reason' => (string) $wp_mail_failed_message]);
-		}
-		$args = ['cmx_beleg_mail_error' => '1'];
-		$error_message = \trim((string) $wp_mail_failed_message);
-		if ($error_message !== '') {
-			$token = \wp_generate_password(12, false, false);
-			$key = 'cmx_beleg_mail_error_' . (int) \get_current_user_id() . '_' . $token;
-			\set_transient($key, \substr($error_message, 0, 400), 10 * MINUTE_IN_SECONDS);
-			$args['cmx_beleg_mail_error_token'] = $token;
-		}
-		\wp_safe_redirect(\add_query_arg($args, $redirect_base));
-		exit;
+		\wp_die(\esc_html($result->get_error_message()));
 	}
 
 	$redirect = \add_query_arg(
 		[
 			'cmx_beleg_mail_sent' => '1',
-			'cmx_beleg_mail_to'   => \sanitize_email((string) $to),
+			'cmx_beleg_mail_to'   => \sanitize_email((string) ($result['to'] ?? '')),
 		],
 		\get_edit_post_link($post_id, '')
 	);
