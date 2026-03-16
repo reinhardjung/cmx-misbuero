@@ -99,16 +99,19 @@ echo '</p>';
 		'cmx_woocommerce_webhook_url',
 		__('Webhook URL', 'cmx-misbuero'),
 		static function (): void {
-			$url = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_url')
-				? (string) cmx_woocommerce_webhook_url()
-				: '';
+			$url = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_delivery_url')
+				? (string) cmx_woocommerce_webhook_delivery_url()
+				: (\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_url')
+					? (string) cmx_woocommerce_webhook_url()
+					: '')
+			;
 			echo '<div style="display:flex;align-items:center;gap:8px;max-width:100%;flex-wrap:nowrap;">';
 			echo '<button type="button" class="button button-secondary" aria-label="' . \esc_attr__('Webhook URL kopieren', 'cmx-misbuero') . '" title="' . \esc_attr__('Webhook URL kopieren', 'cmx-misbuero') . '" onclick=\'(function(btn,url){var status=btn.parentNode.querySelector("[data-copy-feedback]");var resetTitle=function(){btn.title="Webhook URL kopieren";};var resetStatus=function(){if(status){status.textContent="";status.style.display="none";}};try{if(window.navigator&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(url);}else{var ta=document.createElement("textarea");ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}btn.title="Kopiert";if(status){status.textContent="Kopiert";status.style.display="inline";}setTimeout(function(){resetTitle();resetStatus();},1200);}catch(e){if(status){status.textContent="Fehler";status.style.display="inline";}setTimeout(resetStatus,1200);resetTitle();}})(this,' . \wp_json_encode($url) . ');return false;\'><span class="dashicons dashicons-admin-page" aria-hidden="true" style="margin-top:3px;"></span></button>';
 			echo '<span data-copy-feedback="1" aria-live="polite" style="display:none;font-size:12px;color:#2271b1;white-space:nowrap;"></span>';
 			echo '<div class="code" style="flex:1 1 auto;min-width:0;padding:6px 0;overflow-x:auto;white-space:nowrap;">' . \esc_html($url) . '</div>';
 			echo '</div>';
 			echo '<p class="description">';
-			echo wp_kses_post(__('Diese URL im externen WooCommerce-WebHook als <strong>Auslieferungs-URL (Delivery URL)</strong> eintragen.<br/>Thema: <strong>Bestellung erstellt (Order Created)</strong>.', 'cmx-misbuero'));
+			echo wp_kses_post(__('Diese URL im externen WooCommerce-WebHook als <strong>Auslieferungs-URL (Delivery URL)</strong> eintragen.<br/>Thema: <strong>Bestellung erstellt (Order Created)</strong>.<br/>Die URL enthält bereits einen Kompatibilitäts-Token für Hosts, die WooCommerce-Header entfernen.', 'cmx-misbuero'));
 			echo '</p>';
 
 			// echo '<p class="description">' . \esc_html__('Diese URL im externen WooCommerce-WebHook als <strong>Auslieferungs-URL (Delivery URL)</strong> eintragen. Topic: Order Created.', 'cmx-misbuero') . '</p>';
@@ -132,6 +135,88 @@ echo '</p>';
 		$page,
 		'cmx_sec_woocommerce_connection'
 	);
+}
+
+\add_action('all_admin_notices', __NAMESPACE__ . '\\cmx_render_woocommerce_webhook_notice');
+function cmx_render_woocommerce_webhook_notice(): void {
+	if (!\defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')) {
+		return;
+	}
+
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	$tab = isset($_GET['tab']) ? \sanitize_key((string) \wp_unslash($_GET['tab'])) : '';
+	if ($page !== CMX_SETTINGS_SLUG || $tab !== 'woocommerce') {
+		return;
+	}
+
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_get_webhook_notice')) {
+		return;
+	}
+
+	$notice = (array) cmx_woocommerce_get_webhook_notice();
+	if ($notice === []) {
+		return;
+	}
+
+	$captured_at = \absint($notice['captured_at'] ?? 0);
+	$code = \sanitize_text_field((string) ($notice['code'] ?? ''));
+	$message = \sanitize_text_field((string) ($notice['message'] ?? ''));
+	$hint = \sanitize_text_field((string) ($notice['hint'] ?? ''));
+	$http_status = \absint($notice['http_status'] ?? 0);
+	$debug = \is_array($notice['debug'] ?? null) ? $notice['debug'] : [];
+
+	$debug_parts = [];
+	$topic = \sanitize_text_field((string) ($debug['topic'] ?? ''));
+	if ($topic !== '') {
+		$debug_parts[] = 'Topic: ' . $topic;
+	}
+	$signature_present = !empty($debug['signature_present']);
+	$debug_parts[] = 'Signature-Header: ' . ($signature_present ? 'vorhanden' : 'fehlt');
+	$body_length = \absint($debug['body_length'] ?? 0);
+	$debug_parts[] = 'Body: ' . $body_length . ' Bytes';
+	$token_present = !empty($debug['token_present']);
+	$debug_parts[] = 'URL-Token: ' . ($token_present ? 'vorhanden' : 'fehlt');
+	$auth_method = \sanitize_text_field((string) ($debug['auth_method'] ?? ''));
+	if ($auth_method !== '') {
+		$debug_parts[] = 'Auth: ' . $auth_method;
+	}
+	$delivery_id = \sanitize_text_field((string) ($debug['delivery_id'] ?? ''));
+	if ($delivery_id !== '') {
+		$debug_parts[] = 'Delivery-ID: ' . $delivery_id;
+	}
+	$webhook_id = \sanitize_text_field((string) ($debug['webhook_id'] ?? ''));
+	if ($webhook_id !== '') {
+		$debug_parts[] = 'Webhook-ID: ' . $webhook_id;
+	}
+	$header_names = \sanitize_text_field((string) ($debug['header_names'] ?? ''));
+	if ($header_names !== '') {
+		$debug_parts[] = 'Header: ' . $header_names;
+	}
+
+	echo '<div class="notice notice-error">';
+	echo '<p><strong>' . \esc_html__('Letzter WooCommerce-WebHook-Fehler', 'cmx-misbuero') . '</strong>';
+	if ($captured_at > 0) {
+		echo ' <span style="color:#646970;">(' . \esc_html(\wp_date('d.m.Y H:i:s', $captured_at)) . ')</span>';
+	}
+	echo '</p>';
+	echo '<p>' . \esc_html($message !== '' ? $message : $code) . '</p>';
+	if ($code !== '' || $http_status > 0) {
+		$code_line = [];
+		if ($http_status > 0) {
+			$code_line[] = 'HTTP ' . $http_status;
+		}
+		if ($code !== '') {
+			$code_line[] = 'Code: ' . $code;
+		}
+		echo '<p><code>' . \esc_html(\implode(' | ', $code_line)) . '</code></p>';
+	}
+	if ($debug_parts !== []) {
+		echo '<p><code>' . \esc_html(\implode(' | ', $debug_parts)) . '</code></p>';
+	}
+	if ($hint !== '') {
+		echo '<p>' . \esc_html__('Hinweis:', 'cmx-misbuero') . ' ' . \esc_html($hint) . '</p>';
+	}
+	echo '</div>';
 }
 
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, __NAMESPACE__ . '\\cmx_sanitize_woocommerce_settings', 20, 2);

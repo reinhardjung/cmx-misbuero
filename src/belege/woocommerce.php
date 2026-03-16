@@ -15,6 +15,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_settings_defaults')) {
 			'misbuero_webhook_secret'                => '',
 			'misbuero_webhook_secret_previous'       => '',
 			'misbuero_webhook_secret_previous_until' => '0',
+			'misbuero_webhook_token'                 => '',
 			'misbuero_auto_mail'                     => '0',
 		];
 	}
@@ -53,6 +54,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_generate_webhook_secret
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_generate_webhook_token')) {
+	function cmx_woocommerce_generate_webhook_token(): string {
+		try {
+			$random = \bin2hex(\random_bytes(24));
+		} catch (\Throwable $exception) {
+			$random = \strtolower(\wp_generate_password(48, false, false));
+		}
+
+		return 'wcwhtok_' . $random;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_secret_rotation_window')) {
 	function cmx_woocommerce_webhook_secret_rotation_window(): int {
 		return 15 * MINUTE_IN_SECONDS;
@@ -87,6 +100,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_ensure_webhook_secret')
 		\update_option(cmx_woocommerce_option_name(), $options);
 
 		return (string) $options['misbuero_webhook_secret'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_ensure_webhook_token')) {
+	function cmx_woocommerce_ensure_webhook_token(): string {
+		$token = \trim((string) cmx_woocommerce_get_setting('misbuero_webhook_token', ''));
+		if ($token !== '') {
+			return $token;
+		}
+
+		$options = \get_option(cmx_woocommerce_option_name(), []);
+		$options = \is_array($options) ? $options : [];
+		$options['misbuero_webhook_token'] = cmx_woocommerce_generate_webhook_token();
+
+		\update_option(cmx_woocommerce_option_name(), $options);
+
+		return (string) $options['misbuero_webhook_token'];
 	}
 }
 
@@ -155,10 +185,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_settings')) {
 			$previous_until = 0;
 		}
 
+		$token = \trim(\sanitize_text_field((string) ($settings['misbuero_webhook_token'] ?? ($existing_settings['misbuero_webhook_token'] ?? ''))));
+		if ($token === '') {
+			$token = \trim((string) ($existing_settings['misbuero_webhook_token'] ?? ''));
+		}
+		if ($token === '') {
+			$token = cmx_woocommerce_generate_webhook_token();
+		}
+
 		return [
 			'misbuero_webhook_secret'                => $secret,
 			'misbuero_webhook_secret_previous'       => $previous_secret,
 			'misbuero_webhook_secret_previous_until' => (string) $previous_until,
+			'misbuero_webhook_token'                 => $token,
 			'misbuero_auto_mail'                     => cmx_woocommerce_normalize_checkbox($settings['misbuero_auto_mail']),
 		];
 	}
@@ -189,6 +228,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_is_webhook_beleg')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_url')) {
 	function cmx_woocommerce_webhook_url(): string {
 		return \rest_url(cmx_woocommerce_webhook_route());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_delivery_url')) {
+	function cmx_woocommerce_webhook_delivery_url(): string {
+		$token = cmx_woocommerce_ensure_webhook_token();
+		if ($token === '') {
+			return cmx_woocommerce_webhook_url();
+		}
+
+		return (string) \add_query_arg('cmx_wc_token', $token, cmx_woocommerce_webhook_url());
 	}
 }
 
@@ -272,6 +322,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_active_webhook_secrets'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_validate_webhook_token')) {
+	function cmx_woocommerce_validate_webhook_token(string $provided_token): bool {
+		$provided_token = \trim($provided_token);
+		if ($provided_token === '') {
+			return false;
+		}
+
+		$stored_token = \trim((string) cmx_woocommerce_get_setting('misbuero_webhook_token', ''));
+		if ($stored_token === '') {
+			$stored_token = cmx_woocommerce_ensure_webhook_token();
+		}
+
+		return $stored_token !== '' && \hash_equals($stored_token, $provided_token);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_request_webhook_token')) {
+	function cmx_woocommerce_request_webhook_token(\WP_REST_Request $request): string {
+		$query = (array) $request->get_query_params();
+
+		return \trim((string) ($query['cmx_wc_token'] ?? ''));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_verify_signature_against_active_secrets')) {
 	function cmx_woocommerce_verify_signature_against_active_secrets(string $payload, string $provided_signature): bool {
 		foreach (cmx_woocommerce_active_webhook_secrets() as $secret) {
@@ -281,6 +355,193 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_verify_signature_agains
 		}
 
 		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_notice_option_name')) {
+	function cmx_woocommerce_webhook_notice_option_name(): string {
+		return 'cmx_woocommerce_last_webhook_notice';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_request_header_names')) {
+	function cmx_woocommerce_request_header_names(\WP_REST_Request $request): array {
+		$names = [];
+
+		foreach ((array) $request->get_headers() as $header_name => $values) {
+			$normalized = \strtolower(\trim((string) $header_name));
+			if ($normalized !== '') {
+				$names[] = $normalized;
+			}
+		}
+
+		foreach ((array) $_SERVER as $server_key => $server_value) {
+			if (!\is_string($server_key)) {
+				continue;
+			}
+			if (\strpos($server_key, 'HTTP_') !== 0 && \strpos($server_key, 'REDIRECT_HTTP_') !== 0) {
+				continue;
+			}
+
+			$header_key = $server_key;
+			if (\strpos($header_key, 'REDIRECT_HTTP_') === 0) {
+				$header_key = (string) \substr($header_key, 9);
+			}
+			if (\strpos($header_key, 'HTTP_') !== 0) {
+				continue;
+			}
+
+			$normalized = \strtolower(\str_replace('_', '-', (string) \substr($header_key, 5)));
+			if ($normalized !== '') {
+				$names[] = $normalized;
+			}
+		}
+
+		if (\function_exists('apache_request_headers')) {
+			foreach ((array) \apache_request_headers() as $header_name => $header_value) {
+				$normalized = \strtolower(\trim((string) $header_name));
+				if ($normalized !== '') {
+					$names[] = $normalized;
+				}
+			}
+		}
+
+		$names = \array_values(\array_unique(\array_filter($names, static function ($name): bool {
+			return \is_string($name) && $name !== '';
+		})));
+		\sort($names, \SORT_STRING);
+
+		return $names;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_human_webhook_message')) {
+	function cmx_woocommerce_human_webhook_message(string $code): string {
+		$map = [
+			'webhook_secret_missing'  => 'Es ist kein Secret Key in Mis BuerO gespeichert.',
+			'missing_signature_header'=> 'Der Header X-WC-Webhook-Signature fehlt beim Request.',
+			'invalid_signature'       => 'Die Signatur passt nicht zum gespeicherten Secret Key.',
+			'empty_payload'           => 'WooCommerce hat einen leeren Request-Body gesendet.',
+			'invalid_json'            => 'Der Request-Body ist kein gueltiges JSON.',
+			'ignored_non_order_topic' => 'Der Webhook wurde empfangen, aber das Thema ist keine Bestellung.',
+			'beleg_insert_failed'     => 'Der Beleg konnte nicht angelegt werden.',
+			'missing_order_id'        => 'Im Webhook fehlt eine Bestell-ID.',
+		];
+
+		return (string) ($map[$code] ?? $code);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_store_webhook_notice')) {
+	function cmx_woocommerce_store_webhook_notice(array $data): void {
+		$debug = \is_array($data['debug'] ?? null) ? $data['debug'] : [];
+		$payload = [
+			'code'        => \sanitize_key((string) ($data['code'] ?? '')),
+			'message'     => \sanitize_text_field((string) ($data['message'] ?? '')),
+			'hint'        => \sanitize_text_field((string) ($data['hint'] ?? '')),
+			'http_status' => \absint($data['http_status'] ?? 0),
+			'captured_at' => \absint($data['captured_at'] ?? \time()),
+			'debug'       => [
+				'topic'               => \sanitize_text_field((string) ($debug['topic'] ?? '')),
+				'body_length'         => \absint($debug['body_length'] ?? 0),
+				'signature_present'   => !empty($debug['signature_present']) ? '1' : '0',
+				'signature_length'    => \absint($debug['signature_length'] ?? 0),
+				'delivery_id'         => \sanitize_text_field((string) ($debug['delivery_id'] ?? '')),
+				'webhook_id'          => \sanitize_text_field((string) ($debug['webhook_id'] ?? '')),
+				'user_agent'          => \sanitize_text_field((string) ($debug['user_agent'] ?? '')),
+				'header_names'        => \sanitize_text_field((string) ($debug['header_names'] ?? '')),
+				'token_present'       => !empty($debug['token_present']) ? '1' : '0',
+				'auth_method'         => \sanitize_text_field((string) ($debug['auth_method'] ?? '')),
+			],
+		];
+
+		\update_option(cmx_woocommerce_webhook_notice_option_name(), $payload, false);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_get_webhook_notice')) {
+	function cmx_woocommerce_get_webhook_notice(): array {
+		$notice = \get_option(cmx_woocommerce_webhook_notice_option_name(), []);
+
+		return \is_array($notice) ? $notice : [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_clear_webhook_notice')) {
+	function cmx_woocommerce_clear_webhook_notice(): void {
+		\delete_option(cmx_woocommerce_webhook_notice_option_name());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_debug_context')) {
+	function cmx_woocommerce_webhook_debug_context(\WP_REST_Request $request, string $topic, string $body, string $signature, string $token = '', string $auth_method = ''): array {
+		$header_names = cmx_woocommerce_request_header_names($request);
+
+		return [
+			'topic'             => $topic,
+			'body_length'       => \strlen($body),
+			'signature_present' => $signature !== '',
+			'signature_length'  => \strlen($signature),
+			'delivery_id'       => cmx_woocommerce_header($request, 'x-wc-webhook-delivery-id'),
+			'webhook_id'        => cmx_woocommerce_header($request, 'x-wc-webhook-id'),
+			'user_agent'        => cmx_woocommerce_header($request, 'user-agent'),
+			'header_names'      => \implode(', ', $header_names),
+			'token_present'     => $token !== '',
+			'auth_method'       => $auth_method,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_error_response')) {
+	function cmx_woocommerce_error_response(\WP_REST_Request $request, int $status, string $code, string $hint = '', array $debug = []): \WP_REST_Response {
+		$message = cmx_woocommerce_human_webhook_message($code);
+		cmx_woocommerce_store_webhook_notice([
+			'code'        => $code,
+			'message'     => $message,
+			'hint'        => $hint,
+			'http_status' => $status,
+			'captured_at' => \time(),
+			'debug'       => $debug,
+		]);
+
+		$response = [
+			'success' => false,
+			'message' => $code,
+			'detail'  => $message,
+		];
+		if ($hint !== '') {
+			$response['hint'] = $hint;
+		}
+		if ($debug !== []) {
+			$response['debug'] = $debug;
+		}
+
+		return new \WP_REST_Response($response, $status);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_is_unsigned_probe_request')) {
+	function cmx_woocommerce_is_unsigned_probe_request(string $topic, string $body, string $signature, string $auth_method): bool {
+		if ($auth_method !== 'url_token' || $signature !== '' || $topic !== '') {
+			return false;
+		}
+
+		$body = \trim($body);
+		if ($body === '') {
+			return true;
+		}
+
+		return \strlen($body) <= 64;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_error_status')) {
+	function cmx_woocommerce_import_error_status(string $code): int {
+		$map = [
+			'missing_order_id' => 400,
+		];
+
+		return (int) ($map[$code] ?? 500);
 	}
 }
 
@@ -956,7 +1217,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 			'rechnungsnummer'   => $invoice_no,
 			'kontakt_id'        => $kontakt_id,
 			'webhook_topic'     => $topic,
-			'webhook_target'    => cmx_woocommerce_webhook_url(),
+			'webhook_target'    => \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_delivery_url')
+				? cmx_woocommerce_webhook_delivery_url()
+				: cmx_woocommerce_webhook_url(),
 			'woocommerce_order' => $order_id,
 		];
 	}
@@ -974,15 +1237,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_rest_webhook_callback')
 	function cmx_woocommerce_rest_webhook_callback(\WP_REST_Request $request): \WP_REST_Response {
 		$secrets = cmx_woocommerce_active_webhook_secrets();
 		if ($secrets === []) {
-			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'webhook_secret_missing',
-			], 503);
+			return cmx_woocommerce_error_response(
+				$request,
+				503,
+				'webhook_secret_missing',
+				'Bitte den Secret Key in Mis BuerO speichern und denselben Wert im externen WooCommerce-WebHook eintragen.'
+			);
 		}
 
 		$body = (string) $request->get_body();
 		$topic = \strtolower(cmx_woocommerce_header($request, 'x-wc-webhook-topic'));
 		if ($topic === 'ping') {
+			cmx_woocommerce_clear_webhook_notice();
 			return new \WP_REST_Response([
 				'success' => true,
 				'message' => 'pong',
@@ -990,45 +1256,97 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_rest_webhook_callback')
 		}
 
 		$signature = cmx_woocommerce_header($request, 'x-wc-webhook-signature');
-		if ($signature === '') {
-			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'missing_signature_header',
-			], 401);
+		$token = cmx_woocommerce_request_webhook_token($request);
+		$token_valid = cmx_woocommerce_validate_webhook_token($token);
+		$auth_method = '';
+		if ($signature !== '' && cmx_woocommerce_verify_signature_against_active_secrets($body, $signature)) {
+			$auth_method = 'signature';
+		} elseif ($token_valid) {
+			$auth_method = 'url_token';
+		}
+
+		$debug = cmx_woocommerce_webhook_debug_context($request, $topic, $body, $signature, $token, $auth_method);
+		if ($signature === '' && !$token_valid) {
+			return cmx_woocommerce_error_response(
+				$request,
+				401,
+				'missing_signature_header',
+				'Der WebHook ist angekommen, aber der Signatur-Header fehlt. Das deutet eher auf Server/Proxy/WAF hin. Falls Dein Host die X-WC-Header entfernt, bitte die neu angezeigte Webhook URL mit URL-Token im externen WooCommerce hinterlegen.',
+				$debug
+			);
 		}
 
 		if ($body === '') {
-			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'empty_payload',
-			], 400);
+			if (cmx_woocommerce_is_unsigned_probe_request($topic, $body, $signature, $auth_method)) {
+				cmx_woocommerce_clear_webhook_notice();
+				return new \WP_REST_Response([
+					'success'     => true,
+					'message'     => 'accepted_unsigned_probe',
+					'auth_method' => $auth_method,
+				], 200);
+			}
+
+			return cmx_woocommerce_error_response(
+				$request,
+				400,
+				'empty_payload',
+				'WooCommerce oder ein Proxy hat keinen JSON-Body an die Delivery URL uebergeben.',
+				$debug
+			);
 		}
 
-		if (!cmx_woocommerce_verify_signature_against_active_secrets($body, $signature)) {
+		if ($signature !== '' && $auth_method === '') {
+			return cmx_woocommerce_error_response(
+				$request,
+				401,
+				'invalid_signature',
+				'Secret Key, unveraenderter Request-Body und eventuell dazwischenliegende Proxies/WAF pruefen.',
+				$debug
+			);
+		}
+
+		if (cmx_woocommerce_is_unsigned_probe_request($topic, $body, $signature, $auth_method)) {
+			cmx_woocommerce_clear_webhook_notice();
 			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'invalid_signature',
-			], 401);
+				'success'     => true,
+				'message'     => 'accepted_unsigned_probe',
+				'auth_method' => $auth_method,
+			], 200);
 		}
 
 		$payload = \json_decode($body, true);
 		if (!\is_array($payload)) {
-			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'invalid_json',
-			], 400);
+			return cmx_woocommerce_error_response(
+				$request,
+				400,
+				'invalid_json',
+				'Der Body wurde empfangen, ist aber kein gueltiges JSON.',
+				$debug
+			);
 		}
 
 		if ($topic !== '' && \strpos($topic, 'order.') !== 0) {
+			cmx_woocommerce_clear_webhook_notice();
 			return new \WP_REST_Response([
 				'success' => true,
 				'message' => 'ignored_non_order_topic',
 				'topic'   => $topic,
-			], 202);
+			], 200);
 		}
 
 		$result = cmx_woocommerce_import_order($payload, $topic);
-		$status_code = !empty($result['success']) ? 200 : 500;
+		$status_code = !empty($result['success']) ? 200 : cmx_woocommerce_import_error_status((string) ($result['message'] ?? ''));
+		if (!empty($result['success'])) {
+			cmx_woocommerce_clear_webhook_notice();
+		} else {
+			return cmx_woocommerce_error_response(
+				$request,
+				$status_code,
+				(string) ($result['message'] ?? 'webhook_import_failed'),
+				'Der WebHook wurde verifiziert, aber beim Import in Mis BuerO ist ein Fehler aufgetreten.',
+				$debug
+			);
+		}
 
 		return new \WP_REST_Response($result, $status_code);
 	}
