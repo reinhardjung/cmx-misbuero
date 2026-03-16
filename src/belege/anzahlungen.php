@@ -79,11 +79,12 @@ function cmx_beleg_anzahlungen_get_rows(int $post_id): array {
  * ========================================================= */
 function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	$rows = cmx_beleg_anzahlungen_get_rows($post->ID);
+	$has_rows = !empty($rows);
 	if (!$rows) $rows = [['datum'=>'', 'betrag'=>'']];
 	$pay_tax = function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax') ? cmx_beleg_zahlungsart_tax() : null;
 	$pay_terms = $pay_tax ? \get_terms(['taxonomy' => $pay_tax, 'hide_empty' => false]) : [];
 	$status = \get_post_meta($post->ID, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS') ? CMX_BELEG_META_STATUS : '_cmx_beleg_status', true);
-	$wrap_style = ($status === 'teilbezahlt') ? '' : 'display:none;';
+	$wrap_style = ($status === 'teilbezahlt' || $has_rows) ? '' : 'display:none;';
 
 	\wp_nonce_field('cmx_save_beleg_anzahlungen', 'cmx_beleg_anzahlungen_nonce');
 
@@ -202,11 +203,38 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			const day = String(d.getDate()).padStart(2, "0");
 			return y + "-" + m + "-" + day;
 		}
+		function hasFilledRows(){
+			let filled = false;
+			$wrap.find(".cmx-anzahlung-row").each(function(){
+				const dateVal = ($(this).find(".cmx-anzahlung-date").val() ?? "").toString().trim();
+				const amountVal = ($(this).find("input[name*=\"[betrag]\"]").val() ?? "").toString().trim();
+				const methodVal = ($(this).find(".cmx-anzahlung-zahlungsart").val() ?? "").toString().trim();
+				if (dateVal !== "" || amountVal !== "" || methodVal !== "") {
+					filled = true;
+					return false;
+				}
+			});
+			return filled;
+		}
+		function getSlug(){
+			const el = document.querySelector("input[name=cmx_beleg_kategorie]:checked");
+			return el ? (el.getAttribute("data-slug") || "") : "";
+		}
+		function syncWrap(){
+			const slug = getSlug();
+			const hideByCat = slug === "offerte" || slug === "lieferschein";
+			const show = !hideByCat && ($status.val() === "teilbezahlt" || hasFilledRows());
+			$wrap.toggle(show);
+			if ($box.length) {
+				$box.toggle(show);
+			}
+		}
 
 		$("#cmx-anzahlung-add").on("click", function(){
 			const idx = $wrap.find(".cmx-anzahlung-row").length;
 			const $row = $(tmpl.replace(/__INDEX__/g, idx));
 			$wrap.append($row);
+			syncWrap();
 			$row.find("input:first").trigger("focus");
 		});
 
@@ -214,10 +242,12 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			const $rows = $wrap.find(".cmx-anzahlung-row");
 			if ($rows.length <= 1) {
 				$(this).closest(".cmx-anzahlung-row").find("input, select").val("");
+				syncWrap();
 				return;
 			}
 			$(this).closest(".cmx-anzahlung-row").remove();
 			reindexRows();
+			syncWrap();
 		});
 
 		$wrap.on("click", ".cmx-anzahlung-today", function(e){
@@ -229,22 +259,11 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 			const raw = ($(this).val() ?? "").toString().trim();
 			if (raw === "") return;
 			$(this).val(formatCH(toNumber(raw)));
+			syncWrap();
 		});
+		$wrap.on("change input", ".cmx-anzahlung-date, .cmx-anzahlung-zahlungsart, input[name*=\"[betrag]\"]", syncWrap);
 
 		if ($status.length) {
-			const getSlug = () => {
-				const el = document.querySelector("input[name=cmx_beleg_kategorie]:checked");
-				return el ? (el.getAttribute("data-slug") || "") : "";
-			};
-			const syncWrap = () => {
-				const slug = getSlug();
-				const hideByCat = slug === "offerte" || slug === "lieferschein";
-				const show = $status.val() === "teilbezahlt" && !hideByCat;
-				$wrap.toggle(show);
-				if ($box.length) {
-					$box.toggle(show);
-				}
-			};
 			$status.on("change", syncWrap);
 			$(document).on("change", "input[name=cmx_beleg_kategorie]", syncWrap);
 			syncWrap();
@@ -263,14 +282,11 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	if (!isset($_POST['cmx_beleg_anzahlungen_nonce']) || !\wp_verify_nonce($_POST['cmx_beleg_anzahlungen_nonce'], 'cmx_save_beleg_anzahlungen')) return;
 	if (defined('DOING_AJAX') && DOING_AJAX) return;
 
-	$incoming_status = isset($_POST['cmx_beleg_status']) ? \sanitize_key($_POST['cmx_beleg_status']) : '';
-	if ($incoming_status !== 'teilbezahlt') {
+	$rows = $_POST['cmx_anzahlungen'] ?? [];
+	if (!\is_array($rows)) {
 		\delete_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN);
 		return;
 	}
-
-	$rows = $_POST['cmx_anzahlungen'] ?? [];
-	if (!\is_array($rows)) return;
 
 	if (\count($rows) > 200) $rows = \array_slice($rows, 0, 200);
 

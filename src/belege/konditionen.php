@@ -77,6 +77,40 @@ function cmx_beleg_zahlungsgrund_tax(): ?string {
 	return null;
 }
 
+function cmx_beleg_taxonomy_admin_url(?string $taxonomy): string {
+	if (!$taxonomy || !\taxonomy_exists($taxonomy)) {
+		return '';
+	}
+
+	$taxonomy_obj = \get_taxonomy($taxonomy);
+	if (!$taxonomy_obj || empty($taxonomy_obj->show_ui)) {
+		return '';
+	}
+
+	$post_type = 'belege';
+	$object_types = \is_array($taxonomy_obj->object_type) ? $taxonomy_obj->object_type : [];
+	if (!\in_array($post_type, $object_types, true)) {
+		foreach ($object_types as $candidate) {
+			if (\post_type_exists($candidate)) {
+				$post_type = $candidate;
+				break;
+			}
+		}
+	}
+
+	return (string) \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=' . \rawurlencode($post_type));
+}
+
+function cmx_beleg_waehrung_tax(): ?string {
+	foreach (['belege_waehrungen', 'artikel_waehrung'] as $tax) {
+		if (\taxonomy_exists($tax)) {
+			return $tax;
+		}
+	}
+
+	return null;
+}
+
 /**
  * Liefert eine eindeutige, sortierte Liste möglicher Währungen aus dem CPT "artikel".
  */
@@ -237,14 +271,21 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$currencies = cmx_get_artikel_waehrungen();
 	$current    = \get_post_meta($post->ID, CMX_BELEG_META_WAEHRUNG, true);
 	$current    = $current ? \strtoupper(\sanitize_text_field($current)) : '';
+	$waehrung_tax_url = cmx_beleg_taxonomy_admin_url(cmx_beleg_waehrung_tax());
 
 	if (!$current || !\in_array($current, $currencies, true)) {
 		$current = \in_array('CHF', $currencies, true) ? 'CHF' : $currencies[0];
 	}
 
 	echo '<p style="margin:8px 0 12px;">';
-	echo '<label for="cmx_beleg_waehrung_select" style="display:block;margin-bottom:6px;"><strong>' .
-		 \esc_html__('W&auml;hrung', 'cmx-misbuero') . '</strong></label>';
+	echo '<label for="cmx_beleg_waehrung_select" style="display:block;margin-bottom:6px;"><strong>';
+	if ($waehrung_tax_url !== '') {
+		echo '<a href="' . \esc_url($waehrung_tax_url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">' .
+			 \esc_html__('W&auml;hrung', 'cmx-misbuero') . '</a>';
+	} else {
+		echo \esc_html__('W&auml;hrung', 'cmx-misbuero');
+	}
+	echo '</strong></label>';
 	echo '<select id="cmx_beleg_waehrung_select" name="cmx_beleg_waehrung" style="width:100%;">';
 
 	foreach ($currencies as $code) {
@@ -269,7 +310,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 
 	/* ===== NEU: Bezahlt am (am Ende der Metabox) ===== */
 	echo '<p style="margin:8px 0 0;">';
-	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(<span id="cmx_bezahlt_today" style="text-decoration:none; cursor:pointer;">heute</span> <span id="cmx_bezahlt_rng" style="text-decoration:none; cursor:pointer;">&nbsp;&nbsp;Beleg</span>)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">unbezahlt</a></label>';
+	echo '<label for="cmx_beleg_bezahlt_am" id="cmx_bezahlt_label" style="display:block;margin-bottom:6px;cursor:pointer;"><strong>Bezahlt am</strong> <small style="color:#666;">(<span id="cmx_bezahlt_today" style="text-decoration:none; cursor:pointer;">heute</span> <span id="cmx_bezahlt_rng" style="text-decoration:none; cursor:pointer;">&nbsp;&nbsp;Beleg</span> <span id="cmx_bezahlt_partial" style="text-decoration:none; cursor:pointer;">&nbsp;&nbsp;geteilt</span>)</small> <a href="#" id="cmx_bezahlt_clear" style="margin-left:8px;font-size:10px; font-weight:normal; text-decoration:none;">offen</a></label>';
 	echo '<input type="date" name="cmx_beleg_bezahlt_am" id="cmx_beleg_bezahlt_am" style="width:100%;" value="' . \esc_attr($bezahlt) . '">';
 
 	// Inline-JS: sauberes Event-Handling inkl. "heute" vor 10/14/30/Monatsende
@@ -277,7 +318,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'var lblR=document.getElementById("cmx_rng_label"),inpR=document.getElementById("cmx_beleg_rng_datum");';
 	echo 'var inpF=document.getElementById("cmx_beleg_faelligkeitsdatum");';
 	echo 'var ltdy=document.getElementById("cmx_f_today"), l10=document.getElementById("cmx_f_10"), l14=document.getElementById("cmx_f_14"), l30=document.getElementById("cmx_f_30"), lend=document.getElementById("cmx_f_end");';
-	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBToday=document.getElementById("cmx_bezahlt_today"),btnBRng=document.getElementById("cmx_bezahlt_rng"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
+	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBToday=document.getElementById("cmx_bezahlt_today"),btnBRng=document.getElementById("cmx_bezahlt_rng"),btnBPartial=document.getElementById("cmx_bezahlt_partial"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
 	echo 'var lblL=document.getElementById("cmx_leistungs_label"),selL=document.getElementById("cmx_beleg_leistungsmonat");';
 	echo 'var defaultDueDays=' . (int) $default_due_days . ';';
 
@@ -290,6 +331,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
 	echo 'function addDays(n){var b=baseDate(); b.setDate(b.getDate()+n); return fmt(b);}';
 	echo 'function applyDefaultDueFromInvoice(force){if(!inpR||!inpF)return;if(!force&&(inpF.value||"")!=="")return;var n=parseInt(defaultDueDays,10);if(isNaN(n)||n<0)n=0;var b=baseDate();b.setDate(b.getDate()+n);inpF.value=fmt(b);}';
+	echo 'function lastPartialDate(){var latest="";document.querySelectorAll("#cmx-anzahlungen-wrap .cmx-anzahlung-date").forEach(function(el){var val=(el&&el.value)?String(el.value).trim():"";if(!isYmd(val)) return;if(latest===""||val>latest){latest=val;}});return latest;}';
 
 	// Rechnungsdatum -> heute
 	echo 'if(lblR&&inpR){lblR.addEventListener("click",function(e){e.preventDefault();inpR.value=today();applyDefaultDueFromInvoice(true);});}';
@@ -303,9 +345,10 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'if(lend&&inpF){lend.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=monthEnd();});}';
 
 	// Bezahlt am -> heute
-	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){var tid=(e.target&&e.target.id)?e.target.id:"";if(tid==="cmx_bezahlt_clear"||tid==="cmx_bezahlt_today"||tid==="cmx_bezahlt_rng"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){var tid=(e.target&&e.target.id)?e.target.id:"";if(tid==="cmx_bezahlt_clear"||tid==="cmx_bezahlt_today"||tid==="cmx_bezahlt_rng"||tid==="cmx_bezahlt_partial"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 	echo 'if(btnBToday&&inpB){btnBToday.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 	echo 'if(btnBRng&&inpB){btnBRng.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();var rngVal=(inpR&&isYmd(inpR.value))?inpR.value:"";if(rngVal===""){return;}inpB.value=rngVal;inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
+	echo 'if(btnBPartial&&inpB){btnBPartial.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();var partialVal=lastPartialDate();if(partialVal===""){return;}inpB.value=partialVal;inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 	echo 'if(btnBClear&&inpB){btnBClear.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpB.value="";var sel=document.getElementById("cmx_beleg_status");if(sel){sel.value="offen";sel.dispatchEvent(new Event("change",{bubbles:true}));}inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
 
 	// Leistungszeitraum -> nächster Monat
@@ -335,11 +378,18 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		$pay_terms = \get_terms(['taxonomy' => $pay_tax, 'hide_empty' => false]);
 		$current_terms = \wp_get_post_terms($post->ID, $pay_tax, ['fields' => 'ids']);
 		$current_id = $current_terms[0] ?? 0;
+		$pay_tax_url = cmx_beleg_taxonomy_admin_url($pay_tax);
 
 		$current_id = $bez_valid ? $current_id : 0;
 		$wrap_style = $bez_valid ? 'block' : 'none';
 		echo '<p id="cmx_beleg_zahlungsart_wrap" style="margin:8px 0 0; display:' . $wrap_style . ';">';
-		echo '<label for="cmx_beleg_zahlungsart" style="display:block;margin-bottom:6px;"><strong>Zahlungsart</strong></label>';
+		echo '<label for="cmx_beleg_zahlungsart" style="display:block;margin-bottom:6px;"><strong>';
+		if ($pay_tax_url !== '') {
+			echo '<a href="' . \esc_url($pay_tax_url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">Zahlungsart</a>';
+		} else {
+			echo 'Zahlungsart';
+		}
+		echo '</strong></label>';
 		echo '<select name="cmx_beleg_zahlungsart" id="cmx_beleg_zahlungsart" style="width:100%;">';
 		echo '<option value="">— auswählen —</option>';
 		if (!\is_wp_error($pay_terms)) {
@@ -359,9 +409,16 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 			$zg_terms = \get_terms(['taxonomy' => $zg_tax, 'hide_empty' => false]);
 			$zg_current_terms = \wp_get_post_terms($post->ID, $zg_tax, ['fields' => 'ids']);
 			$zg_current_id = (int) ($zg_current_terms[0] ?? 0);
+			$zg_tax_url = cmx_beleg_taxonomy_admin_url($zg_tax);
 
 			echo '<p id="cmx_beleg_zahlungsgrund_wrap" style="margin:8px 0 0;">';
-			echo '<label for="cmx_beleg_zahlungsgrund" style="display:block;margin-bottom:6px;"><strong>Zahlungsgrund</strong></label>';
+			echo '<label for="cmx_beleg_zahlungsgrund" style="display:block;margin-bottom:6px;"><strong>';
+			if ($zg_tax_url !== '') {
+				echo '<a href="' . \esc_url($zg_tax_url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">Zahlungsgrund</a>';
+			} else {
+				echo 'Zahlungsgrund';
+			}
+			echo '</strong></label>';
 			echo '<select name="cmx_beleg_zahlungsgrund" id="cmx_beleg_zahlungsgrund" style="width:100%;">';
 			echo '<option value="">— auswählen —</option>';
 			if (!\is_wp_error($zg_terms)) {
