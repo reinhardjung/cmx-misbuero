@@ -16,6 +16,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_settings_defaults')) {
 			'misbuero_webhook_secret_previous'       => '',
 			'misbuero_webhook_secret_previous_until' => '0',
 			'misbuero_webhook_token'                 => '',
+			'misbuero_order_example_url'             => '',
 			'misbuero_order_link_template'           => '',
 			'misbuero_auto_mail'                     => '0',
 		];
@@ -169,6 +170,137 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_order_link_tem
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_order_example_url')) {
+	function cmx_woocommerce_sanitize_order_example_url($value): string {
+		$value = \is_string($value) ? \wp_unslash($value) : '';
+		$value = \trim(\str_replace(["\r", "\n"], '', $value));
+		if ($value === '') {
+			return '';
+		}
+
+		$sanitized = \esc_url_raw($value, ['http', 'https']);
+
+		return \is_string($sanitized) ? \trim($sanitized) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_mode_label')) {
+	function cmx_woocommerce_order_link_mode_label(string $mode): string {
+		$mode = \sanitize_key($mode);
+		if ($mode === 'hpos') {
+			return 'HPOS';
+		}
+		if ($mode === 'classic') {
+			return 'Classic';
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_url_from_parts')) {
+	function cmx_woocommerce_build_url_from_parts(array $parts, array $query = []): string {
+		$host = (string) ($parts['host'] ?? '');
+		if ($host === '') {
+			return '';
+		}
+
+		$scheme = (string) ($parts['scheme'] ?? 'https');
+		$path = (string) ($parts['path'] ?? '/');
+		if ($path === '') {
+			$path = '/';
+		}
+
+		$auth = '';
+		$user = (string) ($parts['user'] ?? '');
+		if ($user !== '') {
+			$auth = $user;
+			$pass = (string) ($parts['pass'] ?? '');
+			if ($pass !== '') {
+				$auth .= ':' . $pass;
+			}
+			$auth .= '@';
+		}
+
+		$port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+		$fragment = (string) ($parts['fragment'] ?? '');
+		$query_string = \http_build_query($query, '', '&', \PHP_QUERY_RFC3986);
+		$query_string = \str_replace(
+			[\rawurlencode('{order_id}'), \rawurlencode('{order_number}')],
+			['{order_id}', '{order_number}'],
+			$query_string
+		);
+
+		$url = $scheme . '://' . $auth . $host . $port . $path;
+		if ($query_string !== '') {
+			$url .= '?' . $query_string;
+		}
+		if ($fragment !== '') {
+			$url .= '#' . $fragment;
+		}
+
+		return $url;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_data_from_example_url')) {
+	/**
+	 * @return array{source_url:string,template:string,mode:string,recognized:bool}
+	 */
+	function cmx_woocommerce_order_link_data_from_example_url(string $url): array {
+		$source_url = cmx_woocommerce_sanitize_order_example_url($url);
+		$default = [
+			'source_url' => $source_url,
+			'template'   => '',
+			'mode'       => '',
+			'recognized' => false,
+		];
+		if ($source_url === '') {
+			return $default;
+		}
+
+		$parts = \wp_parse_url($source_url);
+		if (!\is_array($parts) || empty($parts['host'])) {
+			return $default;
+		}
+
+		$path = (string) ($parts['path'] ?? '');
+		$basename = \strtolower(\basename($path));
+		$query = [];
+		\parse_str((string) ($parts['query'] ?? ''), $query);
+
+		$template = '';
+		$mode = '';
+
+		if ($basename === 'post.php' && isset($query['post']) && \preg_match('/^\d+$/', (string) $query['post'])) {
+			$template = cmx_woocommerce_build_url_from_parts($parts, [
+				'post'   => '{order_id}',
+				'action' => 'edit',
+			]);
+			$mode = 'classic';
+		} elseif ($basename === 'admin.php' && (string) ($query['page'] ?? '') === 'wc-orders' && isset($query['id']) && \preg_match('/^\d+$/', (string) $query['id'])) {
+			$template = cmx_woocommerce_build_url_from_parts($parts, [
+				'page'   => 'wc-orders',
+				'action' => 'edit',
+				'id'     => '{order_id}',
+			]);
+			$mode = 'hpos';
+		}
+
+		$template = cmx_woocommerce_sanitize_order_link_template($template);
+		if ($template === '' || $mode === '') {
+			return $default;
+		}
+
+		return [
+			'source_url' => $source_url,
+			'template'   => $template,
+			'mode'       => $mode,
+			'recognized' => true,
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_settings')) {
 	function cmx_woocommerce_sanitize_settings(array $settings, array $existing_settings = []): array {
 		$defaults = cmx_woocommerce_settings_defaults();
@@ -212,12 +344,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_settings')) {
 			$token = cmx_woocommerce_generate_webhook_token();
 		}
 
+		$existing_example_url = cmx_woocommerce_sanitize_order_example_url($existing_settings['misbuero_order_example_url'] ?? '');
+		$order_example_url = cmx_woocommerce_sanitize_order_example_url($settings['misbuero_order_example_url'] ?? '');
+		$order_link_template = '';
+		if ($order_example_url !== '') {
+			$order_link_data = cmx_woocommerce_order_link_data_from_example_url($order_example_url);
+			$order_link_template = (string) ($order_link_data['template'] ?? '');
+		} elseif ($existing_example_url === '') {
+			// Rueckwaertskompatibel: vorhandene manuelle Vorlage beibehalten,
+			// solange noch keine Beispiel-URL gesetzt wurde.
+			$order_link_template = cmx_woocommerce_sanitize_order_link_template($existing_settings['misbuero_order_link_template'] ?? '');
+		}
+
 		return [
 			'misbuero_webhook_secret'                => $secret,
 			'misbuero_webhook_secret_previous'       => $previous_secret,
 			'misbuero_webhook_secret_previous_until' => (string) $previous_until,
 			'misbuero_webhook_token'                 => $token,
-			'misbuero_order_link_template'           => cmx_woocommerce_sanitize_order_link_template($settings['misbuero_order_link_template'] ?? ''),
+			'misbuero_order_example_url'             => $order_example_url,
+			'misbuero_order_link_template'           => $order_link_template,
 			'misbuero_auto_mail'                     => cmx_woocommerce_normalize_checkbox($settings['misbuero_auto_mail']),
 		];
 	}
@@ -266,6 +411,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_url')) {
 	function cmx_woocommerce_order_link_url(array $order): string {
 		$template = \trim((string) cmx_woocommerce_get_setting('misbuero_order_link_template', ''));
 		if ($template === '') {
+			$example_url = (string) cmx_woocommerce_get_setting('misbuero_order_example_url', '');
+			$data = cmx_woocommerce_order_link_data_from_example_url($example_url);
+			$template = \trim((string) ($data['template'] ?? ''));
+		}
+		if ($template === '') {
 			return '';
 		}
 
@@ -278,6 +428,91 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_url')) {
 		$url = \esc_url_raw($url, ['http', 'https']);
 
 		return \is_string($url) ? $url : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_reference_from_values')) {
+	/**
+	 * @return array{label:string,url:string}
+	 */
+	function cmx_woocommerce_order_reference_from_values(int $order_id, string $order_number): array {
+		$order_number = \trim($order_number);
+		$label_value = $order_number !== '' ? $order_number : ($order_id > 0 ? (string) $order_id : '');
+		$label = $label_value !== '' ? ('#' . $label_value) : '';
+		$url = $label !== ''
+			? cmx_woocommerce_order_link_url([
+				'id'     => $order_id,
+				'number' => $order_number,
+			])
+			: '';
+
+		return [
+			'label' => $label,
+			'url'   => $url,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_link_order_label_in_note_text')) {
+	function cmx_woocommerce_link_order_label_in_note_text(string $text, string $order_label, string $order_url): string {
+		$text = \trim($text);
+		$order_label = \trim($order_label);
+		$order_url = \trim($order_url);
+		if ($text === '' || $order_label === '' || $order_url === '') {
+			return $text;
+		}
+		if (\strpos($text, 'WooCommerce-Import') === false || \strpos($text, 'Bestellung:') === false) {
+			return $text;
+		}
+
+		$link_html = '<a href="' . \esc_url($order_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($order_label) . '</a>';
+		$pattern = '/(Bestellung:\s*)(?:<a\b[^>]*>)?' . \preg_quote($order_label, '/') . '(?:<\/a>)?/u';
+		$updated = \preg_replace($pattern, '$1' . $link_html, $text, 1);
+
+		return \is_string($updated) && $updated !== '' ? $updated : $text;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_maybe_backfill_note_links')) {
+	function cmx_woocommerce_maybe_backfill_note_links(int $post_id): void {
+		if ($post_id <= 0 || !cmx_woocommerce_is_webhook_beleg($post_id)) {
+			return;
+		}
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows') || !\function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')) {
+			return;
+		}
+
+		$order_id = (int) \get_post_meta($post_id, '_cmx_wc_order_id', true);
+		$order_number = (string) \get_post_meta($post_id, '_cmx_wc_order_number', true);
+		$order_reference = cmx_woocommerce_order_reference_from_values($order_id, $order_number);
+		$order_label = (string) ($order_reference['label'] ?? '');
+		$order_url = (string) ($order_reference['url'] ?? '');
+		if ($order_label === '' || $order_url === '') {
+			return;
+		}
+
+		$rows = (array) cmx_notizen_load_rows($post_id, 'belege');
+		if ($rows === []) {
+			return;
+		}
+
+		$changed = false;
+		foreach ($rows as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$text = (string) ($row['text'] ?? '');
+			$updated_text = cmx_woocommerce_link_order_label_in_note_text($text, $order_label, $order_url);
+			if ($updated_text === $text) {
+				continue;
+			}
+			$rows[$index]['text'] = $updated_text;
+			$changed = true;
+		}
+
+		if ($changed) {
+			\update_post_meta($post_id, cmx_notizen_meta_key_for_post_type('belege'), $rows);
+		}
 	}
 }
 
@@ -1115,10 +1350,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_notes')) {
 		$total = \trim((string) ($order['total'] ?? ''));
 		$currency = \strtoupper(\trim((string) ($order['currency'] ?? '')));
 		$order_id = (int) ($order['id'] ?? 0);
-		$order_label = '#' . ($order_number !== '' ? $order_number : (string) $order_id);
-		$order_url = cmx_woocommerce_order_link_url($order);
-		$order_line = 'Bestellung: ' . $order_label;
-		if ($order_url !== '') {
+		$order_reference = cmx_woocommerce_order_reference_from_values($order_id, $order_number);
+		$order_label = (string) ($order_reference['label'] ?? '');
+		$order_url = (string) ($order_reference['url'] ?? '');
+		$order_line = 'Bestellung: ' . ($order_label !== '' ? $order_label : '—');
+		if ($order_label !== '' && $order_url !== '') {
 			$order_line = 'Bestellung: <a href="' . \esc_url($order_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($order_label) . '</a>';
 		}
 
@@ -1146,6 +1382,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_notes')) {
 		}
 
 		return \implode("\n", $lines);
+	}
+}
+
+\add_action('current_screen', __NAMESPACE__ . '\\cmx_woocommerce_backfill_note_links_for_current_screen');
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_backfill_note_links_for_current_screen')) {
+	function cmx_woocommerce_backfill_note_links_for_current_screen($screen = null): void {
+		if (!$screen instanceof \WP_Screen) {
+			return;
+		}
+		if ((string) $screen->base !== 'post' || (string) ($screen->post_type ?? '') !== 'belege') {
+			return;
+		}
+
+		$post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
+		if ($post_id <= 0) {
+			return;
+		}
+
+		cmx_woocommerce_maybe_backfill_note_links($post_id);
 	}
 }
 
@@ -1470,9 +1725,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox')
 		$error = \trim((string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_error_meta_key(), true));
 		$mail_sent = (string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_sent_meta_key(), true) === '1';
 		$auto_mail_enabled = cmx_woocommerce_auto_mail_enabled();
+		$order_reference = cmx_woocommerce_order_reference_from_values((int) $order_id, $order_number);
+		$order_label = (string) ($order_reference['label'] ?? '');
+		$order_url = (string) ($order_reference['url'] ?? '');
 
 		echo '<div style="display:grid;gap:8px;">';
-		echo '<p style="margin:0;"><strong>' . \esc_html__('Bestellung', 'cmx-misbuero') . ':</strong> ' . \esc_html($order_number !== '' ? ('#' . $order_number) : ($order_id !== '' ? ('#' . $order_id) : '—')) . '</p>';
+		echo '<p style="margin:0;"><strong>' . \esc_html__('Bestellung', 'cmx-misbuero') . ':</strong> ';
+		if ($order_label !== '' && $order_url !== '') {
+			echo '<a href="' . \esc_url($order_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($order_label) . '</a>';
+		} else {
+			echo \esc_html($order_label !== '' ? $order_label : '—');
+		}
+		echo '</p>';
 		if ($order_status !== '') {
 			echo '<p style="margin:0;"><strong>' . \esc_html__('Woo-Status', 'cmx-misbuero') . ':</strong> ' . \esc_html($order_status) . '</p>';
 		}
@@ -1486,7 +1750,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox')
 			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #00a32a;border-radius:8px;background:#edfaef;color:#0f5132;">';
 			echo '<strong>' . \esc_html__('Auto-Mail versendet', 'cmx-misbuero') . '</strong>';
 			if ($recipient !== '' && \is_email($recipient)) {
-				echo '<div style="margin-top:4px;">' . \esc_html__('Empfänger:', 'cmx-misbuero') . ' ' . \esc_html($recipient) . '</div>';
+				echo '<div style="margin-top:4px;">' . \esc_html__('Empfänger:', 'cmx-misbuero') . ' <a href="' . \esc_url('mailto:' . $recipient) . '" style="color:inherit;text-decoration:underline;">' . \esc_html($recipient) . '</a></div>';
 			}
 			if ($sent_at !== '') {
 				$sent_at_ts = \strtotime($sent_at);

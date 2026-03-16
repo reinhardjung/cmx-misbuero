@@ -69,8 +69,8 @@ echo '</p>';
 			echo '<div style="display:flex;align-items:center;gap:8px;max-width:100%;flex-wrap:nowrap;">';
 			echo '<button type="button" class="button button-secondary" aria-label="' . \esc_attr($copy_label) . '" title="' . \esc_attr($copy_label) . '" onclick="' . \esc_attr($copy_onclick) . '"><span class="dashicons dashicons-admin-page" aria-hidden="true" style="margin-top:3px;"></span></button>';
 			echo '<span data-copy-feedback="1" aria-live="polite" style="display:none;font-size:12px;color:#2271b1;white-space:nowrap;"></span>';
-			echo '<div class="code" style="flex:1 1 auto;min-width:0;padding:0 8px;overflow-x:auto;white-space:nowrap;">';
-			echo '<input type="text" style="width:100%;min-width:0;border:0;background:transparent;box-shadow:none;padding:6px 0;font-family:monospace;white-space:nowrap;" name="' . \esc_attr($field_name) . '" value="' . \esc_attr($value) . '" autocomplete="off">';
+			echo '<div class="code" style="flex:1 1 auto;min-width:0;padding:0 8px;overflow:hidden;">';
+			echo '<input type="text" style="width:100%;min-width:0;border:0;background:transparent;box-shadow:none;padding:6px 0;font-family:monospace;overflow:hidden;text-overflow:ellipsis;" name="' . \esc_attr($field_name) . '" value="' . \esc_attr($value) . '" autocomplete="off">';
 			echo '</div>';
 			echo '<input type="hidden" name="' . \esc_attr($rotate_name) . '" value="0" data-cmx-woo-rotate-secret-input="1">';
 			echo '<button type="button" class="button button-secondary" data-cmx-woo-rotate-secret-button="1" data-confirm-title="' . \esc_attr($rotate_title) . '" data-confirm-message="' . \esc_attr($rotate_confirm) . '" data-confirm-ok="' . \esc_attr($rotate_ok) . '" data-confirm-cancel="' . \esc_attr($rotate_cancel) . '">' . \esc_html($rotate_label) . '</button>';
@@ -121,21 +121,39 @@ echo '</p>';
 	);
 
 	\add_settings_field(
-		'cmx_woocommerce_order_link_template',
-		__('Bestell-Link', 'cmx-misbuero'),
+		'cmx_woocommerce_order_example_url',
+		__('Beispiel-URL einer Bestellung', 'cmx-misbuero'),
 		static function (): void {
-			$value = (string) cmx_woocommerce_get_setting('misbuero_order_link_template', '');
-			$field_name = CMX_SETTINGS_MAIN . '[misbuero_order_link_template]';
+			$value = (string) cmx_woocommerce_get_setting('misbuero_order_example_url', '');
+			$field_name = CMX_SETTINGS_MAIN . '[misbuero_order_example_url]';
+			$link_data = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_data_from_example_url')
+				? (array) cmx_woocommerce_order_link_data_from_example_url($value)
+				: ['recognized' => false, 'mode' => '', 'template' => ''];
+			$recognized = !empty($link_data['recognized']);
+			$mode_label = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_link_mode_label')
+				? (string) cmx_woocommerce_order_link_mode_label((string) ($link_data['mode'] ?? ''))
+				: '';
+			$template = (string) ($link_data['template'] ?? '');
 			echo '<input type="text" class="regular-text code" style="width:100%;max-width:860px;" name="' . \esc_attr($field_name) . '" value="' . \esc_attr($value) . '" autocomplete="off" spellcheck="false">';
 			echo '<p class="description">';
-			echo \esc_html__('Optional. Damit wird die Bestellnummer in den internen Notizen klickbar.', 'cmx-misbuero');
+			echo \esc_html__('Öffne im externen WooCommerce-Shop irgendeine Bestellung im Backend und kopiere die komplette URL aus dem Browser hier hinein.', 'cmx-misbuero');
 			echo '<br>';
-			echo \esc_html__('Verwende {order_id} und optional {order_number}.', 'cmx-misbuero');
-			echo '<br>';
-			echo '<code>' . \esc_html('Classic: https://shop.example.com/wp-admin/post.php?post={order_id}&action=edit') . '</code>';
-			echo '<br>';
-			echo '<code>' . \esc_html('HPOS: https://shop.example.com/wp-admin/admin.php?page=wc-orders&action=edit&id={order_id}') . '</code>';
+			echo \esc_html__('Mis Büro erkennt daraus automatisch HPOS oder Classic und verlinkt danach die Bestellnummer in den internen Notizen.', 'cmx-misbuero');
 			echo '</p>';
+			if ($recognized && $mode_label !== '' && $template !== '') {
+				echo '<p class="description" style="color:#2271b1;">';
+				echo '<strong>' . \esc_html__('Erkannt:', 'cmx-misbuero') . '</strong> ' . \esc_html($mode_label);
+				echo '<br>';
+				echo '<strong>' . \esc_html__('Verwendeter Bestell-Link:', 'cmx-misbuero') . '</strong> ';
+				echo '<code>' . \esc_html($template) . '</code>';
+				echo '</p>';
+			} elseif ($value !== '') {
+				echo '<p class="description" style="color:#b32d2e;">';
+				echo \esc_html__('Die URL wurde gespeichert, konnte aber nicht als WooCommerce-Bestell-URL erkannt werden. Bitte direkt eine geöffnete Bestellung aus dem Shop-Backend kopieren.', 'cmx-misbuero');
+				echo '<br><code>' . \esc_html('Classic: https://shop.example.com/wp-admin/post.php?post=4161&action=edit') . '</code>';
+				echo '<br><code>' . \esc_html('HPOS: https://shop.example.com/wp-admin/admin.php?page=wc-orders&action=edit&id=4161') . '</code>';
+				echo '</p>';
+			}
 		},
 		$page,
 		'cmx_sec_woocommerce_connection'
@@ -259,7 +277,7 @@ function cmx_sanitize_woocommerce_settings($new_value, $old_value) {
 	$settings = [
 		'misbuero_webhook_secret' => $new_value['misbuero_webhook_secret'] ?? ($old_value['misbuero_webhook_secret'] ?? ''),
 		'misbuero_rotate_webhook_secret' => $rotate_requested,
-		'misbuero_order_link_template' => $new_value['misbuero_order_link_template'] ?? ($old_value['misbuero_order_link_template'] ?? ''),
+		'misbuero_order_example_url' => $new_value['misbuero_order_example_url'] ?? ($old_value['misbuero_order_example_url'] ?? ''),
 		'misbuero_auto_mail'      => $new_value['misbuero_auto_mail'] ?? ($old_value['misbuero_auto_mail'] ?? '0'),
 	];
 
