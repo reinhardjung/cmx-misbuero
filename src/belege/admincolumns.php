@@ -31,6 +31,7 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		? (int) cmx_kontakt_request_kontakt_id()
 		: (isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0);
 	$proj_id      = isset($_GET['cmx_proj_id']) ? (int) $_GET['cmx_proj_id'] : 0;
+	$woo_only     = isset($_GET['cmx_woo']) && (string) \wp_unslash($_GET['cmx_woo']) === '1';
 
 	// Kategorie (Taxonomie kann belege_kategorien oder beleg_kategorie heißen)
 	$tax = '';
@@ -96,6 +97,17 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		}
 	}
 
+	if ($woo_only) {
+		$meta_key = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_beleg_meta_key')
+			? cmx_woocommerce_webhook_beleg_meta_key()
+			: 'cmx_woo_webhook';
+		$meta_query[] = [
+			'key'     => $meta_key,
+			'value'   => '1',
+			'compare' => '=',
+		];
+	}
+
 	// Nur setzen, wenn Bedingungen existieren (mind. eine zusätzliche Klausel)
 	if (count($meta_query) > 1) {
 		$q->set('meta_query', $meta_query);
@@ -115,6 +127,73 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$q->set('tax_query', $tax_query);
 	}
 }, 20);
+
+\add_action('restrict_manage_posts', function ($post_type = '', $which = ''): void {
+	if ($post_type !== 'belege') {
+		return;
+	}
+	if ($which !== 'top') {
+		return;
+	}
+	if (!\current_user_can('edit_posts')) {
+		return;
+	}
+
+	$checked = isset($_GET['cmx_woo']) && (string) \wp_unslash($_GET['cmx_woo']) === '1';
+	$classes = 'cmx-belege-woo-filter' . ($checked ? ' is-checked' : '');
+
+	echo '<label for="cmx_woo" class="' . \esc_attr($classes) . '">';
+	echo '<input type="checkbox" name="cmx_woo" id="cmx_woo" value="1" ' . \checked($checked, true, false) . '>';
+	echo '<span>' . \esc_html__('Woo', 'cmx-misbuero') . '</span>';
+	echo '</label>';
+}, 999, 2);
+
+\add_action('admin_head-edit.php', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) $screen->id !== 'edit-belege') {
+		return;
+	}
+
+	echo '<style>
+		#posts-filter .tablenav.top .actions select,
+		#posts-filter .tablenav.top .actions .button {
+			min-height: 32px;
+			border-radius: 6px;
+			vertical-align: middle;
+		}
+		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			min-height: 32px;
+			padding: 0 12px;
+			margin: 0 8px 0 0;
+			border: 1px solid #c3c4c7;
+			border-radius: 6px;
+			background: linear-gradient(180deg, #ffffff 0%, #f6f7f7 100%);
+			box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+			color: #1d2327;
+			cursor: pointer;
+			vertical-align: middle;
+		}
+		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter.is-checked {
+			border-color: #2271b1;
+			background: #eef6ff;
+			color: #0a4b78;
+		}
+		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter input[type="checkbox"] {
+			width: 16px;
+			height: 16px;
+			margin: 0;
+			accent-color: #2271b1;
+		}
+		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter span {
+			font-weight: 600;
+			line-height: 1;
+			white-space: nowrap;
+		}
+	</style>';
+});
 
 /**
  * Oben-rechts-Suche in der Belege-Liste um Kontakt erweitern.

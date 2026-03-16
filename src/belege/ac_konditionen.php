@@ -1006,23 +1006,74 @@ add_action('admin_footer-edit.php', function () {
 	<?php
 });
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_mark_beleg_paid')) {
+	function cmx_admin_mark_beleg_paid(int $post_id, string $paid_date = ''): array {
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || $post->post_type !== CMX_PT_BELEGE) {
+			return [
+				'success' => false,
+				'message' => 'invalid',
+				'status'  => 400,
+			];
+		}
+
+		if (!\current_user_can('edit_post', $post_id)) {
+			return [
+				'success' => false,
+				'message' => 'forbidden',
+				'status'  => 403,
+			];
+		}
+
+		$paid_date = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $paid_date)
+			? $paid_date
+			: \wp_date('Y-m-d');
+
+		$status_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')
+			: '_cmx_beleg_status';
+
+		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $paid_date);
+		\update_post_meta($post_id, $status_meta_key, 'bezahlt');
+		\clean_post_cache($post_id);
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_mark_project_tasks_paid')) {
+			cmxbu_mark_project_tasks_paid($post_id, $post, true);
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+			cmxbu_generate_document_on_save($post_id, $post, true);
+		}
+
+		$amount_display = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
+			? \trim((string) cmxbu_get_beleg_amount_display($post_id))
+			: '';
+
+		return [
+			'success'           => true,
+			'post_id'           => $post_id,
+			'paid_date'         => $paid_date,
+			'paid_date_display' => \wp_date('d.m.Y', \strtotime($paid_date)),
+			'status'            => 'bezahlt',
+			'amount_display'    => $amount_display,
+		];
+	}
+}
+
 // AJAX: Beleg als bezahlt markieren (ausgewaehltes Datum oder heutiges Datum)
 add_action('wp_ajax_cmx_mark_beleg_paid', function() {
-	if (!current_user_can('edit_posts')) {
-		wp_send_json_error('forbidden', 403);
-	}
 	check_ajax_referer('cmx_mark_paid');
 
 	$post_id = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
-	if ($post_id <= 0 || get_post_type($post_id) !== CMX_PT_BELEGE) {
-		wp_send_json_error('invalid');
+	$paid_date = isset($_POST['paid_date']) ? (string) $_POST['paid_date'] : '';
+	$result = cmx_admin_mark_beleg_paid($post_id, $paid_date);
+
+	if (empty($result['success'])) {
+		$status = isset($result['status']) ? (int) $result['status'] : 400;
+		$message = (string) ($result['message'] ?? 'error');
+		wp_send_json_error($message, $status);
 	}
 
-	$paid_date = isset($_POST['paid_date']) ? (string) $_POST['paid_date'] : '';
-	$paid_date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $paid_date)
-		? $paid_date
-		: gmdate('Y-m-d', current_time('timestamp'));
-	update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $paid_date);
-
-	wp_send_json_success();
+	unset($result['success']);
+	wp_send_json_success($result);
 });

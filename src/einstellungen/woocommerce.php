@@ -26,9 +26,10 @@ function cmx_register_woocommerce_tab(): void {
 				'cmx-misbuero'
 			);
 
-// fixme rju 2026-03-16: Überall verbessern
+
+			// fixme rju 2026-03-16: Überall verbessern
 echo '<p>';
-echo '<code>' . esc_html__( 'WP-Admin → WooCommerce → Einstellungen → Webhooks', 'cmx-misbuero' ) . '</code>';
+echo '<code>' . esc_html__( 'WP-Admin → WooCommerce → Einstellungen → Erweitert → Webhooks', 'cmx-misbuero' ) . '</code>';
 echo '</p>';
 
 // fixme rju 2026-03-16: Überall verbessern

@@ -170,6 +170,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_route')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_beleg_meta_key')) {
+	function cmx_woocommerce_webhook_beleg_meta_key(): string {
+		return 'cmx_woo_webhook';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_is_webhook_beleg')) {
+	function cmx_woocommerce_is_webhook_beleg(int $post_id): bool {
+		if ($post_id <= 0) {
+			return false;
+		}
+
+		return (string) \get_post_meta($post_id, cmx_woocommerce_webhook_beleg_meta_key(), true) === '1';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_url')) {
 	function cmx_woocommerce_webhook_url(): string {
 		return \rest_url(cmx_woocommerce_webhook_route());
@@ -880,6 +896,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 		\update_post_meta($beleg_id, '_cmx_wc_order_number', $order_number);
 		\update_post_meta($beleg_id, '_cmx_wc_order_status', \sanitize_key((string) ($order['status'] ?? '')));
 		\update_post_meta($beleg_id, '_cmx_wc_webhook_topic', \sanitize_text_field($topic));
+		\update_post_meta($beleg_id, cmx_woocommerce_webhook_beleg_meta_key(), '1');
 		\update_post_meta($beleg_id, '_cmx_beleg_richtung', 'ausgang');
 		\update_post_meta($beleg_id, '_cmx_beleg_kontakt_id', $kontakt_id > 0 ? $kontakt_id : '');
 		\update_post_meta($beleg_id, '_cmx_beleg_kontakt_label', $contact_title);
