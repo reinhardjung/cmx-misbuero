@@ -121,6 +121,27 @@ echo '</p>';
 	);
 
 	\add_settings_field(
+		'cmx_woocommerce_order_link_template',
+		__('Bestell-Link', 'cmx-misbuero'),
+		static function (): void {
+			$value = (string) cmx_woocommerce_get_setting('misbuero_order_link_template', '');
+			$field_name = CMX_SETTINGS_MAIN . '[misbuero_order_link_template]';
+			echo '<input type="text" class="regular-text code" style="width:100%;max-width:860px;" name="' . \esc_attr($field_name) . '" value="' . \esc_attr($value) . '" autocomplete="off" spellcheck="false">';
+			echo '<p class="description">';
+			echo \esc_html__('Optional. Damit wird die Bestellnummer in den internen Notizen klickbar.', 'cmx-misbuero');
+			echo '<br>';
+			echo \esc_html__('Verwende {order_id} und optional {order_number}.', 'cmx-misbuero');
+			echo '<br>';
+			echo '<code>' . \esc_html('Classic: https://shop.example.com/wp-admin/post.php?post={order_id}&action=edit') . '</code>';
+			echo '<br>';
+			echo '<code>' . \esc_html('HPOS: https://shop.example.com/wp-admin/admin.php?page=wc-orders&action=edit&id={order_id}') . '</code>';
+			echo '</p>';
+		},
+		$page,
+		'cmx_sec_woocommerce_connection'
+	);
+
+	\add_settings_field(
 		'cmx_woocommerce_auto_mail',
 		__('Automatischer Mailversand', 'cmx-misbuero'),
 		static function (): void {
@@ -238,6 +259,7 @@ function cmx_sanitize_woocommerce_settings($new_value, $old_value) {
 	$settings = [
 		'misbuero_webhook_secret' => $new_value['misbuero_webhook_secret'] ?? ($old_value['misbuero_webhook_secret'] ?? ''),
 		'misbuero_rotate_webhook_secret' => $rotate_requested,
+		'misbuero_order_link_template' => $new_value['misbuero_order_link_template'] ?? ($old_value['misbuero_order_link_template'] ?? ''),
 		'misbuero_auto_mail'      => $new_value['misbuero_auto_mail'] ?? ($old_value['misbuero_auto_mail'] ?? '0'),
 	];
 

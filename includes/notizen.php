@@ -54,6 +54,49 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_is_valid_time')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_allowed_html')) {
+	function cmx_notizen_allowed_html(): array {
+		$allowed = \wp_kses_allowed_html('post');
+		$allowed = \is_array($allowed) ? $allowed : [];
+		$allowed['a'] = \array_merge(
+			['href' => [], 'title' => [], 'target' => [], 'rel' => []],
+			\is_array($allowed['a'] ?? null) ? $allowed['a'] : []
+		);
+
+		return $allowed;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_sanitize_text')) {
+	function cmx_notizen_sanitize_text($text): string {
+		if (!\is_string($text)) {
+			return '';
+		}
+
+		$text = \str_replace(["\r\n", "\r"], "\n", $text);
+
+		return \trim((string) \wp_kses($text, cmx_notizen_allowed_html()));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')) {
+	function cmx_notizen_editor_settings(): array {
+		return [
+			'mediaButtons' => false,
+			'quicktags'    => true,
+			'tinymce'      => [
+				'wpautop'   => true,
+				'branding'  => false,
+				'menubar'   => false,
+				'statusbar' => false,
+				'resize'    => true,
+				'toolbar1'  => 'formatselect,bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
+				'toolbar2'  => '',
+			],
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 	/**
 	 * @param mixed $row
@@ -67,9 +110,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 		if (\is_array($row)) {
 			$datum = \sanitize_text_field((string) ($row['datum'] ?? ($row['date'] ?? '')));
 			$zeit  = \sanitize_text_field((string) ($row['zeit'] ?? ($row['time'] ?? ($row['uhrzeit'] ?? ''))));
-			$text  = \sanitize_textarea_field((string) ($row['text'] ?? ($row['notiz'] ?? ($row['note'] ?? ($row['info'] ?? '')))));
+			$text  = cmx_notizen_sanitize_text((string) ($row['text'] ?? ($row['notiz'] ?? ($row['note'] ?? ($row['info'] ?? '')))));
 		} elseif (\is_string($row)) {
-			$text = \sanitize_textarea_field($row);
+			$text = cmx_notizen_sanitize_text($row);
 		}
 
 		$datum = \trim($datum);
@@ -181,11 +224,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		$name_index = $is_template ? '__INDEX__' : (string) $index;
 		$datum = \esc_attr((string) ($row['datum'] ?? ''));
 		$zeit  = \esc_attr((string) ($row['zeit'] ?? ''));
-		$text  = \esc_textarea((string) ($row['text'] ?? ''));
+		$text_value = (string) ($row['text'] ?? '');
+		$text  = \esc_textarea($text_value);
+		$textarea_id = 'cmx_intern_notiz_text_' . \preg_replace('/[^A-Za-z0-9_-]+/', '_', $name_index);
 
 		echo '<div class="cmx-intern-notiz-row">';
 		echo '<div class="cmx-intern-notiz-main">';
-		echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="4" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
+		echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="8" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
 		echo '</div>';
 
 		echo '<div class="cmx-intern-notiz-side">';
@@ -228,7 +273,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label{display:flex;flex-direction:column;gap:4px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label-inline{display:flex;align-items:center;gap:6px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-side{display:flex;flex-direction:column;gap:8px;}';
-		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:120px;}';
+		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:200px;}';
+		echo '#cmx-intern-notizen-list .wp-editor-wrap{width:100%;}';
+		echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:200px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';
@@ -249,6 +296,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		(function(){
 			const list = document.getElementById('cmx-intern-notizen-list');
 			const tpl = document.getElementById('cmx-intern-notizen-template');
+			const editorSettings = <?php echo \wp_json_encode(cmx_notizen_editor_settings()); ?>;
+			const editorIds = new Set();
+			let editorBootAttempts = 0;
 			if (!list || !tpl || list.dataset.cmxBound === '1') return;
 			list.dataset.cmxBound = '1';
 
@@ -259,6 +309,63 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 			function nowTime() {
 				const d = new Date();
 				return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+			}
+			function getTextInput(row) {
+				return row ? row.querySelector('textarea[data-cmx-notiz-editor="1"]') : null;
+			}
+			function hasEditorApi() {
+				return !!(window.wp && wp.editor && typeof wp.editor.initialize === 'function' && typeof wp.editor.remove === 'function');
+			}
+			function initAllEditors() {
+				list.querySelectorAll('.cmx-intern-notiz-row').forEach(initEditor);
+			}
+			function scheduleEditorBoot(delay) {
+				window.setTimeout(function(){
+					if (hasEditorApi()) {
+						initAllEditors();
+						return;
+					}
+					if (editorBootAttempts >= 40) {
+						return;
+					}
+					editorBootAttempts += 1;
+					scheduleEditorBoot(150);
+				}, delay);
+			}
+			function initEditor(row) {
+				const textarea = getTextInput(row);
+				if (!textarea || editorIds.has(textarea.id) || !hasEditorApi()) return;
+				try {
+					wp.editor.initialize(textarea.id, editorSettings);
+					editorIds.add(textarea.id);
+				} catch (err) {}
+			}
+			function destroyEditor(row) {
+				const textarea = getTextInput(row);
+				if (!textarea) return;
+				if (editorIds.has(textarea.id) && hasEditorApi()) {
+					try {
+						wp.editor.remove(textarea.id);
+					} catch (err) {}
+				}
+				editorIds.delete(textarea.id);
+			}
+			function setTextValue(row, value) {
+				const textarea = getTextInput(row);
+				if (!textarea) return;
+				textarea.value = value || '';
+				if (window.tinymce && textarea.id) {
+					const editor = window.tinymce.get(textarea.id);
+					if (editor) {
+						editor.setContent(value || '');
+						editor.save();
+					}
+				}
+			}
+			function triggerSave() {
+				if (window.tinymce && typeof window.tinymce.triggerSave === 'function') {
+					window.tinymce.triggerSave();
+				}
 			}
 			function addRow(seed){
 				const idx = list.querySelectorAll('.cmx-intern-notiz-row').length;
@@ -274,6 +381,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 				if (timeInput) timeInput.value = seed && seed.zeit ? seed.zeit : nowTime();
 				if (textInput) textInput.value = seed && seed.text ? seed.text : '';
 				list.appendChild(row);
+				initEditor(row);
+				if (!hasEditorApi()) {
+					scheduleEditorBoot(150);
+				}
+			}
+			initAllEditors();
+			if (!hasEditorApi()) {
+				if (document.readyState === 'complete') {
+					scheduleEditorBoot(0);
+				} else {
+					window.addEventListener('load', function(){ scheduleEditorBoot(0); }, {once:true});
+				}
+			}
+			const form = list.closest('form');
+			if (form && form.dataset.cmxNotizenSubmitBound !== '1') {
+				form.dataset.cmxNotizenSubmitBound = '1';
+				form.addEventListener('submit', triggerSave);
 			}
 
 			list.addEventListener('click', function(e){
@@ -293,12 +417,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 					if (allRows.length <= 1) {
 						const dateInput = row.querySelector('input[type="date"]');
 						const timeInput = row.querySelector('input[type="time"]');
-						const textInput = row.querySelector('textarea');
 						if (dateInput) dateInput.value = today();
 						if (timeInput) timeInput.value = nowTime();
-						if (textInput) textInput.value = '';
+						setTextValue(row, '');
 						return;
 					}
+					destroyEditor(row);
 					row.remove();
 					return;
 				}
@@ -344,6 +468,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 	);
 }, 10, 1);
 
+\add_action('admin_enqueue_scripts', function (): void {
+	if (!\function_exists('get_current_screen') || !\function_exists('wp_enqueue_editor')) {
+		return;
+	}
+
+	$screen = \get_current_screen();
+	if (!$screen instanceof \WP_Screen) {
+		return;
+	}
+	if (!\in_array((string) $screen->base, ['post', 'post-new'], true)) {
+		return;
+	}
+	if (!\in_array((string) ($screen->post_type ?? ''), cmx_notizen_supported_post_types(), true)) {
+		return;
+	}
+
+	\wp_enqueue_editor();
+});
+
 \add_action('save_post', function ($post_id, $post, $update) {
 	if (!($post instanceof \WP_Post)) {
 		return;
@@ -362,6 +505,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 	$rows = $_POST['cmx_intern_notizen_rows'] ?? [];
 	if (!\is_array($rows)) {
 		$rows = [];
+	} else {
+		$rows = \wp_unslash($rows);
 	}
 
 	$clean = [];
