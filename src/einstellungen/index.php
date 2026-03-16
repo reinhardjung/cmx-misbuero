@@ -31,6 +31,7 @@ require_once 'vorgaben.php';
 require_once 'banken.php';
 require_once 'kontakte.php';
 require_once 'belege.php';
+require_once 'woocommerce.php';
 require_once 'email.php';
 require_once 'erweitert.php';
 require_once 'support.php';
@@ -85,12 +86,13 @@ add_action('all_admin_notices', function (): void {
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
 	return [
-		'general'  => 'Allgemein',
-		'vorgaben' => 'Vorgaben',
-		'banken'   => 'Zahlungen',
-		'belege'   => 'Belege',
-		'email'    => 'E-Mail',
-		'support'  => 'Support',
+		'general'     => 'Allgemein',
+		'vorgaben'    => 'Vorgaben',
+		'banken'      => 'Zahlungen',
+		'belege'      => 'Belege',
+		'woocommerce' => 'WooCommerce',
+		'email'       => 'E-Mails',
+		'support'     => 'Support',
 	];
 }
 

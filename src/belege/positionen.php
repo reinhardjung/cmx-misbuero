@@ -933,6 +933,7 @@ function cmx_render_position_row($i, $pos) {
 	$edit_link = $artikel_id ? get_edit_post_link($artikel_id, '') : '';
 	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
+	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_name]" class="cmx-artikel-name" value="'.esc_attr($display_name).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_idx]" class="cmx-task-idx" value="'.($task_idx === null ? '' : esc_attr((string) $task_idx)).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_uid]" class="cmx-task-uid" value="'.esc_attr($task_uid).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_projekt_id]" class="cmx-task-projekt-id" value="'.($task_projekt_id === null ? '' : esc_attr((string) $task_projekt_id)).'">';
@@ -1019,7 +1020,8 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			continue;
 		}
 
-		$artikel_id   = isset($row['artikel_id']) ? (int)$row['artikel_id'] : 0;
+			$artikel_id   = isset($row['artikel_id']) ? (int)$row['artikel_id'] : 0;
+			$artikel_name = \sanitize_text_field((string) ($row['artikel_name'] ?? ''));
 
 		$menge_raw    = isset($row['menge']) ? (string)$row['menge'] : '';
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
@@ -1049,16 +1051,17 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			$unit       = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
 
 			// Wenn Artikel gewählt ist, leere Menge als 1 übernehmen.
-			if ($artikel_id > 0 && \trim($menge_raw) === '' && $menge == 0.0) {
+			if (($artikel_id > 0 || $artikel_name !== '') && \trim($menge_raw) === '' && $menge == 0.0) {
 				$menge = 1.0;
 			}
 
-			// negative Mengen zulassen; nur 0 verwerfen
-			if ($artikel_id <= 0 || $menge == 0.0) continue;
+			// Negative Mengen zulassen; externe Positionen ohne lokale Artikel-ID ebenfalls behalten.
+			if (($artikel_id <= 0 && $artikel_name === '') || $menge == 0.0) continue;
 			if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
 
 			$clean[] = [
 				'artikel_id'   => $artikel_id,
+				'artikel_name' => $artikel_name,
 				'menge'        => $menge,
 				'einheit_id'   => $einheit_id,
 				'unit'         => $unit,
@@ -1910,6 +1913,7 @@ function cmx_beleg_positionen_js() {
 				const info = (task.info || '').toString();
 
 				const $articleId = $row.find('.cmx-artikel-id').first();
+				const $articleName = $row.find('.cmx-artikel-name').first();
 				const $articleInput = $row.find('.cmx-artikel-autocomplete').first();
 				const $taskIdx = $row.find('.cmx-task-idx').first();
 				const $taskUid = $row.find('.cmx-task-uid').first();
@@ -1921,6 +1925,7 @@ function cmx_beleg_positionen_js() {
 				const $edit = $row.find('.cmx-artikel-edit').first();
 
 				$articleId.val(artikelId > 0 ? artikelId : '');
+				$articleName.val(artikelLabel);
 				$articleInput.val(artikelLabel);
 				$taskIdx.val(taskIdx);
 				$taskUid.val(taskUid.replace(/[^A-Za-z0-9_-]/g, ''));
@@ -2010,6 +2015,7 @@ function cmx_beleg_positionen_js() {
 				function chooseItem(it){
 					const $row = $input.closest('tr');
 					$row.find('.cmx-artikel-id').val(it.id||0);
+					$row.find('.cmx-artikel-name').val((it.title || '').toString());
 					$input.val((it.nr?it.nr+' – ':'') + (it.title||''));
 					const $edit = $row.find('.cmx-artikel-edit');
 					const $qty = $row.find('input[name*="[menge]"]').first();
@@ -2047,6 +2053,11 @@ function cmx_beleg_positionen_js() {
 				$input.on('input', function(){
 					if(t) clearTimeout(t);
 					const q = $input.val().trim();
+					const $row = $input.closest('tr');
+					const artikelId = parseInt((($row.find('.cmx-artikel-id').first().val() || '').toString().trim()), 10) || 0;
+					if (artikelId <= 0) {
+						$row.find('.cmx-artikel-name').first().val(q);
+					}
 					if(q.length<1){ doSearch(''); return; }
 					t = setTimeout(()=>doSearch(q), 120);
 				});
@@ -2688,6 +2699,7 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 			continue;
 		}
 		$artikel_id   = isset($r['artikel_id']) ? (int)$r['artikel_id'] : 0;
+		$artikel_name = \sanitize_text_field((string) ($r['artikel_name'] ?? ''));
 
 		$menge_raw    = (string)($r['menge'] ?? '');
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
@@ -2715,16 +2727,17 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		$unit = \sanitize_text_field((string) ($unit_data['unit'] ?? ''));
 
 		// Wenn Artikel gewählt ist, leere Menge als 1 übernehmen.
-		if ($artikel_id > 0 && \trim($menge_raw) === '' && $menge == 0.0) {
+		if (($artikel_id > 0 || $artikel_name !== '') && \trim($menge_raw) === '' && $menge == 0.0) {
 			$menge = 1.0;
 		}
 
-		// negative Mengen zulassen; nur 0 verwerfen
-		if ($artikel_id <= 0 || $menge == 0.0) continue;
+		// Negative Mengen zulassen; externe Positionen ohne lokale Artikel-ID ebenfalls behalten.
+		if (($artikel_id <= 0 && $artikel_name === '') || $menge == 0.0) continue;
 		if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
 
 		$clean[] = [
 			'artikel_id'   => $artikel_id,
+			'artikel_name' => $artikel_name,
 			'menge'        => $menge,
 			'einheit_id'   => $einheit_id,
 			'unit'         => $unit,
