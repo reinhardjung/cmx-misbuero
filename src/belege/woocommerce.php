@@ -1102,6 +1102,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_notes')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_note_rows')) {
+	/**
+	 * Interne Notizen-Metabox erwartet strukturierte Zeilen mit Datum/Uhrzeit/Text.
+	 *
+	 * @return array<int, array{datum:string,zeit:string,text:string}>
+	 */
+	function cmx_woocommerce_import_note_rows(array $order, string $topic, array $tax_rates): array {
+		$text = cmx_woocommerce_import_notes($order, $topic, $tax_rates);
+		$datum = \function_exists(__NAMESPACE__ . '\\cmx_notizen_now_date')
+			? (string) cmx_notizen_now_date()
+			: (string) \current_time('Y-m-d');
+		$zeit = \function_exists(__NAMESPACE__ . '\\cmx_notizen_now_time')
+			? (string) cmx_notizen_now_time()
+			: (string) \current_time('H:i');
+
+		return [[
+			'datum' => $datum,
+			'zeit'  => $zeit,
+			'text'  => $text,
+		]];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_map_beleg_status')) {
 	function cmx_woocommerce_map_beleg_status(array $order): string {
 		$status = \strtolower(\trim((string) ($order['status'] ?? '')));
@@ -1523,7 +1546,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 		\update_post_meta($beleg_id, '_cmx_beleg_positionen', $positions);
 		\update_post_meta($beleg_id, '_cmx_beleg_is_brutto', $is_brutto);
 		\update_post_meta($beleg_id, '_cmx_beleg_mwst_term', $mwst_term_id > 0 ? $mwst_term_id : '');
-		\update_post_meta($beleg_id, '_cmx_beleg_intern_notizen', cmx_woocommerce_import_notes($order, $topic, $tax_rates));
+		$intern_notizen_key = \function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
+			? (string) cmx_notizen_meta_key_for_post_type('belege')
+			: '_cmx_beleg_intern_notizen';
+		\update_post_meta($beleg_id, $intern_notizen_key, cmx_woocommerce_import_note_rows($order, $topic, $tax_rates));
 		cmx_woocommerce_sync_beleg_post_datetime($beleg_id, $invoice_datetime);
 
 		if ($paid_date !== '') {
