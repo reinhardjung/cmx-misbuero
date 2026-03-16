@@ -97,6 +97,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_extract_links')) {
+	/**
+	 * @return array<int, array{href:string,label:string}>
+	 */
+	function cmx_notizen_extract_links(string $text): array {
+		$text = \trim($text);
+		if ($text === '' || \stripos($text, '<a') === false) {
+			return [];
+		}
+
+		$matches = [];
+		\preg_match_all('/<a\b[^>]*href=(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', $text, $matches, \PREG_SET_ORDER);
+		if ($matches === []) {
+			return [];
+		}
+
+		$links = [];
+		foreach ($matches as $match) {
+			$href = \esc_url_raw((string) ($match[2] ?? ''), ['http', 'https', 'mailto']);
+			$label = \trim(\wp_strip_all_tags((string) ($match[3] ?? '')));
+			if ($href === '') {
+				continue;
+			}
+			if ($label === '') {
+				$label = $href;
+			}
+			$key = \md5($href . '|' . $label);
+			$links[$key] = [
+				'href'  => $href,
+				'label' => $label,
+			];
+		}
+
+		return \array_values($links);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 	/**
 	 * @param mixed $row
@@ -227,10 +264,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		$text_value = (string) ($row['text'] ?? '');
 		$text  = \esc_textarea($text_value);
 		$textarea_id = 'cmx_intern_notiz_text_' . \preg_replace('/[^A-Za-z0-9_-]+/', '_', $name_index);
+		$links = cmx_notizen_extract_links($text_value);
 
 		echo '<div class="cmx-intern-notiz-row">';
 		echo '<div class="cmx-intern-notiz-main">';
 		echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="8" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
+		if ($links !== []) {
+			echo '<div class="cmx-intern-notiz-links">';
+			echo '<strong>' . \esc_html__('Links', 'cmx') . ':</strong> ';
+			foreach ($links as $link_index => $link) {
+				if ($link_index > 0) {
+					echo ' <span aria-hidden="true">|</span> ';
+				}
+				echo '<a href="' . \esc_url((string) $link['href']) . '" target="_blank" rel="noopener noreferrer">' . \esc_html((string) $link['label']) . '</a>';
+			}
+			echo '</div>';
+		}
 		echo '</div>';
 
 		echo '<div class="cmx-intern-notiz-side">';
@@ -274,6 +323,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label-inline{display:flex;align-items:center;gap:6px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-side{display:flex;flex-direction:column;gap:8px;}';
 		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:200px;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-links{margin-top:8px;font-size:12px;line-height:1.5;color:#50575e;}';
+		echo '#cmx-intern-notizen-list .cmx-intern-notiz-links a{font-weight:600;text-decoration:underline;}';
 		echo '#cmx-intern-notizen-list .wp-editor-wrap{width:100%;}';
 		echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:200px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';

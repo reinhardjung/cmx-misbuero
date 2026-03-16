@@ -1737,6 +1737,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox')
 			echo \esc_html($order_label !== '' ? $order_label : '—');
 		}
 		echo '</p>';
+		if ($order_label !== '' && $order_url === '') {
+			$settings_url = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+				? \admin_url('admin.php?page=' . \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG') . '&tab=woocommerce')
+				: '';
+			echo '<div style="margin-top:-2px;font-size:12px;color:#b32d2e;">';
+			echo \esc_html__('Bestell-Link noch nicht verfügbar.', 'cmx-misbuero');
+			if ($settings_url !== '') {
+				echo ' <a href="' . \esc_url($settings_url) . '">' . \esc_html__('Bitte in den WooCommerce-Einstellungen eine Beispiel-URL einer Bestellung hinterlegen.', 'cmx-misbuero') . '</a>';
+			}
+			echo '</div>';
+		}
 		if ($order_status !== '') {
 			echo '<p style="margin:0;"><strong>' . \esc_html__('Woo-Status', 'cmx-misbuero') . ':</strong> ' . \esc_html($order_status) . '</p>';
 		}
@@ -1750,7 +1761,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox')
 			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #00a32a;border-radius:8px;background:#edfaef;color:#0f5132;">';
 			echo '<strong>' . \esc_html__('Auto-Mail versendet', 'cmx-misbuero') . '</strong>';
 			if ($recipient !== '' && \is_email($recipient)) {
-				echo '<div style="margin-top:4px;">' . \esc_html__('Empfänger:', 'cmx-misbuero') . ' <a href="' . \esc_url('mailto:' . $recipient) . '" style="color:inherit;text-decoration:underline;">' . \esc_html($recipient) . '</a></div>';
+				echo '<div style="margin-top:4px;">' . \esc_html__('Empfänger:', 'cmx-misbuero') . ' <a href="' . \esc_url('mailto:' . $recipient) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' . \esc_html($recipient) . '</a></div>';
 			}
 			if ($sent_at !== '') {
 				$sent_at_ts = \strtotime($sent_at);
