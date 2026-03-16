@@ -1645,52 +1645,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_current_admin_beleg_id'
 	}
 }
 
-\add_action('all_admin_notices', __NAMESPACE__ . '\\cmx_render_woocommerce_auto_mail_notice');
-if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_auto_mail_notice')) {
-	function cmx_render_woocommerce_auto_mail_notice(): void {
-		$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
-		if (!$screen || (string) ($screen->post_type ?? '') !== 'belege' || (string) ($screen->base ?? '') !== 'post') {
-			return;
-		}
-
-		$post_id = cmx_woocommerce_current_admin_beleg_id();
-		if ($post_id <= 0 || !cmx_woocommerce_is_webhook_beleg($post_id)) {
-			return;
-		}
-
-		$error = \trim((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_error_meta_key(), true));
-		if ($error !== '') {
-			echo '<div class="notice notice-error">';
-			echo '<p><strong>' . \esc_html__('Woo Auto-Mail fehlgeschlagen.', 'cmx-misbuero') . '</strong> ' . \esc_html($error) . '</p>';
-			echo '</div>';
-			return;
-		}
-
-		if ((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_sent_meta_key(), true) !== '1') {
-			return;
-		}
-
-		$parts = [];
-		$recipient = \sanitize_email((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_recipient_meta_key(), true));
-		if ($recipient !== '' && \is_email($recipient)) {
-			$parts[] = 'an ' . $recipient;
-		}
-		$sent_at = \trim((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_sent_at_meta_key(), true));
-		$sent_at_ts = $sent_at !== '' ? \strtotime($sent_at) : false;
-		if ($sent_at_ts) {
-			$parts[] = 'am ' . \wp_date('d.m.Y H:i', $sent_at_ts);
-		}
-
-		echo '<div class="notice notice-success">';
-		echo '<p><strong>' . \esc_html__('Woo Auto-Mail wurde versendet.', 'cmx-misbuero') . '</strong>';
-		if ($parts !== []) {
-			echo ' ' . \esc_html(\implode(' ', $parts)) . '.';
-		}
-		echo '</p>';
-		echo '</div>';
-	}
-}
-
 \add_action('add_meta_boxes', __NAMESPACE__ . '\\cmx_register_woocommerce_status_metabox');
 if (!\function_exists(__NAMESPACE__ . '\\cmx_register_woocommerce_status_metabox')) {
 	function cmx_register_woocommerce_status_metabox(): void {
