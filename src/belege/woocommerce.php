@@ -563,6 +563,104 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_pick_date_ymd')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_parse_datetime')) {
+	function cmx_woocommerce_parse_datetime(string $raw, \DateTimeZone $timezone): ?\DateTimeImmutable {
+		$raw = \trim($raw);
+		if ($raw === '') {
+			return null;
+		}
+
+		$formats = [
+			'Y-m-d\TH:i:sP',
+			'Y-m-d\TH:i:s.uP',
+			'Y-m-d\TH:i:s',
+			'Y-m-d H:i:s',
+			'Y-m-d',
+		];
+
+		foreach ($formats as $format) {
+			$parsed = \DateTimeImmutable::createFromFormat($format, $raw, $timezone);
+			if ($parsed instanceof \DateTimeImmutable) {
+				return $parsed;
+			}
+		}
+
+		try {
+			return new \DateTimeImmutable($raw, $timezone);
+		} catch (\Throwable $exception) {
+			return null;
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_pick_datetime_values')) {
+	function cmx_woocommerce_pick_datetime_values(array $source, array $keys): array {
+		$wp_timezone = \function_exists('wp_timezone') ? \wp_timezone() : new \DateTimeZone('UTC');
+		$utc_timezone = new \DateTimeZone('UTC');
+
+		foreach ($keys as $key) {
+			$raw = \trim((string) ($source[$key] ?? ''));
+			if ($raw === '') {
+				continue;
+			}
+
+			$is_gmt = \substr($key, -4) === '_gmt';
+			$base_timezone = $is_gmt ? $utc_timezone : $wp_timezone;
+			$parsed = cmx_woocommerce_parse_datetime($raw, $base_timezone);
+			if (!$parsed instanceof \DateTimeImmutable) {
+				continue;
+			}
+
+			$local = $parsed->setTimezone($wp_timezone);
+			$gmt = $parsed->setTimezone($utc_timezone);
+
+			return [
+				'date'          => $local->format('Y-m-d'),
+				'post_date'     => $local->format('Y-m-d H:i:s'),
+				'post_date_gmt' => $gmt->format('Y-m-d H:i:s'),
+				'time'          => $local->format('H:i:s'),
+			];
+		}
+
+		return [
+			'date'          => '',
+			'post_date'     => '',
+			'post_date_gmt' => '',
+			'time'          => '',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sync_beleg_post_datetime')) {
+	function cmx_woocommerce_sync_beleg_post_datetime(int $post_id, array $datetime): void {
+		if ($post_id <= 0) {
+			return;
+		}
+
+		$post_date = \trim((string) ($datetime['post_date'] ?? ''));
+		$post_date_gmt = \trim((string) ($datetime['post_date_gmt'] ?? ''));
+		if ($post_date === '' || $post_date_gmt === '') {
+			return;
+		}
+
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || $post->post_type !== 'belege') {
+			return;
+		}
+
+		if ((string) $post->post_date === $post_date && (string) $post->post_date_gmt === $post_date_gmt) {
+			return;
+		}
+
+		\wp_update_post([
+			'ID'            => $post_id,
+			'post_date'     => $post_date,
+			'post_date_gmt' => $post_date_gmt,
+			'edit_date'     => true,
+		]);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_number')) {
 	function cmx_woocommerce_order_number(array $order): string {
 		$number = \trim((string) ($order['number'] ?? ''));
@@ -1210,6 +1308,139 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_maybe_send_auto_mail'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_current_admin_beleg_id')) {
+	function cmx_woocommerce_current_admin_beleg_id(): int {
+		$post_id = isset($_GET['post']) ? \absint(\wp_unslash($_GET['post'])) : 0;
+		if ($post_id > 0) {
+			return $post_id;
+		}
+
+		$post_id = isset($_POST['post_ID']) ? \absint(\wp_unslash($_POST['post_ID'])) : 0;
+		return $post_id > 0 ? $post_id : 0;
+	}
+}
+
+\add_action('all_admin_notices', __NAMESPACE__ . '\\cmx_render_woocommerce_auto_mail_notice');
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_auto_mail_notice')) {
+	function cmx_render_woocommerce_auto_mail_notice(): void {
+		$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+		if (!$screen || (string) ($screen->post_type ?? '') !== 'belege' || (string) ($screen->base ?? '') !== 'post') {
+			return;
+		}
+
+		$post_id = cmx_woocommerce_current_admin_beleg_id();
+		if ($post_id <= 0 || !cmx_woocommerce_is_webhook_beleg($post_id)) {
+			return;
+		}
+
+		$error = \trim((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_error_meta_key(), true));
+		if ($error !== '') {
+			echo '<div class="notice notice-error">';
+			echo '<p><strong>' . \esc_html__('Woo Auto-Mail fehlgeschlagen.', 'cmx-misbuero') . '</strong> ' . \esc_html($error) . '</p>';
+			echo '</div>';
+			return;
+		}
+
+		if ((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_sent_meta_key(), true) !== '1') {
+			return;
+		}
+
+		$parts = [];
+		$recipient = \sanitize_email((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_recipient_meta_key(), true));
+		if ($recipient !== '' && \is_email($recipient)) {
+			$parts[] = 'an ' . $recipient;
+		}
+		$sent_at = \trim((string) \get_post_meta($post_id, cmx_woocommerce_auto_mail_sent_at_meta_key(), true));
+		$sent_at_ts = $sent_at !== '' ? \strtotime($sent_at) : false;
+		if ($sent_at_ts) {
+			$parts[] = 'am ' . \wp_date('d.m.Y H:i', $sent_at_ts);
+		}
+
+		echo '<div class="notice notice-success">';
+		echo '<p><strong>' . \esc_html__('Woo Auto-Mail wurde versendet.', 'cmx-misbuero') . '</strong>';
+		if ($parts !== []) {
+			echo ' ' . \esc_html(\implode(' ', $parts)) . '.';
+		}
+		echo '</p>';
+		echo '</div>';
+	}
+}
+
+\add_action('add_meta_boxes', __NAMESPACE__ . '\\cmx_register_woocommerce_status_metabox');
+if (!\function_exists(__NAMESPACE__ . '\\cmx_register_woocommerce_status_metabox')) {
+	function cmx_register_woocommerce_status_metabox(): void {
+		$post_id = cmx_woocommerce_current_admin_beleg_id();
+		if ($post_id <= 0 || !cmx_woocommerce_is_webhook_beleg($post_id)) {
+			return;
+		}
+
+		\add_meta_box(
+			'cmx-woocommerce-status',
+			__('WooCommerce', 'cmx-misbuero'),
+			__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox',
+			'belege',
+			'side',
+			'high'
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_woocommerce_status_metabox')) {
+	function cmx_render_woocommerce_status_metabox(\WP_Post $post): void {
+		if ($post->post_type !== 'belege' || !cmx_woocommerce_is_webhook_beleg((int) $post->ID)) {
+			echo '<p>' . \esc_html__('Kein WooCommerce-WebHook-Beleg.', 'cmx-misbuero') . '</p>';
+			return;
+		}
+
+		$order_id = \trim((string) \get_post_meta($post->ID, '_cmx_wc_order_id', true));
+		$order_number = \trim((string) \get_post_meta($post->ID, '_cmx_wc_order_number', true));
+		$order_status = \trim((string) \get_post_meta($post->ID, '_cmx_wc_order_status', true));
+		$recipient = \sanitize_email((string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_recipient_meta_key(), true));
+		$sent_at = \trim((string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_sent_at_meta_key(), true));
+		$error = \trim((string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_error_meta_key(), true));
+		$mail_sent = (string) \get_post_meta($post->ID, cmx_woocommerce_auto_mail_sent_meta_key(), true) === '1';
+		$auto_mail_enabled = cmx_woocommerce_auto_mail_enabled();
+
+		echo '<div style="display:grid;gap:8px;">';
+		echo '<p style="margin:0;"><strong>' . \esc_html__('Bestellung', 'cmx-misbuero') . ':</strong> ' . \esc_html($order_number !== '' ? ('#' . $order_number) : ($order_id !== '' ? ('#' . $order_id) : '—')) . '</p>';
+		if ($order_status !== '') {
+			echo '<p style="margin:0;"><strong>' . \esc_html__('Woo-Status', 'cmx-misbuero') . ':</strong> ' . \esc_html($order_status) . '</p>';
+		}
+
+		if ($error !== '') {
+			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #d63638;border-radius:8px;background:#fcf0f1;color:#8a2424;">';
+			echo '<strong>' . \esc_html__('Auto-Mail fehlgeschlagen', 'cmx-misbuero') . '</strong>';
+			echo '<div style="margin-top:4px;">' . \esc_html($error) . '</div>';
+			echo '</div>';
+		} elseif ($mail_sent) {
+			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #00a32a;border-radius:8px;background:#edfaef;color:#0f5132;">';
+			echo '<strong>' . \esc_html__('Auto-Mail versendet', 'cmx-misbuero') . '</strong>';
+			if ($recipient !== '' && \is_email($recipient)) {
+				echo '<div style="margin-top:4px;">' . \esc_html__('Empfänger:', 'cmx-misbuero') . ' ' . \esc_html($recipient) . '</div>';
+			}
+			if ($sent_at !== '') {
+				$sent_at_ts = \strtotime($sent_at);
+				if ($sent_at_ts) {
+					echo '<div style="margin-top:4px;">' . \esc_html__('Versendet am:', 'cmx-misbuero') . ' ' . \esc_html(\wp_date('d.m.Y H:i', $sent_at_ts)) . '</div>';
+				}
+			}
+			echo '</div>';
+		} elseif (!$auto_mail_enabled) {
+			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #dcdcde;border-radius:8px;background:#f6f7f7;color:#50575e;">';
+			echo '<strong>' . \esc_html__('Auto-Mail ist deaktiviert', 'cmx-misbuero') . '</strong>';
+			echo '<div style="margin-top:4px;">' . \esc_html__('Die Checkbox "Automatischer Mailversand" ist in den WooCommerce-Einstellungen aktuell nicht aktiv.', 'cmx-misbuero') . '</div>';
+			echo '</div>';
+		} else {
+			echo '<div style="margin:4px 0 0 0;padding:10px 12px;border:1px solid #dcdcde;border-radius:8px;background:#f6f7f7;color:#50575e;">';
+			echo '<strong>' . \esc_html__('Noch kein Versandstatus', 'cmx-misbuero') . '</strong>';
+			echo '<div style="margin-top:4px;">' . \esc_html__('Für diesen Woo-Beleg wurde noch kein Auto-Mail-Status gespeichert.', 'cmx-misbuero') . '</div>';
+			echo '</div>';
+		}
+
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 	function cmx_woocommerce_import_order(array $order, string $topic = ''): array {
 		$order_id = (int) ($order['id'] ?? 0);
@@ -1249,9 +1480,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 			$contact_address = (string) cmx_build_kontakt_postanschrift($kontakt_id);
 		}
 
-		$invoice_date = cmx_woocommerce_pick_date_ymd($order, ['date_created_gmt', 'date_created', 'date_paid_gmt', 'date_paid']);
+		$invoice_datetime = cmx_woocommerce_pick_datetime_values($order, ['date_created_gmt', 'date_created', 'date_paid_gmt', 'date_paid']);
+		$invoice_date = (string) ($invoice_datetime['date'] ?? '');
 		if ($invoice_date === '') {
 			$invoice_date = (string) \wp_date('Y-m-d');
+			$invoice_datetime['date'] = $invoice_date;
+			$invoice_datetime['post_date'] = (string) \wp_date('Y-m-d H:i:s');
+			$invoice_datetime['post_date_gmt'] = (string) \gmdate('Y-m-d H:i:s', \current_time('timestamp', true));
+			$invoice_datetime['time'] = (string) \wp_date('H:i:s');
 		}
 		$paid_date = cmx_woocommerce_pick_date_ymd($order, ['date_paid_gmt', 'date_paid', 'date_completed_gmt', 'date_completed']);
 		$due_date = cmx_woocommerce_order_due_date($invoice_date);
@@ -1288,6 +1524,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 		\update_post_meta($beleg_id, '_cmx_beleg_is_brutto', $is_brutto);
 		\update_post_meta($beleg_id, '_cmx_beleg_mwst_term', $mwst_term_id > 0 ? $mwst_term_id : '');
 		\update_post_meta($beleg_id, '_cmx_beleg_intern_notizen', cmx_woocommerce_import_notes($order, $topic, $tax_rates));
+		cmx_woocommerce_sync_beleg_post_datetime($beleg_id, $invoice_datetime);
 
 		if ($paid_date !== '') {
 			\update_post_meta($beleg_id, '_cmx_beleg_bezahlt_am', $paid_date);

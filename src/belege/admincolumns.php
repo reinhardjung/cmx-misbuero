@@ -155,19 +155,38 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 	}
 
 	echo '<style>
+		#posts-filter .tablenav.top .actions {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		#posts-filter .tablenav.top .actions > * {
+			float: none !important;
+			margin: 0 !important;
+			align-self: center;
+		}
 		#posts-filter .tablenav.top .actions select,
 		#posts-filter .tablenav.top .actions .button {
+			height: 32px;
 			min-height: 32px;
+			line-height: 30px;
 			border-radius: 6px;
+			margin: 0;
 			vertical-align: middle;
+		}
+		#posts-filter .tablenav.top .actions .button {
+			padding-top: 0;
+			padding-bottom: 0;
 		}
 		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter {
 			display: inline-flex;
 			align-items: center;
 			gap: 8px;
+			height: 32px;
 			min-height: 32px;
 			padding: 0 12px;
-			margin: 0 8px 0 0;
+			margin: 0;
 			border: 1px solid #c3c4c7;
 			border-radius: 6px;
 			background: linear-gradient(180deg, #ffffff 0%, #f6f7f7 100%);
