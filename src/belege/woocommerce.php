@@ -211,6 +211,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_request_float')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_header')) {
 	function cmx_woocommerce_header(\WP_REST_Request $request, string $name): string {
 		$value = (string) $request->get_header($name);
+		if ($value !== '') {
+			return \trim($value);
+		}
+
+		$server_key = 'HTTP_' . \strtoupper(\str_replace('-', '_', $name));
+		$fallbacks = [
+			$_SERVER[$server_key] ?? '',
+			$_SERVER['REDIRECT_' . $server_key] ?? '',
+		];
+		foreach ($fallbacks as $fallback) {
+			$fallback = (string) $fallback;
+			if ($fallback !== '') {
+				return \trim($fallback);
+			}
+		}
+
+		if (\function_exists('apache_request_headers')) {
+			$headers = (array) \apache_request_headers();
+			foreach ($headers as $header_name => $header_value) {
+				if (\strcasecmp((string) $header_name, $name) === 0) {
+					return \trim((string) $header_value);
+				}
+			}
+		}
 
 		return \trim($value);
 	}
@@ -957,14 +981,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_rest_webhook_callback')
 		}
 
 		$body = (string) $request->get_body();
-		$signature = cmx_woocommerce_header($request, 'x-wc-webhook-signature');
-		if (!cmx_woocommerce_verify_signature_against_active_secrets($body, $signature)) {
-			return new \WP_REST_Response([
-				'success' => false,
-				'message' => 'invalid_signature',
-			], 401);
-		}
-
 		$topic = \strtolower(cmx_woocommerce_header($request, 'x-wc-webhook-topic'));
 		if ($topic === 'ping') {
 			return new \WP_REST_Response([
@@ -973,11 +989,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_rest_webhook_callback')
 			], 200);
 		}
 
+		$signature = cmx_woocommerce_header($request, 'x-wc-webhook-signature');
+		if ($signature === '') {
+			return new \WP_REST_Response([
+				'success' => false,
+				'message' => 'missing_signature_header',
+			], 401);
+		}
+
 		if ($body === '') {
 			return new \WP_REST_Response([
 				'success' => false,
 				'message' => 'empty_payload',
 			], 400);
+		}
+
+		if (!cmx_woocommerce_verify_signature_against_active_secrets($body, $signature)) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'message' => 'invalid_signature',
+			], 401);
 		}
 
 		$payload = \json_decode($body, true);
