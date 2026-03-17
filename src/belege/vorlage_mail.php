@@ -155,7 +155,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 				continue;
 			}
 			if ($block_key === '{beleg}') {
-				$html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>';
+				$button_block_style = \function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')
+					? (string) cmx_email_button_block_style()
+					: 'margin:18px 0 24px 0;';
+				$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
+					? (string) cmx_email_button_outlook_gap_html()
+					: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
+				$html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>';
+				$html .= $button_outlook_gap_html;
 				continue;
 			}
 
@@ -242,6 +249,12 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	$button_background = (string) ($mail_theme['button_background'] ?? '#a42c24');
 	$button_text = (string) ($mail_theme['button_text'] ?? '#ffffff');
 	$button_accent = (string) ($mail_theme['button_accent'] ?? '#d84a3a');
+	$button_block_style = \function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')
+		? (string) cmx_email_button_block_style()
+		: 'margin:18px 0 24px 0;';
+	$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
+		? (string) cmx_email_button_outlook_gap_html()
+		: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
 	$header_style = 'padding:20px 24px;background:' . \esc_attr($header_background) . ';color:' . \esc_attr($header_text) . ';';
 	if (!$header_plain && $header_gradient_start !== '' && $header_gradient_end !== '') {
 		$header_style .= 'background-image:linear-gradient(135deg,' . \esc_attr($header_gradient_start) . ',' . \esc_attr($header_gradient_end) . ');';
@@ -254,10 +267,10 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		: '';
 	$header_content_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')
 		? (string) cmx_email_header_content_html($header_kicker_esc, $title_esc, $beleg_date_esc, $preheader_esc, $header_logo_html)
-		: '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_esc . '</div>'
-			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>'
-			. ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '')
-			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>';
+		: '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;color:' . \esc_attr($header_text) . ';">' . $header_kicker_esc . '</div>'
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;color:' . \esc_attr($header_text) . ';">' . $title_esc . '</div>'
+			. ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;color:' . \esc_attr($header_text) . ';">vom ' . $beleg_date_esc . '</div>' : '')
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;color:' . \esc_attr($header_text) . ';">' . $preheader_esc . '</div>';
 	$button_icon_html = '<span style="vertical-align:middle;display:inline-block;margin-right:8px;">'
 		. '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;display:inline-block;">'
 		. '<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>'
@@ -271,8 +284,8 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		: '';
 	$default_body_html = $salutation_line_html
 		. '<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst ihn jetzt bequem als PDF herunterladen.</p>'
-		. '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 24px 0;"><tr><td>' . $download_button_html . '</td></tr></table>'
-		. '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->'
+		. '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>'
+		. $button_outlook_gap_html
 		. '<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Dienstleistungen.</p>';
 	$body_html = cmxbu_render_belegmail_body_html([
 		'custom_content' => (string) ($data['custom_content'] ?? ''),

@@ -341,6 +341,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_button_mode')) {
+	function cmx_email_theme_button_mode(): string {
+		$theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+			? (array) cmx_email_theme_palette()
+			: [];
+		$mode = (string) ($theme['button_mode'] ?? 'button');
+
+		return $mode === 'link' ? 'link' : 'button';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')) {
+	function cmx_email_button_block_style(string $button_style = 'margin:18px 0 24px 0;', string $link_style = 'margin:18px 0 24px 0;'): string {
+		$mode = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_button_mode')
+			? (string) cmx_email_theme_button_mode()
+			: 'button';
+
+		return $mode === 'link' ? $link_style : $button_style;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')) {
+	function cmx_email_button_outlook_gap_html(string $height = '16px'): string {
+		$mode = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_button_mode')
+			? (string) cmx_email_theme_button_mode()
+			: 'button';
+		if ($mode !== 'button') {
+			return '';
+		}
+
+		$height = \preg_match('/^\d+px$/', $height) ? $height : '16px';
+
+		return '<!--[if mso]><div style="height:' . \esc_attr($height) . ';line-height:' . \esc_attr($height) . ';font-size:' . \esc_attr($height) . ';">&nbsp;</div><![endif]-->';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')) {
 	function cmx_email_self_contact_id(): int {
 		$query = new \WP_Query([
@@ -478,10 +514,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')) {
 			? (array) cmx_email_theme_palette()
 			: [];
 		$logo_badge_border = (string) ($theme['logo_badge_border'] ?? '#efcfc7');
-		$text_html = '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_html . '</div>'
-			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_html . '</div>'
-			. ($beleg_date_html !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_html . '</div>' : '')
-			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_html . '</div>';
+		$header_text = (string) ($theme['header_text'] ?? '#ffffff');
+		$text_html = '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;color:' . \esc_attr($header_text) . ';">' . $header_kicker_html . '</div>'
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;color:' . \esc_attr($header_text) . ';">' . $title_html . '</div>'
+			. ($beleg_date_html !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;color:' . \esc_attr($header_text) . ';">vom ' . $beleg_date_html . '</div>' : '')
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;color:' . \esc_attr($header_text) . ';">' . $preheader_html . '</div>';
 
 		if ($logo_html === '') {
 			return $text_html;

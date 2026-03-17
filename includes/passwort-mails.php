@@ -71,12 +71,19 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 	if ($header_plain && $header_border !== '') {
 		$header_style .= 'border-bottom:1px solid ' . \esc_attr($header_border) . ';';
 	}
+	$button_block_style = \function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')
+		? (string) cmx_email_button_block_style('margin:0 0 18px;', 'margin:0 0 18px;')
+		: 'margin:0 0 18px;';
+	$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
+		? (string) cmx_email_button_outlook_gap_html()
+		: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
 
 	$button_html = '';
 	if (\is_array($button) && !empty($button['url']) && !empty($button['label'])) {
-		$button_html = '<p style="margin:0 0 18px;">'
+		$button_html = '<p style="' . \esc_attr($button_block_style) . '">'
 			. cmx_mail_button_html((string) $button['url'], (string) $button['label'], $button_background, $button_text, 230)
-			. '</p>';
+			. '</p>'
+			. $button_outlook_gap_html;
 	}
 
 	$agb_footer_html = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
@@ -91,8 +98,8 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. '<tr><td align="center">'
 		. '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;">'
 		. '<tr><td style="' . $header_style . '">'
-		. '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;">MIS BUERO</div>'
-		. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;">' . \esc_html($title) . '</div>'
+		. '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:' . \esc_attr($header_text) . ';">MIS BUERO</div>'
+		. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;color:' . \esc_attr($header_text) . ';">' . \esc_html($title) . '</div>'
 		. '</td></tr>'
 		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border:1px solid #d8d8d8;border-top:none;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
 		. $body_html

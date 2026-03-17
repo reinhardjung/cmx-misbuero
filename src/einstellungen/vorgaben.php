@@ -36,7 +36,7 @@ function cmx_register_vorgaben_tab(): void {
 
 	\add_settings_field(
 		'email_theme',
-		'Mail-Theme',
+		'Theme',
 		function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$current = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
