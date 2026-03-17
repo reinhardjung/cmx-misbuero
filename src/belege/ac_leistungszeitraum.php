@@ -55,12 +55,12 @@ $add_col = static function(array $columns): array {
 	foreach ($columns as $col_key => $label) {
 		$new[$col_key] = $label;
 		if ($col_key === 'cmx_beleg_projekt') {
-			$new[$key] = 'Leistungszeitraum';
+			$new[$key] = 'Leistung';
 			$inserted = true;
 		}
 	}
 	if (!$inserted) {
-		$new[$key] = 'Leistungszeitraum';
+		$new[$key] = 'Leistung';
 	}
 	return $new;
 };

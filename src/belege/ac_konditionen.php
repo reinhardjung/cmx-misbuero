@@ -388,7 +388,7 @@ $add_columns = function(array $columns){
 	$show_category_col = $tax !== '';
 
 	$insert = [
-		'beleg_datum'   => __('Datum des Beleges', 'cmx'),
+		'beleg_datum'   => __('Beleg', 'cmx'),
 		'beleg_faellig' => __('Fällig am', 'cmx'),
 		'beleg_bezahlt' => __('Bezahlt am', 'cmx'),
 		'beleg_zahlungsart' => __('Zahlungsart', 'cmx'),
