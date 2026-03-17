@@ -97,6 +97,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_request_kontakt_id')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_admin_edit_url')) {
+	function cmx_kontakt_admin_edit_url(int $kontakt_id): string {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+
+		$edit_url = (string) \admin_url('post.php?post=' . $kontakt_id . '&action=edit');
+		if ($edit_url === '') {
+			return '';
+		}
+
+		if (\is_user_logged_in()) {
+			return $edit_url;
+		}
+
+		return (string) \wp_login_url($edit_url);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_type_label')) {
 	function cmx_kontakt_beleg_type_label(int $beleg_id): string {
 		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_taxonomy')
@@ -472,6 +492,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		if ($kontakt_name === '') {
 			$kontakt_name = 'Kontakt';
 		}
+		$kontakt_admin_url = cmx_kontakt_admin_edit_url($kontakt_id);
 		$reload_url = cmx_kontakt_belege_share_url($kontakt_id);
 		$rows = cmx_kontakt_all_belege_rows($kontakt_id);
 		$show_online_column = false;
@@ -507,6 +528,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			.cmx-kontakt-kicker a{color:inherit;text-decoration:none}
 			.cmx-kontakt-kicker a:hover{color:#1d2327}
 			.cmx-kontakt-title{margin:0;font-size:30px;line-height:1.1}
+			.cmx-kontakt-title-link{color:inherit;text-decoration:none}
+			.cmx-kontakt-title-link:hover{color:#135e96}
 			.cmx-kontakt-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
 			.cmx-kontakt-sub a{color:inherit;text-decoration:none}
 			.cmx-kontakt-sub a:hover{color:#1d2327}
@@ -551,7 +574,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<div class="cmx-kontakt-page"><div class="cmx-kontakt-card">';
 		echo '<div class="cmx-kontakt-head">';
 		echo '<p class="cmx-kontakt-kicker"><a href="' . \esc_url($reload_url) . '">Belegübersicht</a></p>';
-		echo '<h1 class="cmx-kontakt-title">' . \esc_html($kontakt_name) . '</h1>';
+		if ($kontakt_admin_url !== '') {
+			echo '<h1 class="cmx-kontakt-title"><a class="cmx-kontakt-title-link" href="' . \esc_url($kontakt_admin_url) . '" title="Kontakt im Admin bearbeiten">' . \esc_html($kontakt_name) . '</a></h1>';
+		} else {
+			echo '<h1 class="cmx-kontakt-title">' . \esc_html($kontakt_name) . '</h1>';
+		}
 		echo '<p class="cmx-kontakt-sub"><a href="' . \esc_url($reload_url) . '" id="cmx-kontakt-count">' . \esc_html(\count($rows) . ' Belege') . '</a></p>';
 		echo '</div>';
 

@@ -272,11 +272,20 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 			if ($item_name === '') {
 				$item_name = 'Bild';
 			}
+			$item_filetype = \wp_check_filetype($item_name);
+			$item_mime = (string) ($item_filetype['type'] ?? '');
+			if ($item_mime === '') {
+				$item_mime = 'application/octet-stream';
+			}
 			$up_style = $index === 0 ? 'display:none;' : '';
 			$down_style = $index === $total_items - 1 ? 'display:none;' : '';
-			echo '<div class="cmx-li-file-row" data-id="' . esc_attr($item_id) . '" data-url="' . esc_url($item_url) . '" draggable="true" title="' . esc_attr($item_name) . '" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #f0f0f1;transition:background-color .15s ease;">';
+			echo '<div class="cmx-li-file-row" data-id="' . esc_attr($item_id) . '" data-url="' . esc_url($item_url) . '" data-download-name="' . esc_attr($item_name) . '" data-download-type="' . esc_attr($item_mime) . '" draggable="true" title="' . esc_attr($item_name) . '" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #f0f0f1;transition:background-color .15s ease;">';
 			echo '<span class="cmx-li-drag-handle" title="Ziehen zum Verschieben" aria-label="Ziehen zum Verschieben" style="display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#8c8f94;cursor:grab;"><span class="dashicons dashicons-menu" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></span>';
-			echo '<span class="cmx-li-file-name" title="' . esc_attr($item_name) . '" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' . esc_html($item_name) . '</span>';
+			if ($item_url !== '') {
+				echo '<a class="cmx-li-file-name" href="' . esc_url($item_url) . '" download="' . esc_attr($item_name) . '" target="_blank" rel="noopener noreferrer" title="Bild herunterladen: ' . esc_attr($item_name) . '" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none;">' . esc_html($item_name) . '</a>';
+			} else {
+				echo '<span class="cmx-li-file-name" title="' . esc_attr($item_name) . '" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' . esc_html($item_name) . '</span>';
+			}
 			echo '<span class="cmx-li-file-actions" style="display:flex;align-items:center;gap:2px;margin-left:auto;">';
 			echo '<button type="button" class="button-link cmx-li-move-up" aria-label="Nach oben" title="Nach oben" style="text-decoration:none;' . esc_attr($up_style) . '"><span class="dashicons dashicons-arrow-up-alt2" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
 			echo '<button type="button" class="button-link cmx-li-move-down" aria-label="Nach unten" title="Nach unten" style="text-decoration:none;' . esc_attr($down_style) . '"><span class="dashicons dashicons-arrow-down-alt2" style="font-size:16px;width:16px;height:16px;line-height:16px;"></span></button>';
@@ -550,9 +559,15 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 					row.style.opacity = "0.65";
 					setHoveredPreview(null);
 					if (e.dataTransfer) {
-						e.dataTransfer.effectAllowed = "move";
+						e.dataTransfer.effectAllowed = "copyMove";
 						try {
 							e.dataTransfer.setData("text/plain", row.dataset.id || "");
+						} catch (err) {}
+						try {
+							if (row.dataset.url) {
+								e.dataTransfer.setData("text/uri-list", row.dataset.url);
+								e.dataTransfer.setData("DownloadURL", (row.dataset.downloadType || "application/octet-stream") + ":" + (row.dataset.downloadName || "bild") + ":" + row.dataset.url);
+							}
 						} catch (err) {}
 					}
 				});

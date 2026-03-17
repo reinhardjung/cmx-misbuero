@@ -494,6 +494,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 		.header-logo{max-width:150px;max-height:36px;height:auto;width:auto}
 		table{width:100%;border-collapse:collapse;table-layout:auto}
 		th,td{padding:6px;border:none}
+		thead{display:table-row-group}
 		thead th{font-weight:700;background:transparent;text-align:left;white-space:normal}
 		.line-row-cell{padding:0 !important;height:1px;line-height:1px;font-size:0;background:#000;border:none !important}
 			.beleg-table tbody td{word-wrap:break-word}
@@ -595,26 +596,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_pdf_binary_from_ids
 			<div class="result-block">
 			<?php if (\is_array($render_last_row)): ?>
 				<table class="beleg-table">
-					<thead>
-					<tr>
-						<th style="text-align:right;width:26px;">#</th>
-						<th style="text-align:center;width:20px;"></th>
-						<th style="width:80px;">Belegnummer</th>
-						<th style="width:60px">Bezahlt am</th>
-						<th style="width:70px;">Belegtyp</th>
-						<th style="">Kontakt</th>
-						<th style="width:80px">Zahlungsart</th>
-						<th style="width:90px;">Zahlungsgrund</th>
-						<th style="text-align:center;width:50px;">Satz</th>
-						<th style="text-align:center;width:50px;">MwSt</th>
-						<th style="text-align:center;width:50px">Vorsteuer</th>
-						<th style="text-align:right;width:90px;">Einnahmen</th>
-						<th style="text-align:right;width:90px;">Ausgaben</th>
-					</tr>
-					<tr>
-						<th colspan="13" class="line-row-cell"></th>
-					</tr>
-					</thead>
 					<tbody>
 						<tr class="beleg-last-row">
 							<td style="text-align:right;width:26px;"><?= $render_last_row_number; ?></td>

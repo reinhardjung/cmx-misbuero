@@ -171,6 +171,7 @@ $position_row_indices = [];
 $position_display_no = 0;
 $zebra_block_pos = 0;
 $closing_start_index = -1;
+$closing_group_min_rows = 6;
 foreach ($positions as $idx => $row) {
 	$row_type = (string)($row['row_type'] ?? 'position');
 	if ($row_type === 'abschnitt') {
@@ -195,7 +196,7 @@ if ($position_row_count > 0) {
 		$closing_start_index = $prev_index;
 	}
 }
-$use_closing_group = ($show_mwst_footer_group && !$is_lieferschein && $closing_start_index >= 0);
+$use_closing_group = ($show_mwst_footer_group && !$is_lieferschein && $closing_start_index >= 0 && $position_row_count >= $closing_group_min_rows);
 $render_primary_positions_table = (!$use_closing_group || $closing_start_index > 0);
 
 $sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
