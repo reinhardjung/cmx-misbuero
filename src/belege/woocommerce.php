@@ -1156,8 +1156,404 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_line_amounts')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_sku_meta_key')) {
+	function cmx_woocommerce_artikel_sku_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SKU')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SKU')
+			: '_cmx_artikel_sku';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_vk_meta_key')) {
+	function cmx_woocommerce_artikel_vk_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK')
+			: '_cmx_artikel_vk';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_ek_meta_key')) {
+	function cmx_woocommerce_artikel_ek_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK')
+			: '_cmx_artikel_ek';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_aufwand_meta_key')) {
+	function cmx_woocommerce_artikel_aufwand_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_AUFWAND')
+			: '_cmx_artikel_aufwand';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_waehrung_meta_key')) {
+	function cmx_woocommerce_artikel_waehrung_meta_key(): string {
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WAEHRUNGEN')) {
+			return (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WAEHRUNGEN');
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WAEHRUNG')) {
+			return (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WAEHRUNG');
+		}
+
+		return '_cmx_artikel_waehrung';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_marge_meta_key')) {
+	function cmx_woocommerce_artikel_marge_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MARGE')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_MARGE')
+			: '_cmx_artikel_marge';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_selbstkosten_meta_key')) {
+	function cmx_woocommerce_artikel_selbstkosten_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_SELBSTKOSTEN')
+			: '_cmx_artikel_selbstkosten';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_deckungsbeitrag_meta_key')) {
+	function cmx_woocommerce_artikel_deckungsbeitrag_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_DECKUNGSBEITRAG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_DECKUNGSBEITRAG')
+			: '_cmx_artikel_deckungsbeitrag';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_verkaufbar_meta_key')) {
+	function cmx_woocommerce_artikel_verkaufbar_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR')
+			: '_cmx_artikel_verkaufbar';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_katalog_meta_key')) {
+	function cmx_woocommerce_artikel_katalog_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')
+			: '_cmx_artikel_katalog';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_meta')) {
+	function cmx_woocommerce_artikel_find_by_meta(string $meta_key, string $meta_value): int {
+		$meta_key = \trim($meta_key);
+		$meta_value = \trim($meta_value);
+		if ($meta_key === '' || $meta_value === '' || !\post_type_exists('artikel')) {
+			return 0;
+		}
+
+		$posts = \get_posts([
+			'post_type'              => 'artikel',
+			'post_status'            => ['publish', 'draft', 'pending', 'private', 'future'],
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_key'               => $meta_key,
+			'meta_value'             => $meta_value,
+		]);
+
+		return (int) ($posts[0] ?? 0);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_sku')) {
+	function cmx_woocommerce_artikel_find_by_sku(string $sku): int {
+		$sku = \trim($sku);
+		if ($sku === '' || !\post_type_exists('artikel')) {
+			return 0;
+		}
+
+		$posts = \get_posts([
+			'post_type'              => 'artikel',
+			'post_status'            => ['publish', 'draft', 'pending', 'private', 'future'],
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [
+				'relation' => 'OR',
+				[
+					'key'   => cmx_woocommerce_artikel_sku_meta_key(),
+					'value' => $sku,
+				],
+				[
+					'key'   => '_cmx_artikel_nr',
+					'value' => $sku,
+				],
+				[
+					'key'   => '_sku',
+					'value' => $sku,
+				],
+			],
+		]);
+
+		return (int) ($posts[0] ?? 0);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_exact_title')) {
+	function cmx_woocommerce_artikel_find_by_exact_title(string $title): int {
+		$title = \trim($title);
+		if ($title === '' || !\post_type_exists('artikel')) {
+			return 0;
+		}
+
+		global $wpdb;
+		$rows = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT ID
+				   FROM {$wpdb->posts}
+				  WHERE post_type = %s
+				    AND post_status <> 'trash'
+				    AND post_title = %s
+				  ORDER BY ID ASC
+				  LIMIT 2",
+				'artikel',
+				$title
+			)
+		);
+
+		return \count($rows) === 1 ? (int) $rows[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_or_create_stueck_unit')) {
+	function cmx_woocommerce_find_or_create_stueck_unit(): array {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+
+		$cache = [
+			'taxonomy' => '',
+			'term_id'  => 0,
+			'name'     => 'Stück',
+		];
+
+		$taxonomy = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')
+			? (string) cmx_artikel_einheiten_taxonomy()
+			: '';
+		if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+			return $cache;
+		}
+
+		$cache['taxonomy'] = $taxonomy;
+		$options = \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_options')
+			? (array) cmx_artikel_einheiten_options()
+			: [];
+		$preferred_keys = ['stück', 'stueck', 'stk', 'stück.'];
+
+		foreach ($options as $option) {
+			$term_id = (int) ($option['id'] ?? 0);
+			$name = \trim((string) ($option['name'] ?? ''));
+			if ($term_id <= 0 || $name === '') {
+				continue;
+			}
+
+			$normalized = \function_exists('mb_strtolower')
+				? \mb_strtolower($name, 'UTF-8')
+				: \strtolower($name);
+			if (\in_array($normalized, $preferred_keys, true)) {
+				$cache['term_id'] = $term_id;
+				$cache['name'] = $name;
+				return $cache;
+			}
+		}
+
+		$inserted = \wp_insert_term('Stück', $taxonomy, ['slug' => 'stueck']);
+		if (\is_wp_error($inserted)) {
+			$existing_id = 0;
+			$data = $inserted->get_error_data('term_exists');
+			if (\is_array($data) && isset($data['term_id'])) {
+				$existing_id = (int) $data['term_id'];
+			} elseif (\is_numeric($data)) {
+				$existing_id = (int) $data;
+			}
+			if ($existing_id > 0) {
+				$term = \get_term($existing_id, $taxonomy);
+				if ($term instanceof \WP_Term) {
+					$cache['term_id'] = (int) $term->term_id;
+					$cache['name'] = (string) $term->name;
+				}
+			}
+			return $cache;
+		}
+
+		$cache['term_id'] = (int) ($inserted['term_id'] ?? 0);
+		if ($cache['term_id'] > 0) {
+			$term = \get_term($cache['term_id'], $taxonomy);
+			if ($term instanceof \WP_Term && \trim((string) $term->name) !== '') {
+				$cache['name'] = (string) $term->name;
+			}
+		}
+
+		return $cache;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_sync_prices')) {
+	function cmx_woocommerce_artikel_sync_prices(int $artikel_id, float $vk): void {
+		$vk = \round(\max(0.0, $vk), 2);
+		$ek = cmx_woocommerce_request_float(\get_post_meta($artikel_id, cmx_woocommerce_artikel_ek_meta_key(), true));
+		$aufwand = cmx_woocommerce_request_float(\get_post_meta($artikel_id, cmx_woocommerce_artikel_aufwand_meta_key(), true));
+		$selbstkosten = \round($ek + $aufwand, 2);
+		$deckungsbeitrag = \round($vk - $selbstkosten, 2);
+		$marge = \round($vk - $ek, 2);
+
+		\update_post_meta($artikel_id, cmx_woocommerce_artikel_vk_meta_key(), $vk);
+		\update_post_meta($artikel_id, cmx_woocommerce_artikel_selbstkosten_meta_key(), $selbstkosten);
+		\update_post_meta($artikel_id, cmx_woocommerce_artikel_deckungsbeitrag_meta_key(), $deckungsbeitrag);
+		\update_post_meta($artikel_id, cmx_woocommerce_artikel_marge_meta_key(), $marge);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_existing_artikel_for_line')) {
+	function cmx_woocommerce_find_existing_artikel_for_line(array $line, string $sku, string $name): int {
+		$variation_id = (int) ($line['variation_id'] ?? 0);
+		$product_id = (int) ($line['product_id'] ?? 0);
+
+		if ($variation_id > 0) {
+			$artikel_id = cmx_woocommerce_artikel_find_by_meta('_cmx_wc_variation_id', (string) $variation_id);
+			if ($artikel_id > 0) {
+				return $artikel_id;
+			}
+		}
+
+		if ($product_id > 0) {
+			$artikel_id = cmx_woocommerce_artikel_find_by_meta('_cmx_wc_product_id', (string) $product_id);
+			if ($artikel_id > 0) {
+				return $artikel_id;
+			}
+		}
+
+		$artikel_id = cmx_woocommerce_artikel_find_by_sku($sku);
+		if ($artikel_id > 0) {
+			return $artikel_id;
+		}
+
+		return cmx_woocommerce_artikel_find_by_exact_title($name);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_artikel_from_line')) {
+	function cmx_woocommerce_upsert_artikel_from_line(array $line, string $name, string $currency, float $unit_price): array {
+		static $cache = [];
+
+		$name = \sanitize_text_field($name);
+		$sku = \trim((string) ($line['sku'] ?? ''));
+		$product_id = (int) ($line['product_id'] ?? 0);
+		$variation_id = (int) ($line['variation_id'] ?? 0);
+		$cache_key = $variation_id . '|' . $product_id . '|' . $sku . '|' . $name;
+		if (isset($cache[$cache_key]) && \is_array($cache[$cache_key])) {
+			return $cache[$cache_key];
+		}
+
+		$result = [
+			'artikel_id' => 0,
+			'einheit_id' => 0,
+			'unit'       => '',
+		];
+
+		if (!\post_type_exists('artikel') || ($name === '' && $sku === '' && $product_id <= 0 && $variation_id <= 0)) {
+			$cache[$cache_key] = $result;
+			return $result;
+		}
+
+		$artikel_id = cmx_woocommerce_find_existing_artikel_for_line($line, $sku, $name);
+		$created = false;
+		if ($artikel_id <= 0) {
+			$inserted = \wp_insert_post([
+				'post_type'    => 'artikel',
+				'post_status'  => 'publish',
+				'post_title'   => $name !== '' ? $name : ($sku !== '' ? $sku : 'WooCommerce Artikel'),
+				'post_content' => '',
+			], true);
+			if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+				$cache[$cache_key] = $result;
+				return $result;
+			}
+			$artikel_id = (int) $inserted;
+			$created = true;
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_verkaufbar_meta_key(), 0);
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_katalog_meta_key(), 1);
+		}
+
+		if ($name !== '' && \trim((string) \get_the_title($artikel_id)) !== $name) {
+			\wp_update_post([
+				'ID'         => $artikel_id,
+				'post_title' => $name,
+			]);
+		}
+
+		if ($sku !== '') {
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_sku_meta_key(), $sku);
+		}
+
+		if (\preg_match('/^[A-Z]{3}$/', $currency)) {
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_waehrung_meta_key(), $currency);
+		}
+
+		cmx_woocommerce_artikel_sync_prices($artikel_id, $unit_price);
+
+		if ($product_id > 0) {
+			\update_post_meta($artikel_id, '_cmx_wc_product_id', (string) $product_id);
+		}
+		if ($variation_id > 0) {
+			\update_post_meta($artikel_id, '_cmx_wc_variation_id', (string) $variation_id);
+		}
+
+		$default_unit = \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')
+			? (array) cmx_artikel_default_einheit($artikel_id)
+			: ['id' => 0, 'name' => ''];
+		$einheit_id = (int) ($default_unit['id'] ?? 0);
+		$unit_name = \trim((string) ($default_unit['name'] ?? ''));
+
+		if ($created || $einheit_id <= 0 || $unit_name === '') {
+			$stueck = cmx_woocommerce_find_or_create_stueck_unit();
+			$taxonomy = (string) ($stueck['taxonomy'] ?? '');
+			$stueck_id = (int) ($stueck['term_id'] ?? 0);
+			if ($taxonomy !== '' && $stueck_id > 0) {
+				\wp_set_post_terms($artikel_id, [$stueck_id], $taxonomy, false);
+				$einheit_id = $stueck_id;
+				$unit_name = (string) ($stueck['name'] ?? 'Stück');
+			}
+		}
+
+		if (($einheit_id <= 0 || $unit_name === '') && \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
+			$default_unit = (array) cmx_artikel_default_einheit($artikel_id);
+			$einheit_id = (int) ($default_unit['id'] ?? $einheit_id);
+			$unit_name = \trim((string) ($default_unit['name'] ?? $unit_name));
+		}
+
+		$result = [
+			'artikel_id' => $artikel_id,
+			'einheit_id' => $einheit_id > 0 ? $einheit_id : 0,
+			'unit'       => $unit_name,
+		];
+		$cache[$cache_key] = $result;
+
+		return $result;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_line_row')) {
-	function cmx_woocommerce_build_line_row(array $line, bool $prices_include_tax, string $fallback_name = ''): ?array {
+	function cmx_woocommerce_build_line_row(array $line, bool $prices_include_tax, string $fallback_name = '', string $currency = 'CHF', bool $sync_artikel = true): ?array {
 		$name = \trim((string) ($line['name'] ?? $fallback_name));
 		$quantity = (int) ($line['quantity'] ?? 1);
 		if ($quantity <= 0) {
@@ -1171,13 +1567,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_line_row')) {
 			return null;
 		}
 
+		$artikel_data = [
+			'artikel_id' => 0,
+			'einheit_id' => 0,
+			'unit'       => '',
+		];
+		if ($sync_artikel) {
+			$artikel_data = cmx_woocommerce_upsert_artikel_from_line(
+				$line,
+				$name,
+				$currency,
+				(float) $amounts['unit_price']
+			);
+		}
+
 		return [
-			'artikel_id'   => 0,
+			'artikel_id'   => (int) ($artikel_data['artikel_id'] ?? 0),
 			'artikel_name' => $name,
 			'sku'          => \trim((string) ($line['sku'] ?? '')),
 			'menge'        => \round((float) $amounts['qty'], 2),
-			'einheit_id'   => 0,
-			'unit'         => '',
+			'einheit_id'   => (int) ($artikel_data['einheit_id'] ?? 0),
+			'unit'         => (string) ($artikel_data['unit'] ?? ''),
 			'preis'        => \round((float) $amounts['unit_price'], 2),
 			'rabatt'       => $amounts['discount'] > 0
 				? \number_format((float) $amounts['discount'], 2, '.', '')
@@ -1188,7 +1598,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_line_row')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_collect_position_rows')) {
-	function cmx_woocommerce_collect_position_rows(array $order): array {
+	function cmx_woocommerce_collect_position_rows(array $order, string $currency = 'CHF'): array {
 		$prices_include_tax = !empty($order['prices_include_tax']);
 		$rows = [];
 
@@ -1197,7 +1607,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_collect_position_rows')
 				continue;
 			}
 
-			$row = cmx_woocommerce_build_line_row($line, $prices_include_tax);
+			$row = cmx_woocommerce_build_line_row($line, $prices_include_tax, '', $currency, true);
 			if (\is_array($row)) {
 				$rows[] = $row;
 			}
@@ -1216,7 +1626,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_collect_position_rows')
 				'total'       => $line['total'] ?? 0,
 				'total_tax'   => $line['total_tax'] ?? 0,
 			];
-			$row = cmx_woocommerce_build_line_row($shipping_line, $prices_include_tax, 'Versand');
+			$row = cmx_woocommerce_build_line_row($shipping_line, $prices_include_tax, 'Versand', $currency, false);
 			if (\is_array($row)) {
 				$rows[] = $row;
 			}
@@ -1235,7 +1645,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_collect_position_rows')
 				'total'       => $line['total'] ?? 0,
 				'total_tax'   => $line['total_tax'] ?? 0,
 			];
-			$row = cmx_woocommerce_build_line_row($fee_line, $prices_include_tax, 'Gebuehr');
+			$row = cmx_woocommerce_build_line_row($fee_line, $prices_include_tax, 'Gebuehr', $currency, false);
 			if (\is_array($row)) {
 				$rows[] = $row;
 			}
@@ -1795,7 +2205,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_import_order')) {
 			$currency = 'CHF';
 		}
 
-		$positions = cmx_woocommerce_collect_position_rows($order);
+		$positions = cmx_woocommerce_collect_position_rows($order, $currency);
 		$tax_rates = cmx_woocommerce_collect_tax_rates($order);
 		$mwst_term_id = 0;
 		if (\count($tax_rates) === 1) {
