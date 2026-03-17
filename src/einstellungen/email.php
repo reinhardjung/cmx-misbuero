@@ -437,6 +437,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
 		? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
 		: 'rot';
+	$new['email_hide_logo'] = !empty($new['email_hide_logo']) ? '1' : '0';
 	$new['smtp_port'] = '587';
 	$new['imap_port'] = '993';
 

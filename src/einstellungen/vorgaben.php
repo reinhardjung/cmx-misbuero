@@ -57,6 +57,11 @@ function cmx_register_vorgaben_tab(): void {
 			}
 			echo '</select>';
 			echo '<p class="description">Steuert den Farbverlauf im Mail-Header sowie die Button-Farbe in versendeten E-Mails.</p>';
+			$hide_logo = !empty($opts['email_hide_logo']);
+			echo '<div style="margin-top:10px;">';
+			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[email_hide_logo]" value="0">';
+			echo '<label><input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[email_hide_logo]" value="1" '.\checked($hide_logo, true, false).'> Ohne Logo im Header</label>';
+			echo '</div>';
 		},
 		'cmx_tab_vorgaben__email',
 		'cmx_sec_vorgaben_email'

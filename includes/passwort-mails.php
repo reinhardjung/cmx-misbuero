@@ -76,7 +76,7 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		: 'margin:0 0 18px;';
 	$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
 		? (string) cmx_email_button_outlook_gap_html()
-		: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
+		: '';
 
 	$button_html = '';
 	if (\is_array($button) && !empty($button['url']) && !empty($button['label'])) {

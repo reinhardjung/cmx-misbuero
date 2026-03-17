@@ -160,7 +160,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')) {
 					: 'margin:18px 0 24px 0;';
 				$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
 					? (string) cmx_email_button_outlook_gap_html()
-					: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
+					: '';
 				$html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>';
 				$html .= $button_outlook_gap_html;
 				continue;
@@ -254,7 +254,7 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		: 'margin:18px 0 24px 0;';
 	$button_outlook_gap_html = \function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')
 		? (string) cmx_email_button_outlook_gap_html()
-		: '<!--[if mso]><div style="height:16px;line-height:16px;font-size:16px;">&nbsp;</div><![endif]-->';
+		: '';
 	$header_style = 'padding:20px 24px;background:' . \esc_attr($header_background) . ';color:' . \esc_attr($header_text) . ';';
 	if (!$header_plain && $header_gradient_start !== '' && $header_gradient_end !== '') {
 		$header_style .= 'background-image:linear-gradient(135deg,' . \esc_attr($header_gradient_start) . ',' . \esc_attr($header_gradient_end) . ');';
@@ -262,8 +262,8 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	if ($header_plain && $header_border !== '') {
 		$header_style .= 'border-bottom:1px solid ' . \esc_attr($header_border) . ';';
 	}
-	$header_logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
-		? (string) cmx_email_self_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;')
+	$header_logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')
+		? (string) cmx_email_header_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;')
 		: '';
 	$header_content_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')
 		? (string) cmx_email_header_content_html($header_kicker_esc, $title_esc, $beleg_date_esc, $preheader_esc, $header_logo_html)

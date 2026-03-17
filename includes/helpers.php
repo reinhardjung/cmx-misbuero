@@ -364,16 +364,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')) {
 	function cmx_email_button_outlook_gap_html(string $height = '16px'): string {
-		$mode = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_button_mode')
-			? (string) cmx_email_theme_button_mode()
-			: 'button';
-		if ($mode !== 'button') {
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_enabled')) {
+	function cmx_email_header_logo_enabled(): bool {
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+
+		return empty($options['email_hide_logo']);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')) {
+	function cmx_email_header_logo_html(string $img_style = ''): string {
+		$enabled = \function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_enabled')
+			? cmx_email_header_logo_enabled()
+			: true;
+		if (!$enabled) {
 			return '';
 		}
 
-		$height = \preg_match('/^\d+px$/', $height) ? $height : '16px';
-
-		return '<!--[if mso]><div style="height:' . \esc_attr($height) . ';line-height:' . \esc_attr($height) . ';font-size:' . \esc_attr($height) . ';">&nbsp;</div><![endif]-->';
+		return \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
+			? (string) cmx_email_self_logo_html($img_style)
+			: '';
 	}
 }
 
