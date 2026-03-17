@@ -457,6 +457,88 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin-top:8px}
 	#cmx-artikel-lieferanten-table .cmx-lief-add{display:none;min-width:170px}
 	#cmx-artikel-lieferanten-table tbody tr.cmx-lief-note-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
+	#cmx-artikel-lieferanten-table .cmx-lief-cell{box-sizing:border-box}
+	@media (max-width: 1280px){
+		#cmx-artikel-lieferanten-table,
+		#cmx-artikel-lieferanten-table tbody{display:block;width:100%}
+		#cmx-artikel-lieferanten-table thead{display:none}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row{
+			display:flex;
+			flex-wrap:wrap;
+			gap:10px 12px;
+			padding:12px 0 4px;
+			border-top:1px solid #e2e4e7;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row:first-child{border-top:0}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
+			display:block;
+			padding:0 !important;
+			border:0 !important;
+			background:transparent;
+			flex:1 1 180px;
+			min-width:140px;
+			width:auto !important;
+			max-width:100%;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td::before{
+			content:attr(data-label);
+			display:block;
+			font-weight:600;
+			margin:0 0 4px;
+			color:#1d2327;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--supplier{flex:1 1 250px}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--nr{flex:1 1 180px}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--ek{flex:1 1 150px;max-width:200px}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--quelle{flex:1 1 320px}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--ltage,
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--lager{flex:1 1 120px;max-width:160px}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-actions-cell{display:none}
+		#cmx-artikel-lieferanten-table .cmx-supplier-wrap,
+		#cmx-artikel-lieferanten-table .cmx-url-wrap{
+			display:flex;
+			align-items:center;
+			gap:6px;
+			width:100%;
+			min-width:0;
+		}
+		#cmx-artikel-lieferanten-table .cmx-supplier-wrap .cmx-lief-supplier,
+		#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{
+			flex:1 1 auto;
+			min-width:0;
+			width:auto !important;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4),
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4) .cmx-url-wrap,
+		#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url,
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5),
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6){
+			width:auto !important;
+			min-width:0 !important;
+		}
+		#cmx-artikel-lieferanten-table .col-ltage,
+		#cmx-artikel-lieferanten-table .col-lager,
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:none}
+		#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
+			display:block;
+			padding:0 0 12px 0;
+			border:0 !important;
+			background:transparent;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding-top:2px}
+		#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{
+			justify-content:flex-start;
+			flex-wrap:wrap;
+			margin-top:10px;
+		}
+	}
+	@media (max-width: 782px){
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
+			flex:1 1 100%;
+			max-width:none;
+		}
+	}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
 	.cmx-lief-del{min-width:36px}
 	</style>';
@@ -468,7 +550,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	echo '<th class="col-ek">Einkaufspreis</th>';
 	echo '<th class="col-quelle">Bezugsquelle</th>';
 	echo '<th class="col-ltage">Lieferzeit</th>';
-	echo '<th class="col-lager">E-Best</th>';
+	echo '<th class="col-lager">Bestand</th>';
 	echo '<th class="col-actions"></th>';
 	echo '</tr></thead><tbody>';
 
@@ -484,7 +566,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		$r_lager = max(0, (int)($row['lagerbestand'] ?? 0));
 		$r_notiz = (string)($row['notiz'] ?? '');
 		echo '<tr class="cmx-lief-item-row">';
-		echo '<td><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><select name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="widefat cmx-lief-supplier"><option value="0" data-edit="">— auswählen —</option>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><select name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="widefat cmx-lief-supplier"><option value="0" data-edit="">— auswählen —</option>';
 		if ($lieferanten_posts) {
 			foreach($lieferanten_posts as $k){
 				$title=\get_the_title($k->ID)?:'(#'.(int)$k->ID.')';
@@ -493,11 +575,11 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			}
 		}
 		echo '</select></div></td>';
-		echo '<td><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></td>';
-		echo '<td><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></td>';
-		echo '<td><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
-		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
-		echo '<td><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--nr" data-label="Artikel-Nr."><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--ltage" data-label="Lieferzeit"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--lager" data-label="Bestand"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
 		echo '<td class="cmx-lief-actions-cell"></td>';
 		echo '</tr>';
 		echo '<tr class="cmx-lief-note-row">';

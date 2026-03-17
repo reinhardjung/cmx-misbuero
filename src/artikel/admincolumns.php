@@ -100,6 +100,14 @@ function cmx_tax_marken(): ?string     { return cmx_first_existing_tax(['artikel
 function cmx_tax_farben(): ?string     { return cmx_first_existing_tax(['artikel_farbe','artikel_farben','farbe','farben']); }
 function cmx_tax_einheiten(): ?string  { return cmx_first_existing_tax(['artikel_einheit','artikel_einheiten','einheit','einheiten']); }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_marken_label')) {
+	function cmx_artikel_admin_marken_label(string $label): string {
+		$label = (string) \preg_replace('/\s*\([^)]*\)\s*/u', ' ', $label);
+		$label = (string) \preg_replace('/\s+/u', ' ', $label);
+		return \trim($label);
+	}
+}
+
 
 /** Lieferanten-Query-Args (optional eingeschränkt, falls Kennzeichnung existiert) */
 function cmx_lieferanten_args(): array {
@@ -205,7 +213,13 @@ function cmx_lieferanten_args(): array {
 			$out = [];
 			foreach ($terms as $t) {
 				$url = \add_query_arg(['post_type' => 'artikel', $tax => $t->slug], \admin_url('edit.php'));
-				$out[] = '<a href="'.\esc_url($url).'">'.\esc_html($t->name).'</a>';
+				$label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_marken_label')
+					? (string) cmx_artikel_admin_marken_label((string) $t->name)
+					: (string) $t->name;
+				if ($label === '') {
+					continue;
+				}
+				$out[] = '<a href="'.\esc_url($url).'">'.\esc_html($label).'</a>';
 			}
 			echo implode(', ', $out);
 			break;
