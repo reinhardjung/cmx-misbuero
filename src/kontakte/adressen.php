@@ -71,6 +71,21 @@ function cmx_countries_default_slug(array $countries, string $prefer='ch'): stri
 	return strtolower($countries[0]['value'] ?? 'ch');
 }
 
+function cmx_countries_taxonomy(): string {
+	return \taxonomy_exists('kontakte_laender') ? 'kontakte_laender' : '';
+}
+
+function cmx_countries_label_html(string $label = 'Land'): string {
+	$taxonomy = cmx_countries_taxonomy();
+	if ($taxonomy === '') {
+		return \esc_html($label);
+	}
+
+	$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=kontakte');
+
+	return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;">' . \esc_html($label) . '</a>';
+}
+
 /** -------------------- Metas registrieren -------------------- */
 \add_action('init', __NAMESPACE__ . '\\cmx_register_address_metas');
 function cmx_register_address_metas(): void {
@@ -108,6 +123,7 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 
 	$countries = cmx_countries_from_taxonomy();
 	$default_slug = cmx_countries_default_slug($countries, 'schweiz');
+	$land_label_html = cmx_countries_label_html('Land');
 
 	$rechnung = [
 		'strasse' => \get_post_meta($post->ID, CMX_RECHNUNG_META_STRASSE, true),
@@ -154,7 +170,7 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 			<button type="button" data-tab="liefer">Lieferadresse</button>
 		</div>';
 
-	$render_tab = static function(string $key, array $vals, array $countries): void {
+	$render_tab = static function(string $key, array $vals, array $countries) use ($default_slug, $land_label_html): void {
 		$is_active = $key === 'rechnung' ? ' active' : '';
 
 		$init_parts = array_filter([$vals['strasse'] ?? '', $vals['zusatz'] ?? '', $vals['plz'] ?? '', $vals['ort'] ?? '', $vals['land'] ?? '']);
@@ -181,7 +197,7 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 
 
 			echo '<div class="cmx-col cmx-land">
-				<label><strong>Land</strong></label><br>';
+				<label><strong>' . $land_label_html . '</strong></label><br>';
 
 				$selected_land = strtolower($vals['land'] ?? '') ?: $default_slug;
 

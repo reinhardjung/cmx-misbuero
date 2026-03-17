@@ -56,6 +56,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_notice_category_taxonomies
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_make_taxonomy_metabox_title_link')) {
+	function cmx_kontakte_make_taxonomy_metabox_title_link(string $taxonomy, string $box_id, string $fallback_label): void {
+		if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+			return;
+		}
+
+		$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=' . \rawurlencode(basename(__DIR__)));
+
+		echo '<script>';
+		echo 'document.addEventListener("DOMContentLoaded",function(){';
+		echo 'var box=document.getElementById(' . \wp_json_encode($box_id) . ');';
+		echo 'if(!box)return;';
+		echo 'var title=box.querySelector(".postbox-header .hndle, .postbox-header h2, .hndle, h2.hndle");';
+		echo 'if(!title||title.querySelector("a[data-cmx-tax-link=\\"1\\"]"))return;';
+		echo 'var text=(title.textContent||"").trim()||' . \wp_json_encode($fallback_label) . ';';
+		echo 'title.textContent="";';
+		echo 'var link=document.createElement("a");';
+		echo 'link.href=' . \wp_json_encode($url) . ';';
+		echo 'link.target="_blank";';
+		echo 'link.rel="noopener noreferrer";';
+		echo 'link.dataset.cmxTaxLink="1";';
+		echo 'link.style.textDecoration="none";';
+		echo 'link.style.color="inherit";';
+		echo 'link.style.font="inherit";';
+		echo 'link.style.fontSize="inherit";';
+		echo 'link.style.fontWeight="inherit";';
+		echo 'link.style.lineHeight="inherit";';
+		echo 'link.textContent=text;';
+		echo 'title.appendChild(link);';
+		echo '});';
+		echo '</script>';
+	}
+}
+
+\add_action('admin_print_footer_scripts', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== basename(__DIR__) || (string) ($screen->base ?? '') !== 'post') {
+		return;
+	}
+
+	foreach (cmx_kontakte_notice_category_taxonomies() as $taxonomy) {
+		cmx_kontakte_make_taxonomy_metabox_title_link((string) $taxonomy, (string) $taxonomy . 'div', 'Kategorien');
+		cmx_kontakte_make_taxonomy_metabox_title_link((string) $taxonomy, 'tagsdiv-' . (string) $taxonomy, 'Kategorien');
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_stufen_tax')) {
+		$stufen_tax = (string) cmx_stufen_tax();
+		cmx_kontakte_make_taxonomy_metabox_title_link($stufen_tax, 'cmx_kontakte_stufe_side', 'Stufe');
+	}
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 	function cmx_kontakte_notice_first_email(int $post_id): string {
 		$email = \sanitize_email((string) \get_post_meta($post_id, '_cmx_email_1', true));
