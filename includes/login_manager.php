@@ -168,27 +168,27 @@ function cmx_copy_layout_from_cloudmeister(string $user_login, $user): void {
  * Entfernt den Demo-User "vorlage", sobald die Instanz nicht mehr auf der Subdomain "vorlage.*" läuft.
  * Damit verhindern wir, dass der Platzhalter-Account in produktiven Umgebungen bestehen bleibt.
  */
-add_action('init', function () {
-	$user = get_user_by('login', 'vorlage');
-	if (!$user instanceof \WP_User) {
-		return;
-	}
+// add_action('init', function () {
+// 	$user = get_user_by('login', 'vorlage');
+// 	if (!$user instanceof \WP_User) {
+// 		return;
+// 	}
 
-	$host = parse_url(home_url(), PHP_URL_HOST);
-	if (!$host) {
-		return; // Keine Host-Info verfügbar, nichts tun.
-	}
+// 	$host = parse_url(home_url(), PHP_URL_HOST);
+// 	if (!$host) {
+// 		return; // Keine Host-Info verfügbar, nichts tun.
+// 	}
 
-	$labels = explode('.', $host);
-	$sub    = $labels[0] ?? '';
+// 	$labels = explode('.', $host);
+// 	$sub    = $labels[0] ?? '';
 
-	if (strcasecmp($sub, 'vorlage') === 0) {
-		return; // Bleibt auf der vorlage-Subdomain erlaubt.
-	}
+// 	if (strcasecmp($sub, 'vorlage') === 0) {
+// 		return; // Bleibt auf der vorlage-Subdomain erlaubt.
+// 	}
 
-	if (!function_exists('wp_delete_user')) {
-		require_once ABSPATH . 'wp-admin/includes/user.php';
-	}
+// 	if (!function_exists('wp_delete_user')) {
+// 		require_once ABSPATH . 'wp-admin/includes/user.php';
+// 	}
 
-	wp_delete_user($user->ID);
-});
+// 	wp_delete_user($user->ID);
+// });
