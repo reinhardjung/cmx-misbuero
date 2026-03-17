@@ -672,8 +672,8 @@ function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false
 						$partial_art = (string) ($partial['zahlungsart'] ?? '');
 						if ($partial_art === '') $partial_art = $zahlungsart;
 
-							$partial_einnahmen = $is_income_side ? $total : 0.0;
-							$partial_ausgaben = $is_expense_side ? $total : 0.0;
+							$partial_einnahmen = $is_income_side ? $partial_amount : 0.0;
+							$partial_ausgaben = $is_expense_side ? $partial_amount : 0.0;
 							$partial_ratio = $total > 0.0 ? ($partial_amount / $total) : 0.0;
 							$partial_tax_amount = max(0.0, (float) $tax_amount * (float) $partial_ratio);
 							$partial_mwst = $is_income_side ? $partial_tax_amount : 0.0;
