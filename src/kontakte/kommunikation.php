@@ -43,6 +43,16 @@ function cmx_label_dropdown(array $terms, string $name, array $meta, string $tax
 	return $html;
 }
 
+function cmx_kommunikation_taxonomy_label_html(string $taxonomy, string $label): string {
+	if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+		return \esc_html($label);
+	}
+
+	$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=kontakte');
+
+	return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;">' . \esc_html($label) . '</a>';
+}
+
 /** Metabox registrieren (unverändert) */
 \add_action('add_meta_boxes', function () {
 	if (!\post_type_exists('kontakte')) return;
@@ -99,6 +109,8 @@ function cmx_kommunikation_box_html($post): void {
 
 	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
 	$mail_terms  = \taxonomy_exists(CMX_TAX_MAIL_LABELS)  ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS)  : [];
+	$phone_label = cmx_kommunikation_taxonomy_label_html(CMX_TAX_PHONE_LABELS, 'Telefon');
+	$mail_label = cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail');
 
 	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
 
@@ -132,7 +144,7 @@ function cmx_kommunikation_box_html($post): void {
 	echo '<table class="form-table"><tbody>';
 
 	// Telefone (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">Telefon</th><td><div class="cmx-kommu-row">';
+	echo '<tr><th scope="row">' . $phone_label . '</th><td><div class="cmx-kommu-row">';
 	for ($i = 1; $i <= 3; $i++) {
 		$val = isset($meta["telefon_$i"]) ? \esc_attr($meta["telefon_$i"]) : '';
 		$ddl = cmx_label_dropdown($phone_terms, "telefon_label_$i", $meta, CMX_TAX_PHONE_LABELS);
@@ -144,7 +156,7 @@ function cmx_kommunikation_box_html($post): void {
 	echo '</div></td></tr>';
 
 	// E-Mails (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">E-Mail</th><td><div class="cmx-kommu-row">';
+	echo '<tr><th scope="row">' . $mail_label . '</th><td><div class="cmx-kommu-row">';
 	for ($i = 1; $i <= 3; $i++) {
 		$val = isset($meta["email_$i"]) ? \esc_attr($meta["email_$i"]) : '';
 		$ddl = cmx_label_dropdown($mail_terms, "email_label_$i", $meta, CMX_TAX_MAIL_LABELS);
