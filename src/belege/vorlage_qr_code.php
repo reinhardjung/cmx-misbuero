@@ -539,7 +539,10 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
     }
     $iban_print = trim((string) $iban_print);
 
-    $amount = (float) ($tpl['document']['total'] ?? 0);
+    $amount = (float) ($tpl['document']['payment_amount'] ?? ($tpl['document']['total'] ?? 0));
+    if ($amount < 0) {
+        $amount = 0.0;
+    }
     // EMV braucht Punkt, KEINE Tausendertrennzeichen
     $betrag_emv = number_format($amount, 2, '.', '');
     // Für Druck etwas hübscher (Leerzeichen als Tausender)

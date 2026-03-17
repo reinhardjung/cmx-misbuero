@@ -1013,14 +1013,23 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 								</table>
 								<?php if (!$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 									<?php
-									$anz_base_total = (float)($totals['total'] ?? 0);
-									$anzahlungen_sum = 0.0;
-									foreach ($tpl['anzahlungen'] as $row) {
-										$anz_amount_raw = (string)($row['betrag'] ?? 0);
-										$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
-										$anzahlungen_sum += $anz_amount;
+									$document_meta = (array)($tpl['document'] ?? []);
+									$anzahlungen_sum = array_key_exists('paid_amount', $document_meta)
+										? (float)$document_meta['paid_amount']
+										: 0.0;
+									$offen_betrag = array_key_exists('open_amount', $document_meta)
+										? (float)$document_meta['open_amount']
+										: (float)($totals['total'] ?? 0);
+									if (!array_key_exists('paid_amount', $document_meta) || !array_key_exists('open_amount', $document_meta)) {
+										$anz_base_total = (float)($totals['total'] ?? 0);
+										$anzahlungen_sum = 0.0;
+										foreach ($tpl['anzahlungen'] as $row) {
+											$anz_amount_raw = (string)($row['betrag'] ?? 0);
+											$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+											$anzahlungen_sum += $anz_amount;
+										}
+										$offen_betrag = $anz_base_total - $anzahlungen_sum;
 									}
-									$offen_betrag = $anz_base_total - $anzahlungen_sum;
 									?>
 									<div style="margin-top:16px;text-align:right;">
 										<em>Bereits erhaltene Zahlungen</em>
@@ -1124,14 +1133,23 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 
 	<?php if (!$use_closing_group && !$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
 		<?php
-		$anz_base_total = (float)($totals['total'] ?? 0);
-		$anzahlungen_sum = 0.0;
-		foreach ($tpl['anzahlungen'] as $row) {
-			$anz_amount_raw = (string)($row['betrag'] ?? 0);
-			$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
-			$anzahlungen_sum += $anz_amount;
+		$document_meta = (array)($tpl['document'] ?? []);
+		$anzahlungen_sum = array_key_exists('paid_amount', $document_meta)
+			? (float)$document_meta['paid_amount']
+			: 0.0;
+		$offen_betrag = array_key_exists('open_amount', $document_meta)
+			? (float)$document_meta['open_amount']
+			: (float)($totals['total'] ?? 0);
+		if (!array_key_exists('paid_amount', $document_meta) || !array_key_exists('open_amount', $document_meta)) {
+			$anz_base_total = (float)($totals['total'] ?? 0);
+			$anzahlungen_sum = 0.0;
+			foreach ($tpl['anzahlungen'] as $row) {
+				$anz_amount_raw = (string)($row['betrag'] ?? 0);
+				$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+				$anzahlungen_sum += $anz_amount;
+			}
+			$offen_betrag = $anz_base_total - $anzahlungen_sum;
 		}
-		$offen_betrag = $anz_base_total - $anzahlungen_sum;
 		?>
 		<div style="margin-top:16px;text-align:right;">
 			<em>Bereits erhaltene Zahlungen</em>

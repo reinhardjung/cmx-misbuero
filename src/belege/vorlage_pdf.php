@@ -91,6 +91,34 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_first_meta')) {
 		return null;
 	}
 }
+if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_payment_amounts')) {
+	function cmxbu_get_beleg_payment_amounts(float $total, array $anzahlungen): array {
+		$total = round($total, 2);
+		$paid_amount = 0.0;
+
+		foreach ($anzahlungen as $row) {
+			if (!is_array($row)) {
+				continue;
+			}
+			$betrag_raw = trim((string) ($row['betrag'] ?? ''));
+			if ($betrag_raw === '') {
+				continue;
+			}
+			$betrag_raw = preg_replace('/\s*(chf|fr\.?)\s*/i', '', $betrag_raw);
+			$paid_amount += (float) cmx_norm_decimal((string) $betrag_raw);
+		}
+
+		$paid_amount = round($paid_amount, 2);
+		$open_amount = round($total - $paid_amount, 2);
+
+		return [
+			'has_partial_payments' => !empty($anzahlungen),
+			'paid_amount' => $paid_amount,
+			'open_amount' => $open_amount,
+			'payment_amount' => !empty($anzahlungen) ? max($open_amount, 0.0) : $total,
+		];
+	}
+}
 
 if (!function_exists(__NAMESPACE__ . '\\cmxbu_strip_png_iccp_chunks')) {
 	/**
@@ -1334,6 +1362,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				return $at <=> $bt;
 			});
 		}
+		$payment_amounts = cmxbu_get_beleg_payment_amounts((float) ($calc['total'] ?? 0.0), $anzahlungen);
 		$me    = cmxbu_get_me_contact(); // var_dump(cmxbu_get_me_contact()); exit;
 
 		$bank  = cmxbu_get_preferred_bank();
@@ -1341,9 +1370,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$bank_iban = trim((string)($bank['iban'] ?? ''));
 		$payrexx_vpos_url = '';
 		$payrexx_qr_data_uri = '';
+		$payment_amount = (float) ($payment_amounts['payment_amount'] ?? ($calc['total'] ?? 0.0));
 		if (
 			$beleg_type === 'rechnung'
 			&& $beleg_richtung === 'ausgang'
+			&& $payment_amount > 0.0
 			&& \function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_vpos_url')
 		) {
 			$payrexx_base_url = (string) cmx_get_payrexx_vpos_url();
@@ -1356,7 +1387,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					: ['company' => '', 'forename' => '', 'surname' => '', 'email' => ''];
 				$payrexx_query = \http_build_query([
 					'tid' => $payrexx_terminal_id,
-					'amount' => \number_format((float) ($calc['total'] ?? 0.0), 2, '.', ''),
+					'amount' => \number_format($payment_amount, 2, '.', ''),
 					'currency' => \strtoupper(\trim((string) ($dates['currency'] ?? ($fmt['currency'] ?? 'CHF')))),
 					'purpose' => \trim((string) $title_safe),
 					'contact_company' => (string) ($payrexx_contact['company'] ?? ''),
@@ -1406,6 +1437,10 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					'due' => $doc_due,
 					'currency' => $dates['currency'],
 					'period' => $dates['period'],
+					'payment_amount' => $payment_amount,
+					'open_amount' => (float) ($payment_amounts['open_amount'] ?? ($calc['total'] ?? 0.0)),
+					'paid_amount' => (float) ($payment_amounts['paid_amount'] ?? 0.0),
+					'has_partial_payments' => !empty($payment_amounts['has_partial_payments']),
 					'payrexx_vpos_url' => $payrexx_vpos_url,
 					'payrexx_qr_data_uri' => $payrexx_qr_data_uri,
 					'subtotal' => $calc['subtotal'],
