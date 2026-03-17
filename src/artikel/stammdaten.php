@@ -20,6 +20,64 @@ function cmx_get_terms_safe(string $taxonomy): array {
 	return \is_wp_error($terms) ? [] : $terms;
 }
 
+function cmx_artikel_make_taxonomy_metabox_title_link(string $taxonomy, string $box_id, string $fallback_label): void {
+	if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+		return;
+	}
+
+	$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=artikel');
+	echo '<script>';
+	echo 'document.addEventListener("DOMContentLoaded",function(){';
+	echo 'var box=document.getElementById(' . \wp_json_encode($box_id) . ');';
+	echo 'if(!box)return;';
+	echo 'var title=box.querySelector(".postbox-header .hndle, .postbox-header h2, .hndle, h2.hndle");';
+	echo 'if(!title||title.querySelector("a[data-cmx-tax-link=\\"1\\"]"))return;';
+	echo 'var text=(title.textContent||"").trim()||' . \wp_json_encode($fallback_label) . ';';
+	echo 'title.textContent="";';
+	echo 'var link=document.createElement("a");';
+	echo 'link.href=' . \wp_json_encode($url) . ';';
+	echo 'link.target="_blank";';
+	echo 'link.rel="noopener noreferrer";';
+	echo 'link.dataset.cmxTaxLink="1";';
+	echo 'link.style.textDecoration="none";';
+	echo 'link.style.color="inherit";';
+	echo 'link.style.font="inherit";';
+	echo 'link.style.fontSize="inherit";';
+	echo 'link.style.fontWeight="inherit";';
+	echo 'link.style.lineHeight="inherit";';
+	echo 'link.textContent=text;';
+	echo 'title.appendChild(link);';
+	echo '});';
+	echo '</script>';
+}
+
+\add_action('admin_print_footer_scripts', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'artikel' || (string) ($screen->base ?? '') !== 'post') {
+		return;
+	}
+
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_KATEGORIEN')) {
+		$taxonomy = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_KATEGORIEN');
+		cmx_artikel_make_taxonomy_metabox_title_link($taxonomy, $taxonomy . 'div', 'Kategorien');
+		cmx_artikel_make_taxonomy_metabox_title_link($taxonomy, 'tagsdiv-' . $taxonomy, 'Kategorien');
+	}
+
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN')) {
+		$taxonomy = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN');
+		cmx_artikel_make_taxonomy_metabox_title_link($taxonomy, $taxonomy . 'div', 'Typen');
+		cmx_artikel_make_taxonomy_metabox_title_link($taxonomy, 'tagsdiv-' . $taxonomy, 'Typen');
+	}
+
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_FARBEN')) {
+		cmx_artikel_make_taxonomy_metabox_title_link((string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_FARBEN'), 'cmx_artikel_farbe_side', 'Farben');
+	}
+
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_MARKEN')) {
+		cmx_artikel_make_taxonomy_metabox_title_link((string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_MARKEN'), 'cmx_artikel_marke_side', 'Marke');
+	}
+});
+
 /** CSV → eindeutige Integer-IDs */
 function cmx_csv_ids_to_array(string $csv): array {
 	$out = [];
