@@ -200,19 +200,28 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 			background: #eef6ff;
 			color: #0a4b78;
 		}
-		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter input[type="checkbox"] {
-			width: 16px;
-			height: 16px;
-			margin: 0;
-			accent-color: #2271b1;
-		}
-		#posts-filter .tablenav.top .actions .cmx-belege-woo-filter span {
-			font-weight: 600;
-			line-height: 1;
-			white-space: nowrap;
-		}
-	</style>';
-});
+			#posts-filter .tablenav.top .actions .cmx-belege-woo-filter input[type="checkbox"] {
+				width: 16px;
+				height: 16px;
+				margin: 0;
+				accent-color: #2271b1;
+			}
+			#posts-filter .tablenav.top .actions .cmx-belege-woo-filter span {
+				font-weight: 600;
+				line-height: 1;
+				white-space: nowrap;
+			}
+			.wp-list-table th#title,
+			.wp-list-table th.manage-column.column-title,
+			.wp-list-table th.manage-column.column-title > a,
+			.wp-list-table th.manage-column.column-title > span,
+			.wp-list-table td.title.column-title,
+			.wp-list-table td.column-title strong,
+			.wp-list-table td.column-title .row-title {
+				white-space: nowrap !important;
+			}
+		</style>';
+	});
 
 /**
  * Oben-rechts-Suche in der Belege-Liste um Kontakt erweitern.
