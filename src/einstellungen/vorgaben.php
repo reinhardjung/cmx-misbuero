@@ -27,6 +27,41 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_tab_vorgaben__artikel'
 	);
 
+	\add_settings_section(
+		'cmx_sec_vorgaben_email',
+		__('E-Mail', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__email'
+	);
+
+	\add_settings_field(
+		'email_theme',
+		'Mail-Theme',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$current = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
+				? (string) cmx_email_theme_sanitize((string) ($opts['email_theme'] ?? 'rot'))
+				: 'rot';
+			$themes = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_presets')
+				? (array) cmx_email_theme_presets()
+				: [
+					'rot' => ['label' => 'Rot'],
+					'blau' => ['label' => 'Blau'],
+					'grau' => ['label' => 'Grau'],
+				];
+
+			echo '<select name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[email_theme]" style="min-width:220px;">';
+			foreach ($themes as $key => $theme) {
+				$label = \is_array($theme) ? (string) ($theme['label'] ?? $key) : (string) $key;
+				echo '<option value="'.\esc_attr((string) $key).'" '.\selected($current, (string) $key, false).'>'.\esc_html($label).'</option>';
+			}
+			echo '</select>';
+			echo '<p class="description">Steuert den Farbverlauf im Mail-Header sowie die Button-Farbe in versendeten E-Mails.</p>';
+		},
+		'cmx_tab_vorgaben__email',
+		'cmx_sec_vorgaben_email'
+	);
+
 	\add_settings_field(
 		'mwst_pflichtig',
 		'MwSt-pflichtig?',

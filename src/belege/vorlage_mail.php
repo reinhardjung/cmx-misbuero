@@ -8,13 +8,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_outlook_head_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
-	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = '', int $label_offset_px = 0): string {
+	function cmx_mail_button_html(string $url, string $label, string $background = '', string $color = '', int $width = 240, string $inner_html = '', int $label_offset_px = 0): string {
 		$url = \esc_url($url);
 		$label_esc = \esc_html($label);
 		$width = \max(140, $width);
+		$theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+			? (array) cmx_email_theme_palette()
+			: [];
+		if ($background === '') {
+			$background = (string) ($theme['button_background'] ?? '#a42c24');
+		}
+		if ($color === '') {
+			$color = (string) ($theme['button_text'] ?? '#ffffff');
+		}
+		$button_mode = (string) ($theme['button_mode'] ?? 'button');
+		$link_color = (string) ($theme['link_color'] ?? ($background !== '' ? $background : '#a42c24'));
 		$label_html = $label_offset_px !== 0
 			? '<span style="position:relative;top:' . $label_offset_px . 'px;">' . $label_esc . '</span>'
 			: $label_esc;
+		if ($button_mode === 'link') {
+			return '<a href="' . $url . '" style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;line-height:1.4;color:' . $link_color . ';text-decoration:underline;font-weight:600;">' . $label_html . '</a>';
+		}
 
 		return '<!--[if mso]>'
 			. '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>'
@@ -216,14 +230,42 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 		: '';
 	$thank_you_margin_bottom = $kundenportal_footer_html !== '' ? '16px' : '0';
 	$mail_head_html = cmx_mail_outlook_head_html();
+	$mail_theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+		? (array) cmx_email_theme_palette()
+		: [];
+	$header_background = (string) ($mail_theme['header_background'] ?? '#b53a30');
+	$header_gradient_start = (string) ($mail_theme['header_gradient_start'] ?? '#a42c24');
+	$header_gradient_end = (string) ($mail_theme['header_gradient_end'] ?? '#d84a3a');
+	$header_text = (string) ($mail_theme['header_text'] ?? '#ffffff');
+	$header_plain = !empty($mail_theme['header_plain']);
+	$header_border = (string) ($mail_theme['header_border'] ?? 'transparent');
+	$button_background = (string) ($mail_theme['button_background'] ?? '#a42c24');
+	$button_text = (string) ($mail_theme['button_text'] ?? '#ffffff');
+	$button_accent = (string) ($mail_theme['button_accent'] ?? '#d84a3a');
+	$header_style = 'padding:20px 24px;background:' . \esc_attr($header_background) . ';color:' . \esc_attr($header_text) . ';';
+	if (!$header_plain && $header_gradient_start !== '' && $header_gradient_end !== '') {
+		$header_style .= 'background-image:linear-gradient(135deg,' . \esc_attr($header_gradient_start) . ',' . \esc_attr($header_gradient_end) . ');';
+	}
+	if ($header_plain && $header_border !== '') {
+		$header_style .= 'border-bottom:1px solid ' . \esc_attr($header_border) . ';';
+	}
+	$header_logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
+		? (string) cmx_email_self_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;')
+		: '';
+	$header_content_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')
+		? (string) cmx_email_header_content_html($header_kicker_esc, $title_esc, $beleg_date_esc, $preheader_esc, $header_logo_html)
+		: '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_esc . '</div>'
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>'
+			. ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '')
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>';
 	$button_icon_html = '<span style="vertical-align:middle;display:inline-block;margin-right:8px;">'
 		. '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="vertical-align:middle;display:inline-block;">'
 		. '<path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#ffffff"/>'
 		. '<path d="M15 2v6h6" fill="#e7e9ef"/>'
-		. '<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="#d84a3a"/>'
+		. '<rect x="6.8" y="13.3" width="10.4" height="5.2" rx="1" fill="' . \esc_attr($button_accent) . '"/>'
 		. '<text x="12" y="17.2" text-anchor="middle" font-family="Segoe UI,Roboto,Arial,sans-serif" font-size="3.7" font-weight="700" fill="#ffffff"></text>'
 		. '</svg></span>';
-	$download_button_html = cmx_mail_button_html($download_url, 'PDF Beleg herunterladen', '#a42c24', '#ffffff', 240, $button_icon_html, 2);
+	$download_button_html = cmx_mail_button_html($download_url, 'PDF Beleg herunterladen', $button_background, $button_text, 240, $button_icon_html, 2);
 	$salutation_line_html = $anrede_esc !== ''
 		? '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
 		: '';
@@ -254,15 +296,12 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f5f6f8;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 		<tr>
 			<td align="center" style="padding:24px 12px;">
-				<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
-					<tr>
-						<td style="padding:20px 24px;background:#b53a30;background-image:linear-gradient(135deg,#a42c24,#d84a3a);color:#ffffff;">
-							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_esc . '</div>
-							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_esc . '</div>
-							' . ($beleg_date !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_esc . '</div>' : '') . '
-							<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_esc . '</div>
-						</td>
-					</tr>
+					<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
+						<tr>
+							<td style="' . $header_style . '">
+								' . $header_content_html . '
+							</td>
+						</tr>
 
 
 					<tr>

@@ -102,6 +102,7 @@ function cmx_get_subtabs(string $tab): array {
 			'allgemein' => 'Allgemein',
 			'artikel'   => 'Artikel',
 			'belege'    => 'Belege',
+			'email'     => 'E-Mail',
 		];
 	}
 

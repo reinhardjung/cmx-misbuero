@@ -197,16 +197,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		'cmx_sec_email_account'
 	);
 
-	\add_settings_field(
-		'cmx_email_password',
-		'Kennwort*',
-		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('email_password'));
-			echo '<input type="password" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_password]" value="' . $value . '" autocomplete="current-password">';
-		},
-		$page,
-		'cmx_sec_email_account'
-	);
+		\add_settings_field(
+			'cmx_email_password',
+			'Kennwort*',
+			static function (): void {
+				$value = \esc_attr(cmx_email_option_value('email_password'));
+				echo '<span class="cmx-email-password-wrap">';
+				echo '<input type="password" class="regular-text cmx-email-password-input" id="cmx-email-password-input" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_password]" value="' . $value . '" autocomplete="current-password">';
+				echo '<button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden">';
+				echo '<span class="cmx-email-password-icon is-show" aria-hidden="true"></span>';
+				echo '</button>';
+				echo '</span>';
+			},
+			$page,
+			'cmx_sec_email_account'
+		);
 
 	\add_settings_field(
 		'cmx_email_alias',
@@ -343,12 +348,70 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		$page,
 		'cmx_sec_email_links'
 	);
-});
+	});
 
-\add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
-	if (!\is_array($new)) {
-		return $new;
-	}
+	\add_action('admin_head', function (): void {
+		if (!cmx_email_tab_is_active()) {
+			return;
+		}
+		$icon_show_url = \esc_url(\plugins_url('../../assets/see.png', __FILE__));
+		$icon_hide_url = \esc_url(\plugins_url('../../assets/hide.png', __FILE__));
+		?>
+		<style>
+			.cmx-email-password-wrap {
+				position: relative;
+				display: inline-flex;
+				align-items: center;
+			}
+			.cmx-email-password-wrap .cmx-email-password-input {
+				padding-right: 62px;
+			}
+			.cmx-email-password-wrap .cmx-email-password-toggle {
+				position: absolute;
+				right: -2px;
+				top: 50%;
+				transform: translateY(-50%);
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 52px;
+				height: 36px;
+				margin: 2px 0 0 0;
+				padding: 0;
+				color: #50575e;
+				text-decoration: none;
+			}
+			.cmx-email-password-wrap .cmx-email-password-icon {
+				display: block;
+				width: 48px;
+				height: 32px;
+				background-repeat: no-repeat;
+				background-position: center;
+				background-size: contain;
+			}
+			.cmx-email-password-wrap .cmx-email-password-icon.is-show {
+				background-image: url('<?php echo $icon_show_url; ?>');
+			}
+			.cmx-email-password-wrap .cmx-email-password-icon.is-hide {
+				background-image: url('<?php echo $icon_hide_url; ?>');
+			}
+			.cmx-email-password-wrap .cmx-email-password-toggle:hover,
+			.cmx-email-password-wrap .cmx-email-password-toggle:focus {
+				color: #1d2327;
+			}
+			.cmx-email-password-wrap .cmx-email-password-toggle:focus {
+				outline: none;
+				box-shadow: 0 0 0 2px #2271b1;
+				border-radius: 3px;
+			}
+		</style>
+		<?php
+	});
+
+	\add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
+		if (!\is_array($new)) {
+			return $new;
+		}
 
 	$new['email_name'] = \sanitize_text_field((string) ($new['email_name'] ?? ''));
 	$new['email_address'] = \sanitize_email((string) ($new['email_address'] ?? ''));
@@ -371,6 +434,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
 	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
 	$new['kundenportal_link'] = !empty($new['kundenportal_link']) ? '1' : '0';
+	$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
+		? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
+		: 'rot';
 	$new['smtp_port'] = '587';
 	$new['imap_port'] = '993';
 
@@ -531,6 +597,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			el.textContent = message || '';
 			el.style.color = '#50575e';
 		}
+		function initPasswordToggle(){
+			var input = document.getElementById('cmx-email-password-input');
+			var toggle = document.querySelector('.cmx-email-password-toggle');
+			if (!input || !toggle || toggle.dataset.bound === '1') return;
+			toggle.dataset.bound = '1';
+			var icon = toggle.querySelector('.cmx-email-password-icon');
+
+			function syncPasswordToggle(){
+				var isVisible = input.type === 'text';
+				var label = isVisible ? 'Kennwort ausblenden' : 'Kennwort einblenden';
+				toggle.setAttribute('aria-label', label);
+				toggle.setAttribute('title', label);
+				toggle.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+				if (icon) {
+					icon.className = 'cmx-email-password-icon ' + (isVisible ? 'is-hide' : 'is-show');
+				}
+			}
+
+			toggle.addEventListener('click', function(){
+				input.type = input.type === 'password' ? 'text' : 'password';
+				syncPasswordToggle();
+			});
+
+			syncPasswordToggle();
+		}
 		function runTest(action, hostKey, buttonId, resultId){
 			var btn = document.getElementById(buttonId);
 			var result = document.getElementById(resultId);
@@ -609,6 +700,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			});
 		}
 
+		initPasswordToggle();
 		runTest('cmx_email_test_smtp', 'smtp_host', 'cmx-email-smtp-test', 'cmx-email-smtp-result');
 		runTest('cmx_email_test_imap', 'imap_host', 'cmx-email-imap-test', 'cmx-email-imap-result');
 	})();

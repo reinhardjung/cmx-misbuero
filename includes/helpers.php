@@ -238,6 +238,109 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_presets')) {
+	function cmx_email_theme_presets(): array {
+		return [
+			'rot' => [
+				'label' => 'Rot',
+				'header_background' => '#b53a30',
+				'header_gradient_start' => '#a42c24',
+				'header_gradient_end' => '#d84a3a',
+				'header_text' => '#ffffff',
+				'header_plain' => false,
+				'header_border' => 'transparent',
+				'button_background' => '#a42c24',
+				'button_text' => '#ffffff',
+				'button_mode' => 'button',
+				'button_accent' => '#d84a3a',
+				'link_color' => '#a42c24',
+				'logo_badge_border' => '#efcfc7',
+			],
+			'blau' => [
+				'label' => 'Blau',
+				'header_background' => '#2b73a6',
+				'header_gradient_start' => '#1f5f8e',
+				'header_gradient_end' => '#4f97cc',
+				'header_text' => '#ffffff',
+				'header_plain' => false,
+				'header_border' => 'transparent',
+				'button_background' => '#1f5f8e',
+				'button_text' => '#ffffff',
+				'button_mode' => 'button',
+				'button_accent' => '#4f97cc',
+				'link_color' => '#1f5f8e',
+				'logo_badge_border' => '#c8deee',
+			],
+			'grau' => [
+				'label' => 'Grau',
+				'header_background' => '#616b78',
+				'header_gradient_start' => '#4c5562',
+				'header_gradient_end' => '#8f99a7',
+				'header_text' => '#ffffff',
+				'header_plain' => false,
+				'header_border' => 'transparent',
+				'button_background' => '#4c5562',
+				'button_text' => '#ffffff',
+				'button_mode' => 'button',
+				'button_accent' => '#8f99a7',
+				'link_color' => '#4c5562',
+				'logo_badge_border' => '#d7dde4',
+			],
+			'ohne' => [
+				'label' => 'Ohne',
+				'header_background' => '#ffffff',
+				'header_gradient_start' => '',
+				'header_gradient_end' => '',
+				'header_text' => '#1f2933',
+				'header_plain' => true,
+				'header_border' => '#e5e7eb',
+				'button_background' => '#1f2933',
+				'button_text' => '#1f2933',
+				'button_mode' => 'link',
+				'button_accent' => '#d1d5db',
+				'link_color' => '#1f2933',
+				'logo_badge_border' => '#e5e7eb',
+			],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')) {
+	function cmx_email_theme_sanitize(string $key): string {
+		$key = \sanitize_key($key);
+		$themes = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_presets')
+			? (array) cmx_email_theme_presets()
+			: [];
+
+		return isset($themes[$key]) ? $key : 'rot';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')) {
+	function cmx_email_theme_palette(string $key = ''): array {
+		if ($key === '') {
+			$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+				: 'cmx_einstellungen';
+			$options = (array) \get_option($option_name, []);
+			$key = \is_scalar($options['email_theme'] ?? null)
+				? (string) $options['email_theme']
+				: 'rot';
+		}
+
+		$themes = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_presets')
+			? (array) cmx_email_theme_presets()
+			: [];
+		$key = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
+			? (string) cmx_email_theme_sanitize($key)
+			: 'rot';
+
+		return isset($themes[$key]) && \is_array($themes[$key])
+			? $themes[$key]
+			: (isset($themes['rot']) && \is_array($themes['rot']) ? $themes['rot'] : []);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')) {
 	function cmx_email_self_contact_id(): int {
 		$query = new \WP_Query([
@@ -261,13 +364,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
-	function cmx_email_self_logo_url(): string {
-		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
-			? (int) cmx_email_self_contact_id()
-			: 0;
+if (!\function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')) {
+	function cmx_contact_logo_url(int $post_id): string {
+		$post_id = (int) $post_id;
 		if ($post_id <= 0) {
 			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kl_active_gallery_item')) {
+			$meta_base = \function_exists(__NAMESPACE__ . '\\cmx_kl_meta_base')
+				? (string) cmx_kl_meta_base()
+				: '_cmx_local_image_kontakte';
+			$active_item = cmx_kl_active_gallery_item($post_id, $meta_base);
+			if (\is_array($active_item)) {
+				$active_url = \trim((string) ($active_item['url'] ?? ''));
+				if ($active_url !== '') {
+					return $active_url;
+				}
+			}
 		}
 
 		$local_url = \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true));
@@ -287,6 +401,107 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_contact_homepage_url')) {
+	function cmx_contact_homepage_url(int $post_id): string {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$meta_keys = [
+			'_cmx_kontakte_url',
+			'cmx_kontakte_meta_url',
+			'cmx_kontakte_url',
+			'_cmx_url',
+			'cmx_url',
+			'_website',
+			'website',
+			'url',
+		];
+		$url = '';
+
+		foreach ($meta_keys as $meta_key) {
+			$candidate = \trim((string) \get_post_meta($post_id, $meta_key, true));
+			if ($candidate !== '') {
+				$url = $candidate;
+				break;
+			}
+		}
+
+		if ($url === '') {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_href')) {
+			$url = (string) cmx_normalize_url_for_href($url);
+		} elseif (!\preg_match('~^https?://~i', $url)) {
+			$url = 'https://' . \ltrim($url, '/');
+		}
+
+		return \esc_url_raw($url);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
+	function cmx_email_self_logo_url(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')
+			? (string) cmx_contact_logo_url($post_id)
+			: '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')) {
+	function cmx_email_self_contact_url(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_contact_homepage_url')
+			? (string) cmx_contact_homepage_url($post_id)
+			: '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')) {
+	function cmx_email_header_content_html(string $header_kicker_html, string $title_html, string $beleg_date_html, string $preheader_html, string $logo_html = ''): string {
+		$theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+			? (array) cmx_email_theme_palette()
+			: [];
+		$logo_badge_border = (string) ($theme['logo_badge_border'] ?? '#efcfc7');
+		$text_html = '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">' . $header_kicker_html . '</div>'
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;">' . $title_html . '</div>'
+			. ($beleg_date_html !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;">vom ' . $beleg_date_html . '</div>' : '')
+			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;">' . $preheader_html . '</div>';
+
+		if ($logo_html === '') {
+			return $text_html;
+		}
+
+		$logo_badge_html = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="border-collapse:separate;margin-top:8px;">'
+			. '<tr>'
+			. '<td style="padding:10px 12px;background:#ffffff;border:1px solid ' . \esc_attr($logo_badge_border) . ';border-radius:12px;text-align:center;">' . $logo_html . '</td>'
+			. '</tr>'
+			. '</table>';
+
+		return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;">'
+			. '<tr>'
+			. '<td valign="top" style="padding:0 18px 0 0;">' . $text_html . '</td>'
+			. '<td valign="top" align="right" style="width:188px;text-align:right;">' . $logo_badge_html . '</td>'
+			. '</tr>'
+			. '</table>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 	function cmx_email_self_logo_html(string $img_style = ''): string {
 		$logo_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')
@@ -300,7 +515,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 			$img_style = 'display:block;max-width:180px;width:100%;height:auto;border:0;outline:none;text-decoration:none;';
 		}
 
-		return '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo" style="' . \esc_attr($img_style) . '">';
+		$img_html = '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo" style="' . \esc_attr($img_style) . '">';
+		$link_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')
+			? (string) cmx_email_self_contact_url()
+			: '';
+		if ($link_url === '') {
+			return $img_html;
+		}
+
+		return '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0;outline:none;">' . $img_html . '</a>';
 	}
 }
 

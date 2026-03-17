@@ -291,7 +291,13 @@ function cmx_get_contact_logo(int $post_id): string {
 		return '';
 	}
 
-	// 1) Lokales Logo (download-/dateibasiert)
+	if (\function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')) {
+		$logo_url = (string) cmx_contact_logo_url($post_id);
+		if ($logo_url !== '') {
+			return \esc_url($logo_url);
+		}
+	}
+
 	$local_url  = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true);
 	$local_path = (string) \get_post_meta($post_id, '_cmx_local_image_kontakte_path', true);
 	if ($local_url !== '' && $local_path !== '' && \is_file($local_path)) {
@@ -301,7 +307,6 @@ function cmx_get_contact_logo(int $post_id): string {
 		}
 	}
 
-	// 2) Beitragsbild
 	$thumb = (string) \get_the_post_thumbnail_url($post_id, 'full');
 	if ($thumb !== '') {
 		return \esc_url($thumb);
@@ -311,36 +316,36 @@ function cmx_get_contact_logo(int $post_id): string {
 }
 
 function cmx_get_branding_logo(): string {
-	// Kontakt "das-bin-ich" suchen
+	if (\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
+		$logo = (string) cmx_email_self_logo_url();
+		if ($logo !== '') {
+			return $logo;
+		}
+	}
+
 	$q = new \WP_Query([
 		'post_type'      => 'kontakte',
 		'post_status'    => ['publish', 'private'],
 		'posts_per_page' => 1,
-		'tax_query'      => [
-			[
-				'taxonomy' => 'kontakte_kategorien',
-				'field'    => 'slug',
-				'terms'    => ['das-bin-ich'],
-			]
-		],
+		'tax_query'      => [[
+			'taxonomy' => 'kontakte_kategorien',
+			'field'    => 'slug',
+			'terms'    => ['das-bin-ich'],
+		]],
 		'no_found_rows'    => true,
 		'suppress_filters' => true,
 	]);
-
-	$fallback_logo = 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png';
 	if (!$q->have_posts()) {
-		return $fallback_logo;
+		return '';
 	}
 
 	$q->the_post();
 	$post_id = (int) \get_the_ID();
 	\wp_reset_postdata();
 
-	$logo = \function_exists(__NAMESPACE__ . '\\cmx_get_contact_logo')
+	return \function_exists(__NAMESPACE__ . '\\cmx_get_contact_logo')
 		? (string) cmx_get_contact_logo($post_id)
 		: '';
-
-	return $logo !== '' ? $logo : $fallback_logo;
 }
 
 

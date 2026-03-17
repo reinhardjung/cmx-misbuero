@@ -8,13 +8,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_outlook_head_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
-	function cmx_mail_button_html(string $url, string $label, string $background = '#a42c24', string $color = '#ffffff', int $width = 240, string $inner_html = '', int $label_offset_px = 0): string {
+	function cmx_mail_button_html(string $url, string $label, string $background = '', string $color = '', int $width = 240, string $inner_html = '', int $label_offset_px = 0): string {
 		$url = \esc_url($url);
 		$label_esc = \esc_html($label);
 		$width = \max(140, $width);
+		$theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+			? (array) cmx_email_theme_palette()
+			: [];
+		if ($background === '') {
+			$background = (string) ($theme['button_background'] ?? '#a42c24');
+		}
+		if ($color === '') {
+			$color = (string) ($theme['button_text'] ?? '#ffffff');
+		}
+		$button_mode = (string) ($theme['button_mode'] ?? 'button');
+		$link_color = (string) ($theme['link_color'] ?? ($background !== '' ? $background : '#a42c24'));
 		$label_html = $label_offset_px !== 0
 			? '<span style="position:relative;top:' . $label_offset_px . 'px;">' . $label_esc . '</span>'
 			: $label_esc;
+		if ($button_mode === 'link') {
+			return '<a href="' . $url . '" style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;line-height:1.4;color:' . $link_color . ';text-decoration:underline;font-weight:600;">' . $label_html . '</a>';
+		}
 
 		return '<!--[if mso]>'
 			. '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>'
@@ -39,10 +53,29 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		$body_html = \str_replace('{logo}', $logo_html, $body_html);
 	}
 
+	$mail_theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+		? (array) cmx_email_theme_palette()
+		: [];
+	$header_background = (string) ($mail_theme['header_background'] ?? '#b53a30');
+	$header_gradient_start = (string) ($mail_theme['header_gradient_start'] ?? '#a42c24');
+	$header_gradient_end = (string) ($mail_theme['header_gradient_end'] ?? '#d84a3a');
+	$header_text = (string) ($mail_theme['header_text'] ?? '#ffffff');
+	$header_plain = !empty($mail_theme['header_plain']);
+	$header_border = (string) ($mail_theme['header_border'] ?? '#d8d8d8');
+	$button_background = (string) ($mail_theme['button_background'] ?? '#a42c24');
+	$button_text = (string) ($mail_theme['button_text'] ?? '#ffffff');
+	$header_style = 'background:' . \esc_attr($header_background) . ';color:' . \esc_attr($header_text) . ';padding:24px 28px;border:1px solid #d8d8d8;border-bottom:none;border-radius:14px 14px 0 0;font-family:Arial, sans-serif;';
+	if (!$header_plain && $header_gradient_start !== '' && $header_gradient_end !== '') {
+		$header_style .= 'background-image:linear-gradient(135deg,' . \esc_attr($header_gradient_start) . ',' . \esc_attr($header_gradient_end) . ');';
+	}
+	if ($header_plain && $header_border !== '') {
+		$header_style .= 'border-bottom:1px solid ' . \esc_attr($header_border) . ';';
+	}
+
 	$button_html = '';
 	if (\is_array($button) && !empty($button['url']) && !empty($button['label'])) {
 		$button_html = '<p style="margin:0 0 18px;">'
-			. cmx_mail_button_html((string) $button['url'], (string) $button['label'], '#b1342b', '#ffffff', 230)
+			. cmx_mail_button_html((string) $button['url'], (string) $button['label'], $button_background, $button_text, 230)
 			. '</p>';
 	}
 
@@ -57,7 +90,7 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#dcdcdc;padding:24px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">'
 		. '<tr><td align="center">'
 		. '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;">'
-		. '<tr><td style="background:#c0392b;color:#ffffff;padding:24px 28px;border:1px solid #d8d8d8;border-bottom:none;border-radius:14px 14px 0 0;font-family:Arial, sans-serif;">'
+		. '<tr><td style="' . $header_style . '">'
 		. '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;">MIS BUERO</div>'
 		. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;">' . \esc_html($title) . '</div>'
 		. '</td></tr>'
@@ -142,11 +175,15 @@ function cmx_passwort_mails_reset_message($message, $key, $user_login, $user_dat
 
 	$reset_url = cmx_passwort_mails_reset_url((string) $key, (string) $user_login, $user_data);
 	$site_name = \wp_specialchars_decode((string) \get_option('blogname'), ENT_QUOTES);
+	$mail_theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+		? (array) cmx_email_theme_palette()
+		: [];
+	$link_color = (string) ($mail_theme['link_color'] ?? '#a42c24');
 
 	$body_html  = '<p style="margin:0 0 14px;">Sali ' . \esc_html($display_name) . ',</p>';
 	$body_html .= '<p style="margin:0 0 14px;">fuer Dein Konto auf <strong>' . \esc_html($site_name) . '</strong> wurde ein Passwort-Reset angefordert.</p>';
 	$body_html .= '<p style="margin:0 0 14px;">Klicke auf den Button und vergebe ein neues Passwort.</p>';
-	$body_html .= '<p style="margin:0 0 14px;">Falls der Button nicht funktioniert, nutze diesen Link:<br><a href="' . \esc_url($reset_url) . '" style="color:#b1342b;text-decoration:none;">' . \esc_html($reset_url) . '</a></p>';
+	$body_html .= '<p style="margin:0 0 14px;">Falls der Button nicht funktioniert, nutze diesen Link:<br><a href="' . \esc_url($reset_url) . '" style="color:' . \esc_attr($link_color) . ';text-decoration:none;">' . \esc_html($reset_url) . '</a></p>';
 
 	$request_ip = cmx_passwort_mails_request_ip();
 	if ($request_ip !== '') {
@@ -190,22 +227,26 @@ function cmx_passwort_mails_change_email($pass_change_email, $user, $userdata) {
 	$site_name = \wp_specialchars_decode((string) \get_option('blogname'), ENT_QUOTES);
 	$site_url = (string) \home_url();
 	$admin_mail = (string) \get_option('admin_email');
+	$mail_theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
+		? (array) cmx_email_theme_palette()
+		: [];
+	$link_color = (string) ($mail_theme['link_color'] ?? '#a42c24');
 
 	$body_html  = '<p style="margin:0 0 14px;">Sali ' . \esc_html($display_name) . ',</p>';
 	$body_html .= '<p style="margin:0 0 14px;">Dein Passwort auf <strong>' . \esc_html($site_name) . '</strong> wurde erfolgreich geaendert.</p>';
 
 	$configured_sender_html = \function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')
-		? (string) cmx_email_sender_mailto_html('color:#b1342b;text-decoration:none;')
+		? (string) cmx_email_sender_mailto_html('color:' . $link_color . ';text-decoration:none;')
 		: '';
 	if ($configured_sender_html !== '') {
 		$body_html .= '<p style="margin:0 0 14px;">Wenn Du das nicht warst, melde Dich bitte sofort bei uns:<br>' . $configured_sender_html . '</p>';
 	} elseif (\is_email($admin_mail)) {
 		$admin_mail_attr = \esc_attr($admin_mail);
 		$admin_mail_html = \esc_html($admin_mail);
-		$body_html .= '<p style="margin:0 0 14px;">Wenn Du das nicht warst, melde Dich bitte sofort bei uns:<br><a href="mailto:' . $admin_mail_attr . '" style="color:#b1342b;text-decoration:none;">' . $admin_mail_html . '</a></p>';
+		$body_html .= '<p style="margin:0 0 14px;">Wenn Du das nicht warst, melde Dich bitte sofort bei uns:<br><a href="mailto:' . $admin_mail_attr . '" style="color:' . \esc_attr($link_color) . ';text-decoration:none;">' . $admin_mail_html . '</a></p>';
 	}
 
-	$body_html .= '<p style="margin:0;">Zurueck zur Webseite: <a href="' . \esc_url($site_url) . '" style="color:#b1342b;text-decoration:none;">' . \esc_html($site_url) . '</a></p>';
+	$body_html .= '<p style="margin:0;">Zurueck zur Webseite: <a href="' . \esc_url($site_url) . '" style="color:' . \esc_attr($link_color) . ';text-decoration:none;">' . \esc_html($site_url) . '</a></p>';
 
 	$pass_change_email['message'] = cmx_passwort_mails_build_html('Passwort geaendert', $body_html);
 	$pass_change_email['headers'] = cmx_passwort_mails_with_html_header($pass_change_email['headers'] ?? '');

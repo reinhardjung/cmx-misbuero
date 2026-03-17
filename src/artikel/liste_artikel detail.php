@@ -119,28 +119,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_belegtext')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_me_logo_url')) {
 	function cmx_artikel_detail_me_logo_url(): string {
-		$query = new \WP_Query([
-			'post_type'              => 'kontakte',
-			'post_status'            => 'publish',
-			'posts_per_page'         => 1,
-			'no_found_rows'          => true,
-			'suppress_filters'       => true,
-			'ignore_sticky_posts'    => true,
-			'update_post_meta_cache' => false,
-			'update_post_term_cache' => false,
-			'tax_query'              => [[
-				'taxonomy' => 'kontakte_kategorien',
-				'field'    => 'name',
-				'terms'    => ['Das bin ich', 'Ich'],
-			]],
-		]);
-
-		$post_id = !empty($query->posts[0]->ID) ? (int) $query->posts[0]->ID : 0;
-		if ($post_id <= 0) {
-			return '';
-		}
-
-		return \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true));
+		return \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')
+			? (string) cmx_email_self_logo_url()
+			: '';
 	}
 }
 

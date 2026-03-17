@@ -323,20 +323,36 @@ function cmx_lieferanten_args(): array {
 \add_action('admin_head-edit.php', function () {
 	if (!isset($_GET['post_type']) || $_GET['post_type'] !== 'artikel') return;
 	?>
-	<style>
-		.cmx-ac-thumb {
-			width: 50px;
-			height: 50px;
-			object-fit: contain; /* ganzes Bild zeigen wie im Katalog */
-			background: #fff;
-			border: 1px solid #e6e6e6;
-			border-radius: 6px;
-			box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-			display: inline-block;
-		}
-	</style>
-	<?php
-});
+		<style>
+			.cmx-ac-thumb {
+				width: 50px;
+				height: 50px;
+				object-fit: contain; /* ganzes Bild zeigen wie im Katalog */
+				background: #fff;
+				border: 1px solid #e6e6e6;
+				border-radius: 6px;
+				box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+				display: inline-block;
+			}
+			.wp-list-table th#title,
+			.wp-list-table th.manage-column.column-title,
+			.wp-list-table td.title.column-title {
+				width: 25ch;
+				max-width: 25ch;
+			}
+			.wp-list-table th.manage-column.column-title,
+			.wp-list-table th.manage-column.column-title > a,
+			.wp-list-table th.manage-column.column-title > span,
+			.wp-list-table td.title.column-title,
+			.wp-list-table td.column-title strong,
+			.wp-list-table td.column-title .row-title {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+		</style>
+		<?php
+	});
 
 
 /* =========================================================
