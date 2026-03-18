@@ -1629,6 +1629,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			$payrexx_vpos_url = '';
 			$payrexx_qr_data_uri = '';
 			$offerte_accept_url = '';
+			$offerte_reject_url = '';
 			$payment_amount = (float) ($payment_amounts['payment_amount'] ?? ($calc['total'] ?? 0.0));
 			if (
 				$beleg_type === 'rechnung'
@@ -1670,6 +1671,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					: \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_offertenstatus', true));
 				if ($offerte_status === '' || $offerte_status === 'offen') {
 					$offerte_accept_url = (string) cmx_beleg_offerte_accept_url($post_id);
+					if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_offerte_reject_url')) {
+						$offerte_reject_url = (string) cmx_beleg_offerte_reject_url($post_id);
+					}
 				}
 			}
 			$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
@@ -1715,6 +1719,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 						'payrexx_vpos_url' => $payrexx_vpos_url,
 						'payrexx_qr_data_uri' => $payrexx_qr_data_uri,
 						'offerte_accept_url' => $offerte_accept_url,
+						'offerte_reject_url' => $offerte_reject_url,
 						'subtotal' => $calc['subtotal'],
 					'total' => $calc['total'],
 					'manual_total' => $manual_total_value,

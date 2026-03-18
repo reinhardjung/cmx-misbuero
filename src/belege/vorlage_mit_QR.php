@@ -286,8 +286,10 @@ $payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
 $payrexx_qr_data_uri = \trim((string)($tpl['document']['payrexx_qr_data_uri'] ?? ''));
 $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
 $offerte_accept_url = \trim((string)($tpl['document']['offerte_accept_url'] ?? ''));
+$offerte_reject_url = \trim((string)($tpl['document']['offerte_reject_url'] ?? ''));
 $show_offerte_accept_link = $is_offerte && $is_ausgang && ($offerte_accept_url !== '');
-$show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link;
+$show_offerte_reject_link = $is_offerte && $is_ausgang && ($offerte_reject_url !== '');
+$show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show_offerte_reject_link;
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -375,6 +377,10 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link;
 		padding-right: 2.4mm;
 		text-align: center;
 	}
+	.invoice-meta .cmx-payrexx-buttons {
+		display: inline-block;
+		white-space: nowrap;
+	}
 	.invoice-meta .cmx-payrexx-code {
 		width: 22.6mm;
 		text-align: right;
@@ -406,6 +412,12 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link;
 		text-decoration: none;
 		white-space: nowrap;
 		width: auto;
+	}
+	.invoice-meta .cmx-payrexx-row a.cmx-offerte-reject {
+		background: #fff;
+		color: #b32d2e;
+		border-color: #b32d2e;
+		margin-left: 1.2mm;
 	}
 	.invoice-meta .cmx-payrexx-note {
 		font-size: 9px;
@@ -708,7 +720,14 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link;
 													<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
 													<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
 												<?php else: ?>
-													<a href="<?= htmlspecialchars($offerte_accept_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">akzeptieren</a>
+													<div class="cmx-payrexx-buttons">
+														<?php if ($show_offerte_accept_link): ?>
+															<a href="<?= htmlspecialchars($offerte_accept_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">akzeptieren</a>
+														<?php endif; ?>
+														<?php if ($show_offerte_reject_link): ?>
+															<a class="cmx-offerte-reject" href="<?= htmlspecialchars($offerte_reject_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">ablehnen</a>
+														<?php endif; ?>
+													</div>
 												<?php endif; ?>
 											</td>
 											<?php if ($show_payrexx_vpos_link && $payrexx_qr_data_uri !== ''): ?>
