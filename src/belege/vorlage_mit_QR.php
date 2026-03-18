@@ -516,6 +516,12 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	left: 0;
 	white-space: nowrap;
 }
+.positions-table .cmx-pdf-pos-details { margin-top: 1.2mm; }
+.positions-table .cmx-pdf-article-belegtext { margin: 0; }
+.positions-table .cmx-pdf-article-variants { margin-top: 0.8mm; }
+.positions-table .cmx-pdf-article-variant-line { margin: 0; }
+.positions-table .cmx-pdf-article-variant-label { font-weight: bold; }
+.positions-table .cmx-pdf-line-desc { margin-top: 0.8mm; }
 .positions-table th.col-unit-price,
 .positions-table td.col-unit-price {
 	width: 1%;
@@ -810,6 +816,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 					$item = (string)($row['item'] ?? '');
 					$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
 					$desc_html = (string)($row['desc_html'] ?? '');
+					$article_belegtext_html = (string)($row['article_belegtext_html'] ?? '');
+					$article_variant_html = (string)($row['article_variant_html'] ?? '');
 					$sku = (string)($row['article_number'] ?? '');
 					$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
 					$row_class_name = (string)($position_row_classes[$i] ?? '');
@@ -823,11 +831,21 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 							<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 						<?php endif; ?>
 						<td>
-							<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
-							<?php if ($desc_html !== ''): ?>
-								<?= $desc_html; ?>
-							<?php else: ?>
-								<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+							<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong>
+							<?php if ($article_belegtext_html !== '' || $article_variant_html !== '' || $desc_html !== '' || $desc !== ''): ?>
+								<div class="cmx-pdf-pos-details">
+									<?php if ($article_belegtext_html !== ''): ?>
+										<div class="cmx-pdf-article-belegtext"><?= $article_belegtext_html; ?></div>
+									<?php endif; ?>
+									<?php if ($article_variant_html !== ''): ?>
+										<div class="cmx-pdf-article-variants"><?= $article_variant_html; ?></div>
+									<?php endif; ?>
+									<?php if ($desc_html !== ''): ?>
+										<div class="cmx-pdf-line-desc"><?= $desc_html; ?></div>
+									<?php elseif ($desc !== ''): ?>
+										<div class="cmx-pdf-line-desc"><?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?></div>
+									<?php endif; ?>
+								</div>
 							<?php endif; ?>
 						</td>
 						<td class="text-right col-qty">
@@ -919,6 +937,8 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 						$item = (string)($row['item'] ?? '');
 						$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
 						$desc_html = (string)($row['desc_html'] ?? '');
+						$article_belegtext_html = (string)($row['article_belegtext_html'] ?? '');
+						$article_variant_html = (string)($row['article_variant_html'] ?? '');
 						$sku = (string)($row['article_number'] ?? '');
 						$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
 						$row_class_name = (string)($position_row_classes[$i] ?? '');
@@ -932,11 +952,21 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 								<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
 							<?php endif; ?>
 							<td>
-								<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong><br>
-								<?php if ($desc_html !== ''): ?>
-									<?= $desc_html; ?>
-								<?php else: ?>
-									<?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?>
+								<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong>
+								<?php if ($article_belegtext_html !== '' || $article_variant_html !== '' || $desc_html !== '' || $desc !== ''): ?>
+									<div class="cmx-pdf-pos-details">
+										<?php if ($article_belegtext_html !== ''): ?>
+											<div class="cmx-pdf-article-belegtext"><?= $article_belegtext_html; ?></div>
+										<?php endif; ?>
+										<?php if ($article_variant_html !== ''): ?>
+											<div class="cmx-pdf-article-variants"><?= $article_variant_html; ?></div>
+										<?php endif; ?>
+										<?php if ($desc_html !== ''): ?>
+											<div class="cmx-pdf-line-desc"><?= $desc_html; ?></div>
+										<?php elseif ($desc !== ''): ?>
+											<div class="cmx-pdf-line-desc"><?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?></div>
+										<?php endif; ?>
+									</div>
 								<?php endif; ?>
 							</td>
 							<td class="text-right col-qty">
