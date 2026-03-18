@@ -526,7 +526,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	echo '<ul id="' . \esc_attr($selected_id) . '" class="cmx-dok-rel-selected"></ul>';
 	echo '</div>';
 	if ($allow_multiple) {
-		echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: mehrere Treffer nacheinander hinzufügen.</em></p>';
+		// echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: mehrere Treffer nacheinander hinzufügen.</em></p>';
 	}
 
 	if (empty($options)) {
