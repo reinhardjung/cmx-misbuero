@@ -173,7 +173,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 				const container = document.getElementById('cmx-projekt-tasks');
 				if (!container) return;
 				const addButton = document.getElementById('cmx-task-add');
-				const ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
+				const ajaxUrl = <?php echo \wp_json_encode($ajax_url); ?>;
 
 			function parseSwissDecimal(value){
 				let s = (value ?? '').toString().trim();
