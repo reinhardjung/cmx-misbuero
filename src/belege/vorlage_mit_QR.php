@@ -285,6 +285,9 @@ $qr_will_print = !empty($tpl['qr']['will_print']);
 $payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
 $payrexx_qr_data_uri = \trim((string)($tpl['document']['payrexx_qr_data_uri'] ?? ''));
 $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
+$offerte_accept_url = \trim((string)($tpl['document']['offerte_accept_url'] ?? ''));
+$show_offerte_accept_link = $is_offerte && $is_ausgang && ($offerte_accept_url !== '');
+$show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link;
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -433,7 +436,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 	}
 	.recipient-window .recipient-lines { line-height: 1.3; }
 	h1 { margin-top: 0; font-size: 20px; }
-	.beleg-content > h1 { margin-top: <?= $show_payrexx_vpos_link ? '12mm' : '0'; ?>; }
+		.beleg-content > h1 { margin-top: <?= $show_action_box ? '12mm' : '0'; ?>; }
 	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 	th, td { border: none; padding: 6px 8px; }
 	.beleg-content {
@@ -691,23 +694,27 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($period_value, ENT_QUOTES, 'UTF-8'); ?></td>
 					</tr>
 				<?php endif; ?>
-				<?php if ($show_payrexx_vpos_link): ?>
-					<tr class="cmx-payrexx-spacer">
-						<td colspan="2">&nbsp;</td>
-					</tr>
+					<?php if ($show_action_box): ?>
+						<tr class="cmx-payrexx-spacer">
+							<td colspan="2">&nbsp;</td>
+						</tr>
 					<tr class="cmx-payrexx-row">
 						<td colspan="2" class="text-right" style="border:0; padding:0;">
 							<div class="cmx-payrexx-box">
-								<table class="cmx-payrexx-layout" role="presentation">
-									<tr>
-										<td class="cmx-payrexx-actions">
-											<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
-											<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
-										</td>
-										<?php if ($payrexx_qr_data_uri !== ''): ?>
-											<td class="cmx-payrexx-code">
-												<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
+									<table class="cmx-payrexx-layout" role="presentation">
+										<tr>
+											<td class="cmx-payrexx-actions">
+												<?php if ($show_payrexx_vpos_link): ?>
+													<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
+													<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
+												<?php else: ?>
+													<a href="<?= htmlspecialchars($offerte_accept_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">akzeptieren</a>
+												<?php endif; ?>
 											</td>
+											<?php if ($show_payrexx_vpos_link && $payrexx_qr_data_uri !== ''): ?>
+												<td class="cmx-payrexx-code">
+													<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
+												</td>
 										<?php endif; ?>
 									</tr>
 								</table>

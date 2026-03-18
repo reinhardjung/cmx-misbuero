@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-03-13T10:05:52+00:00",
+    "exported_at": "2026-03-18T08:26:34+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -21,8 +21,8 @@
             "cmx_scanner_rel_artikel"
         ],
         "meta-box-order_artikel": {
-            "side": "cmx_savebox,cmx_dokumente_box,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_farbe_side,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_zu_projekt",
-            "normal": "cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_artikel_belegtext,cmx_internenotizen_central",
+            "side": "cmx_savebox,cmx_dokumente_box,cmx_artikel_waehrung_side,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_zu_projekt",
+            "normal": "cmx_artikel_waehrung_preise,cmx_artikel_lieferanten,cmx_internenotizen_central",
             "advanced": ""
         },
         "meta-box-order_attachment": [
@@ -37,15 +37,15 @@
             false
         ],
         "meta-box-order_belege": {
-            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box,cmxbu_logfile_box",
+            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_offerte,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box",
             "normal": "cmx_beleg_details,cmx_beleg_positionen,cmx_internenotizen_central",
             "advanced": ""
         },
         "meta-box-order_dashboard": {
             "normal": "cmx_cpt_counts_widget,cmx_kontakt_wichtige_daten,dashboard_site_health,dashboard_right_now,dashboard_activity,cmx_projekte_widget",
             "side": "dashboard_quick_press,dashboard_primary,cmx_umsatz_widget,cmx_lieferanten_widget,cmx_quittungen_widget,cmx_gutschriften_widget",
-            "column3": "cmx_overview_revenue_widget,cmx_rechnungen_faellig_widget,cmx_mahnwesen_widget",
-            "column4": "cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok"
+            "column3": "cmx_overview_revenue_widget,cmx_rechnungen_faellig_widget,cmx_online_shop_widget",
+            "column4": "cmx_angebote_widget,cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok"
         },
         "meta-box-order_dokumente": {
             "side": "cmx_savebox,cmx_dokumente_box,dokumente_kategoriendiv,cmx_dokumente_validity,cmx_dokumente_status,cmx_dok_zuordnung,cmx_dok_rel_artikel,cmx_dok_rel_kontakte,cmx_dok_rel_projekte,cmx_dok_rel_belege,cmx_mail_import_meta",

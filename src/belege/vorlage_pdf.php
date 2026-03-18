@@ -1626,11 +1626,12 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		$bank  = cmxbu_get_preferred_bank();
 		$qr_iban = trim((string)($bank['qr_iban'] ?? ''));
 		$bank_iban = trim((string)($bank['iban'] ?? ''));
-		$payrexx_vpos_url = '';
-		$payrexx_qr_data_uri = '';
-		$payment_amount = (float) ($payment_amounts['payment_amount'] ?? ($calc['total'] ?? 0.0));
-		if (
-			$beleg_type === 'rechnung'
+			$payrexx_vpos_url = '';
+			$payrexx_qr_data_uri = '';
+			$offerte_accept_url = '';
+			$payment_amount = (float) ($payment_amounts['payment_amount'] ?? ($calc['total'] ?? 0.0));
+			if (
+				$beleg_type === 'rechnung'
 			&& $beleg_richtung === 'ausgang'
 			&& $payment_amount > 0.0
 			&& \function_exists(__NAMESPACE__ . '\\cmx_get_payrexx_vpos_url')
@@ -1656,10 +1657,22 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				$payrexx_vpos_url = $payrexx_base_url . $payrexx_query;
 				if (\function_exists(__NAMESPACE__ . '\\cmxbu_generate_payrexx_qr_data_uri')) {
 					$payrexx_qr_data_uri = (string) cmxbu_generate_payrexx_qr_data_uri($payrexx_vpos_url);
+					}
 				}
 			}
-		}
-		$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
+			if (
+				$beleg_type === 'offerte'
+				&& $beleg_richtung === 'ausgang'
+				&& \function_exists(__NAMESPACE__ . '\\cmx_beleg_offerte_accept_url')
+			) {
+				$offerte_status = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_OFFERTENSTATUS')
+					? \sanitize_key((string) \get_post_meta($post_id, CMX_BELEG_META_OFFERTENSTATUS, true))
+					: \sanitize_key((string) \get_post_meta($post_id, '_cmx_beleg_offertenstatus', true));
+				if ($offerte_status === '' || $offerte_status === 'offen') {
+					$offerte_accept_url = (string) cmx_beleg_offerte_accept_url($post_id);
+				}
+			}
+			$qr_enabled_raw = strtolower(trim((string) get_post_meta($post_id, '_cmx_beleg_qr_enabled', true)));
 		$qr_user_enabled = ($qr_enabled_raw === '' || !in_array($qr_enabled_raw, ['0', 'no', 'false', 'off'], true));
 		$qr_payment_iban = $qr_iban !== '' ? $qr_iban : $bank_iban;
 		$qr_meta_enabled = $qr_user_enabled && ($qr_payment_iban !== '');
@@ -1698,10 +1711,11 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 					'payment_amount' => $payment_amount,
 					'open_amount' => (float) ($payment_amounts['open_amount'] ?? ($calc['total'] ?? 0.0)),
 					'paid_amount' => (float) ($payment_amounts['paid_amount'] ?? 0.0),
-					'has_partial_payments' => !empty($payment_amounts['has_partial_payments']),
-					'payrexx_vpos_url' => $payrexx_vpos_url,
-					'payrexx_qr_data_uri' => $payrexx_qr_data_uri,
-					'subtotal' => $calc['subtotal'],
+						'has_partial_payments' => !empty($payment_amounts['has_partial_payments']),
+						'payrexx_vpos_url' => $payrexx_vpos_url,
+						'payrexx_qr_data_uri' => $payrexx_qr_data_uri,
+						'offerte_accept_url' => $offerte_accept_url,
+						'subtotal' => $calc['subtotal'],
 					'total' => $calc['total'],
 					'manual_total' => $manual_total_value,
 				'subject' => (string) get_post_meta($post_id, '_cmx_beleg_betreff', true),
