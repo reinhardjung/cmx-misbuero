@@ -12,6 +12,152 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VERKAUFBAR'))     \define(__NA
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG'))        \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG', '_cmx_artikel_katalog');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE', '_cmx_artikel_bezugsquelle_url');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID', '_cmx_artikel_lieferant_id');
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS', '_cmx_artikel_variant_rows');
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_term_name')) {
+	function cmx_artikel_admin_variant_term_name(string $taxonomy, int $term_id): string {
+		$taxonomy = \sanitize_key($taxonomy);
+		if ($taxonomy === '' || $term_id <= 0 || !\taxonomy_exists($taxonomy)) {
+			return '';
+		}
+		$term = \get_term($term_id, $taxonomy);
+		if (!$term || \is_wp_error($term)) {
+			return '';
+		}
+		return \trim((string) $term->name);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_money_display')) {
+	function cmx_artikel_admin_variant_money_display($value): string {
+		$raw = \trim((string) $value);
+		if ($raw === '') {
+			return '';
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_parse_number')) {
+			$number = (float) cmx_parse_number($raw);
+		} else {
+			$number = (float) \str_replace([',', "'"], ['.', ''], $raw);
+		}
+		return \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
+			? (string) cmx_format_swiss_number($number, 2)
+			: \number_format($number, 2, '.', "'");
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
+	function cmx_artikel_admin_variant_entries(int $post_id): array {
+		static $cache = [];
+		if (isset($cache[$post_id])) {
+			return $cache[$post_id];
+		}
+		$stored = \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, true);
+		if (!\is_array($stored) || empty($stored)) {
+			$cache[$post_id] = [];
+			return [];
+		}
+
+		$parent_title = (string) \get_the_title($post_id);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$parent_title = (string) cmx_normalize_minus_sign($parent_title);
+		}
+		$parent_title = \trim($parent_title);
+		$einheiten_tax = \function_exists(__NAMESPACE__ . '\\cmx_tax_einheiten') ? (string) cmx_tax_einheiten() : '';
+		$entries = [];
+
+		foreach (\array_values($stored) as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$sku = \trim((string) ($row['sku'] ?? ''));
+			$left_taxonomy = \sanitize_key((string) ($row['left_taxonomy'] ?? ''));
+			$right_taxonomy = \sanitize_key((string) ($row['right_taxonomy'] ?? ''));
+			$left_term = cmx_artikel_admin_variant_term_name($left_taxonomy, (int) ($row['left_term_id'] ?? 0));
+			$right_term = cmx_artikel_admin_variant_term_name($right_taxonomy, (int) ($row['right_term_id'] ?? 0));
+			$einheit = cmx_artikel_admin_variant_term_name($einheiten_tax, (int) ($row['einheit_term_id'] ?? 0));
+			$title_parts = \array_values(\array_filter([$left_term, $right_term], static fn($v) => \trim((string) $v) !== ''));
+			$title = $parent_title !== '' ? $parent_title : '(ohne Titel)';
+			if (!empty($title_parts)) {
+				$title .= ' - ' . \implode(' / ', $title_parts);
+			} elseif ($sku !== '') {
+				$title .= ' - ' . $sku;
+			}
+
+			$search_blob = \implode(' ', \array_filter([
+				$title,
+				$parent_title,
+				$sku,
+				$left_term,
+				$right_term,
+				$einheit,
+				(string) ($row['belegtext'] ?? ''),
+			], static fn($v) => \trim((string) $v) !== ''));
+
+			if (\function_exists('mb_strtolower')) {
+				$search_blob = (string) \mb_strtolower($search_blob, 'UTF-8');
+			} else {
+				$search_blob = (string) \strtolower($search_blob);
+			}
+
+			$entries[] = [
+				'index'      => (int) $index,
+				'title'      => $title,
+				'sku'        => $sku,
+				'farben'     => $right_term,
+				'einheit'    => $einheit,
+				'vk'         => cmx_artikel_admin_variant_money_display($row['vk'] ?? ''),
+				'ek'         => cmx_artikel_admin_variant_money_display($row['ek'] ?? ''),
+				'marge'      => cmx_artikel_admin_variant_money_display($row['marge'] ?? ''),
+				'verkaufbar' => !empty($row['verkaufbar']),
+				'katalog'    => !empty($row['katalog']),
+				'search'     => $search_blob,
+			];
+		}
+
+		$cache[$post_id] = $entries;
+		return $entries;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_search_ids')) {
+	function cmx_artikel_admin_variant_search_ids(string $term): array {
+		static $cache = [];
+		$term = \trim($term);
+		if ($term === '') {
+			return [];
+		}
+		$needle = \function_exists('mb_strtolower') ? (string) \mb_strtolower($term, 'UTF-8') : (string) \strtolower($term);
+		if (isset($cache[$needle])) {
+			return $cache[$needle];
+		}
+
+		$post_ids = \get_posts([
+			'post_type'      => 'artikel',
+			'post_status'    => ['publish', 'draft', 'pending', 'future', 'private'],
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'meta_query'     => [[
+				'key'     => CMX_ARTIKEL_META_VARIANT_ROWS,
+				'compare' => 'EXISTS',
+			]],
+		]);
+
+		$matches = [];
+		foreach ((array) $post_ids as $post_id) {
+			foreach (cmx_artikel_admin_variant_entries((int) $post_id) as $entry) {
+				$haystack = (string) ($entry['search'] ?? '');
+				if ($haystack !== '' && \strpos($haystack, $needle) !== false) {
+					$matches[] = (int) $post_id;
+					break;
+				}
+			}
+		}
+
+		$cache[$needle] = \array_values(\array_unique($matches));
+		return $cache[$needle];
+	}
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_image_url_exists')) {
 	function cmx_artikel_admin_image_url_exists(string $url): bool {
@@ -951,3 +1097,143 @@ function cmx_lieferanten_args(): array {
 \add_action('pre_get_posts', function(\WP_Query $query): void {
 	cmx_admin_deckungsbeitrag_apply_query_sort($query, 'artikel', 'artikel');
 }, 99999);
+
+\add_filter('posts_search', function (string $search, \WP_Query $q): string {
+	if (!\is_admin() || !$q->is_main_query()) {
+		return $search;
+	}
+	$post_types = (array) $q->get('post_type');
+	if (!\in_array('artikel', $post_types, true)) {
+		return $search;
+	}
+	$term = \trim((string) $q->get('s'));
+	if ($term === '') {
+		return $search;
+	}
+	$match_ids = cmx_artikel_admin_variant_search_ids($term);
+	if (empty($match_ids)) {
+		return $search;
+	}
+
+	global $wpdb;
+	$id_sql = $wpdb->posts . '.ID IN (' . \implode(',', \array_map('intval', $match_ids)) . ')';
+	$search = \trim($search);
+	if ($search === '') {
+		return ' AND (' . $id_sql . ')';
+	}
+	if (\stripos($search, 'AND ') === 0) {
+		$search = \trim((string) \substr($search, 4));
+	}
+	return ' AND ((' . $search . ') OR ' . $id_sql . ')';
+}, 30, 2);
+
+\add_action('admin_footer-edit.php', function (): void {
+	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'artikel') {
+		return;
+	}
+
+	global $wp_query;
+	$payload = [];
+	foreach ((array) ($wp_query->posts ?? []) as $post) {
+		$post_id = (int) ($post->ID ?? 0);
+		if ($post_id <= 0) {
+			continue;
+		}
+		$entries = cmx_artikel_admin_variant_entries($post_id);
+		if (\count($entries) <= 1) {
+			continue;
+		}
+		$edit_url = (string) \admin_url('post.php?post=' . $post_id . '&action=edit');
+		$rows = [];
+		foreach (\array_slice($entries, 1) as $entry) {
+			$rows[] = [
+				'index' => (int) ($entry['index'] ?? 0),
+				'title' => (string) ($entry['title'] ?? ''),
+				'sku' => (string) ($entry['sku'] ?? ''),
+				'farben' => (string) ($entry['farben'] ?? ''),
+				'einheit' => (string) ($entry['einheit'] ?? ''),
+				'vk' => (string) ($entry['vk'] ?? ''),
+				'ek' => (string) ($entry['ek'] ?? ''),
+				'marge' => (string) ($entry['marge'] ?? ''),
+				'verkaufbar_html' => !empty($entry['verkaufbar'])
+					? '<span title="Verkaufbar" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Verkaufbar</span>'
+					: '<span title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>',
+				'katalog_html' => !empty($entry['katalog'])
+					? '<span title="Im Katalog" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Im Katalog</span>'
+					: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>',
+				'edit_url' => $edit_url,
+			];
+		}
+		if (!empty($rows)) {
+			$payload[$post_id] = $rows;
+		}
+	}
+
+	if (empty($payload)) {
+		return;
+	}
+	$json = \wp_json_encode($payload);
+	if (!\is_string($json) || $json === '') {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		const variantsByPost = <?php echo $json; ?>;
+		const setText = function(row, selector, value){
+			const cell = row.querySelector(selector);
+			if (!cell) return;
+			cell.textContent = value || "";
+		};
+		const setHtml = function(row, selector, html){
+			const cell = row.querySelector(selector);
+			if (!cell) return;
+			cell.innerHTML = html || "";
+		};
+		const setTitle = function(row, variant){
+			const titleCell = row.querySelector(".column-title");
+			if (!titleCell) return;
+			const titleLink = titleCell.querySelector(".row-title");
+			if (titleLink) {
+				titleLink.textContent = variant.title || "";
+				titleLink.href = variant.edit_url || "#";
+				titleLink.title = variant.title || "";
+			}
+			const actions = titleCell.querySelector(".row-actions");
+			if (actions) {
+				actions.innerHTML = '<span class="edit"><a href="' + (variant.edit_url || "#") + '">Bearbeiten</a></span>';
+			}
+		};
+
+		Object.keys(variantsByPost).forEach(function(postId){
+			const baseRow = document.getElementById("post-" + postId);
+			if (!baseRow || !baseRow.parentNode) return;
+			let insertAfter = baseRow;
+			(variantsByPost[postId] || []).forEach(function(variant){
+				const clone = baseRow.cloneNode(true);
+				clone.id = "cmx-artikel-variant-" + postId + "-" + String(variant.index || "0");
+				clone.classList.add("cmx-artikel-variant-row");
+
+				const checkCell = clone.querySelector("th.check-column, td.check-column");
+				if (checkCell) {
+					checkCell.innerHTML = "";
+				}
+
+				setTitle(clone, variant);
+				setText(clone, ".column-sku", variant.sku);
+				setText(clone, ".column-farben", variant.farben);
+				setText(clone, ".column-einheiten", variant.einheit);
+				setText(clone, ".column-vk", variant.vk);
+				setText(clone, ".column-ek", variant.ek);
+				setText(clone, ".column-marge", variant.marge);
+				setHtml(clone, ".column-verkaufbar", variant.verkaufbar_html);
+				setHtml(clone, ".column-katalog", variant.katalog_html);
+
+				insertAfter.parentNode.insertBefore(clone, insertAfter.nextSibling);
+				insertAfter = clone;
+			});
+		});
+	})();
+	</script>
+	<?php
+});
