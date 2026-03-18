@@ -128,9 +128,6 @@ function cmx_csv_ids_to_array(string $csv): array {
 \add_action('add_meta_boxes', function () {
 	// KEINE Artikel-Nr.-Metabox mehr hier!
 
-	// Farben (Mehrfach) in SIDE
-	\add_meta_box('cmx_artikel_farbe_side', 'Farben', __NAMESPACE__.'\\cmx_artikel_farbe_side_box', 'artikel', 'side', 'default');
-
 	// Marke in SIDE
 	\add_meta_box('cmx_artikel_marke_side', 'Marke', __NAMESPACE__.'\\cmx_artikel_marke_side_box', 'artikel', 'side', 'default');
 });

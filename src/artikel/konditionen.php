@@ -70,6 +70,15 @@ function cmx_artikel_variant_taxonomy_choices(): array {
 	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN')) {
 		$exclude[] = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN');
 	}
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN')) {
+		$exclude[] = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN');
+	}
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_KATEGORIEN')) {
+		$exclude[] = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_KATEGORIEN');
+	}
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_MARKEN')) {
+		$exclude[] = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_MARKEN');
+	}
 
 	$out = [];
 	foreach ($labels as $label) {
