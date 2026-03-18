@@ -82,7 +82,7 @@ add_action('add_meta_boxes', function() {
 				$kontakt_belege_url = (string) cmx_kontakt_belege_share_url((int) $post->ID);
 			}
 
-			echo '<div style="padding:12px 0;">';
+				echo '<div style="padding:2px 0 8px;">';
 			if ($is_belege) {
 				$hide_save_as = false;
 				$active_slug = '';
@@ -343,7 +343,7 @@ add_action('add_meta_boxes', function() {
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
 				if ($delete_link || $dup_link !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
 					$justify = $is_belege ? 'space-between' : 'flex-start';
-					echo '<div style="margin-top:10px; padding-top:6px; border-top:1px solid #ddd; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
+						echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
 					}

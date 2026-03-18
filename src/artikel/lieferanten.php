@@ -446,8 +446,24 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .col-lager{transform:translateX(80px)}
 	#cmx-artikel-lieferanten-table .col-actions{width:56px;min-width:56px;text-align:center}
 	#cmx-artikel-lieferanten-table .widefat{width:100%}
-	#cmx-artikel-lieferanten-table tbody td{background:#fff}
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td{padding-top:12px;padding-bottom:10px}
+		#cmx-artikel-lieferanten-table tbody td{background:transparent}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
+			background:#fafafa;
+			border-top:1px solid #ddd !important;
+			border-bottom:0 !important;
+			border-left:0 !important;
+			border-right:0 !important;
+			padding-top:12px;
+			padding-bottom:10px;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:first-child{
+			border-left:1px solid #ddd !important;
+			border-top-left-radius:6px;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:last-child{
+			border-right:1px solid #ddd !important;
+			border-top-right-radius:6px;
+		}
 	#cmx-artikel-lieferanten-table .cmx-supplier-wrap{display:flex;align-items:flex-start;gap:6px}
 	#cmx-artikel-lieferanten-table .cmx-lief-suggest{position:relative;flex:1 1 auto;min-width:0}
 	#cmx-artikel-lieferanten-table .cmx-lief-input-row{display:flex;align-items:center;gap:6px}
@@ -485,33 +501,42 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:translateX(80px)}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-row td{background:#fff;border-top:0}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-full-cell{padding:0 0 12px 0}
+		#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
+			background:#fafafa;
+			border:1px solid #ddd !important;
+			border-top:0 !important;
+			border-bottom-left-radius:6px;
+			border-bottom-right-radius:6px;
+		}
+		#cmx-artikel-lieferanten-table .cmx-lief-note-full-cell{padding:0 10px 12px 10px}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding:0;border:0;border-radius:0;background:transparent}
 	#cmx-artikel-lieferanten-table .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 6px}
 	#cmx-artikel-lieferanten-table .cmx-lief-note{width:100%;min-height:44px;height:44px;resize:vertical;box-sizing:border-box}
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-actions-cell{padding:0 0 0 8px}
 	#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin-top:8px}
-	#cmx-artikel-lieferanten-table .cmx-lief-add{display:none;min-width:170px}
+	#cmx-artikel-lieferanten-table .cmx-lief-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
 	#cmx-artikel-lieferanten-table tbody tr.cmx-lief-note-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
 	#cmx-artikel-lieferanten-table .cmx-lief-cell{box-sizing:border-box}
 	@media (max-width: 1280px){
 		#cmx-artikel-lieferanten-table,
 		#cmx-artikel-lieferanten-table tbody{display:block;width:100%}
 		#cmx-artikel-lieferanten-table thead{display:none}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row{
-			display:flex;
-			flex-wrap:wrap;
-			gap:10px 12px;
-			padding:12px 0 4px;
-			border-top:1px solid #e2e4e7;
-		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row:first-child{border-top:0}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
-			display:block;
-			padding:0 !important;
-			border:0 !important;
-			background:transparent;
+			#cmx-artikel-lieferanten-table .cmx-lief-item-row{
+				display:flex;
+				flex-wrap:wrap;
+				gap:10px 12px;
+				padding:12px 12px 4px;
+				border:1px solid #ddd;
+				border-bottom:0;
+				border-radius:6px 6px 0 0;
+				background:#fafafa;
+			}
+			#cmx-artikel-lieferanten-table .cmx-lief-item-row:first-child{margin-top:0}
+			#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
+				display:block;
+				padding:0 !important;
+				border:0 !important;
+				background:transparent;
 			flex:1 1 180px;
 			min-width:140px;
 			width:auto !important;
@@ -557,12 +582,18 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		#cmx-artikel-lieferanten-table .col-lager,
 		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
 		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:none}
-		#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
-			display:block;
-			padding:0 0 12px 0;
-			border:0 !important;
-			background:transparent;
-		}
+			#cmx-artikel-lieferanten-table .cmx-lief-note-row{
+				display:block;
+				margin:0 0 10px;
+			}
+			#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
+				display:block;
+				padding:0 12px 12px;
+				border:1px solid #ddd !important;
+				border-top:0 !important;
+				border-radius:0 0 6px 6px;
+				background:#fafafa;
+			}
 		#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding-top:2px}
 		#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{
 			justify-content:flex-start;
@@ -577,7 +608,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		}
 	}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
-	.cmx-lief-del{min-width:36px}
+	.cmx-lief-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
 	</style>';
 
 	echo '<table class="widefat" id="cmx-artikel-lieferanten-table">';
