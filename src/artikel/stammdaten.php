@@ -117,6 +117,18 @@ function cmx_csv_ids_to_array(string $csv): array {
 	\remove_meta_box(TAX_ARTIKEL_FARBEN.'div',         'artikel', 'side');
 	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_EINHEITEN, 'artikel', 'side');
 	\remove_meta_box(TAX_ARTIKEL_EINHEITEN.'div',      'artikel', 'side');
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_GROESSEN')) {
+		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_GROESSEN, 'artikel', 'side');
+		\remove_meta_box(TAX_ARTIKEL_GROESSEN.'div',      'artikel', 'side');
+	}
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_MATERIALIEN')) {
+		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_MATERIALIEN, 'artikel', 'side');
+		\remove_meta_box(TAX_ARTIKEL_MATERIALIEN.'div',      'artikel', 'side');
+	}
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_AUSFUEHRUNGEN')) {
+		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_AUSFUEHRUNGEN, 'artikel', 'side');
+		\remove_meta_box(TAX_ARTIKEL_AUSFUEHRUNGEN.'div',      'artikel', 'side');
+	}
 
 	// ALT: Stammdaten-Metabox entfernen (nur UI, KEINE Taxonomien!)
 	\remove_meta_box('cmx_artikel_stammdaten', 'artikel', 'normal');

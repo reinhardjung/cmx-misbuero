@@ -16,11 +16,67 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 		return $settings;
 	}
 
-	$current_rows = isset($settings['textarea_rows']) ? (int) $settings['textarea_rows'] : 20;
-	$settings['textarea_rows'] = \max(5, $current_rows - 5);
+	$settings['textarea_rows'] = 5;
+	$settings['editor_height'] = 120;
+	if (($settings['tinymce'] ?? true) !== false) {
+		$settings['tinymce'] = \is_array($settings['tinymce'] ?? null) ? $settings['tinymce'] : [];
+		$settings['tinymce']['height'] = 120;
+	}
 
 	return $settings;
 }, 10, 2);
+
+\add_action('admin_head', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== basename(__DIR__)) {
+		return;
+	}
+	echo '<style>
+		#postdivrich #wp-content-editor-container textarea.wp-editor-area,
+		#postdivrich #content,
+		#postdivrich .mce-edit-area iframe{
+			height:120px !important;
+			min-height:120px !important;
+		}
+	</style>';
+});
+
+\add_action('admin_print_footer_scripts', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== basename(__DIR__)) {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		const height = 120;
+		function applyEditorHeight() {
+			document.querySelectorAll('#postdivrich #wp-content-editor-container textarea.wp-editor-area, #postdivrich #content, #postdivrich .mce-edit-area iframe').forEach(function(el){
+				el.style.height = height + 'px';
+				el.style.minHeight = height + 'px';
+			});
+			if (window.tinymce) {
+				const editor = window.tinymce.get('content');
+				if (editor && editor.iframeElement) {
+					editor.iframeElement.style.height = height + 'px';
+					editor.iframeElement.style.minHeight = height + 'px';
+				}
+			}
+		}
+		document.addEventListener('DOMContentLoaded', applyEditorHeight, {once:true});
+		window.addEventListener('load', applyEditorHeight, {once:true});
+		let runs = 0;
+		const timer = window.setInterval(function(){
+			applyEditorHeight();
+			runs += 1;
+			if (runs >= 20) {
+				window.clearInterval(timer);
+			}
+		}, 250);
+	})();
+	</script>
+	<?php
+});
 
 
 // Define: CONST 4 @ll Taxos

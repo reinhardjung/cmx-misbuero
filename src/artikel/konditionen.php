@@ -26,10 +26,13 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_FARBEN_TAXONOMY')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS', '_cmx_artikel_variant_rows');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART', '_cmx_artikel_art');
+}
 
 \add_action('add_meta_boxes', function () {
 	\add_meta_box('cmx_artikel_waehrung_preise', 'Stammdaten', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
-	\add_meta_box('cmx_artikel_waehrung_side', 'Währung', __NAMESPACE__ . '\\cmx_artikel_waehrung_side_box_html', 'artikel', 'side', 'default');
+	\add_meta_box('cmx_artikel_waehrung_side', 'Art', __NAMESPACE__ . '\\cmx_artikel_waehrung_side_box_html', 'artikel', 'side', 'default');
 });
 
 function cmx_artikel_render_save_nonce_once(): void {
@@ -855,10 +858,13 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 	cmx_artikel_render_save_nonce_once();
 	echo '<input type="hidden" name="cmx_artikel_waehrung_payload" value="1">';
+	$art = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_ART, 'produkt');
 	$waehrung = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
 
-	echo '<p><label for="cmx_artikel_waehrung"><strong>Währung auswählen</strong></label><br>';
-	echo '<select id="cmx_artikel_waehrung" name="cmx_artikel_waehrung" class="widefat">';
+	echo '<p style="margin:0 0 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+	echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="produkt" ' . \checked($art, 'produkt', false) . '> Produkt</label>';
+	echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="dienstleistung" ' . \checked($art, 'dienstleistung', false) . '> Dienstleistung</label></p>';
+	echo '<p style="margin:0;"><select id="cmx_artikel_waehrung" name="cmx_artikel_waehrung" class="widefat" aria-label="Währung auswählen">';
 	foreach (cmx_artikel_waehrung_optionen() as $val => $label) {
 		echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
 	}
@@ -883,6 +889,13 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 	$has       = static fn($k) => \array_key_exists($k, $_POST);
 
 	// --- SKU & Währung speichern ---
+	if ($has('cmx_artikel_art')) {
+		$art = \sanitize_key((string) $in('cmx_artikel_art', 'produkt'));
+		if (!\in_array($art, ['produkt', 'dienstleistung'], true)) {
+			$art = 'produkt';
+		}
+		\update_post_meta($post_id, CMX_ARTIKEL_META_ART, $art);
+	}
 	if ($has('cmx_artikel_waehrung')) {
 		$waehrung = \strtoupper(\sanitize_text_field($in('cmx_artikel_waehrung', 'CHF')));
 		$allowed  = \array_keys(cmx_artikel_waehrung_optionen());
