@@ -487,14 +487,14 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	echo '<style>
 		#cmx-artikel-variant-rows{display:flex;flex-direction:column;gap:14px}
-		.cmx-variant-block{padding:10px;margin:0;border:1px solid #ddd;border-radius:6px;background:#fafafa}
+		.cmx-variant-block{padding:8px 8px 10px;margin:0;border:1px solid #ddd;border-radius:6px;background:#fafafa}
 		.cmx-variant-block:last-child{margin-bottom:0}
-		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+		.cmx-price-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 		.cmx-price-row .cmx-f{display:flex;flex-direction:column;min-width:140px;flex:1 1 180px;max-width:320px}
 		.cmx-price-row .cmx-f--xs{min-width:96px;max-width:132px;flex:1 1 112px}
 		.cmx-price-row .cmx-f--xxs{min-width:48px;max-width:66px;flex:1 1 56px}
 		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px;flex:1 1 180px}
-		.cmx-price-row .cmx-f--sku{min-width:130px;max-width:162px;flex:1 1 146px}
+		.cmx-price-row .cmx-f--sku{min-width:112px;max-width:138px;flex:1 1 120px}
 		.cmx-price-row .cmx-f--md{min-width:220px;max-width:320px;flex:1 1 220px}
 		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px;flex:1 1 260px}
 		.cmx-price-row .cmx-f--full{min-width:100%;max-width:100%;flex:1 1 100%}
@@ -513,7 +513,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-check-left{display:flex;align-items:center;gap:14px;white-space:nowrap;flex-wrap:wrap}
 		.cmx-price-row .cmx-check-left label{position:relative;top:-5px}
 		.cmx-price-row .cmx-variant-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
-		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px;align-items:center;justify-content:center;text-align:center}
+		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
 		.cmx-price-row .cmx-variant-actions .cmx-variant-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
 		.cmx-price-row .cmx-variant-actions .cmx-variant-del .dashicons{color:#d63638}
 		.cmx-price-row .cmx-variant-actions button[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}

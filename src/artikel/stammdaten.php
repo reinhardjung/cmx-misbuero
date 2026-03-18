@@ -20,6 +20,20 @@ function cmx_get_terms_safe(string $taxonomy): array {
 	return \is_wp_error($terms) ? [] : $terms;
 }
 
+function cmx_artikel_remove_taxonomy_metabox(string $taxonomy): void {
+	if ($taxonomy === '') {
+		return;
+	}
+	foreach (['side', 'normal', 'advanced'] as $context) {
+		\remove_meta_box('tagsdiv-' . $taxonomy, 'artikel', $context);
+		\remove_meta_box($taxonomy . 'div', 'artikel', $context);
+	}
+}
+
+function cmx_artikel_taxonomy_slug(string $label): string {
+	return cmx_tax_key('artikel', cmx_no_umlaute($label));
+}
+
 function cmx_artikel_make_taxonomy_metabox_title_link(string $taxonomy, string $box_id, string $fallback_label): void {
 	if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
 		return;
@@ -111,28 +125,50 @@ function cmx_csv_ids_to_array(string $csv): array {
  * Core-Taxo-Boxen ausblenden (UNVERÄNDERT)
  * ======================================================= */
 \add_action('admin_menu', function () {
+	$groessen_taxonomy = cmx_artikel_taxonomy_slug('Grössen');
+	$ausfuehrungen_taxonomy = cmx_artikel_taxonomy_slug('Ausführungen');
 	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_MARKEN,    'artikel', 'side');
 	\remove_meta_box(TAX_ARTIKEL_MARKEN.'div',         'artikel', 'side');
 	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_FARBEN,    'artikel', 'side');
 	\remove_meta_box(TAX_ARTIKEL_FARBEN.'div',         'artikel', 'side');
 	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_EINHEITEN, 'artikel', 'side');
 	\remove_meta_box(TAX_ARTIKEL_EINHEITEN.'div',      'artikel', 'side');
-	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_GROESSEN')) {
-		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_GROESSEN, 'artikel', 'side');
-		\remove_meta_box(TAX_ARTIKEL_GROESSEN.'div',      'artikel', 'side');
-	}
+	cmx_artikel_remove_taxonomy_metabox($groessen_taxonomy);
 	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_MATERIALIEN')) {
 		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_MATERIALIEN, 'artikel', 'side');
 		\remove_meta_box(TAX_ARTIKEL_MATERIALIEN.'div',      'artikel', 'side');
 	}
-	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_AUSFUEHRUNGEN')) {
-		\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_AUSFUEHRUNGEN, 'artikel', 'side');
-		\remove_meta_box(TAX_ARTIKEL_AUSFUEHRUNGEN.'div',      'artikel', 'side');
-	}
+	cmx_artikel_remove_taxonomy_metabox($ausfuehrungen_taxonomy);
 
 	// ALT: Stammdaten-Metabox entfernen (nur UI, KEINE Taxonomien!)
 	\remove_meta_box('cmx_artikel_stammdaten', 'artikel', 'normal');
 }, 50);
+
+\add_action('do_meta_boxes', function ($post_type): void {
+	if ((string) $post_type !== 'artikel') {
+		return;
+	}
+	cmx_artikel_remove_taxonomy_metabox(cmx_artikel_taxonomy_slug('Grössen'));
+	cmx_artikel_remove_taxonomy_metabox(cmx_artikel_taxonomy_slug('Ausführungen'));
+}, 100, 1);
+
+\add_action('admin_head', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'artikel' || !\in_array((string) ($screen->base ?? ''), ['post', 'post-new'], true)) {
+		return;
+	}
+	$selectors = [];
+	$taxonomy = cmx_artikel_taxonomy_slug('Grössen');
+	$selectors[] = '#tagsdiv-' . $taxonomy;
+	$selectors[] = '#' . $taxonomy . 'div';
+	$taxonomy = cmx_artikel_taxonomy_slug('Ausführungen');
+	$selectors[] = '#tagsdiv-' . $taxonomy;
+	$selectors[] = '#' . $taxonomy . 'div';
+	if ($selectors === []) {
+		return;
+	}
+	echo '<style>' . \implode(',', $selectors) . '{display:none !important;}</style>';
+}, 100);
 
 /* =========================================================
  * NEUE/BEIBEBLIEBENE Metaboxen (ohne Artikel-Nr.-Sidebox)
@@ -186,8 +222,7 @@ function cmx_artikel_marke_side_box(\WP_Post $post): void {
 	$terms  = cmx_get_terms_safe(TAX_ARTIKEL_MARKEN);
 
 	echo '<input type="hidden" name="cmx_artikel_marke_payload" value="1">';
-	echo '<p><label for="cmx_artikel_marke"><strong>Marke auswählen</strong></label><br>';
-	echo '<select id="cmx_artikel_marke" name="cmx_artikel_marke" class="widefat">';
+	echo '<p style="margin:0;"><select id="cmx_artikel_marke" name="cmx_artikel_marke" class="widefat" aria-label="Marke auswählen">';
 	echo '<option value="0">— auswählen —</option>';
 	foreach ($terms as $t) {
 		echo '<option value="'.(int)$t->term_id.'" '.selected($sel_id, $t->term_id, false).'>'.esc_html($t->name).'</option>';
