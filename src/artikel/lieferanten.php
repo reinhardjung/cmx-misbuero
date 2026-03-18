@@ -604,7 +604,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		$r_lager = max(0, (int)($row['lagerbestand'] ?? 0));
 		$r_notiz = (string)($row['notiz'] ?? '');
 		echo '<tr class="cmx-lief-item-row">';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><div class="cmx-lief-suggest"><div class="cmx-lief-input-row"><input type="text" class="widefat cmx-lief-supplier-search" autocomplete="off" value="'.\esc_attr($r_lieferant_title).'" placeholder="Lieferant suchen..."><input type="hidden" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="cmx-lief-supplier-id" value="'.\esc_attr((string)$r_lieferant).'"><button type="button" class="button button-small cmx-lief-supplier-clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></div><ul class="cmx-lief-supplier-suggest" style="display:none"></ul></div></div></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><div class="cmx-lief-suggest"><div class="cmx-lief-input-row"><input type="text" class="widefat cmx-lief-supplier-search" autocomplete="off" value="'.\esc_attr($r_lieferant_title).'" placeholder="Lieferant suchen..."><input type="hidden" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="cmx-lief-supplier-id" value="'.\esc_attr((string)$r_lieferant).'"></div><ul class="cmx-lief-supplier-suggest" style="display:none"></ul></div></div></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--nr" data-label="Artikel-Nr."><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
@@ -790,11 +790,10 @@ echo <<<HTML
 			wrap.dataset.cmxSupplierBound="1";
 			var input=wrap.querySelector("input.cmx-lief-supplier-search");
 			var hidden=wrap.querySelector("input.cmx-lief-supplier-id");
-			var clearBtn=wrap.querySelector("button.cmx-lief-supplier-clear");
 			var list=wrap.querySelector("ul.cmx-lief-supplier-suggest");
 			var link=wrap.querySelector("a.cmx-lief-supplier-open");
 			var timer=null;
-			if(!input || !hidden || !clearBtn || !list || !link) return;
+			if(!input || !hidden || !list || !link) return;
 			var navigator = makeNavigator(input, list, chooseSupplier);
 			function closeSuggestions(){
 				list.style.display="none";
@@ -896,15 +895,6 @@ echo <<<HTML
 						if(match) chooseSupplier(match, false);
 					}
 				}, 130);
-			});
-			clearBtn.addEventListener("click", function(e){
-				e.preventDefault();
-				hidden.value = "0";
-				input.value = "";
-				input.dataset.selectedTitle = "";
-				hidden.dispatchEvent(new Event("change", {bubbles:true}));
-				closeSuggestions();
-				input.focus();
 			});
 			hidden.addEventListener("change", function(){
 				syncFieldFromHidden();
