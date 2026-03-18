@@ -194,6 +194,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-f--xs{min-width:96px;max-width:132px;flex:1 1 112px}
 		.cmx-price-row .cmx-f--xxs{min-width:48px;max-width:66px;flex:1 1 56px}
 		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px;flex:1 1 180px}
+		.cmx-price-row .cmx-f--sku{min-width:130px;max-width:162px;flex:1 1 146px}
 		.cmx-price-row .cmx-f--md{min-width:220px;max-width:320px;flex:1 1 220px}
 		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px;flex:1 1 260px}
 		.cmx-price-row .cmx-f--full{min-width:100%;max-width:100%;flex:1 1 100%}
@@ -218,7 +219,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	echo '<div class="cmx-price-row" role="group" aria-label="Konditionen & Preise">';
 
-	echo '<div class="cmx-f cmx-f--sm">
+	echo '<div class="cmx-f cmx-f--sku">
 		<label for="cmx_artikel_sku">Artikel-Nr.</label>
 		<input type="text" id="cmx_artikel_sku" name="cmx_artikel_sku" value="' . esc_attr($sku) . '" autocomplete="off">
 	</div>';
