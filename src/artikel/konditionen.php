@@ -20,16 +20,29 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')) {
 
 \add_action('add_meta_boxes', function () {
 	\add_meta_box('cmx_artikel_waehrung_preise', 'Konditionen', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
+	\add_meta_box('cmx_artikel_waehrung_side', 'Währung', __NAMESPACE__ . '\\cmx_artikel_waehrung_side_box_html', 'artikel', 'side', 'default');
 });
 
+function cmx_artikel_render_save_nonce_once(): void {
+	static $rendered = false;
+	if ($rendered) return;
+	\wp_nonce_field('cmx_artikel_save', 'cmx_artikel_nonce');
+	$rendered = true;
+}
+
+function cmx_artikel_waehrung_optionen(): array {
+	return [
+		'CHF' => 'Schweizer Franken',
+		'EUR' => 'Euro',
+		'USD' => 'US-Dollar',
+	];
+}
+
 function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
-	if (!isset($_POST['cmx_artikel_nonce'])) {
-		\wp_nonce_field('cmx_artikel_save', 'cmx_artikel_nonce');
-	}
+	cmx_artikel_render_save_nonce_once();
 	echo '<input type="hidden" name="cmx_artikel_konditionen_payload" value="1">';
 
 	$sku         = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SKU, '');
-	$waehrung    = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
 	$ek          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_EK, '');
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
@@ -77,20 +90,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		}
 	</style>';
 
-	echo '<div class="cmx-price-row" role="group" aria-label="Währung & Preise">';
+	echo '<div class="cmx-price-row" role="group" aria-label="Konditionen & Preise">';
 
 	echo '<div class="cmx-f cmx-f--md">
 		<label for="cmx_artikel_sku">Artikel-Nr.</label>
 		<input type="text" id="cmx_artikel_sku" name="cmx_artikel_sku" value="' . esc_attr($sku) . '" autocomplete="off">
-	</div>';
-
-	echo '<div class="cmx-f cmx-f--xs">
-		<label for="cmx_artikel_waehrung">Währung</label>
-		<select id="cmx_artikel_waehrung" name="cmx_artikel_waehrung">';
-	foreach (['CHF' => 'Schweizer Franken', 'EUR' => 'Euro', 'USD' => 'US-Dollar'] as $val => $label) {
-		echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
-	}
-	echo '	</select>
 	</div>';
 
 	// Einheit (halbe Breite)
@@ -282,6 +286,19 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	</script>';
 }
 
+function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
+	cmx_artikel_render_save_nonce_once();
+	echo '<input type="hidden" name="cmx_artikel_waehrung_payload" value="1">';
+	$waehrung = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
+
+	echo '<p><label for="cmx_artikel_waehrung"><strong>Währung auswählen</strong></label><br>';
+	echo '<select id="cmx_artikel_waehrung" name="cmx_artikel_waehrung" class="widefat">';
+	foreach (cmx_artikel_waehrung_optionen() as $val => $label) {
+		echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
+	}
+	echo '</select></p>';
+}
+
 // Save-Handler:
 // EK, Aufwand und VK werden manuell gespeichert.
 // Selbstkosten, Deckungsbeitrag und Marge werden daraus serverseitig berechnet.
@@ -292,7 +309,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	if ($post->post_type !== 'artikel') return;
 	if (!\current_user_can('edit_post', $post_id)) return;
 	if (!isset($_POST['cmx_artikel_nonce']) || !\wp_verify_nonce($_POST['cmx_artikel_nonce'], 'cmx_artikel_save')) return;
-	if (!isset($_POST['cmx_artikel_konditionen_payload'])) return;
+	if (!isset($_POST['cmx_artikel_konditionen_payload']) && !isset($_POST['cmx_artikel_waehrung_payload'])) return;
 
 	$in        = static fn($k, $d = '') => $_POST[$k] ?? $d;
 	$norm      = static fn($v) => cmx_parse_number((string) $v);
@@ -307,7 +324,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	if ($has('cmx_artikel_waehrung')) {
 		$waehrung = \strtoupper(\sanitize_text_field($in('cmx_artikel_waehrung', 'CHF')));
-		$allowed  = ['CHF', 'EUR', 'USD'];
+		$allowed  = \array_keys(cmx_artikel_waehrung_optionen());
 		if (!\in_array($waehrung, $allowed, true)) {
 			$waehrung = 'CHF';
 		}
