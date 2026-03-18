@@ -33,6 +33,7 @@ require_once 'kontakte.php';
 require_once 'belege.php';
 require_once 'woocommerce.php';
 require_once 'email.php';
+require_once 'system.php';
 require_once 'erweitert.php';
 require_once 'support.php';
 require_once 'adminbar.php';
@@ -92,6 +93,7 @@ function cmx_get_tabs(): array {
 		'belege'      => 'Belege',
 		'woocommerce' => 'WooCommerce',
 		'email'       => 'E-Mails',
+		'system'      => 'System',
 		'support'     => 'Support',
 	];
 }
@@ -254,7 +256,7 @@ function cmx_render_settings_page(): void {
 	/* ALLE ANDEREN */
 	echo '<form method="post" action="options.php">';
 	settings_fields(CMX_SETTINGS_MAIN);
-	if ($tab !== 'general') {
+	if ($tab !== 'general' && $tab !== 'system') {
 		$openai_key = (string) \get_option('mis_buero_openai_key', '');
 		echo '<input type="hidden" name="mis_buero_openai_key" value="' . \esc_attr($openai_key) . '">';
 	}

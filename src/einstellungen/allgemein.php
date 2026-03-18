@@ -19,32 +19,6 @@ function cmx_register_general_tab(): void {
 		'cmx_tab_general'
 	);
 
-	\register_setting(
-		'cmx_einstellungen',
-		'mis_buero_openai_key',
-		[
-			'type'              => 'string',
-			'sanitize_callback' => static function($value): string {
-				if ($value === null) {
-					$value = \get_option('mis_buero_openai_key', '');
-				}
-				return \sanitize_text_field((string) $value);
-			},
-		]
-	);
-
-	\add_settings_field(
-		'mis_buero_openai_key',
-		'Paddle API Key',
-		function () {
-			$val = (string) \get_option( 'mis_buero_openai_key', '' );
-			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr( $val ) . '">';
-			echo '<p class="description">Wird für OCR und Produkttexte verwendet</p>';
-		},
-		'cmx_tab_general',
-		'cmx_sec_general'
-	);
-
 	\add_settings_field(
 		'support_user_switch',
 		'Support',
