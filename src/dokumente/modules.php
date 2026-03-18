@@ -452,20 +452,68 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	$id_suffix = \preg_replace('~[^a-z0-9_]+~', '_', \strtolower($target_type . '_' . $meta_key));
 	$select_id = 'cmx_dok_rel_select_' . $id_suffix;
 	$search_id = 'cmx_dok_rel_search_' . $id_suffix;
-	$nohit_id = 'cmx_dok_rel_nohit_' . $id_suffix;
+	$results_id = 'cmx_dok_rel_results_' . $id_suffix;
+	$selected_id = 'cmx_dok_rel_selected_' . $id_suffix;
+	$ui_id = 'cmx_dok_rel_ui_' . $id_suffix;
 	$touched_id = 'cmx_dok_rel_touched_' . $id_suffix;
 	$touched_name = 'cmx_dok_rel_touched[' . $meta_key . ']';
 	$select_name = $allow_multiple ? ($meta_key . '[]') : $meta_key;
 	$multiple_attr = $allow_multiple ? ' multiple data-cmx-multiple="1"' : '';
-	$select_style = 'width:100%;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:none;box-sizing:border-box;';
-	if ($target_type === 'belege') {
-		$select_style .= 'font-family:Consolas,Monaco,Courier,monospace;font-size:12px;white-space:pre;font-variant-numeric:tabular-nums;letter-spacing:0;padding-right:24px;';
-	}
+	$ui_map = cmx_dok_rel_ui_map();
+	$target_label = (string) (($ui_map[$target_type]['label'] ?? '') ?: \ucfirst($target_type));
+	$placeholder = $target_label . ' suchen...';
+	$is_belege = ($target_type === 'belege');
+	$ui_classes = 'cmx-dok-rel-ui' . ($is_belege ? ' cmx-dok-rel-ui--belege' : '');
+	$metabox_ids = cmx_dok_relation_metabox_ids();
+	$metabox_id = (string) ($metabox_ids[$target_type] ?? '');
+	$metabox_id_attr = \esc_attr($metabox_id);
+	$ui_id_attr = \esc_attr($ui_id);
+	$edit_prefix_json = \wp_json_encode(\admin_url('post.php?post='));
 
 	echo '<label for="' . \esc_attr($search_id) . '" class="screen-reader-text">Suchen</label>';
+	echo '<style>
+	' . ($metabox_id_attr !== '' ? ('#' . $metabox_id_attr . ',#' . $metabox_id_attr . ' .inside,') : '') . '#' . $ui_id_attr . '{position:relative;overflow:visible}
+	#' . $ui_id_attr . ' .cmx-dok-rel-suggest{position:relative;overflow:visible}
+	#' . $ui_id_attr . ' .cmx-dok-rel-results{
+		position:absolute;
+		z-index:100002;
+		left:0;
+		right:0;
+		max-height:240px;
+		overflow:auto;
+		margin:2px 0 0;
+		padding:0;
+		border:1px solid #ccd0d4;
+		border-radius:4px;
+		background:#fff;
+		box-shadow:0 10px 24px rgba(0,0,0,.10);
+		list-style:none;
+	}
+	#' . $ui_id_attr . ' .cmx-dok-rel-results li{margin:0;padding:6px 8px;cursor:pointer}
+	#' . $ui_id_attr . ' .cmx-dok-rel-results li.active,
+	#' . $ui_id_attr . ' .cmx-dok-rel-results li:hover{background:#e5f3ff}
+	#' . $ui_id_attr . ' .cmx-dok-rel-results li.cmx-dok-rel-results-empty{color:#646970;cursor:default}
+	#' . $ui_id_attr . ' .cmx-dok-rel-selected{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+	#' . $ui_id_attr . ' .cmx-dok-rel-selected li{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+	#' . $ui_id_attr . ' .cmx-dok-rel-selected-main{min-width:0;flex:1 1 auto}
+	#' . $ui_id_attr . ' .cmx-dok-rel-selected-main a{display:block;text-decoration:none}
+	#' . $ui_id_attr . ' .cmx-dok-rel-remove{line-height:1}
+	#' . $ui_id_attr . '.cmx-dok-rel-ui--belege .cmx-dok-rel-results,
+	#' . $ui_id_attr . '.cmx-dok-rel-ui--belege .cmx-dok-rel-selected-main a{
+		font-family:Consolas,Monaco,Courier,monospace;
+		font-size:12px;
+		white-space:pre;
+		font-variant-numeric:tabular-nums;
+		letter-spacing:0;
+	}
+	</style>';
 	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
-	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="cmx-dok-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-nohit="' . \esc_attr($nohit_id) . '" placeholder="Suchen..." style="width:100%;margin:0 0 8px;" autocomplete="off" />';
-	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="' . \esc_attr($select_style) . '" size="10"' . $multiple_attr . '>';
+	echo '<div id="' . \esc_attr($ui_id) . '" class="' . \esc_attr($ui_classes) . '">';
+	echo '<div class="cmx-dok-rel-suggest">';
+	echo '<input type="search" id="' . \esc_attr($search_id) . '" class="widefat cmx-dok-rel-search" data-target-select="' . \esc_attr($select_id) . '" data-target-results="' . \esc_attr($results_id) . '" data-target-selected="' . \esc_attr($selected_id) . '" placeholder="' . \esc_attr($placeholder) . '" autocomplete="off" aria-label="' . \esc_attr($placeholder) . '">';
+	echo '<ul id="' . \esc_attr($results_id) . '" class="cmx-dok-rel-results" style="display:none"></ul>';
+	echo '</div>';
+	echo '<select id="' . \esc_attr($select_id) . '" class="cmx-dok-rel-select" data-target-touched="' . \esc_attr($touched_id) . '" data-cmx-no-selection="' . ($has_current ? '0' : '1') . '" name="' . \esc_attr($select_name) . '" style="display:none"' . $multiple_attr . '>';
 	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		$id = (int) ($opt['id'] ?? 0);
@@ -475,9 +523,10 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
-	echo '<p id="' . \esc_attr($nohit_id) . '" style="display:none;margin:8px 0 0;"><em>Keine Treffer.</em></p>';
+	echo '<ul id="' . \esc_attr($selected_id) . '" class="cmx-dok-rel-selected"></ul>';
+	echo '</div>';
 	if ($allow_multiple) {
-		echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: Strg/Cmd gedrückt halten und mehrere Einträge wählen.</em></p>';
+		echo '<p style="margin:8px 0 0;"><em>Mehrfachauswahl: mehrere Treffer nacheinander hinzufügen.</em></p>';
 	}
 
 	if (empty($options)) {
@@ -490,160 +539,278 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	}
 	$printed_search_js = true;
 
-	echo '<script>
-		(function(){
-			if (window.cmxDokRelSearchInit) return;
-			window.cmxDokRelSearchInit = true;
+		$script = <<<HTML
+<script>
+	(function(){
+		if (window.cmxDokRelSearchInit) return;
+		window.cmxDokRelSearchInit = true;
+		var editPrefix = {$edit_prefix_json};
 
-			var setTouchState = function(select, state){
-				if (!select) return;
-				var touchedId = select.getAttribute("data-target-touched") || "";
-				if (!touchedId) return;
-				var touched = document.getElementById(touchedId);
-				if (!touched) return;
-				touched.value = String(state || "0");
-			};
+		function escHtml(str){
+			return String(str || "").replace(/[&<>"']/g, function(c){
+				if (c === "&") return "&amp;";
+				if (c === "<") return "&lt;";
+				if (c === ">") return "&gt;";
+				if (c.charCodeAt(0) === 34) return "&quot;";
+				return "&#039;";
+			});
+		}
 
-			var markTouched = function(select){
-				setTouchState(select, "1");
-			};
-
-			var normalizeSelection = function(select){
-				if (!select) return;
-				var firstOption = select.options.length > 0 ? select.options[0] : null;
-				if (!firstOption || String(firstOption.value || "") !== "0") return;
-				var hasPositiveSelection = false;
-				for (var i = 1; i < select.options.length; i++) {
-					if (select.options[i].selected) {
-						hasPositiveSelection = true;
-						break;
-					}
-				}
-				if (hasPositiveSelection && firstOption.selected) {
-					firstOption.selected = false;
-				}
-			};
-
-			var clearSelection = function(select){
-				if (!select) return;
-				for (var i = 0; i < select.options.length; i++) {
-					select.options[i].selected = false;
-				}
-				select.selectedIndex = -1;
-				var firstOption = select.options.length > 0 ? select.options[0] : null;
-				if (firstOption && String(firstOption.value || "") === "0") {
-					firstOption.selected = true;
-				}
-				setTouchState(select, "2");
-			};
-
-			var filter = function(input){
-				var selectId = input.getAttribute("data-target-select") || "";
-				var nohitId = input.getAttribute("data-target-nohit") || "";
-				var select = document.getElementById(selectId);
+		function setTouchState(select, state){
 			if (!select) return;
-			var nohit = nohitId ? document.getElementById(nohitId) : null;
-			var term = (input.value || "").toLowerCase().trim();
-			var visible = 0;
+			var touchedId = select.getAttribute("data-target-touched") || "";
+			if (!touchedId) return;
+			var touched = document.getElementById(touchedId);
+			if (!touched) return;
+			touched.value = String(state || "0");
+		}
 
-			for (var i = 0; i < select.options.length; i++) {
+		function syncEmptyOption(select){
+			if (!select) return;
+			var firstOption = select.options.length > 0 ? select.options[0] : null;
+			if (!firstOption || String(firstOption.value || "") !== "0") return;
+			var hasPositiveSelection = false;
+			for (var i = 1; i < select.options.length; i++) {
+				if (select.options[i].selected) {
+					hasPositiveSelection = true;
+					break;
+				}
+			}
+			firstOption.selected = !hasPositiveSelection;
+		}
+
+		function getSelectedOptions(select){
+			var out = [];
+			if (!select) return out;
+			for (var i = 1; i < select.options.length; i++) {
 				var opt = select.options[i];
-				if (i === 0) {
-					opt.hidden = false;
+				if (!opt.selected) continue;
+				out.push({
+					id: String(opt.value || ""),
+					label: String(opt.textContent || opt.innerText || ""),
+					title: String(opt.getAttribute("title") || "")
+				});
+			}
+			return out;
+		}
+
+		function findOption(select, id){
+			if (!select) return null;
+			var idStr = String(id || "");
+			for (var i = 1; i < select.options.length; i++) {
+				if (String(select.options[i].value || "") === idStr) {
+					return select.options[i];
+				}
+			}
+			return null;
+		}
+
+		function closeResults(root){
+			if (!root) return;
+			var results = root.querySelector(".cmx-dok-rel-results");
+			if (!results) return;
+			results.style.display = "none";
+			results.innerHTML = "";
+			root._cmxItems = [];
+			root._cmxActive = -1;
+		}
+
+		function resultItems(root){
+			var results = root ? root.querySelector(".cmx-dok-rel-results") : null;
+			return results ? Array.prototype.slice.call(results.querySelectorAll("li[data-id]")) : [];
+		}
+
+		function setActive(root, next){
+			var items = resultItems(root);
+			if (!items.length) {
+				root._cmxActive = -1;
+				return;
+			}
+			if (next < 0) next = items.length - 1;
+			if (next >= items.length) next = 0;
+			root._cmxActive = next;
+			items.forEach(function(item, idx){
+				item.classList.toggle("active", idx === next);
+				if (idx === next) {
+					try { item.scrollIntoView({ block: "nearest" }); } catch (err) {}
+				}
+			});
+		}
+
+		function renderSelected(root){
+			var select = root ? root.querySelector(".cmx-dok-rel-select") : null;
+			var list = root ? root.querySelector(".cmx-dok-rel-selected") : null;
+			if (!select || !list) return;
+			syncEmptyOption(select);
+			var items = getSelectedOptions(select);
+			if (!items.length) {
+				list.innerHTML = "";
+				return;
+			}
+			list.innerHTML = items.map(function(item){
+				var titleAttr = item.title ? ' title="' + escHtml(item.title) + '"' : "";
+				return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-dok-rel-selected-main"><a href="' + escHtml(editPrefix + encodeURIComponent(item.id) + "&action=edit") + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(item.label) + '</a></div><button type="button" class="button-link-delete cmx-dok-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
+			}).join("");
+		}
+
+		function buildMatches(select, term){
+			var items = [];
+			if (!select) return items;
+			var normalizedTerm = String(term || "").toLowerCase().trim();
+			for (var i = 1; i < select.options.length; i++) {
+				var opt = select.options[i];
+				if (opt.selected) continue;
+				var label = String(opt.textContent || opt.innerText || "");
+				if (normalizedTerm !== "" && label.toLowerCase().indexOf(normalizedTerm) === -1) {
 					continue;
 				}
-				var txt = (opt.textContent || opt.innerText || "").toLowerCase();
-				var match = term === "" || txt.indexOf(term) !== -1;
-				opt.hidden = !match;
-				if (!match && opt.selected) {
-					opt.selected = false;
-				}
-				if (match) {
-					visible++;
+				items.push({
+					id: String(opt.value || ""),
+					label: label,
+					title: String(opt.getAttribute("title") || "")
+				});
+			}
+			return items;
+		}
+
+		function renderResults(root, term){
+			var select = root ? root.querySelector(".cmx-dok-rel-select") : null;
+			var results = root ? root.querySelector(".cmx-dok-rel-results") : null;
+			if (!select || !results) return;
+			var items = buildMatches(select, term);
+			root._cmxItems = items;
+			root._cmxActive = -1;
+			if (!items.length) {
+				results.innerHTML = '<li class="cmx-dok-rel-results-empty">Keine Treffer.</li>';
+				results.style.display = "block";
+				return;
+			}
+			results.innerHTML = items.map(function(item, idx){
+				var titleAttr = item.title ? ' title="' + escHtml(item.title) + '"' : "";
+				return '<li data-id="' + escHtml(item.id) + '" data-index="' + idx + '"' + titleAttr + '>' + escHtml(item.label) + '</li>';
+			}).join("");
+			results.style.display = "block";
+			setActive(root, 0);
+		}
+
+		function chooseItem(root, id){
+			var select = root ? root.querySelector(".cmx-dok-rel-select") : null;
+			var input = root ? root.querySelector(".cmx-dok-rel-search") : null;
+			if (!select || !input) return;
+			var option = findOption(select, id);
+			if (!option) return;
+			if (!select.hasAttribute("multiple")) {
+				for (var i = 1; i < select.options.length; i++) {
+					select.options[i].selected = false;
 				}
 			}
+			option.selected = true;
+			syncEmptyOption(select);
+			setTouchState(select, "1");
+			renderSelected(root);
+			closeResults(root);
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			input.value = "";
+			input.focus();
+		}
 
-			if (nohit) {
-				nohit.style.display = (term !== "" && visible === 0) ? "" : "none";
-			}
-		};
+		function removeItem(root, id){
+			var select = root ? root.querySelector(".cmx-dok-rel-select") : null;
+			if (!select) return;
+			var option = findOption(select, id);
+			if (!option) return;
+			option.selected = false;
+			syncEmptyOption(select);
+			var remaining = getSelectedOptions(select).length;
+			setTouchState(select, remaining > 0 ? "1" : "2");
+			renderSelected(root);
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		}
 
-			document.addEventListener("input", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
-				filter(t);
+		function initRoot(root){
+			if (!root || root.dataset.cmxBound === "1") return;
+			root.dataset.cmxBound = "1";
+			var input = root.querySelector(".cmx-dok-rel-search");
+			var results = root.querySelector(".cmx-dok-rel-results");
+			var selected = root.querySelector(".cmx-dok-rel-selected");
+			var select = root.querySelector(".cmx-dok-rel-select");
+			if (!input || !results || !selected || !select) return;
+			root._cmxItems = [];
+			root._cmxActive = -1;
+			syncEmptyOption(select);
+			renderSelected(root);
+
+			input.addEventListener("input", function(){
+				renderResults(root, (input.value || "").trim());
 			});
-
-			document.addEventListener("change", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-select")) return;
-				normalizeSelection(t);
-				markTouched(t);
+			input.addEventListener("focus", function(){
+				renderResults(root, (input.value || "").trim());
 			});
-
-			document.addEventListener("keydown", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-search")) return;
-				if (e.key === "Escape") {
-					var selectId = t.getAttribute("data-target-select") || "";
-					var nohitId = t.getAttribute("data-target-nohit") || "";
-					var select = document.getElementById(selectId);
-					var nohit = nohitId ? document.getElementById(nohitId) : null;
+			input.addEventListener("click", function(){
+				renderResults(root, (input.value || "").trim());
+			});
+			input.addEventListener("keydown", function(e){
+				var isOpen = results.style.display === "block";
+				if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !isOpen) {
+					renderResults(root, (input.value || "").trim());
+					isOpen = true;
+				}
+				if (e.key === "ArrowDown") {
 					e.preventDefault();
-					t.value = "";
-					filter(t);
-					clearSelection(select);
-					if (nohit) {
-						nohit.style.display = "none";
+					setActive(root, (root._cmxActive || 0) + 1);
+					return;
+				}
+				if (e.key === "ArrowUp") {
+					e.preventDefault();
+					setActive(root, (typeof root._cmxActive === "number" ? root._cmxActive : 0) - 1);
+					return;
+				}
+				if (e.key === "Enter") {
+					var items = Array.isArray(root._cmxItems) ? root._cmxItems : [];
+					if (root._cmxActive > -1 && items[root._cmxActive]) {
+						e.preventDefault();
+						chooseItem(root, items[root._cmxActive].id);
 					}
 					return;
 				}
-				if (e.key !== "ArrowDown") return;
-				var selectId = t.getAttribute("data-target-select") || "";
-				var select = document.getElementById(selectId);
-			if (!select) return;
-			e.preventDefault();
-			select.focus();
-			for (var i = 1; i < select.options.length; i++) {
-				if (!select.options[i].hidden) {
-					select.options[i].selected = true;
-					normalizeSelection(select);
-					break;
-					}
+				if (e.key === "Escape") {
+					e.preventDefault();
+					closeResults(root);
 				}
 			});
 
-			document.addEventListener("keydown", function(e){
-				var t = e.target;
-				if (!t || !t.classList || !t.classList.contains("cmx-dok-rel-select")) return;
-				if (e.key !== "Escape") return;
+			results.addEventListener("mousedown", function(e){
+				var item = e.target && e.target.closest ? e.target.closest("li[data-id]") : null;
+				if (!item) return;
 				e.preventDefault();
-				clearSelection(t);
-				var searchId = t.id ? t.id.replace("cmx_dok_rel_select_", "cmx_dok_rel_search_") : "";
-				var search = searchId ? document.getElementById(searchId) : null;
-				if (search) {
-					search.focus();
-				}
+				chooseItem(root, item.getAttribute("data-id") || "");
 			});
+			results.addEventListener("mousemove", function(e){
+				var item = e.target && e.target.closest ? e.target.closest("li[data-id]") : null;
+				if (!item) return;
+				var items = resultItems(root);
+				var idx = items.indexOf(item);
+				if (idx > -1) setActive(root, idx);
+			});
+			selected.addEventListener("click", function(e){
+				var btn = e.target && e.target.closest ? e.target.closest(".cmx-dok-rel-remove") : null;
+				if (!btn) return;
+				e.preventDefault();
+				removeItem(root, btn.getAttribute("data-id") || "");
+			});
+			select.addEventListener("change", function(){
+				renderSelected(root);
+			});
+			document.addEventListener("click", function(e){
+				if (root.contains(e.target)) return;
+				closeResults(root);
+			});
+		}
 
-			var boot = function(){
-				var selects = document.querySelectorAll(".cmx-dok-rel-select[data-cmx-no-selection=\'1\']");
-				for (var si = 0; si < selects.length; si++) {
-					var select = selects[si];
-					var hasSelected = false;
-					for (var oi = 0; oi < select.options.length; oi++) {
-						if (select.options[oi].selected) {
-							hasSelected = true;
-							break;
-						}
-					}
-					if (hasSelected) {
-						select.selectedIndex = -1;
-					}
-				}
-				var inputs = document.querySelectorAll(".cmx-dok-rel-search");
-				for (var i = 0; i < inputs.length; i++) {
-					filter(inputs[i]);
+		var boot = function(){
+			var roots = document.querySelectorAll(".cmx-dok-rel-ui");
+			for (var i = 0; i < roots.length; i++) {
+				initRoot(roots[i]);
 			}
 		};
 		if (document.readyState === "loading") {
@@ -652,8 +819,10 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			boot();
 		}
 	})();
-	</script>';
-}
+</script>
+HTML;
+		echo $script;
+		}
 
 function cmx_dok_render_relation_metabox(\WP_Post $post, string $target_type): void {
 	$cfg = cmx_dok_rel_ui_map()[$target_type] ?? null;
