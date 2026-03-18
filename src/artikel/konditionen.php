@@ -43,6 +43,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '<input type="hidden" name="cmx_artikel_konditionen_payload" value="1">';
 
 	$sku         = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SKU, '');
+	$belegtext   = (string) \get_post_meta($post->ID, CMX_META_ARTIKEL_BELEG, true);
 	$ek          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_EK, '');
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
 	$vk          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_VK, '');
@@ -76,12 +77,15 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-f--sm{min-width:160px;max-width:200px;flex:1 1 180px}
 		.cmx-price-row .cmx-f--md{min-width:220px;max-width:320px;flex:1 1 220px}
 		.cmx-price-row .cmx-f--lg{min-width:260px;max-width:420px;flex:1 1 260px}
+		.cmx-price-row .cmx-f--full{min-width:100%;max-width:100%;flex:1 1 100%}
 		.cmx-price-row .cmx-f--half{min-width:118px;max-width:150px;flex:1 1 124px}
 		.cmx-price-row .cmx-f label{font-weight:600;margin-bottom:4px}
 		.cmx-price-row .cmx-f input[type="number"],
 		.cmx-price-row .cmx-f input[type="text"],
-		.cmx-price-row .cmx-f select{width:100%}
+		.cmx-price-row .cmx-f select,
+		.cmx-price-row .cmx-f textarea{width:100%}
 		.cmx-price-row .cmx-f input[readonly]{background:#f6f7f7;color:#2c3338}
+		.cmx-price-row .cmx-f textarea{min-height:38px;height:38px;resize:vertical}
 		.cmx-price-row .cmx-check{display:flex;align-items:center;gap:14px;white-space:nowrap;flex:0 0 100%;margin:2px 0 0}
 		@media (max-width: 1200px){
 			.cmx-price-row{gap:10px}
@@ -147,6 +151,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '<div class="cmx-f cmx-f--xs">
 		<label for="cmx_artikel_marge">Marge (VK − EK)</label>
 		<input type="text" inputmode="decimal" id="cmx_artikel_marge" name="cmx_artikel_marge" value="' . esc_attr($marge_display) . '" readonly>
+	</div>';
+
+	echo '<div class="cmx-f cmx-f--full">
+		<label for="cmx_artikel_beleg_text">Belegtext</label>
+		<textarea id="cmx_artikel_beleg_text" name="cmx_artikel_beleg_text" rows="1">' . esc_textarea($belegtext) . '</textarea>
 	</div>';
 
 	echo '<div class="cmx-check">
@@ -331,6 +340,15 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 		\update_post_meta($post_id, CMX_ARTIKEL_META_WAEHRUNGEN, $waehrung);
 	}
 	// --- Ende SKU & Währung ---
+
+	if ($has('cmx_artikel_beleg_text')) {
+		$belegtext = \sanitize_textarea_field(\wp_unslash((string) $in('cmx_artikel_beleg_text', '')));
+		if ($belegtext === '') {
+			\delete_post_meta($post_id, CMX_META_ARTIKEL_BELEG);
+		} else {
+			\update_post_meta($post_id, CMX_META_ARTIKEL_BELEG, $belegtext);
+		}
+	}
 
 	$has_ek      = $has('cmx_artikel_ek');
 	$has_aufwand = $has('cmx_artikel_aufwand');
