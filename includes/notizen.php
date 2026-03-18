@@ -42,6 +42,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_time')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_betreff_options')) {
+	function cmx_notizen_betreff_options(): array {
+		return ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_betreff')) {
+	function cmx_notizen_normalize_betreff($betreff): string {
+		$betreff = \sanitize_text_field((string) $betreff);
+		$allowed = cmx_notizen_betreff_options();
+		return \in_array($betreff, $allowed, true) ? $betreff : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_is_valid_date')) {
 	function cmx_notizen_is_valid_date(string $date): bool {
 		return (bool) \preg_match('/^\d{4}-\d{2}-\d{2}$/', $date);
@@ -137,14 +151,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_extract_links')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 	/**
 	 * @param mixed $row
-	 * @return array{datum:string,zeit:string,text:string}|null
+	 * @return array{betreff:string,datum:string,zeit:string,text:string}|null
 	 */
 	function cmx_notizen_normalize_row($row): ?array {
+		$betreff = '';
 		$datum = '';
 		$zeit  = '';
 		$text  = '';
 
 		if (\is_array($row)) {
+			$betreff = cmx_notizen_normalize_betreff($row['betreff'] ?? ($row['subject'] ?? ($row['thema'] ?? '')));
 			$datum = \sanitize_text_field((string) ($row['datum'] ?? ($row['date'] ?? '')));
 			$zeit  = \sanitize_text_field((string) ($row['zeit'] ?? ($row['time'] ?? ($row['uhrzeit'] ?? ''))));
 			$text  = cmx_notizen_sanitize_text((string) ($row['text'] ?? ($row['notiz'] ?? ($row['note'] ?? ($row['info'] ?? '')))));
@@ -152,6 +168,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 			$text = cmx_notizen_sanitize_text($row);
 		}
 
+		$betreff = \trim($betreff);
 		$datum = \trim($datum);
 		$zeit  = \trim($zeit);
 		$text  = \trim($text);
@@ -163,11 +180,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 			$zeit = '';
 		}
 
-		if ($datum === '' && $zeit === '' && $text === '') {
+		if ($betreff === '' && $datum === '' && $zeit === '' && $text === '') {
 			return null;
 		}
 
-		return ['datum' => $datum, 'zeit' => $zeit, 'text' => $text];
+		return ['betreff' => $betreff, 'datum' => $datum, 'zeit' => $zeit, 'text' => $text];
 	}
 }
 
@@ -211,10 +228,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 		}
 	}
 
-	/**
-	 * @return array<int, array{datum:string,zeit:string,text:string}>
-	 */
-	function cmx_notizen_load_rows(int $post_id, string $post_type): array {
+		/**
+		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string}>
+		 */
+		function cmx_notizen_load_rows(int $post_id, string $post_type): array {
 		$meta_key = cmx_notizen_meta_key_for_post_type($post_type);
 		$raw = \get_post_meta($post_id, $meta_key, true);
 
@@ -232,7 +249,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 
 		$rows = [];
 		if (\is_array($raw)) {
-			$is_single_row = isset($raw['datum']) || isset($raw['date']) || isset($raw['zeit']) || isset($raw['time']) || isset($raw['text']) || isset($raw['notiz']) || isset($raw['note']) || isset($raw['info']);
+				$is_single_row = isset($raw['betreff']) || isset($raw['subject']) || isset($raw['thema']) || isset($raw['datum']) || isset($raw['date']) || isset($raw['zeit']) || isset($raw['time']) || isset($raw['text']) || isset($raw['notiz']) || isset($raw['note']) || isset($raw['info']);
 			if ($is_single_row) {
 				$raw = [$raw];
 			}
@@ -259,6 +276,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 	 */
 	function cmx_notizen_render_row($index, array $row, bool $is_template = false): void {
 		$name_index = $is_template ? '__INDEX__' : (string) $index;
+		$betreff = (string) ($row['betreff'] ?? '');
 		$datum = \esc_attr((string) ($row['datum'] ?? ''));
 		$zeit  = \esc_attr((string) ($row['zeit'] ?? ''));
 		$text_value = (string) ($row['text'] ?? '');
@@ -284,6 +302,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 
 		echo '<div class="cmx-intern-notiz-side">';
 		echo '<label class="cmx-intern-notiz-label">';
+		echo '<span>Betreff</span>';
+		echo '<select name="cmx_intern_notizen_rows[' . $name_index . '][betreff]">';
+		echo '<option value=""></option>';
+		foreach (cmx_notizen_betreff_options() as $option) {
+			echo '<option value="' . \esc_attr($option) . '"' . \selected($betreff, $option, false) . '>' . \esc_html($option) . '</option>';
+		}
+		echo '</select>';
+		echo '</label>';
+
+		echo '<label class="cmx-intern-notiz-label">';
 		echo '<span class="cmx-intern-notiz-label-inline">Datum <a href="#" class="cmx-notiz-heute">heute</a></span>';
 		echo '<input type="date" name="cmx_intern_notizen_rows[' . $name_index . '][datum]" value="' . $datum . '" />';
 		echo '</label>';
@@ -307,6 +335,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		$rows = cmx_notizen_load_rows((int) $post->ID, $post_type);
 		if (empty($rows)) {
 			$rows[] = [
+				'betreff' => '',
 				'datum' => cmx_notizen_now_date(),
 				'zeit'  => cmx_notizen_now_time(),
 				'text'  => '',
@@ -328,21 +357,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .wp-editor-wrap{width:100%;}';
 			echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:104px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
-		echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0;}';
+			echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;width:100%;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';
-			echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;margin-right:auto;}';
-		echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}';
-			echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:flex-end;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
+			echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;}';
+			echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;margin-left:auto;}';
+			echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:space-between;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
 		echo '</style>';
-		echo '<div id="cmx-intern-notizen-list">';
-		foreach ($rows as $idx => $row) {
-			cmx_notizen_render_row((int) $idx, $row, false);
-		}
-		echo '</div>';
-		?>
-		<script type="text/template" id="cmx-intern-notizen-template">
-			<?php cmx_notizen_render_row('__INDEX__', ['datum' => '', 'zeit' => '', 'text' => ''], true); ?>
-		</script>
+			echo '<div id="cmx-intern-notizen-list">';
+			foreach ($rows as $idx => $row) {
+				cmx_notizen_render_row((int) $idx, $row, false);
+			}
+			echo '</div>';
+			?>
+			<script type="text/template" id="cmx-intern-notizen-template">
+				<?php cmx_notizen_render_row('__INDEX__', ['betreff' => '', 'datum' => '', 'zeit' => '', 'text' => ''], true); ?>
+			</script>
 		<script>
 		(function(){
 			const list = document.getElementById('cmx-intern-notizen-list');
@@ -425,9 +454,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 				wrap.innerHTML = html.trim();
 				const row = wrap.firstElementChild;
 				if (!row) return;
+				const subjectInput = row.querySelector('select');
 				const dateInput = row.querySelector('input[type="date"]');
 				const timeInput = row.querySelector('input[type="time"]');
 				const textInput = row.querySelector('textarea');
+				if (subjectInput) subjectInput.value = seed && seed.betreff ? seed.betreff : '';
 				if (dateInput) dateInput.value = seed && seed.datum ? seed.datum : today();
 				if (timeInput) timeInput.value = seed && seed.zeit ? seed.zeit : nowTime();
 				if (textInput) textInput.value = seed && seed.text ? seed.text : '';
@@ -462,15 +493,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 				const removeBtn = e.target && e.target.closest ? e.target.closest('.cmx-notiz-remove') : null;
 				if (removeBtn) {
 					e.preventDefault();
-					const row = removeBtn.closest('.cmx-intern-notiz-row');
-					if (!row) return;
-					const allRows = list.querySelectorAll('.cmx-intern-notiz-row');
-					if (allRows.length <= 1) {
-						const dateInput = row.querySelector('input[type="date"]');
-						const timeInput = row.querySelector('input[type="time"]');
-						if (dateInput) dateInput.value = today();
-						if (timeInput) timeInput.value = nowTime();
-						setTextValue(row, '');
+						const row = removeBtn.closest('.cmx-intern-notiz-row');
+						if (!row) return;
+						const allRows = list.querySelectorAll('.cmx-intern-notiz-row');
+						if (allRows.length <= 1) {
+							const subjectInput = row.querySelector('select');
+							const dateInput = row.querySelector('input[type="date"]');
+							const timeInput = row.querySelector('input[type="time"]');
+							if (subjectInput) subjectInput.value = '';
+							if (dateInput) dateInput.value = today();
+							if (timeInput) timeInput.value = nowTime();
+							setTextValue(row, '');
 						return;
 					}
 					destroyEditor(row);
