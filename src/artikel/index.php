@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien,Kleider,Schuhe,Zoll,Abos');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien,Grössen,Zoll,Abos');
 
 
 // Define: CONST 4 each Taxo
@@ -23,10 +23,7 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 	cmx_create_taxo(basename(__DIR__), 'Marke', 'Marken');
 	cmx_create_taxo(basename(__DIR__), 'Farbe', 'Farben');
 	cmx_create_taxo(basename(__DIR__), 'Einheit', 'Einheiten');
-	cmx_create_taxo(basename(__DIR__), 'Kleider', 'Kleider');
-	cmx_create_taxo(basename(__DIR__), 'Schuhe', 'Schuhe');
-	cmx_create_taxo(basename(__DIR__), 'Zoll', 'Zoll');
-	cmx_create_taxo(basename(__DIR__), 'Abo', 'Abos');
+	cmx_create_taxo(basename(__DIR__), 'Groesse', 'Grössen');
 }, 15);
 
 
