@@ -38,11 +38,30 @@ function cmx_artikel_waehrung_optionen(): array {
 	];
 }
 
+function cmx_artikel_format_quantity_display(mixed $value): string {
+	if ($value === '' || $value === null) return '';
+	$normalized = cmx_parse_number($value);
+	if (!\is_finite($normalized)) return '';
+	if (\abs($normalized - \round($normalized)) < 0.0005) return (string) (int) \round($normalized);
+	return \rtrim(\rtrim(\number_format($normalized, 3, '.', "'"), '0'), '.');
+}
+
+function cmx_artikel_normalize_quantity_value(mixed $value): string {
+	$raw = \trim((string) $value);
+	if ($raw === '') return '';
+	$normalized = cmx_parse_number($raw);
+	if (!\is_finite($normalized)) return '';
+	$normalized = \max(0, $normalized);
+	if (\abs($normalized - \round($normalized)) < 0.0005) return (string) (int) \round($normalized);
+	return \rtrim(\rtrim(\number_format($normalized, 3, '.', ''), '0'), '.');
+}
+
 function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	cmx_artikel_render_save_nonce_once();
 	echo '<input type="hidden" name="cmx_artikel_konditionen_payload" value="1">';
 
 	$sku         = cmx_meta_get($post->ID, CMX_ARTIKEL_META_SKU, '');
+	$anzahl_raw  = cmx_meta_get($post->ID, CMX_ARTIKEL_META_ANZAHL, '');
 	$belegtext   = (string) \get_post_meta($post->ID, CMX_META_ARTIKEL_BELEG, true);
 	$ek          = cmx_meta_get($post->ID, CMX_ARTIKEL_META_EK, '');
 	$aufwand     = cmx_meta_get($post->ID, CMX_ARTIKEL_META_AUFWAND, '');
@@ -57,6 +76,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$katalog_raw    = (string) \get_post_meta($post->ID, CMX_ARTIKEL_META_KATALOG, true);
 	$katalog_exists = \metadata_exists('post', $post->ID, CMX_ARTIKEL_META_KATALOG);
 	$katalog        = !$katalog_exists || $katalog_raw === '' || (int) $katalog_raw === 1;
+	$anzahl_display   = cmx_artikel_format_quantity_display($anzahl_raw);
 	$ek_display       = ($ek === '' || $ek === null) ? '' : cmx_format_swiss_number($ek, 2);
 	$aufwand_display  = ($aufwand === '' || $aufwand === null) ? '' : cmx_format_swiss_number($aufwand, 2);
 	$vk_display       = ($vk === '' || $vk === null) ? '' : cmx_format_swiss_number($vk, 2);
@@ -99,6 +119,11 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	echo '<div class="cmx-f cmx-f--md">
 		<label for="cmx_artikel_sku">Artikel-Nr.</label>
 		<input type="text" id="cmx_artikel_sku" name="cmx_artikel_sku" value="' . esc_attr($sku) . '" autocomplete="off">
+	</div>';
+
+	echo '<div class="cmx-f cmx-f--xs">
+		<label for="cmx_artikel_anzahl">Anzahl</label>
+		<input type="text" inputmode="decimal" id="cmx_artikel_anzahl" name="cmx_artikel_anzahl" value="' . esc_attr($anzahl_display) . '" autocomplete="off">
 	</div>';
 
 	// Einheit (halbe Breite)
@@ -175,6 +200,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		const ek  = document.getElementById("cmx_artikel_ek");
 		const aw  = document.getElementById("cmx_artikel_aufwand");
 		const vk  = document.getElementById("cmx_artikel_vk");
+		const anzahl = document.getElementById("cmx_artikel_anzahl");
 		const vkLabel = document.getElementById("cmx_artikel_vk_label");
 		const sk  = document.getElementById("cmx_artikel_selbstkosten");
 		const db  = document.getElementById("cmx_artikel_deckungsbeitrag");
@@ -208,6 +234,17 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 				left = left.slice(0, -3);
 			}
 			return left + out + "." + parts[1];
+		}
+		function formatQty(v){
+			const parts = (Math.max(0, Number(num(v)) || 0)).toFixed(3).split(".");
+			let left = parts[0];
+			let out = "";
+			while (left.length > 3) {
+				out = "\'" + left.slice(-3) + out;
+				left = left.slice(0, -3);
+			}
+			const frac = parts[1].replace(/0+$/, "");
+			return left + out + (frac !== "" ? "." + frac : "");
 		}
 
 		function recalcDerived(){
@@ -258,10 +295,19 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 		// Alle Textfelder in der Konditionen-Box automatisch selektieren bei Klick/Fokus
 		document.querySelectorAll(".cmx-price-row input[type=\"text\"], .cmx-price-row input[type=\"number\"]").forEach(enableAutoSelect);
+		if (anzahl && anzahl.value !== "") anzahl.value = formatQty(anzahl.value);
 		[ek, aw, vk].forEach(el => {
 			if (!el) return;
 			if (el.value !== "") el.value = formatCH(num(el.value));
 		});
+		if (anzahl) {
+			anzahl.addEventListener("blur", function(){
+				const raw = (this.value ?? "").toString().trim();
+				if (raw !== "") {
+					this.value = formatQty(raw);
+				}
+			});
+		}
 		[ek, aw, vk].forEach(el => {
 			if (!el) return;
 			el.addEventListener("blur", function(){
@@ -347,6 +393,15 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 			\delete_post_meta($post_id, CMX_META_ARTIKEL_BELEG);
 		} else {
 			\update_post_meta($post_id, CMX_META_ARTIKEL_BELEG, $belegtext);
+		}
+	}
+
+	if ($has('cmx_artikel_anzahl')) {
+		$anzahl_raw = \trim((string) $in('cmx_artikel_anzahl', ''));
+		if ($anzahl_raw === '') {
+			\delete_post_meta($post_id, CMX_ARTIKEL_META_ANZAHL);
+		} else {
+			\update_post_meta($post_id, CMX_ARTIKEL_META_ANZAHL, cmx_artikel_normalize_quantity_value($anzahl_raw));
 		}
 	}
 
