@@ -857,23 +857,51 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	</script>';
 }
 
-function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
-	cmx_artikel_render_save_nonce_once();
-	echo '<input type="hidden" name="cmx_artikel_waehrung_payload" value="1">';
-	$art = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_ART, 'produkt');
-	$waehrung = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
-	$woo_id = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_WOO_ID, '');
+	function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
+		cmx_artikel_render_save_nonce_once();
+		echo '<input type="hidden" name="cmx_artikel_waehrung_payload" value="1">';
+		$art = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_ART, 'produkt');
+		$waehrung = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
+		$woo_id = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_WOO_ID, '');
+		$woo_id_trimmed = \trim($woo_id);
+		$woo_product_id = \preg_match('/^\d+$/', $woo_id_trimmed) ? (int) $woo_id_trimmed : 0;
+		$woo_product_url = $woo_product_id > 0 ? (string) \get_permalink($woo_product_id) : '';
+		$woo_fallback_template = (string) \add_query_arg(
+			['post_type' => 'product', 'p' => '__CMX_WOO_PRODUCT_ID__'],
+			\home_url('/')
+		);
 
-	echo '<p style="margin:0 0 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
-	echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="produkt" ' . \checked($art, 'produkt', false) . '> Produkt</label>';
-	echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="dienstleistung" ' . \checked($art, 'dienstleistung', false) . '> Dienstleistung</label></p>';
+		echo '<p style="margin:0 0 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+		echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="produkt" ' . \checked($art, 'produkt', false) . '> Produkt</label>';
+		echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="dienstleistung" ' . \checked($art, 'dienstleistung', false) . '> Dienstleistung</label></p>';
 	echo '<p style="margin:0;"><select id="cmx_artikel_waehrung" name="cmx_artikel_waehrung" class="widefat" aria-label="Währung auswählen">';
-	foreach (cmx_artikel_waehrung_optionen() as $val => $label) {
-		echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
+		foreach (cmx_artikel_waehrung_optionen() as $val => $label) {
+			echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
+		}
+		echo '</select></p>';
+		echo '<p style="margin:8px 0 0;"><input type="text" id="cmx_artikel_woo_id" name="cmx_artikel_woo_id" class="widefat" aria-label="Woo-ID" placeholder="WooCommerce: Produkt-ID" value="' . \esc_attr($woo_id) . '"></p>';
+		echo '<p style="margin:4px 0 0;">';
+		echo '<a id="cmx_artikel_woo_id_link" href="' . \esc_url($woo_product_url !== '' ? $woo_product_url : '#') . '" target="_blank" rel="noopener noreferrer" style="' . ($woo_product_id > 0 ? '' : 'display:none;') . 'text-decoration:underline;">' . \esc_html($woo_id_trimmed) . '</a>';
+		echo '</p>';
+		echo '<script>(function(){';
+		echo 'var input=document.getElementById("cmx_artikel_woo_id");';
+		echo 'var link=document.getElementById("cmx_artikel_woo_id_link");';
+		echo 'if(!input||!link) return;';
+		echo 'var savedId=' . \wp_json_encode($woo_product_id > 0 ? (string) $woo_product_id : '') . ';';
+		echo 'var savedUrl=' . \wp_json_encode($woo_product_url) . ';';
+		echo 'var fallback=' . \wp_json_encode($woo_fallback_template) . ';';
+		echo 'function sync(){';
+		echo 'var value=(input.value||"").trim();';
+		echo 'if(!/^\\d+$/.test(value)){link.style.display="none";link.removeAttribute("href");link.textContent="";return;}';
+		echo 'link.textContent=value;';
+		echo 'link.href=(value===savedId&&savedUrl)?savedUrl:fallback.replace("__CMX_WOO_PRODUCT_ID__", encodeURIComponent(value));';
+		echo 'link.style.display="inline";';
+		echo '}';
+		echo 'input.addEventListener("input", sync);';
+		echo 'input.addEventListener("change", sync);';
+		echo 'sync();';
+		echo '})();</script>';
 	}
-	echo '</select></p>';
-	echo '<p style="margin:8px 0 0;"><input type="text" id="cmx_artikel_woo_id" name="cmx_artikel_woo_id" class="widefat" aria-label="Woo-ID" placeholder="WooCommerce: Produkt-ID" value="' . \esc_attr($woo_id) . '"></p>';
-}
 
 // Save-Handler:
 // EK, Aufwand und VK werden manuell gespeichert.
