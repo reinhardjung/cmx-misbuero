@@ -880,6 +880,20 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_resolve_position_variant_entry')) {
 			return null;
 		}
 
+		$selected_index = isset($row['artikel_variant_index']) && $row['artikel_variant_index'] !== ''
+			? (int) $row['artikel_variant_index']
+			: null;
+		if ($selected_index !== null) {
+			foreach ((array) cmxbu_get_article_variant_entries($artikel_id) as $entry) {
+				if (!\is_array($entry)) {
+					continue;
+				}
+				if ((int) ($entry['index'] ?? -1) === $selected_index) {
+					return $entry;
+				}
+			}
+		}
+
 		$selected_title = \trim((string) ($row['artikel_name'] ?? $row['item'] ?? $row['title'] ?? ''));
 		if ($selected_title === '') {
 			return null;
@@ -1162,11 +1176,44 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_beleg_positionen_calc')) {
 					}
 				}
 			}
-			if ($artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmxbu_resolve_position_variant_entry')) {
-				$variant_entry = cmxbu_resolve_position_variant_entry($artikel_id, (array) $r);
-				if (\is_array($variant_entry)) {
-					$variant_belegtext = \trim((string) ($variant_entry['belegtext'] ?? ''));
-					if ($variant_belegtext !== '') {
+				if ($artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmxbu_resolve_position_variant_entry')) {
+					$variant_entry = cmxbu_resolve_position_variant_entry($artikel_id, (array) $r);
+					if (!\is_array($variant_entry) && \function_exists(__NAMESPACE__ . '\\cmxbu_get_article_variant_entries')) {
+						$variant_entries = \array_values((array) cmxbu_get_article_variant_entries($artikel_id));
+						if (!empty($variant_entries)) {
+							$belegtext_key = \function_exists(__NAMESPACE__ . '\\cmxbu_article_variant_normalize_text')
+								? (string) cmxbu_article_variant_normalize_text((string) $belegtext_raw)
+								: \trim((string) $belegtext_raw);
+							foreach ($variant_entries as $candidate) {
+								if (!\is_array($candidate)) {
+									continue;
+								}
+								$candidate_belegtext = \trim((string) ($candidate['belegtext'] ?? ''));
+								$candidate_key = \function_exists(__NAMESPACE__ . '\\cmxbu_article_variant_normalize_text')
+									? (string) cmxbu_article_variant_normalize_text($candidate_belegtext)
+									: $candidate_belegtext;
+								if ($belegtext_key !== '' && $candidate_key !== '' && $candidate_key === $belegtext_key) {
+									$variant_entry = $candidate;
+									break;
+								}
+							}
+							if (!\is_array($variant_entry)) {
+								$parent_title = (string) \get_the_title($artikel_id);
+								$current_title_key = \function_exists(__NAMESPACE__ . '\\cmxbu_article_variant_normalize_text')
+									? (string) cmxbu_article_variant_normalize_text((string) $title)
+									: \trim((string) $title);
+								$parent_title_key = \function_exists(__NAMESPACE__ . '\\cmxbu_article_variant_normalize_text')
+									? (string) cmxbu_article_variant_normalize_text($parent_title)
+									: \trim($parent_title);
+								if ($current_title_key !== '' && $current_title_key === $parent_title_key) {
+									$variant_entry = $variant_entries[0];
+								}
+							}
+						}
+					}
+					if (\is_array($variant_entry)) {
+						$variant_belegtext = \trim((string) ($variant_entry['belegtext'] ?? ''));
+						if ($variant_belegtext !== '') {
 						$belegtext_raw = $variant_belegtext;
 					}
 					$article_variant_html = \function_exists(__NAMESPACE__ . '\\cmxbu_build_article_variant_html')

@@ -519,7 +519,7 @@ $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payre
 .positions-table .cmx-pdf-pos-details { margin-top: 1.2mm; }
 .positions-table .cmx-pdf-article-belegtext { margin: 0; }
 .positions-table .cmx-pdf-article-variants { margin-top: 0.8mm; }
-.positions-table .cmx-pdf-article-variant-line { margin: 0; }
+.positions-table .cmx-pdf-article-variant-line { display: inline-block; margin: 0 4mm 0 0; white-space: nowrap; }
 .positions-table .cmx-pdf-article-variant-label { font-weight: bold; }
 .positions-table .cmx-pdf-line-desc { margin-top: 0.8mm; }
 .positions-table th.col-unit-price,

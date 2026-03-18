@@ -960,14 +960,18 @@ add_action('cmx_beleg_positionen_after_add_button', function(): void {
  * ------------------------------ */
 function cmx_render_position_row($i, $pos) {
 	$artikel_id   = isset($pos['artikel_id']) ? (int)$pos['artikel_id'] : 0;
+	$artikel_variant_index = isset($pos['artikel_variant_index']) && $pos['artikel_variant_index'] !== ''
+		? (int) $pos['artikel_variant_index']
+		: '';
 	$title        = $artikel_id ? get_the_title($artikel_id) : '';
 	$title        = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
 		? cmx_beleg_decode_label_text((string) $title)
 		: (string) $title;
 	$nr           = $artikel_id ? cmx_get_artikel_nr($artikel_id) : '';
-	$display_name = $title ?: (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
+	$stored_name  = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
 		? cmx_beleg_decode_label_text((string) ($pos['artikel_name'] ?? ''))
-		: (string) ($pos['artikel_name'] ?? ''));
+		: (string) ($pos['artikel_name'] ?? '');
+	$display_name = $stored_name !== '' ? $stored_name : $title;
 	$display      = esc_html( ($nr ? $nr.' – ' : '') . $display_name );
 	$textbaustein_edit_url = \function_exists(__NAMESPACE__ . '\\cmx_beleg_textbaustein_admin_url')
 		? (string) cmx_beleg_textbaustein_admin_url()
@@ -1011,6 +1015,7 @@ function cmx_render_position_row($i, $pos) {
 	echo '<a href="'.esc_url($edit_link).'" class="cmx-artikel-edit" data-cmx-help-key="beleg_artikel_edit" aria-label="Artikel bearbeiten" title="Artikel im neuen Tab bearbeiten" target="_blank" rel="noopener noreferrer" style="'.($edit_link ? '' : 'pointer-events:none; opacity:0.35;').'">✎</a>';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_id]" class="cmx-artikel-id" value="'.esc_attr($artikel_id).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_name]" class="cmx-artikel-name" value="'.esc_attr($display_name).'">';
+	echo '<input type="hidden" name="cmx_positionen['.$i.'][artikel_variant_index]" class="cmx-artikel-variant-index" value="'.esc_attr((string) $artikel_variant_index).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_idx]" class="cmx-task-idx" value="'.($task_idx === null ? '' : esc_attr((string) $task_idx)).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_uid]" class="cmx-task-uid" value="'.esc_attr($task_uid).'">';
 	echo '<input type="hidden" name="cmx_positionen['.$i.'][task_projekt_id]" class="cmx-task-projekt-id" value="'.($task_projekt_id === null ? '' : esc_attr((string) $task_projekt_id)).'">';
@@ -1097,8 +1102,11 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			continue;
 		}
 
-			$artikel_id   = isset($row['artikel_id']) ? (int)$row['artikel_id'] : 0;
-			$artikel_name = \sanitize_text_field((string) ($row['artikel_name'] ?? ''));
+				$artikel_id   = isset($row['artikel_id']) ? (int)$row['artikel_id'] : 0;
+				$artikel_name = \sanitize_text_field((string) ($row['artikel_name'] ?? ''));
+				$artikel_variant_index = isset($row['artikel_variant_index']) && $row['artikel_variant_index'] !== ''
+					? (int) $row['artikel_variant_index']
+					: null;
 
 		$menge_raw    = isset($row['menge']) ? (string)$row['menge'] : '';
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
@@ -1136,11 +1144,12 @@ add_action('save_post_belege', function($post_id, \WP_Post $post, $update) {
 			if (($artikel_id <= 0 && $artikel_name === '') || $menge == 0.0) continue;
 			if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
 
-			$clean[] = [
-				'artikel_id'   => $artikel_id,
-				'artikel_name' => $artikel_name,
-				'menge'        => $menge,
-				'einheit_id'   => $einheit_id,
+				$clean[] = [
+					'artikel_id'   => $artikel_id,
+					'artikel_name' => $artikel_name,
+					'artikel_variant_index' => $artikel_variant_index,
+					'menge'        => $menge,
+					'einheit_id'   => $einheit_id,
 				'unit'         => $unit,
 				'preis'        => $preis,
 				'rabatt'       => $rabatt,
@@ -1445,12 +1454,13 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 		$nr    = cmx_get_artikel_nr($id);
 		$base_label = trim(($nr !== '' ? $nr . ' – ' : '') . $title);
 
-		$items[] = [
-			'label' => $base_label,
-			'value' => $id,
-			'nr'    => $nr,
-			'title' => $title,
-		];
+			$items[] = [
+				'label' => $base_label,
+				'value' => $id,
+				'nr'    => $nr,
+				'title' => $title,
+				'variant_index' => '',
+			];
 
 		$variant_entries = [];
 		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_entries')) {
@@ -1491,13 +1501,14 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 				$variant_title = $title;
 			}
 
-			$items[] = [
-				'label' => $variant_label,
-				'value' => $id,
-				'nr'    => \trim((string) ($entry['sku'] ?? '')) ?: $nr,
-				'title' => $variant_title,
-			];
-		}
+				$items[] = [
+					'label' => $variant_label,
+					'value' => $id,
+					'nr'    => \trim((string) ($entry['sku'] ?? '')) ?: $nr,
+					'title' => $variant_title,
+					'variant_index' => isset($entry['index']) ? (int) $entry['index'] : '',
+				];
+			}
 	}
 
 	$priority_threshold = (int) \apply_filters('cmx_beleg_artikel_priority_threshold', 3);
@@ -1896,11 +1907,11 @@ function cmx_beleg_positionen_js() {
 		}
 
 			function fetchArtikel(term, cb){
-				$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_artikel', term: term||'' }, function(data){
-					const rows = Array.isArray(data) ? data.map(it=>({ id: it.value, title: it.title||'', nr: it.nr||'' })) : [];
-					cb(rows);
-				});
-			}
+					$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_artikel', term: term||'' }, function(data){
+						const rows = Array.isArray(data) ? data.map(it=>({ id: it.value, title: it.title||'', nr: it.nr||'', variant_index: (it.variant_index ?? '') })) : [];
+						cb(rows);
+					});
+				}
 
 			function fetchTextbausteine(term, cb){
 				$.getJSON(<?php echo wp_json_encode($ajax_url); ?>, { action:'cmx_search_beleg_textbausteine', term: term||'' }, function(data){
@@ -2220,11 +2231,12 @@ function cmx_beleg_positionen_js() {
 				const nav = makeNavigator($input[0], $ul[0], chooseItem);
 				let t=null;
 
-				function chooseItem(it){
-					const $row = $input.closest('tr');
-					$row.find('.cmx-artikel-id').val(it.id||0);
-					$row.find('.cmx-artikel-name').val((it.title || '').toString());
-					$input.val((it.nr?it.nr+' – ':'') + (it.title||''));
+					function chooseItem(it){
+						const $row = $input.closest('tr');
+						$row.find('.cmx-artikel-id').val(it.id||0);
+						$row.find('.cmx-artikel-name').val((it.title || '').toString());
+						$row.find('.cmx-artikel-variant-index').val((it.variant_index ?? '').toString());
+						$input.val((it.nr?it.nr+' – ':'') + (it.title||''));
 					const $edit = $row.find('.cmx-artikel-edit');
 					const $qty = $row.find('input[name*="[menge]"]').first();
 					if (it.id) {
@@ -2262,10 +2274,11 @@ function cmx_beleg_positionen_js() {
 					if(t) clearTimeout(t);
 					const q = $input.val().trim();
 					const $row = $input.closest('tr');
-					const artikelId = parseInt((($row.find('.cmx-artikel-id').first().val() || '').toString().trim()), 10) || 0;
-					if (artikelId <= 0) {
-						$row.find('.cmx-artikel-name').first().val(q);
-					}
+						const artikelId = parseInt((($row.find('.cmx-artikel-id').first().val() || '').toString().trim()), 10) || 0;
+						if (artikelId <= 0) {
+							$row.find('.cmx-artikel-name').first().val(q);
+							$row.find('.cmx-artikel-variant-index').first().val('');
+						}
 					if(q.length<1){ doSearch(''); return; }
 					t = setTimeout(()=>doSearch(q), 120);
 				});
@@ -2906,8 +2919,11 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		if ($custom === false) {
 			continue;
 		}
-		$artikel_id   = isset($r['artikel_id']) ? (int)$r['artikel_id'] : 0;
-		$artikel_name = \sanitize_text_field((string) ($r['artikel_name'] ?? ''));
+			$artikel_id   = isset($r['artikel_id']) ? (int)$r['artikel_id'] : 0;
+			$artikel_name = \sanitize_text_field((string) ($r['artikel_name'] ?? ''));
+			$artikel_variant_index = isset($r['artikel_variant_index']) && $r['artikel_variant_index'] !== ''
+				? (int) $r['artikel_variant_index']
+				: null;
 
 		$menge_raw    = (string)($r['menge'] ?? '');
 		$menge        = (float)\CLOUDMEISTER\CMX\Buero\cmx_norm_decimal($menge_raw);
@@ -2943,11 +2959,12 @@ add_action('wp_ajax_cmx_save_beleg_positionen_order', function() {
 		if (($artikel_id <= 0 && $artikel_name === '') || $menge == 0.0) continue;
 		if (strlen($beschreibung) > 10000) $beschreibung = substr($beschreibung, 0, 10000);
 
-		$clean[] = [
-			'artikel_id'   => $artikel_id,
-			'artikel_name' => $artikel_name,
-			'menge'        => $menge,
-			'einheit_id'   => $einheit_id,
+			$clean[] = [
+				'artikel_id'   => $artikel_id,
+				'artikel_name' => $artikel_name,
+				'artikel_variant_index' => $artikel_variant_index,
+				'menge'        => $menge,
+				'einheit_id'   => $einheit_id,
 			'unit'         => $unit,
 			'preis'        => $preis,
 			'rabatt'       => $rabatt,

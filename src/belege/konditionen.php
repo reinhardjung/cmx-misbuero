@@ -380,8 +380,8 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		$current_id = $current_terms[0] ?? 0;
 		$pay_tax_url = cmx_beleg_taxonomy_admin_url($pay_tax);
 
-		$current_id = $bez_valid ? $current_id : 0;
-		$wrap_style = $bez_valid ? 'block' : 'none';
+			$current_id = $bez_valid ? $current_id : 0;
+			$wrap_style = ($bez_valid && $status !== 'teilbezahlt') ? 'block' : 'none';
 		echo '<p id="cmx_beleg_zahlungsart_wrap" style="margin:8px 0 0; display:' . $wrap_style . ';">';
 		echo '<label for="cmx_beleg_zahlungsart" style="display:block;margin-bottom:6px;"><strong>';
 		if ($pay_tax_url !== '') {
@@ -430,7 +430,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 			echo '</p>';
 		}
 
-	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");var payFields=document.getElementById("cmx_beleg_payment_fields");function findZahlungsgrundBoxes(){var nodes=[];document.querySelectorAll(".postbox").forEach(function(box){var title=box.querySelector(".hndle, h2, h3");var t=title?title.textContent.trim():"";if(t&&t.toLowerCase().includes("zahlungsgrund")){nodes.push(box);}});var direct=document.querySelectorAll("#tagsdiv-belege_zahlungsgrund, #belege_zahlungsgrunddiv, .postbox[id*=\\"zahlungsgrund\\"]");direct.forEach(function(n){if(nodes.indexOf(n)===-1) nodes.push(n);});return nodes;}var canPay=!!(inpB&&selS);function hasValidDate(){return canPay&&/^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(!canPay){return;}if(hasValidDate()){if(selS.value!=="bezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}}function syncPay(){if(!canPay||!payWrap){return;}var show=hasValidDate();payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function syncKategorieFields(){var slug=getSlug();var hide=slug==="offerte"||slug==="lieferschein";if(payFields){payFields.style.display=hide?"none":"";}findZahlungsgrundBoxes().forEach(function(box){box.style.display=hide?"none":"";});if(hide&&canPay){inpB.value="";selS.value="offen";syncPay();}}function onStatusChange(){if(!canPay){return;}if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="teilbezahlt"){inpB.value="";syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}if(canPay){inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){syncKategorieFields();}});document.addEventListener("DOMContentLoaded",syncKategorieFields);setTimeout(syncKategorieFields,0);syncStatus();syncPay();})();</script>';
+	echo '<script>(function(){var inpB=document.getElementById("cmx_beleg_bezahlt_am");var selS=document.getElementById("cmx_beleg_status");var payWrap=document.getElementById("cmx_beleg_zahlungsart_wrap");var paySel=document.getElementById("cmx_beleg_zahlungsart");var payFields=document.getElementById("cmx_beleg_payment_fields");function findZahlungsgrundBoxes(){var nodes=[];document.querySelectorAll(".postbox").forEach(function(box){var title=box.querySelector(".hndle, h2, h3");var t=title?title.textContent.trim():"";if(t&&t.toLowerCase().includes("zahlungsgrund")){nodes.push(box);}});var direct=document.querySelectorAll("#tagsdiv-belege_zahlungsgrund, #belege_zahlungsgrunddiv, .postbox[id*=\\"zahlungsgrund\\"]");direct.forEach(function(n){if(nodes.indexOf(n)===-1) nodes.push(n);});return nodes;}var canPay=!!(inpB&&selS);function hasValidDate(){return canPay&&/^\\d{4}-\\d{2}-\\d{2}$/.test(inpB.value||"");}function syncStatus(){if(!canPay){return;}if(hasValidDate()&&selS.value!=="bezahlt"&&selS.value!=="teilbezahlt"){selS.value="bezahlt";selS.dispatchEvent(new Event("change",{bubbles:true}));}}function syncPay(){if(!canPay||!payWrap){return;}var show=hasValidDate()&&selS.value!=="teilbezahlt";payWrap.style.display=show?"block":"none";if(!show&&paySel){paySel.value="";paySel.selectedIndex=0;}}function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function syncKategorieFields(){var slug=getSlug();var hide=slug==="offerte"||slug==="lieferschein";if(payFields){payFields.style.display=hide?"none":"";}findZahlungsgrundBoxes().forEach(function(box){box.style.display=hide?"none":"";});if(hide&&canPay){inpB.value="";selS.value="offen";syncPay();}}function onStatusChange(){if(!canPay){return;}if(selS.value==="offen"){inpB.value="";syncPay();}else if(selS.value==="teilbezahlt"){syncPay();}else if(selS.value==="bezahlt"){inpB.value=inpB.value||new Date().toISOString().slice(0,10);syncPay();}}if(canPay){inpB.addEventListener("change",function(){syncStatus();syncPay();});inpB.addEventListener("input",function(){syncStatus();syncPay();});selS.addEventListener("change",onStatusChange);}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){syncKategorieFields();}});document.addEventListener("DOMContentLoaded",syncKategorieFields);setTimeout(syncKategorieFields,0);syncStatus();syncPay();})();</script>';
 }
 
 /** ===== Speichern (ergänzt um die neuen Felder, bestehende Währungslogik bleibt) ===== */
@@ -490,19 +490,19 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	// ===== NEU: Bezahlt am =====
 	$bez = isset($_POST['cmx_beleg_bezahlt_am']) ? \sanitize_text_field($_POST['cmx_beleg_bezahlt_am']) : '';
 	$bez_valid = ($bez && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $bez));
-	if ($val !== 'bezahlt') {
-		$bez = '';
-		$bez_valid = false;
-	}
+		if (!\in_array($val, ['bezahlt', 'teilbezahlt'], true)) {
+			$bez = '';
+			$bez_valid = false;
+		}
 	if ($bez_valid) {
 		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM, $bez);
 	} else {
 		\delete_post_meta($post_id, CMX_BELEG_META_BEZAHLT_AM);
 	}
 
-	if ($bez_valid) {
-		$val = 'bezahlt';
-	}
+		if ($bez_valid && $val !== 'teilbezahlt') {
+			$val = 'bezahlt';
+		}
 	\update_post_meta($post_id, CMX_BELEG_META_STATUS, $val);
 
 	// ===== NEU: Zahlungsart =====
