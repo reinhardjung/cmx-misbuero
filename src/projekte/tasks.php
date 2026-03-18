@@ -126,6 +126,15 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
+	$artikel_items = [];
+	foreach ($artikel_options as $opt) {
+		$artikel_items[] = [
+			'id'    => (int) ($opt['id'] ?? 0),
+			'title' => (string) ($opt['label'] ?? ''),
+		];
+	}
+	$artikel_items_json = \wp_json_encode($artikel_items);
+
 	echo '<style>
 	#cmx-projekt-tasks{display:flex;flex-direction:column;gap:8px;}
 	#cmx-projekt-tasks .cmx-task-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}
@@ -139,6 +148,11 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-projekt-tasks .cmx-task-check-label input[type=checkbox]{margin:0;}
 	#cmx-projekt-tasks select,#cmx-projekt-tasks textarea{width:100%;}
 	#cmx-projekt-tasks textarea{min-height:120px;}
+	#cmx-projekt-tasks .cmx-task-article-suggest{position:relative;}
+	#cmx-projekt-tasks .cmx-task-article-suggest-list{position:absolute;z-index:100002;left:0;right:0;max-height:240px;overflow:auto;margin:2px 0 0;padding:0;border:1px solid #ccd0d4;border-radius:4px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.10);list-style:none;}
+	#cmx-projekt-tasks .cmx-task-article-suggest-list li{margin:0;padding:6px 8px;cursor:pointer;}
+	#cmx-projekt-tasks .cmx-task-article-suggest-list li.active{background:#e5f3ff;}
+	#cmx-projekt-tasks .cmx-task-article-suggest-list li:hover{background:#f3f4f5;}
 	#cmx-projekt-tasks .cmx-task-footer{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;}
 	#cmx-projekt-tasks .cmx-task-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:0;}
 	#cmx-projekt-tasks .cmx-task-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}
@@ -153,16 +167,25 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	}
 	echo '</div>';
 
-	echo '<p><button type="button" class="button" id="cmx-task-add">+ Zeile hinzufügen</button></p>';
+	echo '<p style="display:none;"><button type="button" class="button" id="cmx-task-add">weitere hinzufügen</button></p>';
 
 	?>
 	<script>
 		(function(){
 			const container = document.getElementById('cmx-projekt-tasks');
 			if (!container) return;
+			const addButton = document.getElementById('cmx-task-add');
+			const artikelItems = ' . ($artikel_items_json ?: '[]') . ';
+			const artikelById = {};
+			artikelItems.forEach(function(item){
+				item.id = parseInt(item.id || 0, 10) || 0;
+				item.title = item.title || "";
+				item.titleLower = item.title.toLocaleLowerCase();
+				if (item.id > 0) artikelById[String(item.id)] = item;
+			});
 
-		function parseSwissDecimal(value){
-			let s = (value ?? '').toString().trim();
+			function parseSwissDecimal(value){
+				let s = (value ?? '').toString().trim();
 			if (s === '') return NaN;
 			s = s.replace(/\s+/g, '').replace(/'/g, '');
 			const hasComma = s.indexOf(',') > -1;
@@ -216,39 +239,207 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			function newUid() {
 				return 'tsk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 			}
+			function escHtml(value){
+				return (value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+			}
+			function initTaskArticleSearch(rowEl){
+				const input = rowEl.querySelector(".cmx-task-artikel-search");
+				const hidden = rowEl.querySelector(".cmx-task-artikel-id");
+				const list = rowEl.querySelector(".cmx-task-article-suggest-list");
+				if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
+				input.dataset.cmxSearchReady = "1";
+				let active = -1;
+				let navItems = [];
+				function closeList(){
+					list.style.display = "none";
+					list.innerHTML = "";
+					active = -1;
+					navItems = [];
+				}
+				function render(arr){
+					navItems = arr || [];
+					if (!navItems.length) {
+						closeList();
+						return;
+					}
+					list.innerHTML = navItems.map(function(item, index){
+						return "<li data-index=\"" + index + "\">" + escHtml(item.title) + "</li>";
+					}).join("");
+					list.style.display = "block";
+					active = -1;
+				}
+				function move(delta){
+					if (!navItems.length) return;
+					active = (active + delta + navItems.length) % navItems.length;
+					Array.prototype.forEach.call(list.children, function(li, index){
+						li.classList.toggle("active", index === active);
+					});
+				}
+				function chooseItem(item, keepFocus){
+					hidden.value = item && item.id ? String(item.id) : "";
+					input.value = item && item.title ? item.title : "";
+					input.dataset.selectedTitle = item && item.title ? item.title : "";
+					hidden.dispatchEvent(new Event("change", { bubbles: true }));
+					closeList();
+					if (keepFocus !== false) input.focus();
+				}
+				function matchedItems(query){
+					const q = (query || "").trim().toLocaleLowerCase();
+					const activeId = parseInt(hidden.value || "0", 10) || 0;
+					let matches = artikelItems.slice();
+					if (q) {
+						matches = matches.filter(function(item){ return item.titleLower.indexOf(q) !== -1; });
+						matches.sort(function(a, b){
+							const aStarts = a.titleLower.indexOf(q) === 0 ? 0 : 1;
+							const bStarts = b.titleLower.indexOf(q) === 0 ? 0 : 1;
+							if (aStarts !== bStarts) return aStarts - bStarts;
+							if (a.titleLower < b.titleLower) return -1;
+							if (a.titleLower > b.titleLower) return 1;
+							return 0;
+						});
+					} else if (activeId > 0) {
+						matches.sort(function(a, b){
+							if (a.id === activeId && b.id !== activeId) return -1;
+							if (b.id === activeId && a.id !== activeId) return 1;
+							if (a.titleLower < b.titleLower) return -1;
+							if (a.titleLower > b.titleLower) return 1;
+							return 0;
+						});
+					}
+					return matches.slice(0, 50);
+				}
+				function renderSuggestions(showAll){
+					const query = (input.value || "").trim();
+					if (!showAll && query.length < 1) {
+						closeList();
+						return;
+					}
+					render(matchedItems(showAll ? "" : query));
+				}
+				function syncFieldFromHidden(){
+					const item = artikelById[String(hidden.value || "")] || null;
+					if (item) {
+						input.value = item.title || "";
+						input.dataset.selectedTitle = item.title || "";
+						return;
+					}
+					if ((hidden.value || "") === "") {
+						input.dataset.selectedTitle = "";
+					}
+				}
+				function exactMatch(query){
+					const q = (query || "").trim().toLocaleLowerCase();
+					if (!q) return null;
+					const matches = artikelItems.filter(function(item){ return item.titleLower === q; });
+					return matches.length === 1 ? matches[0] : null;
+				}
+				list.addEventListener("mousedown", function(e){
+					const li = e.target.closest("li");
+					if (!li) return;
+					e.preventDefault();
+					const index = parseInt(li.dataset.index || "-1", 10);
+					if (index > -1 && navItems[index]) chooseItem(navItems[index]);
+				});
+				input.addEventListener("keydown", function(e){
+					if (list.style.display !== "block" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
+					if (e.key === "ArrowDown") {
+						e.preventDefault();
+						move(1);
+					} else if (e.key === "ArrowUp") {
+						e.preventDefault();
+						move(-1);
+					} else if (e.key === "Enter") {
+						if (active > -1 && navItems[active]) {
+							e.preventDefault();
+							chooseItem(navItems[active]);
+						}
+					} else if (e.key === "Escape") {
+						closeList();
+					}
+				});
+				input.addEventListener("input", function(){
+					hidden.value = "";
+					renderSuggestions((input.value || "").trim() === "");
+				});
+				input.addEventListener("focus", function(){
+					renderSuggestions((input.value || "").trim() === "");
+				});
+				input.addEventListener("click", function(){
+					renderSuggestions((input.value || "").trim() === "");
+				});
+				input.addEventListener("blur", function(){
+					window.setTimeout(function(){
+						const activeEl = document.activeElement;
+						if (activeEl === input || list.contains(activeEl)) return;
+						if ((hidden.value || "") === "") {
+							const match = exactMatch(input.value || "");
+							if (match) {
+								chooseItem(match, false);
+								return;
+							}
+						}
+						closeList();
+					}, 120);
+				});
+				document.addEventListener("click", function(e){
+					if (!list.contains(e.target) && e.target !== input) closeList();
+				});
+				hidden.addEventListener("change", syncFieldFromHidden);
+				syncFieldFromHidden();
+			}
 
-		function addRow(data){
-			const idx = container.querySelectorAll('.cmx-task-row').length;
-			const tpl = document.getElementById('cmx-task-template').innerHTML.replace(/__INDEX__/g, idx);
-			const wrapper = document.createElement('div');
+			function addRow(data){
+				const idx = container.querySelectorAll('.cmx-task-row').length;
+				const tpl = document.getElementById('cmx-task-template').innerHTML.replace(/__INDEX__/g, idx);
+				const wrapper = document.createElement('div');
 			wrapper.innerHTML = tpl;
 			const rowEl = wrapper.firstElementChild;
 			// Vorbelegte Werte
 			rowEl.querySelector('input[name*="[datum]"]').value  = data?.datum  || '';
 				rowEl.querySelector('input[name*="[zeit]"]').value   = data?.zeit   || '';
-				const dauerInput = rowEl.querySelector('input[name*="[dauer]"]');
-				if (dauerInput) {
-					dauerInput.value = data?.dauer || '';
-					formatDauerInput(dauerInput);
-				}
-				rowEl.querySelector('select[name*="[artikel_id]"]').value = data?.artikel_id || '';
-				const verrechenbarInput = rowEl.querySelector('input[name*="[verrechenbar]"]');
-				if (verrechenbarInput && data && Object.prototype.hasOwnProperty.call(data, 'verrechenbar')) {
-					const raw = data.verrechenbar;
-					const isOff = raw === 0 || raw === '0' || raw === false || raw === 'false' || raw === 'off' || raw === 'no';
-					verrechenbarInput.checked = !isOff;
+					const dauerInput = rowEl.querySelector('input[name*="[dauer]"]');
+					if (dauerInput) {
+						dauerInput.value = data?.dauer || '';
+						formatDauerInput(dauerInput);
+					}
+					const artikelInput = rowEl.querySelector('input[name*="[artikel_id]"]');
+					if (artikelInput) {
+						artikelInput.value = data?.artikel_id || '';
+					}
+					const verrechenbarInput = rowEl.querySelector('input[name*="[verrechenbar]"]');
+					if (verrechenbarInput && data && Object.prototype.hasOwnProperty.call(data, 'verrechenbar')) {
+						const raw = data.verrechenbar;
+						const isOff = raw === 0 || raw === '0' || raw === false || raw === 'false' || raw === 'off' || raw === 'no';
+						verrechenbarInput.checked = !isOff;
 				}
 				rowEl.querySelector('textarea[name*="[info]"]').value = data?.info || '';
 				const uidInput = rowEl.querySelector('input[name*="[uid]"]');
-				if (uidInput && !uidInput.value) {
-					uidInput.value = newUid();
+					if (uidInput && !uidInput.value) {
+						uidInput.value = newUid();
+					}
+					container.appendChild(rowEl);
+					initTaskArticleSearch(rowEl);
+					if (artikelInput) {
+						artikelInput.dispatchEvent(new Event('change', { bubbles: true }));
+					}
+					syncAddButtonPosition();
 				}
-				container.appendChild(rowEl);
+			function syncAddButtonPosition(){
+				if (!addButton) return;
+				const rows = container.querySelectorAll('.cmx-task-row');
+				const lastRow = rows.length ? rows[rows.length - 1] : null;
+				const actions = lastRow ? lastRow.querySelector('.cmx-task-actions') : null;
+				if (!actions) return;
+				actions.insertBefore(addButton, actions.firstChild || null);
 			}
 
 			container.querySelectorAll('input[name*="[uid]"]').forEach(function(el){
 				if (!el.value) el.value = newUid();
 			});
+			container.querySelectorAll('.cmx-task-row').forEach(function(rowEl){
+				initTaskArticleSearch(rowEl);
+			});
+			syncAddButtonPosition();
 			container.querySelectorAll('input[name*="[dauer]"]').forEach(function(el){
 				formatDauerInput(el);
 			});
@@ -266,17 +457,18 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			formatDauerInput(t);
 		}, true);
 
-		document.getElementById('cmx-task-add')?.addEventListener('click', function(){
-			addRow({});
-		});
+			document.getElementById('cmx-task-add')?.addEventListener('click', function(){
+				addRow({});
+			});
 
 		container.addEventListener('click', function(e){
-			if (e.target.classList.contains('cmx-task-remove')) {
-				const row = e.target.closest('.cmx-task-row');
-				if (row && container.children.length > 1) {
-					row.remove();
+				if (e.target.classList.contains('cmx-task-remove')) {
+					const row = e.target.closest('.cmx-task-row');
+					if (row && container.children.length > 1) {
+						row.remove();
+						syncAddButtonPosition();
+					}
 				}
-			}
 				if (e.target.classList.contains('cmx-task-today')) {
 					e.preventDefault();
 					const row = e.target.closest('.cmx-task-row');
@@ -324,6 +516,12 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 		}
 	}
 	$art_id = (int) ($row['artikel_id'] ?? 0);
+	$art_title = '';
+	foreach ($artikel_options as $opt) {
+		if ((int) ($opt['id'] ?? 0) !== $art_id) continue;
+		$art_title = (string) ($opt['label'] ?? '');
+		break;
+	}
 	$info   = esc_textarea($row['info'] ?? '');
 	$is_verrechenbar = \array_key_exists('verrechenbar', $row)
 		? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($row['verrechenbar']) : !empty($row['verrechenbar']))
@@ -341,12 +539,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<div class="cmx-task-row">';
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
 	echo '<div class="cmx-task-main">';
-	echo '<label class="cmx-task-label"><span>Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]" class="widefat cmx-task-artikel">';
-	echo '<option value="">— auswählen —</option>';
-	foreach ($artikel_options as $opt) {
-		printf('<option value="%d"%s>%s</option>', (int)$opt['id'], selected($art_id, $opt['id'], false), esc_html($opt['label']));
-	}
-	echo '</select></label>';
+	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest"><input type="text" class="widefat cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-task-article-suggest-list" style="display:none"></ul></div></label>';
 	echo '<label class="cmx-task-label" style="margin-top:8px;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="4">'.$info.'</textarea></label>';
 	echo '</div>';
 	echo '<div class="cmx-task-side">';

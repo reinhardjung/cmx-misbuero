@@ -86,13 +86,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 		$selected_ids = cmx_zu_projekt_load_ids((int) $post->ID, $post_type);
 		$ajax_nonce = \wp_create_nonce(CMX_ZU_PROJEKT_AJAX_NONCE_ACTION);
 		$box_id = 'cmx-zu-projekt-' . (int) $post->ID;
+		$is_pretty_search = ($post_type === 'kontakte');
 
 		\wp_nonce_field(CMX_ZU_PROJEKT_NONCE_ACTION, CMX_ZU_PROJEKT_NONCE_NAME);
 
+		if ($is_pretty_search) {
+			echo '<style>
+			#' . \esc_attr($box_id) . '{position:relative;overflow:visible}
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-suggest{position:relative;overflow:visible}
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-results{
+				position:absolute !important;
+				z-index:100002;
+				left:0;
+				right:0;
+				max-height:240px !important;
+				overflow:auto;
+				margin:2px 0 0 !important;
+				padding:0;
+				border:1px solid #ccd0d4 !important;
+				border-radius:4px;
+				background:#fff;
+				box-shadow:0 10px 24px rgba(0,0,0,.10);
+			}
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-add{
+				display:block;
+				width:100%;
+				text-align:left;
+				padding:6px 8px;
+				border:0;
+				border-bottom:1px solid #f0f0f1;
+				background:#fff;
+				cursor:pointer;
+			}
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-add:hover,
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-add[aria-selected="true"]{background:#e5f3ff !important}
+			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-results .cmx-zu-projekt-add:last-child{border-bottom:0}
+			</style>';
+		}
+
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-zu-projekt-box">';
 		// echo '<p style="margin:0 0 8px;">Projekt suchen und zuordnen.</p>';
+		if ($is_pretty_search) {
+			echo '<div class="cmx-zu-projekt-suggest">';
+		}
 		echo '<input type="search" class="widefat cmx-zu-projekt-search" placeholder="Projekt suchen...">';
 		echo '<div class="cmx-zu-projekt-results" style="margin-top:8px;max-height:160px;overflow:auto;border:1px solid #dcdcde;border-radius:4px;display:none;"></div>';
+		if ($is_pretty_search) {
+			echo '</div>';
+		}
 		// echo '<p style="margin:10px 0 6px;font-weight:600;">Zugeordnete Projekte</p>';
 		echo '<p style="margin:10px 0 6px;"></p>';
 		echo '<ul class="cmx-zu-projekt-selected" style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;">';
