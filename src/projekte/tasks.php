@@ -327,6 +327,23 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 							input.value = artikelLabel(item);
 							input.dataset.selectedTitle = input.value;
 							hidden.dispatchEvent(new Event("change", { bubbles: true }));
+							if (art === "dienstleistung") {
+								const produktInput = rowEl.querySelector('.cmx-task-article-picker[data-art="produkt"] .cmx-task-artikel-search');
+								if (produktInput) {
+									window.setTimeout(function(){
+										produktInput.focus();
+										if (typeof produktInput.select === "function") produktInput.select();
+									}, 0);
+									return;
+								}
+							}
+							if (art === "produkt") {
+								const infoInput = rowEl.querySelector('textarea[name*="[info]"]');
+								if (infoInput) {
+									window.setTimeout(function(){ infoInput.focus(); }, 0);
+									return;
+								}
+							}
 							if (keepFocus !== false) input.focus();
 						}
 						function doSearch(query){

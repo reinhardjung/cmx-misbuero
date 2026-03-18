@@ -54,56 +54,87 @@ add_action('add_meta_boxes', function () {
  */
 function cmx_render_projekt_kontakt_box(\WP_Post $post): void {
 	$selected = (int) get_post_meta($post->ID, '_cmx_projekt_kontakt_id', true);
+	$selected_title = $selected > 0 ? cmx_normalize_minus_sign((string) \get_the_title($selected)) : '';
 	$list_url = \admin_url('edit.php?post_type=kontakte');
 	$edit_prefix = \admin_url('post.php?post=');
-
-	// Kontakte laden (alphabetisch)
-	$kontakte = get_posts([
+	$ajax_url = \admin_url('admin-ajax.php');
+	$ajax_nonce = \wp_create_nonce('cmx_search_kontakte');
+	$has_kontakte = !empty(\get_posts([
 		'post_type'      => 'kontakte',
-		'post_status'    => 'publish',
-		'posts_per_page' => -1,
-		'orderby'        => 'title',
-		'order'          => 'ASC',
-	]);
+		'post_status'    => 'any',
+		'posts_per_page' => 1,
+		'fields'         => 'ids',
+	]));
+	$box_id = 'cmx-projekt-kontakt-box-' . (int) $post->ID;
 
 	wp_nonce_field('cmx_save_projekt_kontakt', 'cmx_projekt_kontakt_nonce');
 
-	echo '<select name="cmx_projekt_kontakt_id" id="cmx_projekt_kontakt_select" style="width:100%;">';
-	echo '<option value="">' . esc_html__('— Kein Kontakt —', 'cmx') . '</option>';
-
-	foreach ($kontakte as $kontakt) {
-		printf(
-			'<option value="%d" %s>%s</option>',
-			(int) $kontakt->ID,
-			selected($selected, (int) $kontakt->ID, false),
-			esc_html($kontakt->post_title)
-		);
+	echo '<style>
+	#' . \esc_attr('cmx_projekt_kontakt_box') . ',
+	#' . \esc_attr('cmx_projekt_kontakt_box') . ' .inside,
+	#' . \esc_attr($box_id) . '{position:relative;overflow:visible}
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-suggest{position:relative;overflow:visible}
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-row{display:flex;align-items:center;gap:6px}
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-row input[type=search]{flex:1 1 auto;min-width:0}
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-results{
+		position:absolute;
+		z-index:100002;
+		left:0;
+		right:0;
+		max-height:240px;
+		overflow:auto;
+		margin:2px 0 0;
+		padding:0;
+		border:1px solid #ccd0d4;
+		border-radius:4px;
+		background:#fff;
+		box-shadow:0 10px 24px rgba(0,0,0,.10);
+		list-style:none;
 	}
-	echo '</select>';
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-results li{margin:0;padding:6px 8px;cursor:pointer}
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-results li.active,
+	#' . \esc_attr($box_id) . ' .cmx-projekt-kontakt-results li:hover{background:#e5f3ff}
+	</style>';
+	echo '<div id="' . \esc_attr($box_id) . '" class="cmx-projekt-kontakt-box">';
+	echo '<div class="cmx-projekt-kontakt-suggest">';
+	echo '<div class="cmx-projekt-kontakt-row">';
+	echo '<input type="search" id="cmx_projekt_kontakt_search" class="widefat" autocomplete="off" placeholder="Kontakt suchen..." value="' . \esc_attr($selected_title) . '">';
+	echo '<input type="hidden" name="cmx_projekt_kontakt_id" id="cmx_projekt_kontakt_id" value="' . \esc_attr((string) $selected) . '">';
+	echo '</div>';
+	echo '<ul id="cmx_projekt_kontakt_suggest" class="cmx-projekt-kontakt-results" style="display:none"></ul>';
+	echo '</div>';
+	echo '</div>';
 	echo '<script>
 	(function(){
+		var root = document.getElementById(' . \wp_json_encode($box_id) . ');
+		if (!root || root.dataset.cmxBound === "1") return;
+		root.dataset.cmxBound = "1";
 		var headerLink = document.getElementById("cmx_projekt_kontakt_box_link");
-		var select = document.getElementById("cmx_projekt_kontakt_select");
-		if (!headerLink || !select) return;
+		var searchInput = document.getElementById("cmx_projekt_kontakt_search");
+		var hiddenInput = document.getElementById("cmx_projekt_kontakt_id");
+		var listEl = document.getElementById("cmx_projekt_kontakt_suggest");
+		if (!headerLink || !searchInput || !hiddenInput || !listEl) return;
 
+		var ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
+		var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
 		var listUrl = ' . \wp_json_encode($list_url) . ';
 		var editPrefix = ' . \wp_json_encode($edit_prefix) . ';
+		var timer = null;
+		var active = -1;
+		var items = [];
 
-		var selectedKontaktId = function(){
-			var id = parseInt(select.value || "0", 10);
+		function selectedKontaktId(){
+			var id = parseInt(hiddenInput.value || "0", 10);
 			return (isNaN(id) || id <= 0) ? 0 : id;
-		};
-
-		var targetUrl = function(){
+		}
+		function targetUrl(){
 			var kontaktId = selectedKontaktId();
 			return kontaktId > 0 ? (editPrefix + kontaktId + "&action=edit") : listUrl;
-		};
-
-		var syncHref = function(){
-			var href = targetUrl();
-			headerLink.href = href;
-		};
-		var openCurrent = function(e){
+		}
+		function syncHref(){
+			headerLink.href = targetUrl();
+		}
+		function openCurrent(e){
 			if (e) {
 				e.preventDefault();
 				e.stopPropagation();
@@ -114,28 +145,140 @@ function cmx_render_projekt_kontakt_box(\WP_Post $post): void {
 			var w = window.open(href, "_blank", "noopener,noreferrer");
 			if (w) { w.opener = null; }
 			return false;
-		};
-		window.cmxProjektKontaktOpen = openCurrent;
-
-		select.addEventListener("change", syncHref);
-		select.addEventListener("input", syncHref);
-
-		var linkClick = function(e){
-			openCurrent(e);
-		};
-		var linkMouseDown = function(e){ e.stopPropagation(); };
-
-		if (headerLink) {
-			headerLink.addEventListener("mousedown", linkMouseDown, true);
-			headerLink.addEventListener("click", linkClick, true);
-			headerLink.addEventListener("auxclick", linkClick, true);
 		}
+		function esc(str){
+			return String(str || "").replace(/[&<>"\']/g, function(c){
+				if (c === "&") return "&amp;";
+				if (c === "<") return "&lt;";
+				if (c === ">") return "&gt;";
+				if (c.charCodeAt(0) === 34) return "&quot;";
+				return "&#039;";
+			});
+		}
+		function closeList(){
+			listEl.style.display = "none";
+			listEl.innerHTML = "";
+			active = -1;
+			items = [];
+		}
+		function render(arr){
+			items = Array.isArray(arr) ? arr : [];
+			if (!items.length) {
+				listEl.innerHTML = "<li style=\"color:#646970;cursor:default;\">Keine Kontakte gefunden.</li>";
+				listEl.style.display = "block";
+				active = -1;
+				return;
+			}
+			listEl.innerHTML = items.map(function(it, i){
+				return "<li data-index=\"" + i + "\">" + esc(it && it.title ? it.title : "") + "</li>";
+			}).join("");
+			listEl.style.display = "block";
+			active = -1;
+		}
+		function setActive(next){
+			if (!items.length) { active = -1; return; }
+			if (next < 0) next = items.length - 1;
+			if (next >= items.length) next = 0;
+			active = next;
+			Array.prototype.forEach.call(listEl.children, function(li, idx){
+				li.classList.toggle("active", idx === active);
+				if (idx === active) {
+					try { li.scrollIntoView({ block: "nearest" }); } catch (err) {}
+				}
+			});
+		}
+		function choose(item){
+			hiddenInput.value = item && item.id ? String(item.id) : "";
+			searchInput.value = item && item.title ? String(item.title) : "";
+			syncHref();
+			closeList();
+			searchInput.focus();
+		}
+		function search(q){
+			var url = ajaxUrl + "?action=cmx_search_kontakte&_ajax_nonce=" + encodeURIComponent(ajaxNonce) + "&q=" + encodeURIComponent(q || "");
+			fetch(url, { credentials: "same-origin" }).then(function(r){
+				return r.json();
+			}).then(function(json){
+				if (!json || !json.success || !json.data || !Array.isArray(json.data.items)) {
+					closeList();
+					return;
+				}
+				render(json.data.items || []);
+			}).catch(function(){
+				closeList();
+			});
+		}
+
+		window.cmxProjektKontaktOpen = openCurrent;
+		headerLink.addEventListener("mousedown", function(e){ e.stopPropagation(); }, true);
+		headerLink.addEventListener("click", openCurrent, true);
+		headerLink.addEventListener("auxclick", openCurrent, true);
+
+		searchInput.addEventListener("input", function(){
+			hiddenInput.value = "";
+			syncHref();
+			if (timer) clearTimeout(timer);
+			var q = (searchInput.value || "").trim();
+			if (q.length === 0) {
+				search("");
+				return;
+			}
+			if (q.length < 2) {
+				closeList();
+				return;
+			}
+			timer = setTimeout(function(){ search(q); }, 200);
+		});
+		searchInput.addEventListener("focus", function(){
+			if (timer) clearTimeout(timer);
+			search((searchInput.value || "").trim());
+		});
+		searchInput.addEventListener("click", function(){
+			if (timer) clearTimeout(timer);
+			search((searchInput.value || "").trim());
+		});
+		searchInput.addEventListener("keydown", function(e){
+			if (listEl.style.display !== "block" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setActive(active + 1);
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setActive(active - 1);
+			} else if (e.key === "Enter") {
+				if (active > -1 && items[active]) {
+					e.preventDefault();
+					choose(items[active]);
+				}
+			} else if (e.key === "Escape") {
+				closeList();
+			}
+		});
+		listEl.addEventListener("mousedown", function(e){
+			var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
+			if (!li) return;
+			e.preventDefault();
+			var index = parseInt(li.getAttribute("data-index") || "-1", 10);
+			if (!isNaN(index) && items[index]) {
+				choose(items[index]);
+			}
+		});
+		listEl.addEventListener("mousemove", function(e){
+			var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
+			if (!li) return;
+			var index = parseInt(li.getAttribute("data-index") || "-1", 10);
+			if (!isNaN(index)) setActive(index);
+		});
+		document.addEventListener("click", function(e){
+			if (e.target === searchInput || listEl.contains(e.target)) return;
+			closeList();
+		});
 		syncHref();
 	})();
 	</script>';
 
 	// Kleiner Hinweis
-	if (empty($kontakte)) {
+	if (!$has_kontakte) {
 		$new_kontakt_url = admin_url('post-new.php?post_type=kontakte');
 		$anlegen_link = '<a href="' . esc_url($new_kontakt_url) . '" target="_blank" rel="noopener noreferrer">' . esc_html__('anlegen', 'cmx') . '</a>';
 		$hint_html = sprintf(__('Keine Kontakte - zuerst einen %s.', 'cmx'), $anlegen_link);
