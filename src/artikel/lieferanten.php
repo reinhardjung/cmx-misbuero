@@ -385,6 +385,11 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 
 	$kontakt_pt=cmx_first_existing_kontakt_cpt_unified();
 	$lieferanten_ids=$kontakt_pt?cmx_fetch_lieferanten_ids_unified($kontakt_pt):[];
+	foreach ($normalized_rows as $row) {
+		$current_supplier_id = (int) ($row['lieferant_id'] ?? 0);
+		if ($current_supplier_id > 0) $lieferanten_ids[] = $current_supplier_id;
+	}
+	$lieferanten_ids = \array_values(\array_unique(\array_map('intval', $lieferanten_ids)));
 	$lieferanten_posts = [];
 	if ($lieferanten_ids) {
 		$lieferanten_posts = \get_posts([
@@ -397,6 +402,17 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			'suppress_filters'=>true
 		]);
 	}
+	$lieferanten_items = [];
+	foreach ($lieferanten_posts as $lieferant_post) {
+		$lieferant_id = (int) ($lieferant_post->ID ?? 0);
+		if ($lieferant_id <= 0) continue;
+		$lieferanten_items[] = [
+			'id' => $lieferant_id,
+			'title' => (string) (\get_the_title($lieferant_id) ?: '(#' . $lieferant_id . ')'),
+			'edit' => (string) \get_edit_post_link($lieferant_id, ''),
+		];
+	}
+	$lieferanten_json = \wp_json_encode($lieferanten_items) ?: '[]';
 	echo '<style>
 	#cmx-artikel-lieferanten-table{
 		border:0 !important;
@@ -432,8 +448,29 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-table .widefat{width:100%}
 	#cmx-artikel-lieferanten-table tbody td{background:#fff}
 	#cmx-artikel-lieferanten-table .cmx-lief-item-row td{padding-top:12px;padding-bottom:10px}
-	#cmx-artikel-lieferanten-table .cmx-supplier-wrap{display:flex;align-items:center;gap:6px}
-	#cmx-artikel-lieferanten-table .cmx-supplier-wrap .cmx-lief-supplier{flex:1 1 auto}
+	#cmx-artikel-lieferanten-table .cmx-supplier-wrap{display:flex;align-items:flex-start;gap:6px}
+	#cmx-artikel-lieferanten-table .cmx-lief-suggest{position:relative;flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-table .cmx-lief-input-row{display:flex;align-items:center;gap:6px}
+	#cmx-artikel-lieferanten-table .cmx-lief-input-row input[type=text]{flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-table .cmx-lief-supplier-id{display:none}
+	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest{
+		position:absolute;
+		z-index:40;
+		left:0;
+		right:0;
+		max-height:240px;
+		overflow:auto;
+		margin:2px 0 0;
+		padding:0;
+		border:1px solid #ccd0d4;
+		border-radius:4px;
+		background:#fff;
+		box-shadow:0 10px 24px rgba(0,0,0,.10);
+		list-style:none;
+	}
+	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li{margin:0;padding:6px 8px;cursor:pointer}
+	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li.active{background:#e5f3ff}
+	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li:hover{background:#f3f4f5}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
 	#cmx-artikel-lieferanten-table .cmx-supplier-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
@@ -497,12 +534,12 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		#cmx-artikel-lieferanten-table .cmx-supplier-wrap,
 		#cmx-artikel-lieferanten-table .cmx-url-wrap{
 			display:flex;
-			align-items:center;
+			align-items:flex-start;
 			gap:6px;
 			width:100%;
 			min-width:0;
 		}
-		#cmx-artikel-lieferanten-table .cmx-supplier-wrap .cmx-lief-supplier,
+		#cmx-artikel-lieferanten-table .cmx-supplier-wrap .cmx-lief-suggest,
 		#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{
 			flex:1 1 auto;
 			min-width:0;
@@ -557,6 +594,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	foreach ($normalized_rows as $i => $row) {
 		$r_lieferant = (int)($row['lieferant_id'] ?? 0);
 		$r_lieferant_open = ($r_lieferant > 0 && \get_post_status($r_lieferant)) ? (string)\get_edit_post_link($r_lieferant, '') : '';
+		$r_lieferant_title = $r_lieferant > 0 ? (string) (\get_the_title($r_lieferant) ?: '(#' . $r_lieferant . ')') : '';
 		$r_lfnr = (string)($row['lieferant_nr'] ?? '');
 		$r_ek = $row['ek'] ?? null;
 		$r_ek_display = ($r_ek === null) ? '' : cmx_format_swiss_number((float)$r_ek, 2);
@@ -566,15 +604,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		$r_lager = max(0, (int)($row['lagerbestand'] ?? 0));
 		$r_notiz = (string)($row['notiz'] ?? '');
 		echo '<tr class="cmx-lief-item-row">';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><select name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="widefat cmx-lief-supplier"><option value="0" data-edit="">— auswählen —</option>';
-		if ($lieferanten_posts) {
-			foreach($lieferanten_posts as $k){
-				$title=\get_the_title($k->ID)?:'(#'.(int)$k->ID.')';
-				$edit_link = (string)\get_edit_post_link($k->ID, '');
-				echo '<option value="'.(int)$k->ID.'" data-edit="'.\esc_attr($edit_link).'" '.\selected($r_lieferant,$k->ID,false).'>'.\esc_html($title).'</option>';
-			}
-		}
-		echo '</select></div></td>';
+		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><div class="cmx-lief-suggest"><div class="cmx-lief-input-row"><input type="text" class="widefat cmx-lief-supplier-search" autocomplete="off" value="'.\esc_attr($r_lieferant_title).'" placeholder="Lieferant suchen..."><input type="hidden" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="cmx-lief-supplier-id" value="'.\esc_attr((string)$r_lieferant).'"><button type="button" class="button button-small cmx-lief-supplier-clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></div><ul class="cmx-lief-supplier-suggest" style="display:none"></ul></div></div></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--nr" data-label="Artikel-Nr."><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></td>';
 		echo '<td class="cmx-lief-cell cmx-lief-cell--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
@@ -596,9 +626,89 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	echo '</tbody></table>';
 	if(!$kontakt_pt) echo '<span class="cmx-inline-help">Kein Kontakte-CPT gefunden (<code>kontakt</code> / <code>kontakte</code>).</span>';
 
-	echo <<<'HTML'
+echo <<<HTML
 <script>
 (function(){
+	var supplierItems = {$lieferanten_json};
+	function esc(s){
+		return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+	}
+	function compareSupplierTitle(a,b){
+		var at = (a && a.titleLower) ? a.titleLower : "";
+		var bt = (b && b.titleLower) ? b.titleLower : "";
+		if(at < bt) return -1;
+		if(at > bt) return 1;
+		return 0;
+	}
+	(supplierItems||[]).forEach(function(item){
+		item.id = parseInt(item.id || 0, 10) || 0;
+		item.title = item.title || "";
+		item.edit = item.edit || "";
+		item.titleLower = item.title.toLocaleLowerCase();
+	});
+	supplierItems.sort(compareSupplierTitle);
+	var supplierById = {};
+	supplierItems.forEach(function(item){
+		if(item.id > 0) supplierById[String(item.id)] = item;
+	});
+	function makeNavigator(inputEl, listEl, chooseCb){
+		var active=-1, items=[];
+		function closeList(){
+			listEl.style.display="none";
+			listEl.innerHTML="";
+			active=-1;
+		}
+		function render(arr){
+			items=arr||[];
+			if(!items.length){ closeList(); return; }
+			listEl.innerHTML=items.map(function(it, i){
+				return '<li data-index="'+i+'">'+esc(it.title)+'</li>';
+			}).join("");
+			listEl.style.display="block";
+			active=-1;
+		}
+		function move(delta){
+			if(!items.length) return;
+			active=(active+delta+items.length)%items.length;
+			Array.prototype.forEach.call(listEl.children, function(li, i){
+				li.classList.toggle("active", i===active);
+			});
+		}
+		function choose(index){
+			if(index<0 || index>=items.length) return;
+			chooseCb(items[index]);
+			closeList();
+		}
+		listEl.addEventListener("mousedown", function(e){
+			var li=e.target.closest("li");
+			if(!li) return;
+			e.preventDefault();
+			choose(parseInt(li.dataset.index || "-1", 10));
+		});
+		inputEl.addEventListener("keydown", function(e){
+			if(listEl.style.display!=="block" && (e.key==="ArrowDown" || e.key==="ArrowUp")) return;
+			if(e.key==="ArrowDown"){ e.preventDefault(); move(1); }
+			else if(e.key==="ArrowUp"){ e.preventDefault(); move(-1); }
+			else if(e.key==="Enter"){ if(active>-1){ e.preventDefault(); choose(active); } }
+			else if(e.key==="Escape"){ closeList(); }
+		});
+		inputEl.addEventListener("blur", function(){
+			window.setTimeout(function(){
+				var ae=document.activeElement;
+				if(ae===inputEl || listEl.contains(ae)) return;
+				closeList();
+			}, 120);
+		});
+		document.addEventListener("click", function(e){
+			if(!listEl.contains(e.target) && e.target!==inputEl){
+				closeList();
+			}
+		});
+		return {
+			render: render,
+			reset: function(){ items=[]; active=-1; }
+		};
+	}
 	function parseNumber(v){
 		if(typeof v!=="string") v=(v??"").toString();
 		var s=v.replace(/[\s\u00A0\u202F]+/g,"").replace(/['’‘`´′]/g,"");
@@ -678,21 +788,129 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		(scope||document).querySelectorAll(".cmx-supplier-wrap").forEach(function(wrap){
 			if(wrap.dataset.cmxSupplierBound==="1") return;
 			wrap.dataset.cmxSupplierBound="1";
-			var select=wrap.querySelector("select.cmx-lief-supplier");
+			var input=wrap.querySelector("input.cmx-lief-supplier-search");
+			var hidden=wrap.querySelector("input.cmx-lief-supplier-id");
+			var clearBtn=wrap.querySelector("button.cmx-lief-supplier-clear");
+			var list=wrap.querySelector("ul.cmx-lief-supplier-suggest");
 			var link=wrap.querySelector("a.cmx-lief-supplier-open");
-			if(!select || !link) return;
+			var timer=null;
+			if(!input || !hidden || !clearBtn || !list || !link) return;
+			var navigator = makeNavigator(input, list, chooseSupplier);
+			function closeSuggestions(){
+				list.style.display="none";
+				list.innerHTML="";
+				navigator.reset();
+			}
+			function syncFieldFromHidden(){
+				var item = supplierById[String(hidden.value || "")] || null;
+				if(item){
+					input.value = item.title || "";
+					input.dataset.selectedTitle = item.title || "";
+				} else if((hidden.value || "") === "" || String(hidden.value || "0") === "0"){
+					input.dataset.selectedTitle = "";
+				}
+			}
 			function sync(){
-				var opt=select.options[select.selectedIndex];
-				var href=opt ? (opt.getAttribute("data-edit")||"") : "";
-				if(href){
-					link.href=href;
+				var item = supplierById[String(hidden.value || "")] || null;
+				if(item && item.edit){
+					link.href=item.edit;
 					link.classList.remove("is-disabled");
 				}else{
 					link.href="#";
 					link.classList.add("is-disabled");
 				}
 			}
-			select.addEventListener("change", sync);
+			function chooseSupplier(item, keepFocus){
+				hidden.value = item && item.id ? String(item.id) : "0";
+				input.value = item && item.title ? item.title : "";
+				input.dataset.selectedTitle = item && item.title ? item.title : "";
+				hidden.dispatchEvent(new Event("change", {bubbles:true}));
+				if(keepFocus !== false) input.focus();
+			}
+			function exactMatch(query){
+				var q=(query||"").trim().toLocaleLowerCase();
+				if(!q) return null;
+				var matches=supplierItems.filter(function(item){
+					return item.titleLower===q;
+				});
+				return matches.length===1 ? matches[0] : null;
+			}
+			function matchedSuppliers(query){
+				var q=(query||"").trim().toLocaleLowerCase();
+				var activeId = parseInt(hidden.value || "0", 10) || 0;
+				var items = supplierItems.slice();
+				if(q){
+					items = items.filter(function(item){
+						return item.titleLower.indexOf(q)!==-1;
+					});
+					items.sort(function(a,b){
+						var aStarts = a.titleLower.indexOf(q)===0 ? 0 : 1;
+						var bStarts = b.titleLower.indexOf(q)===0 ? 0 : 1;
+						if(aStarts !== bStarts) return aStarts - bStarts;
+						return compareSupplierTitle(a,b);
+					});
+				} else if(activeId > 0) {
+					items.sort(function(a,b){
+						if(a.id===activeId && b.id!==activeId) return -1;
+						if(b.id===activeId && a.id!==activeId) return 1;
+						return compareSupplierTitle(a,b);
+					});
+				}
+				return items.slice(0, 50);
+			}
+			function renderSuggestions(showAll){
+				var query=(input.value||"").trim();
+				if(!showAll && query.length>0 && query.length<2){
+					closeSuggestions();
+					return;
+				}
+				navigator.render(matchedSuppliers(showAll ? "" : query));
+			}
+			input.addEventListener("input", function(){
+				hidden.value = "0";
+				sync();
+				if(timer) clearTimeout(timer);
+				var query=(input.value||"").trim();
+				if(query.length===0){
+					renderSuggestions(true);
+					return;
+				}
+				if(query.length<2){
+					closeSuggestions();
+					return;
+				}
+				timer=window.setTimeout(function(){
+					renderSuggestions(false);
+				}, 120);
+			});
+			input.addEventListener("focus", function(){
+				renderSuggestions((input.value||"").trim()==="");
+			});
+			input.addEventListener("click", function(){
+				renderSuggestions((input.value||"").trim()==="");
+			});
+			input.addEventListener("blur", function(){
+				window.setTimeout(function(){
+					if(String(hidden.value || "0")==="0"){
+						var match = exactMatch(input.value || "");
+						if(match) chooseSupplier(match, false);
+					}
+				}, 130);
+			});
+			clearBtn.addEventListener("click", function(e){
+				e.preventDefault();
+				hidden.value = "0";
+				input.value = "";
+				input.dataset.selectedTitle = "";
+				hidden.dispatchEvent(new Event("change", {bubbles:true}));
+				closeSuggestions();
+				input.focus();
+			});
+			hidden.addEventListener("change", function(){
+				syncFieldFromHidden();
+				sync();
+			});
+			syncFieldFromHidden();
 			sync();
 		});
 	}
@@ -745,6 +963,11 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			});
 			row.querySelectorAll("input").forEach(function(i){ i.value=""; });
 			row.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+			row.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
+			row.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
+				list.innerHTML="";
+				list.style.display="none";
+			});
 			if(noteRow){
 				noteRow.querySelectorAll("textarea").forEach(function(t){ t.value=""; });
 			}
@@ -771,9 +994,14 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 				if(!r) return;
 				r.querySelectorAll("input").forEach(function(i){ i.value=""; });
 				r.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+				r.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
+				r.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
+					list.innerHTML="";
+					list.style.display="none";
+				});
 				var note=r.nextElementSibling && r.nextElementSibling.classList.contains("cmx-lief-note-row") ? r.nextElementSibling : null;
 				if(note){ note.querySelectorAll("textarea").forEach(function(t){ t.value=""; }); }
-				r.querySelectorAll("select.cmx-lief-supplier").forEach(function(s){ s.dispatchEvent(new Event("change")); });
+				r.querySelectorAll("input.cmx-lief-supplier-id").forEach(function(i){ i.dispatchEvent(new Event("change", {bubbles:true})); });
 				r.querySelectorAll("input.cmx-lief-url").forEach(function(i){ i.dispatchEvent(new Event("input")); });
 				return;
 			}
