@@ -28,7 +28,7 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')) {
 }
 
 \add_action('add_meta_boxes', function () {
-	\add_meta_box('cmx_artikel_waehrung_preise', 'Konditionen', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
+	\add_meta_box('cmx_artikel_waehrung_preise', 'Stammdaten', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
 	\add_meta_box('cmx_artikel_waehrung_side', 'Währung', __NAMESPACE__ . '\\cmx_artikel_waehrung_side_box_html', 'artikel', 'side', 'default');
 });
 
@@ -510,7 +510,7 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-check-left{display:flex;align-items:center;gap:14px;white-space:nowrap;flex-wrap:wrap}
 		.cmx-price-row .cmx-check-left label{position:relative;top:-5px}
 		.cmx-price-row .cmx-variant-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
-		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px}
+		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px;align-items:center;justify-content:center;text-align:center}
 		.cmx-price-row .cmx-variant-actions .cmx-variant-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
 		.cmx-price-row .cmx-variant-actions .cmx-variant-del .dashicons{color:#d63638}
 		.cmx-price-row .cmx-variant-actions button[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
