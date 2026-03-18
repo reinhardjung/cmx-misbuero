@@ -127,8 +127,10 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	}
 
 	$ajax_url = \admin_url('admin-ajax.php');
-
 	echo '<style>
+	#cmx_projekt_tasks,
+	#cmx_projekt_tasks .inside,
+	#cmx-projekt-tasks{position:relative;overflow:visible !important}
 	#cmx-projekt-tasks{display:flex;flex-direction:column;gap:8px;}
 	#cmx-projekt-tasks .cmx-task-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}
 	#cmx-projekt-tasks .cmx-task-main{min-width:0;}
@@ -142,10 +144,13 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-projekt-tasks select,#cmx-projekt-tasks textarea{width:100%;}
 	#cmx-projekt-tasks textarea{min-height:120px;}
 	#cmx-projekt-tasks .cmx-task-article-suggest{position:relative;}
-	#cmx-projekt-tasks .cmx-task-article-suggest-list{position:absolute;z-index:100002;left:0;right:0;max-height:240px;overflow:auto;margin:2px 0 0;padding:0;border:1px solid #ccd0d4;border-radius:4px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.10);list-style:none;}
-	#cmx-projekt-tasks .cmx-task-article-suggest-list li{margin:0;padding:6px 8px;cursor:pointer;}
-	#cmx-projekt-tasks .cmx-task-article-suggest-list li.active{background:#e5f3ff;}
-	#cmx-projekt-tasks .cmx-task-article-suggest-list li:hover{background:#f3f4f5;}
+	#cmx-projekt-tasks .cmx-art-suggest{position:absolute;z-index:100000;left:0;right:0;max-height:280px;overflow:auto;margin:2px 0 0;padding:0;border:1px solid #ccd0d4;background:#fff;list-style:none;}
+	#cmx-projekt-tasks .cmx-art-suggest li{margin:0;padding:0;cursor:pointer;}
+	#cmx-projekt-tasks .cmx-art-suggest li.active,
+	#cmx-projekt-tasks .cmx-art-suggest li:hover{background:#e5f3ff;}
+	#cmx-projekt-tasks .cmx-ac-row{display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:center;padding:6px 8px;}
+	#cmx-projekt-tasks .cmx-ac-nr{font-weight:600;white-space:nowrap;}
+	#cmx-projekt-tasks .cmx-ac-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 	#cmx-projekt-tasks .cmx-task-footer{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;}
 	#cmx-projekt-tasks .cmx-task-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:0;}
 	#cmx-projekt-tasks .cmx-task-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}
@@ -225,109 +230,106 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			function newUid() {
 				return 'tsk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 			}
-				function escHtml(value){
-					return (value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-				}
-				function artikelLabel(item){
-					if (!item) return "";
-					if (item.label) return String(item.label);
-					const nr = (item.nr || "").toString();
-					const title = (item.title || "").toString();
-					return nr ? (nr + " – " + title) : title;
-				}
 				function fetchArtikel(term, cb){
-					const url = new URL(ajaxUrl, window.location.origin);
-					url.searchParams.set("action", "cmx_search_artikel");
-					url.searchParams.set("term", term || "");
-					url.searchParams.set("art", "dienstleistung");
-					window.fetch(url.toString(), { credentials: "same-origin" })
-						.then(function(resp){ return resp.json(); })
-						.then(function(data){
-							const rows = Array.isArray(data) ? data.map(function(item){
-								return {
-									id: parseInt(item && item.value || 0, 10) || 0,
-									nr: item && item.nr ? String(item.nr) : "",
-									title: item && item.title ? String(item.title) : "",
-									label: item && item.label ? String(item.label) : ""
-								};
-							}) : [];
-							cb(rows);
-						})
-						.catch(function(){
-							cb([]);
+					if (!window.jQuery || !window.jQuery.getJSON) {
+						cb([]);
+						return;
+					}
+					window.jQuery.getJSON(ajaxUrl, { action: "cmx_search_artikel", term: term || "", art: "dienstleistung" }, function(data){
+						const rows = Array.isArray(data) ? data.map(function(item){
+							return {
+								id: item && item.value ? item.value : 0,
+								title: item && item.title ? item.title : "",
+								nr: item && item.nr ? item.nr : ""
+							};
+						}) : [];
+						cb(rows);
+					}).fail(function(){
+						cb([]);
+					});
+				}
+				function makeNavigator(inputEl, listEl, chooseCb){
+					let active=-1, items=[];
+					function esc(s){ return (s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+					function closeList(){ listEl.style.display="none"; listEl.innerHTML=""; active=-1; }
+					function render(arr){
+						items = Array.isArray(arr) ? arr : [];
+						if(!items.length){ closeList(); return; }
+						listEl.innerHTML = items.map(function(it, i){
+							return "<li data-index=\"" + i + "\"><div class=\"cmx-ac-row\"><span class=\"cmx-ac-nr\">" + esc(it.nr||"") + "</span><span class=\"cmx-ac-title\">" + esc(it.title||"") + "</span></div></li>";
+						}).join("");
+						listEl.style.display="block";
+						active=-1;
+					}
+					function move(d){
+						if(!items.length) return;
+						active = (active + d + items.length) % items.length;
+						Array.prototype.forEach.call(listEl.children, function(li, i){
+							li.classList.toggle("active", i===active);
 						});
+					}
+					function choose(i){
+						if(i<0||i>=items.length) return;
+						chooseCb(items[i]);
+						closeList();
+					}
+					listEl.addEventListener("mousedown", function(e){
+						const li=e.target.closest("li"); if(!li) return;
+						e.preventDefault();
+						choose(parseInt(li.dataset.index,10));
+					});
+					inputEl.addEventListener("keydown", function(e){
+						if(e.key==="ArrowDown"){
+							if(listEl.style.display!=="block"){
+								e.preventDefault();
+								inputEl.dispatchEvent(new Event("focus"));
+								setTimeout(function(){ move(1); }, 0);
+							}else{
+								e.preventDefault(); move(1);
+							}
+						}else if(e.key==="ArrowUp"){
+							if(listEl.style.display==="block"){ e.preventDefault(); move(-1); }
+						}else if(e.key==="Enter"){
+							if(listEl.style.display==="block"){
+								const idx = active>-1 ? active : 0;
+								e.preventDefault(); choose(idx);
+							}
+						}else if(e.key==="Tab"){
+							if(listEl.style.display==="block"){ closeList(); }
+						}else if(e.key==="Escape"){
+							if(listEl.style.display==="block"){ e.preventDefault(); closeList(); }
+						}
+					});
+					document.addEventListener("click", function(e){
+						if(!listEl.contains(e.target) && e.target!==inputEl){ closeList(); }
+					});
+					return { render: render, reset: function(){ items=[]; active=-1; } };
 				}
 				function initTaskArticleSearch(rowEl){
 					const input = rowEl.querySelector(".cmx-task-artikel-search");
 					const hidden = rowEl.querySelector(".cmx-task-artikel-id");
-					const list = rowEl.querySelector(".cmx-task-article-suggest-list");
+					const list = rowEl.querySelector(".cmx-artikel-suggest");
 					if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
 					input.dataset.cmxSearchReady = "1";
-					let active = -1;
-					let navItems = [];
+					const nav = makeNavigator(input, list, chooseItem);
 					let timer = null;
-					function closeList(){
-						list.style.display = "none";
-						list.innerHTML = "";
-						active = -1;
-						navItems = [];
-				}
-					function render(arr){
-						navItems = arr || [];
-						if (!navItems.length) {
-							closeList();
-							return;
-						}
-						list.innerHTML = navItems.map(function(item, index){
-							return "<li data-index=\"" + index + "\">" + escHtml(artikelLabel(item)) + "</li>";
-						}).join("");
-						list.style.display = "block";
-						active = -1;
-					}
-				function move(delta){
-					if (!navItems.length) return;
-					active = (active + delta + navItems.length) % navItems.length;
-					Array.prototype.forEach.call(list.children, function(li, index){
-						li.classList.toggle("active", index === active);
-					});
+					function artikelLabel(item){
+						const nr = (item && item.nr ? String(item.nr) : "");
+						const title = (item && item.title ? String(item.title) : "");
+						return nr ? (nr + " – " + title) : title;
 					}
 					function chooseItem(item, keepFocus){
 						hidden.value = item && item.id ? String(item.id) : "";
 						input.value = artikelLabel(item);
 						input.dataset.selectedTitle = input.value;
 						hidden.dispatchEvent(new Event("change", { bubbles: true }));
-						closeList();
 						if (keepFocus !== false) input.focus();
 					}
 					function doSearch(query){
 						fetchArtikel(query, function(rows){
-							render(rows);
+							nav.render(rows);
 						});
 					}
-					list.addEventListener("mousedown", function(e){
-						const li = e.target.closest("li");
-						if (!li) return;
-						e.preventDefault();
-					const index = parseInt(li.dataset.index || "-1", 10);
-					if (index > -1 && navItems[index]) chooseItem(navItems[index]);
-				});
-				input.addEventListener("keydown", function(e){
-					if (list.style.display !== "block" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
-					if (e.key === "ArrowDown") {
-						e.preventDefault();
-						move(1);
-					} else if (e.key === "ArrowUp") {
-						e.preventDefault();
-						move(-1);
-					} else if (e.key === "Enter") {
-						if (active > -1 && navItems[active]) {
-							e.preventDefault();
-							chooseItem(navItems[active]);
-						}
-					} else if (e.key === "Escape") {
-							closeList();
-						}
-					});
 					input.addEventListener("input", function(){
 						if (timer) window.clearTimeout(timer);
 						hidden.value = "";
@@ -342,16 +344,6 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 						doSearch("");
 					});
 					input.addEventListener("click", function(){ doSearch(""); });
-					input.addEventListener("blur", function(){
-						window.setTimeout(function(){
-							const activeEl = document.activeElement;
-							if (activeEl === input || list.contains(activeEl)) return;
-							closeList();
-						}, 120);
-					});
-					document.addEventListener("click", function(e){
-						if (!list.contains(e.target) && e.target !== input) closeList();
-					});
 				}
 
 			function addRow(data){
@@ -505,7 +497,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<div class="cmx-task-row">';
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
 	echo '<div class="cmx-task-main">';
-	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest"><input type="text" class="widefat cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-task-article-suggest-list" style="display:none"></ul></div></label>';
+	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
 	echo '<label class="cmx-task-label" style="margin-top:8px;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="4">'.$info.'</textarea></label>';
 	echo '</div>';
 	echo '<div class="cmx-task-side">';

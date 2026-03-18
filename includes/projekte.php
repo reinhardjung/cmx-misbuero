@@ -224,15 +224,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 		echo 'if(timer){clearTimeout(timer);}';
 		echo 'timer=setTimeout(function(){search(q);},180);';
 		echo '});';
-		echo 'searchInput.addEventListener("focus",function(){if(results.style.display==="none"){search((searchInput.value||"").trim());}});';
-		echo 'searchInput.addEventListener("blur",function(){setTimeout(function(){if(suppressBlurHide){suppressBlurHide=false;return;}ensureResultsVisible(false);},20);});';
-		echo 'searchInput.addEventListener("keydown",function(e){';
-		echo 'if(e.key==="ArrowDown"||e.key==="ArrowUp"){const btns=resultButtons();if(!btns.length){return;}e.preventDefault();if(e.key==="ArrowDown"){setActiveIndex(activeIndex+1);}else{setActiveIndex(activeIndex-1);}return;}';
-		echo 'if(e.key==="Enter"){const btns=resultButtons();if(activeIndex>=0&&btns[activeIndex]){e.preventDefault();btns[activeIndex].click();}return;}';
-		echo 'if(e.key==="Escape"){ensureResultsVisible(false);}';
-		echo '});';
-		echo 'results.addEventListener("mousedown",function(e){const btn=e.target&&e.target.closest?e.target.closest(".cmx-zu-projekt-add"):null;if(btn){suppressBlurHide=true;}});';
-		echo 'results.addEventListener("mousemove",function(e){const btn=e.target&&e.target.closest?e.target.closest(".cmx-zu-projekt-add"):null;if(!btn){return;}const btns=resultButtons();const idx=btns.indexOf(btn);if(idx>=0){setActiveIndex(idx);}});';
+			echo 'searchInput.addEventListener("focus",function(){if(results.style.display==="none"){search((searchInput.value||"").trim());}});';
+			echo 'searchInput.addEventListener("blur",function(){setTimeout(function(){if(suppressBlurHide){suppressBlurHide=false;return;}ensureResultsVisible(false);},20);});';
+			echo 'searchInput.addEventListener("keydown",function(e){';
+			echo 'if(e.key==="ArrowDown"||e.key==="ArrowUp"){const btns=resultButtons();if(!btns.length){return;}e.preventDefault();if(e.key==="ArrowDown"){setActiveIndex(activeIndex+1);}else{setActiveIndex(activeIndex-1);}return;}';
+			echo 'if(e.key==="Enter"){const btns=resultButtons();if(activeIndex>=0&&btns[activeIndex]){e.preventDefault();btns[activeIndex].click();}return;}';
+			echo 'if(e.key==="Escape"){ensureResultsVisible(false);}';
+			echo '});';
+			echo 'results.addEventListener("mousedown",function(e){const btn=e.target&&e.target.closest?e.target.closest(".cmx-zu-projekt-add"):null;if(btn){suppressBlurHide=true;}});';
+			echo 'results.addEventListener("mousemove",function(e){const btn=e.target&&e.target.closest?e.target.closest(".cmx-zu-projekt-add"):null;if(!btn){return;}const btns=resultButtons();const idx=btns.indexOf(btn);if(idx>=0){setActiveIndex(idx);}});';
+			echo 'document.addEventListener("click",function(e){if(e.target===searchInput||results.contains(e.target)){return;}ensureResultsVisible(false);});';
 
 		echo 'root.addEventListener("click",function(e){';
 		echo 'const addBtn=e.target&&e.target.closest?e.target.closest(".cmx-zu-projekt-add"):null;';
