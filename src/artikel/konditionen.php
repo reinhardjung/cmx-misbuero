@@ -29,6 +29,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART', '_cmx_artikel_art');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WOO_ID')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WOO_ID', '_cmx_artikel_woo_id');
+}
 
 \add_action('add_meta_boxes', function () {
 	\add_meta_box('cmx_artikel_waehrung_preise', 'Stammdaten', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
@@ -769,16 +772,15 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 				}
 			});
 		}
-		function insertVariantBlock(sourceBlock){
-			const block = buildVariantBlock(nextVariantIndex());
-			if (!block || !variantRows) return;
-			if (sourceBlock) {
-				sourceBlock.insertAdjacentElement("afterend", block);
-				copyVariantBlockValues(sourceBlock, block);
-			} else {
-				variantRows.appendChild(block);
-			}
-			bindVariantBlock(block);
+			function insertVariantBlock(sourceBlock){
+				const block = buildVariantBlock(nextVariantIndex());
+				if (!block || !variantRows) return;
+				if (sourceBlock) {
+					sourceBlock.insertAdjacentElement("afterend", block);
+				} else {
+					variantRows.appendChild(block);
+				}
+				bindVariantBlock(block);
 			syncVariantActionState();
 			const sku = block.querySelector(".cmx-variant-sku");
 			if (sku) {
@@ -860,6 +862,7 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 	echo '<input type="hidden" name="cmx_artikel_waehrung_payload" value="1">';
 	$art = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_ART, 'produkt');
 	$waehrung = cmx_meta_get($post->ID, CMX_ARTIKEL_META_WAEHRUNGEN, 'CHF');
+	$woo_id = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_WOO_ID, '');
 
 	echo '<p style="margin:0 0 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
 	echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="produkt" ' . \checked($art, 'produkt', false) . '> Produkt</label>';
@@ -869,6 +872,7 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 		echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
 	}
 	echo '</select></p>';
+	echo '<p style="margin:8px 0 0;"><input type="text" id="cmx_artikel_woo_id" name="cmx_artikel_woo_id" class="widefat" aria-label="Woo-ID" placeholder="WooCommerce: Produkt-ID" value="' . \esc_attr($woo_id) . '"></p>';
 }
 
 // Save-Handler:
@@ -903,6 +907,14 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 			$waehrung = 'CHF';
 		}
 		\update_post_meta($post_id, CMX_ARTIKEL_META_WAEHRUNGEN, $waehrung);
+	}
+	if ($has('cmx_artikel_woo_id')) {
+		$woo_id = \sanitize_text_field((string) $in('cmx_artikel_woo_id', ''));
+		if ($woo_id === '') {
+			\delete_post_meta($post_id, CMX_ARTIKEL_META_WOO_ID);
+		} else {
+			\update_post_meta($post_id, CMX_ARTIKEL_META_WOO_ID, $woo_id);
+		}
 	}
 	// --- Ende SKU & Währung ---
 
