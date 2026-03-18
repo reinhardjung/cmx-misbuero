@@ -276,7 +276,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_beleg_offerte_metabox')) {
 		}
 		echo '</select>';
 
-		echo '<script>(function(){function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function sync(){var box=document.getElementById("cmx_beleg_offerte");if(!box)return;var slug=getSlug();box.style.display=(slug==="offerte"||slug==="offerten")?"":"none";}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",sync);setTimeout(sync,0);})();</script>';
+		echo '<script>(function(){function getSlug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function sync(){var box=document.getElementById("cmx_beleg_offerte");if(!box)return;var slug=getSlug();box.style.display=(slug==="offerte"||slug==="offerten")?"block":"none";}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",sync);setTimeout(sync,0);})();</script>';
 	}
 }
 
