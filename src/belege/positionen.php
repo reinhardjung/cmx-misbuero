@@ -49,6 +49,83 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_decode_label_text')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_search_normalize_text')) {
+	function cmx_artikel_search_normalize_text(string $value): string {
+		$value = \trim($value);
+		if ($value === '') {
+			return '';
+		}
+		if (\function_exists('mb_strtolower')) {
+			$value = (string) \mb_strtolower($value, 'UTF-8');
+		} else {
+			$value = (string) \strtolower($value);
+		}
+		$normalized = (string) \preg_replace('/[\s\.\-_:]+/u', '', $value);
+		return $normalized !== '' ? $normalized : $value;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_search_variant_entries')) {
+	function cmx_artikel_search_variant_entries(int $post_id, string $term = ''): array {
+		if ($post_id <= 0 || !\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
+			return [];
+		}
+
+		$entries = (array) cmx_artikel_admin_variant_entries($post_id);
+		$term = \trim($term);
+		if ($term === '' || empty($entries)) {
+			return $entries;
+		}
+
+		if (\function_exists('mb_strtolower')) {
+			$needle_raw = (string) \mb_strtolower($term, 'UTF-8');
+		} else {
+			$needle_raw = (string) \strtolower($term);
+		}
+		$needle_normalized = \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_normalize_text')
+			? (string) cmx_artikel_search_normalize_text($term)
+			: $needle_raw;
+
+		$matches = [];
+		foreach ($entries as $entry) {
+			if (!\is_array($entry)) {
+				continue;
+			}
+			$haystack = \trim((string) ($entry['search'] ?? ''));
+			if ($haystack === '') {
+				continue;
+			}
+			if (\function_exists('mb_strtolower')) {
+				$haystack_raw = (string) \mb_strtolower($haystack, 'UTF-8');
+			} else {
+				$haystack_raw = (string) \strtolower($haystack);
+			}
+			$haystack_normalized = \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_normalize_text')
+				? (string) cmx_artikel_search_normalize_text($haystack)
+				: $haystack_raw;
+
+			if (($needle_raw !== '' && \strpos($haystack_raw, $needle_raw) !== false)
+				|| ($needle_normalized !== '' && \strpos($haystack_normalized, $needle_normalized) !== false)
+			) {
+				$matches[] = $entry;
+			}
+		}
+
+		return $matches;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\cmx_artikel_search_variant_label')) {
+	function cmx_artikel_search_variant_label(array $entry): string {
+		$sku = \trim((string) ($entry['sku'] ?? ''));
+		$title = \trim((string) ($entry['title'] ?? ''));
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$title = (string) cmx_beleg_decode_label_text($title);
+		}
+		return \trim(($sku !== '' ? $sku . ' – ' : '') . $title);
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\cmx_artikel_einheiten_taxonomies')) {
 	function cmx_artikel_einheiten_taxonomies(): array {
 		static $cache = null;
@@ -1238,6 +1315,8 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 	}
 
 	$ids = [];
+	$title_match_map = [];
+	$meta_match_map = [];
 
 	if ($term === '') {
 		if ($art_filter !== '') {
@@ -1337,22 +1416,88 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 		}
 		$meta_ids = $wpdb->get_col($meta_sql);
 
-		$ids = array_slice(array_values(array_unique(array_merge($title_ids, $meta_ids))), 0, $limit);
+		$title_ids = \array_values(\array_map('intval', (array) $title_ids));
+		$meta_ids = \array_values(\array_map('intval', (array) $meta_ids));
+		$title_match_map = \array_fill_keys($title_ids, true);
+		$meta_match_map = \array_fill_keys($meta_ids, true);
+
+		$variant_ids = \function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_search_ids')
+			? \array_values(\array_map('intval', (array) cmx_artikel_admin_variant_search_ids($term)))
+			: [];
+		if ($art_filter !== '' && !empty($variant_ids)) {
+			$variant_ids = \array_values(\array_filter($variant_ids, static function($post_id) use ($art_filter): bool {
+				return (string) \get_post_meta((int) $post_id, '_cmx_artikel_art', true) === $art_filter;
+			}));
+		}
+
+		$ids = \array_values(\array_unique(\array_merge($title_ids, $meta_ids, $variant_ids)));
+		if (\count($ids) > 60) {
+			$ids = \array_slice($ids, 0, 60);
+		}
 	}
 
 	$items = [];
 	foreach ($ids as $id) {
+		$id = (int) $id;
 		$title = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
 			? cmx_beleg_decode_label_text((string) get_the_title($id))
 			: (string) get_the_title($id);
 		$nr    = cmx_get_artikel_nr($id);
+		$base_label = trim(($nr !== '' ? $nr . ' – ' : '') . $title);
 
 		$items[] = [
-			'label' => trim(($nr !== '' ? $nr . ' – ' : '') . $title),
-			'value' => (int) $id,
+			'label' => $base_label,
+			'value' => $id,
 			'nr'    => $nr,
 			'title' => $title,
 		];
+
+		$variant_entries = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_entries')) {
+			$include_all_variants = ($term === '' || isset($title_match_map[$id]) || isset($meta_match_map[$id]));
+			$variant_entries = cmx_artikel_search_variant_entries($id, $include_all_variants ? '' : $term);
+		}
+		if (empty($variant_entries)) {
+			continue;
+		}
+
+		$seen_variant_labels = [];
+		foreach ($variant_entries as $entry) {
+			if (!\is_array($entry)) {
+				continue;
+			}
+			$variant_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_label')
+				? (string) cmx_artikel_search_variant_label($entry)
+				: '';
+			if ($variant_label === '') {
+				continue;
+			}
+			$variant_key = \function_exists('mb_strtolower')
+				? (string) \mb_strtolower($variant_label, 'UTF-8')
+				: (string) \strtolower($variant_label);
+			if ($variant_key === '' || isset($seen_variant_labels[$variant_key])) {
+				continue;
+			}
+			if (\strcasecmp($variant_label, $base_label) === 0) {
+				continue;
+			}
+			$seen_variant_labels[$variant_key] = true;
+
+			$variant_title = \trim((string) ($entry['title'] ?? ''));
+			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+				$variant_title = (string) cmx_beleg_decode_label_text($variant_title);
+			}
+			if ($variant_title === '') {
+				$variant_title = $title;
+			}
+
+			$items[] = [
+				'label' => $variant_label,
+				'value' => $id,
+				'nr'    => \trim((string) ($entry['sku'] ?? '')) ?: $nr,
+				'title' => $variant_title,
+			];
+		}
 	}
 
 	$priority_threshold = (int) \apply_filters('cmx_beleg_artikel_priority_threshold', 3);
@@ -1379,6 +1524,9 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			}
 			return $a_id <=> $b_id;
 		});
+	}
+	if (\count($items) > $limit) {
+		$items = \array_slice($items, 0, $limit);
 	}
 
 	wp_send_json($items);

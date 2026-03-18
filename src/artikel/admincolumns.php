@@ -63,6 +63,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
 		}
 		$parent_title = \trim($parent_title);
 		$einheiten_tax = \function_exists(__NAMESPACE__ . '\\cmx_tax_einheiten') ? (string) cmx_tax_einheiten() : '';
+		$groessen_tax = \function_exists(__NAMESPACE__ . '\\cmx_tax_groessen') ? (string) cmx_tax_groessen() : '';
+		$ausfuehrungen_tax = \function_exists(__NAMESPACE__ . '\\cmx_tax_ausfuehrungen') ? (string) cmx_tax_ausfuehrungen() : '';
+		$materialien_tax = \function_exists(__NAMESPACE__ . '\\cmx_tax_materialien') ? (string) cmx_tax_materialien() : '';
 		$entries = [];
 
 		foreach (\array_values($stored) as $index => $row) {
@@ -75,6 +78,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
 			$left_term = cmx_artikel_admin_variant_term_name($left_taxonomy, (int) ($row['left_term_id'] ?? 0));
 			$right_term = cmx_artikel_admin_variant_term_name($right_taxonomy, (int) ($row['right_term_id'] ?? 0));
 			$einheit = cmx_artikel_admin_variant_term_name($einheiten_tax, (int) ($row['einheit_term_id'] ?? 0));
+			$groessen = '';
+			$ausfuehrungen = '';
+			$materialien = '';
+			foreach ([[$left_taxonomy, $left_term], [$right_taxonomy, $right_term]] as $variant_pair) {
+				$variant_taxonomy = (string) ($variant_pair[0] ?? '');
+				$variant_term = \trim((string) ($variant_pair[1] ?? ''));
+				if ($variant_taxonomy === '' || $variant_term === '') {
+					continue;
+				}
+				if ($groessen === '' && $groessen_tax !== '' && $variant_taxonomy === $groessen_tax) {
+					$groessen = $variant_term;
+					continue;
+				}
+				if ($ausfuehrungen === '' && $ausfuehrungen_tax !== '' && $variant_taxonomy === $ausfuehrungen_tax) {
+					$ausfuehrungen = $variant_term;
+					continue;
+				}
+				if ($materialien === '' && $materialien_tax !== '' && $variant_taxonomy === $materialien_tax) {
+					$materialien = $variant_term;
+				}
+			}
 			$title_parts = \array_values(\array_filter([$left_term, $right_term], static fn($v) => \trim((string) $v) !== ''));
 			$title = $parent_title !== '' ? $parent_title : '(ohne Titel)';
 			if (!empty($title_parts)) {
@@ -103,6 +127,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
 				'index'      => (int) $index,
 				'title'      => $title,
 				'sku'        => $sku,
+				'groessen'   => $groessen,
+				'ausfuehrungen' => $ausfuehrungen,
+				'materialien' => $materialien,
 				'farben'     => $right_term,
 				'einheit'    => $einheit,
 				'vk'         => cmx_artikel_admin_variant_money_display($row['vk'] ?? ''),
@@ -242,6 +269,21 @@ function cmx_first_existing_tax(array $candidates): ?string {
 /** Kandidaten je Logik (deine Slugs können variieren – wir finden, was existiert) */
 function cmx_tax_typen(): ?string      { return cmx_first_existing_tax(['artikel_type','artikel_typ','artikel_typen','artikel_types']); }
 function cmx_tax_kategorien(): ?string { return cmx_first_existing_tax(['artikel_kategorie','artikel_kategorien','artikel_category','artikel_categories']); }
+function cmx_tax_groessen(): ?string   {
+	$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_taxonomy_slug') ? (string) cmx_artikel_taxonomy_slug('Grössen') : '';
+	if ($tax !== '' && \taxonomy_exists($tax)) return $tax;
+	return cmx_first_existing_tax(['artikel_groessen','artikel_groesse','groessen','groesse']);
+}
+function cmx_tax_ausfuehrungen(): ?string {
+	$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_taxonomy_slug') ? (string) cmx_artikel_taxonomy_slug('Ausführungen') : '';
+	if ($tax !== '' && \taxonomy_exists($tax)) return $tax;
+	return cmx_first_existing_tax(['artikel_ausfuehrungen','artikel_ausfuehrung','ausfuehrungen','ausfuehrung']);
+}
+function cmx_tax_materialien(): ?string {
+	$tax = \function_exists(__NAMESPACE__ . '\\cmx_artikel_taxonomy_slug') ? (string) cmx_artikel_taxonomy_slug('Materialien') : '';
+	if ($tax !== '' && \taxonomy_exists($tax)) return $tax;
+	return cmx_first_existing_tax(['artikel_materialien','artikel_material','materialien','material']);
+}
 function cmx_tax_marken(): ?string     { return cmx_first_existing_tax(['artikel_marke','artikel_marken']); }
 function cmx_tax_farben(): ?string     { return cmx_first_existing_tax(['artikel_farbe','artikel_farben','farbe','farben']); }
 function cmx_tax_einheiten(): ?string  { return cmx_first_existing_tax(['artikel_einheit','artikel_einheiten','einheit','einheiten']); }
@@ -301,6 +343,9 @@ function cmx_lieferanten_args(): array {
 	$new['sku']            = 'Artikel-Nr.';
 	$new['typen']          = 'Typen';
 	$new['kategorien']     = 'Kategorien';
+	$new['groessen']       = 'Grössen';
+	$new['ausfuehrungen']  = 'Ausführungen';
+	$new['materialien']    = 'Materialien';
 	$new['marken']         = 'Marke';
 	$new['farben']         = 'Farbe';
 	$new['einheiten']      = 'Einheit';
@@ -340,6 +385,45 @@ function cmx_lieferanten_args(): array {
 
 		case 'kategorien':
 			$tax = cmx_tax_kategorien();
+			if (!$tax) { echo ''; break; }
+			$terms = \get_the_terms($post_id, $tax);
+			if (\is_wp_error($terms) || empty($terms)) { echo ''; break; }
+			$out = [];
+			foreach ($terms as $t) {
+				$url = \add_query_arg(['post_type' => 'artikel', $tax => $t->slug], \admin_url('edit.php'));
+				$out[] = '<a href="'.\esc_url($url).'">'.\esc_html($t->name).'</a>';
+			}
+			echo implode(', ', $out);
+			break;
+
+		case 'groessen':
+			$tax = cmx_tax_groessen();
+			if (!$tax) { echo ''; break; }
+			$terms = \get_the_terms($post_id, $tax);
+			if (\is_wp_error($terms) || empty($terms)) { echo ''; break; }
+			$out = [];
+			foreach ($terms as $t) {
+				$url = \add_query_arg(['post_type' => 'artikel', $tax => $t->slug], \admin_url('edit.php'));
+				$out[] = '<a href="'.\esc_url($url).'">'.\esc_html($t->name).'</a>';
+			}
+			echo implode(', ', $out);
+			break;
+
+		case 'ausfuehrungen':
+			$tax = cmx_tax_ausfuehrungen();
+			if (!$tax) { echo ''; break; }
+			$terms = \get_the_terms($post_id, $tax);
+			if (\is_wp_error($terms) || empty($terms)) { echo ''; break; }
+			$out = [];
+			foreach ($terms as $t) {
+				$url = \add_query_arg(['post_type' => 'artikel', $tax => $t->slug], \admin_url('edit.php'));
+				$out[] = '<a href="'.\esc_url($url).'">'.\esc_html($t->name).'</a>';
+			}
+			echo implode(', ', $out);
+			break;
+
+		case 'materialien':
+			$tax = cmx_tax_materialien();
 			if (!$tax) { echo ''; break; }
 			$terms = \get_the_terms($post_id, $tax);
 			if (\is_wp_error($terms) || empty($terms)) { echo ''; break; }
@@ -1150,6 +1234,9 @@ function cmx_lieferanten_args(): array {
 				'index' => (int) ($entry['index'] ?? 0),
 				'title' => (string) ($entry['title'] ?? ''),
 				'sku' => (string) ($entry['sku'] ?? ''),
+				'groessen' => (string) ($entry['groessen'] ?? ''),
+				'ausfuehrungen' => (string) ($entry['ausfuehrungen'] ?? ''),
+				'materialien' => (string) ($entry['materialien'] ?? ''),
 				'farben' => (string) ($entry['farben'] ?? ''),
 				'einheit' => (string) ($entry['einheit'] ?? ''),
 				'vk' => (string) ($entry['vk'] ?? ''),
@@ -1195,9 +1282,7 @@ function cmx_lieferanten_args(): array {
 			if (!titleCell) return;
 			const titleLink = titleCell.querySelector(".row-title");
 			if (titleLink) {
-				titleLink.textContent = variant.title || "";
 				titleLink.href = variant.edit_url || "#";
-				titleLink.title = variant.title || "";
 			}
 			const actions = titleCell.querySelector(".row-actions");
 			if (actions) {
@@ -1221,6 +1306,9 @@ function cmx_lieferanten_args(): array {
 
 				setTitle(clone, variant);
 				setText(clone, ".column-sku", variant.sku);
+				setText(clone, ".column-groessen", variant.groessen);
+				setText(clone, ".column-ausfuehrungen", variant.ausfuehrungen);
+				setText(clone, ".column-materialien", variant.materialien);
 				setText(clone, ".column-farben", variant.farben);
 				setText(clone, ".column-einheiten", variant.einheit);
 				setText(clone, ".column-vk", variant.vk);

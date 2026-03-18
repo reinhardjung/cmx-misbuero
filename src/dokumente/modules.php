@@ -436,6 +436,33 @@ function cmx_dok_fetch_relation_options(string $target_type, int $limit = 200): 
 			'id'    => $id,
 			'label' => $title,
 		];
+		if ($target_type === 'artikel' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_entries')) {
+			$seen_variant_labels = [];
+			foreach ((array) cmx_artikel_search_variant_entries($id, '') as $entry) {
+				if (!\is_array($entry)) {
+					continue;
+				}
+				$variant_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_label')
+					? (string) cmx_artikel_search_variant_label($entry)
+					: '';
+				if ($variant_label === '') {
+					continue;
+				}
+				$variant_key = \function_exists('mb_strtolower')
+					? (string) \mb_strtolower($variant_label, 'UTF-8')
+					: (string) \strtolower($variant_label);
+				if ($variant_key === '' || isset($seen_variant_labels[$variant_key])) {
+					continue;
+				}
+				$seen_variant_labels[$variant_key] = true;
+				$options[] = [
+					'id'      => $id,
+					'post_id' => $id,
+					'value'   => $id . '__variant_' . (int) ($entry['index'] ?? \count($seen_variant_labels)),
+					'label'   => $variant_label,
+				];
+			}
+		}
 	}
 
 	return $options;
@@ -517,10 +544,12 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 	echo '<option value="0"' . ($has_current ? '' : ' selected') . '>' . \esc_html($empty_label) . '</option>';
 	foreach ($options as $opt) {
 		$id = (int) ($opt['id'] ?? 0);
-		$selected = \in_array($id, $current_ids, true) ? ' selected' : '';
+		$option_value = isset($opt['value']) ? (string) $opt['value'] : (string) $id;
+		$option_post_id = isset($opt['post_id']) ? (int) $opt['post_id'] : $id;
+		$selected = ($option_value === (string) $id && \in_array($id, $current_ids, true)) ? ' selected' : '';
 		$tooltip = isset($opt['tooltip']) ? \trim((string) $opt['tooltip']) : '';
 		$title_attr = $tooltip !== '' ? ' title="' . \esc_attr($tooltip) . '"' : '';
-		echo '<option value="' . \esc_attr((string) $id) . '"' . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
+		echo '<option value="' . \esc_attr($option_value) . '" data-post-id="' . \esc_attr((string) $option_post_id) . '"' . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
 	echo '<ul id="' . \esc_attr($selected_id) . '" class="cmx-dok-rel-selected"></ul>';
@@ -587,6 +616,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 				if (!opt.selected) continue;
 				out.push({
 					id: String(opt.value || ""),
+					postId: String(opt.getAttribute("data-post-id") || opt.value || ""),
 					label: String(opt.textContent || opt.innerText || ""),
 					title: String(opt.getAttribute("title") || "")
 				});
@@ -649,7 +679,7 @@ function cmx_dok_render_relation_select_box(\WP_Post $post, string $target_type,
 			}
 			list.innerHTML = items.map(function(item){
 				var titleAttr = item.title ? ' title="' + escHtml(item.title) + '"' : "";
-				return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-dok-rel-selected-main"><a href="' + escHtml(editPrefix + encodeURIComponent(item.id) + "&action=edit") + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(item.label) + '</a></div><button type="button" class="button-link-delete cmx-dok-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
+				return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-dok-rel-selected-main"><a href="' + escHtml(editPrefix + encodeURIComponent(item.postId || item.id) + "&action=edit") + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(item.label) + '</a></div><button type="button" class="button-link-delete cmx-dok-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
 			}).join("");
 		}
 
