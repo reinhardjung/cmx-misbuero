@@ -487,8 +487,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 
 	echo '<style>
 		#cmx-artikel-variant-rows{display:flex;flex-direction:column;gap:14px}
-		.cmx-variant-block{padding:0 0 14px 0;margin:0 0 14px 0;border-bottom:1px solid #dcdcde}
-		.cmx-variant-block:last-child{padding-bottom:0;margin-bottom:0;border-bottom:0}
+		.cmx-variant-block{padding:10px;margin:0;border:1px solid #ddd;border-radius:6px;background:#fafafa}
+		.cmx-variant-block:last-child{margin-bottom:0}
 		.cmx-price-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 		.cmx-price-row .cmx-f{display:flex;flex-direction:column;min-width:140px;flex:1 1 180px;max-width:320px}
 		.cmx-price-row .cmx-f--xs{min-width:96px;max-width:132px;flex:1 1 112px}
