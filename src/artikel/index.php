@@ -26,6 +26,7 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 	cmx_create_taxo(basename(__DIR__), 'Kleider', 'Kleider');
 	cmx_create_taxo(basename(__DIR__), 'Schuhe', 'Schuhe');
 	cmx_create_taxo(basename(__DIR__), 'Zoll', 'Zoll');
+	cmx_create_taxo(basename(__DIR__), 'Speicher', 'Speicher');
 	cmx_create_taxo(basename(__DIR__), 'Abo', 'Abos');
 }, 15);
 
