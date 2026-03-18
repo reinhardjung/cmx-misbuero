@@ -45,18 +45,68 @@ function cmx_artikel_render_save_nonce_once(): void {
 	$rendered = true;
 }
 
-function cmx_artikel_waehrung_optionen(): array {
-	return [
-		'CHF' => 'Schweizer Franken',
-		'EUR' => 'Euro',
-		'USD' => 'US-Dollar',
-	];
-}
+	function cmx_artikel_waehrung_optionen(): array {
+		return [
+			'CHF' => 'Schweizer Franken',
+			'EUR' => 'Euro',
+			'USD' => 'US-Dollar',
+		];
+	}
 
-function cmx_artikel_format_quantity_display(mixed $value): string {
-	if ($value === '' || $value === null) return '';
-	$normalized = cmx_parse_number($value);
-	if (!\is_finite($normalized)) return '';
+	function cmx_artikel_woo_product_link_template(): string {
+		$example_url = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_get_setting')
+			? (string) cmx_woocommerce_get_setting('misbuero_order_example_url', '')
+			: '';
+		if ($example_url === '') return '';
+		$example_url = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_sanitize_order_example_url')
+			? (string) cmx_woocommerce_sanitize_order_example_url($example_url)
+			: (string) \esc_url_raw($example_url, ['http', 'https']);
+		if ($example_url === '') return '';
+
+		$parts = \wp_parse_url($example_url);
+		if (!\is_array($parts) || empty($parts['host'])) return '';
+
+		$path = (string) ($parts['path'] ?? '');
+		if ($path === '') return '';
+
+		$admin_dir = \str_replace('\\', '/', \dirname($path));
+		if ($admin_dir === '.' || $admin_dir === '') return '';
+		$parts['path'] = \rtrim($admin_dir, '/') . '/post.php';
+		unset($parts['query'], $parts['fragment']);
+
+		$template = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_url_from_parts')
+			? (string) cmx_woocommerce_build_url_from_parts($parts, [
+				'post'   => '__CMX_WOO_PRODUCT_ID__',
+				'action' => 'edit',
+			])
+			: (string) \add_query_arg(
+				[
+					'post'   => '__CMX_WOO_PRODUCT_ID__',
+					'action' => 'edit',
+				],
+				((string) ($parts['scheme'] ?? 'https')) . '://' . ((string) $parts['host']) . ((isset($parts['port']) && (int) $parts['port'] > 0) ? ':' . (int) $parts['port'] : '') . (string) $parts['path']
+			);
+
+		$validated = \esc_url_raw(\str_replace('__CMX_WOO_PRODUCT_ID__', '123', $template), ['http', 'https']);
+		return \is_string($validated) && $validated !== '' ? $template : '';
+	}
+
+	function cmx_artikel_woo_product_link_url(string $woo_id): string {
+		$woo_id = \trim($woo_id);
+		if (!\preg_match('/^\d+$/', $woo_id)) return '';
+
+		$template = cmx_artikel_woo_product_link_template();
+		if ($template === '') return '';
+
+		$url = \str_replace('__CMX_WOO_PRODUCT_ID__', \rawurlencode($woo_id), $template);
+		$url = \esc_url_raw($url, ['http', 'https']);
+		return \is_string($url) ? $url : '';
+	}
+
+	function cmx_artikel_format_quantity_display(mixed $value): string {
+		if ($value === '' || $value === null) return '';
+		$normalized = cmx_parse_number($value);
+		if (!\is_finite($normalized)) return '';
 	if (\abs($normalized - \round($normalized)) < 0.0005) return (string) (int) \round($normalized);
 	return \rtrim(\rtrim(\number_format($normalized, 3, '.', "'"), '0'), '.');
 }
@@ -865,11 +915,8 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		$woo_id = (string) cmx_meta_get($post->ID, CMX_ARTIKEL_META_WOO_ID, '');
 		$woo_id_trimmed = \trim($woo_id);
 		$woo_product_id = \preg_match('/^\d+$/', $woo_id_trimmed) ? (int) $woo_id_trimmed : 0;
-		$woo_product_url = $woo_product_id > 0 ? (string) \get_permalink($woo_product_id) : '';
-		$woo_fallback_template = (string) \add_query_arg(
-			['post_type' => 'product', 'p' => '__CMX_WOO_PRODUCT_ID__'],
-			\home_url('/')
-		);
+		$woo_product_link_template = cmx_artikel_woo_product_link_template();
+		$woo_product_url = $woo_product_id > 0 ? cmx_artikel_woo_product_link_url((string) $woo_product_id) : '';
 
 		echo '<p style="margin:0 0 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
 		echo '<label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="radio" name="cmx_artikel_art" value="produkt" ' . \checked($art, 'produkt', false) . '> Produkt</label>';
@@ -879,26 +926,29 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			echo '<option value="' . esc_attr($val) . '" ' . selected($waehrung, $val, false) . '>' . esc_html($label) . '</option>';
 		}
 		echo '</select></p>';
-		echo '<p style="margin:8px 0 0;"><input type="text" id="cmx_artikel_woo_id" name="cmx_artikel_woo_id" class="widefat" aria-label="Woo-ID" placeholder="WooCommerce: Produkt-ID" value="' . \esc_attr($woo_id) . '"></p>';
-		echo '<p style="margin:4px 0 0;">';
-		echo '<a id="cmx_artikel_woo_id_link" href="' . \esc_url($woo_product_url !== '' ? $woo_product_url : '#') . '" target="_blank" rel="noopener noreferrer" style="' . ($woo_product_id > 0 ? '' : 'display:none;') . 'text-decoration:underline;">' . \esc_html($woo_id_trimmed) . '</a>';
+		echo '<p style="margin:8px 0 0;display:flex;align-items:center;gap:6px;">';
+		echo '<a id="cmx_artikel_woo_id_link" href="' . \esc_url($woo_product_url !== '' ? $woo_product_url : '#') . '" target="_blank" rel="noopener noreferrer" aria-label="WooCommerce Produkt öffnen" title="' . \esc_attr($woo_product_id > 0 ? ('WooCommerce Produkt #' . $woo_product_id . ' öffnen') : 'WooCommerce Produkt öffnen') . '" style="' . ($woo_product_url !== '' ? 'display:inline-flex;' : 'display:none;') . 'align-items:center;justify-content:center;width:30px;height:30px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 30px;">';
+		echo '<span class="dashicons dashicons-products" style="font-size:16px;line-height:16px;width:16px;height:16px;"></span>';
+		echo '</a>';
+		echo '<input type="text" id="cmx_artikel_woo_id" name="cmx_artikel_woo_id" class="widefat" aria-label="Woo-ID" placeholder="WooCommerce: Produkt-ID" value="' . \esc_attr($woo_id) . '" style="flex:1 1 auto;min-width:0;">';
 		echo '</p>';
 		echo '<script>(function(){';
 		echo 'var input=document.getElementById("cmx_artikel_woo_id");';
 		echo 'var link=document.getElementById("cmx_artikel_woo_id_link");';
 		echo 'if(!input||!link) return;';
-		echo 'var savedId=' . \wp_json_encode($woo_product_id > 0 ? (string) $woo_product_id : '') . ';';
-		echo 'var savedUrl=' . \wp_json_encode($woo_product_url) . ';';
-		echo 'var fallback=' . \wp_json_encode($woo_fallback_template) . ';';
+		echo 'var template=' . \wp_json_encode($woo_product_link_template) . ';';
 		echo 'function sync(){';
 		echo 'var value=(input.value||"").trim();';
-		echo 'if(!/^\\d+$/.test(value)){link.style.display="none";link.removeAttribute("href");link.textContent="";return;}';
-		echo 'link.textContent=value;';
-		echo 'link.href=(value===savedId&&savedUrl)?savedUrl:fallback.replace("__CMX_WOO_PRODUCT_ID__", encodeURIComponent(value));';
-		echo 'link.style.display="inline";';
+		echo 'if(!/^\\d+$/.test(value)||!template){link.style.display="none";link.removeAttribute("href");link.removeAttribute("title");link.setAttribute("aria-label","WooCommerce Produkt öffnen");return;}';
+		echo 'link.href=template.replace("__CMX_WOO_PRODUCT_ID__", encodeURIComponent(value));';
+		echo 'link.title="WooCommerce Produkt #"+value+" öffnen";';
+		echo 'link.setAttribute("aria-label","WooCommerce Produkt #"+value+" öffnen");';
+		echo 'link.style.display="inline-flex";';
 		echo '}';
 		echo 'input.addEventListener("input", sync);';
 		echo 'input.addEventListener("change", sync);';
+		echo 'input.addEventListener("focus", function(){ this.select(); });';
+		echo 'input.addEventListener("click", function(){ this.select(); });';
 		echo 'sync();';
 		echo '})();</script>';
 	}

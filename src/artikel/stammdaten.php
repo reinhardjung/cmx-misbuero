@@ -220,15 +220,227 @@ function cmx_artikel_farbe_side_box(\WP_Post $post): void {
 function cmx_artikel_marke_side_box(\WP_Post $post): void {
 	$sel_id = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_MARKEN);
 	$terms  = cmx_get_terms_safe(TAX_ARTIKEL_MARKEN);
+	$selected_title = '';
+	$term_items = [];
+	foreach ($terms as $t) {
+		$term_id = (int) $t->term_id;
+		$term_name = (string) $t->name;
+		if ($term_id === $sel_id) {
+			$selected_title = $term_name;
+		}
+		$term_items[] = [
+			'id'    => $term_id,
+			'title' => $term_name,
+		];
+	}
+	$term_items_json = \wp_json_encode($term_items);
 
 	echo '<input type="hidden" name="cmx_artikel_marke_payload" value="1">';
-	echo '<p style="margin:0;"><select id="cmx_artikel_marke" name="cmx_artikel_marke" class="widefat" aria-label="Marke auswählen">';
-	echo '<option value="0">— auswählen —</option>';
-	foreach ($terms as $t) {
-		echo '<option value="'.(int)$t->term_id.'" '.selected($sel_id, $t->term_id, false).'>'.esc_html($t->name).'</option>';
+	echo '<style>
+	#cmx_artikel_marke_side,
+	#cmx_artikel_marke_side .inside,
+	#cmx-artikel-marke-box{overflow:visible !important}
+	#cmx_artikel_marke_side .inside,
+	#cmx-artikel-marke-box,
+	#cmx-artikel-marke-box .cmx-marke-suggest{position:relative}
+	#cmx-artikel-marke-box .cmx-marke-suggest{position:relative}
+	#cmx-artikel-marke-box .cmx-marke-input-row{display:flex;align-items:center;gap:6px}
+	#cmx-artikel-marke-box .cmx-marke-input-row input[type=text]{flex:1 1 auto;min-width:0}
+	#cmx-artikel-marke-box .cmx-marke-suggest-list{
+		position:absolute;
+		z-index:100002;
+		left:0;
+		right:0;
+		max-height:240px;
+		overflow:auto;
+		margin:2px 0 0;
+		padding:0;
+		border:1px solid #ccd0d4;
+		border-radius:4px;
+		background:#fff;
+		box-shadow:0 10px 24px rgba(0,0,0,.10);
+		list-style:none;
 	}
-	echo '</select></p>';
-	echo '<a href="/wp-admin/edit-tags.php?taxonomy=artikel_marken&post_type=artikel" target="_blank">verwalten</a>';
+	#cmx-artikel-marke-box .cmx-marke-suggest-list li{margin:0;padding:6px 8px;cursor:pointer}
+	#cmx-artikel-marke-box .cmx-marke-suggest-list li.active{background:#e5f3ff}
+	#cmx-artikel-marke-box .cmx-marke-suggest-list li:hover{background:#f3f4f5}
+	</style>';
+	echo '<div id="cmx-artikel-marke-box">';
+	echo '<div class="cmx-marke-suggest">';
+	echo '<div class="cmx-marke-input-row">';
+	echo '<input type="text" id="cmx_artikel_marke_search" class="widefat" autocomplete="off" aria-label="Marke suchen" placeholder="Marke suchen..." value="' . \esc_attr($selected_title) . '">';
+	echo '<input type="hidden" id="cmx_artikel_marke" name="cmx_artikel_marke" value="' . \esc_attr((string) $sel_id) . '">';
+	echo '</div>';
+	echo '<ul id="cmx_artikel_marke_suggest" class="cmx-marke-suggest-list" style="display:none"></ul>';
+	echo '</div>';
+	echo '</div>';
+	echo '<script>
+	(function(){
+		var input=document.getElementById("cmx_artikel_marke_search");
+		var hidden=document.getElementById("cmx_artikel_marke");
+		var list=document.getElementById("cmx_artikel_marke_suggest");
+		if(!input||!hidden||!list) return;
+		var items=' . ($term_items_json ?: '[]') . ';
+		items.forEach(function(item){
+			item.id=parseInt(item.id||0,10)||0;
+			item.title=item.title||"";
+			item.titleLower=item.title.toLocaleLowerCase();
+		});
+		items.sort(function(a,b){
+			if(a.titleLower<b.titleLower) return -1;
+			if(a.titleLower>b.titleLower) return 1;
+			return 0;
+		});
+		var byId={};
+		items.forEach(function(item){
+			if(item.id>0) byId[String(item.id)]=item;
+		});
+		function esc(s){
+			return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+		}
+		function makeNavigator(inputEl,listEl,chooseCb){
+			var active=-1, navItems=[];
+			function closeList(){
+				listEl.style.display="none";
+				listEl.innerHTML="";
+				active=-1;
+			}
+			function render(arr){
+				navItems=arr||[];
+				if(!navItems.length){ closeList(); return; }
+				listEl.innerHTML=navItems.map(function(it,i){
+					return "<li data-index=\""+i+"\">"+esc(it.title)+"</li>";
+				}).join("");
+				listEl.style.display="block";
+				active=-1;
+			}
+			function move(delta){
+				if(!navItems.length) return;
+				active=(active+delta+navItems.length)%navItems.length;
+				Array.prototype.forEach.call(listEl.children,function(li,i){
+					li.classList.toggle("active", i===active);
+				});
+			}
+			function choose(index){
+				if(index<0||index>=navItems.length) return;
+				chooseCb(navItems[index]);
+				closeList();
+			}
+			listEl.addEventListener("mousedown", function(e){
+				var li=e.target.closest("li");
+				if(!li) return;
+				e.preventDefault();
+				choose(parseInt(li.dataset.index||"-1",10));
+			});
+			inputEl.addEventListener("keydown", function(e){
+				if(listEl.style.display!=="block"&&(e.key==="ArrowDown"||e.key==="ArrowUp")) return;
+				if(e.key==="ArrowDown"){ e.preventDefault(); move(1); }
+				else if(e.key==="ArrowUp"){ e.preventDefault(); move(-1); }
+				else if(e.key==="Enter"){ if(active>-1){ e.preventDefault(); choose(active); } }
+				else if(e.key==="Escape"){ closeList(); }
+			});
+			inputEl.addEventListener("blur", function(){
+				window.setTimeout(function(){
+					var ae=document.activeElement;
+					if(ae===inputEl||listEl.contains(ae)) return;
+					closeList();
+				}, 120);
+			});
+			document.addEventListener("click", function(e){
+				if(!listEl.contains(e.target)&&e.target!==inputEl){ closeList(); }
+			});
+			return {
+				render: render,
+				reset: function(){ navItems=[]; active=-1; }
+			};
+		}
+		var navigator=makeNavigator(input,list,chooseItem);
+		var timer=null;
+		function chooseItem(item, keepFocus){
+			hidden.value=item&&item.id?String(item.id):"0";
+			input.value=item&&item.title?item.title:"";
+			input.dataset.selectedTitle=item&&item.title?item.title:"";
+			hidden.dispatchEvent(new Event("change",{bubbles:true}));
+			if(keepFocus!==false) input.focus();
+		}
+		function exactMatch(query){
+			var q=(query||"").trim().toLocaleLowerCase();
+			if(!q) return null;
+			var matches=items.filter(function(item){ return item.titleLower===q; });
+			return matches.length===1 ? matches[0] : null;
+		}
+		function matchedItems(query){
+			var q=(query||"").trim().toLocaleLowerCase();
+			var activeId=parseInt(hidden.value||"0",10)||0;
+			var matches=items.slice();
+			if(q){
+				matches=matches.filter(function(item){ return item.titleLower.indexOf(q)!==-1; });
+				matches.sort(function(a,b){
+					var aStarts=a.titleLower.indexOf(q)===0 ? 0 : 1;
+					var bStarts=b.titleLower.indexOf(q)===0 ? 0 : 1;
+					if(aStarts!==bStarts) return aStarts-bStarts;
+					if(a.titleLower<b.titleLower) return -1;
+					if(a.titleLower>b.titleLower) return 1;
+					return 0;
+				});
+			} else if(activeId>0) {
+				matches.sort(function(a,b){
+					if(a.id===activeId&&b.id!==activeId) return -1;
+					if(b.id===activeId&&a.id!==activeId) return 1;
+					if(a.titleLower<b.titleLower) return -1;
+					if(a.titleLower>b.titleLower) return 1;
+					return 0;
+				});
+			}
+			return matches.slice(0,50);
+		}
+		function renderSuggestions(showAll){
+			var query=(input.value||"").trim();
+			if(!showAll&&query.length<1){
+				navigator.reset();
+				list.style.display="none";
+				list.innerHTML="";
+				return;
+			}
+			navigator.render(matchedItems(showAll ? "" : query));
+		}
+		function syncFieldFromHidden(){
+			var item=byId[String(hidden.value||"")]||null;
+			if(item){
+				input.value=item.title||"";
+				input.dataset.selectedTitle=item.title||"";
+			} else if((hidden.value||"")===""||String(hidden.value||"0")==="0"){
+				input.dataset.selectedTitle="";
+			}
+		}
+		input.addEventListener("input", function(){
+			hidden.value="0";
+			if(timer) clearTimeout(timer);
+			var query=(input.value||"").trim();
+			if(query.length===0){
+				renderSuggestions(true);
+				return;
+			}
+			timer=window.setTimeout(function(){ renderSuggestions(false); }, 120);
+		});
+		input.addEventListener("focus", function(){
+			renderSuggestions((input.value||"").trim()==="");
+		});
+		input.addEventListener("click", function(){
+			renderSuggestions((input.value||"").trim()==="");
+		});
+		input.addEventListener("blur", function(){
+			window.setTimeout(function(){
+				if(String(hidden.value||"0")==="0"){
+					var match=exactMatch(input.value||"");
+					if(match) chooseItem(match, false);
+				}
+			}, 130);
+		});
+		hidden.addEventListener("change", syncFieldFromHidden);
+		syncFieldFromHidden();
+	})();
+	</script>';
 }
 
 /* =========================================================
