@@ -1222,59 +1222,119 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 	global $wpdb;
 
 	$term  = isset($_GET['term']) ? sanitize_text_field(wp_unslash($_GET['term'])) : '';
+	$art   = isset($_GET['art']) ? sanitize_key(wp_unslash($_GET['art'])) : '';
 	$limit = 20;
 
 	$post_type = 'artikel';
 	$post_tbl  = $wpdb->posts;
 	$meta_tbl  = $wpdb->postmeta;
+	$allowed_art_values = ['produkt', 'dienstleistung'];
+	$art_filter = in_array($art, $allowed_art_values, true) ? $art : '';
+	$art_join = '';
+	$art_where = '';
+	if ($art_filter !== '') {
+		$art_join = " INNER JOIN {$meta_tbl} art_meta ON art_meta.post_id = ID AND art_meta.meta_key = '_cmx_artikel_art' ";
+		$art_where = $wpdb->prepare(" AND art_meta.meta_value = %s", $art_filter);
+	}
 
 	$ids = [];
 
 	if ($term === '') {
-		$ids = $wpdb->get_col(
-			$wpdb->prepare(
+		if ($art_filter !== '') {
+			$sql = $wpdb->prepare(
 				"SELECT ID FROM {$post_tbl}
+				 {$art_join}
 				 WHERE post_type=%s AND post_status<>'trash'
+				 {$art_where}
 				 ORDER BY post_title ASC
 				 LIMIT %d",
-				$post_type, $limit
-			)
-		);
+				$post_type,
+				$limit
+			);
+			$ids = $wpdb->get_col($sql);
+		} else {
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 WHERE post_type=%s AND post_status<>'trash'
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					$post_type, $limit
+				)
+			);
+		}
 	} else {
 		$like = '%' . $wpdb->esc_like($term) . '%';
 		$norm      = preg_replace('/[\s\.\-_:]/', '', $term);
 		$norm_like = '%' . $wpdb->esc_like($norm) . '%';
 
-		$title_ids = $wpdb->get_col(
-			$wpdb->prepare(
+		if ($art_filter !== '') {
+			$title_sql = $wpdb->prepare(
 				"SELECT ID FROM {$post_tbl}
+				 {$art_join}
 				 WHERE post_type=%s AND post_status<>'trash'
+				   {$art_where}
 				   AND post_title LIKE %s
 				 ORDER BY post_title ASC
 				 LIMIT %d",
-				$post_type, $like, $limit
-			)
-		);
+				$post_type,
+				$like,
+				$limit
+			);
+			$title_ids = $wpdb->get_col($title_sql);
+		} else {
+			$title_ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 WHERE post_type=%s AND post_status<>'trash'
+					   AND post_title LIKE %s
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					$post_type, $like, $limit
+				)
+			);
+		}
 
 		$meta_keys = ['cmx_artikel_sku', '_cmx_artikel_sku', '_cmx_artikel_nr', '_sku'];
 		$in_keys   = implode(',', array_fill(0, count($meta_keys), '%s'));
 
-		$meta_sql  = $wpdb->prepare(
-			"SELECT p.ID
-			   FROM {$post_tbl} p
-			   JOIN {$meta_tbl} m ON m.post_id = p.ID
-			  WHERE p.post_type=%s
-			    AND p.post_status<>'trash'
-			    AND m.meta_key IN ($in_keys)
-			    AND (
-					m.meta_value LIKE %s
-					OR REPLACE(REPLACE(REPLACE(REPLACE(m.meta_value,' ',''),'-',''),'.',''),':','') LIKE %s
-				)
-			  GROUP BY p.ID
-			  ORDER BY MAX(p.post_title) ASC
-			  LIMIT %d",
-			array_merge([$post_type], $meta_keys, [$like, $norm_like, $limit])
-		);
+		if ($art_filter !== '') {
+			$meta_sql  = $wpdb->prepare(
+				"SELECT p.ID
+				   FROM {$post_tbl} p
+				   JOIN {$meta_tbl} m ON m.post_id = p.ID
+				   JOIN {$meta_tbl} art_meta ON art_meta.post_id = p.ID AND art_meta.meta_key = '_cmx_artikel_art'
+				  WHERE p.post_type=%s
+				    AND p.post_status<>'trash'
+				    AND art_meta.meta_value=%s
+				    AND m.meta_key IN ($in_keys)
+				    AND (
+						m.meta_value LIKE %s
+						OR REPLACE(REPLACE(REPLACE(REPLACE(m.meta_value,' ',''),'-',''),'.',''),':','') LIKE %s
+					)
+				  GROUP BY p.ID
+				  ORDER BY MAX(p.post_title) ASC
+				  LIMIT %d",
+				array_merge([$post_type, $art_filter], $meta_keys, [$like, $norm_like, $limit])
+			);
+		} else {
+			$meta_sql  = $wpdb->prepare(
+				"SELECT p.ID
+				   FROM {$post_tbl} p
+				   JOIN {$meta_tbl} m ON m.post_id = p.ID
+				  WHERE p.post_type=%s
+				    AND p.post_status<>'trash'
+				    AND m.meta_key IN ($in_keys)
+				    AND (
+						m.meta_value LIKE %s
+						OR REPLACE(REPLACE(REPLACE(REPLACE(m.meta_value,' ',''),'-',''),'.',''),':','') LIKE %s
+					)
+				  GROUP BY p.ID
+				  ORDER BY MAX(p.post_title) ASC
+				  LIMIT %d",
+				array_merge([$post_type], $meta_keys, [$like, $norm_like, $limit])
+			);
+		}
 		$meta_ids = $wpdb->get_col($meta_sql);
 
 		$ids = array_slice(array_values(array_unique(array_merge($title_ids, $meta_ids))), 0, $limit);

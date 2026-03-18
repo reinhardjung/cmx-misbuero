@@ -126,14 +126,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
-	$artikel_items = [];
-	foreach ($artikel_options as $opt) {
-		$artikel_items[] = [
-			'id'    => (int) ($opt['id'] ?? 0),
-			'title' => (string) ($opt['label'] ?? ''),
-		];
-	}
-	$artikel_items_json = \wp_json_encode($artikel_items);
+	$ajax_url = \admin_url('admin-ajax.php');
 
 	echo '<style>
 	#cmx-projekt-tasks{display:flex;flex-direction:column;gap:8px;}
@@ -170,19 +163,12 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	echo '<p style="display:none;"><button type="button" class="button" id="cmx-task-add">weitere hinzufügen</button></p>';
 
 	?>
-	<script>
-		(function(){
-			const container = document.getElementById('cmx-projekt-tasks');
-			if (!container) return;
-			const addButton = document.getElementById('cmx-task-add');
-			const artikelItems = ' . ($artikel_items_json ?: '[]') . ';
-			const artikelById = {};
-			artikelItems.forEach(function(item){
-				item.id = parseInt(item.id || 0, 10) || 0;
-				item.title = item.title || "";
-				item.titleLower = item.title.toLocaleLowerCase();
-				if (item.id > 0) artikelById[String(item.id)] = item;
-			});
+		<script>
+			(function(){
+				const container = document.getElementById('cmx-projekt-tasks');
+				if (!container) return;
+				const addButton = document.getElementById('cmx-task-add');
+				const ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
 
 			function parseSwissDecimal(value){
 				let s = (value ?? '').toString().trim();
@@ -239,104 +225,89 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			function newUid() {
 				return 'tsk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 			}
-			function escHtml(value){
-				return (value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-			}
-			function initTaskArticleSearch(rowEl){
-				const input = rowEl.querySelector(".cmx-task-artikel-search");
-				const hidden = rowEl.querySelector(".cmx-task-artikel-id");
-				const list = rowEl.querySelector(".cmx-task-article-suggest-list");
-				if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
-				input.dataset.cmxSearchReady = "1";
-				let active = -1;
-				let navItems = [];
-				function closeList(){
-					list.style.display = "none";
-					list.innerHTML = "";
-					active = -1;
-					navItems = [];
+				function escHtml(value){
+					return (value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 				}
-				function render(arr){
-					navItems = arr || [];
-					if (!navItems.length) {
-						closeList();
-						return;
+				function artikelLabel(item){
+					if (!item) return "";
+					if (item.label) return String(item.label);
+					const nr = (item.nr || "").toString();
+					const title = (item.title || "").toString();
+					return nr ? (nr + " – " + title) : title;
+				}
+				function fetchArtikel(term, cb){
+					const url = new URL(ajaxUrl, window.location.origin);
+					url.searchParams.set("action", "cmx_search_artikel");
+					url.searchParams.set("term", term || "");
+					url.searchParams.set("art", "dienstleistung");
+					window.fetch(url.toString(), { credentials: "same-origin" })
+						.then(function(resp){ return resp.json(); })
+						.then(function(data){
+							const rows = Array.isArray(data) ? data.map(function(item){
+								return {
+									id: parseInt(item && item.value || 0, 10) || 0,
+									nr: item && item.nr ? String(item.nr) : "",
+									title: item && item.title ? String(item.title) : "",
+									label: item && item.label ? String(item.label) : ""
+								};
+							}) : [];
+							cb(rows);
+						})
+						.catch(function(){
+							cb([]);
+						});
+				}
+				function initTaskArticleSearch(rowEl){
+					const input = rowEl.querySelector(".cmx-task-artikel-search");
+					const hidden = rowEl.querySelector(".cmx-task-artikel-id");
+					const list = rowEl.querySelector(".cmx-task-article-suggest-list");
+					if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
+					input.dataset.cmxSearchReady = "1";
+					let active = -1;
+					let navItems = [];
+					let timer = null;
+					function closeList(){
+						list.style.display = "none";
+						list.innerHTML = "";
+						active = -1;
+						navItems = [];
+				}
+					function render(arr){
+						navItems = arr || [];
+						if (!navItems.length) {
+							closeList();
+							return;
+						}
+						list.innerHTML = navItems.map(function(item, index){
+							return "<li data-index=\"" + index + "\">" + escHtml(artikelLabel(item)) + "</li>";
+						}).join("");
+						list.style.display = "block";
+						active = -1;
 					}
-					list.innerHTML = navItems.map(function(item, index){
-						return "<li data-index=\"" + index + "\">" + escHtml(item.title) + "</li>";
-					}).join("");
-					list.style.display = "block";
-					active = -1;
-				}
 				function move(delta){
 					if (!navItems.length) return;
 					active = (active + delta + navItems.length) % navItems.length;
 					Array.prototype.forEach.call(list.children, function(li, index){
 						li.classList.toggle("active", index === active);
 					});
-				}
-				function chooseItem(item, keepFocus){
-					hidden.value = item && item.id ? String(item.id) : "";
-					input.value = item && item.title ? item.title : "";
-					input.dataset.selectedTitle = item && item.title ? item.title : "";
-					hidden.dispatchEvent(new Event("change", { bubbles: true }));
-					closeList();
-					if (keepFocus !== false) input.focus();
-				}
-				function matchedItems(query){
-					const q = (query || "").trim().toLocaleLowerCase();
-					const activeId = parseInt(hidden.value || "0", 10) || 0;
-					let matches = artikelItems.slice();
-					if (q) {
-						matches = matches.filter(function(item){ return item.titleLower.indexOf(q) !== -1; });
-						matches.sort(function(a, b){
-							const aStarts = a.titleLower.indexOf(q) === 0 ? 0 : 1;
-							const bStarts = b.titleLower.indexOf(q) === 0 ? 0 : 1;
-							if (aStarts !== bStarts) return aStarts - bStarts;
-							if (a.titleLower < b.titleLower) return -1;
-							if (a.titleLower > b.titleLower) return 1;
-							return 0;
-						});
-					} else if (activeId > 0) {
-						matches.sort(function(a, b){
-							if (a.id === activeId && b.id !== activeId) return -1;
-							if (b.id === activeId && a.id !== activeId) return 1;
-							if (a.titleLower < b.titleLower) return -1;
-							if (a.titleLower > b.titleLower) return 1;
-							return 0;
-						});
 					}
-					return matches.slice(0, 50);
-				}
-				function renderSuggestions(showAll){
-					const query = (input.value || "").trim();
-					if (!showAll && query.length < 1) {
+					function chooseItem(item, keepFocus){
+						hidden.value = item && item.id ? String(item.id) : "";
+						input.value = artikelLabel(item);
+						input.dataset.selectedTitle = input.value;
+						hidden.dispatchEvent(new Event("change", { bubbles: true }));
 						closeList();
-						return;
+						if (keepFocus !== false) input.focus();
 					}
-					render(matchedItems(showAll ? "" : query));
-				}
-				function syncFieldFromHidden(){
-					const item = artikelById[String(hidden.value || "")] || null;
-					if (item) {
-						input.value = item.title || "";
-						input.dataset.selectedTitle = item.title || "";
-						return;
+					function doSearch(query){
+						fetchArtikel(query, function(rows){
+							render(rows);
+						});
 					}
-					if ((hidden.value || "") === "") {
-						input.dataset.selectedTitle = "";
-					}
-				}
-				function exactMatch(query){
-					const q = (query || "").trim().toLocaleLowerCase();
-					if (!q) return null;
-					const matches = artikelItems.filter(function(item){ return item.titleLower === q; });
-					return matches.length === 1 ? matches[0] : null;
-				}
-				list.addEventListener("mousedown", function(e){
-					const li = e.target.closest("li");
-					if (!li) return;
-					e.preventDefault();
+					list.addEventListener("mousedown", function(e){
+						const li = e.target.closest("li");
+						if (!li) return;
+						e.preventDefault();
 					const index = parseInt(li.dataset.index || "-1", 10);
 					if (index > -1 && navItems[index]) chooseItem(navItems[index]);
 				});
@@ -354,39 +325,34 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 							chooseItem(navItems[active]);
 						}
 					} else if (e.key === "Escape") {
-						closeList();
-					}
-				});
-				input.addEventListener("input", function(){
-					hidden.value = "";
-					renderSuggestions((input.value || "").trim() === "");
-				});
-				input.addEventListener("focus", function(){
-					renderSuggestions((input.value || "").trim() === "");
-				});
-				input.addEventListener("click", function(){
-					renderSuggestions((input.value || "").trim() === "");
-				});
-				input.addEventListener("blur", function(){
-					window.setTimeout(function(){
-						const activeEl = document.activeElement;
-						if (activeEl === input || list.contains(activeEl)) return;
-						if ((hidden.value || "") === "") {
-							const match = exactMatch(input.value || "");
-							if (match) {
-								chooseItem(match, false);
-								return;
-							}
+							closeList();
 						}
-						closeList();
-					}, 120);
-				});
-				document.addEventListener("click", function(e){
-					if (!list.contains(e.target) && e.target !== input) closeList();
-				});
-				hidden.addEventListener("change", syncFieldFromHidden);
-				syncFieldFromHidden();
-			}
+					});
+					input.addEventListener("input", function(){
+						if (timer) window.clearTimeout(timer);
+						hidden.value = "";
+						const query = (input.value || "").trim();
+						if (query.length < 1) {
+							doSearch("");
+							return;
+						}
+						timer = window.setTimeout(function(){ doSearch(query); }, 120);
+					});
+					input.addEventListener("focus", function(){
+						doSearch("");
+					});
+					input.addEventListener("click", function(){ doSearch(""); });
+					input.addEventListener("blur", function(){
+						window.setTimeout(function(){
+							const activeEl = document.activeElement;
+							if (activeEl === input || list.contains(activeEl)) return;
+							closeList();
+						}, 120);
+					});
+					document.addEventListener("click", function(e){
+						if (!list.contains(e.target) && e.target !== input) closeList();
+					});
+				}
 
 			function addRow(data){
 				const idx = container.querySelectorAll('.cmx-task-row').length;

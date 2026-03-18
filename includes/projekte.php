@@ -92,6 +92,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 
 		if ($is_pretty_search) {
 			echo '<style>
+			#' . \esc_attr(CMX_ZU_PROJEKT_MB_ID) . ',
+			#' . \esc_attr(CMX_ZU_PROJEKT_MB_ID) . ' .inside,
 			#' . \esc_attr($box_id) . '{position:relative;overflow:visible}
 			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-suggest{position:relative;overflow:visible}
 			#' . \esc_attr($box_id) . ' .cmx-zu-projekt-results{
