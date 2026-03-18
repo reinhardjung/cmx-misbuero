@@ -355,6 +355,7 @@ function cmx_lieferanten_args(): array {
 	$new['marge']          = 'Marge';
 	$new['verkaufbar']     = 'Verkaufbar';
 	$new['katalog']        = 'Katalog';
+	$new['woo']            = 'Woo';
 	$new['hersteller_url'] = 'URL';
 	$new['featimg']        = 'Bild';
 	return $new;
@@ -521,6 +522,25 @@ function cmx_lieferanten_args(): array {
 				: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>';
 			break;
 
+		case 'woo':
+			$woo_id = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WOO_ID')
+				? \trim((string) \get_post_meta($post_id, CMX_ARTIKEL_META_WOO_ID, true))
+				: '';
+			if ($woo_id === '') {
+				echo '';
+				break;
+			}
+			$tooltip = 'Woo-ID: ' . $woo_id;
+			$woo_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_woo_product_link_url')
+				? (string) cmx_artikel_woo_product_link_url($woo_id)
+				: '';
+			if ($woo_url !== '') {
+				echo '<a href="' . \esc_url($woo_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($tooltip) . '" aria-label="' . \esc_attr($tooltip) . '" style="text-decoration:none;color:#2271b1;"><span class="dashicons dashicons-products" style="font-size:18px;vertical-align:middle;"></span></a>';
+			} else {
+				echo '<span title="' . \esc_attr($tooltip) . '" aria-label="' . \esc_attr($tooltip) . '" style="display:inline-block;color:#2271b1;"><span class="dashicons dashicons-products" style="font-size:18px;vertical-align:middle;"></span></span>';
+			}
+			break;
+
 		case 'hersteller_url':
 			$url = \trim(\get_post_meta($post_id, CMX_ARTIKEL_META_BEZUGSQUELLE, true));
 			echo $url
@@ -593,6 +613,15 @@ function cmx_lieferanten_args(): array {
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
+			}
+			.wp-list-table th#woo,
+			.wp-list-table td.column-woo,
+			.wp-list-table th#hersteller_url,
+			.wp-list-table td.column-hersteller_url {
+				width: 46px;
+				min-width: 46px;
+				max-width: 46px;
+				text-align: center;
 			}
 		</style>
 		<?php
