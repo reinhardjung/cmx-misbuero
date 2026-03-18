@@ -268,7 +268,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 
 		echo '<div class="cmx-intern-notiz-row">';
 		echo '<div class="cmx-intern-notiz-main">';
-			echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="4" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
+			echo '<textarea rows="4" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" aria-label="' . \esc_attr__('Notiz', 'cmx') . '" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea>';
 		if ($links !== []) {
 			echo '<div class="cmx-intern-notiz-links">';
 			echo '<strong>' . \esc_html__('Links', 'cmx') . ':</strong> ';
@@ -330,9 +330,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';
-		echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;}';
+			echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;margin-right:auto;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}';
-		echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:flex-start;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
+			echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:flex-end;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
 		echo '</style>';
 		echo '<div id="cmx-intern-notizen-list">';
 		foreach ($rows as $idx => $row) {
