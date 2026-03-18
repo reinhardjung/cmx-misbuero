@@ -13,6 +13,7 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG'))        \define(__NA
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE', '_cmx_artikel_bezugsquelle_url');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID', '_cmx_artikel_lieferant_id');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS', '_cmx_artikel_variant_rows');
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART'))            \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART', '_cmx_artikel_art');
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_term_name')) {
 	function cmx_artikel_admin_variant_term_name(string $taxonomy, int $term_id): string {
@@ -665,6 +666,14 @@ function cmx_lieferanten_args(): array {
 	$current = isset($_GET['cmx_lieferant']) ? (string)$_GET['cmx_lieferant'] : '0';
 	$current_verkaufbar = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
 	$current_katalog = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
+	$current_art = isset($_GET['cmx_artikel_art_filter']) ? (string)\sanitize_key((string) $_GET['cmx_artikel_art_filter']) : '0';
+
+	echo '<label class="screen-reader-text" for="cmx_artikel_art_filter">Art filtern</label>';
+	echo '<select name="cmx_artikel_art_filter" id="cmx_artikel_art_filter">';
+	echo '<option value="0"' . selected($current_art, '0', false) . '>Alle Arten</option>';
+	echo '<option value="produkt"' . selected($current_art, 'produkt', false) . '>Nur Produkte</option>';
+	echo '<option value="dienstleistung"' . selected($current_art, 'dienstleistung', false) . '>Nur Dienstleistungen</option>';
+	echo '</select>';
 
 	if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') || cmx_admin_post_type_column_is_visible('artikel', 'lieferant')) {
 		echo '<label class="screen-reader-text" for="cmx_lieferant">Lieferant filtern</label>';
@@ -758,6 +767,7 @@ function cmx_lieferanten_args(): array {
 	$lieferant_id    = absint($lieferant_raw);
 	$verkaufbar_raw  = isset($_GET['cmx_verkaufbar']) ? (string)\sanitize_text_field((string) $_GET['cmx_verkaufbar']) : '0';
 	$katalog_raw     = isset($_GET['cmx_katalog']) ? (string)\sanitize_text_field((string) $_GET['cmx_katalog']) : '0';
+	$art_filter      = isset($_GET['cmx_artikel_art_filter']) ? (string)\sanitize_key((string) $_GET['cmx_artikel_art_filter']) : '0';
 	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible')) {
 		if (!cmx_admin_post_type_column_is_visible('artikel', 'lieferant')) {
 			$lieferant_raw = '0';
@@ -921,6 +931,40 @@ function cmx_lieferanten_args(): array {
 					'value'   => 1,
 					'compare' => '=',
 					'type'    => 'NUMERIC',
+				],
+			];
+		}
+
+		if (!isset($meta_query['relation'])) {
+			$meta_query = array_merge(['relation' => 'AND'], $meta_query);
+		}
+		$q->set('meta_query', $meta_query);
+	}
+
+	if ($art_filter === 'produkt' || $art_filter === 'dienstleistung') {
+		$meta_query = (array) $q->get('meta_query');
+		if ($art_filter === 'dienstleistung') {
+			$meta_query[] = [
+				'key'     => CMX_ARTIKEL_META_ART,
+				'value'   => 'dienstleistung',
+				'compare' => '=',
+			];
+		} else {
+			$meta_query[] = [
+				'relation' => 'OR',
+				[
+					'key'     => CMX_ARTIKEL_META_ART,
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key'     => CMX_ARTIKEL_META_ART,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => CMX_ARTIKEL_META_ART,
+					'value'   => 'produkt',
+					'compare' => '=',
 				],
 			];
 		}

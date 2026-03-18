@@ -126,7 +126,8 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'produkt_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
-	$ajax_url = \admin_url('admin-ajax.php');
+		$ajax_url = \admin_url('admin-ajax.php');
+		$artikel_edit_base_url = \admin_url('post.php');
 	echo '<style>
 	#cmx_projekt_tasks,
 	#cmx_projekt_tasks .inside,
@@ -135,9 +136,11 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-projekt-tasks .cmx-task-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}
 	#cmx-projekt-tasks .cmx-task-main{min-width:0;}
 	#cmx-projekt-tasks .cmx-task-side{display:flex;flex-direction:column;gap:8px;}
-	#cmx-projekt-tasks .cmx-task-article-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-	#cmx-projekt-tasks .cmx-task-label{display:flex;flex-direction:column;gap:4px;min-width:0;}
-	#cmx-projekt-tasks .cmx-task-label-inline{display:flex;align-items:center;gap:6px;}
+		#cmx-projekt-tasks .cmx-task-article-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+		#cmx-projekt-tasks .cmx-task-label{display:flex;flex-direction:column;gap:4px;min-width:0;}
+		#cmx-projekt-tasks .cmx-task-label-jump{color:inherit;font:inherit;text-decoration:none;}
+		#cmx-projekt-tasks .cmx-task-label-jump:hover{text-decoration:underline;}
+		#cmx-projekt-tasks .cmx-task-label-inline{display:flex;align-items:center;gap:6px;}
 	#cmx-projekt-tasks .cmx-task-checkboxes{display:flex;flex-wrap:wrap;align-items:center;gap:16px;}
 	#cmx-projekt-tasks .cmx-task-check{display:flex;justify-content:flex-start;align-items:center;}
 	#cmx-projekt-tasks .cmx-task-check-label{display:inline-flex;align-items:center;gap:6px;font-weight:600;cursor:pointer;}
@@ -176,6 +179,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 				if (!container) return;
 				const addButton = document.getElementById('cmx-task-add');
 				const ajaxUrl = <?php echo \wp_json_encode($ajax_url); ?>;
+				const artikelEditBaseUrl = <?php echo \wp_json_encode($artikel_edit_base_url); ?>;
 
 			function parseSwissDecimal(value){
 				let s = (value ?? '').toString().trim();
@@ -307,27 +311,44 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 					});
 					return { render: render, reset: function(){ items=[]; active=-1; } };
 				}
-				function initTaskArticleSearch(rowEl){
-					rowEl.querySelectorAll(".cmx-task-article-picker").forEach(function(picker){
-						const input = picker.querySelector(".cmx-task-artikel-search");
+					function artikelEditUrl(id){
+						const artikelId = parseInt(id || 0, 10);
+						if (!artikelId) return "";
+						return artikelEditBaseUrl + "?post=" + encodeURIComponent(String(artikelId)) + "&action=edit";
+					}
+					function syncPickerJumpLink(picker){
+						if (!picker) return;
+						const jumpLink = picker.closest(".cmx-task-label")?.querySelector(".cmx-task-label-jump");
 						const hidden = picker.querySelector(".cmx-task-artikel-id");
-						const list = picker.querySelector(".cmx-artikel-suggest");
-						const art = (picker.getAttribute("data-art") || "").toString();
-						if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
-						input.dataset.cmxSearchReady = "1";
-						const nav = makeNavigator(input, list, chooseItem);
-						let timer = null;
+						if (!jumpLink || !hidden) return;
+						const selectedId = parseInt(hidden.value || "0", 10);
+						const listUrl = jumpLink.getAttribute("data-list-url") || "#";
+						const href = selectedId > 0 ? artikelEditUrl(selectedId) : listUrl;
+						jumpLink.setAttribute("href", href || listUrl);
+					}
+					function initTaskArticleSearch(rowEl){
+						rowEl.querySelectorAll(".cmx-task-article-picker").forEach(function(picker){
+							const input = picker.querySelector(".cmx-task-artikel-search");
+							const hidden = picker.querySelector(".cmx-task-artikel-id");
+							const list = picker.querySelector(".cmx-artikel-suggest");
+							const art = (picker.getAttribute("data-art") || "").toString();
+							if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
+							input.dataset.cmxSearchReady = "1";
+							syncPickerJumpLink(picker);
+							const nav = makeNavigator(input, list, chooseItem);
+							let timer = null;
 						function artikelLabel(item){
 							const nr = (item && item.nr ? String(item.nr) : "");
 							const title = (item && item.title ? String(item.title) : "");
 							return nr ? (nr + " – " + title) : title;
 						}
-						function chooseItem(item, keepFocus){
-							hidden.value = item && item.id ? String(item.id) : "";
-							input.value = artikelLabel(item);
-							input.dataset.selectedTitle = input.value;
-							hidden.dispatchEvent(new Event("change", { bubbles: true }));
-							if (art === "dienstleistung") {
+							function chooseItem(item, keepFocus){
+								hidden.value = item && item.id ? String(item.id) : "";
+								input.value = artikelLabel(item);
+								input.dataset.selectedTitle = input.value;
+								syncPickerJumpLink(picker);
+								hidden.dispatchEvent(new Event("change", { bubbles: true }));
+								if (art === "dienstleistung") {
 								const produktInput = rowEl.querySelector('.cmx-task-article-picker[data-art="produkt"] .cmx-task-artikel-search');
 								if (produktInput) {
 									window.setTimeout(function(){
@@ -351,19 +372,23 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 								nav.render(rows);
 							});
 						}
-						input.addEventListener("input", function(){
-							if (timer) window.clearTimeout(timer);
-							hidden.value = "";
-							const query = (input.value || "").trim();
-							if (query.length < 1) {
-								doSearch("");
+							input.addEventListener("input", function(){
+								if (timer) window.clearTimeout(timer);
+								hidden.value = "";
+								syncPickerJumpLink(picker);
+								const query = (input.value || "").trim();
+								if (query.length < 1) {
+									doSearch("");
 								return;
 							}
 							timer = window.setTimeout(function(){ doSearch(query); }, 120);
-						});
-						input.addEventListener("focus", function(){
-							doSearch("");
-						});
+							});
+							hidden.addEventListener("change", function(){
+								syncPickerJumpLink(picker);
+							});
+							input.addEventListener("focus", function(){
+								doSearch("");
+							});
 						input.addEventListener("click", function(){ doSearch(""); });
 					});
 				}
@@ -526,8 +551,10 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
 	echo '<div class="cmx-task-main">';
 	echo '<div class="cmx-task-article-grid">';
-	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="dienstleistung"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
-	echo '<label class="cmx-task-label"><span>Produkt</span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="produkt"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Produkt suchen" placeholder="Produkt suchen..." value="'.\esc_attr($produkt_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][produkt_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $produkt_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
+		$dienstleistung_list_url = \add_query_arg(['post_type' => 'artikel', 'cmx_artikel_art_filter' => 'dienstleistung'], \admin_url('edit.php'));
+		$produkt_list_url = \add_query_arg(['post_type' => 'artikel', 'cmx_artikel_art_filter' => 'produkt'], \admin_url('edit.php'));
+		echo '<label class="cmx-task-label"><span><a href="'.\esc_url($dienstleistung_list_url).'" class="cmx-task-label-jump" data-list-url="'.\esc_attr($dienstleistung_list_url).'" target="_blank" rel="noopener noreferrer">Dienstleistung</a></span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="dienstleistung"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
+		echo '<label class="cmx-task-label"><span><a href="'.\esc_url($produkt_list_url).'" class="cmx-task-label-jump" data-list-url="'.\esc_attr($produkt_list_url).'" target="_blank" rel="noopener noreferrer">Produkt</a></span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="produkt"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Produkt suchen" placeholder="Produkt suchen..." value="'.\esc_attr($produkt_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][produkt_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $produkt_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
 	echo '</div>';
 	echo '<label class="cmx-task-label" style="margin-top:8px;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="4">'.$info.'</textarea></label>';
 	echo '</div>';
