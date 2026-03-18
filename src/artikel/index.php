@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien,Grössen,Zoll,Abos');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien,Grössen,Materialien,Ausführungen');
 
 
 // Define: CONST 4 each Taxo
@@ -24,6 +24,8 @@ cmx_const_taxos(cmx_sani_key(basename(__DIR__),'upper'),basename(__DIR__), CMX_T
 	cmx_create_taxo(basename(__DIR__), 'Farbe', 'Farben');
 	cmx_create_taxo(basename(__DIR__), 'Einheit', 'Einheiten');
 	cmx_create_taxo(basename(__DIR__), 'Groesse', 'Grössen');
+	cmx_create_taxo(basename(__DIR__), 'Ausfuehrung', 'Ausführungen');
+	cmx_create_taxo(basename(__DIR__), 'Material', 'Materialien');
 }, 15);
 
 
