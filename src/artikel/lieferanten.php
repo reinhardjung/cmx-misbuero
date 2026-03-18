@@ -414,62 +414,47 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	}
 	$lieferanten_json = \wp_json_encode($lieferanten_items) ?: '[]';
 	echo '<style>
-	#cmx-artikel-lieferanten-table{
-		border:0 !important;
-		box-shadow:none !important;
-		border-collapse:collapse;
-		margin:0 !important;
-		background:transparent;
+	#cmx-artikel-lieferanten-head{
+		display:grid;
+		grid-template-columns:minmax(220px,1.6fr) minmax(140px,1fr) minmax(120px,.8fr) minmax(320px,2.4fr) minmax(90px,.6fr) minmax(90px,.6fr);
+		gap:12px 18px;
+		margin:0 0 8px;
+		padding:4px 10px 0;
 	}
-	#cmx-artikel-lieferanten-table th,#cmx-artikel-lieferanten-table td{vertical-align:middle}
-	#cmx-artikel-lieferanten-table thead th{
-		border-top:0 !important;
-		padding-top:4px;
-		padding-bottom:8px;
-		background:transparent;
-		font-weight:500;
+		#cmx-artikel-lieferanten-head span{
+			font-weight:500;
+			color:#1d2327;
+		}
+		#cmx-artikel-lieferanten-head span:first-child{padding-left:6px}
+	#cmx-artikel-lieferanten-list{
+		display:flex;
+		flex-direction:column;
+		gap:10px;
 	}
-	#cmx-artikel-lieferanten-table > thead > tr > th:first-child,
-	#cmx-artikel-lieferanten-table > tbody > tr > td:first-child{border-left:0 !important}
-	#cmx-artikel-lieferanten-table > thead > tr > th:last-child,
-	#cmx-artikel-lieferanten-table > tbody > tr > td:last-child{border-right:0 !important}
-	#cmx-artikel-lieferanten-table .col-lieferant{width:24%}
-	#cmx-artikel-lieferanten-table .col-nr{width:16%}
-	#cmx-artikel-lieferanten-table .col-ek{width:12%}
-	#cmx-artikel-lieferanten-table .col-quelle,
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){width:490px;min-width:490px}
-	#cmx-artikel-lieferanten-table .col-ltage,
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5),
-	#cmx-artikel-lieferanten-table .col-lager,
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6){width:75px;min-width:75px}
-	#cmx-artikel-lieferanten-table .col-ltage,
-	#cmx-artikel-lieferanten-table .col-lager{transform:translateX(80px)}
-	#cmx-artikel-lieferanten-table .col-actions{width:56px;min-width:56px;text-align:center}
-	#cmx-artikel-lieferanten-table .widefat{width:100%}
-		#cmx-artikel-lieferanten-table tbody td{background:transparent}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
-			background:#fafafa;
-			border-top:1px solid #ddd !important;
-			border-bottom:0 !important;
-			border-left:0 !important;
-			border-right:0 !important;
-			padding-top:12px;
-			padding-bottom:10px;
-		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:first-child{
-			border-left:1px solid #ddd !important;
-			border-top-left-radius:6px;
-		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:last-child{
-			border-right:1px solid #ddd !important;
-			border-top-right-radius:6px;
-		}
-	#cmx-artikel-lieferanten-table .cmx-supplier-wrap{display:flex;align-items:flex-start;gap:6px}
-	#cmx-artikel-lieferanten-table .cmx-lief-suggest{position:relative;flex:1 1 auto;min-width:0}
-	#cmx-artikel-lieferanten-table .cmx-lief-input-row{display:flex;align-items:center;gap:6px}
-	#cmx-artikel-lieferanten-table .cmx-lief-input-row input[type=text]{flex:1 1 auto;min-width:0}
-	#cmx-artikel-lieferanten-table .cmx-lief-supplier-id{display:none}
-	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest{
+	#cmx-artikel-lieferanten-list .cmx-lief-row{
+		padding:10px;
+		border:1px solid #ddd;
+		border-radius:6px;
+		background:#fafafa;
+	}
+	#cmx-artikel-lieferanten-list .cmx-lief-grid{
+		display:grid;
+		grid-template-columns:minmax(220px,1.6fr) minmax(140px,1fr) minmax(120px,.8fr) minmax(320px,2.4fr) minmax(90px,.6fr) minmax(90px,.6fr);
+		gap:12px 18px;
+		align-items:start;
+	}
+	#cmx-artikel-lieferanten-list .cmx-lief-field{
+		min-width:0;
+		box-sizing:border-box;
+	}
+	#cmx-artikel-lieferanten-list .cmx-lief-field::before{content:none}
+	#cmx-artikel-lieferanten-list .widefat{width:100%}
+	#cmx-artikel-lieferanten-list .cmx-supplier-wrap{display:flex;align-items:flex-start;gap:6px}
+	#cmx-artikel-lieferanten-list .cmx-lief-suggest{position:relative;flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-input-row{display:flex;align-items:center;gap:6px}
+	#cmx-artikel-lieferanten-list .cmx-lief-input-row input[type=text]{flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-supplier-id{display:none}
+	#cmx-artikel-lieferanten-list .cmx-lief-supplier-suggest{
 		position:absolute;
 		z-index:40;
 		left:0;
@@ -484,143 +469,69 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		box-shadow:0 10px 24px rgba(0,0,0,.10);
 		list-style:none;
 	}
-	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li{margin:0;padding:6px 8px;cursor:pointer}
-	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li.active{background:#e5f3ff}
-	#cmx-artikel-lieferanten-table .cmx-lief-supplier-suggest li:hover{background:#f3f4f5}
-	#cmx-artikel-lieferanten-table .cmx-supplier-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px}
-	#cmx-artikel-lieferanten-table .cmx-supplier-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
-	#cmx-artikel-lieferanten-table .cmx-supplier-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
-	#cmx-artikel-lieferanten-table .cmx-url-wrap{display:flex;align-items:center;gap:6px}
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4){overflow:visible}
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4) .cmx-url-wrap{width:540px;min-width:540px;position:relative;z-index:2}
-	#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{flex:0 0 585px;width:585px !important;min-width:585px}
-	#cmx-artikel-lieferanten-table .cmx-url-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px}
-	#cmx-artikel-lieferanten-table .cmx-url-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
-	#cmx-artikel-lieferanten-table .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
-	#cmx-artikel-lieferanten-table .cmx-supplier-open.is-disabled,
-	#cmx-artikel-lieferanten-table .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:translateX(80px)}
-		#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
-			background:#fafafa;
-			border:1px solid #ddd !important;
-			border-top:0 !important;
-			border-bottom-left-radius:6px;
-			border-bottom-right-radius:6px;
-		}
-		#cmx-artikel-lieferanten-table .cmx-lief-note-full-cell{padding:0 10px 12px 10px}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding:0;border:0;border-radius:0;background:transparent}
-	#cmx-artikel-lieferanten-table .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 6px}
-	#cmx-artikel-lieferanten-table .cmx-lief-note{width:100%;min-height:44px;height:44px;resize:vertical;box-sizing:border-box}
-	#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-actions-cell{padding:0 0 0 8px}
-	#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin-top:8px}
-	#cmx-artikel-lieferanten-table .cmx-lief-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
-	#cmx-artikel-lieferanten-table tbody tr.cmx-lief-note-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
-	#cmx-artikel-lieferanten-table .cmx-lief-cell{box-sizing:border-box}
+	#cmx-artikel-lieferanten-list .cmx-lief-supplier-suggest li{margin:0;padding:6px 8px;cursor:pointer}
+	#cmx-artikel-lieferanten-list .cmx-lief-supplier-suggest li.active{background:#e5f3ff}
+	#cmx-artikel-lieferanten-list .cmx-lief-supplier-suggest li:hover{background:#f3f4f5}
+		#cmx-artikel-lieferanten-list .cmx-supplier-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px;margin-top:6px}
+	#cmx-artikel-lieferanten-list .cmx-supplier-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
+	#cmx-artikel-lieferanten-list .cmx-supplier-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
+	#cmx-artikel-lieferanten-list .cmx-url-wrap{display:flex;align-items:center;gap:6px;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-url{flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-url-open{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:1px solid #ccd0d4;border-radius:4px;text-decoration:none;color:#2271b1;background:#fff;flex:0 0 28px}
+	#cmx-artikel-lieferanten-list .cmx-url-open:hover{color:#135e96;border-color:#8c8f94;background:#f6fbff}
+	#cmx-artikel-lieferanten-list .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
+	#cmx-artikel-lieferanten-list .cmx-supplier-open.is-disabled,
+	#cmx-artikel-lieferanten-list .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
+	#cmx-artikel-lieferanten-list .cmx-lief-note-wrap{
+		display:grid;
+		grid-template-columns:minmax(0,1fr) auto;
+		gap:10px;
+		margin-top:10px;
+		align-items:end;
+	}
+	#cmx-artikel-lieferanten-list .cmx-lief-note-panel{min-width:0;padding:0;border:0;border-radius:0;background:transparent}
+	#cmx-artikel-lieferanten-list .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 6px}
+	#cmx-artikel-lieferanten-list .cmx-lief-note{width:100%;min-height:44px;height:44px;resize:vertical;box-sizing:border-box}
+	#cmx-artikel-lieferanten-list .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
+	#cmx-artikel-lieferanten-list .cmx-lief-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
 	@media (max-width: 1280px){
-		#cmx-artikel-lieferanten-table,
-		#cmx-artikel-lieferanten-table tbody{display:block;width:100%}
-		#cmx-artikel-lieferanten-table thead{display:none}
-			#cmx-artikel-lieferanten-table .cmx-lief-item-row{
-				display:flex;
-				flex-wrap:wrap;
-				gap:10px 12px;
-				padding:12px 12px 4px;
-				border:1px solid #ddd;
-				border-bottom:0;
-				border-radius:6px 6px 0 0;
-				background:#fafafa;
-			}
-			#cmx-artikel-lieferanten-table .cmx-lief-item-row:first-child{margin-top:0}
-			#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
-				display:block;
-				padding:0 !important;
-				border:0 !important;
-				background:transparent;
-			flex:1 1 180px;
-			min-width:140px;
-			width:auto !important;
-			max-width:100%;
+		#cmx-artikel-lieferanten-head{display:none}
+		#cmx-artikel-lieferanten-list .cmx-lief-grid{
+			grid-template-columns:repeat(2, minmax(0, 1fr));
+			gap:10px 12px;
 		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td::before{
+		#cmx-artikel-lieferanten-list .cmx-lief-field::before{
 			content:attr(data-label);
 			display:block;
 			font-weight:600;
 			margin:0 0 4px;
 			color:#1d2327;
 		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--supplier{flex:1 1 250px}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--nr{flex:1 1 180px}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--ek{flex:1 1 150px;max-width:200px}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--quelle{flex:1 1 320px}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--ltage,
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-cell--lager{flex:1 1 120px;max-width:160px}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row .cmx-lief-actions-cell{display:none}
-		#cmx-artikel-lieferanten-table .cmx-supplier-wrap,
-		#cmx-artikel-lieferanten-table .cmx-url-wrap{
-			display:flex;
-			align-items:flex-start;
-			gap:6px;
-			width:100%;
-			min-width:0;
-		}
-		#cmx-artikel-lieferanten-table .cmx-supplier-wrap .cmx-lief-suggest,
-		#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url{
-			flex:1 1 auto;
-			min-width:0;
-			width:auto !important;
-		}
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4),
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(4) .cmx-url-wrap,
-		#cmx-artikel-lieferanten-table .cmx-url-wrap .cmx-lief-url,
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5),
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6){
-			width:auto !important;
-			min-width:0 !important;
-		}
-		#cmx-artikel-lieferanten-table .col-ltage,
-		#cmx-artikel-lieferanten-table .col-lager,
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(5) input,
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td:nth-child(6) input{transform:none}
-			#cmx-artikel-lieferanten-table .cmx-lief-note-row{
-				display:block;
-				margin:0 0 10px;
-			}
-			#cmx-artikel-lieferanten-table .cmx-lief-note-row td{
-				display:block;
-				padding:0 12px 12px;
-				border:1px solid #ddd !important;
-				border-top:0 !important;
-				border-radius:0 0 6px 6px;
-				background:#fafafa;
-			}
-		#cmx-artikel-lieferanten-table .cmx-lief-note-panel{padding-top:2px}
-		#cmx-artikel-lieferanten-table .cmx-lief-actions-stack{
+		#cmx-artikel-lieferanten-list .cmx-lief-field--supplier,
+		#cmx-artikel-lieferanten-list .cmx-lief-field--quelle{grid-column:1 / -1}
+		#cmx-artikel-lieferanten-list .cmx-lief-note-wrap{grid-template-columns:1fr}
+		#cmx-artikel-lieferanten-list .cmx-lief-actions-stack{
 			justify-content:flex-start;
 			flex-wrap:wrap;
-			margin-top:10px;
 		}
 	}
 	@media (max-width: 782px){
-		#cmx-artikel-lieferanten-table .cmx-lief-item-row td{
-			flex:1 1 100%;
-			max-width:none;
-		}
+		#cmx-artikel-lieferanten-list .cmx-lief-grid{grid-template-columns:1fr}
 	}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
 	.cmx-lief-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
 	</style>';
 
-	echo '<table class="widefat" id="cmx-artikel-lieferanten-table">';
-	echo '<thead><tr>';
-	echo '<th class="col-lieferant">Name</th>';
-	echo '<th class="col-nr">Artikel-Nr</th>';
-	echo '<th class="col-ek">Einkaufspreis</th>';
-	echo '<th class="col-quelle">Bezugsquelle</th>';
-	echo '<th class="col-ltage">Lieferzeit</th>';
-	echo '<th class="col-lager">Bestand</th>';
-	echo '<th class="col-actions"></th>';
-	echo '</tr></thead><tbody>';
+	echo '<div id="cmx-artikel-lieferanten-head">';
+	echo '<span>Name</span>';
+	echo '<span>Artikel-Nr</span>';
+	echo '<span>Einkaufspreis</span>';
+	echo '<span>Bezugsquelle</span>';
+	echo '<span>Lieferzeit</span>';
+	echo '<span>Bestand</span>';
+	echo '</div>';
+	echo '<div id="cmx-artikel-lieferanten-list">';
 
 	foreach ($normalized_rows as $i => $row) {
 		$r_lieferant = (int)($row['lieferant_id'] ?? 0);
@@ -634,27 +545,26 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		$r_ltage = max(0, (int)($row['lieferzeit_tage'] ?? 0));
 		$r_lager = max(0, (int)($row['lagerbestand'] ?? 0));
 		$r_notiz = (string)($row['notiz'] ?? '');
-		echo '<tr class="cmx-lief-item-row">';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><div class="cmx-lief-suggest"><div class="cmx-lief-input-row"><input type="text" class="widefat cmx-lief-supplier-search" autocomplete="off" value="'.\esc_attr($r_lieferant_title).'" placeholder="Lieferant suchen..."><input type="hidden" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="cmx-lief-supplier-id" value="'.\esc_attr((string)$r_lieferant).'"></div><ul class="cmx-lief-supplier-suggest" style="display:none"></ul></div></div></td>';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--nr" data-label="Artikel-Nr."><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></td>';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></td>';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></td>';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--ltage" data-label="Lieferzeit"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></td>';
-		echo '<td class="cmx-lief-cell cmx-lief-cell--lager" data-label="Bestand"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></td>';
-		echo '<td class="cmx-lief-actions-cell"></td>';
-		echo '</tr>';
-		echo '<tr class="cmx-lief-note-row">';
-		echo '<td colspan="7" class="cmx-lief-note-full-cell">';
-		echo '<div class="cmx-lief-note-panel">';
-		echo '<label class="cmx-lief-note-label" for="cmx_artikel_lieferanten_notiz_' . (int)$i . '">Notizen</label>';
-		echo '<textarea id="cmx_artikel_lieferanten_notiz_' . (int)$i . '" name="cmx_artikel_lieferanten['.(int)$i.'][notiz]" class="cmx-lief-note">' . \esc_textarea($r_notiz) . '</textarea>';
-		echo '</div>';
-		echo '<div class="cmx-lief-actions-stack"><button type="button" class="button button-secondary cmx-lief-add">Lieferant hinzufügen</button><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div>';
-		echo '</td>';
-		echo '</tr>';
-	}
+			echo '<div class="cmx-lief-row">';
+			echo '<div class="cmx-lief-grid">';
+			echo '<div class="cmx-lief-field cmx-lief-field--supplier" data-label="Name"><div class="cmx-supplier-wrap"><a class="cmx-supplier-open cmx-lief-supplier-open'.($r_lieferant_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_lieferant_open !== '' ? $r_lieferant_open : '#').'" target="_blank" rel="noopener noreferrer" title="Lieferant öffnen"><span class="dashicons dashicons-edit"></span></a><div class="cmx-lief-suggest"><div class="cmx-lief-input-row"><input type="text" class="widefat cmx-lief-supplier-search" autocomplete="off" value="'.\esc_attr($r_lieferant_title).'" placeholder="Lieferant suchen..."><input type="hidden" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_id]" class="cmx-lief-supplier-id" value="'.\esc_attr((string)$r_lieferant).'"></div><ul class="cmx-lief-supplier-suggest" style="display:none"></ul></div></div></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--nr" data-label="Artikel-Nr."><input type="text" name="cmx_artikel_lieferanten['.(int)$i.'][lieferant_nr]" class="widefat" value="'.\esc_attr($r_lfnr).'"></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--ltage" data-label="Lieferzeit"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--lager" data-label="Bestand"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></div>';
+			echo '</div>';
+			echo '<div class="cmx-lief-note-wrap">';
+			echo '<div class="cmx-lief-note-panel">';
+			echo '<label class="cmx-lief-note-label" for="cmx_artikel_lieferanten_notiz_' . (int)$i . '">Notizen</label>';
+			echo '<textarea id="cmx_artikel_lieferanten_notiz_' . (int)$i . '" name="cmx_artikel_lieferanten['.(int)$i.'][notiz]" class="cmx-lief-note">' . \esc_textarea($r_notiz) . '</textarea>';
+			echo '</div>';
+			echo '<div class="cmx-lief-actions-stack"><button type="button" class="button button-secondary cmx-lief-add">Lieferant hinzufügen</button><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div>';
+			echo '</div>';
+			echo '</div>';
+		}
 
-	echo '</tbody></table>';
+		echo '</div>';
 	if(!$kontakt_pt) echo '<span class="cmx-inline-help">Kein Kontakte-CPT gefunden (<code>kontakt</code> / <code>kontakte</code>).</span>';
 
 echo <<<HTML
@@ -772,17 +682,12 @@ echo <<<HTML
 		if(/^\/\//.test(u)) return "https:"+u;
 		return "https://"+u.replace(/^\/+/, "");
 	}
-	function reindex(){
-		var rowIndex = 0;
-		document.querySelectorAll("#cmx-artikel-lieferanten-table tbody tr").forEach(function(r){
-			if(r.classList.contains("cmx-lief-item-row")){
-				rowIndex++;
-			}
-			var currentIndex = Math.max(0, rowIndex - 1);
-			r.querySelectorAll("input,select,textarea").forEach(function(el){
-				var name=el.getAttribute("name")||"";
-				if(!name) return;
-				el.setAttribute("name", name.replace(/\[\d+\]/, "["+currentIndex+"]"));
+		function reindex(){
+			document.querySelectorAll("#cmx-artikel-lieferanten-list .cmx-lief-row").forEach(function(r, currentIndex){
+				r.querySelectorAll("input,select,textarea").forEach(function(el){
+					var name=el.getAttribute("name")||"";
+					if(!name) return;
+					el.setAttribute("name", name.replace(/\[\d+\]/, "["+currentIndex+"]"));
 			});
 			r.querySelectorAll("label[for]").forEach(function(el){
 				var val = el.getAttribute("for") || "";
@@ -969,78 +874,62 @@ echo <<<HTML
 			sync();
 		});
 	}
-	var tbody=document.querySelector("#cmx-artikel-lieferanten-table tbody");
-	function addRow(){
-			var tpl=tbody.querySelector("tr.cmx-lief-item-row");
-			if(!tpl) return;
-			var tplNote=tpl.nextElementSibling && tpl.nextElementSibling.classList.contains("cmx-lief-note-row") ? tpl.nextElementSibling : null;
-			var row=tpl.cloneNode(true);
-			var noteRow=tplNote ? tplNote.cloneNode(true) : null;
-			row.querySelectorAll("*").forEach(function(el){
-				delete el.dataset.cmxSelBound;
-				delete el.dataset.cmxEkBound;
-				delete el.dataset.cmxSupplierBound;
-				delete el.dataset.cmxUrlBound;
-			});
-			row.querySelectorAll("input").forEach(function(i){ i.value=""; });
-			row.querySelectorAll("select").forEach(function(s){ s.value="0"; });
-			row.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
-			row.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
-				list.innerHTML="";
-				list.style.display="none";
-			});
-			if(noteRow){
-				noteRow.querySelectorAll("textarea").forEach(function(t){ t.value=""; });
-			}
-			tbody.appendChild(row);
-			if(noteRow) tbody.appendChild(noteRow);
-			reindex();
-			bindSelect(row);
-			bindEkFormat(row);
-			bindSupplier(row);
-			bindUrl(row);
-	}
-	if(tbody){
-		tbody.addEventListener("click", function(e){
-			var addBtn=e.target.closest(".cmx-lief-add");
-			if(addBtn){
-				addRow();
-				return;
-			}
-			var btn=e.target.closest(".cmx-lief-del");
-			if(!btn) return;
-			var rows=tbody.querySelectorAll("tr.cmx-lief-item-row");
-			if(rows.length<=1){
-				var r=tbody.querySelector("tr.cmx-lief-item-row");
-				if(!r) return;
-				r.querySelectorAll("input").forEach(function(i){ i.value=""; });
-				r.querySelectorAll("select").forEach(function(s){ s.value="0"; });
-				r.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
-				r.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
+		var list=document.querySelector("#cmx-artikel-lieferanten-list");
+		function addRow(){
+				if(!list) return;
+				var row=list.querySelector(".cmx-lief-row");
+				if(!row) return;
+				row=row.cloneNode(true);
+				row.querySelectorAll("*").forEach(function(el){
+					delete el.dataset.cmxSelBound;
+					delete el.dataset.cmxEkBound;
+					delete el.dataset.cmxSupplierBound;
+					delete el.dataset.cmxUrlBound;
+				});
+				row.querySelectorAll("input").forEach(function(i){ i.value=""; });
+				row.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+				row.querySelectorAll("textarea").forEach(function(t){ t.value=""; });
+				row.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
+				row.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
 					list.innerHTML="";
 					list.style.display="none";
 				});
-				var note=r.nextElementSibling && r.nextElementSibling.classList.contains("cmx-lief-note-row") ? r.nextElementSibling : null;
-				if(note){ note.querySelectorAll("textarea").forEach(function(t){ t.value=""; }); }
-				r.querySelectorAll("input.cmx-lief-supplier-id").forEach(function(i){ i.dispatchEvent(new Event("change", {bubbles:true})); });
-				r.querySelectorAll("input.cmx-lief-url").forEach(function(i){ i.dispatchEvent(new Event("input")); });
-				return;
-			}
-			var tr=btn.closest("tr");
-			if(tr){
-				if(tr.classList.contains("cmx-lief-note-row")){
-					var itemRow=tr.previousElementSibling && tr.previousElementSibling.classList.contains("cmx-lief-item-row") ? tr.previousElementSibling : null;
-					tr.remove();
-					if(itemRow) itemRow.remove();
-				}else{
-					var noteRow=tr.nextElementSibling && tr.nextElementSibling.classList.contains("cmx-lief-note-row") ? tr.nextElementSibling : null;
-					tr.remove();
-					if(noteRow) noteRow.remove();
+				list.appendChild(row);
+				reindex();
+				bindSelect(row);
+				bindEkFormat(row);
+				bindSupplier(row);
+				bindUrl(row);
+		}
+		if(list){
+			list.addEventListener("click", function(e){
+				var addBtn=e.target.closest(".cmx-lief-add");
+				if(addBtn){
+					addRow();
+					return;
 				}
-			}
-			reindex();
-		});
-	}
+				var btn=e.target.closest(".cmx-lief-del");
+				if(!btn) return;
+				var rows=list.querySelectorAll(".cmx-lief-row");
+				var row=btn.closest(".cmx-lief-row");
+				if(rows.length<=1){
+					if(!row) return;
+					row.querySelectorAll("input").forEach(function(i){ i.value=""; });
+					row.querySelectorAll("select").forEach(function(s){ s.value="0"; });
+					row.querySelectorAll("textarea").forEach(function(t){ t.value=""; });
+					row.querySelectorAll(".cmx-lief-supplier-search").forEach(function(i){ i.dataset.selectedTitle=""; });
+					row.querySelectorAll(".cmx-lief-supplier-suggest").forEach(function(list){
+						list.innerHTML="";
+						list.style.display="none";
+					});
+					row.querySelectorAll("input.cmx-lief-supplier-id").forEach(function(i){ i.dispatchEvent(new Event("change", {bubbles:true})); });
+					row.querySelectorAll("input.cmx-lief-url").forEach(function(i){ i.dispatchEvent(new Event("input")); });
+					return;
+				}
+				if(row) row.remove();
+				reindex();
+			});
+		}
 	bindSelect(document);
 	bindEkFormat(document);
 	bindSupplier(document);
