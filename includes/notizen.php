@@ -268,7 +268,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 
 		echo '<div class="cmx-intern-notiz-row">';
 		echo '<div class="cmx-intern-notiz-main">';
-		echo '<label class="cmx-intern-notiz-label"><span>Notiz</span><textarea rows="8" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
+		echo '<label class="cmx-intern-notiz-label"><textarea rows="6" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea></label>';
 		if ($links !== []) {
 			echo '<div class="cmx-intern-notiz-links">';
 			echo '<strong>' . \esc_html__('Links', 'cmx') . ':</strong> ';
@@ -322,11 +322,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label{display:flex;flex-direction:column;gap:4px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-label-inline{display:flex;align-items:center;gap:6px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-side{display:flex;flex-direction:column;gap:8px;}';
-		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:200px;}';
+		echo '#cmx-intern-notizen-list textarea{width:100%;min-height:152px;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-links{margin-top:8px;font-size:12px;line-height:1.5;color:#50575e;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-links a{font-weight:600;text-decoration:underline;}';
 		echo '#cmx-intern-notizen-list .wp-editor-wrap{width:100%;}';
-		echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:200px;}';
+		echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:152px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
 		echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:0;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';

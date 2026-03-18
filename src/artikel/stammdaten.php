@@ -111,12 +111,19 @@ function cmx_csv_ids_to_array(string $csv): array {
  * Core-Taxo-Boxen ausblenden (UNVERÄNDERT)
  * ======================================================= */
 \add_action('admin_menu', function () {
-	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_MARKEN,    'artikel', 'side');
-	\remove_meta_box(TAX_ARTIKEL_MARKEN.'div',         'artikel', 'side');
-	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_FARBEN,    'artikel', 'side');
-	\remove_meta_box(TAX_ARTIKEL_FARBEN.'div',         'artikel', 'side');
-	\remove_meta_box('tagsdiv-'.TAX_ARTIKEL_EINHEITEN, 'artikel', 'side');
-	\remove_meta_box(TAX_ARTIKEL_EINHEITEN.'div',      'artikel', 'side');
+	$taxonomies_to_hide = [
+		(string) TAX_ARTIKEL_MARKEN,
+		(string) TAX_ARTIKEL_FARBEN,
+		(string) TAX_ARTIKEL_EINHEITEN,
+		cmx_tax_key('artikel', cmx_no_umlaute('Grössen')),
+		cmx_tax_key('artikel', cmx_no_umlaute('Ausführungen')),
+		cmx_tax_key('artikel', cmx_no_umlaute('Materialien')),
+	];
+
+	foreach (\array_values(\array_unique(\array_filter($taxonomies_to_hide))) as $taxonomy) {
+		\remove_meta_box('tagsdiv-' . $taxonomy, 'artikel', 'side');
+		\remove_meta_box($taxonomy . 'div', 'artikel', 'side');
+	}
 
 	// ALT: Stammdaten-Metabox entfernen (nur UI, KEINE Taxonomien!)
 	\remove_meta_box('cmx_artikel_stammdaten', 'artikel', 'normal');

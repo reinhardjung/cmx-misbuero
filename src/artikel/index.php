@@ -6,6 +6,22 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 	'menu_position' => 20, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-cart', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
+\add_filter('wp_editor_settings', function (array $settings, string $editor_id): array {
+	if ($editor_id !== 'content') {
+		return $settings;
+	}
+
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== basename(__DIR__)) {
+		return $settings;
+	}
+
+	$current_rows = isset($settings['textarea_rows']) ? (int) $settings['textarea_rows'] : 20;
+	$settings['textarea_rows'] = \max(5, $current_rows - 5);
+
+	return $settings;
+}, 10, 2);
+
 
 // Define: CONST 4 @ll Taxos
 define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Marken,Farben,Einheiten,Typen,Kategorien,Grössen,Materialien,Ausführungen');
