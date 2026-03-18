@@ -126,7 +126,28 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
-	echo '<div id="cmx-projekt-tasks" style="display:flex;flex-direction:column;gap:8px;">';
+	echo '<style>
+	#cmx-projekt-tasks{display:flex;flex-direction:column;gap:8px;}
+	#cmx-projekt-tasks .cmx-task-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}
+	#cmx-projekt-tasks .cmx-task-main{min-width:0;}
+	#cmx-projekt-tasks .cmx-task-side{display:flex;flex-direction:column;gap:8px;}
+	#cmx-projekt-tasks .cmx-task-label{display:flex;flex-direction:column;gap:4px;min-width:0;}
+	#cmx-projekt-tasks .cmx-task-label-inline{display:flex;align-items:center;gap:6px;}
+	#cmx-projekt-tasks .cmx-task-checkboxes{display:flex;flex-wrap:wrap;align-items:center;gap:16px;}
+	#cmx-projekt-tasks .cmx-task-check{display:flex;justify-content:flex-start;align-items:center;}
+	#cmx-projekt-tasks .cmx-task-check-label{display:inline-flex;align-items:center;gap:6px;font-weight:600;cursor:pointer;}
+	#cmx-projekt-tasks .cmx-task-check-label input[type=checkbox]{margin:0;}
+	#cmx-projekt-tasks select,#cmx-projekt-tasks textarea{width:100%;}
+	#cmx-projekt-tasks textarea{min-height:120px;}
+	#cmx-projekt-tasks .cmx-task-footer{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+	#cmx-projekt-tasks .cmx-task-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:0;}
+	#cmx-projekt-tasks .cmx-task-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}
+	#cmx-task-add{min-width:140px;}
+	@media (max-width:782px){
+		#cmx-projekt-tasks .cmx-task-row{grid-template-columns:1fr;}
+	}
+	</style>';
+	echo '<div id="cmx-projekt-tasks">';
 	foreach ($tasks as $idx => $row) {
 		cmx_render_task_row($idx, $row, $artikel_options);
 	}
@@ -317,33 +338,38 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 
 	$name_base = $is_template ? '__INDEX__' : (string)$idx;
 
-	echo '<div class="cmx-task-row" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;">';
+	echo '<div class="cmx-task-row">';
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:140px;">';
-	echo '<span style="display:flex;align-items:center;gap:6px;">Datum <a href="#" class="cmx-task-today" style="color:#d63638;text-decoration:none;">heute</a></span>';
-	echo '<input type="date" name="cmx_tasks['.$name_base.'][datum]" value="'.$datum.'" />';
-	echo '</label>';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:120px;">';
-	echo '<span style="display:flex;align-items:center;gap:6px;">Uhrzeit <a href="#" class="cmx-task-now" style="color:#d63638;text-decoration:none;">jetzt</a></span>';
-	echo '<input type="time" name="cmx_tasks['.$name_base.'][zeit]" value="'.$zeit.'" />';
-	echo '</label>';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:100px;"><span>Dauer (h)</span><input type="text" inputmode="decimal" class="cmx-task-dauer" name="cmx_tasks['.$name_base.'][dauer]" value="'.$dauer.'" /></label>';
-
-	echo '<label style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1 1 220px;"><span>&nbsp;Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]">';
+	echo '<div class="cmx-task-main">';
+	echo '<label class="cmx-task-label"><span>Artikel</span><select name="cmx_tasks['.$name_base.'][artikel_id]" class="widefat cmx-task-artikel">';
 	echo '<option value="">— auswählen —</option>';
 	foreach ($artikel_options as $opt) {
 		printf('<option value="%d"%s>%s</option>', (int)$opt['id'], selected($art_id, $opt['id'], false), esc_html($opt['label']));
 	}
 	echo '</select></label>';
-
+	echo '<label class="cmx-task-label" style="margin-top:8px;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="4">'.$info.'</textarea></label>';
+	echo '</div>';
+	echo '<div class="cmx-task-side">';
+	echo '<label class="cmx-task-label"><span>Dauer (h)</span><input type="text" inputmode="decimal" class="cmx-task-dauer" name="cmx_tasks['.$name_base.'][dauer]" value="'.$dauer.'" /></label>';
+	echo '<label class="cmx-task-label">';
+	echo '<span class="cmx-task-label-inline">Datum <a href="#" class="cmx-task-today" style="color:#d63638;text-decoration:none;">heute</a></span>';
+	echo '<input type="date" name="cmx_tasks['.$name_base.'][datum]" value="'.$datum.'" />';
+	echo '</label>';
+	echo '<label class="cmx-task-label">';
+	echo '<span class="cmx-task-label-inline">Uhrzeit <a href="#" class="cmx-task-now" style="color:#d63638;text-decoration:none;">jetzt</a></span>';
+	echo '<input type="time" name="cmx_tasks['.$name_base.'][zeit]" value="'.$zeit.'" />';
+	echo '</label>';
+	echo '</div>';
 	$verrechenbar_checked = $is_verrechenbar ? 'checked' : '';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechenbar</span><input type="hidden" name="cmx_tasks['.$name_base.'][verrechenbar]" value="0"><input type="checkbox" name="cmx_tasks['.$name_base.'][verrechenbar]" value="1" '.$verrechenbar_checked.' style="margin:6px 0 0 6px;"> </label>';
+	echo '<div class="cmx-task-footer">';
+	echo '<div class="cmx-task-checkboxes">';
+	echo '<div class="cmx-task-check"><input type="hidden" name="cmx_tasks['.$name_base.'][verrechenbar]" value="0"><label class="cmx-task-check-label"><input type="checkbox" name="cmx_tasks['.$name_base.'][verrechenbar]" value="1" '.$verrechenbar_checked.'><span>Verrechenbar</span></label></div>';
 	$checked = !empty($row['abgerechnet']) ? 'checked' : '';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px;"><span>Verrechnet</span><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.' style="margin:6px 0 0 6px;"> </label>';
-	echo '<div style="display:flex;align-items:flex-start;gap:8px;flex:1 1 100%;">';
-	echo '<label style="display:flex;flex-direction:column;gap:4px;flex:1 1 auto;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="2" style="width:100%;">'.$info.'</textarea></label>';
-	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen" style="margin-top:22px; color:#d63639; font-size:large;"><span class="dashicons dashicons-trash" style="position:relative; top:8px;"></span></button>';
-	// echo '<button class="button"><span class="dashicons dashicons-trash"></span></button>';
+	echo '<div class="cmx-task-check"><label class="cmx-task-check-label"><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.'><span>Verrechnet</span></label></div>';
+	echo '</div>';
+	echo '<div class="cmx-task-actions">';
+	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash cmx-task-remove"></span></button>';
+	echo '</div>';
 	echo '</div>';
 	echo '</div>';
 }
