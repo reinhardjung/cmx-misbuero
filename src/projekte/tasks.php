@@ -123,7 +123,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 
 	// Mindestens eine leere Zeile anzeigen
 	if (empty($tasks)) {
-		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'verrechenbar'=>1, 'info'=>''];
+		$tasks[] = ['datum'=>'', 'zeit'=>'', 'dauer'=>'', 'artikel_id'=>'', 'produkt_id'=>'', 'verrechenbar'=>1, 'info'=>''];
 	}
 
 	$ajax_url = \admin_url('admin-ajax.php');
@@ -135,6 +135,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-projekt-tasks .cmx-task-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fafafa;}
 	#cmx-projekt-tasks .cmx-task-main{min-width:0;}
 	#cmx-projekt-tasks .cmx-task-side{display:flex;flex-direction:column;gap:8px;}
+	#cmx-projekt-tasks .cmx-task-article-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 	#cmx-projekt-tasks .cmx-task-label{display:flex;flex-direction:column;gap:4px;min-width:0;}
 	#cmx-projekt-tasks .cmx-task-label-inline{display:flex;align-items:center;gap:6px;}
 	#cmx-projekt-tasks .cmx-task-checkboxes{display:flex;flex-wrap:wrap;align-items:center;gap:16px;}
@@ -157,6 +158,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-task-add{min-width:140px;}
 	@media (max-width:782px){
 		#cmx-projekt-tasks .cmx-task-row{grid-template-columns:1fr;}
+		#cmx-projekt-tasks .cmx-task-article-grid{grid-template-columns:1fr;}
 	}
 	</style>';
 	echo '<div id="cmx-projekt-tasks">';
@@ -230,12 +232,12 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			function newUid() {
 				return 'tsk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 			}
-				function fetchArtikel(term, cb){
+				function fetchArtikel(term, art, cb){
 					if (!window.jQuery || !window.jQuery.getJSON) {
 						cb([]);
 						return;
 					}
-					window.jQuery.getJSON(ajaxUrl, { action: "cmx_search_artikel", term: term || "", art: "dienstleistung" }, function(data){
+					window.jQuery.getJSON(ajaxUrl, { action: "cmx_search_artikel", term: term || "", art: art || "" }, function(data){
 						const rows = Array.isArray(data) ? data.map(function(item){
 							return {
 								id: item && item.value ? item.value : 0,
@@ -306,44 +308,47 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 					return { render: render, reset: function(){ items=[]; active=-1; } };
 				}
 				function initTaskArticleSearch(rowEl){
-					const input = rowEl.querySelector(".cmx-task-artikel-search");
-					const hidden = rowEl.querySelector(".cmx-task-artikel-id");
-					const list = rowEl.querySelector(".cmx-artikel-suggest");
-					if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
-					input.dataset.cmxSearchReady = "1";
-					const nav = makeNavigator(input, list, chooseItem);
-					let timer = null;
-					function artikelLabel(item){
-						const nr = (item && item.nr ? String(item.nr) : "");
-						const title = (item && item.title ? String(item.title) : "");
-						return nr ? (nr + " – " + title) : title;
-					}
-					function chooseItem(item, keepFocus){
-						hidden.value = item && item.id ? String(item.id) : "";
-						input.value = artikelLabel(item);
-						input.dataset.selectedTitle = input.value;
-						hidden.dispatchEvent(new Event("change", { bubbles: true }));
-						if (keepFocus !== false) input.focus();
-					}
-					function doSearch(query){
-						fetchArtikel(query, function(rows){
-							nav.render(rows);
-						});
-					}
-					input.addEventListener("input", function(){
-						if (timer) window.clearTimeout(timer);
-						hidden.value = "";
-						const query = (input.value || "").trim();
-						if (query.length < 1) {
-							doSearch("");
-							return;
+					rowEl.querySelectorAll(".cmx-task-article-picker").forEach(function(picker){
+						const input = picker.querySelector(".cmx-task-artikel-search");
+						const hidden = picker.querySelector(".cmx-task-artikel-id");
+						const list = picker.querySelector(".cmx-artikel-suggest");
+						const art = (picker.getAttribute("data-art") || "").toString();
+						if (!input || !hidden || !list || input.dataset.cmxSearchReady === "1") return;
+						input.dataset.cmxSearchReady = "1";
+						const nav = makeNavigator(input, list, chooseItem);
+						let timer = null;
+						function artikelLabel(item){
+							const nr = (item && item.nr ? String(item.nr) : "");
+							const title = (item && item.title ? String(item.title) : "");
+							return nr ? (nr + " – " + title) : title;
 						}
-						timer = window.setTimeout(function(){ doSearch(query); }, 120);
+						function chooseItem(item, keepFocus){
+							hidden.value = item && item.id ? String(item.id) : "";
+							input.value = artikelLabel(item);
+							input.dataset.selectedTitle = input.value;
+							hidden.dispatchEvent(new Event("change", { bubbles: true }));
+							if (keepFocus !== false) input.focus();
+						}
+						function doSearch(query){
+							fetchArtikel(query, art, function(rows){
+								nav.render(rows);
+							});
+						}
+						input.addEventListener("input", function(){
+							if (timer) window.clearTimeout(timer);
+							hidden.value = "";
+							const query = (input.value || "").trim();
+							if (query.length < 1) {
+								doSearch("");
+								return;
+							}
+							timer = window.setTimeout(function(){ doSearch(query); }, 120);
+						});
+						input.addEventListener("focus", function(){
+							doSearch("");
+						});
+						input.addEventListener("click", function(){ doSearch(""); });
 					});
-					input.addEventListener("focus", function(){
-						doSearch("");
-					});
-					input.addEventListener("click", function(){ doSearch(""); });
 				}
 
 			function addRow(data){
@@ -361,9 +366,9 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 						formatDauerInput(dauerInput);
 					}
 					const artikelInput = rowEl.querySelector('input[name*="[artikel_id]"]');
-					if (artikelInput) {
-						artikelInput.value = data?.artikel_id || '';
-					}
+					if (artikelInput) artikelInput.value = data?.artikel_id || '';
+					const produktInput = rowEl.querySelector('input[name*="[produkt_id]"]');
+					if (produktInput) produktInput.value = data?.produkt_id || '';
 					const verrechenbarInput = rowEl.querySelector('input[name*="[verrechenbar]"]');
 					if (verrechenbarInput && data && Object.prototype.hasOwnProperty.call(data, 'verrechenbar')) {
 						const raw = data.verrechenbar;
@@ -377,9 +382,8 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 					}
 					container.appendChild(rowEl);
 					initTaskArticleSearch(rowEl);
-					if (artikelInput) {
-						artikelInput.dispatchEvent(new Event('change', { bubbles: true }));
-					}
+					if (artikelInput) artikelInput.dispatchEvent(new Event('change', { bubbles: true }));
+					if (produktInput) produktInput.dispatchEvent(new Event('change', { bubbles: true }));
 					syncAddButtonPosition();
 				}
 			function syncAddButtonPosition(){
@@ -450,7 +454,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 		</script>
 
 	<script type="text/template" id="cmx-task-template">
-		<?php cmx_render_task_row('__INDEX__', ['datum'=>'','zeit'=>'','dauer'=>'','artikel_id'=>'','verrechenbar'=>1,'info'=>''], $artikel_options, true); ?>
+		<?php cmx_render_task_row('__INDEX__', ['datum'=>'','zeit'=>'','dauer'=>'','artikel_id'=>'','produkt_id'=>'','verrechenbar'=>1,'info'=>''], $artikel_options, true); ?>
 	</script>
 	<?php
 }
@@ -480,6 +484,13 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 		$art_title = (string) ($opt['label'] ?? '');
 		break;
 	}
+	$produkt_id = (int) ($row['produkt_id'] ?? 0);
+	$produkt_title = '';
+	foreach ($artikel_options as $opt) {
+		if ((int) ($opt['id'] ?? 0) !== $produkt_id) continue;
+		$produkt_title = (string) ($opt['label'] ?? '');
+		break;
+	}
 	$info   = esc_textarea($row['info'] ?? '');
 	$is_verrechenbar = \array_key_exists('verrechenbar', $row)
 		? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($row['verrechenbar']) : !empty($row['verrechenbar']))
@@ -497,7 +508,10 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<div class="cmx-task-row">';
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
 	echo '<div class="cmx-task-main">';
-	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
+	echo '<div class="cmx-task-article-grid">';
+	echo '<label class="cmx-task-label"><span>Dienstleistung</span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="dienstleistung"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Dienstleistung suchen" placeholder="Dienstleistung suchen..." value="'.\esc_attr($art_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][artikel_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $art_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
+	echo '<label class="cmx-task-label"><span>Produkt</span><div class="cmx-task-article-suggest cmx-task-article-picker" data-art="produkt"><input type="text" class="widefat cmx-artikel-autocomplete cmx-task-artikel-search" autocomplete="off" aria-label="Produkt suchen" placeholder="Produkt suchen..." value="'.\esc_attr($produkt_title).'"><input type="hidden" name="cmx_tasks['.$name_base.'][produkt_id]" class="cmx-task-artikel-id cmx-artikel-id" value="'.\esc_attr((string) $produkt_id).'"><ul class="cmx-art-suggest cmx-artikel-suggest" style="display:none"></ul></div></label>';
+	echo '</div>';
 	echo '<label class="cmx-task-label" style="margin-top:8px;"><span>Info</span><textarea name="cmx_tasks['.$name_base.'][info]" rows="4">'.$info.'</textarea></label>';
 	echo '</div>';
 	echo '<div class="cmx-task-side">';
@@ -548,17 +562,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
 			}
 			$seen_uids[$uid] = true;
 			$datum  = sanitize_text_field($row['datum'] ?? '');
-			$zeit   = sanitize_text_field($row['zeit'] ?? '');
-			$dauer_raw = sanitize_text_field($row['dauer'] ?? '');
-			$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
-				? cmx_projekt_decimal_normalize($dauer_raw)
-				: '';
-			$dauer  = ($dauer_raw === '' || $dauer_norm === '') ? '' : \number_format((float) $dauer_norm, 2, '.', '');
-			$art_id = (int) ($row['artikel_id'] ?? 0);
-			$info   = sanitize_textarea_field($row['info'] ?? '');
+				$zeit   = sanitize_text_field($row['zeit'] ?? '');
+				$dauer_raw = sanitize_text_field($row['dauer'] ?? '');
+				$dauer_norm = \function_exists(__NAMESPACE__ . '\\cmx_projekt_decimal_normalize')
+					? cmx_projekt_decimal_normalize($dauer_raw)
+					: '';
+				$dauer  = ($dauer_raw === '' || $dauer_norm === '') ? '' : \number_format((float) $dauer_norm, 2, '.', '');
+				$art_id = (int) ($row['artikel_id'] ?? 0);
+				$produkt_id = (int) ($row['produkt_id'] ?? 0);
+				$info   = sanitize_textarea_field($row['info'] ?? '');
 
-			// ignorieren, wenn alles leer
-			if ($datum === '' && $zeit === '' && $dauer === '' && $art_id === 0 && $info === '') continue;
+				// ignorieren, wenn alles leer
+				if ($datum === '' && $zeit === '' && $dauer === '' && $art_id === 0 && $produkt_id === 0 && $info === '') continue;
 
 			// Default: aktuelles Datum, falls keins gesetzt
 			if ($datum === '') {
@@ -567,13 +582,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
 
 			$clean[] = [
 				'uid'        => $uid,
-				'datum'      => $datum,
-				'zeit'       => $zeit,
-				'dauer'      => $dauer,
-				'artikel_id' => $art_id,
-				'verrechenbar' => \array_key_exists('verrechenbar', $row) ? (!empty($row['verrechenbar']) ? 1 : 0) : 1,
-				'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
-				'info'       => $info,
+					'datum'      => $datum,
+					'zeit'       => $zeit,
+					'dauer'      => $dauer,
+					'artikel_id' => $art_id,
+					'produkt_id' => $produkt_id,
+					'verrechenbar' => \array_key_exists('verrechenbar', $row) ? (!empty($row['verrechenbar']) ? 1 : 0) : 1,
+					'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
+					'info'       => $info,
 			];
 		}
 
