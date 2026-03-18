@@ -657,7 +657,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_export_filename')) {
 
 
 /**
- * Holt Wert(e) aus globales.ini (Section + Key), case-insensitiv.
+ * Holt Wert(e) aus globales.ini (Section + Key), case-/umlaut-insensitiv.
  * Einzelwert -> string, Mehrwerte (Komma) -> array, nicht gefunden -> null.
  */
 function cmx_ini_get_value(string $section, string $key): string|array|null {
@@ -667,10 +667,19 @@ function cmx_ini_get_value(string $section, string $key): string|array|null {
 	$ini = \parse_ini_file($file, true, INI_SCANNER_TYPED);
 	if ($ini === false) return null;
 
+	$normalize = static function (string $value): string {
+		$value = \trim($value);
+		if ($value === '') return '';
+		$value = \function_exists(__NAMESPACE__ . '\\cmx_no_umlaute') ? cmx_no_umlaute($value) : $value;
+		return \strtolower($value);
+	};
+	$sectionNormalized = $normalize($section);
+	$keyNormalized = $normalize($key);
+
 	// Section (case-insensitive) finden
 	$sectionData = null;
 	foreach ($ini as $secName => $data) {
-		if (\is_array($data) && \strcasecmp($secName, $section) === 0) {
+		if (\is_array($data) && (\strcasecmp($secName, $section) === 0 || $normalize((string) $secName) === $sectionNormalized)) {
 			$sectionData = $data;
 			break;
 		}
@@ -679,7 +688,7 @@ function cmx_ini_get_value(string $section, string $key): string|array|null {
 	// Leere Section => Top-Level-Key
 	if ($section === '') {
 		foreach ($ini as $k => $v) {
-			if (\strcasecmp($k, $key) === 0) return cmx_ini_cast_value($v);
+			if (\strcasecmp($k, $key) === 0 || $normalize((string) $k) === $keyNormalized) return cmx_ini_cast_value($v);
 		}
 		return null;
 	}
@@ -688,7 +697,7 @@ function cmx_ini_get_value(string $section, string $key): string|array|null {
 
 	// Key (case-insensitive) finden
 	foreach ($sectionData as $k => $v) {
-		if (\strcasecmp($k, $key) === 0) return cmx_ini_cast_value($v);
+		if (\strcasecmp($k, $key) === 0 || $normalize((string) $k) === $keyNormalized) return cmx_ini_cast_value($v);
 	}
 
 	return null;
