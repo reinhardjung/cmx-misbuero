@@ -17,6 +17,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_DECKUNGSBEITRAG')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_KATALOG', '_cmx_artikel_katalog');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_TAXONOMY')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_TAXONOMY', '_cmx_artikel_variant_taxonomy');
+}
 
 \add_action('add_meta_boxes', function () {
 	\add_meta_box('cmx_artikel_waehrung_preise', 'Konditionen', __NAMESPACE__ . '\\cmx_artikel_waehrung_preise_box_html', 'artikel', 'normal', 'default');
@@ -56,6 +59,61 @@ function cmx_artikel_normalize_quantity_value(mixed $value): string {
 	return \rtrim(\rtrim(\number_format($normalized, 3, '.', ''), '0'), '.');
 }
 
+function cmx_artikel_variant_taxonomy_choices(): array {
+	$labels_raw = \defined(__NAMESPACE__ . '\\CMX_TAX_ARTIKEL')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_TAX_ARTIKEL')
+		: '';
+	$labels = \array_values(\array_filter(\array_map('trim', \explode(',', $labels_raw)), static fn($value) => $value !== ''));
+	if ($labels === []) return [];
+
+	$exclude = [];
+	if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN')) {
+		$exclude[] = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN');
+	}
+
+	$out = [];
+	foreach ($labels as $label) {
+		$taxonomy = cmx_tax_key('artikel', cmx_no_umlaute($label));
+		if ($taxonomy === '' || \in_array($taxonomy, $exclude, true) || !\taxonomy_exists($taxonomy)) continue;
+		$terms = [];
+		foreach (cmx_get_terms_safe($taxonomy) as $term) {
+			$terms[] = [
+				'id' => (int) ($term->term_id ?? 0),
+				'name' => (string) ($term->name ?? ''),
+			];
+		}
+		$out[$taxonomy] = [
+			'label' => (string) $label,
+			'taxonomy' => $taxonomy,
+			'terms' => $terms,
+		];
+	}
+
+	$preferred = cmx_tax_key('artikel', cmx_no_umlaute('Grössen'));
+	if ($preferred !== '' && isset($out[$preferred])) {
+		$current = [$preferred => $out[$preferred]];
+		unset($out[$preferred]);
+		$out = $current + $out;
+	}
+
+	return $out;
+}
+
+function cmx_artikel_variant_taxonomy_current(int $post_id, array $choices): string {
+	if ($choices === []) return '';
+
+	$stored = (string) \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_TAXONOMY, true);
+	if ($stored !== '' && isset($choices[$stored])) return $stored;
+
+	foreach (\array_keys($choices) as $taxonomy) {
+		if (cmx_get_single_term_id($post_id, (string) $taxonomy) > 0) {
+			return (string) $taxonomy;
+		}
+	}
+
+	return (string) \array_key_first($choices);
+}
+
 function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	cmx_artikel_render_save_nonce_once();
 	echo '<input type="hidden" name="cmx_artikel_konditionen_payload" value="1">';
@@ -84,6 +142,17 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 	$deckungsbeitrag_display = ($deckungsbeitrag === '' || $deckungsbeitrag === null) ? '' : cmx_format_swiss_number($deckungsbeitrag, 2);
 	$marge_display    = ($marge === '' || $marge === null) ? '' : cmx_format_swiss_number($marge, 2);
 
+	$variant_taxonomies = cmx_artikel_variant_taxonomy_choices();
+	$current_variant_taxonomy = cmx_artikel_variant_taxonomy_current((int) $post->ID, $variant_taxonomies);
+	$current_variant_label = $current_variant_taxonomy !== '' && isset($variant_taxonomies[$current_variant_taxonomy]['label'])
+		? (string) $variant_taxonomies[$current_variant_taxonomy]['label']
+		: 'Grössen';
+	$current_variant_terms = $current_variant_taxonomy !== '' && isset($variant_taxonomies[$current_variant_taxonomy]['terms'])
+		? (array) $variant_taxonomies[$current_variant_taxonomy]['terms']
+		: [];
+	$current_variant_term_id = $current_variant_taxonomy !== '' ? cmx_get_single_term_id($post->ID, $current_variant_taxonomy) : 0;
+	$variant_taxonomies_json = \wp_json_encode($variant_taxonomies) ?: '{}';
+
 	$sel_einheit = cmx_get_single_term_id($post->ID, TAX_ARTIKEL_EINHEITEN);
 	$einheiten   = cmx_get_terms_safe(TAX_ARTIKEL_EINHEITEN);
 	$einheiten_url = \taxonomy_exists(TAX_ARTIKEL_EINHEITEN)
@@ -100,6 +169,9 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-f--full{min-width:100%;max-width:100%;flex:1 1 100%}
 		.cmx-price-row .cmx-f--half{min-width:118px;max-width:150px;flex:1 1 124px}
 		.cmx-price-row .cmx-f label{font-weight:600;margin-bottom:4px}
+		.cmx-price-row .cmx-f .cmx-taxonomy-label{display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-decoration:underline dotted}
+		.cmx-price-row .cmx-f .cmx-taxonomy-label::after{content:"▾";font-size:10px;opacity:.75}
+		.cmx-price-row .cmx-f .cmx-taxonomy-picker{display:none;margin:0 0 6px}
 		.cmx-price-row .cmx-f input[type="number"],
 		.cmx-price-row .cmx-f input[type="text"],
 		.cmx-price-row .cmx-f select,
@@ -125,6 +197,28 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		<label for="cmx_artikel_anzahl">Anzahl</label>
 		<input type="text" inputmode="decimal" id="cmx_artikel_anzahl" name="cmx_artikel_anzahl" value="' . esc_attr($anzahl_display) . '" autocomplete="off">
 	</div>';
+
+	echo '<div class="cmx-f cmx-f--half">';
+	echo '<label id="cmx_artikel_variant_term_label" class="cmx-taxonomy-label" for="cmx_artikel_variant_term" role="button" tabindex="0" title="Klicken, um eine andere Taxonomie auszuwählen">' . esc_html($current_variant_label) . '</label>';
+	echo '<select id="cmx_artikel_variant_taxonomy" name="cmx_artikel_variant_taxonomy" class="cmx-taxonomy-picker" aria-label="Taxonomie auswählen">';
+	foreach ($variant_taxonomies as $taxonomy => $config) {
+		echo '<option value="' . esc_attr((string) $taxonomy) . '" ' . selected($current_variant_taxonomy, (string) $taxonomy, false) . '>' . esc_html((string) ($config['label'] ?? $taxonomy)) . '</option>';
+	}
+	echo '</select>';
+	echo '<select id="cmx_artikel_variant_term" name="cmx_artikel_variant_term">';
+	if ($current_variant_terms === []) {
+		echo '<option value="0">— keine Werte —</option>';
+	} else {
+		echo '<option value="0">— auswählen —</option>';
+		foreach ($current_variant_terms as $term) {
+			$term_id = (int) ($term['id'] ?? 0);
+			$term_name = (string) ($term['name'] ?? '');
+			if ($term_id <= 0 || $term_name === '') continue;
+			echo '<option value="' . $term_id . '" ' . selected($current_variant_term_id, $term_id, false) . '>' . esc_html($term_name) . '</option>';
+		}
+	}
+	echo '</select>';
+	echo '</div>';
 
 	// Einheit (halbe Breite)
 	echo '<div class="cmx-f cmx-f--half">
@@ -201,6 +295,10 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		const aw  = document.getElementById("cmx_artikel_aufwand");
 		const vk  = document.getElementById("cmx_artikel_vk");
 		const anzahl = document.getElementById("cmx_artikel_anzahl");
+		const variantLabel = document.getElementById("cmx_artikel_variant_term_label");
+		const variantTaxonomy = document.getElementById("cmx_artikel_variant_taxonomy");
+		const variantTerm = document.getElementById("cmx_artikel_variant_term");
+		const variantTaxonomies = ' . $variant_taxonomies_json . ';
 		const vkLabel = document.getElementById("cmx_artikel_vk_label");
 		const sk  = document.getElementById("cmx_artikel_selbstkosten");
 		const db  = document.getElementById("cmx_artikel_deckungsbeitrag");
@@ -245,6 +343,34 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 			}
 			const frac = parts[1].replace(/0+$/, "");
 			return left + out + (frac !== "" ? "." + frac : "");
+		}
+		function updateVariantTerms(selectedTaxonomy, selectedTermId){
+			if (!variantTerm) return;
+			const config = variantTaxonomies && variantTaxonomies[selectedTaxonomy] ? variantTaxonomies[selectedTaxonomy] : null;
+			const terms = config && Array.isArray(config.terms) ? config.terms : [];
+			const target = String(selectedTermId || "0");
+			if (variantLabel && config && config.label) {
+				variantLabel.textContent = config.label;
+			}
+			if (!terms.length) {
+				variantTerm.innerHTML = "<option value=\"0\">— keine Werte —</option>";
+				variantTerm.value = "0";
+				variantTerm.disabled = true;
+				return;
+			}
+			var html = "<option value=\"0\">— auswählen —</option>";
+			terms.forEach(function(term){
+				const id = parseInt(term && term.id ? term.id : 0, 10) || 0;
+				const name = term && term.name ? String(term.name) : "";
+				if (!id || !name) return;
+				const selected = String(id) === target ? " selected" : "";
+				html += "<option value=\"" + id + "\"" + selected + ">" + name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</option>";
+			});
+			variantTerm.innerHTML = html;
+			variantTerm.disabled = false;
+			if (!variantTerm.querySelector("option[selected]")) {
+				variantTerm.value = "0";
+			}
 		}
 
 		function recalcDerived(){
@@ -307,6 +433,34 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 					this.value = formatQty(raw);
 				}
 			});
+		}
+		if (variantLabel && variantTaxonomy) {
+			const toggleTaxonomyPicker = function(e){
+				if (e) e.preventDefault();
+				variantTaxonomy.style.display = variantTaxonomy.style.display === "block" ? "none" : "block";
+				if (variantTaxonomy.style.display === "block") {
+					variantTaxonomy.focus();
+				}
+			};
+			variantLabel.addEventListener("click", toggleTaxonomyPicker);
+			variantLabel.addEventListener("keydown", function(e){
+				if (e.key === "Enter" || e.key === " ") {
+					toggleTaxonomyPicker(e);
+				}
+			});
+			variantTaxonomy.addEventListener("change", function(){
+				updateVariantTerms(this.value, 0);
+				this.style.display = "none";
+				if (variantTerm) variantTerm.focus();
+			});
+			variantTaxonomy.addEventListener("blur", function(){
+				window.setTimeout(function(){
+					if (document.activeElement !== variantTaxonomy) {
+						variantTaxonomy.style.display = "none";
+					}
+				}, 120);
+			});
+			updateVariantTerms(variantTaxonomy.value, variantTerm ? variantTerm.value : 0);
 		}
 		[ek, aw, vk].forEach(el => {
 			if (!el) return;
@@ -402,6 +556,27 @@ function cmx_artikel_waehrung_side_box_html(\WP_Post $post): void {
 			\delete_post_meta($post_id, CMX_ARTIKEL_META_ANZAHL);
 		} else {
 			\update_post_meta($post_id, CMX_ARTIKEL_META_ANZAHL, cmx_artikel_normalize_quantity_value($anzahl_raw));
+		}
+	}
+
+	$variant_taxonomies = cmx_artikel_variant_taxonomy_choices();
+	if ($has('cmx_artikel_variant_taxonomy')) {
+		$variant_taxonomy = \sanitize_key((string) $in('cmx_artikel_variant_taxonomy', ''));
+		if (!isset($variant_taxonomies[$variant_taxonomy])) {
+			$variant_taxonomy = cmx_artikel_variant_taxonomy_current($post_id, $variant_taxonomies);
+		}
+		if ($variant_taxonomy === '') {
+			\delete_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_TAXONOMY);
+		} else {
+			\update_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_TAXONOMY, $variant_taxonomy);
+			$variant_term_id = (int) $in('cmx_artikel_variant_term', 0);
+			$term = $variant_term_id > 0 ? \get_term($variant_term_id, $variant_taxonomy) : null;
+			\wp_set_post_terms(
+				$post_id,
+				($term && !\is_wp_error($term)) ? [$variant_term_id] : [],
+				$variant_taxonomy,
+				false
+			);
 		}
 	}
 
