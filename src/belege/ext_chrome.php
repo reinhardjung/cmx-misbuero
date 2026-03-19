@@ -985,6 +985,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_create_beleg_draft')) {
 		], true);
 
 		if ($post_id > 0) {
+			$invoice_no = \function_exists(__NAMESPACE__ . '\\cmx_ensure_rechnungsnummer')
+				? (string) cmx_ensure_rechnungsnummer($post_id)
+				: '';
+			if ($invoice_no !== '') {
+				\wp_update_post([
+					'ID' => $post_id,
+					'post_title' => $invoice_no,
+					'post_name' => \sanitize_title($invoice_no),
+				]);
+				\update_post_meta($post_id, '_cmx_title_auto', 1);
+			}
+
 			\update_post_meta($post_id, '_cmx_beleg_richtung', 'eingang');
 
 			$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax')
