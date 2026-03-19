@@ -122,7 +122,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 		echo '<select name="cmx_system_assigned_user" id="cmx_system_assigned_user" style="width:100%;" aria-label="WP-User">';
 		echo '<option value="">— auswählen —</option>';
 		foreach ($users as $user) {
-			$label = \trim((string) $user->display_name);
+			$first_name = \trim((string) \get_user_meta((int) $user->ID, 'first_name', true));
+			$last_name = \trim((string) \get_user_meta((int) $user->ID, 'last_name', true));
+			$label = \trim(\preg_replace('/\s+/', ' ', $first_name . ' ' . $last_name));
 			if ($label === '') {
 				$label = \trim((string) $user->user_login);
 			}
@@ -142,7 +144,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 
 	\add_meta_box(
 		'cmx_system_assigned_user',
-		'Arbeitsplatz',
+		'Zuständig ist',
 		__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox',
 		$post_type,
 		'side',
