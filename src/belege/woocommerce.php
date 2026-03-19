@@ -1241,6 +1241,367 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_katalog_meta_ke
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_variant_rows_meta_key')) {
+	function cmx_woocommerce_artikel_variant_rows_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')
+			: '_cmx_artikel_variant_rows';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_woo_id_meta_key')) {
+	function cmx_woocommerce_artikel_woo_id_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WOO_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_WOO_ID')
+			: '_cmx_artikel_woo_id';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_art_meta_key')) {
+	function cmx_woocommerce_artikel_art_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART')
+			: '_cmx_artikel_art';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_lookup_forms')) {
+	/**
+	 * @return array<int,string>
+	 */
+	function cmx_woocommerce_lookup_forms(string $value): array {
+		$value = \html_entity_decode(\wp_strip_all_tags((string) $value), ENT_QUOTES, 'UTF-8');
+		$value = \trim($value);
+		if ($value === '') {
+			return [];
+		}
+
+		$variants = [
+			$value,
+			\preg_replace('/^attribute[_-]?/i', '', $value),
+			\preg_replace('/^attribute[_-]?pa[_-]?/i', '', $value),
+			\preg_replace('/^pa[_-]?/i', '', $value),
+		];
+
+		$forms = [];
+		foreach ($variants as $variant) {
+			$variant = (string) $variant;
+			if ($variant === '') {
+				continue;
+			}
+			$normalized = \function_exists(__NAMESPACE__ . '\\cmx_no_umlaute')
+				? (string) cmx_no_umlaute($variant)
+				: \strtr($variant, ['ä'=>'ae','ö'=>'oe','ü'=>'ue','Ä'=>'Ae','Ö'=>'Oe','Ü'=>'Ue','ß'=>'ss']);
+			$normalized = \strtolower($normalized);
+			$normalized = (string) \preg_replace('/^attribute[_-]?/i', '', $normalized);
+			$normalized = (string) \preg_replace('/^pa[_-]?/i', '', $normalized);
+			$normalized = (string) \preg_replace('/[^a-z0-9]+/', '', $normalized);
+			if ($normalized === '') {
+				continue;
+			}
+			$forms[] = $normalized;
+			foreach (['innen', 'ungen', 'ien', 'ern', 'en', 'er', 'e', 'n', 's'] as $suffix) {
+				if (\strlen($normalized) > (\strlen($suffix) + 2) && \str_ends_with($normalized, $suffix)) {
+					$forms[] = \substr($normalized, 0, -\strlen($suffix));
+				}
+			}
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $forms))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_forms_intersect')) {
+	function cmx_woocommerce_forms_intersect(array $left, array $right): bool {
+		foreach ($left as $left_form) {
+			$left_form = (string) $left_form;
+			if ($left_form === '') continue;
+			foreach ($right as $right_form) {
+				$right_form = (string) $right_form;
+				if ($right_form === '') continue;
+				if ($left_form === $right_form) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_stringify_line_meta_value')) {
+	function cmx_woocommerce_stringify_line_meta_value($value): string {
+		if (\is_scalar($value) || $value === null) {
+			return \trim((string) $value);
+		}
+		if (!\is_array($value)) {
+			return '';
+		}
+
+		$parts = [];
+		\array_walk_recursive($value, static function ($item) use (&$parts): void {
+			if (\is_scalar($item) || $item === null) {
+				$item = \trim((string) $item);
+				if ($item !== '') {
+					$parts[] = $item;
+				}
+			}
+		});
+
+		return \implode(', ', \array_values(\array_unique($parts)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_line_attribute_candidates')) {
+	/**
+	 * @return array<int,array{key:string,label:string,value:string}>
+	 */
+	function cmx_woocommerce_line_attribute_candidates(array $line): array {
+		$candidates = [];
+		$seen = [];
+		$push = static function (string $key, string $label, string $value) use (&$candidates, &$seen): void {
+			$key = \trim($key);
+			$label = \trim($label);
+			$value = \trim($value);
+			if ($value === '' || ($key === '' && $label === '')) {
+				return;
+			}
+			$hash = \implode('|', [
+				\implode(',', cmx_woocommerce_lookup_forms($key)),
+				\implode(',', cmx_woocommerce_lookup_forms($label)),
+				\implode(',', cmx_woocommerce_lookup_forms($value)),
+			]);
+			if ($hash === '' || isset($seen[$hash])) {
+				return;
+			}
+			$seen[$hash] = true;
+			$candidates[] = [
+				'key' => $key,
+				'label' => $label !== '' ? $label : $key,
+				'value' => $value,
+			];
+		};
+
+		foreach ((array) ($line['variation'] ?? []) as $key => $value) {
+			if (\is_array($value)) {
+				$push(
+					(string) ($value['name'] ?? $value['key'] ?? $value['attribute'] ?? $key),
+					(string) ($value['display_key'] ?? $value['label'] ?? $value['name'] ?? $key),
+					cmx_woocommerce_stringify_line_meta_value($value['option'] ?? $value['value'] ?? $value['display_value'] ?? '')
+				);
+				continue;
+			}
+			$push((string) $key, (string) $key, cmx_woocommerce_stringify_line_meta_value($value));
+		}
+
+		foreach ((array) ($line['attributes'] ?? []) as $key => $value) {
+			if (\is_array($value)) {
+				$push(
+					(string) ($value['name'] ?? $value['key'] ?? $value['attribute'] ?? $key),
+					(string) ($value['display_key'] ?? $value['label'] ?? $value['name'] ?? $key),
+					cmx_woocommerce_stringify_line_meta_value($value['option'] ?? $value['value'] ?? $value['display_value'] ?? '')
+				);
+				continue;
+			}
+			$push((string) $key, (string) $key, cmx_woocommerce_stringify_line_meta_value($value));
+		}
+
+		foreach ((array) ($line['meta_data'] ?? []) as $meta) {
+			if (!\is_array($meta)) {
+				continue;
+			}
+			$key = \trim((string) ($meta['key'] ?? ''));
+			$label = \trim((string) ($meta['display_key'] ?? $meta['label'] ?? $key));
+			$value = cmx_woocommerce_stringify_line_meta_value($meta['display_value'] ?? ($meta['value'] ?? ''));
+			$push($key, $label, $value);
+		}
+
+		return $candidates;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_or_create_attribute_term')) {
+	function cmx_woocommerce_find_or_create_attribute_term(string $taxonomy, string $value): int {
+		$taxonomy = \sanitize_key($taxonomy);
+		$value = \trim(\preg_replace('/\s+/', ' ', \wp_strip_all_tags($value)));
+		if ($taxonomy === '' || $value === '' || !\taxonomy_exists($taxonomy)) {
+			return 0;
+		}
+
+		$value_forms = cmx_woocommerce_lookup_forms($value);
+		$terms = \function_exists(__NAMESPACE__ . '\\cmx_get_terms_safe')
+			? (array) cmx_get_terms_safe($taxonomy)
+			: (array) \get_terms(['taxonomy' => $taxonomy, 'hide_empty' => false]);
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term) {
+				continue;
+			}
+			$term_forms = \array_merge(
+				cmx_woocommerce_lookup_forms((string) $term->name),
+				cmx_woocommerce_lookup_forms((string) $term->slug)
+			);
+			if (cmx_woocommerce_forms_intersect($value_forms, $term_forms)) {
+				return (int) $term->term_id;
+			}
+		}
+
+		$slug = \function_exists(__NAMESPACE__ . '\\cmx_sani_key')
+			? (string) cmx_sani_key($value, 'slug')
+			: \sanitize_title($value);
+		$inserted = \wp_insert_term($value, $taxonomy, $slug !== '' ? ['slug' => $slug] : []);
+		if (\is_wp_error($inserted)) {
+			$data = $inserted->get_error_data('term_exists');
+			if (\is_array($data) && isset($data['term_id'])) {
+				return (int) $data['term_id'];
+			}
+			if (\is_numeric($data)) {
+				return (int) $data;
+			}
+			return 0;
+		}
+
+		return (int) ($inserted['term_id'] ?? 0);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_line_attribute_matches')) {
+	/**
+	 * @return array<int,array{taxonomy:string,term_id:int,label:string,value:string}>
+	 */
+	function cmx_woocommerce_line_attribute_matches(array $line, array $choices): array {
+		if ($choices === []) {
+			return [];
+		}
+
+		$matches = [];
+		$used_taxonomies = [];
+		$choice_forms = [];
+		foreach ($choices as $taxonomy => $config) {
+			$tail = \preg_replace('/^artikel_/', '', (string) $taxonomy);
+			$choice_forms[(string) $taxonomy] = \array_merge(
+				cmx_woocommerce_lookup_forms((string) ($config['label'] ?? '')),
+				cmx_woocommerce_lookup_forms((string) $taxonomy),
+				cmx_woocommerce_lookup_forms((string) $tail)
+			);
+		}
+
+		foreach (cmx_woocommerce_line_attribute_candidates($line) as $candidate) {
+			$candidate_forms = \array_merge(
+				cmx_woocommerce_lookup_forms((string) ($candidate['key'] ?? '')),
+				cmx_woocommerce_lookup_forms((string) ($candidate['label'] ?? ''))
+			);
+			foreach ($choices as $taxonomy => $config) {
+				$taxonomy = (string) $taxonomy;
+				if (isset($used_taxonomies[$taxonomy])) {
+					continue;
+				}
+				if (!cmx_woocommerce_forms_intersect($candidate_forms, $choice_forms[$taxonomy] ?? [])) {
+					continue;
+				}
+
+				$term_id = cmx_woocommerce_find_or_create_attribute_term($taxonomy, (string) ($candidate['value'] ?? ''));
+				if ($term_id <= 0) {
+					continue;
+				}
+
+				$used_taxonomies[$taxonomy] = true;
+				$matches[] = [
+					'taxonomy' => $taxonomy,
+					'term_id' => $term_id,
+					'label' => (string) ($config['label'] ?? $taxonomy),
+					'value' => (string) ($candidate['value'] ?? ''),
+				];
+				break;
+			}
+		}
+
+		return $matches;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_variant_row_is_placeholder')) {
+	function cmx_woocommerce_variant_row_is_placeholder(array $row): bool {
+		return
+			\trim((string) ($row['sku'] ?? '')) === '' &&
+			\trim((string) ($row['woo_variation_sku'] ?? '')) === '' &&
+			(int) ($row['left_term_id'] ?? 0) <= 0 &&
+			(int) ($row['right_term_id'] ?? 0) <= 0 &&
+			(int) ($row['woo_product_id'] ?? 0) <= 0 &&
+			(int) ($row['woo_variation_id'] ?? 0) <= 0 &&
+			\trim((string) ($row['ek'] ?? '')) === '' &&
+			\trim((string) ($row['vk'] ?? '')) === '' &&
+			\trim((string) ($row['belegtext'] ?? '')) === '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_variant_row_has_attribute_match')) {
+	function cmx_woocommerce_variant_row_has_attribute_match(array $row, array $match): bool {
+		$taxonomy = (string) ($match['taxonomy'] ?? '');
+		$term_id = (int) ($match['term_id'] ?? 0);
+		if ($taxonomy === '' || $term_id <= 0) {
+			return false;
+		}
+
+		return (
+			((string) ($row['left_taxonomy'] ?? '') === $taxonomy && (int) ($row['left_term_id'] ?? 0) === $term_id) ||
+			((string) ($row['right_taxonomy'] ?? '') === $taxonomy && (int) ($row['right_term_id'] ?? 0) === $term_id)
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_variant_row_index')) {
+	function cmx_woocommerce_find_variant_row_index(array $rows, int $variation_id, string $sku, array $attribute_matches): int {
+		if ($variation_id > 0) {
+			foreach ($rows as $index => $row) {
+				if ((int) ($row['woo_variation_id'] ?? 0) === $variation_id) {
+					return (int) $index;
+				}
+			}
+		}
+
+		if ($attribute_matches !== []) {
+			foreach ($rows as $index => $row) {
+				$all_match = true;
+				foreach ($attribute_matches as $match) {
+					if (!cmx_woocommerce_variant_row_has_attribute_match((array) $row, (array) $match)) {
+						$all_match = false;
+						break;
+					}
+				}
+				if (!$all_match) {
+					continue;
+				}
+				$row_sku = \trim((string) ($row['sku'] ?? ''));
+				$row_woo_sku = \trim((string) ($row['woo_variation_sku'] ?? ''));
+				if ($sku === '' || $row_sku === $sku || $row_woo_sku === $sku) {
+					return (int) $index;
+				}
+			}
+		}
+
+		if ($sku !== '') {
+			foreach ($rows as $index => $row) {
+				$row_sku = \trim((string) ($row['sku'] ?? ''));
+				$row_woo_sku = \trim((string) ($row['woo_variation_sku'] ?? ''));
+				if ($row_sku === $sku || $row_woo_sku === $sku) {
+					return (int) $index;
+				}
+			}
+		}
+
+		foreach ($rows as $index => $row) {
+			if (cmx_woocommerce_variant_row_is_placeholder((array) $row)) {
+				return (int) $index;
+			}
+		}
+
+		if ($variation_id <= 0 && $attribute_matches === [] && $rows !== []) {
+			return 0;
+		}
+
+		return -1;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_meta')) {
 	function cmx_woocommerce_artikel_find_by_meta(string $meta_key, string $meta_value): int {
 		$meta_key = \trim($meta_key);
@@ -1304,6 +1665,87 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_sku')) 
 		]);
 
 		return (int) ($posts[0] ?? 0);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_variant_lookup_index')) {
+	function cmx_woocommerce_artikel_variant_lookup_index(): array {
+		static $index = null;
+		if (\is_array($index)) {
+			return $index;
+		}
+
+		$index = [
+			'variation' => [],
+			'sku' => [],
+		];
+
+		if (!\post_type_exists('artikel')) {
+			return $index;
+		}
+
+		$artikel_ids = \get_posts([
+			'post_type'              => 'artikel',
+			'post_status'            => ['publish', 'draft', 'pending', 'private', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'no_found_rows'          => true,
+			'suppress_filters'       => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		]);
+
+		foreach ((array) $artikel_ids as $artikel_id) {
+			$artikel_id = (int) $artikel_id;
+			if ($artikel_id <= 0) {
+				continue;
+			}
+			$rows = \get_post_meta($artikel_id, cmx_woocommerce_artikel_variant_rows_meta_key(), true);
+			if (!\is_array($rows)) {
+				continue;
+			}
+			foreach ($rows as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$variation_id = (int) ($row['woo_variation_id'] ?? 0);
+				if ($variation_id > 0 && !isset($index['variation'][(string) $variation_id])) {
+					$index['variation'][(string) $variation_id] = $artikel_id;
+				}
+				foreach (['sku', 'woo_variation_sku'] as $key) {
+					$sku = \trim((string) ($row[$key] ?? ''));
+					if ($sku !== '' && !isset($index['sku'][$sku])) {
+						$index['sku'][$sku] = $artikel_id;
+					}
+				}
+			}
+		}
+
+		return $index;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_variant_variation_id')) {
+	function cmx_woocommerce_artikel_find_by_variant_variation_id(int $variation_id): int {
+		$variation_id = (int) $variation_id;
+		if ($variation_id <= 0) {
+			return 0;
+		}
+		$index = cmx_woocommerce_artikel_variant_lookup_index();
+		return (int) ($index['variation'][(string) $variation_id] ?? 0);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_artikel_find_by_variant_sku')) {
+	function cmx_woocommerce_artikel_find_by_variant_sku(string $sku): int {
+		$sku = \trim($sku);
+		if ($sku === '') {
+			return 0;
+		}
+		$index = cmx_woocommerce_artikel_variant_lookup_index();
+		return (int) ($index['sku'][$sku] ?? 0);
 	}
 }
 
@@ -1428,21 +1870,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_existing_artikel_f
 		$variation_id = (int) ($line['variation_id'] ?? 0);
 		$product_id = (int) ($line['product_id'] ?? 0);
 
-		if ($variation_id > 0) {
-			$artikel_id = cmx_woocommerce_artikel_find_by_meta('_cmx_wc_variation_id', (string) $variation_id);
+		if ($product_id > 0) {
+			$artikel_id = cmx_woocommerce_artikel_find_by_meta(cmx_woocommerce_artikel_woo_id_meta_key(), (string) $product_id);
 			if ($artikel_id > 0) {
 				return $artikel_id;
 			}
-		}
-
-		if ($product_id > 0) {
 			$artikel_id = cmx_woocommerce_artikel_find_by_meta('_cmx_wc_product_id', (string) $product_id);
 			if ($artikel_id > 0) {
 				return $artikel_id;
 			}
 		}
 
+		if ($variation_id > 0) {
+			$artikel_id = cmx_woocommerce_artikel_find_by_variant_variation_id($variation_id);
+			if ($artikel_id > 0) {
+				return $artikel_id;
+			}
+			$artikel_id = cmx_woocommerce_artikel_find_by_meta('_cmx_wc_variation_id', (string) $variation_id);
+			if ($artikel_id > 0) {
+				return $artikel_id;
+			}
+		}
+
 		$artikel_id = cmx_woocommerce_artikel_find_by_sku($sku);
+		if ($artikel_id > 0) {
+			return $artikel_id;
+		}
+		$artikel_id = cmx_woocommerce_artikel_find_by_variant_sku($sku);
 		if ($artikel_id > 0) {
 			return $artikel_id;
 		}
@@ -1466,6 +1920,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_artikel_from_lin
 
 		$result = [
 			'artikel_id' => 0,
+			'artikel_variant_index' => '',
 			'einheit_id' => 0,
 			'unit'       => '',
 		];
@@ -1504,45 +1959,103 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_artikel_from_lin
 		if ($sku !== '') {
 			\update_post_meta($artikel_id, cmx_woocommerce_artikel_sku_meta_key(), $sku);
 		}
+		\update_post_meta($artikel_id, cmx_woocommerce_artikel_art_meta_key(), 'produkt');
 
 		if (\preg_match('/^[A-Z]{3}$/', $currency)) {
 			\update_post_meta($artikel_id, cmx_woocommerce_artikel_waehrung_meta_key(), $currency);
 		}
 
-		cmx_woocommerce_artikel_sync_prices($artikel_id, $unit_price);
-
 		if ($product_id > 0) {
 			\update_post_meta($artikel_id, '_cmx_wc_product_id', (string) $product_id);
-		}
-		if ($variation_id > 0) {
-			\update_post_meta($artikel_id, '_cmx_wc_variation_id', (string) $variation_id);
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_woo_id_meta_key(), (string) $product_id);
 		}
 
-		$default_unit = \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')
-			? (array) cmx_artikel_default_einheit($artikel_id)
-			: ['id' => 0, 'name' => ''];
-		$einheit_id = (int) ($default_unit['id'] ?? 0);
-		$unit_name = \trim((string) ($default_unit['name'] ?? ''));
+		$left_choices = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')
+			? (array) cmx_artikel_variant_taxonomy_choices('Grössen')
+			: [];
+		$right_choices = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')
+			? (array) cmx_artikel_variant_taxonomy_choices('Farben')
+			: [];
+		$existing_rows = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_load')
+			? (array) cmx_artikel_variant_rows_load($artikel_id, $left_choices, $right_choices)
+			: (array) \get_post_meta($artikel_id, cmx_woocommerce_artikel_variant_rows_meta_key(), true);
+		$attribute_choices = $left_choices;
+		foreach ($right_choices as $taxonomy => $config) {
+			$attribute_choices[(string) $taxonomy] = $config;
+		}
+		$attribute_matches = cmx_woocommerce_line_attribute_matches($line, $attribute_choices);
+		$variant_index = cmx_woocommerce_find_variant_row_index($existing_rows, $variation_id, $sku, $attribute_matches);
+		if ($variant_index < 0) {
+			$variant_index = \count($existing_rows);
+		}
 
-		if ($created || $einheit_id <= 0 || $unit_name === '') {
-			$stueck = cmx_woocommerce_find_or_create_stueck_unit();
-			$taxonomy = (string) ($stueck['taxonomy'] ?? '');
-			$stueck_id = (int) ($stueck['term_id'] ?? 0);
-			if ($taxonomy !== '' && $stueck_id > 0) {
-				\wp_set_post_terms($artikel_id, [$stueck_id], $taxonomy, false);
-				$einheit_id = $stueck_id;
-				$unit_name = (string) ($stueck['name'] ?? 'Stück');
+		$base_row = isset($existing_rows[$variant_index]) && \is_array($existing_rows[$variant_index])
+			? (array) $existing_rows[$variant_index]
+			: (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_row_default')
+				? (array) cmx_artikel_variant_row_default($left_choices, $right_choices)
+				: []);
+
+		$einheit_id = (int) ($base_row['einheit_term_id'] ?? 0);
+		$unit_name = '';
+		if ($einheit_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_einheiten_taxonomy')) {
+			$taxonomy = (string) cmx_artikel_einheiten_taxonomy();
+			$term = $taxonomy !== '' ? \get_term($einheit_id, $taxonomy) : null;
+			if ($term instanceof \WP_Term) {
+				$unit_name = \trim((string) $term->name);
 			}
 		}
-
+		if ($created || $einheit_id <= 0 || $unit_name === '') {
+			$stueck = cmx_woocommerce_find_or_create_stueck_unit();
+			$einheit_id = (int) ($stueck['term_id'] ?? $einheit_id);
+			$unit_name = \trim((string) ($stueck['name'] ?? $unit_name));
+		}
 		if (($einheit_id <= 0 || $unit_name === '') && \function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
 			$default_unit = (array) cmx_artikel_default_einheit($artikel_id);
 			$einheit_id = (int) ($default_unit['id'] ?? $einheit_id);
 			$unit_name = \trim((string) ($default_unit['name'] ?? $unit_name));
 		}
 
+		$row = \array_replace($base_row, [
+			'sku' => $sku !== '' ? $sku : (string) ($base_row['sku'] ?? ''),
+			'einheit_term_id' => $einheit_id > 0 ? $einheit_id : (int) ($base_row['einheit_term_id'] ?? 0),
+			'vk' => \number_format(\round(\max(0.0, $unit_price), 2), 2, '.', ''),
+			'verkaufbar' => 1,
+			'katalog' => 1,
+			'woo_product_id' => $product_id > 0 ? $product_id : (int) ($base_row['woo_product_id'] ?? 0),
+			'woo_variation_id' => $variation_id > 0 ? $variation_id : (int) ($base_row['woo_variation_id'] ?? 0),
+			'woo_variation_sku' => $sku !== '' ? $sku : (string) ($base_row['woo_variation_sku'] ?? ''),
+		]);
+		$slot_keys = [
+			['taxonomy' => 'left_taxonomy', 'term_id' => 'left_term_id'],
+			['taxonomy' => 'right_taxonomy', 'term_id' => 'right_term_id'],
+		];
+		foreach (\array_slice($attribute_matches, 0, 2) as $slot_index => $match) {
+			if (!isset($slot_keys[$slot_index])) {
+				continue;
+			}
+			$row[$slot_keys[$slot_index]['taxonomy']] = (string) ($match['taxonomy'] ?? '');
+			$row[$slot_keys[$slot_index]['term_id']] = (int) ($match['term_id'] ?? 0);
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_row_normalize')) {
+			$row = (array) cmx_artikel_variant_row_normalize($row, $left_choices, $right_choices, $base_row);
+		}
+
+		$existing_rows[$variant_index] = $row;
+		$existing_rows = \array_values($existing_rows);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_persist')) {
+			$existing_rows = (array) cmx_artikel_variant_rows_persist($artikel_id, $existing_rows, $left_choices, $right_choices);
+		} else {
+			\update_post_meta($artikel_id, cmx_woocommerce_artikel_variant_rows_meta_key(), $existing_rows);
+		}
+		if ($variation_id > 0 && \count($existing_rows) === 1) {
+			\update_post_meta($artikel_id, '_cmx_wc_variation_id', (string) $variation_id);
+		} elseif (\count($existing_rows) > 1) {
+			\delete_post_meta($artikel_id, '_cmx_wc_variation_id');
+		}
+
 		$result = [
 			'artikel_id' => $artikel_id,
+			'artikel_variant_index' => isset($existing_rows[$variant_index]) ? (int) $variant_index : '',
 			'einheit_id' => $einheit_id > 0 ? $einheit_id : 0,
 			'unit'       => $unit_name,
 		];
@@ -1584,6 +2097,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_build_line_row')) {
 		return [
 			'artikel_id'   => (int) ($artikel_data['artikel_id'] ?? 0),
 			'artikel_name' => $name,
+			'artikel_variant_index' => $artikel_data['artikel_variant_index'] ?? '',
 			'sku'          => \trim((string) ($line['sku'] ?? '')),
 			'menge'        => \round((float) $amounts['qty'], 2),
 			'einheit_id'   => (int) ($artikel_data['einheit_id'] ?? 0),
