@@ -51,6 +51,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_val
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')) {
+	function cmx_kontakte_resolve_country_option_value(string $country, array $countries = []): string {
+		$country = \trim($country);
+		if ($country === '') {
+			return '';
+		}
+
+		$normalized = cmx_kontakte_normalize_country_meta_value($country);
+		$raw = \strtolower($country);
+		$countries = $countries ?: cmx_countries_from_taxonomy();
+
+		foreach ($countries as $option) {
+			$value = \strtolower((string) ($option['value'] ?? ''));
+			$label = (string) ($option['label'] ?? '');
+			if ($value === '') {
+				continue;
+			}
+
+			if ($raw === $value || $normalized === $value) {
+				return $value;
+			}
+
+			$label_normalized = cmx_kontakte_normalize_country_meta_value($label);
+			if ($label_normalized !== '' && $normalized === $label_normalized) {
+				return $value;
+			}
+		}
+
+		return $normalized;
+	}
+}
+
 function cmx_countries_from_taxonomy(): array {
 	$tax = 'kontakte_laender';
 	if (!\taxonomy_exists($tax)) {
@@ -152,14 +184,14 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 		'zusatz'  => \get_post_meta($post->ID, CMX_RECHNUNG_META_ZUSATZ,  true),
 		'plz'     => \get_post_meta($post->ID, CMX_RECHNUNG_META_PLZ,     true),
 		'ort'     => \get_post_meta($post->ID, CMX_RECHNUNG_META_ORT,     true),
-		'land'    => cmx_kontakte_normalize_country_meta_value((string) \get_post_meta($post->ID, CMX_RECHNUNG_META_LAND, true)) ?: $default_slug,
+		'land'    => cmx_kontakte_resolve_country_option_value((string) \get_post_meta($post->ID, CMX_RECHNUNG_META_LAND, true), $countries) ?: $default_slug,
 	];
 	$liefer = [
 		'strasse' => \get_post_meta($post->ID, CMX_LIEFER_META_STRASSE, true),
 		'zusatz'  => \get_post_meta($post->ID, CMX_LIEFER_META_ZUSATZ,  true),
 		'plz'     => \get_post_meta($post->ID, CMX_LIEFER_META_PLZ,     true),
 		'ort'     => \get_post_meta($post->ID, CMX_LIEFER_META_ORT,     true),
-		'land'    => cmx_kontakte_normalize_country_meta_value((string) \get_post_meta($post->ID, CMX_LIEFER_META_LAND, true)) ?: $default_slug,
+		'land'    => cmx_kontakte_resolve_country_option_value((string) \get_post_meta($post->ID, CMX_LIEFER_META_LAND, true), $countries) ?: $default_slug,
 	];
 
 	echo '<style>

@@ -508,16 +508,24 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		$rechnung_land_raw = (string) ($row['rechnung_land_slug'] ?? ($row_l['rechnung_land_slug'] ?? ''));
 		if ($rechnung_land_raw === '') $rechnung_land_raw = (string) ($row['rechnung_land_label'] ?? ($row_l['rechnung_land_label'] ?? ''));
 		if ($rechnung_land_raw === '') $rechnung_land_raw = (string) ($row['_cmx_rechnung_land'] ?? ($row_l['_cmx_rechnung_land'] ?? ''));
-		$rechnung_land = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')
-			? (string) cmx_kontakte_normalize_country_meta_value($rechnung_land_raw)
-			: \strtolower($rechnung_land_raw);
+		$rechnung_land = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')
+			? (string) cmx_kontakte_resolve_country_option_value($rechnung_land_raw)
+			: (
+				\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')
+					? (string) cmx_kontakte_normalize_country_meta_value($rechnung_land_raw)
+					: \strtolower($rechnung_land_raw)
+			);
 
 		$liefer_land_raw = (string) ($row['liefer_land_slug'] ?? ($row_l['liefer_land_slug'] ?? ''));
 		if ($liefer_land_raw === '') $liefer_land_raw = (string) ($row['liefer_land_label'] ?? ($row_l['liefer_land_label'] ?? ''));
 		if ($liefer_land_raw === '') $liefer_land_raw = (string) ($row['_cmx_liefer_land'] ?? ($row_l['_cmx_liefer_land'] ?? ''));
-		$liefer_land = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')
-			? (string) cmx_kontakte_normalize_country_meta_value($liefer_land_raw)
-			: \strtolower($liefer_land_raw);
+		$liefer_land = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')
+			? (string) cmx_kontakte_resolve_country_option_value($liefer_land_raw)
+			: (
+				\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')
+					? (string) cmx_kontakte_normalize_country_meta_value($liefer_land_raw)
+					: \strtolower($liefer_land_raw)
+			);
 
 		\update_post_meta($post_id, CMX_RECHNUNG_META_STRASSE, (string)($row['rechnung_strasse'] ?? ($row_l['rechnung_strasse'] ?? '')));
 		\update_post_meta($post_id, CMX_RECHNUNG_META_ZUSATZ,  (string)($row['rechnung_zusatz'] ?? ($row_l['rechnung_zusatz'] ?? '')));

@@ -232,10 +232,22 @@ function cmx_kommunikation_box_html($post): void {
 	if (!isset($_POST['cmx_kommunikation']) || !\is_array($_POST['cmx_kommunikation'])) return;
 
 	if (isset($_POST['_cmx_rechnung_land'])) {
-			\update_post_meta($post_id, '_cmx_rechnung_land', \sanitize_text_field($_POST['_cmx_rechnung_land']));
+			$rechnung_land = \sanitize_text_field($_POST['_cmx_rechnung_land']);
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')) {
+				$rechnung_land = (string) cmx_kontakte_resolve_country_option_value($rechnung_land);
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')) {
+				$rechnung_land = (string) cmx_kontakte_normalize_country_meta_value($rechnung_land);
+			}
+			\update_post_meta($post_id, '_cmx_rechnung_land', $rechnung_land);
 	}
 	if (isset($_POST['_cmx_liefer_land'])) {
-			\update_post_meta($post_id, '_cmx_liefer_land', \sanitize_text_field($_POST['_cmx_liefer_land']));
+			$liefer_land = \sanitize_text_field($_POST['_cmx_liefer_land']);
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')) {
+				$liefer_land = (string) cmx_kontakte_resolve_country_option_value($liefer_land);
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')) {
+				$liefer_land = (string) cmx_kontakte_normalize_country_meta_value($liefer_land);
+			}
+			\update_post_meta($post_id, '_cmx_liefer_land', $liefer_land);
 	}
 
 
