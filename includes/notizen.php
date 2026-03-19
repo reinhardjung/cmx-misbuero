@@ -189,6 +189,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_sort_rows')) {
+		/**
+		 * @param array<int, array{betreff:string,datum:string,zeit:string,text:string}> $rows
+		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string}>
+		 */
+		function cmx_notizen_sort_rows(array $rows): array {
+			$decorated = [];
+			foreach ($rows as $index => $row) {
+				$datum = (string) ($row['datum'] ?? '');
+				$zeit = (string) ($row['zeit'] ?? '');
+				$sort_key = $datum !== '' ? ($datum . ' ' . ($zeit !== '' ? $zeit : '00:00')) : '9999-12-31 23:59';
+				$decorated[] = [
+					'index' => (int) $index,
+					'sort'  => $sort_key,
+					'row'   => $row,
+				];
+			}
+
+			\usort($decorated, static function (array $a, array $b): int {
+				$cmp = \strcmp((string) $a['sort'], (string) $b['sort']);
+				if ($cmp !== 0) {
+					return $cmp;
+				}
+				return ((int) $a['index']) <=> ((int) $b['index']);
+			});
+
+			return \array_values(\array_map(static fn(array $item): array => (array) $item['row'], $decorated));
+		}
+	}
+
 	if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_decode_legacy_raw')) {
 		/**
 		 * Legacy-Notizen robust dekodieren (JSON/serialisiert, auch doppelt serialisiert).
@@ -266,9 +296,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 			}
 		}
 
-		return $rows;
+			return cmx_notizen_sort_rows($rows);
+		}
 	}
-}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 	/**
