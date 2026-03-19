@@ -199,7 +199,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 			foreach ($rows as $index => $row) {
 				$datum = (string) ($row['datum'] ?? '');
 				$zeit = (string) ($row['zeit'] ?? '');
-				$sort_key = $datum !== '' ? ($datum . ' ' . ($zeit !== '' ? $zeit : '00:00')) : '9999-12-31 23:59';
+				$sort_key = $datum !== '' ? ($datum . ' ' . ($zeit !== '' ? $zeit : '00:00')) : '0000-00-00 00:00';
 				$decorated[] = [
 					'index' => (int) $index,
 					'sort'  => $sort_key,
@@ -208,7 +208,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 			}
 
 			\usort($decorated, static function (array $a, array $b): int {
-				$cmp = \strcmp((string) $a['sort'], (string) $b['sort']);
+				$cmp = \strcmp((string) $b['sort'], (string) $a['sort']);
 				if ($cmp !== 0) {
 					return $cmp;
 				}
