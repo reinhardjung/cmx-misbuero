@@ -29,6 +29,28 @@ foreach ([
  * Liefert eine Optionsliste aus der Taxonomie "kontakte_laender".
  * @return array [['value'=>'ch','label'=>'Schweiz'], ...]
  */
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')) {
+	function cmx_kontakte_normalize_country_meta_value(string $country): string {
+		$country = \trim($country);
+		if ($country === '') {
+			return '';
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_country_slug')) {
+			return (string) cmx_normalize_country_slug($country);
+		}
+		if (\preg_match('/^[A-Za-z]{2}$/', $country)) {
+			return \strtolower($country);
+		}
+		$map = [
+			'switzerland' => 'ch', 'schweiz' => 'ch', 'suisse' => 'ch', 'svizzera' => 'ch',
+			'germany' => 'de', 'deutschland' => 'de',
+			'austria' => 'at', 'österreich' => 'at', 'oesterreich' => 'at',
+		];
+		$key = \strtolower(\remove_accents($country));
+		return $map[$key] ?? \strtolower($country);
+	}
+}
+
 function cmx_countries_from_taxonomy(): array {
 	$tax = 'kontakte_laender';
 	if (!\taxonomy_exists($tax)) {
@@ -122,7 +144,7 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 	\wp_nonce_field('cmx_save_address_meta', 'cmx_address_nonce');
 
 	$countries = cmx_countries_from_taxonomy();
-	$default_slug = cmx_countries_default_slug($countries, 'schweiz');
+	$default_slug = cmx_countries_default_slug($countries, 'ch');
 	$land_label_html = cmx_countries_label_html('Land');
 
 	$rechnung = [
@@ -130,14 +152,14 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 		'zusatz'  => \get_post_meta($post->ID, CMX_RECHNUNG_META_ZUSATZ,  true),
 		'plz'     => \get_post_meta($post->ID, CMX_RECHNUNG_META_PLZ,     true),
 		'ort'     => \get_post_meta($post->ID, CMX_RECHNUNG_META_ORT,     true),
-		'land'    => strtolower(\get_post_meta($post->ID, CMX_RECHNUNG_META_LAND, true) ?: $default_slug),
+		'land'    => cmx_kontakte_normalize_country_meta_value((string) \get_post_meta($post->ID, CMX_RECHNUNG_META_LAND, true)) ?: $default_slug,
 	];
 	$liefer = [
 		'strasse' => \get_post_meta($post->ID, CMX_LIEFER_META_STRASSE, true),
 		'zusatz'  => \get_post_meta($post->ID, CMX_LIEFER_META_ZUSATZ,  true),
 		'plz'     => \get_post_meta($post->ID, CMX_LIEFER_META_PLZ,     true),
 		'ort'     => \get_post_meta($post->ID, CMX_LIEFER_META_ORT,     true),
-		'land'    => strtolower(\get_post_meta($post->ID, CMX_LIEFER_META_LAND, true) ?: $default_slug),
+		'land'    => cmx_kontakte_normalize_country_meta_value((string) \get_post_meta($post->ID, CMX_LIEFER_META_LAND, true)) ?: $default_slug,
 	];
 
 	echo '<style>
@@ -300,7 +322,7 @@ function cmx_addr_ac_enqueue($hook): void {
 
 	// Wir setzen bei Pick standardmäßig den CH-Slug, wenn vorhanden. Den Slug holen wir serverseitig und übergeben ihn.
 	$countries = cmx_countries_from_taxonomy();
-	$chSlug    = cmx_countries_default_slug($countries, 'schweiz');
+	$chSlug    = cmx_countries_default_slug($countries, 'ch');
 	$js_chSlug = json_encode($chSlug);
 
 	$js = <<<JS
