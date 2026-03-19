@@ -80,7 +80,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_max_workplaces')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_should_show_user_assignment')) {
 	function cmx_system_should_show_user_assignment(): bool {
-		return cmx_system_total_user_count() > 2;
+		return cmx_system_max_workplaces() > 1;
 	}
 }
 
