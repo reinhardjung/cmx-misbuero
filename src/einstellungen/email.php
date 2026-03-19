@@ -328,10 +328,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		'cmx_email_agb_link',
 		'AGB',
 		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('agb_link'));
-			$placeholder = \esc_attr(cmx_email_agb_placeholder());
+			$raw_value = (string) cmx_email_option_value('agb_link');
+			$raw_placeholder = (string) cmx_email_agb_placeholder();
+			$value = \esc_attr($raw_value);
+			$placeholder = \esc_attr($raw_placeholder);
+			$link = \trim($raw_value) !== '' ? $raw_value : $raw_placeholder;
 			echo '<input type="url" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[agb_link]" value="' . $value . '" placeholder="' . $placeholder . '" autocomplete="off">';
-			echo '<span style="margin-left:8px;">Link zu Deinen AGB.</span>';
+			echo '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">Link zu Deinen AGB.</a>';
 		},
 		$page,
 		'cmx_sec_email_links'
