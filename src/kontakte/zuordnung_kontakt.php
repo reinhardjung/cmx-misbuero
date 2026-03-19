@@ -448,6 +448,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakte_zu_kontakt_box')) {
 					var beziehungValue = selectedOption ? String(selectedOption.value || "") : "";
 					var beziehungLabel = beziehungValue !== "" && selectedOption ? String(selectedOption.text || "") : "";
 					renderSelected(item, beziehungValue, beziehungLabel);
+					beziehungSelect.value = "";
 					searchInput.value = "";
 					closeList();
 					searchInput.focus();
