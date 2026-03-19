@@ -176,7 +176,10 @@ function cmx_render_adressen_metabox(\WP_Post $post): void {
 	\wp_nonce_field('cmx_save_address_meta', 'cmx_address_nonce');
 
 	$countries = cmx_countries_from_taxonomy();
-	$default_slug = cmx_countries_default_slug($countries, 'ch');
+	$default_slug = cmx_kontakte_resolve_country_option_value('ch', $countries);
+	if ($default_slug === '') {
+		$default_slug = cmx_countries_default_slug($countries, 'ch');
+	}
 	$land_label_html = cmx_countries_label_html('Land');
 
 	$rechnung = [
@@ -354,7 +357,10 @@ function cmx_addr_ac_enqueue($hook): void {
 
 	// Wir setzen bei Pick standardmäßig den CH-Slug, wenn vorhanden. Den Slug holen wir serverseitig und übergeben ihn.
 	$countries = cmx_countries_from_taxonomy();
-	$chSlug    = cmx_countries_default_slug($countries, 'ch');
+	$chSlug    = cmx_kontakte_resolve_country_option_value('ch', $countries);
+	if ($chSlug === '') {
+		$chSlug = cmx_countries_default_slug($countries, 'ch');
+	}
 	$js_chSlug = json_encode($chSlug);
 
 	$js = <<<JS
