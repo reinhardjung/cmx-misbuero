@@ -551,6 +551,65 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_postanschrift')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_lieferanschrift')) {
+	function cmx_build_kontakt_lieferanschrift(int $kontakt_id): string {
+		if ($kontakt_id <= 0) return '';
+
+		$firma = \trim((string) cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)));
+		$firma_lc = \function_exists('mb_strtolower') ? \mb_strtolower($firma) : \strtolower($firma);
+		if ($firma_lc === 'firmenname fehlt') {
+			$firma = '';
+		}
+
+		$vorname  = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+		$nachname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		$full_name = \trim(\preg_replace('/\s+/', ' ', $vorname . ' ' . $nachname));
+		$is_privat = !empty(\get_post_meta($kontakt_id, '_cmx_kontakte_privat', true));
+
+		$norm = static function (string $value): string {
+			$value = \trim((string) \preg_replace('/\s+/', ' ', $value));
+			return \function_exists('mb_strtolower') ? \mb_strtolower($value) : \strtolower($value);
+		};
+
+		$lines = [];
+		$firma_norm = $norm($firma);
+		$name_norm  = $norm($full_name);
+
+		if ($firma !== '' && (!$is_privat || $firma_norm !== $name_norm)) {
+			$lines[] = $firma;
+		}
+
+		if ($full_name !== '') {
+			$already_present = false;
+			foreach ($lines as $line) {
+				if ($norm($line) === $name_norm) {
+					$already_present = true;
+					break;
+				}
+			}
+			if (!$already_present) {
+				$lines[] = $full_name;
+			}
+		}
+
+		$str  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_strasse', true));
+		$plz  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_plz', true));
+		$ort  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_ort', true));
+		$iso2 = cmx_iso2_from_land($kontakt_id);
+
+		if ($str !== '') {
+			$lines[] = $str;
+		}
+
+		$city = \trim($plz . ' ' . $ort);
+		if ($city !== '') {
+			$lines[] = ($iso2 !== '' ? $iso2 . '-' : '') . $city;
+		}
+
+		return \trim(\implode("\n", \array_filter($lines, static fn($v) => \trim((string) $v) !== '')));
+	}
+}
+
 /** Rechnungsnummer (Format aus INI, externe Helperfunktion vorausgesetzt) */
 if (!\function_exists(__NAMESPACE__ . '\\cmx_generate_rechnungsnummer')) {
 	function cmx_generate_rechnungsnummer(): string {
@@ -674,6 +733,154 @@ function cmx_ajax_search_projekte(): void {
 	\wp_send_json_success(['items'=>$out]);
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_terms')) {
+	function cmx_ajax_kontakte_search_terms(string $search_term): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_terms')) {
+			return (array) cmx_kontakte_search_terms($search_term);
+		}
+
+		$search_term = \trim($search_term);
+		if ($search_term === '') {
+			return [];
+		}
+
+		$terms = [$search_term];
+		$umlaut_variant = \strtr($search_term, [
+			'Ä' => 'Ae',
+			'Ö' => 'Oe',
+			'Ü' => 'Ue',
+			'ä' => 'ae',
+			'ö' => 'oe',
+			'ü' => 'ue',
+			'ß' => 'ss',
+		]);
+		if ($umlaut_variant !== $search_term) {
+			$terms[] = $umlaut_variant;
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $terms))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_meta_keys')) {
+	function cmx_ajax_kontakte_search_meta_keys(bool $include_liefer = false): array {
+		$email_keys = [
+			'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+		];
+
+		$address_keys = [
+			'_cmx_rechnung_strasse',
+			'_cmx_rechnung_zusatz',
+			'_cmx_rechnung_plz',
+			'_cmx_rechnung_ort',
+			'_cmx_rechnung_land',
+		];
+		if ($include_liefer) {
+			$address_keys = \array_merge($address_keys, [
+				'_cmx_liefer_strasse',
+				'_cmx_liefer_zusatz',
+				'_cmx_liefer_plz',
+				'_cmx_liefer_ort',
+				'_cmx_liefer_land',
+			]);
+		}
+
+		$phone_keys = [
+			'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
+		];
+
+		$general_keys = [
+			'_cmx_kontakte_vorname', '_cmx_kontakte_nachname', '_cmx_kontakte_anrede',
+			'_cmx_kontakte_kunden_nr', '_cmx_kontakte_hr_uid',
+		];
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', \array_merge(
+			$email_keys,
+			$address_keys,
+			$phone_keys,
+			$general_keys
+		)))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_searchable_values')) {
+	/**
+	 * @return array<int,string>
+	 */
+	function cmx_ajax_kontakte_searchable_values(int $kontakt_id, bool $include_liefer = false): array {
+		$values = [];
+
+		$title = (string) \get_the_title($kontakt_id);
+		if ($title !== '') {
+			$values[] = \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')
+				? (string) cmx_normalize_minus_sign($title)
+				: $title;
+		}
+
+		foreach (cmx_ajax_kontakte_search_meta_keys($include_liefer) as $meta_key) {
+			$raw = \get_post_meta($kontakt_id, (string) $meta_key, true);
+			if (\is_array($raw)) {
+				$raw = \wp_json_encode($raw, JSON_UNESCAPED_UNICODE);
+			}
+			$value = \trim((string) $raw);
+			if ($value !== '') {
+				$values[] = $value;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')) {
+			$addr = \trim((string) cmx_build_kontakt_postanschrift($kontakt_id));
+			if ($addr !== '') {
+				$values[] = $addr;
+			}
+		}
+		if ($include_liefer && \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_lieferanschrift')) {
+			$delivery_addr = \trim((string) cmx_build_kontakt_lieferanschrift($kontakt_id));
+			if ($delivery_addr !== '') {
+				$values[] = $delivery_addr;
+			}
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $values))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakt_matches_search')) {
+	function cmx_ajax_kontakt_matches_search(int $kontakt_id, array $search_terms, bool $include_liefer = false): bool {
+		if ($kontakt_id <= 0) {
+			return false;
+		}
+		if ($search_terms === []) {
+			return true;
+		}
+
+		$terms = \array_values(\array_unique(\array_filter(\array_map(static function ($term): string {
+			$term = \trim((string) $term);
+			if ($term === '') {
+				return '';
+			}
+			return \function_exists('mb_strtolower') ? (string) \mb_strtolower($term, 'UTF-8') : \strtolower($term);
+		}, $search_terms))));
+		if ($terms === []) {
+			return true;
+		}
+
+		foreach (cmx_ajax_kontakte_searchable_values($kontakt_id, $include_liefer) as $value) {
+			$haystack = \function_exists('mb_strtolower') ? (string) \mb_strtolower($value, 'UTF-8') : \strtolower($value);
+			foreach ($terms as $term) {
+				$match = \function_exists('mb_stripos')
+					? (\mb_stripos($haystack, $term, 0, 'UTF-8') !== false)
+					: (\stripos($haystack, $term) !== false);
+				if ($term !== '' && $match) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
 \add_action('wp_ajax_cmx_search_kontakte', __NAMESPACE__.'\\cmx_ajax_search_kontakte');
 function cmx_ajax_search_kontakte(): void {
 	if (!\current_user_can('edit_posts')) \wp_send_json_error(['message'=>'forbidden'], 403);
@@ -682,6 +889,7 @@ function cmx_ajax_search_kontakte(): void {
 
 	$q   = isset($_GET['q']) ? \sanitize_text_field(\wp_unslash($_GET['q'])) : '';
 	$cpt = cmx_kontakte_cpt();
+	$include_liefer = !empty($_GET['include_liefer']);
 
 	if ($q === '') {
 		// Leere Suche: einfach die zuletzt geänderten Kontakte anzeigen
@@ -694,13 +902,48 @@ function cmx_ajax_search_kontakte(): void {
 			'fields'         => 'ids',
 		]);
 	} else {
-		$ids = \get_posts([
+		$search_terms = cmx_ajax_kontakte_search_terms($q);
+		$lookup_args = [
 			'post_type'      => $cpt,
 			'post_status'    => 'any',
-			's'              => $q,
-			'posts_per_page' => 20,
+			'posts_per_page' => -1,
 			'fields'         => 'ids',
-		]);
+			'no_found_rows'  => true,
+		];
+
+		$default_match_ids = [];
+		foreach ($search_terms as $lookup_term) {
+			$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $lookup_term,
+			])));
+		}
+
+		$meta_match_ids = [];
+			if ($search_terms !== []) {
+				$meta_query = ['relation' => 'OR'];
+				foreach ($search_terms as $lookup_term) {
+					foreach (cmx_ajax_kontakte_search_meta_keys($include_liefer) as $meta_key) {
+						$meta_query[] = [
+							'key'     => $meta_key,
+						'value'   => $lookup_term,
+						'compare' => 'LIKE',
+					];
+				}
+			}
+
+			$meta_match_ids = (array) \get_posts(\array_merge($lookup_args, [
+				's'          => '',
+				'meta_query' => $meta_query,
+			]));
+		}
+
+			$ids = \array_values(\array_filter(\array_values(\array_unique(\array_map('intval', \array_merge(
+				(array) $default_match_ids,
+				(array) $meta_match_ids
+			)))), static function (int $id) use ($search_terms, $include_liefer): bool {
+				return cmx_ajax_kontakt_matches_search((int) $id, $search_terms, $include_liefer);
+			}));
+			$ids = \array_slice($ids, 0, 20);
 	}
 
 	$out = [];
@@ -711,6 +954,9 @@ function cmx_ajax_search_kontakte(): void {
 			'id'    => (int)$id,
 			'title' => $title,
 			'addr'  => $addr,
+			'delivery_addr' => $include_liefer && \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_lieferanschrift')
+				? (string) cmx_build_kontakt_lieferanschrift((int) $id)
+				: '',
 			'link'  => \get_edit_post_link($id, ''),
 		];
 	}
