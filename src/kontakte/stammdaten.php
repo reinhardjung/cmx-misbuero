@@ -10,6 +10,7 @@ const CMX_KONTAKTE_META_VORNAME  = '_cmx_kontakte_vorname';
 const CMX_KONTAKTE_META_NACHNAME = '_cmx_kontakte_nachname';
 const CMX_KONTAKTE_META_ANREDE   = '_cmx_kontakte_anrede';
 const CMX_KONTAKTE_META_URL      = '_cmx_kontakte_url';
+const CMX_KONTAKTE_META_HR_UID   = '_cmx_kontakte_hr_uid';
 const CMX_KONTAKTE_META_PRIVAT   = '_cmx_kontakte_privat';
 const CMX_KONTAKTE_META_KUNDEN_NR = '_cmx_kontakte_kunden_nr';
 const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
@@ -25,7 +26,7 @@ const CMX_KONTAKTE_META_KUNDE_SEIT      = '_cmx_kontakte_kunde_seit';
 \add_action('init', __NAMESPACE__ . '\\cmx_register_kontakte_stammdaten_meta');
 function cmx_register_kontakte_stammdaten_meta() {
 	// Text
-	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
+	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_HR_UID, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
 		\register_post_meta('kontakte', $key, [
 			'type'              => 'string',
 			'single'            => true,
@@ -164,6 +165,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$privat   = (bool)   \get_post_meta($post->ID, CMX_KONTAKTE_META_PRIVAT, true);
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
+	$hr_uid   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_HR_UID, true);
 	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
 	$geburt   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_GEBURTSDATUM, true);
 	$kunde_seit = cmx_kontakt_kunde_seit_value((int) $post->ID);
@@ -173,6 +175,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	if ($url_disp !== '' && !\preg_match('~^https?://~i', $url_disp)) {
 		$url_disp = 'https://' . \ltrim($url_disp, '/');
 	}
+	$hr_uid_search_url = $hr_uid !== '' ? 'https://www.zefix.ch/de/search/entity/list?name=' . \rawurlencode($hr_uid) : '';
 
 	echo '<style>
 	#cmx-stammdaten .grid {
@@ -191,7 +194,8 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .field--privat{width:120px !important}
 	#cmx-stammdaten .field--kunden-nr{min-width:160px;}
 	#cmx-stammdaten .field--anrede{min-width:200px;}
-	#cmx-stammdaten .field--url{grid-column:span 2}
+	#cmx-stammdaten .field--url{grid-column:span 1}
+	#cmx-stammdaten .field--hr-uid{min-width:170px;}
 	#cmx-stammdaten .text,
 	#cmx-stammdaten .date {width:100% !important; max-width:100% !important}
 	#cmx-stammdaten .url-label a{text-decoration:none}
@@ -243,9 +247,20 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 			} else {
 				echo '<strong>URL</strong>';
 			}
+		echo '	</label><br>
+			<input id="cmx_url" name="cmx_url" type="url" class="text" placeholder="https://example.ch" value="' . \esc_attr($url_raw) . '"
+				onblur="if(this.value && !/^https?:\\/\\//i.test(this.value)){this.value=\'https://\'+this.value.trim().replace(/^\\/+/ , \'\');}">
+		</p>';
+
+	echo '<p class="field field--hr-uid">
+		<label class="url-label" for="cmx_hr_uid">';
+			if ($hr_uid_search_url !== '') {
+				echo '<a href="' . \esc_url($hr_uid_search_url) . '" target="_blank" rel="noopener noreferrer"><strong>HR-UID</strong></a>';
+			} else {
+				echo '<strong>HR-UID</strong>';
+			}
 	echo '	</label><br>
-		<input id="cmx_url" name="cmx_url" type="url" class="text" placeholder="https://example.ch" value="' . \esc_attr($url_raw) . '"
-			onblur="if(this.value && !/^https?:\\/\\//i.test(this.value)){this.value=\'https://\'+this.value.trim().replace(/^\\/+/ , \'\');}">
+		<input id="cmx_hr_uid" name="cmx_hr_uid" type="text" class="text" placeholder="CHE-123.456.789" value="' . \esc_attr($hr_uid) . '">
 	</p>';
 
 	// Firmengründung + Geburtsdatum + Kunde seit (gleiche Zeile)
@@ -300,6 +315,11 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	// Anrede
 	if (isset($_POST['cmx_anrede'])) {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, \sanitize_text_field((string) $_POST['cmx_anrede']));
+	}
+
+	// HR-UID
+	if (isset($_POST['cmx_hr_uid'])) {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_HR_UID, \sanitize_text_field((string) $_POST['cmx_hr_uid']));
 	}
 
 	// URL
