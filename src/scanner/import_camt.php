@@ -352,6 +352,39 @@ function cmx_camt_format_amount($value): string {
 		: \number_format($num, 2, '.', "'");
 }
 
+function cmx_camt_format_amount_no_decimals($value): string {
+	$amount = cmx_camt_normalize_amount($value);
+	if ($amount === '') {
+		return '-';
+	}
+	$num = (float) $amount;
+	return \number_format($num, 0, '.', "'");
+}
+
+function cmx_camt_amount_filter_bounds(array $entry, float $amount_window = 0.0): array {
+	$entry_amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? ''));
+	if ($entry_amount <= 0.0) {
+		return ['from' => 0.0, 'to' => 0.0, 'target' => 0.0];
+	}
+
+	if (\abs($amount_window) < 0.001) {
+		return ['from' => $entry_amount, 'to' => $entry_amount, 'target' => $entry_amount];
+	}
+
+	$base_amount = (float) (\round($entry_amount / 10) * 10);
+	$target_amount = $base_amount + $amount_window;
+	$amount_from = \min($base_amount, $target_amount);
+	$amount_to = \max($base_amount, $target_amount);
+	if ($amount_from < 0.0) {
+		$amount_from = 0.0;
+	}
+	if ($amount_to < 0.0) {
+		$amount_to = 0.0;
+	}
+
+	return ['from' => $amount_from, 'to' => $amount_to, 'target' => $target_amount];
+}
+
 function cmx_camt_format_date(string $value): string {
 	$value = cmx_camt_normalize_date($value);
 	if ($value === '') {
@@ -898,14 +931,11 @@ function cmx_camt_beleg_ids_by_amount_window(array $entry, float $window = 0.0):
 	if ($entry_amount <= 0.0) {
 		return [];
 	}
-	$target_amount = $entry_amount + $window;
-	$amount_from = \min($entry_amount, $target_amount);
-	$amount_to = \max($entry_amount, $target_amount);
+	$bounds = cmx_camt_amount_filter_bounds($entry, $window);
+	$amount_from = (float) ($bounds['from'] ?? 0.0);
+	$amount_to = (float) ($bounds['to'] ?? 0.0);
 	if ($amount_to <= 0.0) {
 		return [];
-	}
-	if ($amount_from < 0.0) {
-		$amount_from = 0.0;
 	}
 
 	$ids = \get_posts([
@@ -999,9 +1029,10 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 	$direction = \sanitize_key((string) \get_post_meta($beleg_id, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung', true));
 	$amount = cmx_camt_beleg_amount($beleg_id);
 	$entry_amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? ''));
-	$target_amount = $entry_amount + $amount_window;
-	$amount_from = \min($entry_amount, $target_amount);
-	$amount_to = \max($entry_amount, $target_amount);
+	$bounds = cmx_camt_amount_filter_bounds($entry, $amount_window);
+	$amount_from = (float) ($bounds['from'] ?? 0.0);
+	$amount_to = (float) ($bounds['to'] ?? 0.0);
+	$target_amount = (float) ($bounds['target'] ?? $entry_amount);
 	$booking_date = cmx_camt_normalize_date((string) ($entry['booking_date'] ?? ''));
 	$paid_date = cmx_camt_normalize_date((string) \get_post_meta($beleg_id, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am', true));
 	$invoice_date = cmx_camt_normalize_date((string) \get_post_meta($beleg_id, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM') ? CMX_BELEG_META_RNG_DATUM : '_cmx_beleg_rng_datum', true));
@@ -1014,12 +1045,12 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 		$score += 120;
 	}
 
-	if (cmx_camt_amounts_match($amount, $entry_amount)) {
+	if (\abs($amount_window) < 0.001 && cmx_camt_amounts_match($amount, $entry_amount)) {
 		$score += 320;
 	} elseif (cmx_camt_amounts_match($amount, $target_amount)) {
 		$score += 220;
 	} elseif ($amount >= ($amount_from - 0.009) && $amount <= ($amount_to + 0.009)) {
-		$distance = \abs($amount - $entry_amount);
+		$distance = \abs($amount - $target_amount);
 		$score += \max(40, 160 - (int) \round($distance * 8));
 	} else {
 		$score = -100000;
@@ -1360,11 +1391,15 @@ function cmx_camt_render_candidates_panel(array $entry, float $amount_window = 0
 	echo '<div class="cmx-camt-candidates-head" data-signature="' . \esc_attr($signature) . '" data-amount-window="' . \esc_attr((string) $amount_window) . '">';
 	echo '<button type="button" class="button button-secondary cmx-camt-range-btn" data-signature="' . \esc_attr($signature) . '" data-direction="plus" data-amount-window="' . \esc_attr((string) $amount_window) . '" title="in 10.- Schritten" aria-label="in 10.- Schritten">+</button>';
 	echo '<button type="button" class="button button-secondary cmx-camt-range-btn" data-signature="' . \esc_attr($signature) . '" data-direction="minus" data-amount-window="' . \esc_attr((string) $amount_window) . '" title="in 10.- Schritten" aria-label="in 10.- Schritten">-</button>';
-	$entry_amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? ''));
-	$target_amount = $entry_amount + $amount_window;
-	$amount_from = \min($entry_amount, $target_amount);
-	$amount_to = \max($entry_amount, $target_amount);
-	echo '<h3 style="margin:0;">Mögliche Belege <span style="font-weight:400;color:#646970;">(' . \esc_html(cmx_camt_format_amount($amount_from)) . ' bis ' . \esc_html(cmx_camt_format_amount($amount_to)) . ')</span></h3>';
+	$bounds = cmx_camt_amount_filter_bounds($entry, $amount_window);
+	$amount_from = (float) ($bounds['from'] ?? 0.0);
+	$amount_to = (float) ($bounds['to'] ?? 0.0);
+	if (\abs($amount_window) < 0.001) {
+		$amount_label = '(' . cmx_camt_format_amount($amount_from) . ')';
+	} else {
+		$amount_label = '(' . cmx_camt_format_amount_no_decimals($amount_from) . ' bis ' . cmx_camt_format_amount_no_decimals($amount_to) . ')';
+	}
+	echo '<h3 style="margin:0;">Mögliche Belege <span style="font-weight:400;color:#646970;">' . \esc_html($amount_label) . '</span></h3>';
 	echo '</div>';
 	if (empty($candidates)) {
 		echo '<p><em>Kein passender Beleg gefunden.</em></p>';
