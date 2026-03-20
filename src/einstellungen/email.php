@@ -343,12 +343,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	);
 
 	\add_settings_field(
-		'cmx_email_kundenportal_link',
+		'cmx_email_agb_belege',
 		'',
+		static function (): void {
+			$checked = cmx_email_option_value('AGB_Belege') === '1';
+			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[AGB_Belege]" value="0">';
+			echo '<label><input type="checkbox" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[AGB_Belege]" value="1" ' . \checked($checked, true, false) . '> auch in den Belegen anzeigen</label>';
+		},
+		$page,
+		'cmx_sec_email_links'
+	);
+
+	\add_settings_field(
+		'cmx_email_kundenportal_link',
+		'Kunden Portal',
 		static function (): void {
 			$checked = cmx_email_option_value('kundenportal_link') === '1';
 			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[kundenportal_link]" value="0">';
-			echo '<label><input type="checkbox" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[kundenportal_link]" value="1" ' . \checked($checked, true, false) . '> Link zum Kunden Portal</label>';
+			echo '<label><input type="checkbox" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[kundenportal_link]" value="1" ' . \checked($checked, true, false) . '> Link hinzufügen</label>';
 		},
 		$page,
 		'cmx_sec_email_links'
@@ -438,6 +450,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['smtp_host'] = \sanitize_text_field((string) ($new['smtp_host'] ?? ''));
 	$new['imap_host'] = \sanitize_text_field((string) ($new['imap_host'] ?? ''));
 	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
+	$new['AGB_Belege'] = !empty($new['AGB_Belege']) ? '1' : '0';
 	$new['kundenportal_link'] = !empty($new['kundenportal_link']) ? '1' : '0';
 	$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
 		? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
