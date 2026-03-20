@@ -1280,6 +1280,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_build_zip_file_from
 		}
 
 		$csv_content = cmxbu_belege_export_csv_string_from_ids($post_ids);
+		$banana_csv_content = '';
+		if (
+			\function_exists(__NAMESPACE__ . '\\cmxbu_belege_csv_string')
+			&& \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_banana_headers')
+			&& \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_banana_rows_from_ids')
+			&& \function_exists(__NAMESPACE__ . '\\cmxbu_belege_csv_export_filename_banana')
+		) {
+			$banana_csv_content = (string) cmxbu_belege_csv_string(
+				cmxbu_beleg_export_banana_headers(),
+				cmxbu_beleg_export_banana_rows_from_ids($post_ids)
+			);
+		}
 		$pdf_binary = cmxbu_belege_export_pdf_binary_from_ids($post_ids);
 		$beleg_pdf_entries = cmxbu_belege_zip_collect_beleg_pdf_entries($post_ids);
 		$upload_entries = cmxbu_belege_zip_collect_upload_entries($post_ids);
@@ -1297,6 +1309,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_build_zip_file_from
 		$zip->addEmptyDir('dokumente');
 
 		$zip->addFromString('export/' . cmxbu_belege_export_filename('csv'), $csv_content);
+		if ($banana_csv_content !== '') {
+			$zip->addFromString('export/' . cmxbu_belege_csv_export_filename_banana(), $banana_csv_content);
+		}
 		$zip->addFromString(cmxbu_belege_export_filename('pdf'), $pdf_binary);
 
 		foreach ($beleg_pdf_entries as $entry) {
