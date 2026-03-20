@@ -1609,10 +1609,7 @@ function cmx_mail_import_is_scanner_list_request_params(): bool {
 }
 
 function cmx_mail_import_maybe_run_for_scanner_request(): void {
-	if (!cmx_mail_import_is_scanner_list_request_params()) {
-		return;
-	}
-	cmx_mail_import_maybe_run_for_scanner_admin_list();
+	return;
 }
 
 \add_action('admin_init', function (): void {
