@@ -1036,6 +1036,12 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show
 									$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
 										&& $tpl['document']['manual_total'] !== null
 										&& $tpl['document']['manual_total'] !== '';
+									if (!$has_positions && $manual_total_defined && (float)($totals['total'] ?? 0) == 0.0) {
+										$totals['total'] = (float)$tpl['document']['manual_total'];
+										if ((float)($totals['subtotal'] ?? 0) == 0.0) {
+											$totals['subtotal'] = (float)$tpl['document']['manual_total'];
+										}
+									}
 									if (!isset($subtotal_value)) {
 										$subtotal_value = $has_positions
 											? (float)$positions_sum
@@ -1150,6 +1156,12 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show
 				$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
 					&& $tpl['document']['manual_total'] !== null
 					&& $tpl['document']['manual_total'] !== '';
+				if (!$has_positions && $manual_total_defined && (float)($totals['total'] ?? 0) == 0.0) {
+					$totals['total'] = (float)$tpl['document']['manual_total'];
+					if ((float)($totals['subtotal'] ?? 0) == 0.0) {
+						$totals['subtotal'] = (float)$tpl['document']['manual_total'];
+					}
+				}
 				if (!isset($subtotal_value)) {
 					$subtotal_value = $has_positions
 						? (float)$positions_sum

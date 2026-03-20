@@ -1493,8 +1493,10 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			'lieferantenquittung'  => 'Lieferantenquittung',
 			'gutschrift'           => 'Gutschrift',
 			'mahnung'              => 'Mahnung',
+			'zahlungseingang'      => '',
 		];
 		$doc_label = $type_map[strtolower($beleg_type)] ?? ucfirst($beleg_type);
+		$doc_title = trim(($doc_label !== '' ? ($doc_label . ' ') : '') . $title_safe);
 
 		// Schweizer Format
 		$fmt = ['currency'=>$opts['currency']??'CHF','decimals'=>2,'decimal'=>'.','thousands'=>"'" ];
@@ -1707,7 +1709,7 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 				'type' => $beleg_type,
 				'richtung' => (string) get_post_meta($post_id, '_cmx_beleg_richtung', true),
 				'number' => $title_safe,
-				'title' => $doc_label . ' ' . $title_safe,
+				'title' => $doc_title,
 				'date' => $doc_date,
 					'due' => $doc_due,
 					'currency' => $dates['currency'],
