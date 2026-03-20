@@ -43,7 +43,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')) {
 		}
 
 		$link_attr = $link_style !== '' ? ' style="' . \esc_attr($link_style) . '"' : '';
-		return 'Es gelten unsere Allgemeinen Geschäftsbedingungen: <a href="' . \esc_url($link) . '"' . $link_attr . '>' . \esc_html($link) . '</a>';
+		return 'Es gelten unsere <a href="' . \esc_url($link) . '"' . $link_attr . '>Allgemeinen Geschäftsbedingungen</a>';
 	}
 }
 
@@ -54,7 +54,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_text')) {
 			return '';
 		}
 
-		return 'Es gelten unsere Allgemeinen Geschäftsbedingungen: ' . $link;
+		return 'Es gelten unsere Allgemeinen Geschäftsbedingungen';
 	}
 }
 
