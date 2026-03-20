@@ -567,6 +567,154 @@ function cmxbu_beleg_export_headers(): array {
 	];
 }
 
+function cmxbu_belege_csv_export_prefix(): string {
+	$prefix = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_site_prefix')
+		? (string) cmxbu_belege_export_site_prefix()
+		: 'misbuero';
+	$prefix = \sanitize_file_name($prefix);
+	return $prefix !== '' ? $prefix : 'misbuero';
+}
+
+function cmxbu_belege_csv_export_range_stamp(): string {
+	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_range_stamp')
+		? (string) cmxbu_belege_export_range_stamp()
+		: '';
+	$range = \sanitize_file_name($range);
+	return $range !== '' ? $range : (string) \gmdate('Ymd-His');
+}
+
+function cmxbu_belege_csv_export_filename_main(): string {
+	return cmxbu_belege_csv_export_prefix() . '_' . cmxbu_belege_csv_export_range_stamp() . '.csv';
+}
+
+function cmxbu_belege_csv_export_filename_banana(): string {
+	return cmxbu_belege_csv_export_prefix() . '_banana_' . cmxbu_belege_csv_export_range_stamp() . '.csv';
+}
+
+function cmxbu_belege_csv_export_bundle_filename(): string {
+	return cmxbu_belege_csv_export_prefix() . '_' . cmxbu_belege_csv_export_range_stamp() . '.zip';
+}
+
+function cmxbu_belege_csv_string(array $headers, array $rows): string {
+	$fh = \fopen('php://temp', 'r+');
+	if (!$fh) {
+		return '';
+	}
+	\fwrite($fh, "\xEF\xBB\xBF");
+	\fputcsv($fh, $headers, ';');
+	foreach ($rows as $row) {
+		\fputcsv($fh, (array) $row, ';');
+	}
+	\rewind($fh);
+	$content = (string) \stream_get_contents($fh);
+	\fclose($fh);
+	return $content;
+}
+
+function cmxbu_beleg_export_banana_headers(): array {
+	return [
+		'Date',
+		'Doc',
+		'Description',
+		'AccountDebit',
+		'AccountCredit',
+		'Amount',
+		'VatCode',
+		'VatAmountType',
+		'VatRate',
+		'VatPosted',
+	];
+}
+
+function cmxbu_beleg_export_banana_number(float $value): string {
+	$value = (float) \round($value, 2);
+	if (\abs($value) < 0.00001) {
+		return '';
+	}
+	return \number_format($value, 2, '.', '');
+}
+
+function cmxbu_beleg_export_banana_description(int $post_id, array $row = []): string {
+	$kategorie = \trim((string) ($row[2] ?? ''));
+	$richtung = '';
+	if ($post_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_richtung_short_label')) {
+		$richtung = \trim((string) cmx_beleg_admin_richtung_short_label($post_id));
+	}
+
+	$kontakt = '';
+	if ($post_id > 0) {
+		$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			: '_cmx_beleg_kontakt_id';
+		$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
+		if ($kontakt_id > 0) {
+			$kontakt = \trim((string) \get_the_title($kontakt_id));
+		}
+	}
+	if ($kontakt === '') {
+		$kontakt = \trim((string) ($row[3] ?? ''));
+	}
+
+	$left = \trim(\implode(' ', \array_values(\array_filter([$kategorie, $richtung], static function ($value): bool {
+		return \trim((string) $value) !== '';
+	}))));
+	if ($left === '') {
+		return $kontakt;
+	}
+
+	if ($kontakt !== '') {
+		return $left . ': ' . $kontakt;
+	}
+
+	return $left;
+}
+
+function cmxbu_beleg_export_banana_rows_from_ids(array $ids): array {
+	$items = cmxbu_beleg_export_rows_from_ids($ids, true);
+	$rows = [];
+
+	foreach ($items as $item) {
+		$post_id = (int) ($item['post_id'] ?? 0);
+		$row = (array) ($item['row'] ?? []);
+		$date = \trim((string) ($row[1] ?? ''));
+		if ($date === '') {
+			continue;
+		}
+
+		$doc = \trim((string) ($row[0] ?? ''));
+		if ($doc === '' && $post_id > 0) {
+			$doc = (string) \get_the_title($post_id);
+		}
+
+		$amount = \abs(cmxbu_beleg_export_to_float((string) ($row[9] ?? '')));
+		if ($amount <= 0.0) {
+			$amount = \abs(cmxbu_beleg_export_to_float((string) ($row[10] ?? '')));
+		}
+
+		$vat_posted = \abs(cmxbu_beleg_export_to_float((string) ($row[7] ?? '')));
+		if ($vat_posted <= 0.0) {
+			$vat_posted = \abs(cmxbu_beleg_export_to_float((string) ($row[8] ?? '')));
+		}
+
+		$vat_rate = \abs(cmxbu_beleg_export_to_float((string) ($row[6] ?? '')));
+
+		$rows[] = [
+			$date,
+			$doc,
+			cmxbu_beleg_export_banana_description($post_id, $row),
+			'',
+			'',
+			cmxbu_beleg_export_banana_number($amount),
+			'',
+			'',
+			cmxbu_beleg_export_banana_number($vat_rate),
+			cmxbu_beleg_export_banana_number($vat_posted),
+		];
+	}
+
+	return $rows;
+}
+
 function cmxbu_beleg_export_rows_from_ids(array $ids, bool $with_context = false): array {
 	$range = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_requested_date_range')
 		? (array) cmxbu_belege_export_requested_date_range()
@@ -788,17 +936,65 @@ function cmxbu_stream_belege_csv_from_ids(array $ids): void {
 	\ignore_user_abort(true); if (function_exists('set_time_limit')) @set_time_limit(0);
 	while (ob_get_level()>0){ @ob_end_clean(); } \nocache_headers();
 
-	header('Content-Type: text/csv; charset=UTF-8');
-	header('Content-Disposition: attachment; filename="'.cmxbu_belege_export_filename('csv').'"');
-	header('Pragma: no-cache'); header('Expires: 0');
+	$main_csv = cmxbu_belege_csv_string(
+		cmxbu_beleg_export_headers(),
+		cmxbu_beleg_export_rows_from_ids($ids)
+	);
+	$banana_csv = cmxbu_belege_csv_string(
+		cmxbu_beleg_export_banana_headers(),
+		cmxbu_beleg_export_banana_rows_from_ids($ids)
+	);
 
-	$fh = fopen('php://output','w'); fwrite($fh, "\xEF\xBB\xBF");
-	$headers = cmxbu_beleg_export_headers();
-	fputcsv($fh, $headers, ';');
-	$rows = cmxbu_beleg_export_rows_from_ids($ids);
-	foreach ($rows as $row) {
-		fputcsv($fh, $row, ';');
+	if (!\class_exists('\\ZipArchive')) {
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="' . cmxbu_belege_csv_export_filename_main() . '"');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+		echo $main_csv;
+		exit;
 	}
-	fclose($fh);
+
+	$tmp = \wp_tempnam('cmx-belege-csv');
+	if (!$tmp) {
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="' . cmxbu_belege_csv_export_filename_main() . '"');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+		echo $main_csv;
+		exit;
+	}
+
+	$zip = new \ZipArchive();
+	if ($zip->open($tmp, \ZipArchive::OVERWRITE) !== true) {
+		@unlink($tmp);
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="' . cmxbu_belege_csv_export_filename_main() . '"');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+		echo $main_csv;
+		exit;
+	}
+
+	$zip->addFromString(cmxbu_belege_csv_export_filename_main(), $main_csv);
+	$zip->addFromString(cmxbu_belege_csv_export_filename_banana(), $banana_csv);
+	$zip->close();
+
+	$zip_binary = (string) @\file_get_contents($tmp);
+	@unlink($tmp);
+	if ($zip_binary === '') {
+		header('Content-Type: text/csv; charset=UTF-8');
+		header('Content-Disposition: attachment; filename="' . cmxbu_belege_csv_export_filename_main() . '"');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+		echo $main_csv;
+		exit;
+	}
+
+	header('Content-Type: application/zip');
+	header('Content-Disposition: attachment; filename="' . cmxbu_belege_csv_export_bundle_filename() . '"');
+	header('Pragma: no-cache');
+	header('Expires: 0');
+	header('Content-Length: ' . (string) \strlen($zip_binary));
+	echo $zip_binary;
 	exit;
 }
