@@ -691,12 +691,7 @@ function cmxbu_beleg_export_banana_rows_from_ids(array $ids): array {
 			$amount = \abs(cmxbu_beleg_export_to_float((string) ($row[10] ?? '')));
 		}
 
-		$vat_posted = \abs(cmxbu_beleg_export_to_float((string) ($row[7] ?? '')));
-		if ($vat_posted <= 0.0) {
-			$vat_posted = \abs(cmxbu_beleg_export_to_float((string) ($row[8] ?? '')));
-		}
-
-		$vat_rate = \abs(cmxbu_beleg_export_to_float((string) ($row[6] ?? '')));
+		$vat_code = $post_id > 0 ? \trim((string) \get_post_meta($post_id, 'MwStTypeCode', true)) : '';
 
 		$rows[] = [
 			$date,
@@ -705,10 +700,10 @@ function cmxbu_beleg_export_banana_rows_from_ids(array $ids): array {
 			'',
 			'',
 			cmxbu_beleg_export_banana_number($amount),
+			$vat_code,
 			'',
 			'',
-			cmxbu_beleg_export_banana_number($vat_rate),
-			cmxbu_beleg_export_banana_number($vat_posted),
+			'',
 		];
 	}
 

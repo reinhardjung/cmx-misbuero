@@ -45,6 +45,96 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_belege_get_effective_type_for_post')
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_ini_csv_values')) {
+	function cmx_belege_ini_csv_values(string $section, string $key): array {
+		$raw = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+			? cmx_ini_get_value($section, $key)
+			: null;
+
+		if (\is_array($raw)) {
+			$values = $raw;
+		} elseif (\is_string($raw) && \trim($raw) !== '') {
+			$values = \str_getcsv($raw, ',', '"');
+		} else {
+			$values = [];
+		}
+
+		$clean = [];
+		foreach ((array) $values as $value) {
+			$value = \trim((string) $value);
+			if ($value !== '') {
+				$clean[] = $value;
+			}
+		}
+
+		return \array_values($clean);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_mwst_type_options')) {
+	function cmx_belege_mwst_type_options(): array {
+		return cmx_belege_ini_csv_values('Belege', 'MwStType');
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_mwst_type_map_options')) {
+	function cmx_belege_mwst_type_map_options(): array {
+		return cmx_belege_ini_csv_values('Belege', 'MwStTypeMap');
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_mwst_rate_code')) {
+	function cmx_belege_mwst_rate_code(int $term_id): string {
+		if ($term_id <= 0) {
+			return '';
+		}
+
+		$rate_label = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_mwst_term_data')) {
+			$data = (array) cmxbu_get_mwst_term_data($term_id);
+			if (\array_key_exists('rate', $data)) {
+				$pct = (float) ($data['rate'] ?? 0.0) * 100;
+				$rate_label = \rtrim(\rtrim(\number_format($pct, 2, '.', ''), '0'), '.');
+			}
+		}
+
+		if ($rate_label === '') {
+			$term = \get_term($term_id, 'belege_mwst');
+			$name = ($term instanceof \WP_Term && !\is_wp_error($term)) ? (string) $term->name : '';
+			if (\preg_match('/([0-9]+(?:[.,][0-9]+)?)/', $name, $match)) {
+				$rate_label = (string) ($match[1] ?? '');
+			}
+		}
+
+		$digits = (string) \preg_replace('/[^0-9]/', '', $rate_label);
+		return $digits;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_belege_mwst_type_code')) {
+	function cmx_belege_mwst_type_code(string $mwst_type, int $term_id): string {
+		$mwst_type = \trim($mwst_type);
+		if ($mwst_type === '') {
+			return '';
+		}
+
+		$types = cmx_belege_mwst_type_options();
+		$maps = cmx_belege_mwst_type_map_options();
+		$index = \array_search($mwst_type, $types, true);
+		if ($index === false) {
+			return '';
+		}
+
+		$prefix = \trim((string) ($maps[(int) $index] ?? ''));
+		$rate_code = cmx_belege_mwst_rate_code($term_id);
+		if ($prefix === '' || $rate_code === '') {
+			return '';
+		}
+
+		return $prefix . $rate_code;
+	}
+}
+
 
 /**
  * Metabox-Inhalt
@@ -69,6 +159,8 @@ function cmx_belege_render_mwst_metabox($post) {
     // Werte laden
     $is_brutto = get_post_meta($post->ID, '_cmx_beleg_is_brutto', true);
     $mwst_term_id = get_post_meta($post->ID, '_cmx_beleg_mwst_term', true);
+    $mwst_type = (string) get_post_meta($post->ID, '_cmx_beleg_mwst_type', true);
+    $mwst_type_options = cmx_belege_mwst_type_options();
     $is_new_autodraft = ($post instanceof \WP_Post) && ((string) $post->post_status === 'auto-draft');
     if ($is_new_autodraft) {
         if ($is_brutto === '') {
@@ -96,7 +188,7 @@ function cmx_belege_render_mwst_metabox($post) {
                        name="cmx_beleg_is_brutto"
                        value="1"
                     <?php checked($is_brutto, '1'); ?> />
-                Brutto (inkl.) / Netto (ohne MWST)
+                Brutto (inkl.) / Netto (ohne)
             </label>
         </p>
 
@@ -113,6 +205,19 @@ function cmx_belege_render_mwst_metabox($post) {
                 <?php endforeach; ?>
             </select>
         </p>
+        <?php if (!empty($mwst_type_options)): ?>
+        <p>
+            <label for="cmx_beleg_mwst_type"><strong>MWST-Typ</strong></label><br>
+            <select name="cmx_beleg_mwst_type" id="cmx_beleg_mwst_type" style="width:100%;">
+                <option value="">— auswählen —</option>
+                <?php foreach ($mwst_type_options as $option): ?>
+                    <option value="<?php echo esc_attr($option); ?>" <?php selected($mwst_type, $option); ?>>
+                        <?php echo esc_html($option); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </p>
+        <?php endif; ?>
         <?php
     }
     ?>
@@ -282,9 +387,19 @@ add_action('save_post_belege', function($post_id) {
 
             $mwst_term_id = isset($_POST['cmx_beleg_mwst_term']) ? intval($_POST['cmx_beleg_mwst_term']) : '';
             update_post_meta($post_id, '_cmx_beleg_mwst_term', $mwst_term_id);
+
+            $mwst_type = isset($_POST['cmx_beleg_mwst_type']) ? \sanitize_text_field(\wp_unslash($_POST['cmx_beleg_mwst_type'])) : '';
+            $allowed_types = cmx_belege_mwst_type_options();
+            if (!\in_array($mwst_type, $allowed_types, true)) {
+                $mwst_type = '';
+            }
+            update_post_meta($post_id, '_cmx_beleg_mwst_type', $mwst_type);
+            update_post_meta($post_id, 'MwStTypeCode', cmx_belege_mwst_type_code($mwst_type, (int) $mwst_term_id));
         } else {
             update_post_meta($post_id, '_cmx_beleg_is_brutto', '0');
             update_post_meta($post_id, '_cmx_beleg_mwst_term', '');
+            update_post_meta($post_id, '_cmx_beleg_mwst_type', '');
+            update_post_meta($post_id, 'MwStTypeCode', '');
         }
     }
 
