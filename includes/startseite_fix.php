@@ -97,6 +97,63 @@ function cmx_startseite_hide_logged_in_links($content) {
 	return $content;
 }
 
+add_filter('the_content', __NAMESPACE__ . '\\cmx_startseite_style_guest_links', 6);
+function cmx_startseite_style_guest_links($content) {
+	if (!\is_string($content) || $content === '') {
+		return $content;
+	}
+	if (!cmx_is_startseite_context() || \is_user_logged_in()) {
+		return $content;
+	}
+
+	$labels = [
+		'Katalog' => 'cmx-startseite-cta',
+		'anmelden' => 'cmx-startseite-cta cmx-startseite-cta--primary',
+	];
+
+	if (\class_exists('\\DOMDocument')) {
+		$dom = new \DOMDocument('1.0', 'UTF-8');
+		$loaded = @$dom->loadHTML(
+			'<?xml encoding="utf-8" ?><div id="cmx-startseite-guest-links-root">' . $content . '</div>',
+			\LIBXML_HTML_NOIMPLIED | \LIBXML_HTML_NODEFDTD
+		);
+		if ($loaded) {
+			$xpath = new \DOMXPath($dom);
+			foreach ($xpath->query('//a') ?: [] as $anchor) {
+				if (!$anchor instanceof \DOMElement) {
+					continue;
+				}
+				$text = \trim((string) $anchor->textContent);
+				if (!isset($labels[$text])) {
+					continue;
+				}
+				$existing = \trim((string) $anchor->getAttribute('class'));
+				$new = \trim($existing . ' ' . $labels[$text]);
+				$anchor->setAttribute('class', $new);
+			}
+
+			$root = $dom->getElementById('cmx-startseite-guest-links-root');
+			if ($root instanceof \DOMElement) {
+				$html = '';
+				foreach ($root->childNodes as $child) {
+					$html .= $dom->saveHTML($child);
+				}
+				return $html;
+			}
+		}
+	}
+
+	foreach ($labels as $label => $class_name) {
+		$content = (string) \preg_replace(
+			'~<a\b([^>]*)>\s*' . \preg_quote($label, '~') . '\s*</a>~iu',
+			'<a$1 class="' . \esc_attr($class_name) . '">' . $label . '</a>',
+			$content
+		);
+	}
+
+	return $content;
+}
+
 /**
  * Fallback fuer fehlendes Hintergrundbild/Logo auf der Startseite.
  */
@@ -107,5 +164,12 @@ function cmx_startseite_background_fallback(): void {
 	}
 
 	$image_url = \esc_url(CMX_PLUGIN_URL . 'assets/favicon.png');
-	echo '<style id="cmx-startseite-bg-fallback">body{background-image:url("' . $image_url . '") !important;background-size:40% !important;background-repeat:no-repeat !important;background-position:center center !important;background-attachment:fixed !important;}</style>';
+	echo '<style id="cmx-startseite-bg-fallback">body{background-image:url("' . $image_url . '") !important;background-size:40% !important;background-repeat:no-repeat !important;background-position:center center !important;background-attachment:fixed !important;}';
+	if (!\is_user_logged_in()) {
+		echo '.cmx-startseite-cta{display:inline-flex;align-items:center;justify-content:center;min-width:170px;padding:14px 22px;border-radius:16px;border:1px solid rgba(164,44,36,.18);background:rgba(255,255,255,.92);box-shadow:0 14px 30px rgba(76,23,18,.10);color:#7d231d !important;font-size:26px;font-weight:700;line-height:1.1;text-decoration:none !important;transition:transform .15s ease, box-shadow .15s ease, background .15s ease;}';
+		echo '.cmx-startseite-cta:hover,.cmx-startseite-cta:focus{transform:translateY(-1px);background:#fff;box-shadow:0 18px 34px rgba(76,23,18,.16);outline:none;}';
+		echo '.cmx-startseite-cta--primary{background:#a42c24;color:#fff !important;border-color:#a42c24;box-shadow:0 18px 34px rgba(164,44,36,.24);}';
+		echo '.cmx-startseite-cta--primary:hover,.cmx-startseite-cta--primary:focus{background:#8f261f;color:#fff !important;}';
+	}
+	echo '</style>';
 }
