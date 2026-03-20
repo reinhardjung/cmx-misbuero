@@ -240,6 +240,66 @@ function cmx_scanner_beleg_two_col_option_label(int $beleg_id): string {
 	return $contact . '|' . $amount;
 }
 
+function cmx_scanner_search_normalize_text(string $value): string {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+		$value = (string) cmx_normalize_minus_sign($value);
+	}
+	$value = \html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+	$value = \strtr($value, [
+		'Ä' => 'Ae',
+		'Ö' => 'Oe',
+		'Ü' => 'Ue',
+		'ä' => 'ae',
+		'ö' => 'oe',
+		'ü' => 'ue',
+		'ß' => 'ss',
+	]);
+	$value = \function_exists('mb_strtolower')
+		? (string) \mb_strtolower($value, 'UTF-8')
+		: (string) \strtolower($value);
+	$value = (string) \preg_replace('~[^a-z0-9]+~', ' ', $value);
+	$value = (string) \preg_replace('~\s+~', ' ', $value);
+	return \trim($value);
+}
+
+function cmx_scanner_beleg_option_search_label(int $beleg_id): string {
+	$parts = [];
+
+	$title = \trim((string) \get_the_title($beleg_id));
+	if ($title !== '') {
+		$parts[] = $title;
+	}
+
+	$kontakt_label = \trim((string) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_label', true));
+	if ($kontakt_label !== '') {
+		$parts[] = $kontakt_label;
+	}
+
+	$kontakt_id = (int) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_id', true);
+	if ($kontakt_id > 0) {
+		$kontakt_title = \trim((string) \get_the_title($kontakt_id));
+		if ($kontakt_title !== '') {
+			$parts[] = $kontakt_title;
+		}
+
+		$person_name = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true) . ' ' . (string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		if ($person_name !== '') {
+			$parts[] = $person_name;
+		}
+	}
+
+	$amount = \trim((string) cmx_scanner_beleg_amount_option_label($beleg_id));
+	if ($amount !== '' && $amount !== '-') {
+		$parts[] = $amount;
+	}
+
+	$parts = \array_values(\array_unique(\array_filter(\array_map('trim', $parts), static function ($value): bool {
+		return $value !== '';
+	})));
+
+	return \implode(' ', $parts);
+}
+
 function cmx_scanner_fetch_relation_options(string $target_post_type, int $limit = 200): array {
 	$ids = \get_posts([
 		'post_type'      => $target_post_type,
@@ -263,6 +323,7 @@ function cmx_scanner_fetch_relation_options(string $target_post_type, int $limit
 				'id'      => $id,
 				'label'   => cmx_scanner_beleg_two_col_option_label($id),
 				'tooltip' => 'Beleg-ID: ' . $id,
+				'search'  => cmx_scanner_beleg_option_search_label($id),
 			];
 			continue;
 		}
@@ -387,7 +448,9 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 		$selected = ($option_value === (string) $id && \in_array($id, $current_ids, true)) ? ' selected' : '';
 		$tooltip = isset($opt['tooltip']) ? \trim((string) $opt['tooltip']) : '';
 		$title_attr = $tooltip !== '' ? ' title="' . \esc_attr($tooltip) . '"' : '';
-		echo '<option value="' . \esc_attr($option_value) . '" data-post-id="' . \esc_attr((string) $option_post_id) . '"' . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
+		$search = isset($opt['search']) ? \trim((string) $opt['search']) : '';
+		$search_attr = $search !== '' ? ' data-search="' . \esc_attr($search) . '"' : '';
+		echo '<option value="' . \esc_attr($option_value) . '" data-post-id="' . \esc_attr((string) $option_post_id) . '"' . $search_attr . $selected . $title_attr . '>' . \esc_html((string) $opt['label']) . '</option>';
 	}
 	echo '</select>';
 	echo '<ul id="' . \esc_attr($selected_id) . '" class="cmx-scanner-rel-selected"></ul>';
@@ -418,6 +481,93 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 				if (c.charCodeAt(0) === 34) return "&quot;";
 				return "&#039;";
 			});
+		}
+
+		function normalizeSearchText(str){
+			str = String(str || "");
+			str = str.replace(/Ä/g, "Ae").replace(/Ö/g, "Oe").replace(/Ü/g, "Ue");
+			str = str.replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+			if (str.normalize) {
+				try {
+					str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+				} catch (err) {}
+			}
+			str = str.toLowerCase();
+			str = str.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+			return str;
+		}
+
+		function tokenizeSearchText(str){
+			var normalized = normalizeSearchText(str);
+			return normalized ? normalized.split(" ").filter(Boolean) : [];
+		}
+
+		function levenshteinWithin(a, b, maxDistance){
+			a = String(a || "");
+			b = String(b || "");
+			if (a === b) return 0;
+			if (Math.abs(a.length - b.length) > maxDistance) return maxDistance + 1;
+			var prev = [];
+			for (var j = 0; j <= b.length; j++) prev[j] = j;
+			for (var i = 1; i <= a.length; i++) {
+				var curr = [i];
+				var minInRow = curr[0];
+				for (var k = 1; k <= b.length; k++) {
+					var cost = a.charAt(i - 1) === b.charAt(k - 1) ? 0 : 1;
+					curr[k] = Math.min(
+						prev[k] + 1,
+						curr[k - 1] + 1,
+						prev[k - 1] + cost
+					);
+					if (curr[k] < minInRow) minInRow = curr[k];
+				}
+				if (minInRow > maxDistance) return maxDistance + 1;
+				prev = curr;
+			}
+			return prev[b.length];
+		}
+
+		function fuzzyTokenMatches(token, hayTokens){
+			if (!token) return true;
+			for (var i = 0; i < hayTokens.length; i++) {
+				var word = String(hayTokens[i] || "");
+				if (!word) continue;
+				if (word.indexOf(token) !== -1 || token.indexOf(word) !== -1) {
+					return true;
+				}
+				if (token.length >= 4 && word.length >= 4) {
+					var slice = word.length > token.length ? word.slice(0, token.length) : word;
+					if (levenshteinWithin(token, slice, 1) <= 1) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		function matchSearchTerm(term, searchIndex, label){
+			var normalizedTerm = normalizeSearchText(term);
+			if (!normalizedTerm) return 3;
+			var haystack = normalizeSearchText(searchIndex || label || "");
+			if (!haystack) return 0;
+			if (haystack.indexOf(normalizedTerm) !== -1) return 3;
+
+			var termTokens = tokenizeSearchText(normalizedTerm);
+			if (!termTokens.length) return 3;
+			var hayTokens = tokenizeSearchText(haystack);
+			if (!hayTokens.length) return 0;
+
+			var exactTokenMatch = termTokens.every(function(token){
+				return hayTokens.some(function(word){
+					return word.indexOf(token) !== -1 || token.indexOf(word) !== -1;
+				});
+			});
+			if (exactTokenMatch) return 2;
+
+			var fuzzyTokenMatch = termTokens.every(function(token){
+				return fuzzyTokenMatches(token, hayTokens);
+			});
+			return fuzzyTokenMatch ? 1 : 0;
 		}
 
 		function setTouchState(select, state){
@@ -521,18 +671,25 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 		function buildMatches(select, term){
 			var items = [];
 			if (!select) return items;
-			var normalizedTerm = String(term || "").toLowerCase().trim();
+			var normalizedTerm = normalizeSearchText(term || "");
 			for (var i = 1; i < select.options.length; i++) {
 				var opt = select.options[i];
 				if (opt.selected) continue;
 				var label = String(opt.textContent || opt.innerText || "");
-				if (normalizedTerm !== "" && label.toLowerCase().indexOf(normalizedTerm) === -1) {
+				var score = matchSearchTerm(normalizedTerm, opt.getAttribute("data-search") || label, label);
+				if (normalizedTerm !== "" && score <= 0) {
 					continue;
 				}
 				items.push({
 					id: String(opt.value || ""),
 					label: label,
-					title: String(opt.getAttribute("title") || "")
+					title: String(opt.getAttribute("title") || ""),
+					score: score
+				});
+			}
+			if (normalizedTerm !== "") {
+				items.sort(function(a, b){
+					return (b.score || 0) - (a.score || 0);
 				});
 			}
 			return items;

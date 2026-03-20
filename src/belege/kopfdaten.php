@@ -453,12 +453,177 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_current_user_can_create_post_type')) 
 		return \current_user_can($cap);
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kontakt_search_normalize_text')) {
+	function cmx_beleg_kontakt_search_normalize_text(string $value): string {
+		$value = cmx_normalize_minus_sign($value);
+		$value = \html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+		$value = \strtr($value, [
+			'Ä' => 'Ae',
+			'Ö' => 'Oe',
+			'Ü' => 'Ue',
+			'ä' => 'ae',
+			'ö' => 'oe',
+			'ü' => 'ue',
+			'ß' => 'ss',
+		]);
+		$value = \function_exists('mb_strtolower')
+			? (string) \mb_strtolower($value, 'UTF-8')
+			: (string) \strtolower($value);
+		$value = (string) \preg_replace('~[^a-z0-9]+~', ' ', $value);
+		$value = (string) \preg_replace('~\s+~', ' ', $value);
+		return \trim($value);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kontakt_search_tokens')) {
+	function cmx_beleg_kontakt_search_tokens(string $value): array {
+		$value = cmx_beleg_kontakt_search_normalize_text($value);
+		if ($value === '') {
+			return [];
+		}
+		return \array_values(\array_filter(\explode(' ', $value), static function ($token): bool {
+			return \is_string($token) && $token !== '';
+		}));
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_score_kontakt_candidate')) {
+	function cmx_beleg_score_kontakt_candidate(string $needle, string $title, string $person_name): int {
+		$needle_norm = cmx_beleg_kontakt_search_normalize_text($needle);
+		if ($needle_norm === '') {
+			return 0;
+		}
+
+		$fields = [];
+		foreach ([$title, $person_name, \trim($title . ' ' . $person_name)] as $field) {
+			$field_norm = cmx_beleg_kontakt_search_normalize_text((string) $field);
+			if ($field_norm !== '' && !\in_array($field_norm, $fields, true)) {
+				$fields[] = $field_norm;
+			}
+		}
+		if ($fields === []) {
+			return 0;
+		}
+
+		$best = 0;
+		foreach ($fields as $field) {
+			if ($field === $needle_norm) {
+				return 300;
+			}
+			if (\str_contains($field, $needle_norm)) {
+				$best = \max($best, 220);
+			}
+		}
+
+		$tokens = cmx_beleg_kontakt_search_tokens($needle_norm);
+		if ($tokens === []) {
+			return $best;
+		}
+
+		foreach ($fields as $field) {
+			$matched = 0;
+			$score = 0;
+			foreach ($tokens as $token) {
+				if ($token === '') {
+					continue;
+				}
+				if (\str_contains($field, $token)) {
+					$matched++;
+					$score += 40 + \min(\strlen($token), 12);
+				}
+			}
+			if ($matched === \count($tokens)) {
+				$score += 120;
+			}
+			$best = \max($best, $score);
+		}
+
+		return $best;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_find_existing_kontakt_id_from_label')) {
+	function cmx_beleg_find_existing_kontakt_id_from_label(string $raw_label): int {
+		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field(cmx_normalize_minus_sign($raw_label))));
+		if ($title === '') {
+			return 0;
+		}
+
+		$cpt = cmx_kontakte_cpt();
+		if (!\post_type_exists($cpt)) {
+			return 0;
+		}
+
+		$lookup_args = [
+			'post_type'        => $cpt,
+			'post_status'      => 'any',
+			'posts_per_page'   => 120,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+		];
+
+		$candidate_ids = (array) \get_posts(\array_merge($lookup_args, [
+			's' => $title,
+		]));
+
+		$tokens = cmx_beleg_kontakt_search_tokens($title);
+		foreach (\array_slice($tokens, 0, 4) as $token) {
+			if (\strlen($token) < 2) {
+				continue;
+			}
+			$candidate_ids = \array_merge($candidate_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $token,
+			])));
+			$candidate_ids = \array_merge($candidate_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's'          => '',
+				'meta_query' => [
+					'relation' => 'OR',
+					[
+						'key'     => '_cmx_kontakte_vorname',
+						'value'   => $token,
+						'compare' => 'LIKE',
+					],
+					[
+						'key'     => '_cmx_kontakte_nachname',
+						'value'   => $token,
+						'compare' => 'LIKE',
+					],
+				],
+			])));
+		}
+
+		$candidate_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $candidate_ids))));
+		if ($candidate_ids === []) {
+			return 0;
+		}
+
+		$best_id = 0;
+		$best_score = 0;
+		foreach ($candidate_ids as $kontakt_id) {
+			if ($kontakt_id <= 0) {
+				continue;
+			}
+			$contact_title = \trim((string) \get_the_title($kontakt_id));
+			$person_name = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true) . ' ' . (string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+			$score = cmx_beleg_score_kontakt_candidate($title, $contact_title, $person_name);
+			if ($score > $best_score) {
+				$best_score = $score;
+				$best_id = $kontakt_id;
+			}
+		}
+
+		return $best_score >= 140 ? $best_id : 0;
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_create_kontakt_from_label')) {
 	function cmx_beleg_create_kontakt_from_label(string $raw_label): int {
 		$raw_label = cmx_normalize_minus_sign($raw_label);
 		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field($raw_label)));
 		if ($title === '') {
 			return 0;
+		}
+
+		$existing_id = cmx_beleg_find_existing_kontakt_id_from_label($title);
+		if ($existing_id > 0) {
+			return $existing_id;
 		}
 
 		$cpt = cmx_kontakte_cpt();
