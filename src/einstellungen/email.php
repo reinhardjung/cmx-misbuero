@@ -29,6 +29,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_belege_enabled')) {
+	function cmx_email_agb_belege_enabled(): bool {
+		return cmx_email_option_value('AGB_Belege') === '1';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')) {
 	function cmx_email_agb_footer_html(string $link_style = ''): string {
 		$link = cmx_email_agb_link();

@@ -153,6 +153,14 @@ if ($footer_block !== '') {
 		$footer_html = nl2br(esc_html($footer_block));
 	}
 }
+$agb_belege_html = '';
+if (
+	function_exists(__NAMESPACE__ . '\\cmx_email_agb_belege_enabled')
+	&& cmx_email_agb_belege_enabled()
+	&& function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
+) {
+	$agb_belege_html = (string) cmx_email_agb_footer_html('text-decoration:underline;');
+}
 $mwst_note_html = '';
 if (!$is_lieferantenrechnung) {
 	if ($is_mwst_pflichtig) {
@@ -601,6 +609,9 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show
 			margin-top: 20px;
 			page-break-inside: avoid;
 			break-inside: avoid;
+		}
+		.cmx-pdf-agb-footer {
+			margin-top: 8px;
 		}
 		.cmx-pdf-closing-summary {
 			page-break-inside: avoid;
@@ -1127,6 +1138,11 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show
 											<div class="footer footer-inline">
 												<?= $footer_html; ?>
 											</div>
+											<?php if ($agb_belege_html !== ''): ?>
+												<div class="footer footer-inline cmx-pdf-agb-footer">
+													<?= $agb_belege_html; ?>
+												</div>
+											<?php endif; ?>
 										</td>
 									</tr>
 								</table>
@@ -1257,12 +1273,22 @@ $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show
 					<div class="footer footer-inline">
 						<?= $footer_html; ?>
 					</div>
+					<?php if ($agb_belege_html !== ''): ?>
+						<div class="footer footer-inline cmx-pdf-agb-footer">
+							<?= $agb_belege_html; ?>
+						</div>
+					<?php endif; ?>
 				</td>
 			</tr>
 		</table>
-	<?php elseif (!$use_closing_group && $footer_html !== ''): ?>
+	<?php elseif (!$use_closing_group && ($footer_html !== '' || $agb_belege_html !== '')): ?>
 		<div class="footer">
 			<?= $footer_html; ?>
+			<?php if ($agb_belege_html !== ''): ?>
+				<div class="cmx-pdf-agb-footer">
+					<?= $agb_belege_html; ?>
+				</div>
+			<?php endif; ?>
 		</div>
 	<?php endif; ?>
 
