@@ -95,8 +95,6 @@ function cmx65_render_front_quicklinks(): void {
 		['label' => 'Home', 'href' => \home_url('/wp-admin/')],
 		['label' => 'Mis Büro', 'href' => 'https://misbuero.ch/', 'target' => '_blank'],
 		['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'],
-		['label' => 'Katalog', 'href' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/')],
-		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/')],
 		['label' => 'Archiv', 'href' => \home_url('/archiv/')],
 		['label' => 'Scanner', 'href' => \home_url('/scanner/')],
 	];

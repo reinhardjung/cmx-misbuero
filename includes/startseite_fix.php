@@ -42,6 +42,61 @@ function cmx_startseite_replace_plesk_shortcode($content) {
 	return \str_replace('[cmx_plesk_telefon_link]', $replacement, $content);
 }
 
+add_filter('the_content', __NAMESPACE__ . '\\cmx_startseite_hide_logged_in_links', 5);
+function cmx_startseite_hide_logged_in_links($content) {
+	if (!\is_string($content) || $content === '') {
+		return $content;
+	}
+	if (!cmx_is_startseite_context() || !\is_user_logged_in()) {
+		return $content;
+	}
+
+	$labels = ['Katalog', 'Telefonbuch', 'anmelden'];
+
+	if (\class_exists('\\DOMDocument')) {
+		$dom = new \DOMDocument('1.0', 'UTF-8');
+		$loaded = @$dom->loadHTML(
+			'<?xml encoding="utf-8" ?><div id="cmx-startseite-links-root">' . $content . '</div>',
+			\LIBXML_HTML_NOIMPLIED | \LIBXML_HTML_NODEFDTD
+		);
+		if ($loaded) {
+			$xpath = new \DOMXPath($dom);
+			foreach ($xpath->query('//a') ?: [] as $anchor) {
+				if (!$anchor instanceof \DOMElement) {
+					continue;
+				}
+				$text = \trim((string) $anchor->textContent);
+				if (!\in_array($text, $labels, true)) {
+					continue;
+				}
+				$parent = $anchor->parentNode;
+				$anchor->parentNode?->removeChild($anchor);
+				if ($parent instanceof \DOMElement) {
+					$parent_text = \trim((string) $parent->textContent);
+					if ($parent_text === '' && \in_array(\strtolower($parent->tagName), ['td', 'div', 'p', 'span'], true)) {
+						$parent->parentNode?->removeChild($parent);
+					}
+				}
+			}
+
+			$root = $dom->getElementById('cmx-startseite-links-root');
+			if ($root instanceof \DOMElement) {
+				$html = '';
+				foreach ($root->childNodes as $child) {
+					$html .= $dom->saveHTML($child);
+				}
+				return $html;
+			}
+		}
+	}
+
+	foreach ($labels as $label) {
+		$content = (string) \preg_replace('~<a\b[^>]*>\s*' . \preg_quote($label, '~') . '\s*</a>~iu', '', $content);
+	}
+
+	return $content;
+}
+
 /**
  * Fallback fuer fehlendes Hintergrundbild/Logo auf der Startseite.
  */
