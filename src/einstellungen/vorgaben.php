@@ -34,6 +34,13 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_tab_vorgaben__email'
 	);
 
+	\add_settings_section(
+		'cmx_sec_vorgaben_projekte',
+		__('Projekte', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__projekte'
+	);
+
 	\add_settings_field(
 		'email_theme',
 		'Theme',
@@ -227,6 +234,28 @@ function cmx_register_vorgaben_tab(): void {
 		},
 		'cmx_tab_vorgaben__allgemein',
 		'cmx_sec_vorgaben_allgemein'
+	);
+
+	\add_settings_field(
+		'task_Intervall',
+		'task_Intervall',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$allowed = ['5', '10', '15', '20', '30', '45', '60'];
+			$current = isset($opts['task_Intervall']) ? (string) $opts['task_Intervall'] : '5';
+			if (!\in_array($current, $allowed, true)) {
+				$current = '5';
+			}
+
+			echo '<select name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[task_Intervall]" style="min-width:90px;">';
+			foreach ($allowed as $value) {
+				echo '<option value="'.\esc_attr($value).'" '.\selected($current, $value, false).'>'.\esc_html($value).'</option>';
+			}
+			echo '</select>';
+			echo '<span style="margin-left:8px;">Erfassungsinterfall in Minuten</span>';
+		},
+		'cmx_tab_vorgaben__projekte',
+		'cmx_sec_vorgaben_projekte'
 	);
 
 	\add_settings_field(
