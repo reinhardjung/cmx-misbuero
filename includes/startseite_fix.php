@@ -166,9 +166,9 @@ function cmx_startseite_background_fallback(): void {
 	$image_url = \esc_url(CMX_PLUGIN_URL . 'assets/favicon.png');
 	echo '<style id="cmx-startseite-bg-fallback">body{background-image:url("' . $image_url . '") !important;background-size:40% !important;background-repeat:no-repeat !important;background-position:center center !important;background-attachment:fixed !important;}';
 	if (!\is_user_logged_in()) {
-		echo '.cmx-startseite-cta{display:inline-flex;align-items:center;justify-content:center;min-width:170px;padding:14px 22px;border-radius:16px;border:1px solid rgba(164,44,36,.18);background:rgba(255,255,255,.92);box-shadow:0 14px 30px rgba(76,23,18,.10);color:#7d231d !important;font-size:26px;font-weight:700;line-height:1.1;text-decoration:none !important;transition:transform .15s ease, box-shadow .15s ease, background .15s ease;}';
-		echo '.cmx-startseite-cta:hover,.cmx-startseite-cta:focus{transform:translateY(-1px);background:#fff;box-shadow:0 18px 34px rgba(76,23,18,.16);outline:none;}';
-		echo '.cmx-startseite-cta--primary{background:#a42c24;color:#fff !important;border-color:#a42c24;box-shadow:0 18px 34px rgba(164,44,36,.24);}';
+		echo '.cmx-startseite-cta{display:inline-flex;align-items:center;justify-content:center;min-width:92px;padding:7px 11px;border-radius:10px;border:1px solid rgba(164,44,36,.18);background:rgba(255,255,255,.92);box-shadow:0 8px 18px rgba(76,23,18,.10);color:#7d231d !important;font-size:18px;font-weight:700;line-height:1.1;text-decoration:none !important;transition:transform .15s ease, box-shadow .15s ease, background .15s ease;}';
+		echo '.cmx-startseite-cta:hover,.cmx-startseite-cta:focus{transform:translateY(-1px);background:#fff;box-shadow:0 10px 22px rgba(76,23,18,.16);outline:none;}';
+		echo '.cmx-startseite-cta--primary{background:#a42c24;color:#fff !important;border-color:#a42c24;box-shadow:0 10px 22px rgba(164,44,36,.24);}';
 		echo '.cmx-startseite-cta--primary:hover,.cmx-startseite-cta--primary:focus{background:#8f261f;color:#fff !important;}';
 	}
 	echo '</style>';
