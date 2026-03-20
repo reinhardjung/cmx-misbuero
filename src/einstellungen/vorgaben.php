@@ -238,7 +238,7 @@ function cmx_register_vorgaben_tab(): void {
 
 	\add_settings_field(
 		'task_Intervall',
-		'task_Intervall',
+		'Erfassungsintervall',
 		function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$allowed = ['5', '10', '15', '20', '30', '45', '60'];
@@ -252,7 +252,7 @@ function cmx_register_vorgaben_tab(): void {
 				echo '<option value="'.\esc_attr($value).'" '.\selected($current, $value, false).'>'.\esc_html($value).'</option>';
 			}
 			echo '</select>';
-			echo '<span style="margin-left:8px;">Erfassungsinterfall in Minuten</span>';
+			echo '<span style="margin-left:8px;">in Minuten</span>';
 		},
 		'cmx_tab_vorgaben__projekte',
 		'cmx_sec_vorgaben_projekte'
