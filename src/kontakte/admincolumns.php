@@ -962,13 +962,17 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .wp-list-table thead th,
 		body.post-type-kontakte .wp-list-table tfoot th {
-			/* background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%); */
+			background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%);
 			color: #22324a;
 			border-bottom: 1px solid #d9e4f2;
 			font-size: 13px;
 			font-weight: 700;
 			padding-top: 15px;
 			padding-bottom: 9px;
+		}
+		body.post-type-kontakte .wp-list-table thead .check-column,
+		body.post-type-kontakte .wp-list-table tfoot .check-column {
+			background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%);
 		}
 		body.post-type-kontakte .wp-list-table tbody td,
 		body.post-type-kontakte .wp-list-table tbody th {
