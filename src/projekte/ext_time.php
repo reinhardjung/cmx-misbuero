@@ -258,7 +258,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_readme_txt')) {
 			. "5. Den entpackten Ordner auswählen.\n\n"
 			. "Verwendung:\n"
 			. "- Über das Zahnrad zuerst die Mis Büro Instanz verbinden.\n"
-			. "- Projekt sowie Tätigkeit oder interne Notiz auswählen.\n"
+			. "- Projekt sowie Tätigkeit oder Notiz auswählen.\n"
 			. "- Mit Start den Timer starten.\n"
 			. "- Nach Ablauf des Intervalls fragt die Erweiterung, ob Du noch arbeitest.\n"
 			. "- Bei Stop oder Timeout wird die Zeit direkt im Projekt gespeichert.\n";
@@ -480,7 +480,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_auth_error')) {
-	function cmx_ext_time_auth_error(string $message = 'Bitte zuerst in Mis Büro anmelden.'): void {
+	function cmx_ext_time_auth_error(string $message = 'Zuerst in Mis Büro anmelden.'): void {
 		\wp_send_json_error(['message' => $message], 403);
 	}
 }
@@ -939,12 +939,14 @@ input[type=text],select,textarea{width:100%;box-sizing:border-box;border:1px sol
 textarea{min-height:76px;resize:vertical}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mode-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.mode-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field-caption{font-weight:600}
 .inline{display:flex;align-items:center;gap:8px}
 .inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
-.mode-options{flex-wrap:wrap}
+.mode-options{flex-wrap:nowrap;gap:12px}
+.mode-options label{white-space:nowrap}
 .muted{color:#646970;font-size:12px}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
-.actions{display:flex;gap:8px}
 button{appearance:none;border:1px solid #2271b1;background:#2271b1;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600}
 button.secondary{background:#fff;color:#2271b1}
 button.danger{background:#d63638;border-color:#d63638}
@@ -958,7 +960,10 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .suggest button{width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 12px;border-radius:0;font-weight:400}
 .suggest button:hover,.suggest button.active{background:#eef4ff}
 .suggest .hint{padding:10px 12px;color:#646970}
-.footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.footer{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:10px}
+.footer .muted{grid-column:1 / -1}
+#reset-form{justify-self:start}
+#start-stop{justify-self:end}
 .session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-height:64px}
 .session.is-info{border-color:#2271b1;background:#eef4ff}
 .session.is-success{border-color:#00a32a;background:#f2fff4}
@@ -993,15 +998,15 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <select id="instance-select"></select>
       </label>
       <div class="mode-row">
-        <label>
-          <span>Speichern als</span>
+        <div class="mode-field">
+          <div class="field-caption">Speichern als</div>
           <div class="inline mode-options" id="mode-select">
-            <label><input type="radio" name="cmx-ext-time-mode" value="note"> Interne Notiz</label>
+            <label><input type="radio" name="cmx-ext-time-mode" value="note"> Notiz</label>
             <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
           </div>
-        </label>
+        </div>
         <div class="task-inline task-only" id="task-inline">
-          <label><input type="checkbox" id="verrechenbar" checked> Verrechenbar</label>
+          <label><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
         </div>
       </div>
       <div class="session" id="session-card">
@@ -1020,10 +1025,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
       </label>
       <div class="footer">
         <div class="muted" id="selection-hint" hidden></div>
-        <div class="actions">
-          <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
-          <button type="button" id="start-stop">Start</button>
-        </div>
+        <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
+        <button type="button" id="start-stop">Start</button>
       </div>
     </div>
   </div>
@@ -1359,7 +1362,7 @@ connectBtn.addEventListener('click', async () => {
     }
   }
   if (!normalized.slug || !normalized.baseUrl) {
-    setStatus('Bitte zuerst eine gültige Instanz eingeben.', 'error');
+    setStatus('Eine gültige Instanz eingeben.', 'error');
     return;
   }
   const username = (usernameInputEl.value || '').trim();
@@ -1405,7 +1408,7 @@ saveBtn.addEventListener('click', async () => {
   const instances = await getInstances();
   const selected = findSelectedInstance(instances);
   if (!selected) {
-    setStatus('Bitte zuerst eine Instanz auswählen.', 'error');
+    setStatus('Eine Instanz auswählen.', 'error');
     return;
   }
   const value = Number(defaultIntervalEl.value || 0);
@@ -1588,7 +1591,7 @@ function instanceResponseError(response, json, rawText) {
 function fillSelect() {
   instanceSelect.innerHTML = '';
   if (!state.instances.length) {
-    instanceSelect.innerHTML = '<option value="">Bitte zuerst in den Einstellungen eine Instanz hinzufügen</option>';
+    instanceSelect.innerHTML = '<option value="">In den Einstellungen eine Instanz hinzufügen</option>';
     instanceSelect.disabled = true;
     renderSessionCard();
     return;
@@ -1675,7 +1678,7 @@ function updateModeUi() {
   if (verrechenbarInput) {
     verrechenbarInput.disabled = !isTask;
   }
-  infoLabel.textContent = isTask ? 'Info / Notiz' : 'Interne Notiz';
+  infoLabel.textContent = isTask ? 'Info / Notiz' : 'Notiz';
 }
 
 function resetForm() {
@@ -1841,7 +1844,7 @@ async function refreshState() {
 async function handleStartStop() {
   const instance = selectedInstance();
   if (!instance) {
-    setStatus('Bitte zuerst eine Instanz auswählen.', 'error');
+    setStatus('Eine Instanz auswählen.', 'error');
     return;
   }
 
@@ -1862,7 +1865,7 @@ async function handleStartStop() {
   }
 
   if (!state.selectedProject || !state.selectedProject.id) {
-    setStatus('Bitte zuerst ein Projekt auswählen.', 'error');
+    setStatus('Ein Projekt auswählen.', 'error');
     return;
   }
 
