@@ -969,6 +969,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 			font-weight: 700;
 			padding-top: 15px;
 			padding-bottom: 9px;
+			vertical-align: middle;
 		}
 		body.post-type-kontakte .wp-list-table thead .check-column,
 		body.post-type-kontakte .wp-list-table tfoot .check-column {
