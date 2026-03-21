@@ -841,6 +841,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		body.post-type-kontakte .subsubsub .count {
 			color: #667085;
 			line-height: 1;
+			margin-left: 0.25em;
 		}
 		body.post-type-kontakte #posts-filter > .search-box {
 			grid-area: search;
@@ -952,6 +953,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .wp-list-table {
 			grid-area: table;
+			margin-top: -10px;
 			border: 1px solid #c9d8ee;
 			border-radius: 16px;
 			background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -965,8 +967,8 @@ function cmx_kontakte_apply_tax_filters($query) {
 			border-bottom: 1px solid #d9e4f2;
 			font-size: 13px;
 			font-weight: 700;
-			padding-top: 10px;
-			padding-bottom: 14px;
+			padding-top: 15px;
+			padding-bottom: 9px;
 		}
 		body.post-type-kontakte .wp-list-table tbody td,
 		body.post-type-kontakte .wp-list-table tbody th {
@@ -995,12 +997,21 @@ function cmx_kontakte_apply_tax_filters($query) {
 		body.post-type-kontakte .wp-list-table .row-actions {
 			margin-top: 8px;
 			color: #98a2b3;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0 0.9em;
+		}
+		body.post-type-kontakte .wp-list-table .row-actions > span {
+			display: inline-flex;
+			align-items: center;
 		}
 		body.post-type-kontakte .wp-list-table .row-actions a {
 			color: #27508a;
 		}
 		body.post-type-kontakte .column-title {
-			min-width: 240px;
+			width: 300px;
+			min-width: 300px;
+			max-width: 300px;
 		}
 		body.post-type-kontakte .column-cmx_kategorie a,
 		body.post-type-kontakte .column-cmx_stufen a {
