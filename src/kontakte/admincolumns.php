@@ -801,12 +801,12 @@ function cmx_kontakte_apply_tax_filters($query) {
 			flex-wrap: wrap;
 			align-items: center;
 			gap: 0;
-			margin: 0;
-			padding: 12px 16px;
-			border: 1px solid #c9d8ee;
-			border-radius: 14px;
-			background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
-			box-shadow: 0 8px 18px rgba(30, 64, 175, 0.06);
+			margin: 0 0 0 15px;
+			padding: 0;
+			border: 0;
+			border-radius: 0;
+			background: transparent;
+			box-shadow: none;
 		}
 		body.post-type-kontakte .subsubsub li {
 			margin: 0;
@@ -819,7 +819,8 @@ function cmx_kontakte_apply_tax_filters($query) {
 			color: #98a2b3;
 		}
 		body.post-type-kontakte .subsubsub a {
-			display: inline;
+			display: inline-flex;
+			align-items: center;
 			padding: 0;
 			border: 0;
 			border-radius: 0;
@@ -828,6 +829,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 			color: #27508a;
 			text-decoration: none;
 			font-weight: 600;
+			line-height: 1;
 		}
 		body.post-type-kontakte .subsubsub a.current {
 			background: transparent;
@@ -838,6 +840,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .subsubsub .count {
 			color: #667085;
+			line-height: 1;
 		}
 		body.post-type-kontakte #posts-filter > .search-box {
 			grid-area: search;
@@ -913,6 +916,13 @@ function cmx_kontakte_apply_tax_filters($query) {
 			min-height: 40px;
 			padding: 0 14px;
 			border-radius: 10px;
+		}
+		body.post-type-kontakte #post-search-input,
+		body.post-type-kontakte #search-submit {
+			position: relative;
+			top: 16px;
+			margin-bottom: 0;
+			margin-right: -5px;
 		}
 		body.post-type-kontakte .search-box {
 			display: flex;
