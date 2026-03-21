@@ -1,9 +1,16 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT')) {
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_CPT', basename(__DIR__));
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_PAGE_SLUG')) {
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_PAGE_SLUG', 'cmx-emails-mailbox');
+}
 
 // Define: Custom-Post-Type based on DIR
-register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 60, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-media-document', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+register_post_type(CMX_EMAILS_CPT, ['labels' => ['name' => 'E-Mails', 'singular_name' => 'E-Mail', 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
+	'menu_position' => 100, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-email-alt', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 
@@ -35,4 +42,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMEN
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'admincolumns');
+cmx_require_files(__DIR__,'clients,mailbox,page,admincolumns');
