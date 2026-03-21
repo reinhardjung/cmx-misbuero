@@ -99,16 +99,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		$email = \esc_attr((string) ($client['email'] ?? ''));
 		$password = \esc_attr((string) ($client['password'] ?? ''));
 		$smtp_host = \esc_attr((string) ($client['smtp_host'] ?? ''));
-		$smtp_port = \esc_attr((string) ($client['smtp_port'] ?? '587'));
 		$imap_host = \esc_attr((string) ($client['imap_host'] ?? ''));
-		$imap_port = \esc_attr((string) ($client['imap_port'] ?? '993'));
 
 		echo '<div class="cmx-email-client-item">';
 		echo '<input type="hidden" name="' . $name_base . '[id]" value="' . $id . '">';
-		echo '<div class="cmx-email-client-head">';
-		echo '<strong>Client</strong>';
-		echo '<button type="button" class="button-link-delete cmx-email-client-remove">Entfernen</button>';
-		echo '</div>';
 		echo '<div class="cmx-email-client-grid">';
 		echo '<label class="cmx-email-client-field"><span>Bezeichnung</span><input type="text" class="regular-text" name="' . $name_base . '[client]" value="' . $client_name . '" placeholder="z.B. Kunde A" autocomplete="off"></label>';
 		echo '<label class="cmx-email-client-field"><span>E-Mail Name</span><input type="text" class="regular-text" name="' . $name_base . '[name]" value="' . $name . '" placeholder="Max Muster" autocomplete="organization"></label>';
@@ -116,6 +110,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '<label class="cmx-email-client-field"><span>Kennwort</span><span class="cmx-email-password-wrap"><input type="password" class="regular-text cmx-email-password-input" name="' . $name_base . '[password]" value="' . $password . '" autocomplete="current-password"><button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden"><span class="cmx-email-password-icon is-show" aria-hidden="true"></span></button></span></label>';
 		echo '<label class="cmx-email-client-field"><span>SMTP Host (587)</span><input type="text" class="regular-text" name="' . $name_base . '[smtp_host]" value="' . $smtp_host . '" placeholder="smtp.infomaniak.com" autocomplete="off"></label>';
 		echo '<label class="cmx-email-client-field"><span>IMAP Host (993)</span><input type="text" class="regular-text" name="' . $name_base . '[imap_host]" value="' . $imap_host . '" placeholder="imap.infomaniak.com" autocomplete="off"></label>';
+		echo '<div class="cmx-email-client-actions">';
+		echo '<div class="cmx-email-client-action-buttons">';
+		echo '<button type="button" class="button button-secondary cmx-email-client-test">Testen</button>';
+		echo '<button type="button" class="button-link-delete cmx-email-client-remove">Entfernen</button>';
+		echo '</div>';
+		echo '<span class="cmx-email-client-test-result" aria-live="polite"></span>';
+		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 	}
@@ -589,18 +590,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				border-radius: 12px;
 				background: #fff;
 				padding: 14px;
-			}
-			.cmx-email-client-head {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				gap: 12px;
-				margin-bottom: 12px;
+				overflow-x: auto;
 			}
 			.cmx-email-client-grid {
 				display: grid;
-				grid-template-columns: repeat(2, minmax(0, 1fr));
+				grid-template-columns: .8fr 1fr 1.15fr 1.3fr 1fr 1fr auto;
 				gap: 12px;
+				align-items: end;
 			}
 			.cmx-email-client-field {
 				display: flex;
@@ -615,6 +611,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			.cmx-email-client-field .small-text {
 				width: 100%;
 				max-width: none;
+			}
+			.cmx-email-client-actions {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				align-self: end;
+				min-width: 180px;
+			}
+			.cmx-email-client-action-buttons {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				justify-content: flex-start;
+			}
+			.cmx-email-client-test-result {
+				display: block;
+				font-size: 12px;
+				line-height: 1.35;
+				color: #646970;
 			}
 			.cmx-email-client-empty {
 				margin: 0 0 14px;
@@ -833,6 +848,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			el.textContent = message || '';
 			el.style.color = '#50575e';
 		}
+		function postConnectionTest(action, host, email, password){
+			var fd = new FormData();
+			fd.append('action', action);
+			fd.append('_ajax_nonce', nonce);
+			fd.append('email', String(email || '').trim());
+			fd.append('password', String(password || ''));
+			fd.append('host', String(host || '').trim());
+
+			return fetch(ajaxUrl, {
+				method: 'POST',
+				credentials: 'same-origin',
+				body: fd
+			})
+			.then(function(res){ return res.json(); })
+			.then(function(json){
+				var ok = !!(json && json.success);
+				var message = json && json.data && json.data.message ? String(json.data.message) : (ok ? 'OK' : 'Fehlgeschlagen.');
+				return { ok: ok, message: message };
+			});
+		}
 		function initPasswordToggles(scope){
 			var root = scope || document;
 			root.querySelectorAll('.cmx-email-password-wrap').forEach(function(wrap){
@@ -902,6 +937,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			});
 
 			list.addEventListener('click', function(event){
+				var testBtn = event.target.closest('.cmx-email-client-test');
+				if (testBtn) {
+					event.preventDefault();
+					var item = testBtn.closest('.cmx-email-client-item');
+					if (!item || testBtn.disabled) return;
+					var emailEl = item.querySelector('input[name$="[email]"]');
+					var passEl = item.querySelector('input[name$="[password]"]');
+					var smtpEl = item.querySelector('input[name$="[smtp_host]"]');
+					var imapEl = item.querySelector('input[name$="[imap_host]"]');
+					var resultEl = item.querySelector('.cmx-email-client-test-result');
+					var email = emailEl ? String(emailEl.value || '').trim() : '';
+					var password = passEl ? String(passEl.value || '') : '';
+					var smtpHost = smtpEl ? String(smtpEl.value || '').trim() : '';
+					var imapHost = imapEl ? String(imapEl.value || '').trim() : '';
+
+					if (!email || !password || !smtpHost || !imapHost) {
+						setResult(resultEl, false, 'Bitte E-Mail, Kennwort, SMTP-Host und IMAP-Host ausfüllen.');
+						return;
+					}
+
+					testBtn.disabled = true;
+					setPending(resultEl, 'Teste SMTP und IMAP...');
+
+					Promise.all([
+						postConnectionTest('cmx_email_test_smtp', smtpHost, email, password),
+						postConnectionTest('cmx_email_test_imap', imapHost, email, password)
+					])
+					.then(function(results){
+						var smtpResult = results[0] || { ok: false, message: 'SMTP-Test fehlgeschlagen.' };
+						var imapResult = results[1] || { ok: false, message: 'IMAP-Test fehlgeschlagen.' };
+						var ok = !!(smtpResult.ok && imapResult.ok);
+						setResult(resultEl, ok, 'SMTP: ' + smtpResult.message + ' IMAP: ' + imapResult.message);
+					})
+					.catch(function(){
+						setResult(resultEl, false, 'Verbindungstest fehlgeschlagen.');
+					})
+					.finally(function(){
+						testBtn.disabled = false;
+					});
+					return;
+				}
+
 				var removeBtn = event.target.closest('.cmx-email-client-remove');
 				if (!removeBtn) return;
 				event.preventDefault();
