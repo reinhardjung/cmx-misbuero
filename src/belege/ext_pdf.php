@@ -240,7 +240,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_manifest_json')) {
 	function cmx_ext_chrome_manifest_json(array $config): string {
 		$manifest = [
 			'manifest_version' => 3,
-			'name' => 'Mis Büro PDF Import',
+			'name' => 'Mis Büro - PDF Import',
 			'short_name' => 'Mis Büro',
 			'version' => cmx_ext_chrome_plugin_version(),
 			'description' => 'Importiert das aktuell angezeigte PDF direkt als neuen Beleg in Mis Büro.',
@@ -284,7 +284,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_popup_html')) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mis Büro PDF Import</title>
+<title>Mis Büro - PDF Import</title>
 <style>
 body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f7fb;color:#1d2327;min-width:320px}
 .wrap{padding:14px}
@@ -788,7 +788,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field'))
 		echo '<img src="' . \esc_url($icon_url) . '" alt="" width="42" height="42" style="display:block;object-fit:contain;">';
 		echo '</button>';
 		echo '<div style="min-width:260px;">';
-		echo '<div style="font-weight:600;">Mis Büro PDF Import</div>';
+		echo '<div style="font-weight:600;">Mis Büro - PDF Import</div>';
 		echo '<div style="color:#646970;">Lädt das Erweiterungspaket für Google Chrome herunter.</div>';
 		echo '<div style="margin-top:4px;"><button type="button" class="button-link" id="cmx-ext-chrome-help" style="padding:0;height:auto;min-height:0;">Anleitung</button></div>';
 		echo '</div>';

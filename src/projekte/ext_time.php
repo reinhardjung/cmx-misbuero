@@ -1,1 +1,1987 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_USER_TOKEN_META')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_USER_TOKEN_META', '_cmx_ext_time_token');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION', 'cmx_ext_time_download');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_CONNECT_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_CONNECT_ACTION', 'cmx_ext_time_connect');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_BOOTSTRAP_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_BOOTSTRAP_ACTION', 'cmx_ext_time_bootstrap');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_PROJECTS_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_PROJECTS_ACTION', 'cmx_ext_time_search_projects');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_ARTICLES_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_ARTICLES_ACTION', 'cmx_ext_time_search_articles');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SAVE_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SAVE_ACTION', 'cmx_ext_time_save');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_plugin_version')) {
+	function cmx_ext_time_plugin_version(): string {
+		$version = \defined(__NAMESPACE__ . '\\CMX_VERSION') ? (string) \constant(__NAMESPACE__ . '\\CMX_VERSION') : '1.0.0';
+		if (!\preg_match('/^\d+(?:\.\d+){0,3}$/', $version)) {
+			$version = '1.0.0';
+		}
+		return $version;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_interval_values')) {
+	function cmx_ext_time_interval_values(): array {
+		return [5, 10, 15, 20, 30, 45, 60];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_default_interval')) {
+	function cmx_ext_time_default_interval(): int {
+		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option((string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN'), [])
+			: [];
+		$value = isset($options['task_Intervall']) ? (int) $options['task_Intervall'] : 5;
+		return \in_array($value, cmx_ext_time_interval_values(), true) ? $value : 5;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_icon_asset_path')) {
+	function cmx_ext_time_icon_asset_path(): string {
+		return \wp_normalize_path(\dirname(__DIR__, 2) . '/assets/ext_time.png');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_icon_asset_url')) {
+	function cmx_ext_time_icon_asset_url(): string {
+		return (string) \plugins_url('assets/ext_time.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_icon_png')) {
+	function cmx_ext_time_icon_png(int $size): string {
+		$size = \max(16, (int) $size);
+		$asset_path = cmx_ext_time_icon_asset_path();
+		if (\is_file($asset_path)) {
+			$source = @\imagecreatefrompng($asset_path);
+			if ($source instanceof \GdImage || \is_resource($source)) {
+				$src_w = (int) \imagesx($source);
+				$src_h = (int) \imagesy($source);
+				if ($src_w > 0 && $src_h > 0) {
+					$crop_x1 = $src_w;
+					$crop_y1 = $src_h;
+					$crop_x2 = -1;
+					$crop_y2 = -1;
+					for ($y = 0; $y < $src_h; $y++) {
+						for ($x = 0; $x < $src_w; $x++) {
+							$rgba = (int) \imagecolorat($source, $x, $y);
+							$alpha = ($rgba >> 24) & 0x7F;
+							if ($alpha >= 120) {
+								continue;
+							}
+							if ($x < $crop_x1) $crop_x1 = $x;
+							if ($y < $crop_y1) $crop_y1 = $y;
+							if ($x > $crop_x2) $crop_x2 = $x;
+							if ($y > $crop_y2) $crop_y2 = $y;
+						}
+					}
+					if ($crop_x2 < $crop_x1 || $crop_y2 < $crop_y1) {
+						$crop_x1 = 0;
+						$crop_y1 = 0;
+						$crop_x2 = $src_w - 1;
+						$crop_y2 = $src_h - 1;
+					}
+					$crop_w = \max(1, $crop_x2 - $crop_x1 + 1);
+					$crop_h = \max(1, $crop_y2 - $crop_y1 + 1);
+					$pad = \max(1, (int) \round(\min($crop_w, $crop_h) * 0.04));
+					$crop_x1 = \max(0, $crop_x1 - $pad);
+					$crop_y1 = \max(0, $crop_y1 - $pad);
+					$crop_x2 = \min($src_w - 1, $crop_x2 + $pad);
+					$crop_y2 = \min($src_h - 1, $crop_y2 + $pad);
+					$crop_w = \max(1, $crop_x2 - $crop_x1 + 1);
+					$crop_h = \max(1, $crop_y2 - $crop_y1 + 1);
+
+					$image = \imagecreatetruecolor($size, $size);
+					\imagealphablending($image, false);
+					\imagesavealpha($image, true);
+					$transparent = \imagecolorallocatealpha($image, 0, 0, 0, 127);
+					\imagefill($image, 0, 0, $transparent);
+					\imagecopyresampled($image, $source, 0, 0, $crop_x1, $crop_y1, $size, $size, $crop_w, $crop_h);
+					\ob_start();
+					\imagepng($image);
+					$png = (string) \ob_get_clean();
+					\imagedestroy($image);
+					\imagedestroy($source);
+					if ($png !== '') {
+						return $png;
+					}
+				}
+				\imagedestroy($source);
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_preview_icon_src')) {
+	function cmx_ext_time_preview_icon_src(): string {
+		$png = cmx_ext_time_icon_png(128);
+		if ($png !== '') {
+			return 'data:image/png;base64,' . \base64_encode($png);
+		}
+
+		return cmx_ext_time_icon_asset_url();
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_current_user_token')) {
+	function cmx_ext_time_current_user_token(int $user_id = 0): string {
+		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
+		if ($user_id <= 0) {
+			return '';
+		}
+
+		$token = \trim((string) \get_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, true));
+		if ($token !== '') {
+			return $token;
+		}
+
+		try {
+			$token = 'cmxexttime_' . \bin2hex(\random_bytes(24));
+		} catch (\Throwable $exception) {
+			$token = 'cmxexttime_' . \wp_generate_password(48, false, false);
+		}
+		\update_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, $token);
+
+		return $token;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_request_token')) {
+	function cmx_ext_time_request_token(): string {
+		$server = (array) ($_SERVER ?? []);
+		$token = '';
+		foreach (['HTTP_X_CMX_EXTENSION_TOKEN', 'REDIRECT_HTTP_X_CMX_EXTENSION_TOKEN'] as $key) {
+			if (!empty($server[$key])) {
+				$token = (string) $server[$key];
+				break;
+			}
+		}
+		if ($token === '' && isset($_REQUEST['token'])) {
+			$token = (string) \wp_unslash($_REQUEST['token']);
+		}
+		return \trim($token);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_token_user_id')) {
+	function cmx_ext_time_token_user_id(string $token): int {
+		$token = \trim($token);
+		if ($token === '') {
+			return 0;
+		}
+
+		$user_ids = \get_users([
+			'meta_key'   => CMX_EXT_TIME_USER_TOKEN_META,
+			'meta_value' => $token,
+			'number'     => 1,
+			'fields'     => 'ID',
+		]);
+		if (!\is_array($user_ids) || empty($user_ids[0])) {
+			return 0;
+		}
+
+		$user_id = (int) $user_ids[0];
+		$user = \get_userdata($user_id);
+		if (!$user instanceof \WP_User) {
+			return 0;
+		}
+
+		return \user_can($user, 'edit_posts') ? $user_id : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_authenticated_user_id')) {
+	function cmx_ext_time_authenticated_user_id(bool $allow_token = true): int {
+		$current_user_id = \get_current_user_id();
+		if ($current_user_id > 0 && \current_user_can('edit_posts')) {
+			return (int) $current_user_id;
+		}
+
+		if (!$allow_token) {
+			return 0;
+		}
+
+		return cmx_ext_time_token_user_id(cmx_ext_time_request_token());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_admin_ajax_url')) {
+	function cmx_ext_time_admin_ajax_url(string $action = ''): string {
+		$url = (string) \admin_url('admin-ajax.php');
+		if ($action !== '') {
+			$url = (string) \add_query_arg(['action' => $action], $url);
+		}
+		return $url;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_url')) {
+	function cmx_ext_time_download_url(): string {
+		return (string) \add_query_arg(
+			[
+				'action'   => CMX_EXT_TIME_DOWNLOAD_ACTION,
+				'_wpnonce' => \wp_create_nonce(CMX_EXT_TIME_DOWNLOAD_ACTION),
+			],
+			\admin_url('admin-post.php')
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_readme_txt')) {
+	function cmx_ext_time_readme_txt(): string {
+		return "Mis Büro - Google Chrome Erweiterung für Zeiterfassung\n\n"
+			. "Installation:\n"
+			. "1. ZIP-Datei herunterladen und entpacken.\n"
+			. "2. In Google Chrome 'chrome://extensions' öffnen.\n"
+			. "3. Entwicklermodus aktivieren.\n"
+			. "4. 'Entpackte Erweiterung laden' wählen.\n"
+			. "5. Den entpackten Ordner auswählen.\n\n"
+			. "Verwendung:\n"
+			. "- Über das Zahnrad zuerst die Mis Büro Instanz verbinden.\n"
+			. "- Projekt sowie Tätigkeit oder interne Notiz auswählen.\n"
+			. "- Mit Start den Timer starten.\n"
+			. "- Nach Ablauf des Intervalls fragt die Erweiterung, ob Du noch arbeitest.\n"
+			. "- Bei Stop oder Timeout wird die Zeit direkt im Projekt gespeichert.\n";
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_add_settings_field')) {
+	function cmx_ext_time_add_settings_field(): void {
+		\add_settings_field(
+			'cmx_ext_time',
+			'Google Chrome Erweiterung',
+			__NAMESPACE__ . '\\cmx_ext_time_render_settings_field',
+			'cmx_tab_vorgaben__projekte',
+			'cmx_sec_vorgaben_projekte'
+		);
+	}
+	\add_action('admin_init', __NAMESPACE__ . '\\cmx_ext_time_add_settings_field');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
+	function cmx_ext_time_render_settings_field(): void {
+		if (!\current_user_can('manage_options')) {
+			echo '<em>Keine Berechtigung.</em>';
+			return;
+		}
+
+		$download_url = cmx_ext_time_download_url();
+		$icon_src = cmx_ext_time_preview_icon_src();
+		$readme_text = cmx_ext_time_readme_txt();
+
+		echo '<div id="cmx-ext-time-wrap" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+		echo '<button type="button" class="button button-secondary" id="cmx-ext-time-install" aria-label="Google Chrome Erweiterung herunterladen" style="width:52px;height:52px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:14px;overflow:hidden;">';
+		echo '<img src="' . \esc_attr($icon_src) . '" alt="" width="42" height="42" style="display:block;width:42px;height:42px;object-fit:contain;">';
+		echo '</button>';
+		echo '<div style="min-width:260px;">';
+		echo '<div style="font-weight:600;">Mis Büro Zeiterfassung</div>';
+		echo '<div style="color:#646970;">Lädt das Erweiterungspaket für Google Chrome herunter.</div>';
+		echo '<div style="margin-top:4px;"><button type="button" class="button-link" id="cmx-ext-time-help" style="padding:0;height:auto;min-height:0;">Anleitung</button></div>';
+		echo '</div>';
+		echo '</div>';
+		echo '<div id="cmx-ext-time-help-box" style="display:none;margin-top:8px;padding:12px 14px;border:1px solid #dcdcde;border-radius:8px;background:#fff;">';
+		echo '<pre style="margin:0;white-space:pre-wrap;font-family:monospace;">' . \esc_html($readme_text) . '</pre>';
+		echo '</div>';
+		echo '<div id="cmx-ext-time-status" style="margin-top:8px;color:#646970;"></div>';
+		echo '<script>
+		(function(){
+			var button = document.getElementById("cmx-ext-time-install");
+			var help = document.getElementById("cmx-ext-time-help");
+			var helpBox = document.getElementById("cmx-ext-time-help-box");
+			var status = document.getElementById("cmx-ext-time-status");
+			if (!button || !status) return;
+			function setStatus(text, isError){
+				status.textContent = text || "";
+				status.style.color = isError ? "#b32d2e" : "#646970";
+			}
+			function setStatusHtml(html, isError){
+				status.innerHTML = html || "";
+				status.style.color = isError ? "#b32d2e" : "#646970";
+			}
+			function fallbackCopyText(text){
+				var field = document.createElement("textarea");
+				field.value = text;
+				field.setAttribute("readonly", "readonly");
+				field.style.position = "fixed";
+				field.style.opacity = "0";
+				field.style.pointerEvents = "none";
+				document.body.appendChild(field);
+				field.focus();
+				field.select();
+				var ok = false;
+				try {
+					ok = document.execCommand("copy");
+				} catch (err) {
+					ok = false;
+				}
+				document.body.removeChild(field);
+				return ok;
+			}
+			function copyText(text){
+				if (navigator.clipboard && window.isSecureContext) {
+					return navigator.clipboard.writeText(text).then(function(){
+						return true;
+					}).catch(function(){
+						return fallbackCopyText(text);
+					});
+				}
+				return Promise.resolve(fallbackCopyText(text));
+			}
+			function isChromeBrowser(){
+				var ua = navigator.userAgent || "";
+				var vendor = navigator.vendor || "";
+				if (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands)) {
+					var hasChromeBrand = navigator.userAgentData.brands.some(function(entry){
+						return /Google Chrome|Chromium/i.test((entry && entry.brand) || "");
+					});
+					if (hasChromeBrand) return true;
+				}
+				return /Chrome\\//.test(ua) && /Google Inc/i.test(vendor) && !/Edg\\//.test(ua) && !/OPR\\//.test(ua);
+			}
+			if (help && helpBox) {
+				help.addEventListener("click", function(){
+					var isOpen = helpBox.style.display !== "none";
+					helpBox.style.display = isOpen ? "none" : "block";
+				});
+			}
+			button.addEventListener("click", function(){
+				if (!isChromeBrowser()) {
+					setStatus("Diese Erweiterung kann nur in Google Chrome heruntergeladen werden.", true);
+					return;
+				}
+				copyText("chrome://extensions").then(function(copied){
+					var message = "Das Erweiterungspaket wird heruntergeladen.<br>Bitte danach in <code>chrome://extensions</code> als entpackte Erweiterung laden.";
+					if (copied) {
+						message += "<br><code>chrome://extensions</code> wurde in die Zwischenablage kopiert.";
+					}
+					setStatusHtml(message, false);
+					window.location.href = ' . \wp_json_encode($download_url) . ';
+				});
+			});
+		})();
+		</script>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
+	function cmx_ext_time_bootstrap_data(int $user_id = 0): array {
+		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
+		$user = $user_id > 0 ? \get_userdata($user_id) : null;
+		$display_name = '';
+		if ($user instanceof \WP_User) {
+			$display_name = \trim((string) $user->display_name);
+			if ($display_name === '') {
+				$display_name = (string) $user->user_login;
+			}
+		}
+
+		return [
+			'siteUrl'         => (string) \home_url('/'),
+			'siteName'        => (string) \get_bloginfo('name'),
+			'ajaxUrl'         => cmx_ext_time_admin_ajax_url(),
+			'token'           => cmx_ext_time_current_user_token($user_id),
+			'intervals'       => cmx_ext_time_interval_values(),
+			'defaultInterval' => cmx_ext_time_default_interval(),
+			'userDisplay'     => $display_name,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_auth_error')) {
+	function cmx_ext_time_auth_error(string $message = 'Bitte zuerst in Mis Büro anmelden.'): void {
+		\wp_send_json_error(['message' => $message], 403);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler')) {
+	function cmx_ext_time_bootstrap_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(false);
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error();
+		}
+
+		\wp_send_json_success(cmx_ext_time_bootstrap_data($user_id));
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_BOOTSTRAP_ACTION, __NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_connect_handler')) {
+	function cmx_ext_time_connect_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(true);
+
+		if ($user_id <= 0) {
+			$username = isset($_REQUEST['username']) ? \sanitize_user((string) \wp_unslash($_REQUEST['username']), true) : '';
+			$password = isset($_REQUEST['password']) ? (string) \wp_unslash($_REQUEST['password']) : '';
+
+			if ($username === '' || $password === '') {
+				\wp_send_json_error(['message' => 'Bitte Benutzername und Passwort eingeben.'], 400);
+			}
+
+			$user = \wp_authenticate($username, $password);
+			if ($user instanceof \WP_Error || !$user instanceof \WP_User) {
+				\wp_send_json_error(['message' => 'Benutzername oder Passwort sind ungültig.'], 403);
+			}
+			if (!\user_can($user, 'edit_posts')) {
+				\wp_send_json_error(['message' => 'Dieser Benutzer darf keine Projekte bearbeiten.'], 403);
+			}
+
+			$user_id = (int) $user->ID;
+		}
+
+		\wp_send_json_success(cmx_ext_time_bootstrap_data($user_id));
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_CONNECT_ACTION, __NAMESPACE__ . '\\cmx_ext_time_connect_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_CONNECT_ACTION, __NAMESPACE__ . '\\cmx_ext_time_connect_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_project_search_results')) {
+	function cmx_ext_time_project_search_results(string $term = ''): array {
+		global $wpdb;
+
+		$post_tbl = $wpdb->posts;
+		$term = \trim($term);
+		$limit = 20;
+		$ids = [];
+		if ($term === '') {
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 WHERE post_type=%s AND post_status<>'trash'
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					'projekte',
+					$limit
+				)
+			);
+		} else {
+			$like = '%' . $wpdb->esc_like($term) . '%';
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 WHERE post_type=%s AND post_status<>'trash' AND post_title LIKE %s
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					'projekte',
+					$like,
+					$limit
+				)
+			);
+		}
+
+		$out = [];
+		foreach ((array) $ids as $project_id) {
+			$project_id = (int) $project_id;
+			if ($project_id <= 0) {
+				continue;
+			}
+			$title = (string) \get_the_title($project_id);
+			if ($title === '') {
+				$title = '(#' . $project_id . ')';
+			}
+			$out[] = [
+				'id'    => $project_id,
+				'title' => $title,
+				'label' => $title,
+			];
+		}
+
+		return $out;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_search_projects_handler')) {
+	function cmx_ext_time_search_projects_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(true);
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error('Keine Berechtigung für diese Instanz.');
+		}
+
+		$term = isset($_REQUEST['term']) ? \sanitize_text_field((string) \wp_unslash($_REQUEST['term'])) : '';
+		\wp_send_json_success(cmx_ext_time_project_search_results($term));
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_SEARCH_PROJECTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_projects_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SEARCH_PROJECTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_projects_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_article_search_results')) {
+	function cmx_ext_time_article_search_results(string $term = '', string $art = ''): array {
+		global $wpdb;
+
+		$term = \trim($term);
+		$art = \sanitize_key($art);
+		$allowed_art_values = ['produkt', 'dienstleistung'];
+		$art_filter = \in_array($art, $allowed_art_values, true) ? $art : '';
+		$limit = 20;
+
+		$post_tbl = $wpdb->posts;
+		$meta_tbl = $wpdb->postmeta;
+
+		$art_join = '';
+		$art_where = '';
+		if ($art_filter !== '') {
+			$art_join = " INNER JOIN {$meta_tbl} art_meta ON art_meta.post_id = ID AND art_meta.meta_key = '_cmx_artikel_art' ";
+			$art_where = $wpdb->prepare(" AND art_meta.meta_value = %s", $art_filter);
+		}
+
+		$ids = [];
+		$title_match_map = [];
+		$meta_match_map = [];
+
+		if ($term === '') {
+			if ($art_filter !== '') {
+				$sql = $wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 {$art_join}
+					 WHERE post_type=%s AND post_status<>'trash'
+					 {$art_where}
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					'artikel',
+					$limit
+				);
+				$ids = $wpdb->get_col($sql);
+			} else {
+				$ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT ID FROM {$post_tbl}
+						 WHERE post_type=%s AND post_status<>'trash'
+						 ORDER BY post_title ASC
+						 LIMIT %d",
+						'artikel',
+						$limit
+					)
+				);
+			}
+		} else {
+			$like = '%' . $wpdb->esc_like($term) . '%';
+			$norm = \preg_replace('/[\s\.\-_:]/', '', $term);
+			$norm_like = '%' . $wpdb->esc_like((string) $norm) . '%';
+
+			if ($art_filter !== '') {
+				$title_sql = $wpdb->prepare(
+					"SELECT ID FROM {$post_tbl}
+					 {$art_join}
+					 WHERE post_type=%s AND post_status<>'trash'
+					   {$art_where}
+					   AND post_title LIKE %s
+					 ORDER BY post_title ASC
+					 LIMIT %d",
+					'artikel',
+					$like,
+					$limit
+				);
+				$title_ids = $wpdb->get_col($title_sql);
+			} else {
+				$title_ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT ID FROM {$post_tbl}
+						 WHERE post_type=%s AND post_status<>'trash'
+						   AND post_title LIKE %s
+						 ORDER BY post_title ASC
+						 LIMIT %d",
+						'artikel',
+						$like,
+						$limit
+					)
+				);
+			}
+
+			$meta_keys = ['cmx_artikel_sku', '_cmx_artikel_sku', '_cmx_artikel_nr', '_sku'];
+			$in_keys = \implode(',', \array_fill(0, \count($meta_keys), '%s'));
+			$params = \array_merge(
+				['artikel'],
+				$art_filter !== '' ? [$art_filter] : [],
+				$meta_keys,
+				[$like, $like, $norm_like, $limit]
+			);
+			$meta_sql = $wpdb->prepare(
+				"SELECT DISTINCT p.ID
+				 FROM {$post_tbl} p
+				 " . ($art_filter !== '' ? "INNER JOIN {$meta_tbl} art_meta ON art_meta.post_id = p.ID AND art_meta.meta_key = '_cmx_artikel_art'" : '') . "
+				 INNER JOIN {$meta_tbl} pm ON pm.post_id = p.ID
+				 WHERE p.post_type=%s
+				   AND p.post_status<>'trash'
+				   " . ($art_filter !== '' ? "AND art_meta.meta_value = %s" : '') . "
+				   AND pm.meta_key IN ($in_keys)
+				   AND (
+				     pm.meta_value LIKE %s
+				     OR REPLACE(REPLACE(REPLACE(REPLACE(pm.meta_value, ' ', ''), '.', ''), '-', ''), '_', '') LIKE %s
+				     OR REPLACE(REPLACE(REPLACE(REPLACE(pm.meta_value, ' ', ''), '.', ''), '-', ''), '_', '') LIKE %s
+				   )
+				 ORDER BY p.post_title ASC
+				 LIMIT %d",
+				$params
+			);
+			$meta_ids = $wpdb->get_col($meta_sql);
+
+			foreach ((array) $title_ids as $title_id) {
+				$title_match_map[(int) $title_id] = true;
+			}
+			foreach ((array) $meta_ids as $meta_id) {
+				$meta_match_map[(int) $meta_id] = true;
+			}
+			$ids = \array_values(\array_unique(\array_merge((array) $title_ids, (array) $meta_ids)));
+		}
+
+		$out = [];
+		foreach ((array) $ids as $id) {
+			$id = (int) $id;
+			if ($id <= 0) {
+				continue;
+			}
+			$title = (string) \get_the_title($id);
+			$nr = (string) \get_post_meta($id, '_cmx_artikel_sku', true);
+			if ($nr === '') {
+				$nr = (string) \get_post_meta($id, 'cmx_artikel_sku', true);
+			}
+			if ($nr === '') {
+				$nr = (string) \get_post_meta($id, '_cmx_artikel_nr', true);
+			}
+			if ($nr === '') {
+				$nr = (string) \get_post_meta($id, '_sku', true);
+			}
+			$label = $nr !== '' ? ($nr . ' – ' . $title) : $title;
+			$out[] = [
+				'id'        => $id,
+				'title'     => $title,
+				'nr'        => $nr,
+				'label'     => $label,
+				'title_hit' => !empty($title_match_map[$id]),
+				'meta_hit'  => !empty($meta_match_map[$id]),
+			];
+		}
+
+		return $out;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_search_articles_handler')) {
+	function cmx_ext_time_search_articles_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(true);
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error('Keine Berechtigung für diese Instanz.');
+		}
+
+		$term = isset($_REQUEST['term']) ? \sanitize_text_field((string) \wp_unslash($_REQUEST['term'])) : '';
+		$art = isset($_REQUEST['art']) ? \sanitize_key((string) \wp_unslash($_REQUEST['art'])) : '';
+		\wp_send_json_success(cmx_ext_time_article_search_results($term, $art));
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_SEARCH_ARTICLES_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_articles_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SEARCH_ARTICLES_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_articles_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_round_hours')) {
+	function cmx_ext_time_round_hours(float $hours): string {
+		$hours = \max(0.0, $hours);
+		return \number_format($hours, 2, '.', '');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_task')) {
+	function cmx_ext_time_append_task(int $project_id, array $payload): void {
+		$existing = \get_post_meta($project_id, CMX_PROJEKT_TASK_META, true);
+		$existing = \is_array($existing) ? $existing : [];
+
+		$existing[] = [
+			'uid'           => \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid') ? cmx_projekt_task_uid('') : ('tsk_' . \uniqid()),
+			'datum'         => (string) ($payload['start_date'] ?? ''),
+			'zeit'          => (string) ($payload['start_time'] ?? ''),
+			'dauer'         => (string) ($payload['duration'] ?? '0.00'),
+			'artikel_id'    => (int) ($payload['artikel_id'] ?? 0),
+			'produkt_id'    => (int) ($payload['produkt_id'] ?? 0),
+			'verrechenbar'  => !empty($payload['verrechenbar']) ? 1 : 0,
+			'abgerechnet'   => 0,
+			'info'          => (string) ($payload['info'] ?? ''),
+		];
+
+		\update_post_meta($project_id, CMX_PROJEKT_TASK_META, $existing);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_note')) {
+	function cmx_ext_time_append_note(int $project_id, array $payload): void {
+		$meta_key = \function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
+			? (string) cmx_notizen_meta_key_for_post_type('projekte')
+			: '_cmx_projekt_intern_notizen';
+		$existing = \get_post_meta($project_id, $meta_key, true);
+		$existing = \is_array($existing) ? $existing : [];
+
+		$note_text = \trim((string) ($payload['info'] ?? ''));
+		if ($note_text === '') {
+			$parts = [];
+			if (!empty($payload['artikel_label'])) {
+				$parts[] = (string) $payload['artikel_label'];
+			}
+			if (!empty($payload['produkt_label'])) {
+				$parts[] = (string) $payload['produkt_label'];
+			}
+			$note_text = \trim(\implode(' / ', $parts));
+		}
+		if ($note_text === '') {
+			$note_text = 'Zeiterfassung per Google Chrome Erweiterung';
+		}
+
+		$existing[] = [
+			'betreff' => '',
+			'datum'   => (string) ($payload['start_date'] ?? ''),
+			'zeit'    => (string) ($payload['start_time'] ?? ''),
+			'text'    => $note_text,
+		];
+
+		\update_post_meta($project_id, $meta_key, $existing);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
+	function cmx_ext_time_save_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(true);
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error('Keine Berechtigung für diese Instanz.');
+		}
+
+		$project_id = isset($_POST['project_id']) ? (int) \wp_unslash($_POST['project_id']) : 0;
+		if ($project_id <= 0 || \get_post_type($project_id) !== 'projekte') {
+			\wp_send_json_error(['message' => 'Projekt wurde nicht gefunden.'], 400);
+		}
+
+		$mode = isset($_POST['mode']) ? \sanitize_key((string) \wp_unslash($_POST['mode'])) : 'task';
+		$mode = \in_array($mode, ['task', 'note'], true) ? $mode : 'task';
+
+		$start_at = isset($_POST['start_at']) ? (string) \wp_unslash($_POST['start_at']) : '';
+		$end_at = isset($_POST['end_at']) ? (string) \wp_unslash($_POST['end_at']) : '';
+		$start_date = isset($_POST['start_date']) ? \sanitize_text_field((string) \wp_unslash($_POST['start_date'])) : '';
+		$start_time = isset($_POST['start_time']) ? \sanitize_text_field((string) \wp_unslash($_POST['start_time'])) : '';
+
+		try {
+			$start_dt = new \DateTimeImmutable($start_at !== '' ? $start_at : 'now');
+			$end_dt = new \DateTimeImmutable($end_at !== '' ? $end_at : 'now');
+		} catch (\Throwable $exception) {
+			\wp_send_json_error(['message' => 'Start- oder Endzeit ist ungültig.'], 400);
+		}
+
+		$duration_seconds = \max(0, $end_dt->getTimestamp() - $start_dt->getTimestamp());
+		$duration_hours = cmx_ext_time_round_hours($duration_seconds / 3600);
+
+		if ($start_date === '') {
+			$start_date = $start_dt->setTimezone(\wp_timezone())->format('Y-m-d');
+		}
+		if ($start_time === '') {
+			$start_time = $start_dt->setTimezone(\wp_timezone())->format('H:i');
+		}
+
+		$payload = [
+			'start_date'   => $start_date,
+			'start_time'   => $start_time,
+			'duration'     => $duration_hours,
+			'artikel_id'   => isset($_POST['artikel_id']) ? (int) \wp_unslash($_POST['artikel_id']) : 0,
+			'produkt_id'   => isset($_POST['produkt_id']) ? (int) \wp_unslash($_POST['produkt_id']) : 0,
+			'verrechenbar' => !empty($_POST['verrechenbar']) ? 1 : 0,
+			'info'         => isset($_POST['info']) ? \sanitize_textarea_field((string) \wp_unslash($_POST['info'])) : '',
+			'artikel_label'=> isset($_POST['artikel_label']) ? \sanitize_text_field((string) \wp_unslash($_POST['artikel_label'])) : '',
+			'produkt_label'=> isset($_POST['produkt_label']) ? \sanitize_text_field((string) \wp_unslash($_POST['produkt_label'])) : '',
+		];
+
+		if ($mode === 'note') {
+			cmx_ext_time_append_note($project_id, $payload);
+		} else {
+			cmx_ext_time_append_task($project_id, $payload);
+		}
+
+		\wp_send_json_success([
+			'project_id' => $project_id,
+			'edit_url'   => (string) \admin_url('post.php?post=' . $project_id . '&action=edit'),
+			'mode'       => $mode,
+			'duration'   => $duration_hours,
+			'start_date' => $start_date,
+			'start_time' => $start_time,
+		]);
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_save_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_save_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_manifest_json')) {
+	function cmx_ext_time_manifest_json(): string {
+		$manifest = [
+			'manifest_version' => 3,
+			'name' => 'Mis Büro Zeiterfassung',
+			'short_name' => 'Mis Büro Zeit',
+			'version' => cmx_ext_time_plugin_version(),
+			'description' => 'Erfasst Zeiten direkt in Projekten von Mis Büro.',
+			'permissions' => ['storage', 'alarms', 'notifications', 'tabs'],
+			'host_permissions' => ['<all_urls>'],
+			'background' => [
+				'service_worker' => 'service_worker.js',
+			],
+			'options_page' => 'options.html',
+			'action' => [
+				'default_title' => 'Mis Büro Zeiterfassung',
+				'default_popup' => 'popup.html',
+				'default_icon' => [
+					'16' => 'icon16.png',
+					'32' => 'icon32.png',
+					'48' => 'icon48.png',
+					'128' => 'icon128.png',
+				],
+			],
+			'icons' => [
+				'16' => 'icon16.png',
+				'32' => 'icon32.png',
+				'48' => 'icon48.png',
+				'128' => 'icon128.png',
+			],
+		];
+
+		return (string) \wp_json_encode($manifest, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_config_js')) {
+	function cmx_ext_time_config_js(): string {
+		$config = [
+			'defaultSuffix' => '.misbuero.ch',
+			'connectAction' => CMX_EXT_TIME_CONNECT_ACTION,
+			'bootstrapAction' => CMX_EXT_TIME_BOOTSTRAP_ACTION,
+			'searchProjectsAction' => CMX_EXT_TIME_SEARCH_PROJECTS_ACTION,
+			'searchArticlesAction' => CMX_EXT_TIME_SEARCH_ARTICLES_ACTION,
+			'saveAction' => CMX_EXT_TIME_SAVE_ACTION,
+		];
+
+		return 'self.CMX_EXT_TIME_CONFIG = ' . (string) \wp_json_encode($config, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . ';' . "\n";
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_popup_html')) {
+	function cmx_ext_time_popup_html(): string {
+		return <<<'HTML'
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis Büro Zeiterfassung</title>
+<style>
+body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef2f7;color:#1d2327;min-width:360px}
+.wrap{padding:14px}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:10px}
+.icon{width:62px;height:62px;border-radius:18px;background:#fff;border:1px solid #dcdcde;display:flex;align-items:center;justify-content:center}
+.title{font-weight:700;font-size:15px}
+.subtitle{color:#646970}
+.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+.panel{background:#fff;border:1px solid #dcdcde;border-radius:14px;padding:12px}
+.stack{display:flex;flex-direction:column;gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+input[type=text],select,textarea{width:100%;box-sizing:border-box;border:1px solid #ccd0d4;border-radius:10px;padding:8px 10px;background:#fff;font:inherit;color:inherit}
+textarea{min-height:76px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inline{display:flex;align-items:center;gap:8px}
+.inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
+.muted{color:#646970;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
+.actions{display:flex;gap:8px}
+button{appearance:none;border:1px solid #2271b1;background:#2271b1;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600}
+button.secondary{background:#fff;color:#2271b1}
+button.danger{background:#d63638;border-color:#d63638}
+button:disabled{opacity:.55;cursor:not-allowed}
+.status{margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #dcdcde;display:none}
+.status.is-error{display:block;border-color:#d63638;background:#fff1f1}
+.status.is-success{display:block;border-color:#00a32a;background:#f2fff4}
+.status.is-info{display:block}
+.suggest-wrap{position:relative}
+.suggest{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:9999;background:#fff;border:1px solid #ccd0d4;border-radius:10px;max-height:220px;overflow:auto;display:none;box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.suggest button{width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 12px;border-radius:0;font-weight:400}
+.suggest button:hover,.suggest button.active{background:#eef4ff}
+.suggest .hint{padding:10px 12px;color:#646970}
+.footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7}
+@media (max-width:420px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="brand">
+      <div class="icon"><img src="icon48.png" alt="" width="54" height="54"></div>
+      <div>
+        <div class="title">Mis Büro</div>
+        <div class="subtitle">Zeiterfassung</div>
+      </div>
+    </div>
+    <button type="button" class="gear" id="open-settings" aria-label="Einstellungen öffnen" title="Einstellungen">⚙</button>
+  </div>
+  <div class="panel">
+    <div class="stack">
+      <label>
+        <span>Instanz</span>
+        <select id="instance-select"></select>
+      </label>
+      <div class="row">
+        <label>
+          <span>Speichern als</span>
+          <div class="inline" id="mode-select">
+            <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
+            <label><input type="radio" name="cmx-ext-time-mode" value="note"> Interne Notiz</label>
+          </div>
+        </label>
+        <div class="session">
+          <div class="muted">Intervall</div>
+          <div id="interval-display" class="pill">-</div>
+        </div>
+      </div>
+      <label class="suggest-wrap">
+        <span>Projekt</span>
+        <input type="text" id="project-search" autocomplete="off" placeholder="Projekt suchen...">
+        <div class="suggest" id="project-suggest"></div>
+      </label>
+      <label>
+        <span id="info-label">Info / Notiz</span>
+        <textarea id="info-input" placeholder="Optionaler Text..."></textarea>
+      </label>
+      <div class="inline task-only">
+        <label><input type="checkbox" id="verrechenbar" checked> Verrechenbar</label>
+      </div>
+      <div class="footer">
+        <div class="muted" id="selection-hint">Noch keine aktive Erfassung.</div>
+        <div class="actions">
+          <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
+          <button type="button" id="start-stop">Start</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="status" class="status"></div>
+</div>
+<script src="config.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
+HTML;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_options_html')) {
+	function cmx_ext_time_options_html(): string {
+		return <<<'HTML'
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis Büro Zeiterfassung – Einstellungen</title>
+<style>
+body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef2f7;color:#1d2327}
+.wrap{max-width:760px;margin:0 auto;padding:28px 18px}
+.card{background:#fff;border:1px solid #dcdcde;border-radius:18px;padding:18px}
+.head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.icon{width:76px;height:76px;border-radius:20px;background:#fff;border:1px solid #dcdcde;display:flex;align-items:center;justify-content:center}
+.title{font-size:20px;font-weight:700}
+.muted{color:#646970}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600}
+input[type=text],input[type=password],select{width:100%;box-sizing:border-box;border:1px solid #ccd0d4;border-radius:12px;padding:10px 12px;background:#fff;font:inherit;color:inherit}
+.suffix{display:flex;align-items:center;gap:8px}
+.suffix input{flex:1 1 auto}
+.suffix span{white-space:nowrap;color:#646970}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+button{appearance:none;border:1px solid #2271b1;background:#2271b1;color:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:600}
+button.secondary{background:#fff;color:#2271b1}
+button.danger{background:#d63638;border-color:#d63638}
+button:disabled{opacity:.55;cursor:not-allowed}
+.status{margin-top:14px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #dcdcde;display:none}
+.status.is-error{display:block;border-color:#d63638;background:#fff1f1}
+.status.is-success{display:block;border-color:#00a32a;background:#f2fff4}
+.status.is-info{display:block}
+.list{margin-top:18px;border-top:1px solid #e2e4e7;padding-top:18px}
+.instance-card{border:1px solid #e2e4e7;border-radius:14px;padding:12px 14px;background:#fafafa}
+.instance-card + .instance-card{margin-top:10px}
+.instance-title{font-weight:700}
+.instance-meta{color:#646970;font-size:13px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="head">
+      <div class="icon"><img src="icon48.png" alt="" width="64" height="64"></div>
+      <div>
+        <div class="title">Mis Büro Zeiterfassung</div>
+        <div class="muted">Instanzen verbinden und Standard-Intervall pro Instanz setzen.</div>
+      </div>
+    </div>
+    <div class="grid">
+      <label>
+        <span>Gespeicherte Instanzen</span>
+        <select id="saved-instance"></select>
+      </label>
+      <label>
+        <span>Erfassungsintervall</span>
+        <select id="default-interval"></select>
+      </label>
+      <label>
+        <span>Benutzername</span>
+        <input type="text" id="instance-username" autocomplete="username" placeholder="WP-Benutzername">
+      </label>
+      <label>
+        <span>Passwort</span>
+        <input type="password" id="instance-password" autocomplete="current-password" placeholder="Passwort">
+      </label>
+      <label style="grid-column:1 / -1;">
+        <span>Neue Instanz</span>
+        <div class="suffix">
+          <input type="text" id="instance-input" placeholder="meine-instanz">
+          <span>.misbuero.ch</span>
+        </div>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" id="connect-instance">Instanz laden</button>
+      <button type="button" class="secondary" id="save-instance">Einstellungen speichern</button>
+      <button type="button" class="danger" id="remove-instance">Instanz entfernen</button>
+    </div>
+    <div id="status" class="status"></div>
+    <div class="list" id="instance-list"></div>
+  </div>
+</div>
+<script src="config.js"></script>
+<script src="options.js"></script>
+</body>
+</html>
+HTML;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_options_js')) {
+	function cmx_ext_time_options_js(): string {
+		return <<<'JS'
+const CONFIG = self.CMX_EXT_TIME_CONFIG || {};
+const STORAGE_KEY = 'cmxExtTime.instances';
+
+const savedInstanceEl = document.getElementById('saved-instance');
+const defaultIntervalEl = document.getElementById('default-interval');
+const instanceInputEl = document.getElementById('instance-input');
+const usernameInputEl = document.getElementById('instance-username');
+const passwordInputEl = document.getElementById('instance-password');
+const connectBtn = document.getElementById('connect-instance');
+const saveBtn = document.getElementById('save-instance');
+const removeBtn = document.getElementById('remove-instance');
+const statusEl = document.getElementById('status');
+const listEl = document.getElementById('instance-list');
+
+function setStatus(text, type = 'info') {
+  statusEl.textContent = text || '';
+  statusEl.classList.remove('is-error', 'is-success', 'is-info');
+  if (text) {
+    statusEl.classList.add(type === 'error' ? 'is-error' : (type === 'success' ? 'is-success' : 'is-info'));
+  }
+}
+
+function getStorage(key) {
+  return chrome.storage.local.get(key).then((data) => data[key]);
+}
+
+function setStorage(obj) {
+  return chrome.storage.local.set(obj);
+}
+
+function normalizeInstanceInput(raw) {
+  const value = (raw || '').trim();
+  if (!value) return { slug: '', baseUrl: '' };
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      const host = (parsed.hostname || '').replace(/\.misbuero\.ch$/i, '');
+      return {
+        slug: host || parsed.hostname,
+        baseUrl: parsed.origin,
+      };
+    } catch (error) {
+      return { slug: '', baseUrl: '' };
+    }
+  }
+  const slug = value.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/\.misbuero\.ch$/i, '').trim();
+  return {
+    slug,
+    baseUrl: slug ? ('https://' + slug + '.misbuero.ch') : '',
+  };
+}
+
+function adminAjaxUrl(instance) {
+  return instance.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php';
+}
+
+async function fetchBootstrap(instance, credentials = {}) {
+  const hasCredentials = !!((credentials.username || '').trim() && (credentials.password || '').trim());
+  const action = hasCredentials ? (CONFIG.connectAction || 'cmx_ext_time_connect') : (CONFIG.bootstrapAction || 'cmx_ext_time_bootstrap');
+  const url = new URL(adminAjaxUrl(instance));
+  url.searchParams.set('action', action);
+  if (!hasCredentials && instance.token) {
+    url.searchParams.set('token', instance.token);
+  }
+  const fetchOptions = {
+    method: hasCredentials ? 'POST' : 'GET',
+    credentials: 'omit',
+    cache: 'no-store',
+    headers: {},
+  };
+  if (hasCredentials) {
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('username', (credentials.username || '').trim());
+    formData.append('password', (credentials.password || '').trim());
+    fetchOptions.body = formData;
+  } else if (instance.token) {
+    fetchOptions.headers['X-CMX-Extension-Token'] = instance.token;
+  }
+  const response = await fetch(url.toString(), fetchOptions);
+  const json = await response.json().catch(() => null);
+  if (!response.ok || !json || !json.success) {
+    throw new Error((json && json.data && json.data.message) || 'Die Instanz antwortet nicht mit gültigen Daten.');
+  }
+  return json.data || {};
+}
+
+function intervalOptions(intervals, current) {
+  const allowed = Array.isArray(intervals) && intervals.length ? intervals : [5,10,15,20,30,45,60];
+  defaultIntervalEl.innerHTML = allowed.map((value) => {
+    const n = Number(value);
+    return '<option value="' + n + '"' + (Number(current) === n ? ' selected' : '') + '>' + n + '</option>';
+  }).join('');
+}
+
+function renderSavedInstanceSelect(instances, selectedKey) {
+  const list = Array.isArray(instances) ? instances : [];
+  savedInstanceEl.innerHTML = '';
+  if (!list.length) {
+    savedInstanceEl.innerHTML = '<option value="">Noch keine Instanz gespeichert</option>';
+    savedInstanceEl.disabled = true;
+    removeBtn.disabled = true;
+    saveBtn.disabled = true;
+    intervalOptions([5,10,15,20,30,45,60], 5);
+    return;
+  }
+
+  savedInstanceEl.disabled = false;
+  removeBtn.disabled = false;
+  saveBtn.disabled = false;
+  savedInstanceEl.innerHTML = list.map((instance) => {
+    const key = instance.slug || instance.baseUrl;
+    const selected = (selectedKey ? selectedKey === key : list[0] && key === (list[0].slug || list[0].baseUrl)) ? ' selected' : '';
+    return '<option value="' + key + '"' + selected + '>' + (instance.slug || instance.baseUrl) + '</option>';
+  }).join('');
+}
+
+function renderInstanceList(instances) {
+  if (!Array.isArray(instances) || !instances.length) {
+    listEl.innerHTML = '<div class="muted">Noch keine Instanz gespeichert.</div>';
+    return;
+  }
+  listEl.innerHTML = instances.map((instance) => {
+    const intervals = Array.isArray(instance.intervals) && instance.intervals.length ? instance.intervals.join(', ') : '-';
+    return '<div class="instance-card">'
+      + '<div class="instance-title">' + (instance.slug || instance.baseUrl) + '</div>'
+      + '<div class="instance-meta">' + (instance.siteName || instance.baseUrl) + '</div>'
+      + '<div class="instance-meta">Benutzer: ' + (instance.userLogin || '-') + '</div>'
+      + '<div class="instance-meta">Intervall standardmässig: ' + (instance.defaultInterval || '-') + ' Minuten</div>'
+      + '<div class="instance-meta">Mögliche Intervalle: ' + intervals + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+async function getInstances() {
+  const instances = await getStorage(STORAGE_KEY);
+  return Array.isArray(instances) ? instances : [];
+}
+
+async function saveInstances(instances) {
+  await setStorage({ [STORAGE_KEY]: instances });
+}
+
+function findSelectedInstance(instances) {
+  const key = savedInstanceEl.value || '';
+  return (instances || []).find((instance) => (instance.slug || instance.baseUrl) === key) || null;
+}
+
+async function refresh(selectedKey = '') {
+  const instances = await getInstances();
+  renderSavedInstanceSelect(instances, selectedKey);
+  renderInstanceList(instances);
+  const selected = findSelectedInstance(instances) || instances[0] || null;
+  if (selected) {
+    intervalOptions(selected.intervals || [5,10,15,20,30,45,60], selected.defaultInterval || 5);
+  } else {
+    intervalOptions([5,10,15,20,30,45,60], 5);
+  }
+}
+
+savedInstanceEl.addEventListener('change', async () => {
+  const instances = await getInstances();
+  const selected = findSelectedInstance(instances);
+  if (selected) {
+    intervalOptions(selected.intervals || [5,10,15,20,30,45,60], selected.defaultInterval || 5);
+    instanceInputEl.value = selected.slug || '';
+    usernameInputEl.value = selected.userLogin || '';
+    passwordInputEl.value = '';
+  }
+});
+
+connectBtn.addEventListener('click', async () => {
+  let normalized = normalizeInstanceInput(instanceInputEl.value);
+  if (!normalized.slug || !normalized.baseUrl) {
+    const existing = findSelectedInstance(await getInstances());
+    if (existing) {
+      normalized = {
+        slug: existing.slug || '',
+        baseUrl: existing.baseUrl || '',
+        token: existing.token || '',
+      };
+    }
+  }
+  if (!normalized.slug || !normalized.baseUrl) {
+    setStatus('Bitte zuerst eine gültige Instanz eingeben.', 'error');
+    return;
+  }
+  const username = (usernameInputEl.value || '').trim();
+  const password = (passwordInputEl.value || '').trim();
+  if (!username || !password) {
+    setStatus('Bitte Benutzername und Passwort eingeben.', 'error');
+    return;
+  }
+
+  setStatus('Instanz wird geladen...', 'info');
+  try {
+    const bootstrap = await fetchBootstrap(normalized, { username, password });
+    const instances = await getInstances();
+    const merged = {
+      slug: normalized.slug,
+      baseUrl: normalized.baseUrl,
+      siteName: bootstrap.siteName || normalized.baseUrl,
+      token: bootstrap.token || '',
+      userLogin: username,
+      intervals: Array.isArray(bootstrap.intervals) && bootstrap.intervals.length ? bootstrap.intervals : [5,10,15,20,30,45,60],
+      defaultInterval: Number(bootstrap.defaultInterval || 5),
+      ajaxUrl: bootstrap.ajaxUrl || (normalized.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
+      userDisplay: bootstrap.userDisplay || '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const next = instances.filter((instance) => (instance.slug || instance.baseUrl) !== merged.slug);
+    next.push(merged);
+    next.sort((a, b) => String(a.slug || '').localeCompare(String(b.slug || ''), 'de'));
+    await saveInstances(next);
+    await refresh(merged.slug);
+    defaultIntervalEl.value = String(merged.defaultInterval);
+    usernameInputEl.value = username;
+    passwordInputEl.value = '';
+    setStatus('Instanz wurde erfolgreich geladen.', 'success');
+  } catch (error) {
+    setStatus(error && error.message ? error.message : 'Die Instanz konnte nicht geladen werden.', 'error');
+  }
+});
+
+saveBtn.addEventListener('click', async () => {
+  const instances = await getInstances();
+  const selected = findSelectedInstance(instances);
+  if (!selected) {
+    setStatus('Bitte zuerst eine Instanz auswählen.', 'error');
+    return;
+  }
+  const value = Number(defaultIntervalEl.value || 0);
+  if (!value) {
+    setStatus('Bitte ein Intervall auswählen.', 'error');
+    return;
+  }
+  selected.defaultInterval = value;
+  await saveInstances(instances.map((instance) => ((instance.slug || instance.baseUrl) === (selected.slug || selected.baseUrl) ? selected : instance)));
+  await refresh(selected.slug || selected.baseUrl);
+  setStatus('Standard-Intervall wurde gespeichert.', 'success');
+});
+
+removeBtn.addEventListener('click', async () => {
+  const instances = await getInstances();
+  const selected = findSelectedInstance(instances);
+  if (!selected) {
+    setStatus('Keine Instanz ausgewählt.', 'error');
+    return;
+  }
+  const next = instances.filter((instance) => (instance.slug || instance.baseUrl) !== (selected.slug || selected.baseUrl));
+  await saveInstances(next);
+  instanceInputEl.value = '';
+  usernameInputEl.value = '';
+  passwordInputEl.value = '';
+  await refresh('');
+  setStatus('Instanz wurde entfernt.', 'success');
+});
+
+document.addEventListener('DOMContentLoaded', refresh);
+JS;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_popup_js')) {
+	function cmx_ext_time_popup_js(): string {
+		return <<<'JS'
+const CONFIG = self.CMX_EXT_TIME_CONFIG || {};
+const INSTANCE_KEY = 'cmxExtTime.instances';
+
+const instanceSelect = document.getElementById('instance-select');
+const modeSelect = document.getElementById('mode-select');
+const projectSearch = document.getElementById('project-search');
+const infoInput = document.getElementById('info-input');
+const infoLabel = document.getElementById('info-label');
+const verrechenbarInput = document.getElementById('verrechenbar');
+const startStopButton = document.getElementById('start-stop');
+const resetButton = document.getElementById('reset-form');
+const openSettingsButton = document.getElementById('open-settings');
+const statusEl = document.getElementById('status');
+const selectionHint = document.getElementById('selection-hint');
+const intervalDisplay = document.getElementById('interval-display');
+
+const taskOnlyEls = Array.from(document.querySelectorAll('.task-only'));
+
+const state = {
+  instances: [],
+  activeSession: null,
+  selectedProject: null,
+};
+
+function setStatus(text, type = '') {
+  statusEl.textContent = text || '';
+  statusEl.classList.remove('is-error', 'is-success', 'is-info');
+  if (text) {
+    statusEl.classList.add(type === 'error' ? 'is-error' : (type === 'success' ? 'is-success' : 'is-info'));
+  }
+}
+
+function getStorage(key) {
+  return chrome.storage.local.get(key).then((data) => data[key]);
+}
+
+function selectedInstance() {
+  const key = instanceSelect.value || '';
+  return state.instances.find((instance) => (instance.slug || instance.baseUrl) === key) || null;
+}
+
+function buildAjaxUrl(instance, action, extra = {}) {
+  const base = instance && instance.ajaxUrl ? instance.ajaxUrl : ((instance.baseUrl || '').replace(/\/+$/, '') + '/wp-admin/admin-ajax.php');
+  const url = new URL(base);
+  url.searchParams.set('action', action);
+  Object.keys(extra || {}).forEach((key) => {
+    const value = extra[key];
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, value);
+    }
+  });
+  return url.toString();
+}
+
+function fillSelect() {
+  instanceSelect.innerHTML = '';
+  if (!state.instances.length) {
+    instanceSelect.innerHTML = '<option value="">Bitte zuerst in den Einstellungen eine Instanz hinzufügen</option>';
+    instanceSelect.disabled = true;
+    intervalDisplay.textContent = '-';
+    return;
+  }
+  instanceSelect.disabled = false;
+  instanceSelect.innerHTML = state.instances.map((instance, index) => {
+    const key = instance.slug || instance.baseUrl;
+    return '<option value="' + key + '"' + (index === 0 ? ' selected' : '') + '>' + key + '</option>';
+  }).join('');
+  updateIntervalHint();
+}
+
+function updateIntervalHint() {
+  const instance = selectedInstance();
+  intervalDisplay.textContent = instance ? ((instance.defaultInterval || 5) + ' min') : '-';
+}
+
+function setPicked(type, item) {
+  if (type === 'project') {
+    state.selectedProject = item || null;
+    projectSearch.value = item ? (item.title || item.label || '') : '';
+  }
+  updateSelectionHint();
+}
+
+function updateSelectionHint() {
+  if (state.activeSession) {
+    selectionHint.textContent = 'Aktive Erfassung seit ' + (state.activeSession.startDate || '') + ' ' + (state.activeSession.startTime || '');
+    return;
+  }
+  const parts = [];
+  if (state.selectedProject && state.selectedProject.title) parts.push(state.selectedProject.title);
+  selectionHint.textContent = parts.length ? parts.join(' / ') : 'Noch keine aktive Erfassung.';
+}
+
+function currentMode() {
+  const checked = modeSelect ? modeSelect.querySelector('input[name="cmx-ext-time-mode"]:checked') : null;
+  return checked ? (checked.value || 'task') : 'task';
+}
+
+function setMode(value) {
+  if (!modeSelect) return;
+  const target = modeSelect.querySelector('input[name="cmx-ext-time-mode"][value="' + value + '"]');
+  if (target) {
+    target.checked = true;
+  }
+}
+
+function updateModeUi() {
+  const isTask = currentMode() === 'task';
+  taskOnlyEls.forEach((el) => {
+    el.style.display = isTask ? '' : 'none';
+  });
+  infoLabel.textContent = isTask ? 'Info / Notiz' : 'Interne Notiz';
+}
+
+function resetForm() {
+  if (state.activeSession) return;
+  setPicked('project', null);
+  infoInput.value = '';
+  verrechenbarInput.checked = true;
+  setStatus('');
+}
+
+async function fetchJson(url, token) {
+  const response = await fetch(url, {
+    credentials: 'omit',
+    headers: token ? { 'X-CMX-Extension-Token': token } : {},
+    cache: 'no-store',
+  });
+  const json = await response.json().catch(() => null);
+  if (!response.ok || !json || !json.success) {
+    throw new Error((json && json.data && json.data.message) || 'Die Instanz antwortet nicht mit gültigen Daten.');
+  }
+  return json.data || [];
+}
+
+function makeSuggest(input, box, action, mapResult, type) {
+  let timer = null;
+  let activeIndex = -1;
+  let items = [];
+
+  function close() {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    activeIndex = -1;
+    items = [];
+  }
+
+  function render(list) {
+    items = Array.isArray(list) ? list : [];
+    if (!items.length) {
+      box.innerHTML = '<div class="hint">Keine Treffer gefunden.</div>';
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = items.map((item, index) => {
+      const title = item.title || item.label || '';
+      const sub = item.nr ? ('<div class="muted">' + item.nr + '</div>') : '';
+      return '<button type="button" data-index="' + index + '"><div>' + title + '</div>' + sub + '</button>';
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  function pick(index) {
+    if (!items[index]) return;
+    setPicked(type, items[index]);
+    close();
+  }
+
+  async function load() {
+    const instance = selectedInstance();
+    if (!instance) {
+      close();
+      return;
+    }
+    const term = (input.value || '').trim();
+    try {
+      const url = buildAjaxUrl(instance, action, mapResult(term));
+      const results = await fetchJson(url, instance.token || '');
+      render(results);
+    } catch (error) {
+      close();
+    }
+  }
+
+  input.addEventListener('input', () => {
+    if (type === 'project') state.selectedProject = null;
+    updateSelectionHint();
+    window.clearTimeout(timer);
+    timer = window.setTimeout(load, 180);
+  });
+
+  input.addEventListener('focus', () => {
+    load();
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (!items.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = (activeIndex + 1 + items.length) % items.length;
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+    } else if (event.key === 'Enter') {
+      if (activeIndex >= 0) {
+        event.preventDefault();
+        pick(activeIndex);
+      }
+      return;
+    } else if (event.key === 'Escape') {
+      close();
+      return;
+    } else {
+      return;
+    }
+    Array.from(box.querySelectorAll('button')).forEach((button, index) => {
+      button.classList.toggle('active', index === activeIndex);
+    });
+  });
+
+  box.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-index]');
+    if (!button) return;
+    pick(Number(button.dataset.index || -1));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target === input || box.contains(event.target)) return;
+    close();
+  });
+}
+
+async function refreshState() {
+  state.instances = Array.isArray(await getStorage(INSTANCE_KEY)) ? await getStorage(INSTANCE_KEY) : [];
+  fillSelect();
+  state.activeSession = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-get-active-session' }).catch(() => null);
+  if (state.activeSession) {
+    const activeInstanceKey = state.activeSession.instanceKey || '';
+    if (activeInstanceKey && Array.from(instanceSelect.options).some((opt) => opt.value === activeInstanceKey)) {
+      instanceSelect.value = activeInstanceKey;
+    }
+    setMode(state.activeSession.mode || 'task');
+    setPicked('project', state.activeSession.project || null);
+    infoInput.value = state.activeSession.info || '';
+    verrechenbarInput.checked = !!state.activeSession.verrechenbar;
+    startStopButton.textContent = 'Stop';
+    startStopButton.classList.add('danger');
+    updateSelectionHint();
+  } else {
+    startStopButton.textContent = 'Start';
+    startStopButton.classList.remove('danger');
+  }
+  updateModeUi();
+}
+
+async function handleStartStop() {
+  const instance = selectedInstance();
+  if (!instance) {
+    setStatus('Bitte zuerst eine Instanz auswählen.', 'error');
+    return;
+  }
+
+  if (state.activeSession) {
+    setStatus('Erfassung wird gespeichert...', 'info');
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-stop-session' });
+      if (!result || !result.success) {
+        throw new Error((result && result.error) || 'Die Erfassung konnte nicht gespeichert werden.');
+      }
+      state.activeSession = null;
+      await refreshState();
+      setStatus('Erfassung wurde gespeichert.', 'success');
+    } catch (error) {
+      setStatus(error && error.message ? error.message : 'Die Erfassung konnte nicht gespeichert werden.', 'error');
+    }
+    return;
+  }
+
+  if (!state.selectedProject || !state.selectedProject.id) {
+    setStatus('Bitte zuerst ein Projekt auswählen.', 'error');
+    return;
+  }
+
+  const payload = {
+    instance: instance,
+    mode: currentMode(),
+    project: state.selectedProject,
+    info: (infoInput.value || '').trim(),
+    verrechenbar: !!verrechenbarInput.checked,
+  };
+
+  setStatus('Erfassung wird gestartet...', 'info');
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-start-session', payload });
+    if (!result || !result.success) {
+      throw new Error((result && result.error) || 'Die Erfassung konnte nicht gestartet werden.');
+    }
+    state.activeSession = result.session || null;
+    await refreshState();
+    setStatus('Erfassung wurde gestartet.', 'success');
+  } catch (error) {
+    setStatus(error && error.message ? error.message : 'Die Erfassung konnte nicht gestartet werden.', 'error');
+  }
+}
+
+openSettingsButton.addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
+});
+
+if (modeSelect) {
+  modeSelect.addEventListener('change', updateModeUi);
+}
+instanceSelect.addEventListener('change', updateIntervalHint);
+resetButton.addEventListener('click', resetForm);
+startStopButton.addEventListener('click', handleStartStop);
+
+makeSuggest(projectSearch, document.getElementById('project-suggest'), CONFIG.searchProjectsAction || 'cmx_ext_time_search_projects', (term) => ({ term }), 'project');
+
+document.addEventListener('DOMContentLoaded', refreshState);
+JS;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_service_worker_js')) {
+	function cmx_ext_time_service_worker_js(): string {
+		return <<<'JS'
+importScripts('config.js');
+
+const CONFIG = self.CMX_EXT_TIME_CONFIG || {};
+const INSTANCE_KEY = 'cmxExtTime.instances';
+const ACTIVE_KEY = 'cmxExtTime.activeSession';
+const REMINDER_KEY = 'cmxExtTime.reminder';
+const ALARM_REMINDER = 'cmx-ext-time-reminder';
+const ALARM_TIMEOUT = 'cmx-ext-time-timeout';
+const NOTIFICATION_ID = 'cmx-ext-time-notification';
+
+function getStorage(key) {
+  return chrome.storage.local.get(key).then((data) => data[key]);
+}
+
+function setStorage(obj) {
+  return chrome.storage.local.set(obj);
+}
+
+function removeStorage(keys) {
+  return chrome.storage.local.remove(keys);
+}
+
+function buildAjaxUrl(instance, action) {
+  const base = instance && instance.ajaxUrl ? instance.ajaxUrl : ((instance.baseUrl || '').replace(/\/+$/, '') + '/wp-admin/admin-ajax.php');
+  const url = new URL(base);
+  url.searchParams.set('action', action);
+  return url.toString();
+}
+
+function formatLocalDate(date) {
+  const d = new Date(date);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function formatLocalTime(date) {
+  const d = new Date(date);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function intervalMs(session) {
+  return Math.max(1, Number(session.intervalMinutes || 5)) * 60 * 1000;
+}
+
+function durationHours(session, endMs) {
+  const startMs = Number(session.startMs || 0);
+  const diff = Math.max(0, Number(endMs || Date.now()) - startMs);
+  const hours = diff / 3600000;
+  return (Math.round(hours * 100) / 100).toFixed(2);
+}
+
+async function scheduleReminder(session) {
+  const when = Date.now() + intervalMs(session);
+  await chrome.alarms.clear(ALARM_REMINDER);
+  await chrome.alarms.create(ALARM_REMINDER, { when });
+}
+
+async function clearReminderUi() {
+  try { await chrome.notifications.clear(NOTIFICATION_ID); } catch (error) {}
+  await chrome.alarms.clear(ALARM_TIMEOUT);
+  await removeStorage(REMINDER_KEY);
+}
+
+async function setActiveBadge(active) {
+  try {
+    await chrome.action.setBadgeBackgroundColor({ color: active ? '#2271b1' : '#999999' });
+    await chrome.action.setBadgeText({ text: active ? 'ON' : '' });
+  } catch (error) {}
+}
+
+async function persistSession(session, reason) {
+  const endMs = Date.now();
+  const formData = new FormData();
+  formData.append('action', CONFIG.saveAction || 'cmx_ext_time_save');
+  formData.append('token', session.instance.token || '');
+  formData.append('project_id', String(session.project.id || 0));
+  formData.append('mode', session.mode || 'task');
+  formData.append('artikel_id', String((session.article && session.article.id) || 0));
+  formData.append('produkt_id', String((session.product && session.product.id) || 0));
+  formData.append('verrechenbar', session.verrechenbar ? '1' : '0');
+  formData.append('info', session.info || '');
+  formData.append('artikel_label', (session.article && (session.article.label || session.article.title)) || '');
+  formData.append('produkt_label', (session.product && (session.product.label || session.product.title)) || '');
+  formData.append('start_at', new Date(session.startMs).toISOString());
+  formData.append('end_at', new Date(endMs).toISOString());
+  formData.append('start_date', session.startDate || formatLocalDate(session.startMs));
+  formData.append('start_time', session.startTime || formatLocalTime(session.startMs));
+  formData.append('reason', reason || 'manual');
+
+  const response = await fetch(buildAjaxUrl(session.instance, CONFIG.saveAction || 'cmx_ext_time_save'), {
+    method: 'POST',
+    credentials: 'omit',
+    headers: {
+      'X-CMX-Extension-Token': session.instance.token || '',
+    },
+    body: formData,
+  });
+  const json = await response.json().catch(() => null);
+  if (!response.ok || !json || !json.success) {
+    throw new Error((json && json.data && json.data.message) || 'Die Zeit konnte in Mis Büro nicht gespeichert werden.');
+  }
+  return json.data || {};
+}
+
+async function startSession(payload) {
+  if (!payload || !payload.instance || !payload.project || !payload.project.id) {
+    throw new Error('Projekt oder Instanz fehlen.');
+  }
+  const session = {
+    instanceKey: payload.instance.slug || payload.instance.baseUrl,
+    instance: payload.instance,
+    project: payload.project,
+    article: payload.article || null,
+    product: payload.product || null,
+    mode: payload.mode || 'task',
+    info: payload.info || '',
+    verrechenbar: !!payload.verrechenbar,
+    intervalMinutes: Number(payload.instance.defaultInterval || 5),
+    startMs: Date.now(),
+  };
+  session.startDate = formatLocalDate(session.startMs);
+  session.startTime = formatLocalTime(session.startMs);
+
+  await clearReminderUi();
+  await setStorage({ [ACTIVE_KEY]: session });
+  await scheduleReminder(session);
+  await setActiveBadge(true);
+
+  return session;
+}
+
+async function stopSession(reason) {
+  const session = await getStorage(ACTIVE_KEY);
+  if (!session) {
+    return { success: false, error: 'Keine aktive Erfassung gefunden.' };
+  }
+
+  await clearReminderUi();
+  await chrome.alarms.clear(ALARM_REMINDER);
+  try {
+    const result = await persistSession(session, reason || 'manual');
+    await removeStorage(ACTIVE_KEY);
+    await setActiveBadge(false);
+    return { success: true, result };
+  } catch (error) {
+    return { success: false, error: error && error.message ? error.message : String(error) };
+  }
+}
+
+async function continueSession() {
+  const session = await getStorage(ACTIVE_KEY);
+  if (!session) {
+    await clearReminderUi();
+    return;
+  }
+  await clearReminderUi();
+  await scheduleReminder(session);
+}
+
+async function showReminder() {
+  const session = await getStorage(ACTIVE_KEY);
+  if (!session) return;
+
+  const projectName = (session.project && session.project.title) || 'diesem Projekt';
+  await setStorage({
+    [REMINDER_KEY]: {
+      createdAt: Date.now(),
+      projectTitle: projectName,
+    },
+  });
+
+  await chrome.notifications.create(NOTIFICATION_ID, {
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: 'Mis Büro Zeiterfassung',
+    message: 'Arbeitest du noch an ' + projectName + '?',
+    buttons: [
+      { title: 'Ja, weiter' },
+      { title: 'Nein, stoppen' },
+    ],
+    priority: 2,
+    requireInteraction: true,
+  });
+
+  await chrome.alarms.create(ALARM_TIMEOUT, { when: Date.now() + 20000 });
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const session = await getStorage(ACTIVE_KEY);
+  await setActiveBadge(!!session);
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  const session = await getStorage(ACTIVE_KEY);
+  if (session) {
+    await scheduleReminder(session);
+    await setActiveBadge(true);
+  } else {
+    await setActiveBadge(false);
+  }
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (!alarm || !alarm.name) return;
+  if (alarm.name === ALARM_REMINDER) {
+    await showReminder();
+    return;
+  }
+  if (alarm.name === ALARM_TIMEOUT) {
+    const reminder = await getStorage(REMINDER_KEY);
+    if (!reminder) return;
+    await stopSession('timeout');
+  }
+});
+
+chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
+  if (notificationId !== NOTIFICATION_ID) return;
+  if (buttonIndex === 0) {
+    await continueSession();
+  } else {
+    await stopSession('declined');
+  }
+});
+
+chrome.notifications.onClosed.addListener(async (notificationId, byUser) => {
+  if (notificationId !== NOTIFICATION_ID) return;
+  const reminder = await getStorage(REMINDER_KEY);
+  if (!reminder) return;
+  if (byUser) {
+    await stopSession('closed');
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || typeof message !== 'object') return;
+
+  if (message.type === 'cmx-ext-time-get-active-session') {
+    getStorage(ACTIVE_KEY).then((session) => sendResponse(session || null));
+    return true;
+  }
+
+  if (message.type === 'cmx-ext-time-start-session') {
+    startSession(message.payload || {})
+      .then((session) => sendResponse({ success: true, session }))
+      .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
+    return true;
+  }
+
+  if (message.type === 'cmx-ext-time-stop-session') {
+    stopSession('manual')
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
+    return true;
+  }
+});
+JS;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_zip')) {
+	function cmx_ext_time_render_zip(): void {
+		if (!\class_exists('\\ZipArchive')) {
+			\wp_die('ZipArchive ist auf diesem Server nicht verfügbar.');
+		}
+
+		$tmp = \wp_tempnam('cmx-ext-time');
+		if (!$tmp) {
+			\wp_die('Temporäre ZIP-Datei konnte nicht erstellt werden.');
+		}
+
+		$zip = new \ZipArchive();
+		if ($zip->open($tmp, \ZipArchive::OVERWRITE) !== true) {
+			@unlink($tmp);
+			\wp_die('ZIP-Datei konnte nicht geöffnet werden.');
+		}
+
+		$zip->addFromString('manifest.json', cmx_ext_time_manifest_json());
+		$zip->addFromString('config.js', cmx_ext_time_config_js());
+		$zip->addFromString('popup.html', cmx_ext_time_popup_html());
+		$zip->addFromString('popup.js', cmx_ext_time_popup_js());
+		$zip->addFromString('options.html', cmx_ext_time_options_html());
+		$zip->addFromString('options.js', cmx_ext_time_options_js());
+		$zip->addFromString('service_worker.js', cmx_ext_time_service_worker_js());
+		$zip->addFromString('README.txt', cmx_ext_time_readme_txt());
+
+		foreach ([16, 32, 48, 128] as $size) {
+			$png = cmx_ext_time_icon_png((int) $size);
+			if ($png !== '') {
+				$zip->addFromString('icon' . $size . '.png', $png);
+			}
+		}
+
+		$zip->close();
+
+		$filename = 'misbuero-zeit-erfassung-chrome.zip';
+		\header('Content-Type: application/zip');
+		\header('Content-Disposition: attachment; filename="' . $filename . '"');
+		\header('Content-Length: ' . (string) \filesize($tmp));
+		\header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+		\header('Pragma: no-cache');
+		\readfile($tmp);
+		@unlink($tmp);
+		exit;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_handler')) {
+	function cmx_ext_time_download_handler(): void {
+		if (!\current_user_can('manage_options')) {
+			\wp_die('Keine Berechtigung.');
+		}
+		if (!isset($_GET['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_GET['_wpnonce']), CMX_EXT_TIME_DOWNLOAD_ACTION)) {
+			\wp_die('Ungültige Anfrage.');
+		}
+		cmx_ext_time_render_zip();
+	}
+	\add_action('admin_post_' . CMX_EXT_TIME_DOWNLOAD_ACTION, __NAMESPACE__ . '\\cmx_ext_time_download_handler');
+}
