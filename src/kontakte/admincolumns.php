@@ -975,6 +975,10 @@ function cmx_kontakte_apply_tax_filters($query) {
 		body.post-type-kontakte .wp-list-table tfoot .check-column {
 			background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%);
 		}
+		body.post-type-kontakte #cb-select-all-1 {
+			position: relative;
+			top: 5px;
+		}
 		body.post-type-kontakte .wp-list-table tbody td,
 		body.post-type-kontakte .wp-list-table tbody th {
 			padding-top: 16px;
