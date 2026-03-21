@@ -1023,8 +1023,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .session.is-success{border-color:#00a32a;background:#f2fff4}
 .session.is-error{border-color:#d63638;background:#fff1f1}
 .session-message{font-size:13px;font-weight:600;line-height:1.35}
-.task-inline{align-self:end;min-height:30px}
-.task-inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px;white-space:nowrap}
+.task-inline{margin-left:8px;white-space:nowrap}
 .task-inline.is-hidden{visibility:hidden;pointer-events:none}
 @media (max-width:420px){.row{grid-template-columns:1fr}}
 </style>
@@ -1057,10 +1056,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
           <div class="inline mode-options" id="mode-select">
             <label><input type="radio" name="cmx-ext-time-mode" value="note"> Notiz</label>
             <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
+            <label class="task-inline task-only" id="task-inline"><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
           </div>
-        </div>
-        <div class="task-inline task-only" id="task-inline">
-          <label><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
         </div>
       </div>
       <div class="session" id="session-card">
@@ -1074,8 +1071,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <div class="suggest" id="project-suggest"></div>
       </label>
       <label>
-        <span id="info-label">Info / Notiz</span>
-        <textarea id="info-input" placeholder="Optionaler Text..."></textarea>
+        <span id="info-label">Weitere Infos im Detail</span>
+        <textarea id="info-input" placeholder="Weitere Infos im Detail..."></textarea>
       </label>
       <div class="footer">
         <div class="muted" id="selection-hint" hidden></div>
@@ -1527,6 +1524,7 @@ const state = {
 };
 
 let statusTimer = null;
+let activeSessionSyncTimer = null;
 
 function renderSessionCard() {
   if (!sessionCardEl || !sessionLabelEl || !intervalDisplay || !sessionMessageEl) return;
@@ -1645,7 +1643,7 @@ function instanceResponseError(response, json, rawText) {
 function fillSelect() {
   instanceSelect.innerHTML = '';
   if (!state.instances.length) {
-    instanceSelect.innerHTML = '<option value="">In den Einstellungen eine Instanz hinzufügen</option>';
+    instanceSelect.innerHTML = '<option value="">Erst eine Instanz hinzufügen</option>';
     instanceSelect.disabled = true;
     renderSessionCard();
     return;
@@ -1732,7 +1730,49 @@ function updateModeUi() {
   if (verrechenbarInput) {
     verrechenbarInput.disabled = !isTask;
   }
-  infoLabel.textContent = isTask ? 'Info / Notiz' : 'Notiz';
+  infoLabel.textContent = isTask ? 'Weitere Infos im Detail' : 'Kurze Info';
+  infoInput.placeholder = isTask ? 'Weitere Infos im Detail...' : 'Kurze Info...';
+}
+
+async function persistActiveSessionInfo() {
+  if (!state.activeSession) {
+    return null;
+  }
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: 'cmx-ext-time-update-session',
+      payload: {
+        info: infoInput.value || '',
+      },
+    });
+    if (result && result.success && result.session) {
+      state.activeSession = result.session;
+    }
+    return result || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function queueActiveSessionInfoSync() {
+  if (!state.activeSession) {
+    return;
+  }
+
+  window.clearTimeout(activeSessionSyncTimer);
+  activeSessionSyncTimer = window.setTimeout(() => {
+    activeSessionSyncTimer = null;
+    persistActiveSessionInfo();
+  }, 180);
+}
+
+async function flushActiveSessionInfoSync() {
+  if (activeSessionSyncTimer) {
+    window.clearTimeout(activeSessionSyncTimer);
+    activeSessionSyncTimer = null;
+  }
+  await persistActiveSessionInfo();
 }
 
 function resetForm() {
@@ -1915,6 +1955,7 @@ async function handleStartStop() {
   if (state.activeSession) {
     setStatus('Erfassung wird gespeichert...', 'info', 0);
     try {
+      await flushActiveSessionInfoSync();
       const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-stop-session' });
       if (!result || !result.success) {
         throw new Error((result && result.error) || 'Die Erfassung konnte nicht gespeichert werden.');
@@ -1962,6 +2003,7 @@ openSettingsButton.addEventListener('click', () => {
 if (modeSelect) {
   modeSelect.addEventListener('change', updateModeUi);
 }
+infoInput.addEventListener('input', queueActiveSessionInfoSync);
 instanceSelect.addEventListener('change', updateIntervalHint);
 resetButton.addEventListener('click', resetForm);
 startStopButton.addEventListener('click', handleStartStop);
@@ -2106,6 +2148,24 @@ async function startSession(payload) {
   return session;
 }
 
+async function updateSession(payload) {
+  const session = await getStorage(ACTIVE_KEY);
+  if (!session) {
+    return { success: false, error: 'Keine aktive Erfassung gefunden.' };
+  }
+
+  const nextSession = {
+    ...session,
+  };
+
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'info')) {
+    nextSession.info = typeof payload.info === 'string' ? payload.info : '';
+  }
+
+  await setStorage({ [ACTIVE_KEY]: nextSession });
+  return { success: true, session: nextSession };
+}
+
 async function stopSession(reason) {
   const session = await getStorage(ACTIVE_KEY);
   if (!session) {
@@ -2219,6 +2279,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'cmx-ext-time-start-session') {
     startSession(message.payload || {})
       .then((session) => sendResponse({ success: true, session }))
+      .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
+    return true;
+  }
+
+  if (message.type === 'cmx-ext-time-update-session') {
+    updateSession(message.payload || {})
+      .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
     return true;
   }
