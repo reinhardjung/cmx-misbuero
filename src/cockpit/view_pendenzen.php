@@ -562,15 +562,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-column:last-child{padding-right:0}
 			.cmx-pend-column-title{display:none}
 			.cmx-pend-card-list{display:flex;flex-direction:column;gap:14px}
-			.cmx-pend-card{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border:1px solid #e0e6ee;border-radius:0;background:#fff;box-shadow:0 10px 18px rgba(16,24,40,.05),0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 62px;width:62px;height:62px;border-radius:6px;color:#fff;box-shadow:inset 0 -1px 0 rgba(0,0,0,.18)}
-			.cmx-pend-card-icon svg{display:block;width:34px;height:34px;fill:currentColor}
-			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:2px}
+			.cmx-pend-card{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid #e0e6ee;border-radius:0;background:#fff;box-shadow:0 10px 18px rgba(16,24,40,.05),0 1px 2px rgba(16,24,40,.05)}
+			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 48px;width:48px;height:48px;border-radius:6px;color:#fff;box-shadow:inset 0 -1px 0 rgba(0,0,0,.18)}
+			.cmx-pend-card-icon svg{display:block;width:24px;height:24px;fill:currentColor}
+			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
 			.cmx-pend-card-line{display:block;font-size:17px;line-height:1.3;color:#42556d}
 			.cmx-pend-card-label{font-weight:800}
 			.cmx-pend-card-link{color:inherit;text-decoration:none}
 			.cmx-pend-card-link:hover{text-decoration:underline}
-			.cmx-pend-card-meta{display:block;margin-top:4px;font-size:15px;line-height:1.35;color:#56687d}
+			.cmx-pend-card-meta{display:block;margin-top:3px;font-size:15px;line-height:1.35;color:#56687d}
 			.cmx-pend-card--red .cmx-pend-card-label{color:#c44a3d}
 			.cmx-pend-card--red .cmx-pend-card-icon{background:linear-gradient(180deg,#ef5b54 0%,#df4137 100%)}
 			.cmx-pend-card--orange .cmx-pend-card-label{color:#d27b1f}
