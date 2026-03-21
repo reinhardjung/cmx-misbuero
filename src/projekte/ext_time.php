@@ -930,15 +930,18 @@ body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-se
 .icon{width:62px;height:62px;border-radius:18px;background:#fff;border:1px solid #dcdcde;display:flex;align-items:center;justify-content:center}
 .title{font-weight:700;font-size:15px}
 .subtitle{color:#646970}
-.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;color:#1d2327;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;color:#1d2327;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.gear svg{display:block;width:22px;height:22px}
 .panel{background:#fff;border:1px solid #dcdcde;border-radius:14px;padding:12px}
 .stack{display:flex;flex-direction:column;gap:10px}
 label{display:flex;flex-direction:column;gap:4px;font-weight:600}
 input[type=text],select,textarea{width:100%;box-sizing:border-box;border:1px solid #ccd0d4;border-radius:10px;padding:8px 10px;background:#fff;font:inherit;color:inherit}
 textarea{min-height:76px;resize:vertical}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
 .inline{display:flex;align-items:center;gap:8px}
 .inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
+.mode-options{flex-wrap:wrap}
 .muted{color:#646970;font-size:12px}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
 .actions{display:flex;gap:8px}
@@ -956,7 +959,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .suggest button:hover,.suggest button.active{background:#eef4ff}
 .suggest .hint{padding:10px 12px;color:#646970}
 .footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
-.session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7}
+.session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-height:64px}
+.session.is-info{border-color:#2271b1;background:#eef4ff}
+.session.is-success{border-color:#00a32a;background:#f2fff4}
+.session.is-error{border-color:#d63638;background:#fff1f1}
+.session-message{font-size:13px;font-weight:600;line-height:1.35}
+.task-inline{align-self:end;min-height:30px}
+.task-inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px;white-space:nowrap}
+.task-inline.is-hidden{visibility:hidden;pointer-events:none}
 @media (max-width:420px){.row{grid-template-columns:1fr}}
 </style>
 </head>
@@ -970,7 +980,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <div class="subtitle">Zeiterfassung</div>
       </div>
     </div>
-    <button type="button" class="gear" id="open-settings" aria-label="Einstellungen öffnen" title="Einstellungen">⚙</button>
+    <button type="button" class="gear" id="open-settings" aria-label="Einstellungen öffnen" title="Einstellungen">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14.1 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.24-1.17.56-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.66-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.42 1.08.74 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.24 1.17-.56 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
+      </svg>
+    </button>
   </div>
   <div class="panel">
     <div class="stack">
@@ -978,18 +992,22 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <span>Instanz</span>
         <select id="instance-select"></select>
       </label>
-      <div class="row">
+      <div class="mode-row">
         <label>
           <span>Speichern als</span>
-          <div class="inline" id="mode-select">
-            <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
+          <div class="inline mode-options" id="mode-select">
             <label><input type="radio" name="cmx-ext-time-mode" value="note"> Interne Notiz</label>
+            <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
           </div>
         </label>
-        <div class="session">
-          <div class="muted">Intervall</div>
-          <div id="interval-display" class="pill">-</div>
+        <div class="task-inline task-only" id="task-inline">
+          <label><input type="checkbox" id="verrechenbar" checked> Verrechenbar</label>
         </div>
+      </div>
+      <div class="session" id="session-card">
+        <div class="muted" id="session-label">Intervall</div>
+        <div id="interval-display" class="pill">-</div>
+        <div id="session-message" class="session-message" hidden></div>
       </div>
       <label class="suggest-wrap">
         <span>Projekt</span>
@@ -1000,11 +1018,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <span id="info-label">Info / Notiz</span>
         <textarea id="info-input" placeholder="Optionaler Text..."></textarea>
       </label>
-      <div class="inline task-only">
-        <label><input type="checkbox" id="verrechenbar" checked> Verrechenbar</label>
-      </div>
       <div class="footer">
-        <div class="muted" id="selection-hint">Noch keine aktive Erfassung.</div>
+        <div class="muted" id="selection-hint" hidden></div>
         <div class="actions">
           <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
           <button type="button" id="start-stop">Start</button>
@@ -1012,7 +1027,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
       </div>
     </div>
   </div>
-  <div id="status" class="status"></div>
 </div>
 <script src="config.js"></script>
 <script src="popup.js"></script>
@@ -1021,7 +1035,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 HTML;
 	}
 }
-
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_options_html')) {
 	function cmx_ext_time_options_html(): string {
 		return <<<'HTML'
@@ -1442,23 +1455,70 @@ const verrechenbarInput = document.getElementById('verrechenbar');
 const startStopButton = document.getElementById('start-stop');
 const resetButton = document.getElementById('reset-form');
 const openSettingsButton = document.getElementById('open-settings');
-const statusEl = document.getElementById('status');
 const selectionHint = document.getElementById('selection-hint');
+const sessionCardEl = document.getElementById('session-card');
+const sessionLabelEl = document.getElementById('session-label');
+const sessionMessageEl = document.getElementById('session-message');
 const intervalDisplay = document.getElementById('interval-display');
-
-const taskOnlyEls = Array.from(document.querySelectorAll('.task-only'));
+const taskInlineEl = document.getElementById('task-inline');
 
 const state = {
   instances: [],
   activeSession: null,
   selectedProject: null,
+  statusNotice: null,
 };
 
-function setStatus(text, type = '') {
-  statusEl.textContent = text || '';
-  statusEl.classList.remove('is-error', 'is-success', 'is-info');
-  if (text) {
-    statusEl.classList.add(type === 'error' ? 'is-error' : (type === 'success' ? 'is-success' : 'is-info'));
+let statusTimer = null;
+
+function renderSessionCard() {
+  if (!sessionCardEl || !sessionLabelEl || !intervalDisplay || !sessionMessageEl) return;
+
+  sessionCardEl.classList.remove('is-error', 'is-success', 'is-info');
+  if (state.statusNotice && state.statusNotice.text) {
+    sessionLabelEl.textContent = 'Status';
+    intervalDisplay.hidden = true;
+    sessionMessageEl.hidden = false;
+    sessionMessageEl.textContent = state.statusNotice.text;
+    sessionCardEl.classList.add(
+      state.statusNotice.type === 'error'
+        ? 'is-error'
+        : (state.statusNotice.type === 'success' ? 'is-success' : 'is-info')
+    );
+    return;
+  }
+
+  sessionLabelEl.textContent = 'Intervall';
+  intervalDisplay.hidden = false;
+  sessionMessageEl.hidden = true;
+  sessionMessageEl.textContent = '';
+  const instance = selectedInstance();
+  intervalDisplay.textContent = instance ? ((instance.defaultInterval || 5) + ' min') : '-';
+}
+
+function setStatus(text, type = '', durationMs = 5000) {
+  if (statusTimer) {
+    window.clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  if (!text) {
+    state.statusNotice = null;
+    renderSessionCard();
+    return;
+  }
+
+  state.statusNotice = {
+    text: text || '',
+    type: type || 'info',
+  };
+  renderSessionCard();
+
+  if (durationMs > 0) {
+    statusTimer = window.setTimeout(() => {
+      state.statusNotice = null;
+      statusTimer = null;
+      renderSessionCard();
+    }, durationMs);
   }
 }
 
@@ -1530,7 +1590,7 @@ function fillSelect() {
   if (!state.instances.length) {
     instanceSelect.innerHTML = '<option value="">Bitte zuerst in den Einstellungen eine Instanz hinzufügen</option>';
     instanceSelect.disabled = true;
-    intervalDisplay.textContent = '-';
+    renderSessionCard();
     return;
   }
   instanceSelect.disabled = false;
@@ -1542,8 +1602,7 @@ function fillSelect() {
 }
 
 function updateIntervalHint() {
-  const instance = selectedInstance();
-  intervalDisplay.textContent = instance ? ((instance.defaultInterval || 5) + ' min') : '-';
+  renderSessionCard();
 }
 
 function setPicked(type, item) {
@@ -1554,14 +1613,44 @@ function setPicked(type, item) {
   updateSelectionHint();
 }
 
+function formatSessionStarted(session) {
+  if (!session) return '';
+
+  const startMs = Number(session.startMs || 0);
+  if (startMs > 0) {
+    try {
+      return new Intl.DateTimeFormat('de-CH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(startMs));
+    } catch (error) {}
+  }
+
+  const startDate = String(session.startDate || '').trim();
+  const startTime = String(session.startTime || '').trim();
+  if (startDate) {
+    const parts = startDate.split('-');
+    if (parts.length === 3) {
+      const formattedDate = [parts[2], parts[1], parts[0]].join('.');
+      return startTime ? (formattedDate + ' ' + startTime) : formattedDate;
+    }
+  }
+
+  return startTime ? startTime : '';
+}
+
 function updateSelectionHint() {
   if (state.activeSession) {
-    selectionHint.textContent = 'Aktive Erfassung seit ' + (state.activeSession.startDate || '') + ' ' + (state.activeSession.startTime || '');
+    const startedAt = formatSessionStarted(state.activeSession);
+    selectionHint.textContent = startedAt ? ('Gestartet seit ' + startedAt) : 'Gestartet seit';
+    selectionHint.hidden = false;
     return;
   }
-  const parts = [];
-  if (state.selectedProject && state.selectedProject.title) parts.push(state.selectedProject.title);
-  selectionHint.textContent = parts.length ? parts.join(' / ') : 'Noch keine aktive Erfassung.';
+  selectionHint.textContent = '';
+  selectionHint.hidden = true;
 }
 
 function currentMode() {
@@ -1579,9 +1668,13 @@ function setMode(value) {
 
 function updateModeUi() {
   const isTask = currentMode() === 'task';
-  taskOnlyEls.forEach((el) => {
-    el.style.display = isTask ? '' : 'none';
-  });
+  if (taskInlineEl) {
+    taskInlineEl.classList.toggle('is-hidden', !isTask);
+    taskInlineEl.setAttribute('aria-hidden', isTask ? 'false' : 'true');
+  }
+  if (verrechenbarInput) {
+    verrechenbarInput.disabled = !isTask;
+  }
   infoLabel.textContent = isTask ? 'Info / Notiz' : 'Interne Notiz';
 }
 
@@ -1741,6 +1834,7 @@ async function refreshState() {
     startStopButton.textContent = 'Start';
     startStopButton.classList.remove('danger');
   }
+  updateSelectionHint();
   updateModeUi();
 }
 
@@ -1752,7 +1846,7 @@ async function handleStartStop() {
   }
 
   if (state.activeSession) {
-    setStatus('Erfassung wird gespeichert...', 'info');
+    setStatus('Erfassung wird gespeichert...', 'info', 0);
     try {
       const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-stop-session' });
       if (!result || !result.success) {
@@ -1780,7 +1874,7 @@ async function handleStartStop() {
     verrechenbar: !!verrechenbarInput.checked,
   };
 
-  setStatus('Erfassung wird gestartet...', 'info');
+  setStatus('Erfassung wird gestartet...', 'info', 0);
   try {
     const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-start-session', payload });
     if (!result || !result.success) {
