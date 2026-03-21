@@ -542,19 +542,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 	function cmx_cockpit_pendenzen_css(): string {
 		return '
 			.cmx-pend-wrap{margin:20px 0 0;padding:0 20px 0 0;box-sizing:border-box}
-			.cmx-pend-shell{background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);border:1px solid #cfe0f7;border-radius:18px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
-			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px 12px}
-			.cmx-pend-title-wrap{display:flex;align-items:flex-start;gap:14px;min-width:0}
+			.cmx-pend-shell{background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);border:1px solid #cfe0f7;border-radius:14px;padding:18px;box-sizing:border-box;box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
+			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 18px}
+			.cmx-pend-title-wrap{display:flex;align-items:flex-start;gap:14px;min-width:0;flex:1 1 auto}
 			.cmx-pend-title-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;color:#3b8ed9;box-shadow:inset 0 0 0 1px #d9e6f6,0 1px 2px rgba(16,24,40,.06)}
 			.cmx-pend-title-icon .dashicons{width:22px;height:22px;font-size:22px;line-height:22px}
 			.cmx-pend-title-copy{min-width:0}
-			.cmx-pend-title{margin:0;color:#162033;font-size:20px;line-height:1.2;font-weight:700}
-			.cmx-pend-subtitle{margin:8px 0 0;color:#4e5968;font-size:14px;line-height:1.45}
-			.cmx-pend-actions{display:flex;gap:10px;flex-wrap:wrap}
+			.cmx-pend-title{margin:0;color:#162033;font-size:20px !important;line-height:1.2;font-weight:700}
+			.cmx-pend-subtitle{margin:8px 0 0;color:#4e5968;font-size:14px;line-height:1.55;max-width:780px}
+			.cmx-pend-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 			.cmx-pend-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid #cfd9e7;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);color:#344054;text-decoration:none;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-tab:hover{background:#fff;color:#162033}
-			.cmx-pend-tab.is-active{border-color:#bcd2ee;background:#fff;color:#173d6d;box-shadow:0 0 0 2px rgba(59,142,217,.08),0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-body{padding:0 24px 24px}
+			.cmx-pend-tab:hover{background:#fff;color:#162033;border-color:#b7cce9}
+			.cmx-pend-tab.is-active{background:#fff;color:#173d6d;border-color:#bcd2ee;box-shadow:0 0 0 2px rgba(59,142,217,.08),0 1px 2px rgba(16,24,40,.05)}
+			.cmx-pend-body{padding:0}
 			.cmx-pend-board-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(220px,1fr);gap:18px;align-items:center;margin:0 0 18px;padding:12px 14px;border:1px solid #d9e6f6;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)}
 			.cmx-pend-board-filter{text-align:left}
 			.cmx-pend-board-filter--center{text-align:center}
@@ -566,7 +566,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-column{min-width:0;padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
 			.cmx-pend-column-title{display:block;margin:0 0 14px;font-size:12px;font-weight:700;line-height:1.2;color:#667085;letter-spacing:.04em;text-transform:uppercase}
 			.cmx-pend-card-list{display:flex;flex-direction:column;gap:12px}
-			.cmx-pend-card{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid #d9e6f6;border-radius:12px;background:#fff;box-shadow:0 6px 14px rgba(16,24,40,.05)}
+			.cmx-pend-card{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid #d9e6f6;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 18px rgba(16,24,40,.04)}
 			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;height:32px;border-radius:7px;color:#42556d;background:#f3f6fa;border:1px solid #d9e6f6;box-shadow:none}
 			.cmx-pend-card-icon svg{display:block;width:14px;height:14px;fill:currentColor}
 			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
@@ -592,7 +592,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-title{margin:0;color:#162033;font-size:20px;font-weight:700}
 			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
 			.cmx-pend-calendar-weekday{padding:6px 4px;color:#7a8898;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center}
-			.cmx-pend-calendar-cell{min-height:168px;padding:10px 10px 12px;border:1px solid #dbe3ec;border-radius:14px;background:#fff;box-shadow:0 6px 14px rgba(16,24,40,.05)}
+			.cmx-pend-calendar-cell{min-height:168px;padding:10px 10px 12px;border:1px solid #dbe3ec;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 18px rgba(16,24,40,.04)}
 			.cmx-pend-calendar-cell.is-muted{background:rgba(255,255,255,.42);border-style:dashed}
 			.cmx-pend-calendar-cell.is-today{border-color:#78a9df;box-shadow:0 0 0 2px rgba(50,120,200,.12),0 10px 18px rgba(16,24,40,.06)}
 			.cmx-pend-calendar-day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
@@ -615,10 +615,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			}
 			@media (max-width: 782px){
 				.cmx-pend-wrap{padding-right:10px}
-				.cmx-pend-head{padding:16px;flex-direction:column;align-items:stretch}
+				.cmx-pend-shell{padding:16px}
+				.cmx-pend-head{flex-direction:column;align-items:stretch}
 				.cmx-pend-actions{width:100%}
 				.cmx-pend-tab{flex:1 1 auto}
-				.cmx-pend-body{padding:18px}
 				.cmx-pend-board-select select{min-width:0;width:100%}
 				.cmx-pend-calendar-grid{grid-template-columns:1fr}
 			}

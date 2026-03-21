@@ -1545,34 +1545,72 @@ function cmx_bank_import_render_log_page(): void {
 	$ajax_url = \admin_url('admin-ajax.php');
 	$nonce = \wp_create_nonce('cmx_camt_ajax');
 
-	echo '<div class="wrap">';
-	echo '<h1>Banken Import</h1>';
-	echo '<p>camt.053 und camt.054 werden gemeinsam eingelesen und über ihre Buchungsmerkmale zusammengeführt, damit dieselbe Buchung nicht doppelt zugeordnet wird.</p>';
+	echo '<div class="wrap cmx-camt-wrap">';
 
 	echo '<style>
-	.cmx-camt-upload{
-		border:2px dashed #c3c4c7;
-		border-radius:12px;
-		padding:28px;
-		text-align:center;
+	.cmx-camt-wrap{
+		margin:20px 0 0;
+		padding:0 20px 0 0;
+		box-sizing:border-box;
+	}
+	.cmx-camt-card{
 		background:#fff;
-		transition:border-color .15s ease, background .15s ease, box-shadow .15s ease;
+		border:1px solid #d7dce3;
+		border-radius:14px;
+		padding:18px;
+		box-sizing:border-box;
+		box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04);
+	}
+	.cmx-camt-card--hero{
+		margin:0 0 18px;
+		background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);
+		border-color:#cfe0f7;
+	}
+	.cmx-camt-card--hero h1{
+		margin:0 0 12px;
+		color:#162033;
+		font-size:20px;
+		line-height:1.2;
+		font-weight:700;
+	}
+	.cmx-camt-intro{
+		max-width:780px;
+		margin:0;
+		color:#4e5968;
+		font-size:14px;
+		line-height:1.55;
+	}
+	.cmx-camt-upload{
+		margin-top:18px;
+		border:2px dashed #cfd9e7;
+		border-radius:16px;
+		padding:34px 28px;
+		text-align:center;
+		background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+		box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04);
+		transition:border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .15s ease;
 		cursor:pointer;
 	}
 	.cmx-camt-upload.is-dragover{
-		border-color:#2271b1;
-		background:#f0f6fc;
-		box-shadow:0 0 0 1px rgba(34,113,177,.08) inset;
+		border-color:#66a7e8;
+		background:linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%);
+		box-shadow:0 0 0 2px rgba(59,142,217,.10),0 14px 26px rgba(16,24,40,.08);
+		transform:translateY(-1px);
 	}
-	.cmx-camt-upload h2{margin:0 0 8px;font-size:20px}
-	.cmx-camt-upload p{margin:0;color:#646970}
+	.cmx-camt-upload h2{margin:0 0 8px;font-size:20px;color:#162033}
+	.cmx-camt-upload p{margin:0;color:#667085}
 	.cmx-camt-toolbar{
 		display:flex;
 		align-items:center;
 		justify-content:space-between;
 		gap:12px;
-		margin:14px 0 18px;
+		margin:18px 0 0;
 		flex-wrap:wrap;
+		padding:12px 14px;
+		border:1px solid #d9e6f6;
+		border-radius:12px;
+		background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);
+		box-shadow:0 1px 2px rgba(16,24,40,.04);
 	}
 	.cmx-camt-layout{
 		display:flex;
@@ -1582,25 +1620,27 @@ function cmx_bank_import_render_log_page(): void {
 	.cmx-camt-pane{
 		flex:1 1 50%;
 		min-width:0;
-		background:#fff;
-		border:1px solid #dcdcde;
-		border-radius:12px;
-		padding:14px;
+		background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);
+		border:1px solid #d7dce3;
+		border-radius:14px;
+		padding:18px;
 		box-sizing:border-box;
+		box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04);
 	}
-	.cmx-camt-pane h2{margin:0 0 12px}
+	.cmx-camt-pane h2{margin:0 0 12px;color:#162033;font-size:15px;line-height:1.35}
 	.cmx-camt-pane--left{max-height:72vh;overflow:auto}
 	.cmx-camt-pane--right{max-height:72vh;overflow:auto}
 	.cmx-camt-table th,.cmx-camt-table td{vertical-align:top}
 	.cmx-camt-entry-row{cursor:pointer}
-	.cmx-camt-entry-row.is-selected{background:#e5f3ff !important}
-	.cmx-camt-entry-row.is-assigned td{background:#f6ffed}
+	.cmx-camt-entry-row.is-selected{background:#e9f4ff !important}
+	.cmx-camt-entry-row.is-assigned td{background:#f3fbe9}
 	.cmx-camt-chip{
 		display:inline-block;
 		padding:2px 8px;
 		border-radius:999px;
-		background:#eef4fb;
-		color:#1d4f91;
+		background:#edf6ff;
+		border:1px solid #d6e9fc;
+		color:#2d65ac;
 		font-size:11px;
 		font-weight:600;
 		line-height:1.8;
@@ -1613,26 +1653,27 @@ function cmx_bank_import_render_log_page(): void {
 		font-weight:600;
 		text-decoration:none;
 	}
-	.cmx-camt-status--open{background:#fff2d6;color:#8a6700}
-	.cmx-camt-status--assigned{background:#ecf7ed;color:#156b2a}
+	.cmx-camt-status--open{background:#fff4df;color:#936400}
+	.cmx-camt-status--assigned{background:#eef9ef;color:#1a7a34}
 	.cmx-camt-files{
 		display:grid;
 		grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
 		gap:10px;
-		margin:0 0 16px;
+		margin:0 0 18px;
 	}
 	.cmx-camt-file-card{
-		background:#fff;
-		border:1px solid #dcdcde;
-		border-radius:10px;
-		padding:12px;
+		background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);
+		border:1px solid #d7dce3;
+		border-radius:12px;
+		padding:14px;
+		box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 18px rgba(16,24,40,.04);
 	}
 	.cmx-camt-file-meta{
 		display:flex;
 		gap:8px;
 		flex-wrap:wrap;
 		margin-top:6px;
-		color:#646970;
+		color:#667085;
 		font-size:12px;
 	}
 	.cmx-camt-detail-head{
@@ -1681,10 +1722,11 @@ function cmx_bank_import_render_log_page(): void {
 		justify-content:space-between;
 		align-items:flex-start;
 		gap:12px;
-		border:1px solid #dcdcde;
-		border-radius:10px;
+		border:1px solid #d9e6f6;
+		border-radius:12px;
 		padding:12px;
-		background:#fafafa;
+		background:linear-gradient(180deg,#ffffff 0%,#f9fbff 100%);
+		box-shadow:0 4px 10px rgba(16,24,40,.04);
 	}
 	.cmx-camt-candidate-main{min-width:0;flex:1 1 auto}
 	.cmx-camt-candidate-title{font-weight:700;margin-bottom:6px}
@@ -1694,22 +1736,27 @@ function cmx_bank_import_render_log_page(): void {
 		gap:8px;
 		flex-wrap:wrap;
 		font-size:12px;
-		color:#50575e;
+		color:#56687d;
 	}
 	#cmx-camt-messages{margin:12px 0 0}
 	.cmx-camt-empty{
-		border:1px dashed #c3c4c7;
+		border:1px dashed #cfd9e7;
 		border-radius:12px;
 		padding:22px;
-		background:#fff;
+		background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);
 		text-align:center;
-		color:#646970;
+		color:#667085;
+		box-shadow:0 1px 2px rgba(16,24,40,.03);
 	}
 	@media (max-width: 1200px){
 		.cmx-camt-layout{flex-direction:column}
 		.cmx-camt-pane{max-height:none}
 	}
 	</style>';
+
+	echo '<section class="cmx-camt-card cmx-camt-card--hero">';
+	echo '<h1>Banken Import</h1>';
+	echo '<p class="cmx-camt-intro">camt.053 und camt.054 werden gemeinsam eingelesen und über ihre Buchungsmerkmale zusammengeführt, damit dieselbe Buchung nicht doppelt zugeordnet wird.</p>';
 
 	echo '<div id="cmx-camt-upload" class="cmx-camt-upload" tabindex="0" role="button" aria-label="CAMT Dateien hochladen">';
 	echo '<h2>camt.053 / camt.054 hier ablegen</h2>';
@@ -1730,13 +1777,14 @@ function cmx_bank_import_render_log_page(): void {
 	echo '</div>';
 
 	echo '<div id="cmx-camt-messages"></div>';
+	echo '</section>';
 
 	if (!empty($files)) {
 		cmx_camt_render_file_summary($files);
 	}
 
 	if (empty($entries)) {
-		echo '<div class="cmx-camt-empty">Noch keine CAMT-Datei geladen.</div>';
+		echo '<section class="cmx-camt-pane cmx-camt-pane--empty"><div class="cmx-camt-empty">Noch keine CAMT-Datei geladen.</div></section>';
 	} else {
 		echo '<div class="cmx-camt-layout">';
 		echo '<div class="cmx-camt-pane cmx-camt-pane--left">';
