@@ -108,13 +108,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_upload_url')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_icon_asset_path')) {
 	function cmx_ext_chrome_icon_asset_path(): string {
-		return \wp_normalize_path(\dirname(__DIR__, 2) . '/assets/ext_chrome.png');
+		return \wp_normalize_path(\dirname(__DIR__, 2) . '/assets/ext_pdf.png');
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_icon_asset_url')) {
 	function cmx_ext_chrome_icon_asset_url(): string {
-		return (string) \plugins_url('assets/ext_chrome.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+		return (string) \plugins_url('assets/ext_pdf.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
 	}
 }
 
@@ -765,8 +765,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_add_settings_field')) {
 			'cmx_ext_chrome',
 			'Google Chrome Erweiterung',
 			__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field',
-			'cmx_tab_general',
-			'cmx_sec_general'
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege'
 		);
 	}
 	\add_action('admin_init', __NAMESPACE__ . '\\cmx_ext_chrome_add_settings_field');

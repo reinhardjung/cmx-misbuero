@@ -255,6 +255,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		$logo_link = $upload_token !== ''
 			? home_url( '/mis-upload/?token=' . rawurlencode( $upload_token ) )
 			: home_url( '/mis-upload/' );
+		$logo_src = (string) plugins_url( 'src/belege/icon_upload.png', dirname( __DIR__ ) . '/cmx-misbuero.php' );
 		$ini_kategorien = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
 			? (array) cmx_ini_get_value( 'Belege', 'Kategorien' )
 			: [];
@@ -492,7 +493,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 
 		<div class="wrap">
 			<div class="card">
-				<a href="<?php echo esc_url( $logo_link ); ?>"><img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="YouTube Logo"></a>
+				<a href="<?php echo esc_url( $logo_link ); ?>"><img class="logo" src="<?php echo esc_url( $logo_src ); ?>" alt="Mis Büro"></a>
 				<!-- <h2>Beleg hochladen</h2> -->
 
 				<form method="post" enctype="multipart/form-data">
@@ -985,6 +986,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		$token = get_option( self::OPTION_TOKEN );
 		$upload_url = $token ? home_url( '/mis-upload/?token=' . $token ) : home_url( '/mis-upload/' );
 		$logo_link = $upload_url;
+		$logo_src = (string) plugins_url( 'src/belege/icon_upload.png', dirname( __DIR__ ) . '/cmx-misbuero.php' );
 		?>
 		<!doctype html>
 		<html>
@@ -1054,7 +1056,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		<body>
 		<div class="wrap">
 			<div class="card">
-			<a href="<?php echo esc_url( $logo_link ); ?>"><img class="logo" src="https://misbuero.ch/wp-content/uploads/youtube.png" alt="Mis Buero"></a>
+			<a href="<?php echo esc_url( $logo_link ); ?>"><img class="logo" src="<?php echo esc_url( $logo_src ); ?>" alt="Mis Büro"></a>
 				<div class="check"><strong>Beleg wurde gespeichert.</strong></div>
 				<div class="note">Du kannst das Fenster jetzt schliessen oder</div>
 				<a class="back-link" href="<?php echo esc_url( $upload_url ); ?>">Neuen Beleg hochladen</a>
