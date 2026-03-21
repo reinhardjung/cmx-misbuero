@@ -1070,10 +1070,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <input type="text" id="project-search" autocomplete="off" placeholder="Projekt suchen...">
         <div class="suggest" id="project-suggest"></div>
       </label>
-      <label>
-        <span id="info-label">Weitere Infos im Detail</span>
-        <textarea id="info-input" placeholder="Weitere Infos im Detail..."></textarea>
-      </label>
+      <div>
+        <textarea id="info-input" aria-label="Weitere Infos im Detail" placeholder="Weitere Infos im Detail..."></textarea>
+      </div>
       <div class="footer">
         <div class="muted" id="selection-hint" hidden></div>
         <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
@@ -1504,7 +1503,6 @@ const instanceSelect = document.getElementById('instance-select');
 const modeSelect = document.getElementById('mode-select');
 const projectSearch = document.getElementById('project-search');
 const infoInput = document.getElementById('info-input');
-const infoLabel = document.getElementById('info-label');
 const verrechenbarInput = document.getElementById('verrechenbar');
 const startStopButton = document.getElementById('start-stop');
 const resetButton = document.getElementById('reset-form');
@@ -1730,8 +1728,9 @@ function updateModeUi() {
   if (verrechenbarInput) {
     verrechenbarInput.disabled = !isTask;
   }
-  infoLabel.textContent = isTask ? 'Weitere Infos im Detail' : 'Kurze Info';
-  infoInput.placeholder = isTask ? 'Weitere Infos im Detail...' : 'Kurze Info...';
+  const infoText = isTask ? 'Weitere Infos im Detail' : 'Kurze Info';
+  infoInput.placeholder = infoText + '...';
+  infoInput.setAttribute('aria-label', infoText);
 }
 
 async function persistActiveSessionInfo() {
