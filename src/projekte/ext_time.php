@@ -969,7 +969,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_note')) {
 		}
 
 		$existing[] = [
-			'betreff' => '',
+			'betreff' => \function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_betreff')
+				? (string) cmx_notizen_normalize_betreff((string) ($payload['betreff'] ?? ''))
+				: \sanitize_text_field((string) ($payload['betreff'] ?? '')),
 			'datum'   => (string) ($payload['start_date'] ?? ''),
 			'zeit'    => (string) ($payload['start_time'] ?? ''),
 			'text'    => $note_text,
@@ -1060,6 +1062,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 			'produkt_id'   => isset($_POST['produkt_id']) ? (int) \wp_unslash($_POST['produkt_id']) : 0,
 			'verrechenbar' => !empty($_POST['verrechenbar']) ? 1 : 0,
 			'info'         => isset($_POST['info']) ? \sanitize_textarea_field((string) \wp_unslash($_POST['info'])) : '',
+			'betreff'      => isset($_POST['betreff']) ? \sanitize_text_field((string) \wp_unslash($_POST['betreff'])) : '',
 			'artikel_label'=> isset($_POST['artikel_label']) ? \sanitize_text_field((string) \wp_unslash($_POST['artikel_label'])) : '',
 			'produkt_label'=> isset($_POST['produkt_label']) ? \sanitize_text_field((string) \wp_unslash($_POST['produkt_label'])) : '',
 		];
@@ -1130,6 +1133,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_config_js')) {
 			'searchContactsAction' => CMX_EXT_TIME_SEARCH_CONTACTS_ACTION,
 			'searchArticlesAction' => CMX_EXT_TIME_SEARCH_ARTICLES_ACTION,
 			'saveAction' => CMX_EXT_TIME_SAVE_ACTION,
+			'noteSubjects' => \function_exists(__NAMESPACE__ . '\\cmx_notizen_betreff_options')
+				? \array_values(\array_map('strval', (array) cmx_notizen_betreff_options()))
+				: ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'],
 		];
 
 		return 'self.CMX_EXT_TIME_CONFIG = ' . (string) \wp_json_encode($config, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . ';' . "\n";
@@ -1164,6 +1170,9 @@ textarea{min-height:76px;resize:vertical}
 .mode-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
 .mode-field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field-caption{font-weight:600}
+.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:118px;align-items:flex-end}
+.note-subject select{min-width:118px;width:auto;max-width:150px}
+.note-subject.is-hidden{visibility:hidden;pointer-events:none}
 .inline{display:flex;align-items:center;gap:8px}
 .inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
 .mode-options{flex-wrap:nowrap;gap:12px}
@@ -1231,6 +1240,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
             <label class="task-inline task-only" id="task-inline"><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
           </div>
         </div>
+        <label class="note-subject is-hidden" id="note-subject-wrap" aria-label="Betreff">
+          <select id="note-subject" aria-label="Betreff"></select>
+        </label>
       </div>
       <div class="session" id="session-card">
         <div class="muted" id="session-label">Intervall</div>
@@ -1916,6 +1928,8 @@ const sessionLabelEl = document.getElementById('session-label');
 const sessionMessageEl = document.getElementById('session-message');
 const intervalDisplay = document.getElementById('interval-display');
 const taskInlineEl = document.getElementById('task-inline');
+const noteSubjectWrapEl = document.getElementById('note-subject-wrap');
+const noteSubjectEl = document.getElementById('note-subject');
 
 const state = {
   instances: [],
@@ -1928,6 +1942,33 @@ const state = {
 
 let statusTimer = null;
 let activeSessionSyncTimer = null;
+
+function fillNoteSubjectOptions(selectedValue = '') {
+  if (!noteSubjectEl) {
+    return;
+  }
+
+  const subjects = Array.isArray(CONFIG.noteSubjects) && CONFIG.noteSubjects.length
+    ? CONFIG.noteSubjects.map((value) => String(value || '').trim()).filter(Boolean)
+    : ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'];
+  const current = String(selectedValue || subjects[0] || '').trim();
+  noteSubjectEl.innerHTML = subjects.map((value) => (
+    '<option value="' + value.replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char] || char)) + '"' + (value === current ? ' selected' : '') + '>' + value + '</option>'
+  )).join('');
+  if (!noteSubjectEl.value && subjects[0]) {
+    noteSubjectEl.value = subjects[0];
+  }
+}
+
+function currentNoteSubject() {
+  return noteSubjectEl ? String(noteSubjectEl.value || '').trim() : '';
+}
 
 function renderSessionCard() {
   if (!sessionCardEl || !sessionLabelEl || !intervalDisplay || !sessionMessageEl) return;
@@ -2203,6 +2244,13 @@ function updateModeUi() {
     taskInlineEl.classList.toggle('is-hidden', !isTask);
     taskInlineEl.setAttribute('aria-hidden', isTask ? 'false' : 'true');
   }
+  if (noteSubjectWrapEl) {
+    noteSubjectWrapEl.classList.toggle('is-hidden', isTask);
+    noteSubjectWrapEl.setAttribute('aria-hidden', isTask ? 'true' : 'false');
+  }
+  if (noteSubjectEl) {
+    noteSubjectEl.disabled = isTask;
+  }
   if (verrechenbarInput) {
     verrechenbarInput.disabled = !isTask;
   }
@@ -2221,6 +2269,7 @@ async function persistActiveSessionInfo() {
       type: 'cmx-ext-time-update-session',
       payload: {
         info: infoInput.value || '',
+        betreff: currentNoteSubject(),
       },
     });
     if (result && result.success && result.session) {
@@ -2257,6 +2306,9 @@ function resetForm() {
   setPicked('project', null);
   setPicked('contact', null);
   infoInput.value = '';
+  if (noteSubjectEl && noteSubjectEl.options.length) {
+    noteSubjectEl.selectedIndex = 0;
+  }
   verrechenbarInput.checked = true;
   setStatus('');
 }
@@ -2418,6 +2470,7 @@ function makeSuggest(input, box) {
 async function refreshState() {
   state.instances = Array.isArray(await getStorage(INSTANCE_KEY)) ? await getStorage(INSTANCE_KEY) : [];
   fillSelect();
+  fillNoteSubjectOptions();
   state.activeSession = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-get-active-session' }).catch(() => null);
   if (state.activeSession) {
     const activeInstanceKey = state.activeSession.instanceKey || '';
@@ -2430,6 +2483,7 @@ async function refreshState() {
     setPicked('contact', state.activeSession.contact || null);
     setPicked(currentTargetType(), state.activeSession.target || state.activeSession.project || state.activeSession.contact || null);
     infoInput.value = state.activeSession.info || '';
+    fillNoteSubjectOptions(state.activeSession.betreff || '');
     verrechenbarInput.checked = !!state.activeSession.verrechenbar;
     startStopButton.textContent = 'Stop';
     startStopButton.classList.add('danger');
@@ -2495,6 +2549,7 @@ async function handleStartStop() {
     targetType: targetType,
     target: selectedTarget,
     info: (infoInput.value || '').trim(),
+    betreff: currentNoteSubject(),
     verrechenbar: !!verrechenbarInput.checked,
   };
 
@@ -2545,6 +2600,9 @@ if (modeSelect) {
   modeSelect.addEventListener('change', updateModeUi);
 }
 infoInput.addEventListener('input', queueActiveSessionInfoSync);
+if (noteSubjectEl) {
+  noteSubjectEl.addEventListener('change', queueActiveSessionInfoSync);
+}
 instanceSelect.addEventListener('mousedown', handleEmptyInstanceSelect);
 instanceSelect.addEventListener('keydown', (event) => {
   if (!state.instances.length && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
@@ -2716,6 +2774,7 @@ async function persistSession(session, reason) {
   formData.append('produkt_id', String((session.product && session.product.id) || 0));
   formData.append('verrechenbar', session.verrechenbar ? '1' : '0');
   formData.append('info', session.info || '');
+  formData.append('betreff', session.betreff || '');
   formData.append('artikel_label', (session.article && (session.article.label || session.article.title)) || '');
   formData.append('produkt_label', (session.product && (session.product.label || session.product.title)) || '');
   formData.append('start_at', new Date(session.startMs).toISOString());
@@ -2761,6 +2820,7 @@ async function startSession(payload) {
     product: payload.product || null,
     mode: payload.mode || 'task',
     info: payload.info || '',
+    betreff: payload.betreff || '',
     verrechenbar: !!payload.verrechenbar,
     intervalMinutes: Number(payload.instance.defaultInterval || 5),
     startMs: Date.now(),
@@ -2788,6 +2848,9 @@ async function updateSession(payload) {
 
   if (payload && Object.prototype.hasOwnProperty.call(payload, 'info')) {
     nextSession.info = typeof payload.info === 'string' ? payload.info : '';
+  }
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'betreff')) {
+    nextSession.betreff = typeof payload.betreff === 'string' ? payload.betreff : '';
   }
 
   if (payload && (
