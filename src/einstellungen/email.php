@@ -94,7 +94,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 	function cmx_email_render_client_item(array $client, string $index): void {
 		$name_base = \esc_attr(CMX_SETTINGS_MAIN . '[email_clients][' . $index . ']');
 		$id = \esc_attr((string) ($client['id'] ?? ''));
-		$client_name = \esc_attr((string) ($client['client'] ?? ''));
 		$name = \esc_attr((string) ($client['name'] ?? ''));
 		$email = \esc_attr((string) ($client['email'] ?? ''));
 		$password = \esc_attr((string) ($client['password'] ?? ''));
@@ -103,8 +102,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 
 		echo '<div class="cmx-email-client-item">';
 		echo '<input type="hidden" name="' . $name_base . '[id]" value="' . $id . '">';
+		echo '<input type="hidden" name="' . $name_base . '[client]" value="' . \esc_attr((string) ($client['client'] ?? '')) . '">';
 		echo '<div class="cmx-email-client-grid">';
-		echo '<label class="cmx-email-client-field"><span>Bezeichnung</span><input type="text" class="regular-text" name="' . $name_base . '[client]" value="' . $client_name . '" placeholder="z.B. Kunde A" autocomplete="off"></label>';
 		echo '<label class="cmx-email-client-field"><span>E-Mail Name</span><input type="text" class="regular-text" name="' . $name_base . '[name]" value="' . $name . '" placeholder="Max Muster" autocomplete="organization"></label>';
 		echo '<label class="cmx-email-client-field"><span>E-Mail Adresse</span><input type="email" class="regular-text" name="' . $name_base . '[email]" value="' . $email . '" placeholder="mail@beispiel.ch" autocomplete="username"></label>';
 		echo '<label class="cmx-email-client-field"><span>Kennwort</span><span class="cmx-email-password-wrap"><input type="password" class="regular-text cmx-email-password-input" name="' . $name_base . '[password]" value="' . $password . '" autocomplete="current-password"><button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden"><span class="cmx-email-password-icon is-show" aria-hidden="true"></span></button></span></label>';
@@ -113,11 +112,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '<div class="cmx-email-client-actions">';
 		echo '<div class="cmx-email-client-action-buttons">';
 		echo '<button type="button" class="button button-secondary cmx-email-client-test">Testen</button>';
-		echo '<button type="button" class="button-link-delete cmx-email-client-remove">Entfernen</button>';
-		echo '</div>';
-		echo '<span class="cmx-email-client-test-result" aria-live="polite"></span>';
+		echo '<button type="button" class="button-link-delete cmx-email-client-remove" aria-label="Client entfernen" title="Client entfernen"><span class="dashicons dashicons-trash" aria-hidden="true"></span></button>';
 		echo '</div>';
 		echo '</div>';
+		echo '</div>';
+		echo '<div class="cmx-email-client-test-result" aria-live="polite"></div>';
 		echo '</div>';
 	}
 }
@@ -594,7 +593,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			}
 			.cmx-email-client-grid {
 				display: grid;
-				grid-template-columns: .8fr 1fr 1.15fr 1.3fr 1fr 1fr auto;
+				grid-template-columns: 1fr 1.15fr 1.3fr 1fr 1fr auto;
 				gap: 12px;
 				align-items: end;
 			}
@@ -615,7 +614,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			.cmx-email-client-actions {
 				display: flex;
 				flex-direction: column;
-				gap: 8px;
 				align-self: end;
 				min-width: 180px;
 			}
@@ -623,13 +621,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				display: flex;
 				align-items: center;
 				gap: 10px;
-				justify-content: flex-start;
+				justify-content: flex-end;
+			}
+			.cmx-email-client-remove {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 34px;
+				height: 34px;
+				padding: 0;
+			}
+			.cmx-email-client-remove .dashicons {
+				width: 18px;
+				height: 18px;
+				font-size: 18px;
+				line-height: 18px;
 			}
 			.cmx-email-client-test-result {
 				display: block;
+				margin-top: 10px;
 				font-size: 12px;
 				line-height: 1.35;
 				color: #646970;
+				white-space: normal;
 			}
 			.cmx-email-client-empty {
 				margin: 0 0 14px;
