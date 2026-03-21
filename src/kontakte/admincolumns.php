@@ -801,7 +801,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 			flex-wrap: wrap;
 			align-items: center;
 			gap: 0;
-			margin: 0 0 0 15px;
+			margin: 16px 0 0 5px;
 			padding: 0;
 			border: 0;
 			border-radius: 0;
@@ -912,6 +912,9 @@ function cmx_kontakte_apply_tax_filters($query) {
 		body.post-type-kontakte .tablenav.top .actions .button {
 			position: relative;
 			top: -5px;
+		}
+		body.post-type-kontakte #bulk-action-selector-top {
+			left: -5px;
 		}
 		body.post-type-kontakte .tablenav .actions .button,
 		body.post-type-kontakte .search-box .button {

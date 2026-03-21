@@ -132,7 +132,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mailbox_url')) {
 			'page'      => \defined(__NAMESPACE__ . '\\CMX_EMAILS_PAGE_SLUG') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_PAGE_SLUG') : 'cmx-emails-mailbox',
 			'post_type' => \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails',
 		];
-		return \add_query_arg(\array_merge($base, $args), \admin_url('admin.php'));
+		return \add_query_arg(\array_merge($base, $args), \admin_url('edit.php'));
 	}
 }
 
@@ -175,4 +175,3 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_folder_label')) {
 		return (string) ($map[$folder]['label'] ?? 'Posteingang');
 	}
 }
-

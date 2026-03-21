@@ -279,6 +279,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			margin-top: 4px;
 			color: #475467;
 		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-title strong {
+			font-size: 18px;
+			line-height: 1.2;
+		}
 		.cmx-email-admin-attachments {
 			margin-bottom: 6px;
 			color: #344054;

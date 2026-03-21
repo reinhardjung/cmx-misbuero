@@ -10,6 +10,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_page_is_active')) {
 	}
 }
 
+\add_action('admin_init', function (): void {
+	if (!\is_admin()) {
+		return;
+	}
+
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page !== CMX_EMAILS_PAGE_SLUG) {
+		return;
+	}
+
+	$current_script = \basename((string) ($_SERVER['PHP_SELF'] ?? ''));
+	if ($current_script !== 'admin.php') {
+		return;
+	}
+
+	$args = [];
+	foreach ($_GET as $key => $value) {
+		$key = \sanitize_key((string) $key);
+		if ($key === '') {
+			continue;
+		}
+
+		if (\is_array($value)) {
+			continue;
+		}
+
+		$args[$key] = \sanitize_text_field((string) \wp_unslash($value));
+	}
+
+	$args['page'] = CMX_EMAILS_PAGE_SLUG;
+	$args['post_type'] = CMX_EMAILS_CPT;
+
+	\wp_safe_redirect(\add_query_arg($args, \admin_url('edit.php')));
+	exit;
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mailbox_notice')) {
 	function cmx_emails_mailbox_notice(): array {
 		$message = isset($_GET['cmx_email_notice']) ? \sanitize_text_field((string) \wp_unslash($_GET['cmx_email_notice'])) : '';
@@ -539,13 +575,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 		echo '<div class="cmx-email-shell">';
 		echo '<div class="cmx-email-toolbar">';
 		echo '<div class="cmx-email-account-box">';
-		echo '<h1>E-Mail Center</h1>';
-		echo '<p>Synchronisierte E-Mails aus deinen hinterlegten Clients mit Detailansicht, Anhaengen und Zuordnung.</p>';
+		// echo '<h1>E-Mail Center</h1>';
+		// echo '<p>Synchronisierte E-Mails aus deinen hinterlegten Clients mit Detailansicht, Anhaengen und Zuordnung.</p>';
 		echo '<form method="get">';
 		echo '<input type="hidden" name="page" value="' . \esc_attr(CMX_EMAILS_PAGE_SLUG) . '">';
 		echo '<input type="hidden" name="post_type" value="' . \esc_attr(CMX_EMAILS_CPT) . '">';
 		echo '<input type="hidden" name="folder" value="' . \esc_attr($folder) . '">';
-		echo '<label for="cmx-email-account">Konto</label>';
+		// echo '<label for="cmx-email-account">Konto</label>';
 		echo '<select id="cmx-email-account" name="account_id" onchange="this.form.submit()">';
 		foreach ($clients as $row) {
 			$row = (array) $row;
