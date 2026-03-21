@@ -814,7 +814,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 			align-items: center;
 		}
 		body.post-type-kontakte .subsubsub li:not(:last-child)::after {
-			content: "|";
+			content: "";
 			margin: 0 14px;
 			color: #98a2b3;
 		}
@@ -875,7 +875,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .tablenav.top {
 			grid-area: topnav;
-			margin-top: -5px;
+			margin: 0;
 		}
 		body.post-type-kontakte .tablenav.bottom {
 			grid-area: bottomnav;
@@ -891,6 +891,9 @@ function cmx_kontakte_apply_tax_filters($query) {
 			gap: 10px;
 			padding: 0;
 		}
+		body.post-type-kontakte .tablenav.top .actions {
+			margin-left: -10px;
+		}
 		body.post-type-kontakte .tablenav .actions select,
 		body.post-type-kontakte .tablenav .actions input[type="search"],
 		body.post-type-kontakte .search-box input[type="search"] {
@@ -899,6 +902,11 @@ function cmx_kontakte_apply_tax_filters($query) {
 			border-radius: 10px;
 			background: #fff;
 			box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.04);
+		}
+		body.post-type-kontakte .tablenav.top .actions select,
+		body.post-type-kontakte .tablenav.top .actions .button {
+			position: relative;
+			top: -5px;
 		}
 		body.post-type-kontakte .tablenav .actions .button,
 		body.post-type-kontakte .search-box .button {
@@ -923,6 +931,9 @@ function cmx_kontakte_apply_tax_filters($query) {
 			align-items: center;
 			justify-content: flex-end;
 			gap: 12px;
+		}
+		body.post-type-kontakte .tablenav.top .tablenav-pages {
+			margin-right: -45px;
 		}
 		body.post-type-kontakte .wp-list-table {
 			grid-area: table;
@@ -1027,6 +1038,25 @@ function cmx_kontakte_apply_tax_filters($query) {
 			}
 		}
 	</style>
+	<script>
+		document.addEventListener('DOMContentLoaded', function () {
+			var wrap = document.querySelector('body.post-type-kontakte .wrap');
+			if (!wrap) {
+				return;
+			}
+			var walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT, null);
+			var toRemove = [];
+			while (walker.nextNode()) {
+				var node = walker.currentNode;
+				if (node.textContent.replace(/\|/g, '').trim() === '') {
+					toRemove.push(node);
+				}
+			}
+			toRemove.forEach(function (node) {
+				node.remove();
+			});
+		});
+	</script>
 	<?php
 });
 
