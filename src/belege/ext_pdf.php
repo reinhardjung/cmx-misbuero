@@ -940,7 +940,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field'))
 		echo '<div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
 		echo '<button type="button" class="button-link" id="cmx-ext-chrome-help" style="padding:0;height:auto;min-height:0;">Anleitung</button>';
 		if ($crx_supported) {
-			echo '<button type="button" class="button-link" id="cmx-ext-chrome-install-crx" style="padding:0;height:auto;min-height:0;">CRX laden</button>';
+			// echo '<button type="button" class="button-link" id="cmx-ext-chrome-install-crx" style="padding:0;height:auto;min-height:0;">CRX laden</button>';
 		}
 		echo '</div>';
 		echo '</div>';
