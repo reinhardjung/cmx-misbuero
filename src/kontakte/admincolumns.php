@@ -815,7 +815,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .subsubsub li:not(:last-child)::after {
 			content: "";
-			margin: 0 14px;
+			margin: 10px 14px;
 			color: #98a2b3;
 		}
 		body.post-type-kontakte .subsubsub a {
@@ -871,14 +871,15 @@ function cmx_kontakte_apply_tax_filters($query) {
 			gap: 14px;
 			margin: 0;
 			padding: 14px 16px;
-			border: 1px solid #c9d8ee;
+			border: 0px solid #c9d8ee;
 			border-radius: 14px;
-			background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-			box-shadow: 0 8px 18px rgba(30, 64, 175, 0.06);
+			/* background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); */
+			/* box-shadow: 0 8px 18px rgba(30, 64, 175, 0.06); */
 		}
 		body.post-type-kontakte .tablenav.top {
 			grid-area: topnav;
 			margin: 0;
+			padding-right: 0;
 		}
 		body.post-type-kontakte .tablenav.bottom {
 			grid-area: bottomnav;
@@ -941,6 +942,10 @@ function cmx_kontakte_apply_tax_filters($query) {
 			align-items: center;
 			justify-content: flex-end;
 			gap: 12px;
+		}
+		body.post-type-kontakte #post-query-submit {
+			position: relative;
+			left: 5px;
 		}
 		body.post-type-kontakte .tablenav.top .tablenav-pages {
 			margin-right: -45px;
