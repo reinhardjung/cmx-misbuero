@@ -114,8 +114,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '<label class="cmx-email-client-field"><span>E-Mail Name</span><input type="text" class="regular-text" name="' . $name_base . '[name]" value="' . $name . '" placeholder="Max Muster" autocomplete="organization"></label>';
 		echo '<label class="cmx-email-client-field"><span>E-Mail Adresse</span><input type="email" class="regular-text" name="' . $name_base . '[email]" value="' . $email . '" placeholder="mail@beispiel.ch" autocomplete="username"></label>';
 		echo '<label class="cmx-email-client-field"><span>Kennwort</span><span class="cmx-email-password-wrap"><input type="password" class="regular-text cmx-email-password-input" name="' . $name_base . '[password]" value="' . $password . '" autocomplete="current-password"><button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden"><span class="cmx-email-password-icon is-show" aria-hidden="true"></span></button></span></label>';
-		echo '<label class="cmx-email-client-field"><span>SMTP Host</span><input type="text" class="regular-text" name="' . $name_base . '[smtp_host]" value="' . $smtp_host . '" placeholder="smtp.infomaniak.com" autocomplete="off"></label>';
-		echo '<label class="cmx-email-client-field"><span>IMAP Host</span><input type="text" class="regular-text" name="' . $name_base . '[imap_host]" value="' . $imap_host . '" placeholder="imap.infomaniak.com" autocomplete="off"></label>';
+		echo '<label class="cmx-email-client-field"><span>SMTP Host (587)</span><input type="text" class="regular-text" name="' . $name_base . '[smtp_host]" value="' . $smtp_host . '" placeholder="smtp.infomaniak.com" autocomplete="off"></label>';
+		echo '<label class="cmx-email-client-field"><span>IMAP Host (993)</span><input type="text" class="regular-text" name="' . $name_base . '[imap_host]" value="' . $imap_host . '" placeholder="imap.infomaniak.com" autocomplete="off"></label>';
 		echo '</div>';
 		echo '</div>';
 	}
