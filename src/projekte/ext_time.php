@@ -20,6 +20,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_PROJECTS_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_PROJECTS_ACTION', 'cmx_ext_time_search_projects');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_CONTACTS_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_CONTACTS_ACTION', 'cmx_ext_time_search_contacts');
+}
+
 if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_ARTICLES_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_ARTICLES_ACTION', 'cmx_ext_time_search_articles');
 }
@@ -258,7 +262,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_readme_txt')) {
 			. "5. Den entpackten Ordner auswählen.\n\n"
 			. "Verwendung:\n"
 			. "- Über das Zahnrad zuerst die Mis Büro Instanz verbinden.\n"
-			. "- Projekt sowie Tätigkeit oder Notiz auswählen.\n"
+			. "- Projekt oder Kontakt sowie Tätigkeit oder Notiz auswählen.\n"
 			. "- Mit Start den Timer starten.\n"
 			. "- Nach Ablauf des Intervalls fragt die Erweiterung, ob Du noch arbeitest.\n"
 			. "- Bei Stop oder Timeout wird die Zeit direkt im Projekt gespeichert.\n";
@@ -498,9 +502,93 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_projects')) {
 				'id'         => $project_id,
 				'title'      => $title,
 				'label'      => $label,
+				'entity_type'=> 'project',
 				'task_names' => $task_names,
 				'beginn'     => $begin,
 				'ende'       => $end,
+			];
+		}
+
+		return $out;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_contacts')) {
+	function cmx_ext_time_contacts_post_types(): array {
+		$candidates = [];
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_cpt')) {
+			$cpt = (string) cmx_kontakte_cpt();
+			if ($cpt !== '') {
+				$candidates[] = $cpt;
+			}
+		}
+
+		$candidates = \array_merge($candidates, ['kontakte', 'kontakt', 'contacts', 'contact']);
+
+		foreach ((array) \get_post_types([], 'names') as $post_type) {
+			$post_type = (string) $post_type;
+			if ($post_type !== '' && (\stripos($post_type, 'kontakt') !== false || \stripos($post_type, 'contact') !== false)) {
+				$candidates[] = $post_type;
+			}
+		}
+
+		$candidates = \array_values(\array_unique(\array_filter(\array_map('strval', $candidates))));
+		$existing = [];
+		foreach ($candidates as $candidate) {
+			if (\post_type_exists($candidate)) {
+				$existing[] = $candidate;
+			}
+		}
+
+		return !empty($existing) ? $existing : ['kontakte'];
+	}
+
+	function cmx_ext_time_contacts_post_type(): string {
+		$post_types = cmx_ext_time_contacts_post_types();
+		return (string) ($post_types[0] ?? 'kontakte');
+	}
+
+	function cmx_ext_time_is_contact_post_type(string $post_type): bool {
+		return \in_array($post_type, cmx_ext_time_contacts_post_types(), true);
+	}
+
+	function cmx_ext_time_active_contacts(int $limit = 300): array {
+		global $wpdb;
+
+		$post_types = cmx_ext_time_contacts_post_types();
+		$limit = $limit > 0 ? $limit : 300;
+		$placeholders = \implode(',', \array_fill(0, \count($post_types), '%s'));
+		$params = \array_merge($post_types, [$limit]);
+
+		$sql = $wpdb->prepare(
+			"SELECT ID
+			 FROM {$wpdb->posts}
+			 WHERE post_type IN ($placeholders)
+			   AND post_status NOT IN ('trash', 'auto-draft')
+			 ORDER BY post_title ASC, ID ASC
+			 LIMIT %d",
+			$params
+		);
+		$post_ids = $wpdb->get_col($sql);
+
+		$out = [];
+		foreach ((array) $post_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0) {
+				continue;
+			}
+
+			$title = \trim((string) \get_the_title($contact_id));
+			if ($title === '') {
+				$title = '(#' . $contact_id . ')';
+			}
+
+			$out[] = [
+				'id'          => $contact_id,
+				'title'       => $title,
+				'label'       => $title,
+				'entity_type' => 'contact',
 			];
 		}
 
@@ -529,6 +617,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
 			'defaultInterval' => cmx_ext_time_default_interval(),
 			'userDisplay'     => $display_name,
 			'projects'        => cmx_ext_time_active_projects(),
+			'contacts'        => cmx_ext_time_active_contacts(),
+			'supports'        => [
+				'contactSave' => true,
+			],
 		];
 	}
 }
@@ -617,6 +709,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_search_projects_handler'))
 	}
 	\add_action('wp_ajax_' . CMX_EXT_TIME_SEARCH_PROJECTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_projects_handler');
 	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SEARCH_PROJECTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_projects_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_contact_search_results')) {
+	function cmx_ext_time_contact_search_results(string $term = ''): array {
+		$term = \trim($term);
+		$contacts = cmx_ext_time_active_contacts();
+		if ($term === '') {
+			return $contacts;
+		}
+
+		$needle = \function_exists('mb_strtolower') ? \mb_strtolower($term, 'UTF-8') : \strtolower($term);
+		$out = [];
+		foreach ($contacts as $contact) {
+			$title = (string) ($contact['title'] ?? '');
+			$label = (string) ($contact['label'] ?? $title);
+			$haystack = $title . ' ' . $label;
+			$haystack = \function_exists('mb_strtolower') ? \mb_strtolower($haystack, 'UTF-8') : \strtolower($haystack);
+			if (\strpos($haystack, $needle) === false) {
+				continue;
+			}
+			$out[] = $contact;
+		}
+
+		return $out;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_search_contacts_handler')) {
+	function cmx_ext_time_search_contacts_handler(): void {
+		$user_id = cmx_ext_time_authenticated_user_id(true);
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error('Keine Berechtigung für diese Instanz.');
+		}
+
+		$term = isset($_REQUEST['term']) ? \sanitize_text_field((string) \wp_unslash($_REQUEST['term'])) : '';
+		\wp_send_json_success(cmx_ext_time_contact_search_results($term));
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_SEARCH_CONTACTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_contacts_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SEARCH_CONTACTS_ACTION, __NAMESPACE__ . '\\cmx_ext_time_search_contacts_handler');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_article_search_results')) {
@@ -794,8 +925,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_round_hours')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_task')) {
-	function cmx_ext_time_append_task(int $project_id, array $payload): void {
-		$existing = \get_post_meta($project_id, CMX_PROJEKT_TASK_META, true);
+	function cmx_ext_time_append_task(int $post_id, array $payload): void {
+		$existing = \get_post_meta($post_id, CMX_PROJEKT_TASK_META, true);
 		$existing = \is_array($existing) ? $existing : [];
 
 		$existing[] = [
@@ -810,16 +941,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_task')) {
 			'info'          => (string) ($payload['info'] ?? ''),
 		];
 
-		\update_post_meta($project_id, CMX_PROJEKT_TASK_META, $existing);
+		\update_post_meta($post_id, CMX_PROJEKT_TASK_META, $existing);
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_note')) {
-	function cmx_ext_time_append_note(int $project_id, array $payload): void {
+	function cmx_ext_time_append_note(int $post_id, string $post_type, array $payload): void {
 		$meta_key = \function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
-			? (string) cmx_notizen_meta_key_for_post_type('projekte')
-			: '_cmx_projekt_intern_notizen';
-		$existing = \get_post_meta($project_id, $meta_key, true);
+			? (string) cmx_notizen_meta_key_for_post_type($post_type)
+			: ($post_type === 'kontakte' ? '_cmx_intern_notizen' : '_cmx_projekt_intern_notizen');
+		$existing = \get_post_meta($post_id, $meta_key, true);
 		$existing = \is_array($existing) ? $existing : [];
 
 		$note_text = \trim((string) ($payload['info'] ?? ''));
@@ -844,7 +975,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_note')) {
 			'text'    => $note_text,
 		];
 
-		\update_post_meta($project_id, $meta_key, $existing);
+		\update_post_meta($post_id, $meta_key, $existing);
 	}
 }
 
@@ -855,9 +986,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 			cmx_ext_time_auth_error('Keine Berechtigung für diese Instanz.');
 		}
 
+		$target_type = isset($_POST['target_type']) ? \sanitize_key((string) \wp_unslash($_POST['target_type'])) : 'project';
+		$target_type = \in_array($target_type, ['project', 'contact'], true) ? $target_type : 'project';
 		$project_id = isset($_POST['project_id']) ? (int) \wp_unslash($_POST['project_id']) : 0;
-		if ($project_id <= 0 || \get_post_type($project_id) !== 'projekte') {
-			\wp_send_json_error(['message' => 'Projekt wurde nicht gefunden.'], 400);
+		$contact_id = isset($_POST['contact_id']) ? (int) \wp_unslash($_POST['contact_id']) : 0;
+		$target_id = isset($_POST['target_id']) ? (int) \wp_unslash($_POST['target_id']) : 0;
+		if ($target_id <= 0) {
+			$target_id = $target_type === 'contact' ? $contact_id : $project_id;
+		}
+
+		$target_post_type = (string) \get_post_type($target_id);
+		if ($target_id > 0) {
+			if (cmx_ext_time_is_contact_post_type($target_post_type)) {
+				$target_type = 'contact';
+				$contact_id = $target_id;
+			} elseif ($target_post_type === 'projekte') {
+				$target_type = 'project';
+				$project_id = $target_id;
+			}
+		}
+
+		if ($target_type === 'contact' && ($target_id <= 0 || !cmx_ext_time_is_contact_post_type($target_post_type)) && $contact_id > 0) {
+			$target_id = $contact_id;
+			$target_post_type = (string) \get_post_type($target_id);
+		} elseif ($target_type === 'project' && ($target_id <= 0 || $target_post_type !== 'projekte') && $project_id > 0) {
+			$target_id = $project_id;
+			$target_post_type = (string) \get_post_type($target_id);
+		}
+
+		if ($target_id > 0 && cmx_ext_time_is_contact_post_type($target_post_type)) {
+			$target_type = 'contact';
+		} elseif ($target_id > 0 && $target_post_type === 'projekte') {
+			$target_type = 'project';
+		}
+
+		$is_valid_target = $target_type === 'contact'
+			? ($target_id > 0 && cmx_ext_time_is_contact_post_type($target_post_type))
+			: ($target_id > 0 && $target_post_type === 'projekte');
+		if (!$is_valid_target) {
+			\wp_send_json_error(['message' => $target_type === 'contact' ? 'Kontakt wurde nicht gefunden.' : 'Projekt wurde nicht gefunden.'], 400);
 		}
 
 		$mode = isset($_POST['mode']) ? \sanitize_key((string) \wp_unslash($_POST['mode'])) : 'task';
@@ -898,18 +1065,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 		];
 
 		if ($mode === 'note') {
-			cmx_ext_time_append_note($project_id, $payload);
+			cmx_ext_time_append_note($target_id, $target_post_type, $payload);
 		} else {
-			cmx_ext_time_append_task($project_id, $payload);
+			cmx_ext_time_append_task($target_id, $payload);
 		}
 
 		\wp_send_json_success([
-			'project_id' => $project_id,
-			'edit_url'   => (string) \admin_url('post.php?post=' . $project_id . '&action=edit'),
-			'mode'       => $mode,
-			'duration'   => $duration_hours,
-			'start_date' => $start_date,
-			'start_time' => $start_time,
+			'target_type' => $target_type,
+			'target_id'   => $target_id,
+			'edit_url'    => (string) \admin_url('post.php?post=' . $target_id . '&action=edit'),
+			'mode'        => $mode,
+			'duration'    => $duration_hours,
+			'start_date'  => $start_date,
+			'start_time'  => $start_time,
 		]);
 	}
 	\add_action('wp_ajax_' . CMX_EXT_TIME_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_save_handler');
@@ -923,7 +1091,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_manifest_json')) {
 			'name' => 'Mis Büro - Zeiterfassung',
 			'short_name' => 'Mis Büro Zeit',
 			'version' => cmx_ext_time_plugin_version(),
-			'description' => 'Erfasst Zeiten direkt in Projekten von Mis Büro.',
+			'description' => 'Erfasst Zeiten direkt in Projekten und Kontakten von Mis Büro.',
 			'permissions' => ['storage', 'alarms', 'notifications', 'tabs'],
 			'host_permissions' => ['<all_urls>'],
 			'background' => [
@@ -959,6 +1127,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_config_js')) {
 			'connectAction' => CMX_EXT_TIME_CONNECT_ACTION,
 			'bootstrapAction' => CMX_EXT_TIME_BOOTSTRAP_ACTION,
 			'searchProjectsAction' => CMX_EXT_TIME_SEARCH_PROJECTS_ACTION,
+			'searchContactsAction' => CMX_EXT_TIME_SEARCH_CONTACTS_ACTION,
 			'searchArticlesAction' => CMX_EXT_TIME_SEARCH_ARTICLES_ACTION,
 			'saveAction' => CMX_EXT_TIME_SAVE_ACTION,
 		];
@@ -999,6 +1168,9 @@ textarea{min-height:76px;resize:vertical}
 .inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
 .mode-options{flex-wrap:nowrap;gap:12px}
 .mode-options label{white-space:nowrap}
+.target-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.target-toggle{appearance:none;border:0;background:none;padding:0;color:#646970;font:inherit;font-weight:600;cursor:pointer}
+.target-toggle.is-active{color:#1d2327}
 .muted{color:#646970;font-size:12px}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
 button{appearance:none;border:1px solid #2271b1;background:#2271b1;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600}
@@ -1014,8 +1186,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .suggest button{width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 12px;border-radius:0;font-weight:400}
 .suggest button:hover,.suggest button.active{background:#eef4ff}
 .suggest .hint{padding:10px 12px;color:#646970}
-.footer{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:10px}
-.footer .muted{grid-column:1 / -1}
+.footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:10px}
+#selection-hint{text-align:center;min-width:0}
 #reset-form{justify-self:start}
 #start-stop{justify-self:end}
 .session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-height:64px}
@@ -1065,8 +1237,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <div id="interval-display" class="pill">-</div>
         <div id="session-message" class="session-message" hidden></div>
       </div>
+      <div class="target-row">
+        <button type="button" class="target-toggle is-active" id="target-project" data-target="project">Projekt</button>
+        <button type="button" class="target-toggle" id="target-contact" data-target="contact">Kontakt</button>
+      </div>
       <label class="suggest-wrap">
-        <span>Projekt</span>
         <input type="text" id="project-search" autocomplete="off" placeholder="Projekt suchen...">
         <div class="suggest" id="project-suggest"></div>
       </label>
@@ -1074,8 +1249,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <textarea id="info-input" aria-label="Weitere Infos im Detail" placeholder="Weitere Infos im Detail..."></textarea>
       </div>
       <div class="footer">
-        <div class="muted" id="selection-hint" hidden></div>
         <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
+        <div class="muted" id="selection-hint" hidden></div>
         <button type="button" id="start-stop">Start</button>
       </div>
     </div>
@@ -1236,6 +1411,9 @@ function normalizeInstanceInput(raw) {
 }
 
 function adminAjaxUrl(instance) {
+  if (instance && typeof instance.ajaxUrl === 'string' && instance.ajaxUrl.trim()) {
+    return instance.ajaxUrl.trim();
+  }
   return instance.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php';
 }
 
@@ -1313,12 +1491,206 @@ async function fetchBootstrap(instance, credentials = {}) {
   return json.data || {};
 }
 
+async function fetchActionData(instance, action, params = {}) {
+  const url = new URL(adminAjaxUrl(instance));
+  url.searchParams.set('action', action);
+  Object.keys(params || {}).forEach((key) => {
+    const value = params[key];
+    if (value === null || value === undefined) {
+      return;
+    }
+    url.searchParams.set(key, String(value));
+  });
+  if (instance && instance.token) {
+    url.searchParams.set('token', instance.token);
+  }
+
+  let response;
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      credentials: 'omit',
+      cache: 'no-store',
+      headers: instance && instance.token ? { 'X-CMX-Extension-Token': instance.token } : {},
+    });
+  } catch (error) {
+    throw new Error('Die Instanz ist nicht erreichbar. Bitte URL und Netzwerk prüfen.');
+  }
+
+  const rawText = await response.text().catch(() => '');
+  let json = null;
+  if (rawText !== '') {
+    try {
+      json = JSON.parse(rawText);
+    } catch (error) {
+      json = null;
+    }
+  }
+  if (!response.ok || !json || !json.success) {
+    throw new Error(instanceResponseError(response, json, rawText));
+  }
+  return json.data || [];
+}
+
+function stripHtml(value) {
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeContacts(items, limit = 300) {
+  const normalized = [];
+  const seen = new Set();
+
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const id = Number(item && item.id ? item.id : 0);
+    if (!id || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    const title = stripHtml(item && (item.label || item.title || '')) || ('(#' + id + ')');
+    normalized.push({
+      id: id,
+      title: title,
+      label: title,
+      entity_type: 'contact',
+    });
+  });
+
+  return normalized.slice(0, Math.max(1, Number(limit) || 300));
+}
+
+async function fetchContactsFromAjax(instance, limit = 300) {
+  const action = CONFIG.searchContactsAction || 'cmx_ext_time_search_contacts';
+  const rows = await fetchActionData(instance, action, { term: '' });
+  return normalizeContacts(rows, limit);
+}
+
+async function fetchRestJson(url) {
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'omit',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error('HTTP ' + response.status);
+  }
+  return response.json();
+}
+
+async function detectContactRestBases(instance) {
+  const fallbackBases = ['kontakte', 'kontakt', 'contacts', 'contact'];
+  const baseUrl = (instance.baseUrl || '').replace(/\/+$/, '');
+  if (!baseUrl) {
+    return fallbackBases;
+  }
+
+  try {
+    const types = await fetchRestJson(baseUrl + '/wp-json/wp/v2/types');
+    const bases = [];
+    Object.keys(types || {}).forEach((key) => {
+      const entry = types[key] || {};
+      const haystack = [
+        key,
+        entry.slug || '',
+        entry.rest_base || '',
+        entry.name || '',
+        entry.description || '',
+      ].join(' ');
+      if (!/kontakt|contact/i.test(haystack)) {
+        return;
+      }
+      bases.push(String(entry.rest_base || key || '').trim());
+    });
+    return Array.from(new Set(bases.concat(fallbackBases).filter(Boolean)));
+  } catch (error) {
+    return fallbackBases;
+  }
+}
+
+async function fetchContactsFromRestBase(instance, restBase, limit = 300) {
+  const baseUrl = (instance.baseUrl || '').replace(/\/+$/, '');
+  if (!baseUrl || !restBase) {
+    return [];
+  }
+
+  const out = [];
+  let page = 1;
+
+  while (out.length < limit) {
+    const perPage = Math.min(100, limit - out.length);
+    let rows = [];
+    let loaded = false;
+    const restPath = '/wp/v2/' + String(restBase).replace(/^\/+/, '');
+    const urls = [
+      baseUrl + '/wp-json' + restPath + '?per_page=' + perPage + '&page=' + page + '&_fields=id,title',
+      baseUrl + '/?rest_route=' + encodeURIComponent(restPath) + '&per_page=' + perPage + '&page=' + page + '&_fields=id,title',
+    ];
+    for (const url of urls) {
+      try {
+        rows = await fetchRestJson(url);
+        loaded = true;
+        break;
+      } catch (error) {
+      }
+    }
+    if (!loaded) {
+      return page === 1 ? [] : out;
+    }
+
+    if (!Array.isArray(rows) || !rows.length) {
+      break;
+    }
+
+    rows.forEach((row) => {
+      const id = Number(row && row.id ? row.id : 0);
+      if (!id) {
+        return;
+      }
+      const title = stripHtml(row && row.title && row.title.rendered ? row.title.rendered : '') || ('(#' + id + ')');
+      out.push({
+        id: id,
+        title: title,
+        label: title,
+        entity_type: 'contact',
+      });
+    });
+
+    if (rows.length < perPage) {
+      break;
+    }
+    page += 1;
+  }
+
+  return out;
+}
+
+async function fetchFallbackContacts(instance, limit = 300) {
+  const restBases = await detectContactRestBases(instance);
+  for (const restBase of restBases) {
+    const contacts = await fetchContactsFromRestBase(instance, restBase, limit);
+    if (contacts.length) {
+      return contacts;
+    }
+  }
+  return [];
+}
+
 function intervalOptions(intervals, current) {
   const allowed = Array.isArray(intervals) && intervals.length ? intervals : [5,10,15,20,30,45,60];
   defaultIntervalEl.innerHTML = allowed.map((value) => {
     const n = Number(value);
     return '<option value="' + n + '"' + (Number(current) === n ? ' selected' : '') + '>' + n + '</option>';
   }).join('');
+}
+
+function pickDefaultInterval(intervals, preferred) {
+  const allowed = Array.isArray(intervals) && intervals.length
+    ? intervals.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)
+    : [5,10,15,20,30,45,60];
+  const requested = Number(preferred || 0);
+  if (allowed.includes(requested)) {
+    return requested;
+  }
+  return Number(allowed[0] || 5);
 }
 
 function renderSavedInstanceSelect(instances, selectedKey) {
@@ -1351,6 +1723,7 @@ function renderInstanceList(instances) {
   listEl.innerHTML = instances.map((instance) => {
     const intervals = Array.isArray(instance.intervals) && instance.intervals.length ? instance.intervals.join(', ') : '-';
     const projectCount = Array.isArray(instance.projects) ? instance.projects.length : 0;
+    const contactCount = Array.isArray(instance.contacts) ? instance.contacts.length : 0;
     return '<div class="instance-card">'
       + '<div class="instance-title">' + (instance.slug || instance.baseUrl) + '</div>'
       + '<div class="instance-meta">' + (instance.siteName || instance.baseUrl) + '</div>'
@@ -1358,6 +1731,7 @@ function renderInstanceList(instances) {
       + '<div class="instance-meta">Intervall standardmässig: ' + (instance.defaultInterval || '-') + ' Minuten</div>'
       + '<div class="instance-meta">Mögliche Intervalle: ' + intervals + '</div>'
       + '<div class="instance-meta">Aktive Projekte geladen: ' + projectCount + '</div>'
+      + '<div class="instance-meta">Kontakte geladen: ' + contactCount + '</div>'
       + '</div>';
   }).join('');
 }
@@ -1399,6 +1773,14 @@ savedInstanceEl.addEventListener('change', async () => {
   }
 });
 
+instanceInputEl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') {
+    return;
+  }
+  event.preventDefault();
+  connectBtn.click();
+});
+
 connectBtn.addEventListener('click', async () => {
   let normalized = normalizeInstanceInput(instanceInputEl.value);
   if (!normalized.slug || !normalized.baseUrl) {
@@ -1425,6 +1807,23 @@ connectBtn.addEventListener('click', async () => {
   setStatus('Instanz wird geladen...', 'info');
   try {
     const bootstrap = await fetchBootstrap(normalized, { username, password });
+    const intervals = Array.isArray(bootstrap.intervals) && bootstrap.intervals.length ? bootstrap.intervals : [5,10,15,20,30,45,60];
+    const defaultInterval = pickDefaultInterval(intervals, defaultIntervalEl.value || bootstrap.defaultInterval || 5);
+    let contacts = Array.isArray(bootstrap.contacts) ? bootstrap.contacts : [];
+    if (!contacts.length) {
+      try {
+        contacts = await fetchContactsFromAjax({
+          baseUrl: normalized.baseUrl,
+          ajaxUrl: bootstrap.ajaxUrl || '',
+          token: bootstrap.token || normalized.token || '',
+        });
+      } catch (error) {
+        contacts = [];
+      }
+    }
+    if (!contacts.length) {
+      contacts = await fetchFallbackContacts(normalized);
+    }
     const instances = await getInstances();
     const merged = {
       slug: normalized.slug,
@@ -1432,11 +1831,13 @@ connectBtn.addEventListener('click', async () => {
       siteName: bootstrap.siteName || normalized.baseUrl,
       token: bootstrap.token || '',
       userLogin: username,
-      intervals: Array.isArray(bootstrap.intervals) && bootstrap.intervals.length ? bootstrap.intervals : [5,10,15,20,30,45,60],
-      defaultInterval: Number(bootstrap.defaultInterval || 5),
+      intervals: intervals,
+      defaultInterval: defaultInterval,
       ajaxUrl: bootstrap.ajaxUrl || (normalized.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
       userDisplay: bootstrap.userDisplay || '',
+      supports: bootstrap.supports && typeof bootstrap.supports === 'object' ? bootstrap.supports : {},
       projects: Array.isArray(bootstrap.projects) ? bootstrap.projects : [],
+      contacts: contacts,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1448,7 +1849,7 @@ connectBtn.addEventListener('click', async () => {
     defaultIntervalEl.value = String(merged.defaultInterval);
     usernameInputEl.value = username;
     passwordInputEl.value = '';
-    setStatus('Instanz wurde erfolgreich geladen. ' + String(merged.projects.length || 0) + ' aktive Projekte wurden übernommen.', 'success');
+    setStatus('Instanz wurde erfolgreich geladen und gespeichert. ' + String(merged.projects.length || 0) + ' Projekte und ' + String(merged.contacts.length || 0) + ' Kontakte wurden übernommen.', 'success');
   } catch (error) {
     setStatus(error && error.message ? error.message : 'Die Instanz konnte nicht geladen werden.', 'error');
   }
@@ -1458,7 +1859,7 @@ saveBtn.addEventListener('click', async () => {
   const instances = await getInstances();
   const selected = findSelectedInstance(instances);
   if (!selected) {
-    setStatus('Eine Instanz auswählen.', 'error');
+    setStatus('Erst eine Instanz auswählen.', 'error');
     return;
   }
   const value = Number(defaultIntervalEl.value || 0);
@@ -1501,6 +1902,8 @@ const INSTANCE_KEY = 'cmxExtTime.instances';
 
 const instanceSelect = document.getElementById('instance-select');
 const modeSelect = document.getElementById('mode-select');
+const targetProjectButton = document.getElementById('target-project');
+const targetContactButton = document.getElementById('target-contact');
 const projectSearch = document.getElementById('project-search');
 const infoInput = document.getElementById('info-input');
 const verrechenbarInput = document.getElementById('verrechenbar');
@@ -1517,7 +1920,9 @@ const taskInlineEl = document.getElementById('task-inline');
 const state = {
   instances: [],
   activeSession: null,
+  selectedTargetType: 'project',
   selectedProject: null,
+  selectedContact: null,
   statusNotice: null,
 };
 
@@ -1584,6 +1989,35 @@ function selectedInstance() {
   return state.instances.find((instance) => (instance.slug || instance.baseUrl) === key) || null;
 }
 
+function currentTargetType() {
+  return state.selectedTargetType === 'contact' ? 'contact' : 'project';
+}
+
+function instanceSupportsContactSave(instance) {
+  return !!(instance && instance.supports && instance.supports.contactSave);
+}
+
+function currentTargetConfig() {
+  const targetType = currentTargetType();
+  return targetType === 'contact'
+    ? {
+        type: 'contact',
+        action: CONFIG.searchContactsAction || 'cmx_ext_time_search_contacts',
+        cacheKey: 'contacts',
+        placeholder: 'Kontakt suchen...',
+      }
+    : {
+        type: 'project',
+        action: CONFIG.searchProjectsAction || 'cmx_ext_time_search_projects',
+        cacheKey: 'projects',
+        placeholder: 'Projekt suchen...',
+      };
+}
+
+function currentSelectedTarget() {
+  return currentTargetType() === 'contact' ? state.selectedContact : state.selectedProject;
+}
+
 function buildAjaxUrl(instance, action, extra = {}) {
   const base = instance && instance.ajaxUrl ? instance.ajaxUrl : ((instance.baseUrl || '').replace(/\/+$/, '') + '/wp-admin/admin-ajax.php');
   const url = new URL(base);
@@ -1641,8 +2075,8 @@ function instanceResponseError(response, json, rawText) {
 function fillSelect() {
   instanceSelect.innerHTML = '';
   if (!state.instances.length) {
-    instanceSelect.innerHTML = '<option value="">Erst eine Instanz hinzufügen</option>';
-    instanceSelect.disabled = true;
+    instanceSelect.innerHTML = '<option value="">Erst eine Instanz auswählen.</option>';
+    instanceSelect.disabled = false;
     renderSessionCard();
     return;
   }
@@ -1658,12 +2092,56 @@ function updateIntervalHint() {
   renderSessionCard();
 }
 
+function updateTargetUi() {
+  const targetType = currentTargetType();
+  const instance = selectedInstance();
+  const contactSupported = instanceSupportsContactSave(instance);
+  if (targetProjectButton) {
+    targetProjectButton.classList.toggle('is-active', targetType === 'project');
+    targetProjectButton.setAttribute('aria-pressed', targetType === 'project' ? 'true' : 'false');
+  }
+  if (targetContactButton) {
+    targetContactButton.classList.toggle('is-active', targetType === 'contact');
+    targetContactButton.setAttribute('aria-pressed', targetType === 'contact' ? 'true' : 'false');
+    targetContactButton.title = contactSupported ? '' : 'Kontakt-Speicherung wird von dieser Instanz noch nicht unterstützt';
+  }
+
+  const selected = currentSelectedTarget();
+  const config = currentTargetConfig();
+  projectSearch.placeholder = config.placeholder;
+  projectSearch.value = selected ? (selected.label || selected.title || '') : '';
+}
+
+function setTargetType(type) {
+  state.selectedTargetType = type === 'contact' ? 'contact' : 'project';
+  updateTargetUi();
+}
+
 function setPicked(type, item) {
   if (type === 'project') {
     state.selectedProject = item || null;
+  } else if (type === 'contact') {
+    state.selectedContact = item || null;
+  }
+  if (type === currentTargetType()) {
     projectSearch.value = item ? (item.label || item.title || '') : '';
   }
   updateSelectionHint();
+  if (state.activeSession && item && item.id) {
+    chrome.runtime.sendMessage({
+      type: 'cmx-ext-time-update-session',
+      payload: {
+        targetType: type,
+        target: item,
+        project: type === 'project' ? item : null,
+        contact: type === 'contact' ? item : null,
+      },
+    }).then((result) => {
+      if (result && result.success && result.session) {
+        state.activeSession = result.session;
+      }
+    }).catch(() => {});
+  }
 }
 
 function formatSessionStarted(session) {
@@ -1777,6 +2255,7 @@ async function flushActiveSessionInfoSync() {
 function resetForm() {
   if (state.activeSession) return;
   setPicked('project', null);
+  setPicked('contact', null);
   infoInput.value = '';
   verrechenbarInput.checked = true;
   setStatus('');
@@ -1809,7 +2288,7 @@ async function fetchJson(url, token) {
   return json.data || [];
 }
 
-function makeSuggest(input, box, action, mapResult, type) {
+function makeSuggest(input, box) {
   let timer = null;
   let activeIndex = -1;
   let items = [];
@@ -1839,32 +2318,32 @@ function makeSuggest(input, box, action, mapResult, type) {
       return;
     }
     box.innerHTML = items.map((item, index) => {
-      const title = type === 'project' ? (item.label || item.title || '') : (item.title || item.label || '');
-      const sub = type === 'project' ? '' : (item.nr ? ('<div class="muted">' + escapeHtml(item.nr) + '</div>') : '');
-      return '<button type="button" data-index="' + index + '"><div>' + escapeHtml(title) + '</div>' + sub + '</button>';
+      const title = item.label || item.title || '';
+      return '<button type="button" data-index="' + index + '"><div>' + escapeHtml(title) + '</div></button>';
     }).join('');
     box.style.display = 'block';
   }
 
   function pick(index) {
     if (!items[index]) return;
-    setPicked(type, items[index]);
+    setPicked(currentTargetType(), items[index]);
     close();
   }
 
-  async function load() {
+  async function load(termOverride = null) {
     const instance = selectedInstance();
     if (!instance) {
       close();
       return;
     }
-    const term = (input.value || '').trim();
+    const config = currentTargetConfig();
+    const term = termOverride === null ? (input.value || '').trim() : String(termOverride || '').trim();
     try {
-      if (type === 'project' && Array.isArray(instance.projects) && instance.projects.length) {
-        render(filterCachedProjects(instance.projects, term));
+      if (Array.isArray(instance[config.cacheKey]) && instance[config.cacheKey].length) {
+        render(filterCachedProjects(instance[config.cacheKey], term));
         return;
       }
-      const url = buildAjaxUrl(instance, action, mapResult(term));
+      const url = buildAjaxUrl(instance, config.action, { term });
       const results = await fetchJson(url, instance.token || '');
       render(results);
     } catch (error) {
@@ -1873,7 +2352,11 @@ function makeSuggest(input, box, action, mapResult, type) {
   }
 
   input.addEventListener('input', () => {
-    if (type === 'project') state.selectedProject = null;
+    if (currentTargetType() === 'contact') {
+      state.selectedContact = null;
+    } else {
+      state.selectedProject = null;
+    }
     updateSelectionHint();
     window.clearTimeout(timer);
     timer = window.setTimeout(load, 180);
@@ -1915,9 +2398,21 @@ function makeSuggest(input, box, action, mapResult, type) {
   });
 
   document.addEventListener('click', (event) => {
-    if (event.target === input || box.contains(event.target)) return;
+    if (
+      event.target === input
+      || box.contains(event.target)
+      || (targetProjectButton && targetProjectButton.contains(event.target))
+      || (targetContactButton && targetContactButton.contains(event.target))
+    ) return;
     close();
   });
+
+  return {
+    openAll() {
+      return load('');
+    },
+    close,
+  };
 }
 
 async function refreshState() {
@@ -1930,13 +2425,17 @@ async function refreshState() {
       instanceSelect.value = activeInstanceKey;
     }
     setMode(state.activeSession.mode || 'task');
+    setTargetType(state.activeSession.targetType || (state.activeSession.contact ? 'contact' : 'project'));
     setPicked('project', state.activeSession.project || null);
+    setPicked('contact', state.activeSession.contact || null);
+    setPicked(currentTargetType(), state.activeSession.target || state.activeSession.project || state.activeSession.contact || null);
     infoInput.value = state.activeSession.info || '';
     verrechenbarInput.checked = !!state.activeSession.verrechenbar;
     startStopButton.textContent = 'Stop';
     startStopButton.classList.add('danger');
     updateSelectionHint();
   } else {
+    setTargetType(currentTargetType());
     startStopButton.textContent = 'Start';
     startStopButton.classList.remove('danger');
   }
@@ -1947,13 +2446,28 @@ async function refreshState() {
 async function handleStartStop() {
   const instance = selectedInstance();
   if (!instance) {
-    setStatus('Eine Instanz auswählen.', 'error');
+    setStatus('Erst eine Instanz auswählen.', 'error');
     return;
   }
 
   if (state.activeSession) {
     setStatus('Erfassung wird gespeichert...', 'info', 0);
     try {
+      const selectedTarget = currentSelectedTarget();
+      if (selectedTarget && selectedTarget.id) {
+        const syncResult = await chrome.runtime.sendMessage({
+          type: 'cmx-ext-time-update-session',
+          payload: {
+            targetType: currentTargetType(),
+            target: selectedTarget,
+            project: currentTargetType() === 'project' ? selectedTarget : null,
+            contact: currentTargetType() === 'contact' ? selectedTarget : null,
+          },
+        }).catch(() => null);
+        if (syncResult && syncResult.success && syncResult.session) {
+          state.activeSession = syncResult.session;
+        }
+      }
       await flushActiveSessionInfoSync();
       const result = await chrome.runtime.sendMessage({ type: 'cmx-ext-time-stop-session' });
       if (!result || !result.success) {
@@ -1968,15 +2482,18 @@ async function handleStartStop() {
     return;
   }
 
-  if (!state.selectedProject || !state.selectedProject.id) {
-    setStatus('Ein Projekt auswählen.', 'error');
+  const targetType = currentTargetType();
+  const selectedTarget = currentSelectedTarget();
+  if (!selectedTarget || !selectedTarget.id) {
+    setStatus(targetType === 'contact' ? 'Einen Kontakt auswählen.' : 'Ein Projekt auswählen.', 'error');
     return;
   }
 
   const payload = {
     instance: instance,
     mode: currentMode(),
-    project: state.selectedProject,
+    targetType: targetType,
+    target: selectedTarget,
     info: (infoInput.value || '').trim(),
     verrechenbar: !!verrechenbarInput.checked,
   };
@@ -1995,19 +2512,61 @@ async function handleStartStop() {
   }
 }
 
-openSettingsButton.addEventListener('click', () => {
+function openSettings() {
   chrome.runtime.openOptionsPage();
-});
+}
+
+function handleEmptyInstanceSelect(event) {
+  if (state.instances.length) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  openSettings();
+}
+
+function handleTargetSwitch(type) {
+  setTargetType(type);
+  if (!selectedInstance()) {
+    return;
+  }
+  targetSuggest.openAll();
+}
+
+openSettingsButton.addEventListener('click', openSettings);
+if (targetProjectButton) {
+  targetProjectButton.addEventListener('click', () => handleTargetSwitch('project'));
+}
+if (targetContactButton) {
+  targetContactButton.addEventListener('click', () => handleTargetSwitch('contact'));
+}
 
 if (modeSelect) {
   modeSelect.addEventListener('change', updateModeUi);
 }
 infoInput.addEventListener('input', queueActiveSessionInfoSync);
-instanceSelect.addEventListener('change', updateIntervalHint);
+instanceSelect.addEventListener('mousedown', handleEmptyInstanceSelect);
+instanceSelect.addEventListener('keydown', (event) => {
+  if (!state.instances.length && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+    handleEmptyInstanceSelect(event);
+  }
+});
+instanceSelect.addEventListener('change', () => {
+  if (!state.instances.length) {
+    openSettings();
+    return;
+  }
+  if (!state.activeSession) {
+    setPicked('project', null);
+    setPicked('contact', null);
+  }
+  updateIntervalHint();
+  updateTargetUi();
+});
 resetButton.addEventListener('click', resetForm);
 startStopButton.addEventListener('click', handleStartStop);
 
-makeSuggest(projectSearch, document.getElementById('project-suggest'), CONFIG.searchProjectsAction || 'cmx_ext_time_search_projects', (term) => ({ term }), 'project');
+const targetSuggest = makeSuggest(projectSearch, document.getElementById('project-suggest'));
 
 document.addEventListener('DOMContentLoaded', refreshState);
 JS;
@@ -2046,6 +2605,10 @@ function buildAjaxUrl(instance, action) {
   return url.toString();
 }
 
+function instanceSupportsContactSave(instance) {
+  return !!(instance && instance.supports && instance.supports.contactSave);
+}
+
 function formatLocalDate(date) {
   const d = new Date(date);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -2054,6 +2617,50 @@ function formatLocalDate(date) {
 function formatLocalTime(date) {
   const d = new Date(date);
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function normalizeSessionTarget(source) {
+  const project = source && source.project && Number(source.project.id || 0) ? source.project : null;
+  const contact = source && source.contact && Number(source.contact.id || 0) ? source.contact : null;
+  let targetType = source && source.targetType === 'contact' ? 'contact' : 'project';
+  let target = source && source.target && Number(source.target.id || 0) ? source.target : null;
+  const entityType = target && typeof target.entity_type === 'string'
+    ? target.entity_type.toLowerCase()
+    : '';
+
+  if (targetType === 'contact' && contact) {
+    target = contact;
+  } else if (targetType === 'project' && project) {
+    target = project;
+  } else if (entityType === 'contact') {
+    targetType = 'contact';
+  } else if (entityType === 'project') {
+    targetType = 'project';
+  } else if (!target && contact && !project) {
+    targetType = 'contact';
+    target = contact;
+  } else if (!target && project && !contact) {
+    targetType = 'project';
+    target = project;
+  }
+
+  if (!target) {
+    target = targetType === 'contact' ? contact : project;
+  }
+  if (!target && contact) {
+    targetType = 'contact';
+    target = contact;
+  } else if (!target && project) {
+    targetType = 'project';
+    target = project;
+  }
+
+  return {
+    targetType: targetType,
+    target: target,
+    project: targetType === 'project' ? target : null,
+    contact: targetType === 'contact' ? target : null,
+  };
 }
 
 function intervalMs(session) {
@@ -2081,17 +2688,29 @@ async function clearReminderUi() {
 
 async function setActiveBadge(active) {
   try {
-    await chrome.action.setBadgeBackgroundColor({ color: active ? '#2271b1' : '#999999' });
+    await chrome.action.setBadgeBackgroundColor({ color: active ? '#d63638' : '#999999' });
     await chrome.action.setBadgeText({ text: active ? 'ON' : '' });
   } catch (error) {}
 }
 
 async function persistSession(session, reason) {
   const endMs = Date.now();
+  const normalizedTarget = normalizeSessionTarget(session || {});
+  const targetType = normalizedTarget.targetType;
+  const target = normalizedTarget.target;
+  if (targetType === 'contact' && !instanceSupportsContactSave(session.instance || null)) {
+    throw new Error('Diese Instanz unterstützt Kontakt-Speicherung noch nicht. Bitte das Plugin auf dieser Instanz aktualisieren.');
+  }
   const formData = new FormData();
   formData.append('action', CONFIG.saveAction || 'cmx_ext_time_save');
   formData.append('token', session.instance.token || '');
-  formData.append('project_id', String(session.project.id || 0));
+  formData.append('target_type', targetType);
+  formData.append('target_id', String((target && target.id) || 0));
+  if (targetType === 'project') {
+    formData.append('project_id', String((target && target.id) || 0));
+  } else {
+    formData.append('contact_id', String((target && target.id) || 0));
+  }
   formData.append('mode', session.mode || 'task');
   formData.append('artikel_id', String((session.article && session.article.id) || 0));
   formData.append('produkt_id', String((session.product && session.product.id) || 0));
@@ -2115,19 +2734,29 @@ async function persistSession(session, reason) {
   });
   const json = await response.json().catch(() => null);
   if (!response.ok || !json || !json.success) {
-    throw new Error((json && json.data && json.data.message) || 'Die Zeit konnte in Mis Büro nicht gespeichert werden.');
+    const message = (json && json.data && json.data.message) || 'Die Zeit konnte in Mis Büro nicht gespeichert werden.';
+    if (targetType === 'contact' && /projekt wurde nicht gefunden/i.test(String(message || ''))) {
+      throw new Error('Diese Instanz unterstützt Kontakt-Speicherung noch nicht. Bitte das Plugin auf dieser Instanz aktualisieren.');
+    }
+    throw new Error(message);
   }
   return json.data || {};
 }
 
 async function startSession(payload) {
-  if (!payload || !payload.instance || !payload.project || !payload.project.id) {
-    throw new Error('Projekt oder Instanz fehlen.');
+  const normalizedTarget = normalizeSessionTarget(payload || {});
+  const targetType = normalizedTarget.targetType;
+  const target = normalizedTarget.target;
+  if (!payload || !payload.instance || !target || !target.id) {
+    throw new Error(targetType === 'contact' ? 'Kontakt oder Instanz fehlen.' : 'Projekt oder Instanz fehlen.');
   }
   const session = {
     instanceKey: payload.instance.slug || payload.instance.baseUrl,
     instance: payload.instance,
-    project: payload.project,
+    targetType: targetType,
+    target: target,
+    project: normalizedTarget.project,
+    contact: normalizedTarget.contact,
     article: payload.article || null,
     product: payload.product || null,
     mode: payload.mode || 'task',
@@ -2159,6 +2788,25 @@ async function updateSession(payload) {
 
   if (payload && Object.prototype.hasOwnProperty.call(payload, 'info')) {
     nextSession.info = typeof payload.info === 'string' ? payload.info : '';
+  }
+
+  if (payload && (
+    Object.prototype.hasOwnProperty.call(payload, 'targetType')
+    || Object.prototype.hasOwnProperty.call(payload, 'target')
+    || Object.prototype.hasOwnProperty.call(payload, 'project')
+    || Object.prototype.hasOwnProperty.call(payload, 'contact')
+  )) {
+    const normalizedTarget = normalizeSessionTarget({
+      ...nextSession,
+      targetType: Object.prototype.hasOwnProperty.call(payload, 'targetType') ? payload.targetType : nextSession.targetType,
+      target: Object.prototype.hasOwnProperty.call(payload, 'target') ? payload.target : nextSession.target,
+      project: Object.prototype.hasOwnProperty.call(payload, 'project') ? payload.project : nextSession.project,
+      contact: Object.prototype.hasOwnProperty.call(payload, 'contact') ? payload.contact : nextSession.contact,
+    });
+    nextSession.targetType = normalizedTarget.targetType;
+    nextSession.target = normalizedTarget.target;
+    nextSession.project = normalizedTarget.project;
+    nextSession.contact = normalizedTarget.contact;
   }
 
   await setStorage({ [ACTIVE_KEY]: nextSession });
@@ -2197,7 +2845,8 @@ async function showReminder() {
   const session = await getStorage(ACTIVE_KEY);
   if (!session) return;
 
-  const projectName = (session.project && session.project.title) || 'diesem Projekt';
+  const target = session.target || session.project || session.contact || null;
+  const projectName = (target && (target.title || target.label)) || (session.targetType === 'contact' ? 'diesem Kontakt' : 'diesem Projekt');
   await setStorage({
     [REMINDER_KEY]: {
       createdAt: Date.now(),

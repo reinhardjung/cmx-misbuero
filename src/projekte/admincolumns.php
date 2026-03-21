@@ -903,6 +903,9 @@ add_action('admin_head-edit.php', function() {
 	$screen = function_exists('get_current_screen') ? get_current_screen() : null;
 	if (!$screen || $screen->id !== 'edit-projekte') return;
 	echo '<style>
+		.wp-list-table.posts.fixed.striped.table-view-list tbody td {
+			vertical-align: top;
+		}
 		td.column-cmx_col_umsatz {
 			text-align: left;
 			white-space: nowrap;
