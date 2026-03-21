@@ -538,39 +538,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events'))
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 	function cmx_cockpit_pendenzen_css(): string {
 		return '
-			.cmx-pend-wrap{margin:22px 0 0;padding:0 20px 0 0;box-sizing:border-box}
-			.cmx-pend-shell{background:linear-gradient(180deg,#edf2f8 0%,#f7f9fc 100%);border:1px solid #cad3df;border-radius:18px;overflow:hidden;box-shadow:0 12px 28px rgba(16,24,40,.12)}
-			.cmx-pend-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 24px;background:linear-gradient(180deg,#4d5c6d 0%,#3e4a59 100%);border-bottom:1px solid rgba(255,255,255,.08)}
-			.cmx-pend-title-wrap{display:flex;align-items:center;gap:14px;min-width:0}
-			.cmx-pend-title-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#f4f6f8;color:#3b8ed9;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+			.cmx-pend-wrap{margin:20px 0 0;padding:0 20px 0 0;box-sizing:border-box}
+			.cmx-pend-shell{background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);border:1px solid #cfe0f7;border-radius:18px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
+			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px 12px}
+			.cmx-pend-title-wrap{display:flex;align-items:flex-start;gap:14px;min-width:0}
+			.cmx-pend-title-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;color:#3b8ed9;box-shadow:inset 0 0 0 1px #d9e6f6,0 1px 2px rgba(16,24,40,.06)}
 			.cmx-pend-title-icon .dashicons{width:22px;height:22px;font-size:22px;line-height:22px}
-			.cmx-pend-title{margin:0;color:#fff;font-size:26px;line-height:1.1;font-weight:700}
+			.cmx-pend-title-copy{min-width:0}
+			.cmx-pend-title{margin:0;color:#162033;font-size:20px;line-height:1.2;font-weight:700}
+			.cmx-pend-subtitle{margin:8px 0 0;color:#4e5968;font-size:14px;line-height:1.45}
 			.cmx-pend-actions{display:flex;gap:10px;flex-wrap:wrap}
-			.cmx-pend-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-size:15px;font-weight:700;box-shadow:inset 0 -1px 0 rgba(0,0,0,.12)}
-			.cmx-pend-tab:hover{background:rgba(255,255,255,.14);color:#fff}
-			.cmx-pend-tab.is-active{background:#fff;color:#41556d;border-color:#d8e0ea}
-			.cmx-pend-body{padding:24px 26px 28px}
-			.cmx-pend-board-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(220px,1fr);gap:18px;align-items:start;padding:14px 0 26px;border-top:1px solid rgba(43,59,79,.08)}
+			.cmx-pend-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid #cfd9e7;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);color:#344054;text-decoration:none;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+			.cmx-pend-tab:hover{background:#fff;color:#162033}
+			.cmx-pend-tab.is-active{border-color:#bcd2ee;background:#fff;color:#173d6d;box-shadow:0 0 0 2px rgba(59,142,217,.08),0 1px 2px rgba(16,24,40,.05)}
+			.cmx-pend-body{padding:0 24px 24px}
+			.cmx-pend-board-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(220px,1fr);gap:18px;align-items:center;margin:0 0 18px;padding:12px 14px;border:1px solid #d9e6f6;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)}
 			.cmx-pend-board-filter{text-align:left}
-			.cmx-pend-board-filter--center{text-align:center;padding-top:8px}
-			.cmx-pend-board-select{display:inline-flex;align-items:center;gap:10px}
-			.cmx-pend-board-select select{min-width:196px;padding:10px 38px 10px 14px;border:1px solid #d5dde7;border-radius:10px;background:#fff;color:#41556d;font-size:15px;font-weight:700;box-shadow:0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-board-today{display:inline-block;min-width:240px;padding-bottom:10px;border-bottom:1px solid #dde5ee;color:#4c6078;font-size:22px;font-weight:700}
+			.cmx-pend-board-filter--center{text-align:center}
+			.cmx-pend-board-filter--right{text-align:right}
+			.cmx-pend-board-select{display:inline-flex;align-items:center;gap:10px;max-width:100%}
+			.cmx-pend-board-select select{min-width:196px;max-width:100%;padding:8px 34px 8px 12px;border:1px solid #cfd9e7;border-radius:8px;background:#fff;color:#162033;font-size:14px;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+			.cmx-pend-board-today{display:inline-block;min-width:240px;color:#41556d;font-size:18px;line-height:1.25;font-weight:700}
 			.cmx-pend-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-			.cmx-pend-column{min-width:0;padding-right:18px}
-			.cmx-pend-column:not(:last-child){border-right:1px solid rgba(43,59,79,.08)}
-			.cmx-pend-column:last-child{padding-right:0}
-			.cmx-pend-column-title{display:none}
-			.cmx-pend-card-list{display:flex;flex-direction:column;gap:14px}
-			.cmx-pend-card{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid #e0e6ee;border-radius:0;background:#fff;box-shadow:0 10px 18px rgba(16,24,40,.05),0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 48px;width:48px;height:48px;border-radius:6px;color:#fff;box-shadow:inset 0 -1px 0 rgba(0,0,0,.18)}
-			.cmx-pend-card-icon svg{display:block;width:24px;height:24px;fill:currentColor}
+			.cmx-pend-column{min-width:0;padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
+			.cmx-pend-column-title{display:block;margin:0 0 14px;font-size:12px;font-weight:700;line-height:1.2;color:#667085;letter-spacing:.04em;text-transform:uppercase}
+			.cmx-pend-card-list{display:flex;flex-direction:column;gap:12px}
+			.cmx-pend-card{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid #d9e6f6;border-radius:12px;background:#fff;box-shadow:0 6px 14px rgba(16,24,40,.05)}
+			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border-radius:7px;color:#fff;box-shadow:inset 0 -1px 0 rgba(0,0,0,.1)}
+			.cmx-pend-card-icon svg{display:block;width:16px;height:16px;fill:currentColor}
 			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
-			.cmx-pend-card-line{display:block;font-size:17px;line-height:1.3;color:#42556d}
+			.cmx-pend-card-line{display:block;font-size:15px;line-height:1.35;color:#42556d}
 			.cmx-pend-card-label{font-weight:800}
 			.cmx-pend-card-link{color:inherit;text-decoration:none}
 			.cmx-pend-card-link:hover{text-decoration:underline}
-			.cmx-pend-card-meta{display:block;margin-top:3px;font-size:15px;line-height:1.35;color:#56687d}
+			.cmx-pend-card-meta{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:#56687d}
 			.cmx-pend-card--red .cmx-pend-card-label{color:#c44a3d}
 			.cmx-pend-card--red .cmx-pend-card-icon{background:linear-gradient(180deg,#ef5b54 0%,#df4137 100%)}
 			.cmx-pend-card--orange .cmx-pend-card-label{color:#d27b1f}
@@ -579,13 +580,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-card--blue .cmx-pend-card-icon{background:linear-gradient(180deg,#63b5ef 0%,#3194de 100%)}
 			.cmx-pend-card--green .cmx-pend-card-label{color:#3d8642}
 			.cmx-pend-card--green .cmx-pend-card-icon{background:linear-gradient(180deg,#74cf5b 0%,#58b749 100%)}
-			.cmx-pend-empty{padding:18px;border:1px dashed #d6dde7;border-radius:12px;background:rgba(255,255,255,.56);color:#75859a;font-size:14px;text-align:center}
-			.cmx-pend-calendar-shell{padding-top:6px}
+			.cmx-pend-empty{padding:18px;border:1px dashed #d6dde7;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);color:#75859a;font-size:14px;text-align:center}
+			.cmx-pend-calendar-shell{padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
 			.cmx-pend-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
 			.cmx-pend-calendar-nav{display:inline-flex;align-items:center;gap:8px}
 			.cmx-pend-calendar-nav a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #d4dbe5;border-radius:10px;background:#fff;color:#41556d;text-decoration:none}
 			.cmx-pend-calendar-nav a:hover{background:#f3f7fb}
-			.cmx-pend-calendar-title{margin:0;color:#41556d;font-size:24px;font-weight:700}
+			.cmx-pend-calendar-title{margin:0;color:#162033;font-size:20px;font-weight:700}
 			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
 			.cmx-pend-calendar-weekday{padding:6px 4px;color:#7a8898;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center}
 			.cmx-pend-calendar-cell{min-height:168px;padding:10px 10px 12px;border:1px solid #dbe3ec;border-radius:14px;background:#fff;box-shadow:0 6px 14px rgba(16,24,40,.05)}
@@ -604,9 +605,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-more{margin-top:2px;color:#74849a;font-size:12px}
 			@media (max-width: 1280px){
 				.cmx-pend-board-toolbar,.cmx-pend-columns{grid-template-columns:1fr}
-				.cmx-pend-column{padding-right:0;border-right:0;border-top:1px solid rgba(43,59,79,.08);padding-top:18px}
-				.cmx-pend-column:first-child{border-top:0;padding-top:0}
-				.cmx-pend-board-filter--center{text-align:left;padding-top:0}
+				.cmx-pend-board-filter--center,
+				.cmx-pend-board-filter--right{text-align:left}
 				.cmx-pend-board-today{min-width:0}
 				.cmx-pend-calendar-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 			}
@@ -724,7 +724,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_board')) {
 		echo '<div class="cmx-pend-board-filter cmx-pend-board-filter--center">';
 		echo '<span class="cmx-pend-board-today">' . \esc_html(cmx_cockpit_pendenzen_format_board_date($today_ts)) . ' - Heute</span>';
 		echo '</div>';
-		echo '<div class="cmx-pend-board-filter" style="text-align:right">';
+		echo '<div class="cmx-pend-board-filter cmx-pend-board-filter--right">';
 		echo '<div class="cmx-pend-board-select">';
 		echo '<select name="future" aria-label="Nächste Tage">';
 		foreach ($day_options as $value => $label) {
@@ -737,12 +737,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_board')) {
 
 		echo '<div class="cmx-pend-columns">';
 		echo '<section class="cmx-pend-column">';
+		echo '<h2 class="cmx-pend-column-title">Vergangenheit</h2>';
 		cmx_cockpit_pendenzen_render_day_column($past_events, 'Keine Einträge in den letzten ' . $past_days . ' Tagen.');
 		echo '</section>';
 		echo '<section class="cmx-pend-column">';
+		echo '<h2 class="cmx-pend-column-title">Heute</h2>';
 		cmx_cockpit_pendenzen_render_day_column($today_events, 'Heute sind keine Fristen erfasst.');
 		echo '</section>';
 		echo '<section class="cmx-pend-column">';
+		echo '<h2 class="cmx-pend-column-title">Zukunft</h2>';
 		cmx_cockpit_pendenzen_render_day_column($future_events, 'Keine Einträge in den nächsten ' . $future_days . ' Tagen.');
 		echo '</section>';
 		echo '</div>';
@@ -851,8 +854,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		echo '<div class="cmx-pend-shell">';
 		echo '<div class="cmx-pend-head">';
 		echo '<div class="cmx-pend-title-wrap">';
-		echo '<span class="cmx-pend-title-icon"><span class="dashicons dashicons-menu-alt3"></span></span>';
-		echo '<h1 class="cmx-pend-title">Übersicht alle Pendenzen</h1>';
+		echo '<div class="cmx-pend-title-copy">';
+		echo '<h1 class="cmx-pend-title">Pendenzenübersicht</h1>';
+		echo '<p class="cmx-pend-subtitle">Alle Fristen aus Belegen, Kontakten und Projekten in einer gemeinsamen Ansicht.</p>';
+		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-pend-actions">';
 		echo '<a class="cmx-pend-tab' . ($view === 'board' && $active_range === 30 ? ' is-active' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'board', 'range' => 30, 'past' => 15, 'future' => 15])) . '">30 Tage Ansicht</a>';
@@ -877,7 +882,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 \add_action('admin_menu', function (): void {
 	\add_submenu_page(
 		'index.php',
-		'Pendenzenüberischt',
+		'Pendenzenübersicht',
 		'Pendenzen',
 		'edit_posts',
 		cmx_cockpit_pendenzen_slug(),
