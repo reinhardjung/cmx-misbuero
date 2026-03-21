@@ -11,11 +11,113 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_tab_is_active')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_active_subtab')) {
+	function cmx_email_active_subtab(): string {
+		if (!cmx_email_tab_is_active()) {
+			return '';
+		}
+		$sub = isset($_GET['sub']) ? \sanitize_key((string) \wp_unslash($_GET['sub'])) : 'belege';
+		return $sub !== '' ? $sub : 'belege';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	function cmx_email_option_value(string $key, string $default = ''): string {
 		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
 		$value = $options[$key] ?? $default;
 		return \is_scalar($value) ? (string) $value : $default;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_normalize_client_list')) {
+	function cmx_email_normalize_client_list($raw): array {
+		$rows = \is_array($raw) ? $raw : [];
+		$normalized = [];
+		$index = 1;
+
+		foreach ($rows as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+
+			$client = \sanitize_text_field((string) ($row['client'] ?? ''));
+			$name = \sanitize_text_field((string) ($row['name'] ?? ''));
+			$email = \sanitize_email((string) ($row['email'] ?? ''));
+			$password = \trim((string) ($row['password'] ?? ''));
+			$smtp_host = \sanitize_text_field((string) ($row['smtp_host'] ?? ''));
+			$smtp_port = (int) ($row['smtp_port'] ?? 587);
+			$imap_host = \sanitize_text_field((string) ($row['imap_host'] ?? ''));
+			$imap_port = (int) ($row['imap_port'] ?? 993);
+
+			if ($smtp_port <= 0 || $smtp_port > 65535) {
+				$smtp_port = 587;
+			}
+			if ($imap_port <= 0 || $imap_port > 65535) {
+				$imap_port = 993;
+			}
+
+			if ($client === '' && $name === '' && $email === '' && $password === '' && $smtp_host === '' && $imap_host === '') {
+				continue;
+			}
+
+			$id = \sanitize_key((string) ($row['id'] ?? ''));
+			if ($id === '') {
+				$id = 'client_' . $index;
+			}
+
+			$normalized[] = [
+				'id'        => $id,
+				'client'    => $client,
+				'name'      => $name,
+				'email'     => $email,
+				'password'  => $password,
+				'smtp_host' => $smtp_host,
+				'smtp_port' => (string) $smtp_port,
+				'imap_host' => $imap_host,
+				'imap_port' => (string) $imap_port,
+			];
+			$index++;
+		}
+
+		return $normalized;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_client_list')) {
+	function cmx_email_client_list(): array {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		return cmx_email_normalize_client_list($options['email_clients'] ?? []);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
+	function cmx_email_render_client_item(array $client, string $index): void {
+		$name_base = \esc_attr(CMX_SETTINGS_MAIN . '[email_clients][' . $index . ']');
+		$id = \esc_attr((string) ($client['id'] ?? ''));
+		$client_name = \esc_attr((string) ($client['client'] ?? ''));
+		$name = \esc_attr((string) ($client['name'] ?? ''));
+		$email = \esc_attr((string) ($client['email'] ?? ''));
+		$password = \esc_attr((string) ($client['password'] ?? ''));
+		$smtp_host = \esc_attr((string) ($client['smtp_host'] ?? ''));
+		$smtp_port = \esc_attr((string) ($client['smtp_port'] ?? '587'));
+		$imap_host = \esc_attr((string) ($client['imap_host'] ?? ''));
+		$imap_port = \esc_attr((string) ($client['imap_port'] ?? '993'));
+
+		echo '<div class="cmx-email-client-item">';
+		echo '<input type="hidden" name="' . $name_base . '[id]" value="' . $id . '">';
+		echo '<div class="cmx-email-client-head">';
+		echo '<strong>Client</strong>';
+		echo '<button type="button" class="button-link-delete cmx-email-client-remove">Entfernen</button>';
+		echo '</div>';
+		echo '<div class="cmx-email-client-grid">';
+		echo '<label class="cmx-email-client-field"><span>Bezeichnung</span><input type="text" class="regular-text" name="' . $name_base . '[client]" value="' . $client_name . '" placeholder="z.B. Kunde A" autocomplete="off"></label>';
+		echo '<label class="cmx-email-client-field"><span>E-Mail Name</span><input type="text" class="regular-text" name="' . $name_base . '[name]" value="' . $name . '" placeholder="Max Muster" autocomplete="organization"></label>';
+		echo '<label class="cmx-email-client-field"><span>E-Mail Adresse</span><input type="email" class="regular-text" name="' . $name_base . '[email]" value="' . $email . '" placeholder="mail@beispiel.ch" autocomplete="username"></label>';
+		echo '<label class="cmx-email-client-field"><span>Kennwort</span><span class="cmx-email-password-wrap"><input type="password" class="regular-text cmx-email-password-input" name="' . $name_base . '[password]" value="' . $password . '" autocomplete="current-password"><button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden"><span class="cmx-email-password-icon is-show" aria-hidden="true"></span></button></span></label>';
+		echo '<label class="cmx-email-client-field"><span>SMTP Host</span><input type="text" class="regular-text" name="' . $name_base . '[smtp_host]" value="' . $smtp_host . '" placeholder="smtp.infomaniak.com" autocomplete="off"></label>';
+		echo '<label class="cmx-email-client-field"><span>IMAP Host</span><input type="text" class="regular-text" name="' . $name_base . '[imap_host]" value="' . $imap_host . '" placeholder="imap.infomaniak.com" autocomplete="off"></label>';
+		echo '</div>';
+		echo '</div>';
 	}
 }
 
@@ -170,7 +272,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 }
 
 \add_action('admin_init', function (): void {
-	$page = 'cmx_tab_email';
+	$page = 'cmx_tab_email__belege';
+	$clients_page = 'cmx_tab_email__clients';
 
 	\add_settings_section(
 		'cmx_sec_email_account',
@@ -371,6 +474,55 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		$page,
 		'cmx_sec_email_links'
 	);
+
+	\add_settings_section(
+		'cmx_sec_email_clients',
+		'E-Mail Clients',
+		static function (): void {
+			echo '<p class="description">Hier kannst Du beliebig viele zusätzliche Mail-Zugangsdaten pro Client hinterlegen.</p>';
+		},
+		$clients_page
+	);
+
+	\add_settings_field(
+		'cmx_email_clients',
+		'',
+		static function (): void {
+			$clients = cmx_email_client_list();
+			$next_index = \count($clients);
+
+			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_clients_present]" value="1">';
+			echo '<div class="cmx-email-client-list-wrap">';
+			echo '<div class="cmx-email-client-list" id="cmx-email-client-list" data-next-index="' . (int) $next_index . '">';
+			if (!empty($clients)) {
+				foreach ($clients as $index => $client) {
+					cmx_email_render_client_item((array) $client, (string) $index);
+				}
+			}
+			echo '</div>';
+			echo '<p class="cmx-email-client-empty" id="cmx-email-client-empty"' . (!empty($clients) ? ' style="display:none;"' : '') . '>Noch kein Client erfasst.</p>';
+			echo '<p><button type="button" class="button button-secondary" id="cmx-email-client-add">Client hinzufügen</button></p>';
+
+			$template_client = [
+				'id'        => '',
+				'client'    => '',
+				'name'      => '',
+				'email'     => '',
+				'password'  => '',
+				'smtp_host' => '',
+				'smtp_port' => '587',
+				'imap_host' => '',
+				'imap_port' => '993',
+			];
+			\ob_start();
+			cmx_email_render_client_item($template_client, '__index__');
+			$template = (string) \ob_get_clean();
+			echo '<template id="cmx-email-client-template">' . $template . '</template>';
+			echo '</div>';
+		},
+		$clients_page,
+		'cmx_sec_email_clients'
+	);
 	});
 
 	\add_action('admin_head', function (): void {
@@ -427,6 +579,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				box-shadow: 0 0 0 2px #2271b1;
 				border-radius: 3px;
 			}
+			.cmx-email-client-list {
+				display: flex;
+				flex-direction: column;
+				gap: 14px;
+			}
+			.cmx-email-client-item {
+				border: 1px solid #d7dce3;
+				border-radius: 12px;
+				background: #fff;
+				padding: 14px;
+			}
+			.cmx-email-client-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				margin-bottom: 12px;
+			}
+			.cmx-email-client-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 12px;
+			}
+			.cmx-email-client-field {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+				min-width: 0;
+			}
+			.cmx-email-client-field span {
+				font-weight: 600;
+			}
+			.cmx-email-client-field .regular-text,
+			.cmx-email-client-field .small-text {
+				width: 100%;
+				max-width: none;
+			}
+			.cmx-email-client-empty {
+				margin: 0 0 14px;
+				color: #646970;
+			}
+			@media (max-width: 782px) {
+				.cmx-email-client-grid {
+					grid-template-columns: 1fr;
+				}
+			}
 		</style>
 		<?php
 	});
@@ -435,6 +633,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		if (!\is_array($new)) {
 			return $new;
 		}
+
+		$normalize_client_list = static function (array $data): array {
+			if (!\array_key_exists('email_clients_present', $data) && !\array_key_exists('email_clients', $data)) {
+				return $data;
+			}
+			$data['email_clients'] = \function_exists(__NAMESPACE__ . '\\cmx_email_normalize_client_list')
+				? cmx_email_normalize_client_list($data['email_clients'] ?? [])
+				: [];
+			unset($data['email_clients_present']);
+			return $data;
+		};
+
+		$new = $normalize_client_list($new);
 
 	$new['email_name'] = \sanitize_text_field((string) ($new['email_name'] ?? ''));
 	$new['email_address'] = \sanitize_email((string) ($new['email_address'] ?? ''));
@@ -622,30 +833,86 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			el.textContent = message || '';
 			el.style.color = '#50575e';
 		}
-		function initPasswordToggle(){
-			var input = document.getElementById('cmx-email-password-input');
-			var toggle = document.querySelector('.cmx-email-password-toggle');
-			if (!input || !toggle || toggle.dataset.bound === '1') return;
-			toggle.dataset.bound = '1';
-			var icon = toggle.querySelector('.cmx-email-password-icon');
+		function initPasswordToggles(scope){
+			var root = scope || document;
+			root.querySelectorAll('.cmx-email-password-wrap').forEach(function(wrap){
+				var input = wrap.querySelector('.cmx-email-password-input');
+				var toggle = wrap.querySelector('.cmx-email-password-toggle');
+				if (!input || !toggle || toggle.dataset.bound === '1') return;
+				toggle.dataset.bound = '1';
+				var icon = toggle.querySelector('.cmx-email-password-icon');
 
-			function syncPasswordToggle(){
-				var isVisible = input.type === 'text';
-				var label = isVisible ? 'Kennwort ausblenden' : 'Kennwort einblenden';
-				toggle.setAttribute('aria-label', label);
-				toggle.setAttribute('title', label);
-				toggle.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
-				if (icon) {
-					icon.className = 'cmx-email-password-icon ' + (isVisible ? 'is-hide' : 'is-show');
+				function syncPasswordToggle(){
+					var isVisible = input.type === 'text';
+					var label = isVisible ? 'Kennwort ausblenden' : 'Kennwort einblenden';
+					toggle.setAttribute('aria-label', label);
+					toggle.setAttribute('title', label);
+					toggle.setAttribute('aria-pressed', isVisible ? 'true' : 'false');
+					if (icon) {
+						icon.className = 'cmx-email-password-icon ' + (isVisible ? 'is-hide' : 'is-show');
+					}
 				}
-			}
 
-			toggle.addEventListener('click', function(){
-				input.type = input.type === 'password' ? 'text' : 'password';
+				toggle.addEventListener('click', function(){
+					input.type = input.type === 'password' ? 'text' : 'password';
+					syncPasswordToggle();
+				});
+
 				syncPasswordToggle();
 			});
+		}
+		function initClientList(){
+			var list = document.getElementById('cmx-email-client-list');
+			var addBtn = document.getElementById('cmx-email-client-add');
+			var template = document.getElementById('cmx-email-client-template');
+			var empty = document.getElementById('cmx-email-client-empty');
+			if (!list || !addBtn || !template || addBtn.dataset.bound === '1') return;
+			addBtn.dataset.bound = '1';
 
-			syncPasswordToggle();
+			function syncEmpty(){
+				if (!empty) return;
+				empty.style.display = list.children.length ? 'none' : '';
+			}
+
+			function nextIndex(){
+				var current = parseInt(list.getAttribute('data-next-index') || '0', 10);
+				if (isNaN(current) || current < 0) {
+					current = list.children.length;
+				}
+				list.setAttribute('data-next-index', String(current + 1));
+				return current;
+			}
+
+			function addRow(){
+				var index = nextIndex();
+				var html = String(template.innerHTML || '').replace(/__index__/g, String(index));
+				if (html.trim() === '') return;
+				var holder = document.createElement('div');
+				holder.innerHTML = html.trim();
+				var item = holder.firstElementChild;
+				if (!item) return;
+				list.appendChild(item);
+				initPasswordToggles(item);
+				syncEmpty();
+			}
+
+			addBtn.addEventListener('click', function(event){
+				event.preventDefault();
+				addRow();
+			});
+
+			list.addEventListener('click', function(event){
+				var removeBtn = event.target.closest('.cmx-email-client-remove');
+				if (!removeBtn) return;
+				event.preventDefault();
+				var item = removeBtn.closest('.cmx-email-client-item');
+				if (item) {
+					item.remove();
+					syncEmpty();
+				}
+			});
+
+			syncEmpty();
 		}
 		function runTest(action, hostKey, buttonId, resultId){
 			var btn = document.getElementById(buttonId);
@@ -725,7 +992,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			});
 		}
 
-		initPasswordToggle();
+		initPasswordToggles(document);
+		initClientList();
 		runTest('cmx_email_test_smtp', 'smtp_host', 'cmx-email-smtp-test', 'cmx-email-smtp-result');
 		runTest('cmx_email_test_imap', 'imap_host', 'cmx-email-imap-test', 'cmx-email-imap-result');
 	})();

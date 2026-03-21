@@ -119,6 +119,13 @@ function cmx_get_subtabs(string $tab): array {
 		];
 	}
 
+	if ($tab === 'email') {
+		return [
+			'belege'  => 'Belege',
+			'clients' => 'Clients',
+		];
+	}
+
 	return [];
 }
 
