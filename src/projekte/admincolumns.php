@@ -172,6 +172,44 @@ if (!function_exists(__NAMESPACE__ . '\cmx_proj_shift_admin_column_left')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\cmx_proj_reorder_admin_columns_after')) {
+	function cmx_proj_reorder_admin_columns_after(array $columns, string $anchor_key, array $ordered_keys): array {
+		if (empty($ordered_keys)) {
+			return $columns;
+		}
+
+		$moved = [];
+		foreach ($ordered_keys as $column_key) {
+			$column_key = (string) $column_key;
+			if ($column_key === '' || !isset($columns[$column_key])) {
+				continue;
+			}
+			$moved[$column_key] = $columns[$column_key];
+			unset($columns[$column_key]);
+		}
+
+		if (empty($moved)) {
+			return $columns;
+		}
+
+		if (!isset($columns[$anchor_key])) {
+			return $moved + $columns;
+		}
+
+		$reordered = [];
+		foreach ($columns as $key => $label) {
+			$reordered[$key] = $label;
+			if ($key === $anchor_key) {
+				foreach ($moved as $moved_key => $moved_label) {
+					$reordered[$moved_key] = $moved_label;
+				}
+			}
+		}
+
+		return $reordered;
+	}
+}
+
 /** Datum-Helpers (ISO prüfen/säubern + CH-Format) */
 if (!function_exists(__NAMESPACE__ . '\cmx_proj_is_iso_date')) {
 	function cmx_proj_is_iso_date($value) {
@@ -940,7 +978,14 @@ add_filter('manage_edit-projekte_columns', function(array $columns): array {
 }, 900);
 
 add_filter('manage_edit-projekte_columns', function(array $columns): array {
-	return cmx_proj_shift_admin_column_left($columns, 'cmx_kategorie', 3);
+	return cmx_proj_reorder_admin_columns_after($columns, 'title', [
+		'cmx_kategorie',
+		'cmx_aufgaben',
+		'cmx_kunde',
+		'cmx_status',
+		'cmx_col_beginn',
+		'cmx_col_ende',
+	]);
 }, 950);
 
 add_action('manage_projekte_posts_custom_column', function(string $column, int $post_id): void {

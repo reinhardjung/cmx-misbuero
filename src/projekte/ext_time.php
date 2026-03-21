@@ -396,6 +396,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_project_date_meta_keys')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_task_taxonomy')) {
+	function cmx_ext_time_task_taxonomy(): ?string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_projekte_detect_task_taxonomy')) {
+			$tax = (string) cmx_projekte_detect_task_taxonomy();
+			if ($tax !== '' && \taxonomy_exists($tax) && \is_object_in_taxonomy('projekte', $tax)) {
+				return $tax;
+			}
+		}
+
+		if (\defined(__NAMESPACE__ . '\\TAX_PROJEKTE_AUFGABEN')) {
+			$tax = (string) \constant(__NAMESPACE__ . '\\TAX_PROJEKTE_AUFGABEN');
+			if ($tax !== '' && \taxonomy_exists($tax) && \is_object_in_taxonomy('projekte', $tax)) {
+				return $tax;
+			}
+		}
+
+		foreach (['projekte_aufgaben', 'projekte_aufgabe', 'aufgaben', 'aufgabe'] as $candidate) {
+			if (\taxonomy_exists($candidate) && \is_object_in_taxonomy('projekte', $candidate)) {
+				return $candidate;
+			}
+		}
+
+		return null;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_project_task_names')) {
+	function cmx_ext_time_project_task_names(int $project_id): array {
+		$tax = cmx_ext_time_task_taxonomy();
+		if ($project_id <= 0 || $tax === null || $tax === '') {
+			return [];
+		}
+
+		$terms = \get_the_terms($project_id, $tax);
+		if (empty($terms) || \is_wp_error($terms)) {
+			return [];
+		}
+
+		$names = [];
+		foreach ($terms as $term) {
+			$name = \trim((string) ($term->name ?? ''));
+			if ($name !== '') {
+				$names[] = $name;
+			}
+		}
+
+		return \array_values(\array_unique($names));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_projects')) {
 	function cmx_ext_time_active_projects(int $limit = 300): array {
 		[$begin_key, $end_key] = cmx_ext_time_project_date_meta_keys();
@@ -440,13 +490,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_projects')) {
 			if ($title === '') {
 				$title = '(#' . $project_id . ')';
 			}
+			$task_names = cmx_ext_time_project_task_names($project_id);
+			$task_label = !empty($task_names) ? \implode(', ', $task_names) : '';
+			$label = $task_label !== '' ? ($title . ' - ' . $task_label) : $title;
 
 			$out[] = [
-				'id'     => $project_id,
-				'title'  => $title,
-				'label'  => $title,
-				'beginn' => $begin,
-				'ende'   => $end,
+				'id'         => $project_id,
+				'title'      => $title,
+				'label'      => $label,
+				'task_names' => $task_names,
+				'beginn'     => $begin,
+				'ende'       => $end,
 			];
 		}
 
@@ -1555,7 +1609,7 @@ function filterCachedProjects(projects, term) {
   }
 
   return list.filter((item) => {
-    const haystack = String(item.title || item.label || '').toLocaleLowerCase('de');
+    const haystack = String((item.title || '') + ' ' + (item.label || '')).toLocaleLowerCase('de');
     return haystack.includes(needle);
   }).slice(0, 100);
 }
@@ -1611,7 +1665,7 @@ function updateIntervalHint() {
 function setPicked(type, item) {
   if (type === 'project') {
     state.selectedProject = item || null;
-    projectSearch.value = item ? (item.title || item.label || '') : '';
+    projectSearch.value = item ? (item.label || item.title || '') : '';
   }
   updateSelectionHint();
 }
@@ -1721,6 +1775,16 @@ function makeSuggest(input, box, action, mapResult, type) {
   let activeIndex = -1;
   let items = [];
 
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[char] || char));
+  }
+
   function close() {
     box.style.display = 'none';
     box.innerHTML = '';
@@ -1736,9 +1800,9 @@ function makeSuggest(input, box, action, mapResult, type) {
       return;
     }
     box.innerHTML = items.map((item, index) => {
-      const title = item.title || item.label || '';
-      const sub = item.nr ? ('<div class="muted">' + item.nr + '</div>') : '';
-      return '<button type="button" data-index="' + index + '"><div>' + title + '</div>' + sub + '</button>';
+      const title = type === 'project' ? (item.label || item.title || '') : (item.title || item.label || '');
+      const sub = type === 'project' ? '' : (item.nr ? ('<div class="muted">' + escapeHtml(item.nr) + '</div>') : '');
+      return '<button type="button" data-index="' + index + '"><div>' + escapeHtml(title) + '</div>' + sub + '</button>';
     }).join('');
     box.style.display = 'block';
   }

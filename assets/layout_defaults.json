@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-03-18T08:26:34+00:00",
+    "exported_at": "2026-03-21T03:16:35+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -56,12 +56,12 @@
             false
         ],
         "meta-box-order_kontakte": {
-            "side": "cmx_savebox,cmx_dokumente_box,kontakte_kategoriendiv,cmx_kontakte_stufe_side,cmx_local_image_box_kontakte,cmx_zu_projekt,cmx_kontakt_belege_umsatz",
+            "side": "cmx_savebox,cmx_dokumente_box,kontakte_kategoriendiv,cmx_kontakte_stufe_side,cmx_kontakte_zu_kontakt_box,cmx_zu_projekt,cmx_kontakt_belege_umsatz,cmx_system_assigned_user,cmx_kl_box_kontakte",
             "normal": "cmx_kontakte_stammdaten,cmx_kommunikation_box,cmx_adressen_metabox,cmx_projekt_tasks,cmx_internenotizen_central",
             "advanced": ""
         },
         "meta-box-order_projekte": {
-            "side": "cmx_savebox,cmx_dokumente_box,cmx_projekt_stammdaten,cmx_projekte_status_side,projekte_kategoriendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz",
+            "side": "cmx_savebox,cmx_dokumente_box,cmx_projekt_stammdaten,cmx_projekte_status_side,projekte_kategoriendiv,projekte_aufgabendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz,cmx_system_assigned_user",
             "normal": "cmx_projekt_zuordnungen,cmx_projekt_tasks,cmx_internenotizen_central",
             "advanced": ""
         },
