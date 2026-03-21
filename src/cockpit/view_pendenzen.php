@@ -1,5 +1,8 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+// if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
+
+
 if (!\in_array(UserDomain, (array) cmx_ini_get_value('vip', 'instanzen'), true)) return;
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_slug')) {
@@ -564,8 +567,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-column-title{display:block;margin:0 0 14px;font-size:12px;font-weight:700;line-height:1.2;color:#667085;letter-spacing:.04em;text-transform:uppercase}
 			.cmx-pend-card-list{display:flex;flex-direction:column;gap:12px}
 			.cmx-pend-card{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid #d9e6f6;border-radius:12px;background:#fff;box-shadow:0 6px 14px rgba(16,24,40,.05)}
-			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border-radius:7px;color:#fff;box-shadow:inset 0 -1px 0 rgba(0,0,0,.1)}
-			.cmx-pend-card-icon svg{display:block;width:16px;height:16px;fill:currentColor}
+			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;height:32px;border-radius:7px;color:#42556d;background:#f3f6fa;border:1px solid #d9e6f6;box-shadow:none}
+			.cmx-pend-card-icon svg{display:block;width:14px;height:14px;fill:currentColor}
 			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
 			.cmx-pend-card-line{display:block;font-size:15px;line-height:1.35;color:#42556d}
 			.cmx-pend-card-label{font-weight:800}
@@ -573,13 +576,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-card-link:hover{text-decoration:underline}
 			.cmx-pend-card-meta{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:#56687d}
 			.cmx-pend-card--red .cmx-pend-card-label{color:#c44a3d}
-			.cmx-pend-card--red .cmx-pend-card-icon{background:linear-gradient(180deg,#ef5b54 0%,#df4137 100%)}
+			.cmx-pend-card--red .cmx-pend-card-icon{background:#feefee;border-color:#f7d0cb;color:#df4137}
 			.cmx-pend-card--orange .cmx-pend-card-label{color:#d27b1f}
-			.cmx-pend-card--orange .cmx-pend-card-icon{background:linear-gradient(180deg,#ffb347 0%,#ff9c2e 100%)}
+			.cmx-pend-card--orange .cmx-pend-card-icon{background:#fff4e2;border-color:#ffdca9;color:#e38b23}
 			.cmx-pend-card--blue .cmx-pend-card-label{color:#3f73a7}
-			.cmx-pend-card--blue .cmx-pend-card-icon{background:linear-gradient(180deg,#63b5ef 0%,#3194de 100%)}
+			.cmx-pend-card--blue .cmx-pend-card-icon{background:#edf6ff;border-color:#cfe4fb;color:#3194de}
 			.cmx-pend-card--green .cmx-pend-card-label{color:#3d8642}
-			.cmx-pend-card--green .cmx-pend-card-icon{background:linear-gradient(180deg,#74cf5b 0%,#58b749 100%)}
+			.cmx-pend-card--green .cmx-pend-card-icon{background:#eef9ef;border-color:#cfeecf;color:#58b749}
 			.cmx-pend-empty{padding:18px;border:1px dashed #d6dde7;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);color:#75859a;font-size:14px;text-align:center}
 			.cmx-pend-calendar-shell{padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
 			.cmx-pend-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
@@ -596,12 +599,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-number{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:999px;color:#41556d;font-size:14px;font-weight:800}
 			.cmx-pend-calendar-cell.is-today .cmx-pend-calendar-number{background:#2f7dd3;color:#fff}
 			.cmx-pend-calendar-items{display:flex;flex-direction:column;gap:8px}
-			.cmx-pend-calendar-chip{display:block;padding:8px 10px;border-radius:10px;color:#fff;text-decoration:none;font-size:12px;line-height:1.3;font-weight:700}
-			.cmx-pend-calendar-chip:hover{opacity:.92}
-			.cmx-pend-calendar-chip--red{background:#df4137}
-			.cmx-pend-calendar-chip--orange{background:#ff9c2e}
-			.cmx-pend-calendar-chip--blue{background:#3194de}
-			.cmx-pend-calendar-chip--green{background:#58b749}
+			.cmx-pend-calendar-chip{display:block;padding:8px 10px;border-radius:10px;border:1px solid #d9e6f6;background:#f8fbff;color:#42556d;text-decoration:none;font-size:12px;line-height:1.3;font-weight:700}
+			.cmx-pend-calendar-chip:hover{opacity:1;filter:brightness(.99)}
+			.cmx-pend-calendar-chip--red{background:#feefee;border-color:#f7d0cb;color:#df4137}
+			.cmx-pend-calendar-chip--orange{background:#fff4e2;border-color:#ffdca9;color:#e38b23}
+			.cmx-pend-calendar-chip--blue{background:#edf6ff;border-color:#cfe4fb;color:#3194de}
+			.cmx-pend-calendar-chip--green{background:#eef9ef;border-color:#cfeecf;color:#58b749}
 			.cmx-pend-calendar-more{margin-top:2px;color:#74849a;font-size:12px}
 			@media (max-width: 1280px){
 				.cmx-pend-board-toolbar,.cmx-pend-columns{grid-template-columns:1fr}
