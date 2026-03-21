@@ -220,6 +220,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_icon_png')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_is_png_bytes')) {
+	function cmx_ext_chrome_is_png_bytes(string $bytes): bool {
+		return $bytes !== '' && \strncmp($bytes, "\x89PNG\r\n\x1a\n", 8) === 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_icon_zip_bytes')) {
+	function cmx_ext_chrome_icon_zip_bytes(int $size, bool $disabled = false): string {
+		$png = cmx_ext_chrome_icon_png($size, $disabled);
+		if (cmx_ext_chrome_is_png_bytes($png)) {
+			return $png;
+		}
+
+		$asset_path = cmx_ext_chrome_icon_asset_path();
+		if (\is_file($asset_path)) {
+			$asset_bytes = (string) \file_get_contents($asset_path);
+			if (cmx_ext_chrome_is_png_bytes($asset_bytes)) {
+				return $asset_bytes;
+			}
+		}
+
+		if ($disabled) {
+			$fallback = cmx_ext_chrome_icon_png($size, false);
+			if (cmx_ext_chrome_is_png_bytes($fallback)) {
+				return $fallback;
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_extension_config')) {
 	function cmx_ext_chrome_extension_config(int $user_id = 0): array {
 		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
@@ -902,8 +934,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_zip')) {
 		$zip->addFromString('README.txt', cmx_ext_chrome_readme_txt());
 
 		foreach ([16, 32, 48, 128] as $size) {
-			$zip->addFromString('icon' . $size . '.png', cmx_ext_chrome_icon_png((int) $size, false));
-			$zip->addFromString('icon-disabled' . $size . '.png', cmx_ext_chrome_icon_png((int) $size, true));
+			$icon_png = cmx_ext_chrome_icon_zip_bytes((int) $size, false);
+			$icon_disabled_png = cmx_ext_chrome_icon_zip_bytes((int) $size, true);
+			if ($icon_png === '' || $icon_disabled_png === '') {
+				$zip->close();
+				@unlink($tmp);
+				\wp_die('Icon-Datei konnte nicht erzeugt werden.');
+			}
+			$zip->addFromString('icon' . $size . '.png', $icon_png);
+			$zip->addFromString('icon-disabled' . $size . '.png', $icon_disabled_png);
 		}
 
 		$zip->close();

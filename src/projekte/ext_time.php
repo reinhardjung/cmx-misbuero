@@ -30,9 +30,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SAVE_ACTION')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_plugin_version')) {
 	function cmx_ext_time_plugin_version(): string {
-		$version = \defined(__NAMESPACE__ . '\\CMX_VERSION') ? (string) \constant(__NAMESPACE__ . '\\CMX_VERSION') : '1.0.0';
+		$version = \defined(__NAMESPACE__ . '\\CMX_VERSION') ? (string) \constant(__NAMESPACE__ . '\\CMX_VERSION') : '2.6.5';
 		if (!\preg_match('/^\d+(?:\.\d+){0,3}$/', $version)) {
-			$version = '1.0.0';
+			$version = '2.6.5';
 		}
 		return $version;
 	}
@@ -294,7 +294,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 		echo '<img src="' . \esc_attr($icon_src) . '" alt="" width="42" height="42" style="display:block;width:42px;height:42px;object-fit:contain;">';
 		echo '</button>';
 		echo '<div style="min-width:260px;">';
-		echo '<div style="font-weight:600;">Mis Büro Zeiterfassung</div>';
+		echo '<div style="font-weight:600;">Mis Büro - Zeiterfassung</div>';
 		echo '<div style="color:#646970;">Lädt das Erweiterungspaket für Google Chrome herunter.</div>';
 		echo '<div style="margin-top:4px;"><button type="button" class="button-link" id="cmx-ext-time-help" style="padding:0;height:auto;min-height:0;">Anleitung</button></div>';
 		echo '</div>';
@@ -383,6 +383,77 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_project_date_meta_keys')) {
+	function cmx_ext_time_project_date_meta_keys(): array {
+		$begin_key = \defined(__NAMESPACE__ . '\\CMX_PROJ_BEG_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_PROJ_BEG_META')
+			: '_cmx_projekt_beginn';
+		$end_key = \defined(__NAMESPACE__ . '\\CMX_PROJ_END_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_PROJ_END_META')
+			: '_cmx_projekt_ende';
+
+		return [$begin_key, $end_key];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_projects')) {
+	function cmx_ext_time_active_projects(int $limit = 300): array {
+		[$begin_key, $end_key] = cmx_ext_time_project_date_meta_keys();
+		$post_ids = \get_posts([
+			'post_type'      => 'projekte',
+			'posts_per_page' => $limit > 0 ? $limit : -1,
+			'post_status'    => ['publish', 'private', 'draft'],
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+			'meta_query'     => [
+				[
+					'key'     => $begin_key,
+					'value'   => '',
+					'compare' => '!=',
+				],
+			],
+		]);
+
+		$today = \current_time('timestamp');
+		$out = [];
+
+		foreach ((array) $post_ids as $project_id) {
+			$project_id = (int) $project_id;
+			if ($project_id <= 0) {
+				continue;
+			}
+
+			$begin = (string) \get_post_meta($project_id, $begin_key, true);
+			$end = (string) \get_post_meta($project_id, $end_key, true);
+			$begin_ts = $begin !== '' ? (int) \strtotime($begin) : 0;
+			$end_ts = $end !== '' ? (int) \strtotime($end) : 0;
+
+			if ($begin_ts <= 0) {
+				continue;
+			}
+			if ($end_ts > 0 && $today > $end_ts) {
+				continue;
+			}
+
+			$title = (string) \get_the_title($project_id);
+			if ($title === '') {
+				$title = '(#' . $project_id . ')';
+			}
+
+			$out[] = [
+				'id'     => $project_id,
+				'title'  => $title,
+				'label'  => $title,
+				'beginn' => $begin,
+				'ende'   => $end,
+			];
+		}
+
+		return $out;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
 	function cmx_ext_time_bootstrap_data(int $user_id = 0): array {
 		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
@@ -403,6 +474,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
 			'intervals'       => cmx_ext_time_interval_values(),
 			'defaultInterval' => cmx_ext_time_default_interval(),
 			'userDisplay'     => $display_name,
+			'projects'        => cmx_ext_time_active_projects(),
 		];
 	}
 }
@@ -456,53 +528,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_connect_handler')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_project_search_results')) {
 	function cmx_ext_time_project_search_results(string $term = ''): array {
-		global $wpdb;
-
-		$post_tbl = $wpdb->posts;
 		$term = \trim($term);
-		$limit = 20;
-		$ids = [];
+		$projects = cmx_ext_time_active_projects();
 		if ($term === '') {
-			$ids = $wpdb->get_col(
-				$wpdb->prepare(
-					"SELECT ID FROM {$post_tbl}
-					 WHERE post_type=%s AND post_status<>'trash'
-					 ORDER BY post_title ASC
-					 LIMIT %d",
-					'projekte',
-					$limit
-				)
-			);
-		} else {
-			$like = '%' . $wpdb->esc_like($term) . '%';
-			$ids = $wpdb->get_col(
-				$wpdb->prepare(
-					"SELECT ID FROM {$post_tbl}
-					 WHERE post_type=%s AND post_status<>'trash' AND post_title LIKE %s
-					 ORDER BY post_title ASC
-					 LIMIT %d",
-					'projekte',
-					$like,
-					$limit
-				)
-			);
+			return $projects;
 		}
 
+		$needle = \function_exists('mb_strtolower') ? \mb_strtolower($term, 'UTF-8') : \strtolower($term);
 		$out = [];
-		foreach ((array) $ids as $project_id) {
-			$project_id = (int) $project_id;
-			if ($project_id <= 0) {
+		foreach ($projects as $project) {
+			$title = (string) ($project['title'] ?? '');
+			$label = (string) ($project['label'] ?? $title);
+			$haystack = $title . ' ' . $label;
+			$haystack = \function_exists('mb_strtolower') ? \mb_strtolower($haystack, 'UTF-8') : \strtolower($haystack);
+			if (\strpos($haystack, $needle) === false) {
 				continue;
 			}
-			$title = (string) \get_the_title($project_id);
-			if ($title === '') {
-				$title = '(#' . $project_id . ')';
-			}
-			$out[] = [
-				'id'    => $project_id,
-				'title' => $title,
-				'label' => $title,
-			];
+			$out[] = $project;
 		}
 
 		return $out;
@@ -824,7 +866,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_manifest_json')) {
 	function cmx_ext_time_manifest_json(): string {
 		$manifest = [
 			'manifest_version' => 3,
-			'name' => 'Mis Büro Zeiterfassung',
+			'name' => 'Mis Büro - Zeiterfassung',
 			'short_name' => 'Mis Büro Zeit',
 			'version' => cmx_ext_time_plugin_version(),
 			'description' => 'Erfasst Zeiten direkt in Projekten von Mis Büro.',
@@ -835,7 +877,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_manifest_json')) {
 			],
 			'options_page' => 'options.html',
 			'action' => [
-				'default_title' => 'Mis Büro Zeiterfassung',
+				'default_title' => 'Mis Büro - Zeiterfassung',
 				'default_popup' => 'popup.html',
 				'default_icon' => [
 					'16' => 'icon16.png',
@@ -879,7 +921,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_popup_html')) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mis Büro Zeiterfassung</title>
+<title>Mis Büro - Zeiterfassung</title>
 <style>
 body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef2f7;color:#1d2327;min-width:360px}
 .wrap{padding:14px}
@@ -888,7 +930,7 @@ body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-se
 .icon{width:62px;height:62px;border-radius:18px;background:#fff;border:1px solid #dcdcde;display:flex;align-items:center;justify-content:center}
 .title{font-weight:700;font-size:15px}
 .subtitle{color:#646970}
-.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;color:#1d2327;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
 .panel{background:#fff;border:1px solid #dcdcde;border-radius:14px;padding:12px}
 .stack{display:flex;flex-direction:column;gap:10px}
 label{display:flex;flex-direction:column;gap:4px;font-weight:600}
@@ -988,7 +1030,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_options_html')) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mis Büro Zeiterfassung – Einstellungen</title>
+<title>Mis Büro - Zeiterfassung – Einstellungen</title>
 <style>
 body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef2f7;color:#1d2327}
 .wrap{max-width:760px;margin:0 auto;padding:28px 18px}
@@ -1026,7 +1068,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
     <div class="head">
       <div class="icon"><img src="icon48.png" alt="" width="64" height="64"></div>
       <div>
-        <div class="title">Mis Büro Zeiterfassung</div>
+        <div class="title">Mis Büro - Zeiterfassung</div>
         <div class="muted">Instanzen verbinden und Standard-Intervall pro Instanz setzen.</div>
       </div>
     </div>
@@ -1131,6 +1173,34 @@ function adminAjaxUrl(instance) {
   return instance.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php';
 }
 
+function instanceResponseError(response, json, rawText) {
+  const serverMessage = json && json.data && typeof json.data.message === 'string'
+    ? json.data.message.trim()
+    : '';
+  if (serverMessage) {
+    return serverMessage;
+  }
+
+  const body = (rawText || '').trim();
+  if (body === '0') {
+    return 'Die Instanz kennt die Zeiterfassungs-Schnittstelle noch nicht. Bitte das Plugin auf dieser Instanz aktualisieren.';
+  }
+  if (/<!doctype html|<html[\s>]/i.test(body)) {
+    return 'Die Instanz liefert HTML statt der Zeiterfassungs-Daten. Meist ist die URL falsch oder das Plugin auf dieser Instanz ist nicht aktuell.';
+  }
+  if (response.status === 401 || response.status === 403) {
+    return 'Die Instanz hat die Anmeldung abgewiesen. Bitte Benutzername und Passwort prüfen.';
+  }
+  if (response.status === 404) {
+    return 'Die Instanz wurde nicht gefunden. Bitte die Subdomain prüfen.';
+  }
+  if (!response.ok) {
+    return 'Die Instanz hat mit HTTP ' + response.status + ' geantwortet.';
+  }
+
+  return 'Die Instanz antwortet nicht mit gültigen Daten.';
+}
+
 async function fetchBootstrap(instance, credentials = {}) {
   const hasCredentials = !!((credentials.username || '').trim() && (credentials.password || '').trim());
   const action = hasCredentials ? (CONFIG.connectAction || 'cmx_ext_time_connect') : (CONFIG.bootstrapAction || 'cmx_ext_time_bootstrap');
@@ -1154,10 +1224,25 @@ async function fetchBootstrap(instance, credentials = {}) {
   } else if (instance.token) {
     fetchOptions.headers['X-CMX-Extension-Token'] = instance.token;
   }
-  const response = await fetch(url.toString(), fetchOptions);
-  const json = await response.json().catch(() => null);
+
+  let response;
+  try {
+    response = await fetch(url.toString(), fetchOptions);
+  } catch (error) {
+    throw new Error('Die Instanz ist nicht erreichbar. Bitte URL und Netzwerk prüfen.');
+  }
+
+  const rawText = await response.text().catch(() => '');
+  let json = null;
+  if (rawText !== '') {
+    try {
+      json = JSON.parse(rawText);
+    } catch (error) {
+      json = null;
+    }
+  }
   if (!response.ok || !json || !json.success) {
-    throw new Error((json && json.data && json.data.message) || 'Die Instanz antwortet nicht mit gültigen Daten.');
+    throw new Error(instanceResponseError(response, json, rawText));
   }
   return json.data || {};
 }
@@ -1199,12 +1284,14 @@ function renderInstanceList(instances) {
   }
   listEl.innerHTML = instances.map((instance) => {
     const intervals = Array.isArray(instance.intervals) && instance.intervals.length ? instance.intervals.join(', ') : '-';
+    const projectCount = Array.isArray(instance.projects) ? instance.projects.length : 0;
     return '<div class="instance-card">'
       + '<div class="instance-title">' + (instance.slug || instance.baseUrl) + '</div>'
       + '<div class="instance-meta">' + (instance.siteName || instance.baseUrl) + '</div>'
       + '<div class="instance-meta">Benutzer: ' + (instance.userLogin || '-') + '</div>'
       + '<div class="instance-meta">Intervall standardmässig: ' + (instance.defaultInterval || '-') + ' Minuten</div>'
       + '<div class="instance-meta">Mögliche Intervalle: ' + intervals + '</div>'
+      + '<div class="instance-meta">Aktive Projekte geladen: ' + projectCount + '</div>'
       + '</div>';
   }).join('');
 }
@@ -1283,6 +1370,7 @@ connectBtn.addEventListener('click', async () => {
       defaultInterval: Number(bootstrap.defaultInterval || 5),
       ajaxUrl: bootstrap.ajaxUrl || (normalized.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
       userDisplay: bootstrap.userDisplay || '',
+      projects: Array.isArray(bootstrap.projects) ? bootstrap.projects : [],
       updatedAt: new Date().toISOString(),
     };
 
@@ -1294,7 +1382,7 @@ connectBtn.addEventListener('click', async () => {
     defaultIntervalEl.value = String(merged.defaultInterval);
     usernameInputEl.value = username;
     passwordInputEl.value = '';
-    setStatus('Instanz wurde erfolgreich geladen.', 'success');
+    setStatus('Instanz wurde erfolgreich geladen. ' + String(merged.projects.length || 0) + ' aktive Projekte wurden übernommen.', 'success');
   } catch (error) {
     setStatus(error && error.message ? error.message : 'Die Instanz konnte nicht geladen werden.', 'error');
   }
@@ -1396,6 +1484,47 @@ function buildAjaxUrl(instance, action, extra = {}) {
   return url.toString();
 }
 
+function filterCachedProjects(projects, term) {
+  const list = Array.isArray(projects) ? projects : [];
+  const needle = String(term || '').trim().toLocaleLowerCase('de');
+  if (!needle) {
+    return list.slice(0, 100);
+  }
+
+  return list.filter((item) => {
+    const haystack = String(item.title || item.label || '').toLocaleLowerCase('de');
+    return haystack.includes(needle);
+  }).slice(0, 100);
+}
+
+function instanceResponseError(response, json, rawText) {
+  const serverMessage = json && json.data && typeof json.data.message === 'string'
+    ? json.data.message.trim()
+    : '';
+  if (serverMessage) {
+    return serverMessage;
+  }
+
+  const body = (rawText || '').trim();
+  if (body === '0') {
+    return 'Die Instanz kennt die Zeiterfassungs-Schnittstelle noch nicht. Bitte das Plugin auf dieser Instanz aktualisieren.';
+  }
+  if (/<!doctype html|<html[\s>]/i.test(body)) {
+    return 'Die Instanz liefert HTML statt der Zeiterfassungs-Daten. Meist ist die URL falsch oder das Plugin auf dieser Instanz ist nicht aktuell.';
+  }
+  if (response.status === 401 || response.status === 403) {
+    return 'Die Instanz hat die Anfrage abgewiesen. Bitte Instanz und Anmeldung prüfen.';
+  }
+  if (response.status === 404) {
+    return 'Die Instanz wurde nicht gefunden. Bitte die Subdomain prüfen.';
+  }
+  if (!response.ok) {
+    return 'Die Instanz hat mit HTTP ' + response.status + ' geantwortet.';
+  }
+
+  return 'Die Instanz antwortet nicht mit gültigen Daten.';
+}
+
 function fillSelect() {
   instanceSelect.innerHTML = '';
   if (!state.instances.length) {
@@ -1465,14 +1594,28 @@ function resetForm() {
 }
 
 async function fetchJson(url, token) {
-  const response = await fetch(url, {
-    credentials: 'omit',
-    headers: token ? { 'X-CMX-Extension-Token': token } : {},
-    cache: 'no-store',
-  });
-  const json = await response.json().catch(() => null);
+  let response;
+  try {
+    response = await fetch(url, {
+      credentials: 'omit',
+      headers: token ? { 'X-CMX-Extension-Token': token } : {},
+      cache: 'no-store',
+    });
+  } catch (error) {
+    throw new Error('Die Instanz ist nicht erreichbar. Bitte URL und Netzwerk prüfen.');
+  }
+
+  const rawText = await response.text().catch(() => '');
+  let json = null;
+  if (rawText !== '') {
+    try {
+      json = JSON.parse(rawText);
+    } catch (error) {
+      json = null;
+    }
+  }
   if (!response.ok || !json || !json.success) {
-    throw new Error((json && json.data && json.data.message) || 'Die Instanz antwortet nicht mit gültigen Daten.');
+    throw new Error(instanceResponseError(response, json, rawText));
   }
   return json.data || [];
 }
@@ -1518,6 +1661,10 @@ function makeSuggest(input, box, action, mapResult, type) {
     }
     const term = (input.value || '').trim();
     try {
+      if (type === 'project' && Array.isArray(instance.projects) && instance.projects.length) {
+        render(filterCachedProjects(instance.projects, term));
+        return;
+      }
       const url = buildAjaxUrl(instance, action, mapResult(term));
       const results = await fetchJson(url, instance.token || '');
       render(results);
@@ -1841,7 +1988,7 @@ async function showReminder() {
   await chrome.notifications.create(NOTIFICATION_ID, {
     type: 'basic',
     iconUrl: 'icon128.png',
-    title: 'Mis Büro Zeiterfassung',
+    title: 'Mis Büro - Zeiterfassung',
     message: 'Arbeitest du noch an ' + projectName + '?',
     buttons: [
       { title: 'Ja, weiter' },
