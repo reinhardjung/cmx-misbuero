@@ -960,12 +960,12 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		body.post-type-kontakte .wp-list-table thead th,
 		body.post-type-kontakte .wp-list-table tfoot th {
-			background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%);
+			/* background: linear-gradient(180deg, #ffffff 0%, #eef4fc 100%); */
 			color: #22324a;
 			border-bottom: 1px solid #d9e4f2;
 			font-size: 13px;
 			font-weight: 700;
-			padding-top: 14px;
+			padding-top: 10px;
 			padding-bottom: 14px;
 		}
 		body.post-type-kontakte .wp-list-table tbody td,
