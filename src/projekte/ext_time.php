@@ -8,6 +8,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION', 'cmx_ext_time_download');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_CRX_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_CRX_ACTION', 'cmx_ext_time_download_crx');
+}
+
 if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_CONNECT_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_CONNECT_ACTION', 'cmx_ext_time_connect');
 }
@@ -251,6 +255,115 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_crx_url')) {
+	function cmx_ext_time_download_crx_url(): string {
+		return (string) \add_query_arg(
+			[
+				'action'   => CMX_EXT_TIME_DOWNLOAD_CRX_ACTION,
+				'_wpnonce' => \wp_create_nonce(CMX_EXT_TIME_DOWNLOAD_CRX_ACTION),
+			],
+			\admin_url('admin-post.php')
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_crx_chrome_binary')) {
+	function cmx_ext_time_crx_chrome_binary(): string {
+		foreach ([
+			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+			'/Applications/Chromium.app/Contents/MacOS/Chromium',
+		] as $candidate) {
+			$candidate = \wp_normalize_path((string) $candidate);
+			if ($candidate !== '' && \is_file($candidate) && \is_executable($candidate)) {
+				return $candidate;
+			}
+		}
+
+		if (!\function_exists('exec')) {
+			return '';
+		}
+
+		foreach (['google-chrome', 'chromium', 'chromium-browser', 'chrome'] as $binary) {
+			$output = [];
+			$exit_code = 1;
+			@exec('command -v ' . \escapeshellarg($binary) . ' 2>/dev/null', $output, $exit_code);
+			if ($exit_code === 0 && !empty($output[0])) {
+				return \trim((string) $output[0]);
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_crx_supported')) {
+	function cmx_ext_time_crx_supported(): bool {
+		return cmx_ext_time_crx_chrome_binary() !== ''
+			&& \function_exists('exec')
+			&& \function_exists('openssl_pkey_new')
+			&& \function_exists('openssl_pkey_export');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_crx_private_key_pem')) {
+	function cmx_ext_time_crx_private_key_pem(): string {
+		$option_key = 'cmx_ext_time_crx_private_key_pem';
+		$pem = \trim((string) \get_option($option_key, ''));
+		if (\strpos($pem, 'BEGIN') !== false && \strpos($pem, 'PRIVATE KEY') !== false) {
+			return $pem;
+		}
+
+		if (!\function_exists('openssl_pkey_new') || !\function_exists('openssl_pkey_export')) {
+			return '';
+		}
+
+		$key = \openssl_pkey_new([
+			'private_key_type' => \OPENSSL_KEYTYPE_RSA,
+			'private_key_bits' => 2048,
+		]);
+		if ($key === false) {
+			return '';
+		}
+
+		$pem = '';
+		if (!\openssl_pkey_export($key, $pem) || \trim($pem) === '') {
+			return '';
+		}
+
+		if (\get_option($option_key, null) === null) {
+			\add_option($option_key, $pem, '', 'no');
+		} else {
+			\update_option($option_key, $pem, false);
+		}
+
+		return $pem;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_crx_remove_dir')) {
+	function cmx_ext_time_crx_remove_dir(string $path): void {
+		$path = \wp_normalize_path($path);
+		if ($path === '' || !\file_exists($path)) {
+			return;
+		}
+		if (\is_file($path) || \is_link($path)) {
+			@unlink($path);
+			return;
+		}
+
+		$items = \scandir($path);
+		if (\is_array($items)) {
+			foreach ($items as $item) {
+				if ($item === '.' || $item === '..') {
+					continue;
+				}
+				cmx_ext_time_crx_remove_dir($path . '/' . $item);
+			}
+		}
+		@rmdir($path);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_readme_txt')) {
 	function cmx_ext_time_readme_txt(): string {
 		return "Mis Büro - Google Chrome Erweiterung für Zeiterfassung\n\n"
@@ -290,6 +403,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 		}
 
 		$download_url = cmx_ext_time_download_url();
+		$download_crx_url = cmx_ext_time_download_crx_url();
+		$crx_supported = cmx_ext_time_crx_supported();
 		$icon_src = cmx_ext_time_preview_icon_src();
 		$readme_text = cmx_ext_time_readme_txt();
 
@@ -300,7 +415,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 		echo '<div style="min-width:260px;">';
 		echo '<div style="font-weight:600;">Mis Büro - Zeiterfassung</div>';
 		echo '<div style="color:#646970;">Lädt das Erweiterungspaket für Google Chrome herunter.</div>';
-		echo '<div style="margin-top:4px;"><button type="button" class="button-link" id="cmx-ext-time-help" style="padding:0;height:auto;min-height:0;">Anleitung</button></div>';
+		echo '<div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">';
+		echo '<button type="button" class="button-link" id="cmx-ext-time-help" style="padding:0;height:auto;min-height:0;">Anleitung</button>';
+		if ($crx_supported) {
+			echo '<button type="button" class="button-link" id="cmx-ext-time-install-crx" style="padding:0;height:auto;min-height:0;">CRX laden</button>';
+		}
+		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div id="cmx-ext-time-help-box" style="display:none;margin-top:8px;padding:12px 14px;border:1px solid #dcdcde;border-radius:8px;background:#fff;">';
@@ -310,6 +430,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 		echo '<script>
 		(function(){
 			var button = document.getElementById("cmx-ext-time-install");
+			var crxButton = document.getElementById("cmx-ext-time-install-crx");
 			var help = document.getElementById("cmx-ext-time-help");
 			var helpBox = document.getElementById("cmx-ext-time-help-box");
 			var status = document.getElementById("cmx-ext-time-status");
@@ -382,6 +503,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_settings_field')) {
 					window.location.href = ' . \wp_json_encode($download_url) . ';
 				});
 			});
+			if (crxButton) {
+				crxButton.addEventListener("click", function(){
+					if (!isChromeBrowser()) {
+						setStatus("Diese Erweiterung kann nur in Google Chrome heruntergeladen werden.", true);
+						return;
+					}
+					copyText("chrome://extensions").then(function(copied){
+						var message = "Die <code>.crx</code>-Datei wird heruntergeladen.";
+						if (copied) {
+							message += "<br><code>chrome://extensions</code> wurde in die Zwischenablage kopiert.";
+						}
+						message += "<br>Falls Chrome die direkte Installation blockiert, bitte weiter die ZIP-Datei als entpackte Erweiterung laden.";
+						setStatusHtml(message, false);
+						window.location.href = ' . \wp_json_encode($download_crx_url) . ';
+					});
+				});
+			}
 		})();
 		</script>';
 	}
@@ -3059,6 +3197,98 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_zip')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_write_extension_dir')) {
+	function cmx_ext_time_write_extension_dir(string $dir): bool {
+		$dir = \wp_normalize_path($dir);
+		if ($dir === '' || !\wp_mkdir_p($dir)) {
+			return false;
+		}
+
+		$files = [
+			'manifest.json'    => cmx_ext_time_manifest_json(),
+			'config.js'        => cmx_ext_time_config_js(),
+			'popup.html'       => cmx_ext_time_popup_html(),
+			'popup.js'         => cmx_ext_time_popup_js(),
+			'options.html'     => cmx_ext_time_options_html(),
+			'options.js'       => cmx_ext_time_options_js(),
+			'service_worker.js'=> cmx_ext_time_service_worker_js(),
+			'README.txt'       => cmx_ext_time_readme_txt(),
+		];
+
+		foreach ($files as $name => $contents) {
+			if (@\file_put_contents($dir . '/' . $name, $contents) === false) {
+				return false;
+			}
+		}
+
+		foreach ([16, 32, 48, 128] as $size) {
+			$png = cmx_ext_time_icon_png((int) $size);
+			if ($png === '' || @\file_put_contents($dir . '/icon' . $size . '.png', $png) === false) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_render_crx')) {
+	function cmx_ext_time_render_crx(): void {
+		if (!cmx_ext_time_crx_supported()) {
+			\wp_die('CRX-Erzeugung ist auf diesem System nicht verfügbar.');
+		}
+
+		$temp_root = \wp_normalize_path(\trailingslashit(\get_temp_dir()) . 'cmx-ext-time-' . \wp_generate_password(12, false, false));
+		$bundle_dir = $temp_root . '/extension';
+		$key_file = $temp_root . '/extension.pem';
+		$crx_file = $bundle_dir . '.crx';
+
+		try {
+			if (!\wp_mkdir_p($bundle_dir)) {
+				throw new \RuntimeException('Temporäres Verzeichnis konnte nicht erstellt werden.');
+			}
+			if (!cmx_ext_time_write_extension_dir($bundle_dir)) {
+				throw new \RuntimeException('Erweiterungsdateien konnten nicht erzeugt werden.');
+			}
+
+			$key_pem = cmx_ext_time_crx_private_key_pem();
+			if ($key_pem === '' || @\file_put_contents($key_file, $key_pem) === false) {
+				throw new \RuntimeException('CRX-Schlüssel konnte nicht bereitgestellt werden.');
+			}
+
+			$chrome = cmx_ext_time_crx_chrome_binary();
+			if ($chrome === '') {
+				throw new \RuntimeException('Google Chrome wurde nicht gefunden.');
+			}
+
+			$output = [];
+			$exit_code = 1;
+			$command = \escapeshellarg($chrome)
+				. ' --pack-extension=' . \escapeshellarg($bundle_dir)
+				. ' --pack-extension-key=' . \escapeshellarg($key_file);
+			@exec($command . ' 2>&1', $output, $exit_code);
+
+			if ($exit_code !== 0 || !\is_file($crx_file)) {
+				$details = \trim(\implode("\n", \array_slice((array) $output, 0, 3)));
+				throw new \RuntimeException($details !== '' ? $details : 'CRX-Datei konnte nicht erzeugt werden.');
+			}
+
+			$filename = 'misbuero-zeit-erfassung-chrome.crx';
+			\header('Content-Type: application/x-chrome-extension');
+			\header('Content-Disposition: attachment; filename="' . $filename . '"');
+			\header('Content-Length: ' . (string) \filesize($crx_file));
+			\header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+			\header('Pragma: no-cache');
+			\readfile($crx_file);
+			exit;
+		} catch (\Throwable $exception) {
+			\wp_die('CRX-Datei konnte nicht erstellt werden: ' . \esc_html($exception->getMessage()));
+		} finally {
+			cmx_ext_time_crx_remove_dir($temp_root);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_handler')) {
 	function cmx_ext_time_download_handler(): void {
 		if (!\current_user_can('manage_options')) {
@@ -3070,4 +3300,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_handler')) {
 		cmx_ext_time_render_zip();
 	}
 	\add_action('admin_post_' . CMX_EXT_TIME_DOWNLOAD_ACTION, __NAMESPACE__ . '\\cmx_ext_time_download_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_download_crx_handler')) {
+	function cmx_ext_time_download_crx_handler(): void {
+		if (!\current_user_can('manage_options')) {
+			\wp_die('Keine Berechtigung.');
+		}
+		if (!isset($_GET['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_GET['_wpnonce']), CMX_EXT_TIME_DOWNLOAD_CRX_ACTION)) {
+			\wp_die('Ungültige Anfrage.');
+		}
+		cmx_ext_time_render_crx();
+	}
+	\add_action('admin_post_' . CMX_EXT_TIME_DOWNLOAD_CRX_ACTION, __NAMESPACE__ . '\\cmx_ext_time_download_crx_handler');
 }
