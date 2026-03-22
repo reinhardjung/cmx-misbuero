@@ -205,6 +205,146 @@ function cmx_admin_placeholder_click_cursor(): void {
 	<?php
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_taxonomy_admin_current_taxonomy')) {
+	function cmx_taxonomy_admin_current_taxonomy(): string {
+		$taxonomy = isset($_REQUEST['taxonomy']) ? \sanitize_key((string) \wp_unslash($_REQUEST['taxonomy'])) : '';
+		return ($taxonomy !== '' && \taxonomy_exists($taxonomy)) ? $taxonomy : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_taxonomy_admin_term_screen_active')) {
+	function cmx_taxonomy_admin_term_screen_active(?string $taxonomy = null): bool {
+		if (!\is_admin()) {
+			return false;
+		}
+
+		$pagenow = (string) ($GLOBALS['pagenow'] ?? '');
+		if (!\in_array($pagenow, ['edit-tags.php', 'term.php'], true)) {
+			return false;
+		}
+
+		$current_taxonomy = cmx_taxonomy_admin_current_taxonomy();
+		if ($current_taxonomy === '') {
+			return false;
+		}
+
+		return $taxonomy === null ? true : $current_taxonomy === \sanitize_key($taxonomy);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_taxonomy_admin_autoslug_request_active')) {
+	function cmx_taxonomy_admin_autoslug_request_active(?string $taxonomy = null): bool {
+		if (!cmx_taxonomy_admin_term_screen_active($taxonomy)) {
+			return false;
+		}
+
+		$name = isset($_POST['name']) ? \trim((string) \wp_unslash($_POST['name'])) : '';
+		return $name !== '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_taxonomy_admin_unique_slug_for_name')) {
+	function cmx_taxonomy_admin_unique_slug_for_name(string $name, string $taxonomy, int $term_id = 0, array $args = []): string {
+		$name = \trim($name);
+		$taxonomy = \sanitize_key($taxonomy);
+		if ($name === '' || $taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+			return '';
+		}
+
+		$slug = \sanitize_title($name);
+		if ($slug === '') {
+			return '';
+		}
+
+		return \wp_unique_term_slug($slug, (object) [
+			'taxonomy' => $taxonomy,
+			'parent'   => (int) ($args['parent'] ?? 0),
+			'term_id'  => $term_id,
+		]);
+	}
+}
+
+add_action('admin_head', function (): void {
+	if (!cmx_taxonomy_admin_term_screen_active()) {
+		return;
+	}
+	?>
+	<style id="cmx-taxonomy-ui-cleanup">
+		.term-slug-wrap,
+		.term-parent-wrap {
+			display: none !important;
+		}
+	</style>
+	<?php
+});
+
+add_action('admin_footer', function (): void {
+	if (!cmx_taxonomy_admin_term_screen_active()) {
+		return;
+	}
+	?>
+	<script>
+	(function () {
+		function hideQuickEditSlugField(context) {
+			var root = context && context.querySelector ? context : document;
+			root.querySelectorAll('.inline-edit-row input[name="slug"]').forEach(function (input) {
+				var label = input.closest('label');
+				if (label) {
+					label.style.display = 'none';
+				}
+			});
+		}
+
+		document.addEventListener('DOMContentLoaded', function () {
+			hideQuickEditSlugField(document);
+			var observer = new MutationObserver(function (mutations) {
+				mutations.forEach(function (mutation) {
+					mutation.addedNodes.forEach(function (node) {
+						if (node && node.nodeType === 1) {
+							hideQuickEditSlugField(node);
+						}
+					});
+				});
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
+		});
+	})();
+	</script>
+	<?php
+});
+
+add_filter('wp_update_term_data', function (array $data, int $term_id, string $taxonomy, array $args): array {
+	if (!cmx_taxonomy_admin_autoslug_request_active($taxonomy)) {
+		return $data;
+	}
+
+	$name = \trim((string) ($data['name'] ?? ''));
+	if ($name === '') {
+		return $data;
+	}
+
+	$new_slug = cmx_taxonomy_admin_unique_slug_for_name($name, $taxonomy, $term_id, $args);
+	if ($new_slug !== '') {
+		$data['slug'] = $new_slug;
+	}
+
+	return $data;
+}, 10, 4);
+
+add_action('admin_init', function (): void {
+	foreach (\get_taxonomies([], 'names') as $taxonomy) {
+		$taxonomy = (string) $taxonomy;
+		if ($taxonomy === '') {
+			continue;
+		}
+
+		\add_filter('manage_edit-' . $taxonomy . '_columns', static function (array $columns): array {
+			unset($columns['slug']);
+			return $columns;
+		});
+	}
+});
+
 
 add_action('admin_head', __NAMESPACE__ . '\\inject_styles');
 function inject_styles(): void {

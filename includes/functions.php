@@ -8,7 +8,7 @@ function cmx_create_taxo(string $cpt_name, string $taxo_single, string $taxo_plu
 
 	// $is_hierarchical	= is_bool($hierarchisch) ? $hierarchisch : (strtolower((string)$hierarchisch) !== 'nein'); // Standardmäßig hierarchisch (true)
 
-	$labels = ['name' => cmx_no_umlaute($taxo_plural),'singular_name' => $taxo_single,'search_items' => 'Suchen','all_items' => 'Alle','edit_item' => 'Bearbeiten','view_item' => 'Anzeigen','update_item' => 'Aktualisieren','add_new_item' => 'Hinzufügen','new_item_name' => 'Neu','parent_item' => 'Übergeordnet','parent_item_colon' => 'Übergeordnet:','not_found' => 'Keine ' .cmx_no_umlaute($taxo_plural). ' gefunden','no_terms' => 'Keine ' .cmx_no_umlaute($taxo_plural),'menu_name' => $taxo_plural];
+	$labels = ['name' => $taxo_plural,'singular_name' => $taxo_single,'search_items' => 'Suchen','all_items' => 'Alle','edit_item' => 'Bearbeiten','view_item' => 'Anzeigen','update_item' => 'Aktualisieren','add_new_item' => 'Hinzufügen','new_item_name' => 'Neu','parent_item' => 'Übergeordnet','parent_item_colon' => 'Übergeordnet:','not_found' => 'Keine ' . $taxo_plural . ' gefunden','no_terms' => 'Keine ' . $taxo_plural,'menu_name' => $taxo_plural];
 	$args_default = ['meta_box_cb' => null, 'labels'  => $labels,'label' => $taxo_single,'public' => false,'meta_box_cb' => $metabox, 'show_ui' => true,'show_admin_column' => false,'hierarchical' => $hierarchisch,'show_in_rest' => true,'rewrite' => false,'query_var' => false,];
 	// \remove_meta_box('tagsdiv-cmx_komm_phone', 'kontakte', 'side');
 
