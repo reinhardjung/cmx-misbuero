@@ -197,6 +197,18 @@ function cmx_register_system_tab(): void {
 				const updateChatRoomPreview = function () {
 					const roomId = (chatRoomInput.value || '').trim();
 					const baseUrl = normalizeBaseUrl(input.value || '');
+					try {
+						if (baseUrl) {
+							window.localStorage.setItem('cmx_nextcloud_url', baseUrl);
+						} else {
+							window.localStorage.removeItem('cmx_nextcloud_url');
+						}
+						if (roomId) {
+							window.localStorage.setItem('cmx_nextcloud_chat_room', roomId);
+						} else {
+							window.localStorage.removeItem('cmx_nextcloud_chat_room');
+						}
+					} catch (error) {}
 					if (!baseUrl || !roomId) {
 						chatRoomLink.style.visibility = 'hidden';
 						chatRoomLink.textContent = '';

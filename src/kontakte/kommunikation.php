@@ -663,9 +663,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_nextcloud_call_url')) {
+	function cmx_kommunikation_read_nextcloud_setting(string $option_name, array $fallback_keys = []): string {
+		$value = \trim((string) \get_option($option_name, ''));
+		if ($value !== '') {
+			return $value;
+		}
+
+		$settings = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		$keys = \array_merge([$option_name], $fallback_keys);
+		foreach ($keys as $key) {
+			$fallback_value = \trim((string) ($settings[$key] ?? ''));
+			if ($fallback_value !== '') {
+				return $fallback_value;
+			}
+		}
+
+		return '';
+	}
+
 	function cmx_kommunikation_nextcloud_call_url(): string {
-		$base_url = \untrailingslashit((string) \get_option('mis_buero_nextcloud_url', ''));
-		$chat_room = \trim((string) \get_option('mis_buero_nextcloud_chat_room', ''));
+		$base_url = cmx_kommunikation_read_nextcloud_setting('mis_buero_nextcloud_url', ['nextcloud_url']);
+		$chat_room = cmx_kommunikation_read_nextcloud_setting('mis_buero_nextcloud_chat_room', ['nextcloud_chat_room', 'nextcloud_chat_room_id']);
+		if ($base_url !== '' && !\preg_match('~^https?://~i', $base_url)) {
+			$base_url = 'https://' . $base_url;
+		}
+		$base_url = \untrailingslashit($base_url);
 		if ($base_url === '' || $chat_room === '') {
 			return '';
 		}
@@ -674,11 +696,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_nextcloud_call_url'))
 	}
 }
 
+\add_action('wp_ajax_cmx_kommunikation_videochat_url', __NAMESPACE__ . '\\cmx_kommunikation_videochat_url_ajax');
+function cmx_kommunikation_videochat_url_ajax(): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+
+	\check_ajax_referer('cmx_kommunikation_videochat', 'nonce');
+
+	$url = cmx_kommunikation_nextcloud_call_url();
+	if ($url === '') {
+		\wp_send_json_error([
+			'message' => 'Nextcloud URL oder Chat Room ID ist nicht gespeichert in Einstellungen > System.',
+		], 400);
+	}
+
+	\wp_send_json_success([
+		'url' => $url,
+	]);
+}
+
 function cmx_kommunikation_box_html($post): void {
 	$rows = cmx_kommunikation_read_contacts((int) $post->ID);
 	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
 	$mail_terms = \taxonomy_exists(CMX_TAX_MAIL_LABELS) ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS) : [];
 	$nextcloud_call_url = cmx_kommunikation_nextcloud_call_url();
+	$videochat_nonce = \wp_create_nonce('cmx_kommunikation_videochat');
 	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
 	?>
 	<style>
@@ -922,7 +965,7 @@ function cmx_kommunikation_box_html($post): void {
 			}
 		}
 	</style>
-	<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>">
+	<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>" data-videochat-nonce="<?php echo \esc_attr($videochat_nonce); ?>">
 		<div class="cmx-kommu-rows">
 			<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms); } ?>
 		</div>
@@ -956,6 +999,7 @@ function cmx_kommunikation_box_html($post): void {
 		var emailMenuState = null;
 		var phoneMenuState = null;
 		var videoChatUrl = String(root.getAttribute("data-videochat-url") || "");
+		var videoChatNonce = String(root.getAttribute("data-videochat-nonce") || "");
 
 		function closeEmailMenu() {
 			emailMenu.classList.remove("is-open");
@@ -1015,6 +1059,45 @@ function cmx_kommunikation_box_html($post): void {
 			var digits = normalizePhoneDigits(raw);
 			if (!digits) return "";
 			return raw.indexOf("+") === 0 ? "+" + digits : digits;
+		}
+
+		function fetchVideoChatUrl() {
+			if (videoChatUrl) {
+				return Promise.resolve(videoChatUrl);
+			}
+			try {
+				var storedBaseUrl = String(window.localStorage.getItem("cmx_nextcloud_url") || "").trim().replace(/\/+$/, "");
+				var storedChatRoom = String(window.localStorage.getItem("cmx_nextcloud_chat_room") || "").trim();
+				if (storedBaseUrl && storedChatRoom) {
+					videoChatUrl = storedBaseUrl + "/index.php/call/" + encodeURIComponent(storedChatRoom);
+					root.setAttribute("data-videochat-url", videoChatUrl);
+					return Promise.resolve(videoChatUrl);
+				}
+			} catch (error) {}
+			if (typeof ajaxurl === "undefined" || !ajaxurl || !videoChatNonce) {
+				return Promise.reject(new Error("VideoChat-Link fehlt auf dieser Kontakte-Seite noch. Bitte Seite neu laden."));
+			}
+			var form = new URLSearchParams();
+			form.set("action", "cmx_kommunikation_videochat_url");
+			form.set("nonce", videoChatNonce);
+			return fetch(ajaxurl, {
+				method: "POST",
+				credentials: "same-origin",
+				headers: {"Content-Type": "application/x-www-form-urlencoded"},
+				body: form.toString()
+			}).then(function(response) {
+				return response.json().catch(function() {
+					return {success: false, data: {message: "Ungültige Serverantwort."}};
+				});
+			}).then(function(payload) {
+				if (!payload || !payload.success || !payload.data || !payload.data.url) {
+					var message = payload && payload.data && payload.data.message ? payload.data.message : "VideoChat-Link fehlt. Bitte Einstellungen > System speichern und die Kontakte-Seite neu laden.";
+					throw new Error(message);
+				}
+				videoChatUrl = String(payload.data.url || "");
+				root.setAttribute("data-videochat-url", videoChatUrl);
+				return videoChatUrl;
+			});
 		}
 
 		function renumberRows() {
@@ -1161,12 +1244,14 @@ function cmx_kommunikation_box_html($post): void {
 				return;
 			}
 			if (action === "videochat") {
-				if (videoChatUrl !== "") {
-					window.open(videoChatUrl, "_blank", "noopener");
-				} else {
-					window.alert("Nextcloud URL oder Chat Room ID fehlt in Einstellungen > System.");
-				}
-				closePhoneMenu();
+				fetchVideoChatUrl().then(function(url) {
+					window.open(url, "_blank", "noopener");
+				}).catch(function(error) {
+					window.alert(error && error.message ? error.message : "VideoChat-Link konnte nicht geladen werden.");
+				}).finally(function() {
+					closePhoneMenu();
+				});
+				return;
 			}
 		});
 
