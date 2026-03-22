@@ -161,7 +161,7 @@ function cmx_register_system_tab(): void {
 			}
 			$placeholder = 'https://' . ($instance !== '' ? $instance : '{DeineInstanz}') . '.misbuero.cloud';
 			$nonce = \wp_create_nonce('cmx_test_nextcloud_url');
-			echo '<div style="display:flex;flex-direction:column;gap:12px;max-width:960px;">';
+			echo '<div style="display:flex;flex-direction:column;gap:18px;max-width:960px;">';
 			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
 			echo '<span>URL</span>';
 			echo '<div style="display:flex;align-items:center;gap:8px;">';
@@ -171,11 +171,11 @@ function cmx_register_system_tab(): void {
 			echo '</div>';
 			echo '<span class="description" id="cmx-nextcloud-test-result" style="display:block;min-height:20px;padding-top:2px;white-space:nowrap;overflow-x:auto;overflow-y:hidden;"></span>';
 			echo '</label>';
-			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
-			echo '<span>Chat Room ID</span>';
-			echo '<div style="display:flex;align-items:center;gap:8px;">';
-			echo '<input type="text" name="mis_buero_nextcloud_chat_room" class="regular-text" value="' . \esc_attr($chat_room) . '">';
-			echo '<span class="description">9bidw5t8</span>';
+			echo '<label style="display:flex;flex-direction:column;gap:6px;padding-bottom:6px;">';
+			echo '<span>Chat Room ID {token}</span>';
+			echo '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;">';
+			echo '<input type="text" name="mis_buero_nextcloud_chat_room" class="regular-text" value="' . \esc_attr($chat_room) . '" id="cmx-nextcloud-chat-room" placeholder="9bidw5t8">';
+			echo '<a class="description" id="cmx-nextcloud-chat-room-link" href="#" target="_blank" rel="noopener noreferrer" style="' . ($url !== '' && $chat_room !== '' ? 'display:block;min-height:18px;' : 'display:block;min-height:18px;visibility:hidden;') . '"></a>';
 			echo '</div>';
 			echo '</label>';
 			echo '</div>';
@@ -184,11 +184,30 @@ function cmx_register_system_tab(): void {
 			document.addEventListener('DOMContentLoaded', function () {
 				const button = document.getElementById('cmx-nextcloud-test');
 				const input = document.getElementById('cmx-nextcloud-url');
+				const chatRoomInput = document.getElementById('cmx-nextcloud-chat-room');
+				const chatRoomLink = document.getElementById('cmx-nextcloud-chat-room-link');
 				const result = document.getElementById('cmx-nextcloud-test-result');
 				const spinner = document.getElementById('cmx-nextcloud-test-spinner');
-				if (!button || !input || !result || !spinner || typeof ajaxurl === 'undefined') {
+				if (!button || !input || !chatRoomInput || !chatRoomLink || !result || !spinner || typeof ajaxurl === 'undefined') {
 					return;
 				}
+				const normalizeBaseUrl = function (value) {
+					return (value || '').trim().replace(/\/+$/, '');
+				};
+				const updateChatRoomPreview = function () {
+					const roomId = (chatRoomInput.value || '').trim();
+					const baseUrl = normalizeBaseUrl(input.value || '');
+					if (!baseUrl || !roomId) {
+						chatRoomLink.style.visibility = 'hidden';
+						chatRoomLink.textContent = '';
+						chatRoomLink.removeAttribute('href');
+						return;
+					}
+					const linkUrl = baseUrl + '/index.php/call/' + encodeURIComponent(roomId);
+					chatRoomLink.href = linkUrl;
+					chatRoomLink.textContent = linkUrl;
+					chatRoomLink.style.visibility = 'visible';
+				};
 				const setResult = function (message, state) {
 					result.textContent = message;
 					if (state === 'error') {
@@ -201,6 +220,9 @@ function cmx_register_system_tab(): void {
 					}
 					result.style.color = '#2271b1';
 				};
+				input.addEventListener('input', updateChatRoomPreview);
+				chatRoomInput.addEventListener('input', updateChatRoomPreview);
+				updateChatRoomPreview();
 				button.addEventListener('click', function () {
 					const url = (input.value || '').trim();
 					const form = new URLSearchParams();
