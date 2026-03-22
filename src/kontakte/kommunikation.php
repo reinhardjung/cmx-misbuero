@@ -645,15 +645,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>">Vorname</label>
-				<input id="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[vorname]'); ?>" value="<?php echo \esc_attr((string) ($row['vorname'] ?? '')); ?>">
+				<input id="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[vorname]'); ?>" value="<?php echo \esc_attr((string) ($row['vorname'] ?? '')); ?>" data-cmx-tab-role="vorname">
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>">Nachname</label>
-				<input id="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[nachname]'); ?>" value="<?php echo \esc_attr((string) ($row['nachname'] ?? '')); ?>">
+				<input id="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[nachname]'); ?>" value="<?php echo \esc_attr((string) ($row['nachname'] ?? '')); ?>" data-cmx-tab-role="nachname">
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_PHONE_LABELS, 'Telefon Typ'); ?></label>
-				<select id="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[telefon_label]'); ?>">
+				<select id="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[telefon_label]'); ?>" data-cmx-tab-role="telefon_label">
 					<option value="">auswählen</option>
 					<?php foreach ($phone_terms as $term) {
 						$slug = (string) ($term['slug'] ?? '');
@@ -669,6 +669,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 						type="button"
 						class="button-link cmx-kommu-phone-action"
 						data-phone-target="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+						tabindex="-1"
 					>Telefon</button>
 				</label>
 				<input
@@ -682,11 +683,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 					pattern="<?php echo \esc_attr($phone_pattern); ?>"
 					title="<?php echo \esc_attr($phone_title); ?>"
 					data-cmx-phone="1"
+					data-cmx-tab-role="telefon"
 				>
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail Typ'); ?></label>
-				<select id="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[email_label]'); ?>">
+				<select id="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[email_label]'); ?>" data-cmx-tab-role="email_label">
 					<option value="">auswählen</option>
 					<?php foreach ($mail_terms as $term) {
 						$slug = (string) ($term['slug'] ?? '');
@@ -703,18 +705,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 						class="button-link cmx-kommu-email-action"
 						data-email-target="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>"
 						data-internal-url="<?php echo \esc_url($internal_email_url); ?>"
+						tabindex="-1"
 					>E-Mail</button>
 				</label>
-				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>">
+				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>" data-cmx-tab-role="email">
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-date">
 				<label for="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>">Geburtsdatum</label>
-				<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>">
+				<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>" data-cmx-tab-role="geburtsdatum">
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-check">
 				<span class="cmx-kommu-field-title">Duzis</span>
 				<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
-					<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?>>
+					<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?> data-cmx-tab-role="duzis">
 					<span class="cmx-kommu-toggle-ui" aria-hidden="true"></span>
 				</label>
 			</div>
@@ -848,6 +851,14 @@ function cmx_kommunikation_box_html($post): void {
 		}
 		#cmx_kommunikation_box .cmx-kommu-field input {
 			width: 100%;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone] {
+			height: 46px;
+			padding: 0 11px;
+			line-height: 44px;
+			box-sizing: border-box;
+			-webkit-appearance: none;
+			appearance: none;
 		}
 		#cmx_kommunikation_box .cmx-kommu-field select {
 			width: 100%;
@@ -1259,6 +1270,29 @@ function cmx_kommunikation_box_html($post): void {
 			});
 		}
 
+		function focusNextTabField(currentField, backwards) {
+			if (!currentField) return false;
+			var row = currentField.closest(".cmx-kommu-contact-row");
+			if (!row) return false;
+			var order = ["vorname", "nachname", "telefon_label", "telefon", "email_label", "email", "geburtsdatum", "duzis"];
+			var currentRole = currentField.getAttribute("data-cmx-tab-role") || "";
+			var currentIndex = order.indexOf(currentRole);
+			if (currentIndex === -1) return false;
+			var nextIndex = currentIndex + (backwards ? -1 : 1);
+			if (nextIndex < 0 || nextIndex >= order.length) {
+				return false;
+			}
+			var nextField = row.querySelector('[data-cmx-tab-role="' + order[nextIndex] + '"]');
+			if (!nextField || nextField.disabled || nextField.hidden) {
+				return false;
+			}
+			nextField.focus();
+			if (nextField.select && (nextField.tagName || "").toLowerCase() === "input" && nextField.type !== "checkbox" && nextField.type !== "date") {
+				nextField.select();
+			}
+			return true;
+		}
+
 		function nextIndex() {
 			var max = -1;
 			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row) {
@@ -1320,6 +1354,19 @@ function cmx_kommunikation_box_html($post): void {
 			}
 			renumberRows();
 			updateRemoveButtons();
+		});
+
+		rows.addEventListener("keydown", function(event) {
+			if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) {
+				return;
+			}
+			var field = event.target.closest("[data-cmx-tab-role]");
+			if (!field) {
+				return;
+			}
+			if (focusNextTabField(field, !!event.shiftKey)) {
+				event.preventDefault();
+			}
 		});
 
 		rows.addEventListener("input", function(event) {
