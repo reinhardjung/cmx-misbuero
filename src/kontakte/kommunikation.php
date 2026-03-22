@@ -5,6 +5,40 @@
 const CMX_TAX_PHONE_LABELS = 'kontakte_telefone';
 const CMX_TAX_MAIL_LABELS  = 'kontakte_emails';
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_default_label_terms')) {
+	function cmx_kommunikation_default_label_terms(): array {
+		return [
+			CMX_TAX_PHONE_LABELS => ['Geschäft', 'Privat', 'Mobil', 'Homeoffice', 'Support', 'Durchwahl', 'FaceTime', 'WhatsApp', 'SMS'],
+			CMX_TAX_MAIL_LABELS  => ['Geschäft', 'Privat', 'Support', 'Sales', 'Direkt'],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_ensure_default_label_terms')) {
+	function cmx_kommunikation_ensure_default_label_terms(): void {
+		foreach (cmx_kommunikation_default_label_terms() as $taxonomy => $terms) {
+			if (!\taxonomy_exists($taxonomy)) {
+				continue;
+			}
+			foreach ($terms as $term_name) {
+				$term_name = \trim((string) $term_name);
+				if ($term_name === '') {
+					continue;
+				}
+				$slug = \sanitize_title($term_name);
+				$existing = \get_term_by('name', $term_name, $taxonomy);
+				if (!$existing || \is_wp_error($existing)) {
+					$existing = $slug !== '' ? \get_term_by('slug', $slug, $taxonomy) : false;
+				}
+				if ($existing && !\is_wp_error($existing)) {
+					continue;
+				}
+				\wp_insert_term($term_name, $taxonomy, $slug !== '' ? ['slug' => $slug] : []);
+			}
+		}
+	}
+}
+
 /** Hilfsfunktionen (unverändert) */
 function cmx_get_terms_normalized(string $taxonomy): array {
 	$terms = \get_terms([
@@ -525,6 +559,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 		return;
 	}
 
+	cmx_kommunikation_ensure_default_label_terms();
+
 	$option_key = 'cmx_kontakte_kommunikation_migrated_v1';
 	if ((string) \get_option($option_key, '') === '1') {
 		return;
@@ -544,6 +580,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
 		?>
 		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>">
+			<div class="cmx-kommu-field cmx-kommu-field-handle">
+				<!-- <span class="cmx-kommu-field-title">Reihenfolge</span> -->
+				<span class="cmx-kommu-drag" draggable="true" title="Kontakt verschieben" aria-label="Kontakt verschieben">
+					<span class="dashicons dashicons-menu" aria-hidden="true"></span>
+				</span>
+			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>">Vorname</label>
 				<input id="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[vorname]'); ?>" value="<?php echo \esc_attr((string) ($row['vorname'] ?? '')); ?>">
@@ -553,7 +595,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				<input id="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[nachname]'); ?>" value="<?php echo \esc_attr((string) ($row['nachname'] ?? '')); ?>">
 			</div>
 			<div class="cmx-kommu-field">
-				<label for="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>">Telefon Typ</label>
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_PHONE_LABELS, 'Telefon Typ'); ?></label>
 				<select id="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[telefon_label]'); ?>">
 					<option value="">auswählen</option>
 					<?php foreach ($phone_terms as $term) {
@@ -569,7 +611,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				<input id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[telefon]'); ?>" value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>">
 			</div>
 			<div class="cmx-kommu-field">
-				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>">E-Mail Typ</label>
+				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail Typ'); ?></label>
 				<select id="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[email_label]'); ?>">
 					<option value="">auswählen</option>
 					<?php foreach ($mail_terms as $term) {
@@ -616,30 +658,56 @@ function cmx_kommunikation_box_html($post): void {
 		#cmx_kommunikation_box .cmx-kommu-rows {
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
+			gap: 10px;
 		}
 		#cmx_kommunikation_box .cmx-kommu-contact-row {
 			display: grid;
-			grid-template-columns: minmax(120px, 0.95fr) minmax(120px, 0.95fr) minmax(120px, 0.85fr) minmax(150px, 1.05fr) minmax(120px, 0.85fr) minmax(180px, 1.15fr) 150px 86px 40px;
-			gap: 10px;
-			padding: 12px;
+			grid-template-columns: 40px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.82fr) minmax(138px, 1fr) minmax(108px, 0.82fr) minmax(168px, 1.08fr) 136px 72px 34px;
+			gap: 8px;
+			padding: 10px;
 			border: 1px solid #dcdcde;
-			border-radius: 8px;
+			border-radius: 7px;
 			background: #fff;
 			align-items: end;
+			transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-contact-row:nth-child(even) {
+			background: #fcfcfc;
+		}
+		#cmx_kommunikation_box .cmx-kommu-contact-row.is-dragging {
+			opacity: 0.6;
+			border-color: #d63638;
+			box-shadow: 0 0 0 1px rgba(214, 54, 56, 0.18);
 		}
 		#cmx_kommunikation_box .cmx-kommu-field {
 			margin: 0;
 		}
+		#cmx_kommunikation_box .cmx-kommu-field-handle {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 0;
+			padding: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-handle .cmx-kommu-field-title {
+			display: none;
+		}
 		#cmx_kommunikation_box .cmx-kommu-field label {
 			display: block;
-			margin: 0 0 4px;
+			margin: 0 0 3px;
+			padding-left: 1ch;
 			font-weight: 600;
+			font-size: 12px;
+			line-height: 1.2;
 		}
 		#cmx_kommunikation_box .cmx-kommu-field-title {
 			display: block;
-			margin: 0 0 4px;
+			margin: 0 0 3px;
+			padding-left: 1ch;
 			font-weight: 600;
+			font-size: 12px;
+			line-height: 1.2;
 		}
 		#cmx_kommunikation_box .cmx-kommu-field input {
 			width: 100%;
@@ -648,19 +716,42 @@ function cmx_kommunikation_box_html($post): void {
 			width: 100%;
 			max-width: none;
 		}
+		#cmx_kommunikation_box .cmx-kommu-drag {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 28px;
+			height: 28px;
+			margin-top: -60px;
+			border-radius: 5px;
+			cursor: grab;
+			color: #646970;
+			background: #f6f7f7;
+			box-shadow: inset 0 0 0 1px #dcdcde;
+			user-select: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-drag:active {
+			cursor: grabbing;
+		}
+		#cmx_kommunikation_box .cmx-kommu-drag .dashicons {
+			font-size: 15px;
+			width: 15px;
+			height: 15px;
+			line-height: 15px;
+		}
 		#cmx_kommunikation_box .cmx-kommu-field-check {
 			display: flex;
 			flex-direction: column;
 			align-items: flex-start;
 			justify-content: flex-end;
-			gap: 4px;
-			padding-bottom: 3px;
+			gap: 2px;
+			padding-bottom: 1px;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toggle {
 			position: relative;
 			display: inline-flex;
 			align-items: center;
-			min-height: 30px;
+			min-height: 26px;
 			cursor: pointer;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"] {
@@ -673,8 +764,8 @@ function cmx_kommunikation_box_html($post): void {
 		#cmx_kommunikation_box .cmx-kommu-toggle-ui {
 			position: relative;
 			display: inline-block;
-			width: 42px;
-			height: 24px;
+			width: 38px;
+			height: 22px;
 			border-radius: 999px;
 			background: #dcdcde;
 			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
@@ -685,8 +776,8 @@ function cmx_kommunikation_box_html($post): void {
 			position: absolute;
 			top: 3px;
 			left: 3px;
-			width: 18px;
-			height: 18px;
+			width: 16px;
+			height: 16px;
 			border-radius: 50%;
 			background: #fff;
 			box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
@@ -696,7 +787,7 @@ function cmx_kommunikation_box_html($post): void {
 			background: #d63638;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:checked + .cmx-kommu-toggle-ui::after {
-			transform: translateX(18px);
+			transform: translateX(16px);
 		}
 		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:focus-visible + .cmx-kommu-toggle-ui {
 			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 2px rgba(214, 54, 56, 0.28);
@@ -705,31 +796,31 @@ function cmx_kommunikation_box_html($post): void {
 			display: flex;
 			align-items: flex-end;
 			justify-content: flex-end;
-			padding-bottom: 4px;
+			padding-bottom: 2px;
 		}
 		#cmx_kommunikation_box .cmx-kommu-remove {
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			width: 36px;
-			height: 36px;
+			width: 32px;
+			height: 32px;
 			padding: 0;
 			color: #d63638;
 			line-height: 1;
 			text-decoration: none;
 		}
 		#cmx_kommunikation_box .cmx-kommu-remove .dashicons {
-			font-size: 18px;
-			width: 18px;
-			height: 18px;
-			line-height: 18px;
+			font-size: 16px;
+			width: 16px;
+			height: 16px;
+			line-height: 16px;
 		}
 		#cmx_kommunikation_box .cmx-kommu-remove:hover,
 		#cmx_kommunikation_box .cmx-kommu-remove:focus {
 			color: #b42527;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toolbar {
-			margin-top: 12px;
+			margin-top: 10px;
 		}
 		@media (max-width: 1280px) {
 			#cmx_kommunikation_box .cmx-kommu-contact-row {
@@ -762,6 +853,31 @@ function cmx_kommunikation_box_html($post): void {
 		var addButton = document.getElementById("cmx-kommu-add-row");
 		var template = document.getElementById("cmx-kommu-row-template");
 		if (!rows || !addButton || !template) return;
+		var draggedRow = null;
+
+		function renumberRows() {
+			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row, index) {
+				row.setAttribute("data-row-index", String(index));
+
+				row.querySelectorAll("[name]").forEach(function(field) {
+					var name = field.getAttribute("name");
+					if (!name) return;
+					field.setAttribute("name", name.replace(/cmx_kommunikation\[kontakte\]\[[^\]]+\]/, "cmx_kommunikation[kontakte][" + index + "]"));
+				});
+
+				row.querySelectorAll("[id]").forEach(function(field) {
+					var id = field.getAttribute("id");
+					if (!id) return;
+					field.setAttribute("id", id.replace(/_[^_]+$/, "_" + index));
+				});
+
+				row.querySelectorAll("label[for]").forEach(function(label) {
+					var target = label.getAttribute("for");
+					if (!target) return;
+					label.setAttribute("for", target.replace(/_[^_]+$/, "_" + index));
+				});
+			});
+		}
 
 		function updateRemoveButtons() {
 			var items = rows.querySelectorAll(".cmx-kommu-contact-row");
@@ -791,6 +907,7 @@ function cmx_kommunikation_box_html($post): void {
 			var row = wrapper.firstElementChild;
 			if (!row) return;
 			rows.appendChild(row);
+			renumberRows();
 			updateRemoveButtons();
 		}
 
@@ -807,9 +924,48 @@ function cmx_kommunikation_box_html($post): void {
 			if (!rows.querySelector(".cmx-kommu-contact-row")) {
 				addRow();
 			}
+			renumberRows();
 			updateRemoveButtons();
 		});
 
+		rows.addEventListener("dragstart", function(event) {
+			var handle = event.target.closest(".cmx-kommu-drag");
+			if (!handle) return;
+			draggedRow = handle.closest(".cmx-kommu-contact-row");
+			if (!draggedRow) return;
+			draggedRow.classList.add("is-dragging");
+			if (event.dataTransfer) {
+				event.dataTransfer.effectAllowed = "move";
+				try {
+					event.dataTransfer.setData("text/plain", draggedRow.getAttribute("data-row-index") || "");
+				} catch (error) {}
+			}
+		});
+
+		rows.addEventListener("dragover", function(event) {
+			if (!draggedRow) return;
+			event.preventDefault();
+			var targetRow = event.target.closest(".cmx-kommu-contact-row");
+			if (!targetRow || targetRow === draggedRow) return;
+			var rect = targetRow.getBoundingClientRect();
+			var insertBefore = event.clientY < (rect.top + rect.height / 2);
+			rows.insertBefore(draggedRow, insertBefore ? targetRow : targetRow.nextSibling);
+		});
+
+		rows.addEventListener("drop", function(event) {
+			if (!draggedRow) return;
+			event.preventDefault();
+			renumberRows();
+		});
+
+		rows.addEventListener("dragend", function() {
+			if (!draggedRow) return;
+			draggedRow.classList.remove("is-dragging");
+			draggedRow = null;
+			renumberRows();
+		});
+
+		renumberRows();
 		updateRemoveButtons();
 	})();
 	</script>
