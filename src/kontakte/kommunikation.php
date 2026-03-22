@@ -114,6 +114,59 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_sanitize_birthdate'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_pattern')) {
+	function cmx_kommunikation_phone_pattern(): string {
+		return '(?:\+41\s?(?:\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\d{3}\s?\d{3}\s?\d{3})|0(?:\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\d{3}\s?\d{3}\s?\d{3}))';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_title')) {
+	function cmx_kommunikation_phone_title(): string {
+		return 'Schweizer Format mit Ländervorwahl: +41 79 123 45 67, +41 44 123 45 67 oder +41 800 123 456';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_placeholder')) {
+	function cmx_kommunikation_phone_placeholder(): string {
+		return '+41 79 123 45 67';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_phone')) {
+	function cmx_kommunikation_normalize_phone(mixed $value): string {
+		$raw = \is_scalar($value) ? \trim((string) $value) : '';
+		if ($raw === '') {
+			return '';
+		}
+
+		$compact = (string) \preg_replace('/[^\d+]+/', '', $raw);
+		if (\strpos($compact, '00') === 0) {
+			$compact = '+' . \substr($compact, 2);
+		}
+
+		if (\preg_match('/^\+41(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
+		}
+		if (\preg_match('/^\+41(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
+		}
+		if (\preg_match('/^41(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
+		}
+		if (\preg_match('/^41(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
+		}
+		if (\preg_match('/^0(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
+		}
+		if (\preg_match('/^0(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
+			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
+		}
+
+		return \sanitize_text_field($raw);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_label_slug')) {
 	function cmx_kommunikation_normalize_label_slug(mixed $value, string $taxonomy): string {
 		$slug = \sanitize_title((string) $value);
@@ -180,7 +233,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_contact_row
 			'vorname'      => \sanitize_text_field((string) ($row['vorname'] ?? '')),
 			'nachname'     => \sanitize_text_field((string) ($row['nachname'] ?? '')),
 			'telefon_label'=> cmx_kommunikation_normalize_label_slug($row['telefon_label'] ?? '', CMX_TAX_PHONE_LABELS),
-			'telefon'      => \sanitize_text_field((string) ($row['telefon'] ?? '')),
+			'telefon'      => cmx_kommunikation_normalize_phone($row['telefon'] ?? ''),
 			'email_label'  => cmx_kommunikation_normalize_label_slug($row['email_label'] ?? '', CMX_TAX_MAIL_LABELS),
 			'email'        => $email,
 			'geburtsdatum' => cmx_kommunikation_sanitize_birthdate($row['geburtsdatum'] ?? ''),
@@ -579,6 +632,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
 		$internal_email_url = \admin_url('post-new.php?post_type=' . \rawurlencode(\defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails'));
+		$phone_pattern = cmx_kommunikation_phone_pattern();
+		$phone_title = cmx_kommunikation_phone_title();
+		$phone_placeholder = cmx_kommunikation_phone_placeholder();
 		?>
 		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>">
 			<div class="cmx-kommu-field cmx-kommu-field-handle">
@@ -615,7 +671,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 						data-phone-target="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
 					>Telefon</button>
 				</label>
-				<input id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[telefon]'); ?>" value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>">
+				<input
+					id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+					type="tel"
+					name="<?php echo \esc_attr($field_base . '[telefon]'); ?>"
+					value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>"
+					inputmode="tel"
+					autocomplete="tel-national"
+					placeholder="<?php echo \esc_attr($phone_placeholder); ?>"
+					pattern="<?php echo \esc_attr($phone_pattern); ?>"
+					title="<?php echo \esc_attr($phone_title); ?>"
+					data-cmx-phone="1"
+				>
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail Typ'); ?></label>
@@ -1061,6 +1128,53 @@ function cmx_kommunikation_box_html($post): void {
 			return raw.indexOf("+") === 0 ? "+" + digits : digits;
 		}
 
+		function formatSwissPhoneValue(value) {
+			var raw = String(value || "").trim();
+			if (!raw) return "";
+			var compact = raw.replace(/[^\d+]+/g, "");
+			if (compact.indexOf("00") === 0) {
+				compact = "+" + compact.slice(2);
+			}
+			var match = compact.match(/^\+41(\d{2})(\d{3})(\d{2})(\d{2})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			}
+			match = compact.match(/^\+41(\d{3})(\d{3})(\d{3})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			}
+			match = compact.match(/^41(\d{2})(\d{3})(\d{2})(\d{2})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			}
+			match = compact.match(/^41(\d{3})(\d{3})(\d{3})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			}
+			match = compact.match(/^0(\d{2})(\d{3})(\d{2})(\d{2})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			}
+			match = compact.match(/^0(\d{3})(\d{3})(\d{3})$/);
+			if (match) {
+				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			}
+			return raw;
+		}
+
+		function updateSwissPhoneValidity(input) {
+			if (!input || !input.matches("[data-cmx-phone]")) return;
+			if (!String(input.value || "").trim()) {
+				input.setCustomValidity("");
+				return;
+			}
+			if (input.validity.patternMismatch) {
+				input.setCustomValidity("Bitte im Schweizer Format mit Ländervorwahl eingeben: +41 79 123 45 67, +41 44 123 45 67 oder +41 800 123 456.");
+				return;
+			}
+			input.setCustomValidity("");
+		}
+
 		function fetchVideoChatUrl() {
 			if (videoChatUrl) {
 				return Promise.resolve(videoChatUrl);
@@ -1207,6 +1321,19 @@ function cmx_kommunikation_box_html($post): void {
 			renumberRows();
 			updateRemoveButtons();
 		});
+
+		rows.addEventListener("input", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			phoneInput.setCustomValidity("");
+		});
+
+		rows.addEventListener("blur", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			phoneInput.value = formatSwissPhoneValue(phoneInput.value);
+			updateSwissPhoneValidity(phoneInput);
+		}, true);
 
 		phoneMenu.addEventListener("click", function(event) {
 			var actionButton = event.target.closest("button[data-action]");
