@@ -608,7 +608,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				</select>
 			</div>
 			<div class="cmx-kommu-field">
-				<label for="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>">Telefon</label>
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" class="cmx-kommu-phone-label">
+					<button
+						type="button"
+						class="button-link cmx-kommu-phone-action"
+						data-phone-target="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+					>Telefon</button>
+				</label>
 				<input id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[telefon]'); ?>" value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>">
 			</div>
 			<div class="cmx-kommu-field">
@@ -656,10 +662,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_nextcloud_call_url')) {
+	function cmx_kommunikation_nextcloud_call_url(): string {
+		$base_url = \untrailingslashit((string) \get_option('mis_buero_nextcloud_url', ''));
+		$chat_room = \trim((string) \get_option('mis_buero_nextcloud_chat_room', ''));
+		if ($base_url === '' || $chat_room === '') {
+			return '';
+		}
+
+		return $base_url . '/index.php/call/' . \rawurlencode($chat_room);
+	}
+}
+
 function cmx_kommunikation_box_html($post): void {
 	$rows = cmx_kommunikation_read_contacts((int) $post->ID);
 	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
 	$mail_terms = \taxonomy_exists(CMX_TAX_MAIL_LABELS) ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS) : [];
+	$nextcloud_call_url = cmx_kommunikation_nextcloud_call_url();
 	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
 	?>
 	<style>
@@ -724,10 +743,12 @@ function cmx_kommunikation_box_html($post): void {
 			width: 100%;
 			max-width: none;
 		}
-		#cmx_kommunikation_box .cmx-kommu-email-label {
+		#cmx_kommunikation_box .cmx-kommu-email-label,
+		#cmx_kommunikation_box .cmx-kommu-phone-label {
 			cursor: pointer;
 		}
-		#cmx_kommunikation_box .cmx-kommu-email-action {
+		#cmx_kommunikation_box .cmx-kommu-email-action,
+		#cmx_kommunikation_box .cmx-kommu-phone-action {
 			padding: 0;
 			border: 0;
 			background: transparent;
@@ -738,26 +759,31 @@ function cmx_kommunikation_box_html($post): void {
 			cursor: pointer;
 		}
 		#cmx_kommunikation_box .cmx-kommu-email-action:hover,
-		#cmx_kommunikation_box .cmx-kommu-email-action:focus {
+		#cmx_kommunikation_box .cmx-kommu-email-action:focus,
+		#cmx_kommunikation_box .cmx-kommu-phone-action:hover,
+		#cmx_kommunikation_box .cmx-kommu-phone-action:focus {
 			color: #d63638;
 			text-decoration: underline;
 			outline: none;
 		}
-		#cmx_kommunikation_box .cmx-kommu-email-menu {
+		#cmx_kommunikation_box .cmx-kommu-email-menu,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu {
 			position: fixed;
 			z-index: 100000;
 			display: none;
-			min-width: 124px;
+			min-width: 132px;
 			padding: 6px;
 			border: 1px solid #dcdcde;
 			border-radius: 7px;
 			background: #fff;
 			box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
 		}
-		#cmx_kommunikation_box .cmx-kommu-email-menu.is-open {
+		#cmx_kommunikation_box .cmx-kommu-email-menu.is-open,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu.is-open {
 			display: block;
 		}
-		#cmx_kommunikation_box .cmx-kommu-email-menu button {
+		#cmx_kommunikation_box .cmx-kommu-email-menu button,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button {
 			display: block;
 			width: 100%;
 			margin: 0;
@@ -770,7 +796,9 @@ function cmx_kommunikation_box_html($post): void {
 			cursor: pointer;
 		}
 		#cmx_kommunikation_box .cmx-kommu-email-menu button:hover,
-		#cmx_kommunikation_box .cmx-kommu-email-menu button:focus {
+		#cmx_kommunikation_box .cmx-kommu-email-menu button:focus,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button:hover,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button:focus {
 			background: #f6f7f7;
 			outline: none;
 		}
@@ -894,7 +922,7 @@ function cmx_kommunikation_box_html($post): void {
 			}
 		}
 	</style>
-	<div id="cmx_kommunikation_box">
+	<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>">
 		<div class="cmx-kommu-rows">
 			<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms); } ?>
 		</div>
@@ -906,6 +934,13 @@ function cmx_kommunikation_box_html($post): void {
 			<button type="button" data-action="internal">Intern</button>
 			<button type="button" data-action="external">Extern</button>
 		</div>
+		<div class="cmx-kommu-phone-menu" id="cmx-kommu-phone-menu" aria-hidden="true">
+			<button type="button" data-action="phone">Telefon</button>
+			<button type="button" data-action="whatsapp">WhatsApp</button>
+			<button type="button" data-action="sms">SMS</button>
+			<button type="button" data-action="signal">Signal</button>
+			<button type="button" data-action="videochat">VideoChat</button>
+		</div>
 	</div>
 	<script>
 	(function(){
@@ -915,9 +950,12 @@ function cmx_kommunikation_box_html($post): void {
 		var addButton = document.getElementById("cmx-kommu-add-row");
 		var template = document.getElementById("cmx-kommu-row-template");
 		var emailMenu = document.getElementById("cmx-kommu-email-menu");
-		if (!rows || !addButton || !template || !emailMenu) return;
+		var phoneMenu = document.getElementById("cmx-kommu-phone-menu");
+		if (!rows || !addButton || !template || !emailMenu || !phoneMenu) return;
 		var draggedRow = null;
 		var emailMenuState = null;
+		var phoneMenuState = null;
+		var videoChatUrl = String(root.getAttribute("data-videochat-url") || "");
 
 		function closeEmailMenu() {
 			emailMenu.classList.remove("is-open");
@@ -925,8 +963,15 @@ function cmx_kommunikation_box_html($post): void {
 			emailMenuState = null;
 		}
 
+		function closePhoneMenu() {
+			phoneMenu.classList.remove("is-open");
+			phoneMenu.setAttribute("aria-hidden", "true");
+			phoneMenuState = null;
+		}
+
 		function openEmailMenu(trigger) {
 			if (!trigger) return;
+			closePhoneMenu();
 			var rect = trigger.getBoundingClientRect();
 			emailMenuState = {
 				targetId: trigger.getAttribute("data-email-target") || "",
@@ -938,9 +983,38 @@ function cmx_kommunikation_box_html($post): void {
 			emailMenu.setAttribute("aria-hidden", "false");
 		}
 
+		function openPhoneMenu(trigger) {
+			if (!trigger) return;
+			closeEmailMenu();
+			var rect = trigger.getBoundingClientRect();
+			phoneMenuState = {
+				targetId: trigger.getAttribute("data-phone-target") || ""
+			};
+			phoneMenu.style.top = Math.round(rect.bottom + 6) + "px";
+			phoneMenu.style.left = Math.round(rect.left) + "px";
+			phoneMenu.classList.add("is-open");
+			phoneMenu.setAttribute("aria-hidden", "false");
+		}
+
 		function resolveEmailInput() {
 			if (!emailMenuState || !emailMenuState.targetId) return null;
 			return document.getElementById(emailMenuState.targetId);
+		}
+
+		function resolvePhoneInput() {
+			if (!phoneMenuState || !phoneMenuState.targetId) return null;
+			return document.getElementById(phoneMenuState.targetId);
+		}
+
+		function normalizePhoneDigits(value) {
+			return String(value || "").replace(/\D+/g, "");
+		}
+
+		function normalizePhoneUriValue(value) {
+			var raw = String(value || "").trim();
+			var digits = normalizePhoneDigits(raw);
+			if (!digits) return "";
+			return raw.indexOf("+") === 0 ? "+" + digits : digits;
 		}
 
 		function renumberRows() {
@@ -963,6 +1037,17 @@ function cmx_kommunikation_box_html($post): void {
 					var target = label.getAttribute("for");
 					if (!target) return;
 					label.setAttribute("for", target.replace(/_[^_]+$/, "_" + index));
+				});
+
+				row.querySelectorAll("[data-email-target], [data-phone-target]").forEach(function(trigger) {
+					var emailTarget = trigger.getAttribute("data-email-target");
+					if (emailTarget) {
+						trigger.setAttribute("data-email-target", emailTarget.replace(/_[^_]+$/, "_" + index));
+					}
+					var phoneTarget = trigger.getAttribute("data-phone-target");
+					if (phoneTarget) {
+						trigger.setAttribute("data-phone-target", phoneTarget.replace(/_[^_]+$/, "_" + index));
+					}
 				});
 			});
 		}
@@ -1004,6 +1089,18 @@ function cmx_kommunikation_box_html($post): void {
 		});
 
 		rows.addEventListener("click", function (event) {
+			var phoneTrigger = event.target.closest(".cmx-kommu-phone-action");
+			if (phoneTrigger) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (phoneMenu.classList.contains("is-open") && phoneMenuState && phoneMenuState.targetId === (phoneTrigger.getAttribute("data-phone-target") || "")) {
+					closePhoneMenu();
+				} else {
+					openPhoneMenu(phoneTrigger);
+				}
+				return;
+			}
+
 			var emailTrigger = event.target.closest(".cmx-kommu-email-action");
 			if (emailTrigger) {
 				event.preventDefault();
@@ -1026,6 +1123,51 @@ function cmx_kommunikation_box_html($post): void {
 			}
 			renumberRows();
 			updateRemoveButtons();
+		});
+
+		phoneMenu.addEventListener("click", function(event) {
+			var actionButton = event.target.closest("button[data-action]");
+			if (!actionButton || !phoneMenuState) return;
+			var action = actionButton.getAttribute("data-action") || "";
+			var input = resolvePhoneInput();
+			var rawValue = input ? String(input.value || "").trim() : "";
+			var phoneDigits = normalizePhoneDigits(rawValue);
+			var phoneUriValue = normalizePhoneUriValue(rawValue);
+			if ((action === "phone" || action === "sms" || action === "whatsapp" || action === "signal") && phoneDigits === "") {
+				if (input) {
+					input.focus();
+				}
+				closePhoneMenu();
+				return;
+			}
+			if (action === "phone") {
+				window.location.href = "tel:" + phoneUriValue;
+				closePhoneMenu();
+				return;
+			}
+			if (action === "sms") {
+				window.location.href = "sms:" + phoneUriValue;
+				closePhoneMenu();
+				return;
+			}
+			if (action === "whatsapp") {
+				window.open("https://wa.me/" + phoneDigits, "_blank", "noopener");
+				closePhoneMenu();
+				return;
+			}
+			if (action === "signal") {
+				window.open("https://signal.me/#p/+" + phoneDigits, "_blank", "noopener");
+				closePhoneMenu();
+				return;
+			}
+			if (action === "videochat") {
+				if (videoChatUrl !== "") {
+					window.open(videoChatUrl, "_blank", "noopener");
+				} else {
+					window.alert("Nextcloud URL oder Chat Room ID fehlt in Einstellungen > System.");
+				}
+				closePhoneMenu();
+			}
 		});
 
 		emailMenu.addEventListener("click", function(event) {
@@ -1052,6 +1194,11 @@ function cmx_kommunikation_box_html($post): void {
 		});
 
 		document.addEventListener("click", function(event) {
+			if (phoneMenu.classList.contains("is-open")) {
+				if (!event.target.closest("#cmx-kommu-phone-menu") && !event.target.closest(".cmx-kommu-phone-action")) {
+					closePhoneMenu();
+				}
+			}
 			if (!emailMenu.classList.contains("is-open")) return;
 			if (event.target.closest("#cmx-kommu-email-menu")) return;
 			if (event.target.closest(".cmx-kommu-email-action")) return;
@@ -1060,11 +1207,13 @@ function cmx_kommunikation_box_html($post): void {
 
 		document.addEventListener("keydown", function(event) {
 			if (event.key === "Escape") {
+				closePhoneMenu();
 				closeEmailMenu();
 			}
 		});
 
 		rows.addEventListener("dragstart", function(event) {
+			closePhoneMenu();
 			closeEmailMenu();
 			var handle = event.target.closest(".cmx-kommu-drag");
 			if (!handle) return;
