@@ -256,7 +256,26 @@ function cmx_kontakte_vcard_apply_contact_data(int $post_id, array $d, bool $is_
 		$changed = cmx_kontakte_vcard_apply_phone_row($post_id, $i + 1, (array) $row, $bundle, $phone_label_map) || $changed;
 	}
 
-	if ($bundle !== $original_bundle) {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+		$contacts = [];
+		$max_slots = max(count($emails), count($tels), ($first_name !== '' || $last_name !== '') ? 1 : 0);
+		for ($slot = 1; $slot <= $max_slots; $slot++) {
+			$contacts[] = [
+				'vorname' => $slot === 1 ? $first_name : '',
+				'nachname' => $slot === 1 ? $last_name : '',
+				'telefon_label' => (string) ($bundle['telefon'][$slot]['label'] ?? ''),
+				'telefon' => (string) \get_post_meta($post_id, "_cmx_telefon_{$slot}", true),
+				'email_label' => (string) ($bundle['email'][$slot]['label'] ?? ''),
+				'email' => (string) \get_post_meta($post_id, "_cmx_email_{$slot}", true),
+				'geburtsdatum' => '',
+				'duzis' => '0',
+			];
+		}
+		if ($contacts !== []) {
+			cmx_kommunikation_persist_contacts($post_id, $contacts);
+			$changed = true;
+		}
+	} elseif ($bundle !== $original_bundle) {
 		\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 		$changed = true;
 	}

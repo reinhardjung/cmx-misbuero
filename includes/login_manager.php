@@ -1,5 +1,14 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || exit;
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_logout_redirect_url')) {
+	function cmx_logout_redirect_url(): string {
+		return (string) \home_url('/');
+	}
+}
+
+\add_filter('logout_redirect', function ($redirect_to, $requested_redirect_to, $user): string {
+	return cmx_logout_redirect_url();
+}, 20, 3);
 
 /**
  * Passwort-Reset auch an die hinterlegte Backup-Mail senden.

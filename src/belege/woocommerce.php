@@ -1108,20 +1108,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_contact')) {
 		\update_post_meta($contact_id, '_cmx_rechnung_ort', $parts['city']);
 		\update_post_meta($contact_id, '_cmx_rechnung_land', $parts['country']);
 
-		$bundle = \get_post_meta($contact_id, '_cmx_kommunikation', true);
-		if (!\is_array($bundle)) {
-			$bundle = ['telefon' => [], 'email' => []];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+			cmx_kommunikation_persist_contacts($contact_id, [[
+				'vorname' => (string) $parts['first_name'],
+				'nachname' => (string) $parts['last_name'],
+				'telefon_label' => '',
+				'telefon' => (string) $parts['phone'],
+				'email_label' => '',
+				'email' => (string) $parts['email'],
+				'geburtsdatum' => '',
+				'duzis' => '0',
+			]]);
+		} else {
+			$bundle = \get_post_meta($contact_id, '_cmx_kommunikation', true);
+			if (!\is_array($bundle)) {
+				$bundle = ['telefon' => [], 'email' => []];
+			}
+			$bundle['telefon'][1] = [
+				'label' => (string) ($bundle['telefon'][1]['label'] ?? ''),
+				'value' => $parts['phone'],
+			];
+			$bundle['email'][1] = [
+				'label' => (string) ($bundle['email'][1]['label'] ?? ''),
+				'value' => $parts['email'],
+				'valid' => \is_email($parts['email']) ? '1' : '0',
+			];
+			\update_post_meta($contact_id, '_cmx_kommunikation', $bundle);
 		}
-		$bundle['telefon'][1] = [
-			'label' => (string) ($bundle['telefon'][1]['label'] ?? ''),
-			'value' => $parts['phone'],
-		];
-		$bundle['email'][1] = [
-			'label' => (string) ($bundle['email'][1]['label'] ?? ''),
-			'value' => $parts['email'],
-			'valid' => \is_email($parts['email']) ? '1' : '0',
-		];
-		\update_post_meta($contact_id, '_cmx_kommunikation', $bundle);
 
 		return $contact_id;
 	}

@@ -107,6 +107,87 @@ function cmx_split_values($val): array {
 	$parts = array_map(static fn($v)=>trim((string)$v), (array)$parts);
 	return array_values(array_filter($parts, static fn($v)=>$v!==''));
 }
+function cmx_kontakte_import_row_value(array $row, array $row_l, string $key): string {
+	if (isset($row[$key]) && \is_scalar($row[$key])) {
+		return \trim((string) $row[$key]);
+	}
+	$key_l = \strtolower($key);
+	if (isset($row_l[$key_l]) && \is_scalar($row_l[$key_l])) {
+		return \trim((string) $row_l[$key_l]);
+	}
+	return '';
+}
+function cmx_kontakte_import_resolve_label_input(string $value, string $taxonomy): string {
+	$value = \trim($value);
+	if ($value === '') {
+		return '';
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_resolve_label_term_slug')) {
+		return (string) cmx_kommunikation_resolve_label_term_slug($value, $taxonomy);
+	}
+	$slug = \sanitize_title($value);
+	if ($slug !== '') {
+		$term = \get_term_by('slug', $slug, $taxonomy);
+		if ($term && !\is_wp_error($term) && isset($term->slug)) {
+			return (string) $term->slug;
+		}
+	}
+	$term = \get_term_by('name', $value, $taxonomy);
+	return ($term && !\is_wp_error($term) && isset($term->slug)) ? (string) $term->slug : '';
+}
+function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
+	$contacts = [];
+	$has_dynamic_contacts = false;
+	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
+	foreach ($all_keys as $raw_key) {
+		$key = \strtolower((string) $raw_key);
+		if (!\preg_match('/^kontakt_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|duzis)$/', $key, $matches)) {
+			continue;
+		}
+		$slot = (int) ($matches[1] ?? 0);
+		if ($slot <= 0) {
+			continue;
+		}
+		$field = (string) ($matches[2] ?? '');
+		$contacts[$slot][$field] = cmx_kontakte_import_row_value($row, $row_l, (string) $raw_key);
+		$has_dynamic_contacts = true;
+	}
+
+	if (!$has_dynamic_contacts) {
+		$first_birthdate = cmx_kontakte_import_row_value($row, $row_l, 'geburtsdatum');
+		if ($first_birthdate === '') {
+			$first_birthdate = cmx_kontakte_import_row_value($row, $row_l, 'cmx_geburtsdatum');
+		}
+
+		for ($slot = 1; $slot <= 3; $slot++) {
+			$row_data = [
+				'vorname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'vorname') : '',
+				'nachname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'nachname') : '',
+				'telefon_label' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_label_' . $slot),
+				'telefon' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_' . $slot),
+				'email_label' => cmx_kontakte_import_row_value($row, $row_l, 'email_label_' . $slot),
+				'email' => cmx_kontakte_import_row_value($row, $row_l, 'email_' . $slot),
+				'geburtsdatum' => $slot === 1 ? $first_birthdate : '',
+				'duzis' => '0',
+			];
+			$contacts[$slot] = $row_data;
+		}
+	}
+
+	\ksort($contacts, \SORT_NUMERIC);
+	$out = [];
+	foreach ($contacts as $slot => $row_data) {
+		if (!\is_array($row_data)) {
+			continue;
+		}
+		$row_data['telefon_label'] = cmx_kontakte_import_resolve_label_input((string) ($row_data['telefon_label'] ?? ''), 'kontakte_telefone');
+		$row_data['email_label'] = cmx_kontakte_import_resolve_label_input((string) ($row_data['email_label'] ?? ''), 'kontakte_emails');
+		$row_data['duzis'] = cmx_bool_from_csv($row_data['duzis'] ?? '') ? '1' : '0';
+		$out[] = $row_data;
+	}
+
+	return $out;
+}
 function cmx_assign_stufe(int $post_id, string $slug = '', string $name = ''): void {
 	$tax_candidates = ['kontakte_stufen','stufen','kontakte_stufe','kontakt_stufen'];
 	$tax_found = null; foreach ($tax_candidates as $tx) { if (\taxonomy_exists($tx)) { $tax_found = $tx; break; } }
@@ -545,23 +626,10 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		cmx_assign_stufe($post_id, (string)($row['stufe_slug'] ?? ''), (string)($row['stufe_name'] ?? ''));
 
 		// Kommunikation
-		for ($i=1;$i<=3;$i++){
-			if (!empty($row['telefon_'.$i])) \update_post_meta($post_id, '_cmx_telefon_'.$i, (string)$row['telefon_'.$i]);
-			if (!empty($row['email_'.$i]))   \update_post_meta($post_id, '_cmx_email_'.$i,   (string)$row['email_'.$i]);
+		$contacts = cmx_kontakte_import_collect_contacts($row, $row_l);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+			cmx_kommunikation_persist_contacts($post_id, $contacts);
 		}
-		$bundle = ['telefon'=>[], 'email'=>[]];
-		for ($i=1;$i<=3;$i++){
-			$bundle['telefon'][$i] = ['value'=>(string)($row['telefon_'.$i] ?? ''), 'label'=>''];
-			$bundle['email'][$i]   = ['value'=>(string)($row['email_'.$i] ?? ''),   'label'=>''];
-		}
-		$tel_tax='kontakte_telefone'; $mail_tax='kontakte_emails';
-		if (!empty($row['telefon_label_1'])) $bundle['telefon'][1]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_1'],$tel_tax);
-		if (!empty($row['telefon_label_2'])) $bundle['telefon'][2]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_2'],$tel_tax);
-		if (!empty($row['telefon_label_3'])) $bundle['telefon'][3]['label'] = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['telefon_label_3'],$tel_tax);
-		if (!empty($row['email_label_1']))   $bundle['email'][1]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_1'],$mail_tax);
-		if (!empty($row['email_label_2']))   $bundle['email'][2]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_2'],$mail_tax);
-		if (!empty($row['email_label_3']))   $bundle['email'][3]['label']   = (function($n,$t){ $term=\get_term_by('name',$n,$t); return $term&&!is_wp_error($term)?$term->slug:''; })((string)$row['email_label_3'],$mail_tax);
-		\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 
 		/* === KATEGORIEN (NEU – kompatibel zum Export) =======================
 		 * Unterstützte CSV-Spalten:

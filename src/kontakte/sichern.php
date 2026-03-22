@@ -1,29 +1,50 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_posted_person_title')) {
+	function cmx_kontakte_posted_person_title(): string {
+		$communication = $_POST['cmx_kommunikation'] ?? null;
+		$contacts = \is_array($communication) ? ($communication['kontakte'] ?? null) : null;
+		if (\is_array($contacts)) {
+			foreach ($contacts as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$vorname = \trim(\sanitize_text_field((string) \wp_unslash($row['vorname'] ?? '')));
+				$nachname = \trim(\sanitize_text_field((string) \wp_unslash($row['nachname'] ?? '')));
+				$title = \trim($vorname . ' ' . $nachname);
+				if ($title !== '') {
+					return $title;
+				}
+			}
+		}
+
+		return '';
+	}
+}
 
 /** ======================================================================
- * TITEL VOR dem Speichern setzen (keine Schleife!)
+ * LEEREN POST-TITEL bei Kontakte auffüllen
  * ====================================================================== */
-\add_filter('wp_insert_post_data', __NAMESPACE__.'\\cmx_prepare_kontakt_title_before_save', 20, 2);
-function cmx_prepare_kontakt_title_before_save(array $data, array $postarr) : array {
-	if (($data['post_type'] ?? '') !== 'kontakte') return $data;
-	if (!isset($_POST['cmx_firma'])) return $data;
+\add_filter('wp_insert_post_data', __NAMESPACE__.'\\cmx_kontakte_fill_empty_post_title', 20, 2);
+function cmx_kontakte_fill_empty_post_title(array $data, array $postarr): array {
+	if ((string) ($data['post_type'] ?? ($postarr['post_type'] ?? '')) !== 'kontakte') return $data;
+	if ((string) ($data['post_status'] ?? '') === 'auto-draft') return $data;
 
-	$placeholder = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_placeholder_company_title')
-		? cmx_kontakte_placeholder_company_title()
-		: 'Firmenname fehlt';
-	$incoming_title = \trim((string) ($data['post_title'] ?? ''));
-	$is_missing = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_is_placeholder_company_title')
-		? cmx_kontakte_is_placeholder_company_title($incoming_title)
-		: (\mb_strtolower($incoming_title) === \mb_strtolower($placeholder));
+	$title = \trim((string) ($data['post_title'] ?? ''));
+	if ($title !== '') return $data;
 
-	$firma = \sanitize_text_field((string) \wp_unslash($_POST['cmx_firma']));
-	$new_title = $firma !== '' ? $firma : $placeholder;
-
-	$data['post_title'] = $new_title;
-	if (empty($postarr['ID']) || ($postarr['ID'] && $is_missing)) {
-		$data['post_name'] = \sanitize_title($new_title);
+	$firma = isset($_POST['cmx_firma'])
+		? \trim(\sanitize_text_field((string) \wp_unslash($_POST['cmx_firma'])))
+		: '';
+	$person_title = cmx_kontakte_posted_person_title();
+	$fallback_title = $firma !== ''
+		? $firma
+		: ($person_title !== '' ? $person_title : 'Firmenname fehlt...');
+	$data['post_title'] = $fallback_title;
+	if (\trim((string) ($data['post_name'] ?? '')) === '') {
+		$data['post_name'] = \sanitize_title($fallback_title);
 	}
+
 	return $data;
 }
 

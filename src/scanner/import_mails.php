@@ -546,6 +546,15 @@ function cmx_mail_import_collect_contact_emails(int $kontakt_id): array {
 		}
 	};
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+		foreach ((array) cmx_kommunikation_read_contacts($kontakt_id) as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$add((string) ($row['email'] ?? ''));
+		}
+	}
+
 	$bundle = \get_post_meta($kontakt_id, '_cmx_kommunikation', true);
 	if (\is_array($bundle)) {
 		for ($i = 1; $i <= 3; $i++) {

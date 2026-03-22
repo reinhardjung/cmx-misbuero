@@ -90,6 +90,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_label_slug'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_resolve_label_term_slug')) {
+	function cmx_kommunikation_resolve_label_term_slug(mixed $value, string $taxonomy): string {
+		$raw = \trim((string) $value);
+		if ($raw === '') {
+			return '';
+		}
+
+		$slug = cmx_kommunikation_normalize_label_slug($raw, $taxonomy);
+		if ($slug !== '') {
+			return $slug;
+		}
+
+		$term = \get_term_by('name', $raw, $taxonomy);
+		if ($term && !\is_wp_error($term) && isset($term->slug)) {
+			return (string) $term->slug;
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_row_fields')) {
+	function cmx_kommunikation_row_fields(): array {
+		return ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'duzis'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_count_meta_key')) {
+	function cmx_kommunikation_count_meta_key(): string {
+		return '_cmx_kommunikation_count';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_meta_key')) {
+	function cmx_kommunikation_contact_meta_key(int $slot, string $field): string {
+		return '_cmx_kommunikation_' . \max(1, $slot) . '_' . \sanitize_key($field);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_label_meta_key')) {
+	function cmx_kommunikation_label_meta_key(string $kind, int $slot): string {
+		return ($kind === 'email' ? '_cmx_email_label_' : '_cmx_telefon_label_') . \max(1, $slot);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_contact_row')) {
 	function cmx_kommunikation_normalize_contact_row(array $row): array {
 		$email = \sanitize_email((string) ($row['email'] ?? ''));
@@ -121,6 +166,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_saved_slots')) {
+	function cmx_kommunikation_flat_saved_slots(int $post_id): array {
+		$slots = [];
+		$count_raw = \get_post_meta($post_id, cmx_kommunikation_count_meta_key(), true);
+		if ($count_raw !== '' && $count_raw !== null) {
+			$count = \max(0, (int) $count_raw);
+			for ($slot = 1; $slot <= $count; $slot++) {
+				$slots[$slot] = $slot;
+			}
+		}
+
+		$all_meta = \get_post_meta($post_id);
+		if (\is_array($all_meta)) {
+			foreach (\array_keys($all_meta) as $meta_key) {
+				if (\preg_match('/^_cmx_kommunikation_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|duzis)$/', (string) $meta_key, $matches)) {
+					$slot = (int) ($matches[1] ?? 0);
+					if ($slot > 0) {
+						$slots[$slot] = $slot;
+					}
+				}
+			}
+		}
+
+		\ksort($slots, \SORT_NUMERIC);
+		return \array_values($slots);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_flat_storage')) {
+	function cmx_kommunikation_has_flat_storage(int $post_id): bool {
+		return \metadata_exists('post', $post_id, cmx_kommunikation_count_meta_key()) || cmx_kommunikation_flat_saved_slots($post_id) !== [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_flat_contacts')) {
+	function cmx_kommunikation_read_flat_contacts(int $post_id): array {
+		$contacts = [];
+		foreach (cmx_kommunikation_flat_saved_slots($post_id) as $slot) {
+			$row = [];
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				$row[$field] = (string) \get_post_meta($post_id, cmx_kommunikation_contact_meta_key((int) $slot, $field), true);
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				$contacts[] = $normalized;
+			}
+		}
+		return $contacts;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_value')) {
 	function cmx_kommunikation_legacy_slot_value(int $post_id, array $bundle, string $kind, int $slot): string {
 		$meta_key = $kind === 'email' ? "_cmx_email_{$slot}" : "_cmx_telefon_{$slot}";
@@ -132,8 +228,249 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_value')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_label')) {
+	function cmx_kommunikation_legacy_slot_label(int $post_id, array $bundle, string $kind, int $slot): string {
+		$meta_key = cmx_kommunikation_label_meta_key($kind, $slot);
+		$value = \get_post_meta($post_id, $meta_key, true);
+		if ($value === '' || $value === null) {
+			$value = $bundle[$kind][$slot]['label'] ?? '';
+		}
+		return \trim((string) $value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+	function cmx_kommunikation_persist_contacts(int $post_id, array $contacts): array {
+		$normalized_contacts = [];
+		foreach ($contacts as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				$normalized_contacts[] = $normalized;
+			}
+		}
+
+		$existing_slots = cmx_kommunikation_flat_saved_slots($post_id);
+		$max_existing_slot = $existing_slots !== [] ? (int) \max($existing_slots) : 0;
+		$max_slot = \max($max_existing_slot, \count($normalized_contacts));
+
+		\update_post_meta($post_id, cmx_kommunikation_count_meta_key(), (string) \count($normalized_contacts));
+
+		foreach ($normalized_contacts as $index => $row) {
+			$slot = $index + 1;
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				$meta_key = cmx_kommunikation_contact_meta_key($slot, $field);
+				$value = (string) ($row[$field] ?? '');
+				if ($field === 'duzis') {
+					\update_post_meta($post_id, $meta_key, $value === '1' ? '1' : '0');
+					continue;
+				}
+				if ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		for ($slot = \count($normalized_contacts) + 1; $slot <= $max_slot; $slot++) {
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				\delete_post_meta($post_id, cmx_kommunikation_contact_meta_key($slot, $field));
+			}
+		}
+
+		for ($slot = 1; $slot <= 3; $slot++) {
+			$row = $normalized_contacts[$slot - 1] ?? null;
+			$telefon = (string) ($row['telefon'] ?? '');
+			$email = (string) ($row['email'] ?? '');
+			$telefon_label = (string) ($row['telefon_label'] ?? '');
+			$email_label = (string) ($row['email_label'] ?? '');
+
+			if ($telefon === '') {
+				\delete_post_meta($post_id, "_cmx_telefon_{$slot}");
+			} else {
+				\update_post_meta($post_id, "_cmx_telefon_{$slot}", $telefon);
+			}
+			if ($email === '') {
+				\delete_post_meta($post_id, "_cmx_email_{$slot}");
+			} else {
+				\update_post_meta($post_id, "_cmx_email_{$slot}", $email);
+			}
+			if ($telefon_label === '') {
+				\delete_post_meta($post_id, cmx_kommunikation_label_meta_key('telefon', $slot));
+			} else {
+				\update_post_meta($post_id, cmx_kommunikation_label_meta_key('telefon', $slot), $telefon_label);
+			}
+			if ($email_label === '') {
+				\delete_post_meta($post_id, cmx_kommunikation_label_meta_key('email', $slot));
+			} else {
+				\update_post_meta($post_id, cmx_kommunikation_label_meta_key('email', $slot), $email_label);
+			}
+		}
+
+		$first = $normalized_contacts[0] ?? null;
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
+			if ($first && (string) ($first['vorname'] ?? '') !== '') {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, (string) $first['vorname']);
+			} else {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_VORNAME);
+			}
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+			if ($first && (string) ($first['nachname'] ?? '') !== '') {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
+			} else {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
+			}
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+			$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
+			if ($birthdate !== '') {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $birthdate);
+			} else {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
+			}
+		}
+
+		\delete_post_meta($post_id, '_cmx_kommunikation');
+
+		return $normalized_contacts;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_legacy_data')) {
+	function cmx_kommunikation_has_legacy_data(int $post_id): bool {
+		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+		if (\is_array($bundle) && $bundle !== []) {
+			return true;
+		}
+
+		$keys = [
+			'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
+			'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+			cmx_kommunikation_label_meta_key('telefon', 1),
+			cmx_kommunikation_label_meta_key('telefon', 2),
+			cmx_kommunikation_label_meta_key('telefon', 3),
+			cmx_kommunikation_label_meta_key('email', 1),
+			cmx_kommunikation_label_meta_key('email', 2),
+			cmx_kommunikation_label_meta_key('email', 3),
+		];
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
+			$keys[] = CMX_KONTAKTE_META_VORNAME;
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+			$keys[] = CMX_KONTAKTE_META_NACHNAME;
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+			$keys[] = CMX_KONTAKTE_META_GEBURTSDATUM;
+		}
+
+		foreach ($keys as $key) {
+			$value = \get_post_meta($post_id, (string) $key, true);
+			if (\is_array($value)) {
+				if ($value !== []) {
+					return true;
+				}
+				continue;
+			}
+			if (\trim((string) $value) !== '') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migration_query_args')) {
+	function cmx_kommunikation_migration_query_args(int $posts_per_page = 100): array {
+		$meta_query = [
+			'relation' => 'AND',
+			[
+				'key' => cmx_kommunikation_count_meta_key(),
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'relation' => 'OR',
+				['key' => '_cmx_kommunikation', 'compare' => 'EXISTS'],
+				['key' => '_cmx_telefon_1', 'compare' => 'EXISTS'],
+				['key' => '_cmx_telefon_2', 'compare' => 'EXISTS'],
+				['key' => '_cmx_telefon_3', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_1', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_2', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_3', 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 1), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 2), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 3), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 1), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 2), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 3), 'compare' => 'EXISTS'],
+			],
+		];
+
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
+			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_VORNAME, 'compare' => 'EXISTS'];
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_NACHNAME, 'compare' => 'EXISTS'];
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_GEBURTSDATUM, 'compare' => 'EXISTS'];
+		}
+
+		return [
+			'post_type' => 'kontakte',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page' => \max(1, $posts_per_page),
+			'fields' => 'ids',
+			'orderby' => 'ID',
+			'order' => 'ASC',
+			'no_found_rows' => true,
+			'meta_query' => $meta_query,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migrate_post')) {
+	function cmx_kommunikation_migrate_post(int $post_id): bool {
+		if ($post_id <= 0 || !cmx_kommunikation_has_legacy_data($post_id)) {
+			return false;
+		}
+		$contacts = cmx_kommunikation_read_contacts($post_id);
+		cmx_kommunikation_persist_contacts($post_id, $contacts);
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migrate_batch')) {
+	function cmx_kommunikation_migrate_batch(int $limit = 100): int {
+		$migrated = 0;
+		$query = new \WP_Query(cmx_kommunikation_migration_query_args($limit));
+		foreach ((array) $query->posts as $post_id) {
+			if (cmx_kommunikation_migrate_post((int) $post_id)) {
+				$migrated++;
+			}
+		}
+		return $migrated;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_pending_migrations')) {
+	function cmx_kommunikation_has_pending_migrations(): bool {
+		$query = new \WP_Query(cmx_kommunikation_migration_query_args(1));
+		return !empty($query->posts);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 	function cmx_kommunikation_read_contacts(int $post_id): array {
+		$flat_contacts = cmx_kommunikation_read_flat_contacts($post_id);
+		if ($flat_contacts !== [] || cmx_kommunikation_has_flat_storage($post_id)) {
+			return $flat_contacts !== [] ? $flat_contacts : [cmx_kommunikation_normalize_contact_row([])];
+		}
+
 		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
 		if (!\is_array($bundle)) {
 			$bundle = [];
@@ -164,9 +501,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 				'nachname'     => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
 					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, true)
 					: '',
-				'telefon_label'=> (string) ($bundle['telefon'][$slot]['label'] ?? ''),
+				'telefon_label'=> cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'telefon', $slot),
 				'telefon'      => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'telefon', $slot),
-				'email_label'  => (string) ($bundle['email'][$slot]['label'] ?? ''),
+				'email_label'  => cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'email', $slot),
 				'email'        => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'email', $slot),
 				'geburtsdatum' => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
 					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true)
@@ -179,9 +516,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 			}
 		}
 
-		return !empty($legacy_rows) ? $legacy_rows : [cmx_kommunikation_normalize_contact_row([])];
+	return !empty($legacy_rows) ? $legacy_rows : [cmx_kommunikation_normalize_contact_row([])];
 	}
 }
+
+\add_action('admin_init', function (): void {
+	if (!\post_type_exists('kontakte') || !\current_user_can('edit_posts')) {
+		return;
+	}
+
+	$option_key = 'cmx_kontakte_kommunikation_migrated_v1';
+	if ((string) \get_option($option_key, '') === '1') {
+		return;
+	}
+
+	cmx_kommunikation_migrate_batch(150);
+
+	if (!cmx_kommunikation_has_pending_migrations()) {
+		\update_option($option_key, '1', false);
+	}
+});
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row')) {
 	function cmx_kommunikation_render_contact_row(array $row, int|string $index, array $phone_terms, array $mail_terms): void {
@@ -235,11 +589,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>">
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-check">
-				<label for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">Duzis</label>
-				<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?>>
+				<span class="cmx-kommu-field-title">Duzis</span>
+				<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
+					<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?>>
+					<span class="cmx-kommu-toggle-ui" aria-hidden="true"></span>
+				</label>
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-actions">
-				<button type="button" class="button-link-delete cmx-kommu-remove">Entfernen</button>
+				<button type="button" class="button-link-delete cmx-kommu-remove" aria-label="Kontakt entfernen" title="Kontakt entfernen">
+					<span class="dashicons dashicons-trash" aria-hidden="true"></span>
+					<span class="screen-reader-text">Entfernen</span>
+				</button>
 			</div>
 		</div>
 		<?php
@@ -260,7 +620,7 @@ function cmx_kommunikation_box_html($post): void {
 		}
 		#cmx_kommunikation_box .cmx-kommu-contact-row {
 			display: grid;
-			grid-template-columns: minmax(120px, 0.95fr) minmax(120px, 0.95fr) minmax(120px, 0.85fr) minmax(150px, 1.05fr) minmax(120px, 0.85fr) minmax(180px, 1.15fr) 150px 86px 72px;
+			grid-template-columns: minmax(120px, 0.95fr) minmax(120px, 0.95fr) minmax(120px, 0.85fr) minmax(150px, 1.05fr) minmax(120px, 0.85fr) minmax(180px, 1.15fr) 150px 86px 40px;
 			gap: 10px;
 			padding: 12px;
 			border: 1px solid #dcdcde;
@@ -272,6 +632,11 @@ function cmx_kommunikation_box_html($post): void {
 			margin: 0;
 		}
 		#cmx_kommunikation_box .cmx-kommu-field label {
+			display: block;
+			margin: 0 0 4px;
+			font-weight: 600;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-title {
 			display: block;
 			margin: 0 0 4px;
 			font-weight: 600;
@@ -288,17 +653,80 @@ function cmx_kommunikation_box_html($post): void {
 			flex-direction: column;
 			align-items: flex-start;
 			justify-content: flex-end;
-			padding-bottom: 4px;
+			gap: 4px;
+			padding-bottom: 3px;
 		}
-		#cmx_kommunikation_box .cmx-kommu-field-check input[type="checkbox"] {
-			width: auto;
+		#cmx_kommunikation_box .cmx-kommu-toggle {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			min-height: 30px;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"] {
+			position: absolute;
+			opacity: 0;
+			width: 1px;
+			height: 1px;
 			margin: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle-ui {
+			position: relative;
+			display: inline-block;
+			width: 42px;
+			height: 24px;
+			border-radius: 999px;
+			background: #dcdcde;
+			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+			transition: background-color 0.18s ease, box-shadow 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle-ui::after {
+			content: "";
+			position: absolute;
+			top: 3px;
+			left: 3px;
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			background: #fff;
+			box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+			transition: transform 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:checked + .cmx-kommu-toggle-ui {
+			background: #d63638;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:checked + .cmx-kommu-toggle-ui::after {
+			transform: translateX(18px);
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:focus-visible + .cmx-kommu-toggle-ui {
+			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 2px rgba(214, 54, 56, 0.28);
 		}
 		#cmx_kommunikation_box .cmx-kommu-field-actions {
 			display: flex;
 			align-items: flex-end;
 			justify-content: flex-end;
 			padding-bottom: 4px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 36px;
+			height: 36px;
+			padding: 0;
+			color: #d63638;
+			line-height: 1;
+			text-decoration: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove .dashicons {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove:hover,
+		#cmx_kommunikation_box .cmx-kommu-remove:focus {
+			color: #b42527;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toolbar {
 			margin-top: 12px;
@@ -415,81 +843,6 @@ function cmx_kommunikation_box_html($post): void {
 	}
 
 	$in = (array) \wp_unslash($_POST['cmx_kommunikation']);
-	$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
-	if (!\is_array($bundle)) {
-		$bundle = [];
-	}
-	$bundle['telefon'] = \is_array($bundle['telefon'] ?? null) ? $bundle['telefon'] : [];
-	$bundle['email'] = \is_array($bundle['email'] ?? null) ? $bundle['email'] : [];
-
-	$contacts = [];
 	$posted_contacts = $in['kontakte'] ?? [];
-	if (\is_array($posted_contacts)) {
-		foreach ($posted_contacts as $row) {
-			if (!\is_array($row)) {
-				continue;
-			}
-			$normalized = cmx_kommunikation_normalize_contact_row($row);
-			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
-				$contacts[] = $normalized;
-			}
-		}
-	}
-	$bundle['kontakte'] = $contacts;
-
-	for ($slot = 1; $slot <= 3; $slot++) {
-		$row = $contacts[$slot - 1] ?? null;
-		$telefon_label = (string) ($row['telefon_label'] ?? '');
-		$telefon = (string) ($row['telefon'] ?? '');
-		$email_label = (string) ($row['email_label'] ?? '');
-		$email = (string) ($row['email'] ?? '');
-
-		if ($telefon === '') {
-			\delete_post_meta($post_id, "_cmx_telefon_{$slot}");
-		} else {
-			\update_post_meta($post_id, "_cmx_telefon_{$slot}", $telefon);
-		}
-
-		if ($email === '') {
-			\delete_post_meta($post_id, "_cmx_email_{$slot}");
-		} else {
-			\update_post_meta($post_id, "_cmx_email_{$slot}", $email);
-		}
-
-		$bundle['telefon'][$slot] = [
-			'label' => $telefon_label,
-			'value' => $telefon,
-		];
-		$bundle['email'][$slot] = [
-			'label' => $email_label,
-			'value' => $email,
-			'valid' => \is_email($email) ? '1' : '0',
-		];
-	}
-
-	$first = $contacts[0] ?? null;
-	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
-		if ($first && (string) ($first['vorname'] ?? '') !== '') {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, (string) $first['vorname']);
-		} else {
-			\delete_post_meta($post_id, CMX_KONTAKTE_META_VORNAME);
-		}
-	}
-	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
-		if ($first && (string) ($first['nachname'] ?? '') !== '') {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
-		} else {
-			\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
-		}
-	}
-	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
-		$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
-		if ($birthdate !== '') {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $birthdate);
-		} else {
-			\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
-		}
-	}
-
-	\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+	cmx_kommunikation_persist_contacts($post_id, \is_array($posted_contacts) ? $posted_contacts : []);
 });

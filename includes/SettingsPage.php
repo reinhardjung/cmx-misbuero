@@ -25,7 +25,10 @@ class SettingsPage {
 			add_action('template_redirect', function() {
 				if (is_front_page()) {
 					wp_logout();
-					wp_redirect(wp_login_url());
+					$target = \function_exists('\\CLOUDMEISTER\\CMX\\Buero\\cmx_logout_redirect_url')
+						? \CLOUDMEISTER\CMX\Buero\cmx_logout_redirect_url()
+						: \home_url('/');
+					wp_redirect($target);
 					exit;
 				}
 			});

@@ -342,7 +342,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_session_user_ids')) {
 		if (!empty($current_result['current_invalid'])) {
 			\wp_logout();
 			if (!\headers_sent()) {
-				\wp_safe_redirect(\wp_login_url());
+				$target = \function_exists(__NAMESPACE__ . '\\cmx_logout_redirect_url')
+					? cmx_logout_redirect_url()
+					: \home_url('/');
+				\wp_safe_redirect($target);
 				exit;
 			}
 			return;

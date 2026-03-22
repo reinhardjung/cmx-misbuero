@@ -9,6 +9,7 @@
 const CMX_KONTAKTE_META_VORNAME  = '_cmx_kontakte_vorname';
 const CMX_KONTAKTE_META_NACHNAME = '_cmx_kontakte_nachname';
 const CMX_KONTAKTE_META_ANREDE   = '_cmx_kontakte_anrede';
+const CMX_KONTAKTE_META_FIRMA    = '_cmx_kontakte_firma';
 const CMX_KONTAKTE_META_URL      = '_cmx_kontakte_url';
 const CMX_KONTAKTE_META_HR_UID   = '_cmx_kontakte_hr_uid';
 const CMX_KONTAKTE_META_PRIVAT   = '_cmx_kontakte_privat';
@@ -26,7 +27,7 @@ const CMX_KONTAKTE_META_KUNDE_SEIT      = '_cmx_kontakte_kunde_seit';
 \add_action('init', __NAMESPACE__ . '\\cmx_register_kontakte_stammdaten_meta');
 function cmx_register_kontakte_stammdaten_meta() {
 	// Text
-	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_HR_UID, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
+	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_FIRMA, CMX_KONTAKTE_META_HR_UID, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
 		\register_post_meta('kontakte', $key, [
 			'type'              => 'string',
 			'single'            => true,
@@ -133,18 +134,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_kunde_seit_value')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_placeholder_company_title')) {
-	function cmx_kontakte_placeholder_company_title(): string {
-		return 'Firmenname fehlt';
-	}
-}
-
-if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_is_placeholder_company_title')) {
-	function cmx_kontakte_is_placeholder_company_title(string $title): bool {
-		return \mb_strtolower(\trim($title)) === \mb_strtolower(cmx_kontakte_placeholder_company_title());
-	}
-}
-
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_business_form_taxonomy')) {
 	function cmx_kontakte_business_form_taxonomy(): string {
 		$candidates = [
@@ -235,9 +224,18 @@ function cmx_add_stammdaten_metabox() {
 function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	\wp_nonce_field('cmx_kontakte_save_meta', 'cmx_kontakte_nonce');
 
-	$firma = (string) ($post->post_title ?? '');
-	if (cmx_kontakte_is_placeholder_company_title($firma)) {
-		$firma = '';
+	$firma_meta_exists = \metadata_exists('post', $post->ID, CMX_KONTAKTE_META_FIRMA);
+	$firma = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMA, true);
+	if (!$firma_meta_exists) {
+		$firma = \trim((string) ($post->post_title ?? ''));
+		$firma_normalized = \strtolower(\str_replace(['_', ' '], '-', $firma));
+		if (
+			(string) ($post->post_status ?? '') === 'auto-draft'
+			|| \strpos($firma_normalized, 'automatisch-gespeicherter-entwurf') !== false
+			|| \strpos($firma_normalized, 'auto-draft') !== false
+		) {
+			$firma = '';
+		}
 	}
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
@@ -261,7 +259,13 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$hr_uid_search_url = $hr_uid !== '' ? 'https://www.zefix.ch/de/search/entity/list?name=' . \rawurlencode($hr_uid) : '';
 
 	echo '<style>
-	body.post-type-kontakte #titlediv{display:none}
+	body.post-type-kontakte #titlediv,
+	body.post-type-kontakte #titlewrap{
+		display:block !important;
+		visibility:visible !important;
+		opacity:1 !important;
+		pointer-events:auto !important;
+	}
 	#cmx-stammdaten .grid {
 		display: grid !important;
 		grid-template-columns:
@@ -358,27 +362,6 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	</p>';
 
 	echo '</div></div>';
-	?>
-	<script>
-	document.addEventListener('DOMContentLoaded', function () {
-		var companyInput = document.getElementById('cmx_firma');
-		var titleInput = document.getElementById('title');
-		if (!companyInput || !titleInput) {
-			return;
-		}
-
-		var syncTitle = function () {
-			titleInput.value = companyInput.value || '';
-			titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-			titleInput.dispatchEvent(new Event('change', { bubbles: true }));
-		};
-
-		companyInput.addEventListener('input', syncTitle);
-		companyInput.addEventListener('change', syncTitle);
-		syncTitle();
-	});
-	</script>
-	<?php
 }
 
 /**
@@ -399,6 +382,10 @@ function cmx_save_kontakte_meta(int $post_id): void {
 		$timestamp = (int) \current_time('timestamp');
 		$kunden_nr = 'K-' . \date('ymd-His', $timestamp);
 		\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDEN_NR, $kunden_nr);
+	}
+
+	if (isset($_POST['cmx_firma'])) {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMA, \sanitize_text_field((string) \wp_unslash($_POST['cmx_firma'])));
 	}
 
 	// Anrede

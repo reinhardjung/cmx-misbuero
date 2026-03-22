@@ -44,7 +44,6 @@ add_filter( 'post_updated_messages', __NAMESPACE__ . '\\cmx_custom_post_updated_
 function cmx_cpt_custom_title_placeholder(string $placeholder, \WP_Post $post): string {
 	// Mapping: CPT => Platzhalter-Text
 	$map = [
-		'kontakte' => 'Firmenname (optional)',
 		'belege'   => 'Belegtitel eingeben',
 		'artikel'  => 'Artikelbezeichung',
 		// weitere CPTs hier ergänzen …

@@ -771,7 +771,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 			color: #1f2937;
 		}
 		body.post-type-kontakte .wrap::after {
-			content: "Kontakte übersichtlich verwalten, filtern und direkt weiterverarbeiten.";
+			/* content: "Kontakte übersichtlich verwalten, filtern und direkt weiterverarbeiten."; */
 			display: block;
 			margin: 0 0 18px;
 			color: #475467;

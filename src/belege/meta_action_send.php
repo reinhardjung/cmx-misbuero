@@ -497,6 +497,18 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {
 
 if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
 	function cmxbu_get_contact_primary_email(int $post_id): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+			foreach ((array) cmx_kommunikation_read_contacts($post_id) as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$candidate = \sanitize_email((string) ($row['email'] ?? ''));
+				if (\is_email($candidate)) {
+					return $candidate;
+				}
+			}
+		}
+
 		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
 		if (\is_array($bundle)) {
 			$candidate = \sanitize_email((string) ($bundle['email'][1]['value'] ?? ''));
@@ -550,6 +562,17 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_collect_contact_reply_emails')) {
 				}
 			}
 		};
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+			$preferred_labels = ['direkt', 'direct', 'geschaeft', 'geschäft', 'privat', 'private', 'haupt', 'main'];
+			$contacts = \array_values(\array_filter((array) cmx_kommunikation_read_contacts($post_id), static fn($row): bool => \is_array($row)));
+			foreach ($contacts as $idx => $row) {
+				$email_val = (string) ($row['email'] ?? '');
+				$label = \sanitize_key((string) ($row['email_label'] ?? ''));
+				$prio = \in_array($label, $preferred_labels, true) ? 260 - $idx : 240 - $idx;
+				$add_email($email_val, $prio);
+			}
+		}
 
 		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
 		if (\is_array($bundle)) {
