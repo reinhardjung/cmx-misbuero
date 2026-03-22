@@ -273,6 +273,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_upload_base_name')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_next_numbered_target')) {
 	function cmx_kl_next_numbered_target(string $base_dir, string $base_name, string $ext): string {
+		$plain_target = \wp_normalize_path($base_dir . '/' . $base_name . $ext);
+		if (!\file_exists($plain_target)) {
+			return $plain_target;
+		}
+
 		$counter = 1;
 		do {
 			$target = \wp_normalize_path($base_dir . '/' . $base_name . '-' . $counter . $ext);
