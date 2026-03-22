@@ -34,6 +34,54 @@ function cmx_const_taxos(string $prefix_const, string $prefix_value, string $tax
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_seed_taxo_ini_key_candidates')) {
+	function cmx_seed_taxo_ini_key_candidates(string $label): array {
+		$key = cmx_sani_key($label, 'lower');
+		if ($key === '') {
+			return [];
+		}
+
+		$candidates = [$key];
+
+		if (\str_ends_with($key, 'ie')) {
+			$candidates[] = $key . 'n';
+		} elseif (!\str_ends_with($key, 'en')) {
+			$candidates[] = $key . 'en';
+		}
+		if (\str_ends_with($key, 'e') && !\str_ends_with($key, 'en')) {
+			$candidates[] = $key . 'n';
+		}
+		if (\str_ends_with($key, 'ien') && \strlen($key) > 1) {
+			$candidates[] = \substr($key, 0, -1);
+		} elseif (\str_ends_with($key, 'en') && \strlen($key) > 2) {
+			$candidates[] = \substr($key, 0, -2);
+		}
+		if (\str_ends_with($key, 'n') && !\str_ends_with($key, 'en') && \strlen($key) > 1) {
+			$candidates[] = \substr($key, 0, -1);
+		}
+
+		return \array_values(\array_unique(\array_filter($candidates, static fn($candidate) => $candidate !== '')));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_seed_taxo_ini_terms')) {
+	function cmx_seed_taxo_ini_terms(string $section, string $label): array {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
+			return [];
+		}
+
+		foreach (cmx_seed_taxo_ini_key_candidates($label) as $candidate) {
+			$terms = (array) cmx_ini_get_value($section, $candidate);
+			$terms = \array_values(\array_filter(\array_map(static fn($value) => \trim((string) $value), $terms), static fn($value) => $value !== ''));
+			if (!empty($terms)) {
+				return $terms;
+			}
+		}
+
+		return [];
+	}
+}
+
 
 // cmx_seed_taxo('Artikel','Marken,Farben,Einheiten,Typen,Kategorien');
 function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = ''): void {
@@ -51,19 +99,15 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = ''): void
 
 	foreach ($labels as $label) {
 		$upper    = cmx_sani_key($label,'upper');
-		$lowerKey = cmx_sani_key($label,'lower');
 		$constFqn = __NAMESPACE__ . '\\TAX_' . $constBase . '_' . $upper; // \NS\TAX_ARTIKEL_MARKEN
 
-		$taxonomy = defined($constFqn) ? constant($constFqn) : $slugBase . '_' . $lowerKey;
+		$taxonomy = defined($constFqn) ? constant($constFqn) : $slugBase . '_' . cmx_sani_key($label, 'lower');
 		if (!taxonomy_exists($taxonomy)) continue;
 
 		$have = get_terms(['taxonomy'=>$taxonomy,'hide_empty'=>false,'fields'=>'ids','number'=>1]);
 		if (is_wp_error($have)) continue;
 
-		$terms = function_exists(__NAMESPACE__.'\\cmx_ini_get_value')
-			? (array) cmx_ini_get_value($slugBase, $lowerKey) // optional: Basisbereich auch dynamisch
-			: [];
-		$terms = array_values(array_filter(array_map(static fn($v) => trim((string) $v), $terms), static fn($v) => $v !== ''));
+		$terms = cmx_seed_taxo_ini_terms($slugBase, $label);
 
 		// Erweiterung: Section [<TaxonomieLabel>] als Name=>Beschreibung lesen
 		// Beispiel:
