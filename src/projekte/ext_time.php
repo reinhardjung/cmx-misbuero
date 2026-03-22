@@ -1273,7 +1273,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_config_js')) {
 			'saveAction' => CMX_EXT_TIME_SAVE_ACTION,
 			'noteSubjects' => \function_exists(__NAMESPACE__ . '\\cmx_notizen_betreff_options')
 				? \array_values(\array_map('strval', (array) cmx_notizen_betreff_options()))
-				: ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'],
+				: ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote', 'Arbeit'],
 		];
 
 		return 'self.CMX_EXT_TIME_CONFIG = ' . (string) \wp_json_encode($config, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . ';' . "\n";
@@ -2088,7 +2088,7 @@ function fillNoteSubjectOptions(selectedValue = '') {
 
   const subjects = Array.isArray(CONFIG.noteSubjects) && CONFIG.noteSubjects.length
     ? CONFIG.noteSubjects.map((value) => String(value || '').trim()).filter(Boolean)
-    : ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'];
+    : ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote', 'Arbeit'];
   const current = String(selectedValue || subjects[0] || '').trim();
   noteSubjectEl.innerHTML = subjects.map((value) => (
     '<option value="' + value.replace(/[&<>"']/g, (char) => ({

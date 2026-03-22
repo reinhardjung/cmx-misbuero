@@ -7,44 +7,22 @@
 \add_filter('wp_insert_post_data', __NAMESPACE__.'\\cmx_prepare_kontakt_title_before_save', 20, 2);
 function cmx_prepare_kontakt_title_before_save(array $data, array $postarr) : array {
 	if (($data['post_type'] ?? '') !== 'kontakte') return $data;
+	if (!isset($_POST['cmx_firma'])) return $data;
 
-	$incoming_title = trim((string)($data['post_title'] ?? ''));
-	$is_missing     = (mb_strtolower($incoming_title) === mb_strtolower('Firmenname fehlt'));
+	$placeholder = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_placeholder_company_title')
+		? cmx_kontakte_placeholder_company_title()
+		: 'Firmenname fehlt';
+	$incoming_title = \trim((string) ($data['post_title'] ?? ''));
+	$is_missing = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_is_placeholder_company_title')
+		? cmx_kontakte_is_placeholder_company_title($incoming_title)
+		: (\mb_strtolower($incoming_title) === \mb_strtolower($placeholder));
 
-	$vor  = isset($_POST['cmx_vorname'])  ? sanitize_text_field(wp_unslash($_POST['cmx_vorname']))  : '';
-	$nach = isset($_POST['cmx_nachname']) ? sanitize_text_field(wp_unslash($_POST['cmx_nachname'])) : '';
-	$priv = !empty($_POST['cmx_privat']);
-
-	$url  = isset($_POST['cmx_url']) ? trim((string) wp_unslash($_POST['cmx_url'])) : '';
-	if ($url !== '' && !preg_match('~^https?://~i', $url)) {
-		$url = 'https://'.ltrim($url, '/');
-	}
-
-	$person_title      = trim($vor . ' ' . $nach);
-	$is_person_title   = ($person_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($person_title));
-	$url_core          = ($url !== '') ? cmx_domain_core_from_url($url) : '';
-	$url_company_title = ($url_core !== '') ? mb_strtoupper($url_core) : '';
-	$is_company_title  = ($url_company_title !== '' && mb_strtolower($incoming_title) === mb_strtolower($url_company_title));
-	$should_fill       = (
-		$incoming_title === ''
-		|| $is_missing
-		|| (!$priv && $url !== '' && $is_person_title)
-		|| ($priv && $person_title !== '' && $is_company_title)
-	);
-
-	if (!$should_fill) return $data;
-
-	if ($priv && ($vor !== '' || $nach !== '')) {
-		$new_title = trim($vor.' '.$nach);
-	} elseif ($url !== '') {
-		$new_title = ($url_company_title !== '') ? $url_company_title : 'Firmenname fehlt';
-	} else {
-		$new_title = 'Firmenname fehlt';
-	}
+	$firma = \sanitize_text_field((string) \wp_unslash($_POST['cmx_firma']));
+	$new_title = $firma !== '' ? $firma : $placeholder;
 
 	$data['post_title'] = $new_title;
 	if (empty($postarr['ID']) || ($postarr['ID'] && $is_missing)) {
-		$data['post_name'] = sanitize_title($new_title);
+		$data['post_name'] = \sanitize_title($new_title);
 	}
 	return $data;
 }
@@ -61,41 +39,61 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 
 	/* --- Stammdaten (per Nonce) --- */
 	if (isset($_POST['cmx_kontakte_nonce']) && \wp_verify_nonce($_POST['cmx_kontakte_nonce'], 'cmx_kontakte_save_meta')) {
-		$vor  = isset($_POST['cmx_vorname'])  ? sanitize_text_field(wp_unslash($_POST['cmx_vorname']))  : '';
-		$nach = isset($_POST['cmx_nachname']) ? sanitize_text_field(wp_unslash($_POST['cmx_nachname'])) : '';
-		$priv = !empty($_POST['cmx_privat']) ? 1 : 0;
-
-		$url  = isset($_POST['cmx_url']) ? trim((string) wp_unslash($_POST['cmx_url'])) : '';
-		if ($url !== '' && !preg_match('~^https?://~i', $url)) {
-			$url = 'https://'.ltrim($url, '/');
+		$url = isset($_POST['cmx_url']) ? \trim((string) \wp_unslash($_POST['cmx_url'])) : null;
+		if ($url !== null && $url !== '' && !\preg_match('~^https?://~i', $url)) {
+			$url = 'https://'.\ltrim($url, '/');
 		}
 
-		// NEU: Firmengründung / Geburtsdatum / Kunde seit (YYYY-MM-DD), mit serverseitiger Validierung
-		$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) \wp_unslash($_POST['cmx_firmengruendung']) : '';
-		$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) \wp_unslash($_POST['cmx_geburtsdatum']) : '';
-		$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) \wp_unslash($_POST['cmx_kunde_seit']) : '';
+		// Firmengründung / Kunde seit (YYYY-MM-DD), mit serverseitiger Validierung
+		$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) \wp_unslash($_POST['cmx_firmengruendung']) : null;
+		$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) \wp_unslash($_POST['cmx_kunde_seit']) : null;
 		if (function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
-			$firmengruendung = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $firmengruendung);
-			$geburtsdatum    = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $geburtsdatum);
-			$kunde_seit      = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $kunde_seit);
+			if ($firmengruendung !== null) {
+				$firmengruendung = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $firmengruendung);
+			}
+			if ($kunde_seit !== null) {
+				$kunde_seit = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $kunde_seit);
+			}
 		} else {
-			$dt = \DateTime::createFromFormat('Y-m-d', $firmengruendung);
-			$firmengruendung = ($dt && $dt->format('Y-m-d') === $firmengruendung) ? $firmengruendung : '';
-			$dt = \DateTime::createFromFormat('Y-m-d', $geburtsdatum);
-			$geburtsdatum = ($dt && $dt->format('Y-m-d') === $geburtsdatum) ? $geburtsdatum : '';
-			$dt = \DateTime::createFromFormat('Y-m-d', $kunde_seit);
-			$kunde_seit = ($dt && $dt->format('Y-m-d') === $kunde_seit) ? $kunde_seit : '';
+			if ($firmengruendung !== null) {
+				$dt = \DateTime::createFromFormat('Y-m-d', $firmengruendung);
+				$firmengruendung = ($dt && $dt->format('Y-m-d') === $firmengruendung) ? $firmengruendung : '';
+			}
+			if ($kunde_seit !== null) {
+				$dt = \DateTime::createFromFormat('Y-m-d', $kunde_seit);
+				$kunde_seit = ($dt && $dt->format('Y-m-d') === $kunde_seit) ? $kunde_seit : '';
+			}
 		}
 
-		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME,  $vor);
-		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, $nach);
-		\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT,   $priv);
-		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      esc_url_raw($url));
-		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
-		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM,    $geburtsdatum);
-		\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT,      $kunde_seit);
-		$legacy_val = $geburtsdatum !== '' ? $geburtsdatum : $firmengruendung;
-		\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM,    $legacy_val);
+		if ($url !== null) {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
+		}
+		if ($firmengruendung !== null) {
+			if ($firmengruendung === '') {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
+			} else {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
+			}
+		}
+		if ($kunde_seit !== null) {
+			if ($kunde_seit === '') {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT);
+			} else {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT, $kunde_seit);
+			}
+		}
+
+		if ($firmengruendung !== null) {
+			$existing_birth = \function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')
+				? \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true))
+				: (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true);
+			$legacy_val = $firmengruendung !== '' ? $firmengruendung : $existing_birth;
+			if ($legacy_val === '') {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_DATUM);
+			} else {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, $legacy_val);
+			}
+		}
 	}
 
 	/* --- Umsatz-Metabox (optional) --- */

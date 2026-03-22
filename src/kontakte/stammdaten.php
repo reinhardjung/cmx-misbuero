@@ -133,6 +133,83 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_kunde_seit_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_placeholder_company_title')) {
+	function cmx_kontakte_placeholder_company_title(): string {
+		return 'Firmenname fehlt';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_is_placeholder_company_title')) {
+	function cmx_kontakte_is_placeholder_company_title(string $title): bool {
+		return \mb_strtolower(\trim($title)) === \mb_strtolower(cmx_kontakte_placeholder_company_title());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_business_form_taxonomy')) {
+	function cmx_kontakte_business_form_taxonomy(): string {
+		$candidates = [
+			'kontakte_geschaeftsform',
+			'kontakte_geschaeftsformen',
+			'geschaeftsform',
+			'geschaeftsformen',
+			'kontakte_rechtsform',
+			'kontakte_rechtsformen',
+			'rechtsform',
+			'rechtsformen',
+		];
+
+		$object_taxes = (array) \get_object_taxonomies('kontakte', 'names');
+		foreach ($object_taxes as $taxonomy) {
+			$taxonomy = (string) $taxonomy;
+			if ($taxonomy === '') {
+				continue;
+			}
+			$normalized = \strtolower(\str_replace('_', '', \function_exists(__NAMESPACE__ . '\\cmx_no_umlaute') ? cmx_no_umlaute($taxonomy) : $taxonomy));
+			if (\strpos($normalized, 'geschaeftsform') !== false || \strpos($normalized, 'rechtsform') !== false) {
+				$candidates[] = $taxonomy;
+			}
+		}
+
+		foreach (\array_values(\array_unique($candidates)) as $taxonomy) {
+			if (\taxonomy_exists($taxonomy)) {
+				return $taxonomy;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_business_form_label_html')) {
+	function cmx_kontakte_business_form_label_html(string $label = 'Form'): string {
+		$taxonomy = cmx_kontakte_business_form_taxonomy();
+		if ($taxonomy === '') {
+			return \esc_html($label);
+		}
+
+		$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=kontakte');
+		return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;">' . \esc_html($label) . '</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_business_form_terms')) {
+	function cmx_kontakte_business_form_terms(): array {
+		$taxonomy = cmx_kontakte_business_form_taxonomy();
+		if ($taxonomy === '') {
+			return [];
+		}
+
+		$terms = \get_terms([
+			'taxonomy'   => $taxonomy,
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		]);
+
+		return \is_wp_error($terms) ? [] : (array) $terms;
+	}
+}
+
 /**
  * ------------------------------------------------------------
  * Metabox registrieren
@@ -152,23 +229,29 @@ function cmx_add_stammdaten_metabox() {
 
 /**
  * ------------------------------------------------------------
- * Metabox-Ausgabe (Grid-Layout, schmale PRIVAT-Spalte, URL-Label ist Link)
- * + Datumsfeld rechts neben URL inkl. dynamischem Label
+ * Metabox-Ausgabe
  * ------------------------------------------------------------
  */
 function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	\wp_nonce_field('cmx_kontakte_save_meta', 'cmx_kontakte_nonce');
 
-	$vorname  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_VORNAME, true);
-	$nachname = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_NACHNAME, true);
-	$anrede   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_ANREDE, true);
-	$privat   = (bool)   \get_post_meta($post->ID, CMX_KONTAKTE_META_PRIVAT, true);
+	$firma = (string) ($post->post_title ?? '');
+	if (cmx_kontakte_is_placeholder_company_title($firma)) {
+		$firma = '';
+	}
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
 	$hr_uid   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_HR_UID, true);
 	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
-	$geburt   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_GEBURTSDATUM, true);
 	$kunde_seit = cmx_kontakt_kunde_seit_value((int) $post->ID);
+	$business_form_taxonomy = cmx_kontakte_business_form_taxonomy();
+	$business_form_terms = cmx_kontakte_business_form_terms();
+	$business_form_term_id = '';
+	$assigned_terms = $business_form_taxonomy !== '' ? \get_the_terms($post->ID, $business_form_taxonomy) : false;
+	if (!\is_wp_error($assigned_terms) && !empty($assigned_terms)) {
+		$first_term = \reset($assigned_terms);
+		$business_form_term_id = $first_term ? (string) $first_term->term_id : '';
+	}
 
 	// Für das Label (nur Anzeige) https:// ergänzen
 	$url_disp = \trim($url_raw);
@@ -178,65 +261,63 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$hr_uid_search_url = $hr_uid !== '' ? 'https://www.zefix.ch/de/search/entity/list?name=' . \rawurlencode($hr_uid) : '';
 
 	echo '<style>
+	body.post-type-kontakte #titlediv{display:none}
 	#cmx-stammdaten .grid {
 		display: grid !important;
 		grid-template-columns:
-			minmax(220px, 1fr)
-			minmax(220px, 1fr)
-			minmax(170px, 0.8fr)
-			minmax(170px, 0.8fr)
-			minmax(170px, 0.8fr);
-		column-gap: 16px;
-		row-gap: 16px;
+			minmax(220px, 1.9fr)
+			minmax(130px, 1fr)
+			minmax(160px, 1.1fr)
+			minmax(160px, 1.1fr)
+			minmax(105px, 0.8fr)
+			minmax(105px, 0.8fr)
+			minmax(120px, 0.9fr);
+		column-gap: 10px;
+		row-gap: 10px;
 		align-items: start;
 	}
 	#cmx-stammdaten .field {margin:0; display:block !important; flex:none !important;}
-	#cmx-stammdaten .field--privat{width:120px !important}
-	#cmx-stammdaten .field--kunden-nr{min-width:160px;}
-	#cmx-stammdaten .field--anrede{min-width:200px;}
-	#cmx-stammdaten .field--url{grid-column:span 1}
+	#cmx-stammdaten .field--kunden-nr{max-width:220px;}
+	#cmx-stammdaten .field--firma{grid-column:span 1}
 	#cmx-stammdaten .field--hr-uid{min-width:170px;}
 	#cmx-stammdaten .text,
-	#cmx-stammdaten .date {width:100% !important; max-width:100% !important}
+	#cmx-stammdaten .date,
+	#cmx-stammdaten select {width:100% !important; max-width:100% !important}
+	#cmx-stammdaten input[readonly]{
+		background:#f6f7f7 !important;
+		color:#50575e !important;
+		border-color:#dcdcde !important;
+		opacity:1 !important;
+	}
 	#cmx-stammdaten .url-label a{text-decoration:none}
 	#cmx-stammdaten .url-label a:hover{text-decoration:underline}
-	#cmx-stammdaten input[type=checkbox]{
-		appearance:auto !important; -webkit-appearance:checkbox !important; -moz-appearance:checkbox !important;
-		width:auto !important; height:auto !important; display:inline-block !important; margin:6px 6px 0 0 !important; vertical-align:middle !important;
+	@media (max-width: 1200px) {
+		#cmx-stammdaten .grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
 	}
-	#cmx-stammdaten .field--privat label{display:block;margin-bottom:4px}
+	@media (max-width: 640px) {
+		#cmx-stammdaten .grid { grid-template-columns: minmax(0, 1fr); }
+		#cmx-stammdaten .field--kunden-nr{max-width:none;}
+	}
 </style>';
 
 	echo '<div id="cmx-stammdaten"><div class="grid">';
 
-	// Vorname
-	echo '<p class="field">
-		<label for="cmx_vorname"><strong>Vorname</strong></label><br>
-		<input id="cmx_vorname" name="cmx_vorname" type="text" class="text" value="' . \esc_attr($vorname) . '">
+	echo '<p class="field field--firma">
+		<label for="cmx_firma"><strong>Firma</strong></label><br>
+		<input id="cmx_firma" name="cmx_firma" type="text" class="text" value="' . \esc_attr($firma) . '">
 	</p>';
 
-	// Nachname
-	echo '<p class="field">
-		<label for="cmx_nachname"><strong>Nachname</strong></label><br>
-		<input id="cmx_nachname" name="cmx_nachname" type="text" class="text" value="' . \esc_attr($nachname) . '">
-	</p>';
-
-	// Privat (schmal)
-	echo '<p class="field field--privat" style="text-align:center;">
-		<label for="cmx_privat"><strong>Privat</strong></label>
-		<input id="cmx_privat" name="cmx_privat" type="checkbox" value="1" ' . \checked($privat, true, false) . '>
-	</p>';
-
-	// Kunden Nr
-	echo '<p class="field field--kunden-nr">
-		<label for="cmx_kunden_nr"><strong>Kunden Nr</strong></label><br>
-		<input id="cmx_kunden_nr" name="cmx_kunden_nr" type="text" class="text" readonly value="' . \esc_attr($kunden_nr) . '">
-	</p>';
-
-	// Anrede
-	echo '<p class="field field--anrede">
-		<label for="cmx_anrede"><strong>Anrede</strong></label><br>
-		<input id="cmx_anrede" name="cmx_anrede" type="text" class="text" placeholder="Sehr geehrte Frau B&auml;rtschi" value="' . \esc_attr($anrede) . '">
+	echo '<p class="field field--form">
+		<label for="cmx_geschaeftsform_term_id"><strong>' . cmx_kontakte_business_form_label_html('Form') . '</strong></label><br>
+		<select id="cmx_geschaeftsform_term_id" name="cmx_geschaeftsform_term_id">
+			<option value="">auswählen</option>';
+	foreach ($business_form_terms as $term) {
+		if (!($term instanceof \WP_Term)) {
+			continue;
+		}
+		echo '<option value="' . \esc_attr((string) $term->term_id) . '"' . \selected($business_form_term_id, (string) $term->term_id, false) . '>' . \esc_html((string) $term->name) . '</option>';
+	}
+	echo '</select>
 	</p>';
 
 	// URL (Label ist Link)
@@ -263,21 +344,41 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		<input id="cmx_hr_uid" name="cmx_hr_uid" type="text" class="text" placeholder="CHE-123.456.789" value="' . \esc_attr($hr_uid) . '">
 	</p>';
 
-	// Firmengründung + Geburtsdatum + Kunde seit (gleiche Zeile)
-	echo '<p class="field field--datum">
+	echo '<p class="field field--datum field--datum-compact">
 	<label for="cmx_firmengruendung"><strong>Firmengründung</strong></label><br>
 	<input id="cmx_firmengruendung" name="cmx_firmengruendung" type="date" class="date" value="' . \esc_attr($firmengr) . '">
 	</p>';
-	echo '<p class="field field--datum">
-	<label for="cmx_geburtsdatum"><strong>Geburtsdatum</strong></label><br>
-	<input id="cmx_geburtsdatum" name="cmx_geburtsdatum" type="date" class="date" value="' . \esc_attr($geburt) . '">
-	</p>';
-	echo '<p class="field field--datum">
+	echo '<p class="field field--datum field--datum-compact">
 	<label for="cmx_kunde_seit"><strong>Kunde seit</strong></label><br>
 	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
+	echo '<p class="field field--kunden-nr">
+		<label for="cmx_kunden_nr"><strong>Kunden Nr</strong></label><br>
+		<input id="cmx_kunden_nr" name="cmx_kunden_nr" type="text" class="text" readonly value="' . \esc_attr($kunden_nr) . '">
+	</p>';
 
 	echo '</div></div>';
+	?>
+	<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		var companyInput = document.getElementById('cmx_firma');
+		var titleInput = document.getElementById('title');
+		if (!companyInput || !titleInput) {
+			return;
+		}
+
+		var syncTitle = function () {
+			titleInput.value = companyInput.value || '';
+			titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+			titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+		};
+
+		companyInput.addEventListener('input', syncTitle);
+		companyInput.addEventListener('change', syncTitle);
+		syncTitle();
+	});
+	</script>
+	<?php
 }
 
 /**
@@ -291,18 +392,6 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (!isset($_POST['cmx_kontakte_nonce']) || !\wp_verify_nonce($_POST['cmx_kontakte_nonce'], 'cmx_kontakte_save_meta')) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
-
-	// Vorname / Nachname
-	if (isset($_POST['cmx_vorname'])) {
-		\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, \sanitize_text_field((string)$_POST['cmx_vorname']));
-	}
-	if (isset($_POST['cmx_nachname'])) {
-		\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, \sanitize_text_field((string)$_POST['cmx_nachname']));
-	}
-
-	// Privat
-	$privat_val = isset($_POST['cmx_privat']) ? 1 : 0;
-	\update_post_meta($post_id, CMX_KONTAKTE_META_PRIVAT, $privat_val);
 
 	// Kunden Nr (nur beim ersten Speichern setzen)
 	$kunden_nr = (string) \get_post_meta($post_id, CMX_KONTAKTE_META_KUNDEN_NR, true);
@@ -331,23 +420,29 @@ function cmx_save_kontakte_meta(int $post_id): void {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
 	}
 
-	// Firmengründung / Geburtsdatum (YYYY-MM-DD)
+	$business_form_taxonomy = cmx_kontakte_business_form_taxonomy();
+	if ($business_form_taxonomy !== '' && isset($_POST['cmx_geschaeftsform_term_id'])) {
+		$incoming_term_id = (int) \sanitize_text_field((string) \wp_unslash($_POST['cmx_geschaeftsform_term_id']));
+		if ($incoming_term_id > 0) {
+			$term = \get_term_by('id', $incoming_term_id, $business_form_taxonomy);
+			if ($term && !\is_wp_error($term)) {
+				\wp_set_object_terms($post_id, [$incoming_term_id], $business_form_taxonomy, false);
+			}
+		} else {
+			\wp_set_object_terms($post_id, [], $business_form_taxonomy, false);
+		}
+	}
+
+	// Firmengründung / Kunde seit (YYYY-MM-DD)
 	$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) $_POST['cmx_firmengruendung'] : '';
-	$geburtsdatum    = isset($_POST['cmx_geburtsdatum']) ? (string) $_POST['cmx_geburtsdatum'] : '';
 	$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) $_POST['cmx_kunde_seit'] : '';
 	$firmengruendung = cmx_sanitize_date_ymd($firmengruendung);
-	$geburtsdatum    = cmx_sanitize_date_ymd($geburtsdatum);
 	$kunde_seit      = cmx_sanitize_date_ymd($kunde_seit);
 
 	if ($firmengruendung === '') {
 		\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
 	} else {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
-	}
-	if ($geburtsdatum === '') {
-		\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
-	} else {
-		\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $geburtsdatum);
 	}
 	if ($kunde_seit === '') {
 		\delete_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT);
@@ -356,7 +451,8 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	}
 
 	// Legacy-Feld für bestehende Integrationen
-	$legacy_val = $geburtsdatum !== '' ? $geburtsdatum : $firmengruendung;
+	$existing_birth = cmx_sanitize_date_ymd((string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true));
+	$legacy_val = $firmengruendung !== '' ? $firmengruendung : $existing_birth;
 	if ($legacy_val === '') {
 		\delete_post_meta($post_id, CMX_KONTAKTE_META_DATUM);
 	} else {
