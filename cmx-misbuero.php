@@ -358,7 +358,10 @@ function cmx_check_and_create_subdomain_admin() {
 			return $sender['name'] !== '' ? $sender['name'] : $name;
 		}, PHP_INT_MAX);
 
-	update_option('blogname', 'Mis Buero – ' . $sub);
+	$target_blogname = 'Mis Buero – ' . $sub;
+	if ((string) \get_option('blogname') !== $target_blogname) {
+		\update_option('blogname', $target_blogname);
+	}
 	// update_option('blogdescription', 'Der neue Untertitel der Website');
 
 		add_filter('wp_mail', function($args) use ($resolve_mail_sender, $get_configured_bcc) {

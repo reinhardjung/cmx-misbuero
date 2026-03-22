@@ -613,17 +613,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 	}
 
 	cmx_kommunikation_ensure_default_label_terms();
-
-	$option_key = 'cmx_kontakte_kommunikation_migrated_v1';
-	if ((string) \get_option($option_key, '') === '1') {
-		return;
-	}
-
-	cmx_kommunikation_migrate_batch(150);
-
-	if (!cmx_kommunikation_has_pending_migrations()) {
-		\update_option($option_key, '1', false);
-	}
 });
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row')) {
