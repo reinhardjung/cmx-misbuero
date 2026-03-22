@@ -8,7 +8,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basen
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Telefone,EMails,Stufen,Länder,Beziehungen');
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Kategorien,Telefone,EMails,Stufen,Länder,Beziehungen,Geschäftsform');
 
 
 // Define: CONST 4 each Taxo
@@ -24,6 +24,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_KONTAKT
 	cmx_create_taxo(basename(__DIR__), 'Stufe', 'Stufen', false);
 	cmx_create_taxo(basename(__DIR__), 'Land', 'Länder', false);
 	cmx_create_taxo(basename(__DIR__), 'Beziehung', 'Beziehungen', false);
+	cmx_create_taxo(basename(__DIR__), 'Geschäftsform', 'Geschäftsform', false);
 }, 15);
 
 
