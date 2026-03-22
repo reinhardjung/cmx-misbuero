@@ -66,164 +66,328 @@ function cmx_kommunikation_taxonomy_label_html(string $taxonomy, string $label):
 	);
 });
 
-/**
- * Metabox-HTML
- * NUR das **Lesen** der Daten wurde angepasst:
- * - Werte für telefon_1..3 und email_1..3 kommen vorrangig aus _cmx_telefon_1..3 / _cmx_email_1..3
- * - Labels kommen weiterhin aus dem Bündel _cmx_kommunikation (Kompatibilität)
- * - Fallback: alte Struktur in _cmx_kommunikation
- */
-function cmx_kommunikation_box_html($post): void {
-	// 1) Basis: vorhandenes Bündel (für Labels/Fallback)
-	$bundle = \get_post_meta($post->ID, '_cmx_kommunikation', true);
-	if (!\is_array($bundle)) $bundle = [];
-
-	// 2) Startwert für $meta aus Bündel (erlaubt vorhandene Labels zu übernehmen)
-	$meta = [];
-
-	// Aus Bündel bekannte Keys in $meta spiegeln (nur Labels/Fallback)
-	for ($i = 1; $i <= 3; $i++) {
-		// Telefon
-		if (isset($bundle['telefon'][$i]['value'])) {
-			$meta["telefon_{$i}"] = (string)$bundle['telefon'][$i]['value'];
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_sanitize_birthdate')) {
+	function cmx_kommunikation_sanitize_birthdate(mixed $value): string {
+		$value = \is_scalar($value) ? \trim((string) $value) : '';
+		if ($value === '') {
+			return '';
 		}
-		if (isset($bundle['telefon'][$i]['label'])) {
-			$meta["telefon_label_{$i}"] = (string)$bundle['telefon'][$i]['label'];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
+			return (string) cmx_sanitize_date_ymd($value);
 		}
-		// E-Mail
-		if (isset($bundle['email'][$i]['value'])) {
-			$meta["email_{$i}"] = (string)$bundle['email'][$i]['value'];
-		}
-		if (isset($bundle['email'][$i]['label'])) {
-			$meta["email_label_{$i}"] = (string)$bundle['email'][$i]['label'];
-		}
+		$dt = \DateTime::createFromFormat('Y-m-d', $value);
+		return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
 	}
-
-	// 3) NEUE Einzelspalten haben Vorrang (nur Werte, keine Labels)
-	for ($i = 1; $i <= 3; $i++) {
-		$tel  = \get_post_meta($post->ID, "_cmx_telefon_{$i}", true);
-		$mail = \get_post_meta($post->ID, "_cmx_email_{$i}", true);
-		if ($tel !== '' && $tel !== null)  { $meta["telefon_{$i}"] = (string)$tel; }
-		if ($mail !== '' && $mail !== null){ $meta["email_{$i}"]   = (string)$mail; }
-	}
-
-	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
-	$mail_terms  = \taxonomy_exists(CMX_TAX_MAIL_LABELS)  ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS)  : [];
-	$phone_label = cmx_kommunikation_taxonomy_label_html(CMX_TAX_PHONE_LABELS, 'Telefon');
-	$mail_label = cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail');
-
-	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
-
-	if (!\taxonomy_exists(CMX_TAX_PHONE_LABELS) || !\taxonomy_exists(CMX_TAX_MAIL_LABELS)) {
-		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> '
-		   . (!\taxonomy_exists(CMX_TAX_PHONE_LABELS) ? 'Taxonomie <code>'.\esc_html(CMX_TAX_PHONE_LABELS).'</code> fehlt. ' : '')
-		   . (!\taxonomy_exists(CMX_TAX_MAIL_LABELS)  ? 'Taxonomie <code>'.\esc_html(CMX_TAX_MAIL_LABELS).'</code> fehlt.' : '')
-		   . '</p></div>';
-	}
-
-	/* A) TH-Spalte kompakter, B) 3 Felder + Icons mit ausreichend Platz (unverändert) */
-	echo '<style>
-		#cmx_kommunikation_box .form-table th{width:120px;padding-right:10px;white-space:nowrap}
-
-		.cmx-kommu-row{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
-		.cmx-kommu-group{display:flex;gap:6px;align-items:center;flex:1 1 calc(33.333% - 10px);min-width:320px}
-		.cmx-kommu-group select{min-width:120px;max-width:160px}
-		.cmx-kommu-group input[type=\"text\"],
-		.cmx-kommu-group input[type=\"email\"]{flex:1 1 auto;min-width:0;max-width:none}
-
-		.cmx-icon-slot{display:inline-flex;align-items:center;justify-content:center;opacity:0.6}
-		.cmx-icon-slot a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
-		.cmx-icon-slot .dashicons{font-size:18px;width:18px;height:18px;line-height:18px}
-		.cmx-icon-slot.empty{opacity:0.25}
-
-		@media (max-width:1200px){.cmx-kommu-group{flex:1 1 calc(50% - 10px)}}
-		@media (max-width:700px){.cmx-kommu-group{flex:1 1 100%}}
-	</style>';
-
-	echo '<div id="cmx_kommunikation_box">';
-	echo '<table class="form-table"><tbody>';
-
-	// Telefone (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">' . $phone_label . '</th><td><div class="cmx-kommu-row">';
-	for ($i = 1; $i <= 3; $i++) {
-		$val = isset($meta["telefon_$i"]) ? \esc_attr($meta["telefon_$i"]) : '';
-		$ddl = cmx_label_dropdown($phone_terms, "telefon_label_$i", $meta, CMX_TAX_PHONE_LABELS);
-		echo '<div class="cmx-kommu-group">'.$ddl.
-		     '<input type="text" class="cmx-input cmx-input-phone" data-cmx-kind="phone" name="cmx_kommunikation[telefon_' . $i . ']" value="'.$val.'" placeholder="Telefon '.$i.'" />'.
-		     '<span class="cmx-icon-slot empty" aria-hidden="true"></span>'.
-		'</div>';
-	}
-	echo '</div></td></tr>';
-
-	// E-Mails (1–3) – unveränderte Ausgabe
-	echo '<tr><th scope="row">' . $mail_label . '</th><td><div class="cmx-kommu-row">';
-	for ($i = 1; $i <= 3; $i++) {
-		$val = isset($meta["email_$i"]) ? \esc_attr($meta["email_$i"]) : '';
-		$ddl = cmx_label_dropdown($mail_terms, "email_label_$i", $meta, CMX_TAX_MAIL_LABELS);
-		echo '<div class="cmx-kommu-group">'.$ddl.
-		     '<input type="email" class="cmx-input cmx-input-email" data-cmx-kind="email" name="cmx_kommunikation[email_' . $i . ']" value="'.$val.'" placeholder="E-Mail '.$i.'" />'.
-		     '<span class="cmx-icon-slot empty" aria-hidden="true"></span>'.
-		'</div>';
-	}
-	echo '</div></td></tr>';
-
-	echo '</tbody></table>';
-	echo '</div>';
-
-	// JS – unverändert (nur Anzeige der Icons)
-	echo '<script>
-	(function(){
-	  function isValidEmail(v){ v=(v||"").trim(); return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(v); }
-	  function normalizePhone(v){ return (v||"").replace(/[^0-9+()\\-\\.\\s]/g,""); }
-	  function onlyDigits(v){ return (v||"").replace(/\\D/g,""); }
-	  function clearSlot(s){ while(s.firstChild){ s.removeChild(s.firstChild);} }
-	  function makeIcon(cls, href, label){ var a=document.createElement("a"); a.href=href;a.target="_blank";a.rel="noopener";a.title=label; var i=document.createElement("span"); i.className="dashicons "+cls; a.appendChild(i); return a; }
-
-	  function refreshGroup(g){
-	    var input=g.querySelector(".cmx-input"), slot=g.querySelector(".cmx-icon-slot");
-	    if(!input||!slot) return;
-	    clearSlot(slot);
-	    var val=(input.value||"").trim(), kind=input.dataset.cmxKind;
-	    if(!val){ slot.classList.add("empty"); return; }
-	    slot.classList.remove("empty");
-
-	    if(kind==="phone"){
-	      var tel = normalizePhone(val);
-	      if(!tel){ slot.classList.add("empty"); return; }
-	      var telDigits = onlyDigits(tel);
-
-	      slot.appendChild(document.createTextNode(" "));
-	      slot.appendChild(makeIcon("dashicons-phone", "tel:"+encodeURI(tel), "Anrufen"));
-	      if(telDigits){
-	        slot.appendChild(makeIcon("dashicons-whatsapp", "https://api.whatsapp.com/send?phone=" + telDigits, "WhatsApp öffnen"));
-	      }
-	      slot.appendChild(makeIcon("dashicons-testimonial", "sms:"+encodeURI(tel), "SMS senden"));
-	      slot.appendChild(document.createTextNode(" "));
-	    } else if(kind==="email"){
-	      if(!isValidEmail(val)){ slot.classList.add("empty"); return; }
-	      slot.appendChild(document.createTextNode(" "));
-	      slot.appendChild(makeIcon("dashicons-email-alt", "mailto:"+encodeURIComponent(val), "E-Mail schreiben"));
-	      slot.appendChild(document.createTextNode(" "));
-	    }
-	  }
-
-	  document.querySelectorAll(".cmx-kommu-group").forEach(function(g){
-	    var i=g.querySelector(".cmx-input"); if(!i) return;
-	    ["input","change","blur"].forEach(function(evt){ i.addEventListener(evt,function(){ refreshGroup(g); }); });
-	    refreshGroup(g);
-	  });
-	})();
-	</script>';
 }
 
-/**
- * SPEICHERN
- * NUR angepasst:
- * - Werte werden in EINZELNEN Post-Metas gesichert:
- *   _cmx_telefon_1..3 und _cmx_email_1..3
- * - Zusätzlich bleibt das Bündel _cmx_kommunikation zur Label-/Kompatibilitätsnutzung erhalten
- * - Markup/JS/Struktur sonst unverändert
- */
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_label_slug')) {
+	function cmx_kommunikation_normalize_label_slug(mixed $value, string $taxonomy): string {
+		$slug = \sanitize_title((string) $value);
+		if ($slug === '') {
+			return '';
+		}
+		return cmx_term_slug_exists($taxonomy, $slug) ? $slug : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_contact_row')) {
+	function cmx_kommunikation_normalize_contact_row(array $row): array {
+		$email = \sanitize_email((string) ($row['email'] ?? ''));
+		if ($email === '' && isset($row['email'])) {
+			$email = \trim((string) $row['email']);
+		}
+
+		return [
+			'vorname'      => \sanitize_text_field((string) ($row['vorname'] ?? '')),
+			'nachname'     => \sanitize_text_field((string) ($row['nachname'] ?? '')),
+			'telefon_label'=> cmx_kommunikation_normalize_label_slug($row['telefon_label'] ?? '', CMX_TAX_PHONE_LABELS),
+			'telefon'      => \sanitize_text_field((string) ($row['telefon'] ?? '')),
+			'email_label'  => cmx_kommunikation_normalize_label_slug($row['email_label'] ?? '', CMX_TAX_MAIL_LABELS),
+			'email'        => $email,
+			'geburtsdatum' => cmx_kommunikation_sanitize_birthdate($row['geburtsdatum'] ?? ''),
+			'duzis'        => !empty($row['duzis']) ? '1' : '0',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty')) {
+	function cmx_kommunikation_contact_row_is_empty(array $row): bool {
+		foreach (['vorname', 'nachname', 'telefon', 'email', 'geburtsdatum'] as $key) {
+			if (\trim((string) ($row[$key] ?? '')) !== '') {
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_value')) {
+	function cmx_kommunikation_legacy_slot_value(int $post_id, array $bundle, string $kind, int $slot): string {
+		$meta_key = $kind === 'email' ? "_cmx_email_{$slot}" : "_cmx_telefon_{$slot}";
+		$value = \get_post_meta($post_id, $meta_key, true);
+		if ($value === '' || $value === null) {
+			$value = $bundle[$kind][$slot]['value'] ?? '';
+		}
+		return \trim((string) $value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+	function cmx_kommunikation_read_contacts(int $post_id): array {
+		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+		if (!\is_array($bundle)) {
+			$bundle = [];
+		}
+
+		$contacts = [];
+		if (\is_array($bundle['kontakte'] ?? null)) {
+			foreach ((array) $bundle['kontakte'] as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$normalized = cmx_kommunikation_normalize_contact_row($row);
+				if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+					$contacts[] = $normalized;
+				}
+			}
+		}
+		if (!empty($contacts)) {
+			return $contacts;
+		}
+
+		$legacy_rows = [];
+		for ($slot = 1; $slot <= 3; $slot++) {
+			$row = [
+				'vorname'      => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, true)
+					: '',
+				'nachname'     => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, true)
+					: '',
+				'telefon_label'=> (string) ($bundle['telefon'][$slot]['label'] ?? ''),
+				'telefon'      => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'telefon', $slot),
+				'email_label'  => (string) ($bundle['email'][$slot]['label'] ?? ''),
+				'email'        => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'email', $slot),
+				'geburtsdatum' => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true)
+					: '',
+				'duzis'        => '0',
+			];
+			$row = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($row)) {
+				$legacy_rows[] = $row;
+			}
+		}
+
+		return !empty($legacy_rows) ? $legacy_rows : [cmx_kommunikation_normalize_contact_row([])];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row')) {
+	function cmx_kommunikation_render_contact_row(array $row, int|string $index, array $phone_terms, array $mail_terms): void {
+		$index_attr = (string) $index;
+		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
+		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
+		?>
+		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>">
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>">Vorname</label>
+				<input id="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[vorname]'); ?>" value="<?php echo \esc_attr((string) ($row['vorname'] ?? '')); ?>">
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>">Nachname</label>
+				<input id="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[nachname]'); ?>" value="<?php echo \esc_attr((string) ($row['nachname'] ?? '')); ?>">
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>">Telefon Typ</label>
+				<select id="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[telefon_label]'); ?>">
+					<option value="">auswählen</option>
+					<?php foreach ($phone_terms as $term) {
+						$slug = (string) ($term['slug'] ?? '');
+						$name = (string) ($term['name'] ?? $slug);
+						?>
+						<option value="<?php echo \esc_attr($slug); ?>" <?php echo \selected((string) ($row['telefon_label'] ?? ''), $slug, false); ?>><?php echo \esc_html($name); ?></option>
+					<?php } ?>
+				</select>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>">Telefon</label>
+				<input id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[telefon]'); ?>" value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>">
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>">E-Mail Typ</label>
+				<select id="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[email_label]'); ?>">
+					<option value="">auswählen</option>
+					<?php foreach ($mail_terms as $term) {
+						$slug = (string) ($term['slug'] ?? '');
+						$name = (string) ($term['name'] ?? $slug);
+						?>
+						<option value="<?php echo \esc_attr($slug); ?>" <?php echo \selected((string) ($row['email_label'] ?? ''), $slug, false); ?>><?php echo \esc_html($name); ?></option>
+					<?php } ?>
+				</select>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>">E-Mail</label>
+				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>">
+			</div>
+			<div class="cmx-kommu-field cmx-kommu-field-date">
+				<label for="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>">Geburtsdatum</label>
+				<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>">
+			</div>
+			<div class="cmx-kommu-field cmx-kommu-field-check">
+				<label for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">Duzis</label>
+				<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?>>
+			</div>
+			<div class="cmx-kommu-field cmx-kommu-field-actions">
+				<button type="button" class="button-link-delete cmx-kommu-remove">Entfernen</button>
+			</div>
+		</div>
+		<?php
+	}
+}
+
+function cmx_kommunikation_box_html($post): void {
+	$rows = cmx_kommunikation_read_contacts((int) $post->ID);
+	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
+	$mail_terms = \taxonomy_exists(CMX_TAX_MAIL_LABELS) ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS) : [];
+	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
+	?>
+	<style>
+		#cmx_kommunikation_box .cmx-kommu-rows {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-contact-row {
+			display: grid;
+			grid-template-columns: minmax(120px, 0.95fr) minmax(120px, 0.95fr) minmax(120px, 0.85fr) minmax(150px, 1.05fr) minmax(120px, 0.85fr) minmax(180px, 1.15fr) 150px 86px 72px;
+			gap: 10px;
+			padding: 12px;
+			border: 1px solid #dcdcde;
+			border-radius: 8px;
+			background: #fff;
+			align-items: end;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field {
+			margin: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field label {
+			display: block;
+			margin: 0 0 4px;
+			font-weight: 600;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input {
+			width: 100%;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field select {
+			width: 100%;
+			max-width: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-check {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: flex-end;
+			padding-bottom: 4px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-check input[type="checkbox"] {
+			width: auto;
+			margin: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-actions {
+			display: flex;
+			align-items: flex-end;
+			justify-content: flex-end;
+			padding-bottom: 4px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toolbar {
+			margin-top: 12px;
+		}
+		@media (max-width: 1280px) {
+			#cmx_kommunikation_box .cmx-kommu-contact-row {
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+			}
+			#cmx_kommunikation_box .cmx-kommu-field-actions {
+				justify-content: flex-start;
+			}
+		}
+		@media (max-width: 782px) {
+			#cmx_kommunikation_box .cmx-kommu-contact-row {
+				grid-template-columns: minmax(0, 1fr);
+			}
+		}
+	</style>
+	<div id="cmx_kommunikation_box">
+		<div class="cmx-kommu-rows">
+			<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms); } ?>
+		</div>
+		<div class="cmx-kommu-toolbar">
+			<button type="button" class="button button-secondary" id="cmx-kommu-add-row">Kontakt hinzufügen</button>
+		</div>
+		<template id="cmx-kommu-row-template"><?php cmx_kommunikation_render_contact_row(cmx_kommunikation_normalize_contact_row([]), '__INDEX__', $phone_terms, $mail_terms); ?></template>
+	</div>
+	<script>
+	(function(){
+		var root = document.getElementById("cmx_kommunikation_box");
+		if (!root) return;
+		var rows = root.querySelector(".cmx-kommu-rows");
+		var addButton = document.getElementById("cmx-kommu-add-row");
+		var template = document.getElementById("cmx-kommu-row-template");
+		if (!rows || !addButton || !template) return;
+
+		function updateRemoveButtons() {
+			var items = rows.querySelectorAll(".cmx-kommu-contact-row");
+			items.forEach(function(row) {
+				var button = row.querySelector(".cmx-kommu-remove");
+				if (button) {
+					button.hidden = items.length <= 1;
+				}
+			});
+		}
+
+		function nextIndex() {
+			var max = -1;
+			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row) {
+				var idx = parseInt(row.getAttribute("data-row-index") || "-1", 10);
+				if (!isNaN(idx) && idx > max) {
+					max = idx;
+				}
+			});
+			return max + 1;
+		}
+
+		function addRow() {
+			var html = template.innerHTML.replace(/__INDEX__/g, String(nextIndex()));
+			var wrapper = document.createElement("div");
+			wrapper.innerHTML = html.trim();
+			var row = wrapper.firstElementChild;
+			if (!row) return;
+			rows.appendChild(row);
+			updateRemoveButtons();
+		}
+
+		addButton.addEventListener("click", function () {
+			addRow();
+		});
+
+		rows.addEventListener("click", function (event) {
+			var button = event.target.closest(".cmx-kommu-remove");
+			if (!button) return;
+			var row = button.closest(".cmx-kommu-contact-row");
+			if (!row) return;
+			row.remove();
+			if (!rows.querySelector(".cmx-kommu-contact-row")) {
+				addRow();
+			}
+			updateRemoveButtons();
+		});
+
+		updateRemoveButtons();
+	})();
+	</script>
+	<?php
+}
+
 \add_action('save_post', function ($post_id) {
 	if (!isset($_POST['cmx_kommunikation_nonce']) || !\wp_verify_nonce($_POST['cmx_kommunikation_nonce'], 'cmx_kommunikation_save')) return;
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -250,55 +414,82 @@ function cmx_kommunikation_box_html($post): void {
 			\update_post_meta($post_id, '_cmx_liefer_land', $liefer_land);
 	}
 
-
-	$in = $_POST['cmx_kommunikation'];
-
-	$sanitize_txt  = static fn($v) => \sanitize_text_field($v ?? '');
-	$sanitize_slug = static fn($v) => \sanitize_title($v ?? '');
-
-	// Vorhandenes Bündel laden (damit Labels nicht verloren gehen)
+	$in = (array) \wp_unslash($_POST['cmx_kommunikation']);
 	$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
-	if (!\is_array($bundle)) $bundle = ['telefon'=>[], 'email'=>[]];
+	if (!\is_array($bundle)) {
+		$bundle = [];
+	}
+	$bundle['telefon'] = \is_array($bundle['telefon'] ?? null) ? $bundle['telefon'] : [];
+	$bundle['email'] = \is_array($bundle['email'] ?? null) ? $bundle['email'] : [];
 
-	// Telefone 1–3: Einzelspalten + Bündel aktualisieren
-	for ($i = 1; $i <= 3; $i++) {
-		$val        = $sanitize_txt($in["telefon_{$i}"] ?? '');
-		$label_slug = $sanitize_slug($in["telefon_label_{$i}"] ?? '');
+	$contacts = [];
+	$posted_contacts = $in['kontakte'] ?? [];
+	if (\is_array($posted_contacts)) {
+		foreach ($posted_contacts as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				$contacts[] = $normalized;
+			}
+		}
+	}
+	$bundle['kontakte'] = $contacts;
 
-		if ($label_slug && !cmx_term_slug_exists(CMX_TAX_PHONE_LABELS, $label_slug)) {
-			$label_slug = '';
+	for ($slot = 1; $slot <= 3; $slot++) {
+		$row = $contacts[$slot - 1] ?? null;
+		$telefon_label = (string) ($row['telefon_label'] ?? '');
+		$telefon = (string) ($row['telefon'] ?? '');
+		$email_label = (string) ($row['email_label'] ?? '');
+		$email = (string) ($row['email'] ?? '');
+
+		if ($telefon === '') {
+			\delete_post_meta($post_id, "_cmx_telefon_{$slot}");
+		} else {
+			\update_post_meta($post_id, "_cmx_telefon_{$slot}", $telefon);
 		}
 
-		// Einzelspalte (konkretes Feld)
-		\update_post_meta($post_id, "_cmx_telefon_{$i}", $val);
+		if ($email === '') {
+			\delete_post_meta($post_id, "_cmx_email_{$slot}");
+		} else {
+			\update_post_meta($post_id, "_cmx_email_{$slot}", $email);
+		}
 
-		// Bündel (Kompatibilität/Labels)
-		$bundle['telefon'][$i] = [
-			'label' => $label_slug,
-			'value' => $val,
+		$bundle['telefon'][$slot] = [
+			'label' => $telefon_label,
+			'value' => $telefon,
+		];
+		$bundle['email'][$slot] = [
+			'label' => $email_label,
+			'value' => $email,
+			'valid' => \is_email($email) ? '1' : '0',
 		];
 	}
 
-	// E-Mails 1–3: Einzelspalten + Bündel aktualisieren
-	for ($i = 1; $i <= 3; $i++) {
-		$val        = $sanitize_txt($in["email_{$i}"] ?? '');
-		$label_slug = $sanitize_slug($in["email_label_{$i}"] ?? '');
-
-		if ($label_slug && !cmx_term_slug_exists(CMX_TAX_MAIL_LABELS, $label_slug)) {
-			$label_slug = '';
+	$first = $contacts[0] ?? null;
+	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
+		if ($first && (string) ($first['vorname'] ?? '') !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, (string) $first['vorname']);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_VORNAME);
 		}
-
-		// Einzelspalte (konkretes Feld)
-		\update_post_meta($post_id, "_cmx_email_{$i}", $val);
-
-		// Bündel (Kompatibilität/Labels)
-		$bundle['email'][$i] = [
-			'label' => $label_slug,
-			'value' => $val,
-			'valid' => (bool)\is_email($val) ? '1' : '0',
-		];
+	}
+	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+		if ($first && (string) ($first['nachname'] ?? '') !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
+		}
+	}
+	if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+		$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
+		if ($birthdate !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $birthdate);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
+		}
 	}
 
-	// Bündel speichern (nur für Labels/Kompatibilität)
 	\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 });
