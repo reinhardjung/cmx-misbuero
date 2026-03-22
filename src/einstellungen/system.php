@@ -291,12 +291,19 @@ function cmx_register_system_tab(): void {
 					}
 					result.style.color = '#2271b1';
 				};
-				input.addEventListener('input', updateChatRoomPreview);
-				chatRoomInput.addEventListener('input', updateChatRoomPreview);
-				chatRoomInput.addEventListener('blur', function () {
-					chatRoomInput.value = normalizeChatRoomId(chatRoomInput.value || '');
+				const syncChatRoomValue = function () {
+					const normalized = normalizeChatRoomId(chatRoomInput.value || '');
+					if (chatRoomInput.value !== normalized) {
+						chatRoomInput.value = normalized;
+					}
 					updateChatRoomPreview();
+				};
+				input.addEventListener('input', updateChatRoomPreview);
+				chatRoomInput.addEventListener('input', syncChatRoomValue);
+				chatRoomInput.addEventListener('paste', function () {
+					window.setTimeout(syncChatRoomValue, 0);
 				});
+				chatRoomInput.addEventListener('blur', syncChatRoomValue);
 				chatRoomInput.value = normalizeChatRoomId(chatRoomInput.value || '');
 				updateChatRoomPreview();
 				button.addEventListener('click', function () {
