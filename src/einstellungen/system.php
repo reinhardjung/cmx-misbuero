@@ -11,6 +11,68 @@ function cmx_register_system_tab(): void {
 
 	\register_setting(
 		'cmx_einstellungen',
+		'mis_buero_nextcloud_url',
+		[
+			'type'              => 'string',
+			'sanitize_callback' => static function ($value): string {
+				if ($value === null) {
+					$value = \get_option('mis_buero_nextcloud_url', '');
+				}
+				return \esc_url_raw((string) $value);
+			},
+		]
+	);
+
+	\register_setting(
+		'cmx_einstellungen',
+		'mis_buero_nextcloud_chat_room',
+		[
+			'type'              => 'string',
+			'sanitize_callback' => static function ($value): string {
+				if ($value === null) {
+					$value = \get_option('mis_buero_nextcloud_chat_room', '');
+				}
+				return \sanitize_text_field((string) $value);
+			},
+		]
+	);
+
+	\add_settings_field(
+		'mis_buero_nextcloud',
+		'Nextcloud',
+		function (): void {
+			$url = (string) \get_option('mis_buero_nextcloud_url', '');
+			$chat_room = (string) \get_option('mis_buero_nextcloud_chat_room', '');
+			$host = (string) (\wp_parse_url(\home_url('/'), \PHP_URL_HOST) ?? '');
+			$instance = '';
+			if ($host !== '') {
+				$parts = \explode('.', \strtolower($host));
+				$instance = \sanitize_title((string) ($parts[0] ?? ''));
+			}
+			if ($instance === '' && \defined('CMX_DOMAIN')) {
+				$instance = \sanitize_title((string) \constant('CMX_DOMAIN'));
+			}
+			$placeholder = 'https://' . ($instance !== '' ? $instance : '{DeineInstanz}') . '.misbuero.cloud';
+			echo '<div style="display:flex;flex-direction:column;gap:10px;max-width:420px;">';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
+			echo '<span>URL</span>';
+			echo '<input type="url" name="mis_buero_nextcloud_url" class="regular-text" value="' . \esc_attr($url) . '" placeholder="' . \esc_attr($placeholder) . '">';
+			echo '</label>';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
+			echo '<span>Chat Room ID</span>';
+			echo '<div style="display:flex;align-items:center;gap:8px;">';
+			echo '<input type="text" name="mis_buero_nextcloud_chat_room" class="regular-text" value="' . \esc_attr($chat_room) . '">';
+			echo '<span class="description">9bidw5t8</span>';
+			echo '</div>';
+			echo '</label>';
+			echo '</div>';
+		},
+		'cmx_tab_system',
+		'cmx_sec_system'
+	);
+
+	\register_setting(
+		'cmx_einstellungen',
 		'mis_buero_openai_key',
 		[
 			'type'              => 'string',

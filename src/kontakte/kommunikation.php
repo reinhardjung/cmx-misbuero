@@ -578,6 +578,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$index_attr = (string) $index;
 		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
+		$internal_email_url = \admin_url('post-new.php?post_type=' . \rawurlencode(\defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails'));
 		?>
 		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>">
 			<div class="cmx-kommu-field cmx-kommu-field-handle">
@@ -623,7 +624,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				</select>
 			</div>
 			<div class="cmx-kommu-field">
-				<label for="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>">E-Mail</label>
+				<label for="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" class="cmx-kommu-email-label">
+					<button
+						type="button"
+						class="button-link cmx-kommu-email-action"
+						data-email-target="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>"
+						data-internal-url="<?php echo \esc_url($internal_email_url); ?>"
+					>E-Mail</button>
+				</label>
 				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>">
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-date">
@@ -715,6 +723,56 @@ function cmx_kommunikation_box_html($post): void {
 		#cmx_kommunikation_box .cmx-kommu-field select {
 			width: 100%;
 			max-width: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-label {
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-action {
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: inherit;
+			font: inherit;
+			line-height: inherit;
+			text-decoration: none;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-action:hover,
+		#cmx_kommunikation_box .cmx-kommu-email-action:focus {
+			color: #d63638;
+			text-decoration: underline;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu {
+			position: fixed;
+			z-index: 100000;
+			display: none;
+			min-width: 124px;
+			padding: 6px;
+			border: 1px solid #dcdcde;
+			border-radius: 7px;
+			background: #fff;
+			box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu.is-open {
+			display: block;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu button {
+			display: block;
+			width: 100%;
+			margin: 0;
+			padding: 7px 9px;
+			border: 0;
+			border-radius: 5px;
+			background: transparent;
+			color: #1d2327;
+			text-align: left;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu button:hover,
+		#cmx_kommunikation_box .cmx-kommu-email-menu button:focus {
+			background: #f6f7f7;
+			outline: none;
 		}
 		#cmx_kommunikation_box .cmx-kommu-drag {
 			display: inline-flex;
@@ -844,6 +902,10 @@ function cmx_kommunikation_box_html($post): void {
 			<button type="button" class="button button-secondary" id="cmx-kommu-add-row">Kontakt hinzufügen</button>
 		</div>
 		<template id="cmx-kommu-row-template"><?php cmx_kommunikation_render_contact_row(cmx_kommunikation_normalize_contact_row([]), '__INDEX__', $phone_terms, $mail_terms); ?></template>
+		<div class="cmx-kommu-email-menu" id="cmx-kommu-email-menu" aria-hidden="true">
+			<button type="button" data-action="internal">Intern</button>
+			<button type="button" data-action="external">Extern</button>
+		</div>
 	</div>
 	<script>
 	(function(){
@@ -852,8 +914,34 @@ function cmx_kommunikation_box_html($post): void {
 		var rows = root.querySelector(".cmx-kommu-rows");
 		var addButton = document.getElementById("cmx-kommu-add-row");
 		var template = document.getElementById("cmx-kommu-row-template");
-		if (!rows || !addButton || !template) return;
+		var emailMenu = document.getElementById("cmx-kommu-email-menu");
+		if (!rows || !addButton || !template || !emailMenu) return;
 		var draggedRow = null;
+		var emailMenuState = null;
+
+		function closeEmailMenu() {
+			emailMenu.classList.remove("is-open");
+			emailMenu.setAttribute("aria-hidden", "true");
+			emailMenuState = null;
+		}
+
+		function openEmailMenu(trigger) {
+			if (!trigger) return;
+			var rect = trigger.getBoundingClientRect();
+			emailMenuState = {
+				targetId: trigger.getAttribute("data-email-target") || "",
+				internalUrl: trigger.getAttribute("data-internal-url") || ""
+			};
+			emailMenu.style.top = Math.round(rect.bottom + 6) + "px";
+			emailMenu.style.left = Math.round(rect.left) + "px";
+			emailMenu.classList.add("is-open");
+			emailMenu.setAttribute("aria-hidden", "false");
+		}
+
+		function resolveEmailInput() {
+			if (!emailMenuState || !emailMenuState.targetId) return null;
+			return document.getElementById(emailMenuState.targetId);
+		}
 
 		function renumberRows() {
 			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row, index) {
@@ -916,6 +1004,18 @@ function cmx_kommunikation_box_html($post): void {
 		});
 
 		rows.addEventListener("click", function (event) {
+			var emailTrigger = event.target.closest(".cmx-kommu-email-action");
+			if (emailTrigger) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (emailMenu.classList.contains("is-open") && emailMenuState && emailMenuState.targetId === (emailTrigger.getAttribute("data-email-target") || "")) {
+					closeEmailMenu();
+				} else {
+					openEmailMenu(emailTrigger);
+				}
+				return;
+			}
+
 			var button = event.target.closest(".cmx-kommu-remove");
 			if (!button) return;
 			var row = button.closest(".cmx-kommu-contact-row");
@@ -928,7 +1028,44 @@ function cmx_kommunikation_box_html($post): void {
 			updateRemoveButtons();
 		});
 
+		emailMenu.addEventListener("click", function(event) {
+			var actionButton = event.target.closest("button[data-action]");
+			if (!actionButton || !emailMenuState) return;
+			var action = actionButton.getAttribute("data-action") || "";
+			var input = resolveEmailInput();
+			var emailValue = input ? String(input.value || "").trim() : "";
+			if (action === "internal") {
+				if (emailMenuState.internalUrl) {
+					window.location.href = emailMenuState.internalUrl;
+				}
+				closeEmailMenu();
+				return;
+			}
+			if (action === "external") {
+				if (emailValue !== "") {
+					window.location.href = "mailto:" + encodeURIComponent(emailValue);
+				} else if (input) {
+					input.focus();
+				}
+				closeEmailMenu();
+			}
+		});
+
+		document.addEventListener("click", function(event) {
+			if (!emailMenu.classList.contains("is-open")) return;
+			if (event.target.closest("#cmx-kommu-email-menu")) return;
+			if (event.target.closest(".cmx-kommu-email-action")) return;
+			closeEmailMenu();
+		});
+
+		document.addEventListener("keydown", function(event) {
+			if (event.key === "Escape") {
+				closeEmailMenu();
+			}
+		});
+
 		rows.addEventListener("dragstart", function(event) {
+			closeEmailMenu();
 			var handle = event.target.closest(".cmx-kommu-drag");
 			if (!handle) return;
 			draggedRow = handle.closest(".cmx-kommu-contact-row");
