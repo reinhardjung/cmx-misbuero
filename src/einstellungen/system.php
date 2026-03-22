@@ -107,6 +107,40 @@ function cmx_test_nextcloud_url(string $url): array {
 	];
 }
 
+function cmx_normalize_nextcloud_chat_room_id($value): string {
+	$value = \trim(\wp_unslash((string) $value));
+	if ($value === '') {
+		return '';
+	}
+
+	$candidate = \preg_replace('~[\\r\\n]+~', '', $value);
+	if (!\is_string($candidate)) {
+		$candidate = $value;
+	}
+	$candidate = \trim($candidate);
+	$candidate = \preg_replace('~/+$~', '', $candidate);
+	if (!\is_string($candidate)) {
+		$candidate = $value;
+	}
+
+	if (\preg_match('~^https?://~i', $candidate)) {
+		$path = (string) (\wp_parse_url($candidate, \PHP_URL_PATH) ?? '');
+		if ($path !== '') {
+			$parts = \array_values(\array_filter(\array_map('trim', \explode('/', $path))));
+			if ($parts !== []) {
+				$candidate = \rawurldecode((string) \end($parts));
+			}
+		}
+	} elseif (\strpos($candidate, '/') !== false) {
+		$parts = \array_values(\array_filter(\array_map('trim', \explode('/', $candidate))));
+		if ($parts !== []) {
+			$candidate = (string) \end($parts);
+		}
+	}
+
+	return \sanitize_text_field(\trim($candidate));
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_system_tab');
 function cmx_register_system_tab(): void {
 	\add_settings_section(
@@ -139,7 +173,7 @@ function cmx_register_system_tab(): void {
 				if ($value === null) {
 					$value = \get_option('mis_buero_nextcloud_chat_room', '');
 				}
-				return \sanitize_text_field((string) $value);
+				return cmx_normalize_nextcloud_chat_room_id($value);
 			},
 		]
 	);
@@ -194,8 +228,33 @@ function cmx_register_system_tab(): void {
 				const normalizeBaseUrl = function (value) {
 					return (value || '').trim().replace(/\/+$/, '');
 				};
+				const normalizeChatRoomId = function (value) {
+					let raw = (value || '').trim().replace(/\/+$/, '');
+					if (!raw) {
+						return '';
+					}
+					if (/^https?:\/\//i.test(raw)) {
+						try {
+							const parsed = new URL(raw);
+							const parts = (parsed.pathname || '').split('/').map(function (part) {
+								return part.trim();
+							}).filter(Boolean);
+							if (parts.length) {
+								raw = decodeURIComponent(parts[parts.length - 1] || '');
+							}
+						} catch (error) {}
+					} else if (raw.indexOf('/') !== -1) {
+						const parts = raw.split('/').map(function (part) {
+							return part.trim();
+						}).filter(Boolean);
+						if (parts.length) {
+							raw = parts[parts.length - 1] || raw;
+						}
+					}
+					return raw.trim();
+				};
 				const updateChatRoomPreview = function () {
-					const roomId = (chatRoomInput.value || '').trim();
+					const roomId = normalizeChatRoomId(chatRoomInput.value || '');
 					const baseUrl = normalizeBaseUrl(input.value || '');
 					try {
 						if (baseUrl) {
@@ -234,6 +293,11 @@ function cmx_register_system_tab(): void {
 				};
 				input.addEventListener('input', updateChatRoomPreview);
 				chatRoomInput.addEventListener('input', updateChatRoomPreview);
+				chatRoomInput.addEventListener('blur', function () {
+					chatRoomInput.value = normalizeChatRoomId(chatRoomInput.value || '');
+					updateChatRoomPreview();
+				});
+				chatRoomInput.value = normalizeChatRoomId(chatRoomInput.value || '');
 				updateChatRoomPreview();
 				button.addEventListener('click', function () {
 					const url = (input.value || '').trim();
