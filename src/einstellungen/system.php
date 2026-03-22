@@ -1,5 +1,112 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+\add_action('wp_ajax_cmx_test_nextcloud_url', __NAMESPACE__ . '\\cmx_test_nextcloud_url_ajax');
+function cmx_test_nextcloud_url_ajax(): void {
+	if (!\current_user_can('manage_options')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+
+	\check_ajax_referer('cmx_test_nextcloud_url', 'nonce');
+
+	$url = isset($_POST['url']) ? \sanitize_text_field(\wp_unslash((string) $_POST['url'])) : '';
+	$result = cmx_test_nextcloud_url($url);
+
+	if ($result['ok']) {
+		\wp_send_json_success([
+			'message' => $result['message'],
+			'data'    => $result['data'],
+		]);
+	}
+
+	\wp_send_json_error([
+		'message' => $result['message'],
+		'data'    => $result['data'],
+	], $result['status']);
+}
+
+function cmx_test_nextcloud_url(string $url): array {
+	$url = \trim($url);
+	if ($url === '') {
+		return [
+			'ok'      => false,
+			'status'  => 400,
+			'message' => 'Bitte zuerst eine URL eintragen.',
+			'data'    => [],
+		];
+	}
+
+	if (!\preg_match('~^https?://~i', $url)) {
+		$url = 'https://' . $url;
+	}
+
+	$base_url = \esc_url_raw(\untrailingslashit($url));
+	if ($base_url === '' || !\wp_http_validate_url($base_url)) {
+		return [
+			'ok'      => false,
+			'status'  => 400,
+			'message' => 'Die URL ist ungültig.',
+			'data'    => [],
+		];
+	}
+
+	$status_url = $base_url . '/status.php';
+	$response = \wp_remote_get($status_url, [
+		'timeout'     => 10,
+		'redirection' => 3,
+		'headers'     => [
+			'Accept' => 'application/json',
+		],
+	]);
+
+	if (\is_wp_error($response)) {
+		return [
+			'ok'      => false,
+			'status'  => 502,
+			'message' => 'Abruf fehlgeschlagen: ' . $response->get_error_message(),
+			'data'    => ['status_url' => $status_url],
+		];
+	}
+
+	$http_code = (int) \wp_remote_retrieve_response_code($response);
+	$body = (string) \wp_remote_retrieve_body($response);
+	$data = \json_decode($body, true);
+	$is_valid = \is_array($data)
+		&& \array_key_exists('installed', $data)
+		&& \array_key_exists('maintenance', $data)
+		&& \array_key_exists('needsDbUpgrade', $data)
+		&& (\array_key_exists('versionstring', $data) || \array_key_exists('version', $data));
+
+	if ($http_code !== 200 || !$is_valid) {
+		return [
+			'ok'      => false,
+			'status'  => $http_code > 0 ? $http_code : 400,
+			'message' => 'Keine Nextcloud-Statusantwort erkannt.',
+			'data'    => [
+				'status_url' => $status_url,
+				'http_code'  => $http_code,
+				'body'       => \is_string($body) ? \mb_substr(\trim(\wp_strip_all_tags($body)), 0, 220) : '',
+			],
+		];
+	}
+
+	$product = isset($data['productname']) ? (string) $data['productname'] : 'Nextcloud';
+	$version = isset($data['versionstring']) ? (string) $data['versionstring'] : ((string) ($data['version'] ?? ''));
+	$maintenance = !empty($data['maintenance']) ? 'Wartungsmodus aktiv' : 'bereit';
+	$installed = !empty($data['installed']) ? 'installiert' : 'noch nicht installiert';
+
+	return [
+		'ok'      => true,
+		'status'  => 200,
+		'message' => \trim($product . ' erkannt' . ($version !== '' ? ' (' . $version . ')' : '') . ' - ' . $installed . ', ' . $maintenance),
+		'data'    => [
+			'status_url' => $status_url,
+			'http_code'  => $http_code,
+			'product'    => $product,
+			'version'    => $version,
+		],
+	];
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_system_tab');
 function cmx_register_system_tab(): void {
 	\add_settings_section(
@@ -53,10 +160,16 @@ function cmx_register_system_tab(): void {
 				$instance = \sanitize_title((string) \constant('CMX_DOMAIN'));
 			}
 			$placeholder = 'https://' . ($instance !== '' ? $instance : '{DeineInstanz}') . '.misbuero.cloud';
-			echo '<div style="display:flex;flex-direction:column;gap:10px;max-width:420px;">';
+			$nonce = \wp_create_nonce('cmx_test_nextcloud_url');
+			echo '<div style="display:flex;flex-direction:column;gap:12px;max-width:960px;">';
 			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
 			echo '<span>URL</span>';
-			echo '<input type="url" name="mis_buero_nextcloud_url" class="regular-text" value="' . \esc_attr($url) . '" placeholder="' . \esc_attr($placeholder) . '">';
+			echo '<div style="display:flex;align-items:center;gap:8px;">';
+			echo '<input type="url" name="mis_buero_nextcloud_url" class="regular-text" value="' . \esc_attr($url) . '" placeholder="' . \esc_attr($placeholder) . '" id="cmx-nextcloud-url">';
+			echo '<button type="button" class="button button-secondary" id="cmx-nextcloud-test" data-nonce="' . \esc_attr($nonce) . '">Prüfen</button>';
+			echo '<span class="spinner" id="cmx-nextcloud-test-spinner" style="float:none;margin:0;"></span>';
+			echo '</div>';
+			echo '<span class="description" id="cmx-nextcloud-test-result" style="display:block;min-height:20px;padding-top:2px;white-space:nowrap;overflow-x:auto;overflow-y:hidden;"></span>';
 			echo '</label>';
 			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
 			echo '<span>Chat Room ID</span>';
@@ -66,6 +179,59 @@ function cmx_register_system_tab(): void {
 			echo '</div>';
 			echo '</label>';
 			echo '</div>';
+			?>
+			<script>
+			document.addEventListener('DOMContentLoaded', function () {
+				const button = document.getElementById('cmx-nextcloud-test');
+				const input = document.getElementById('cmx-nextcloud-url');
+				const result = document.getElementById('cmx-nextcloud-test-result');
+				const spinner = document.getElementById('cmx-nextcloud-test-spinner');
+				if (!button || !input || !result || !spinner || typeof ajaxurl === 'undefined') {
+					return;
+				}
+				const setResult = function (message, state) {
+					result.textContent = message;
+					if (state === 'error') {
+						result.style.color = '#b32d2e';
+						return;
+					}
+					if (state === 'success') {
+						result.style.color = '#2f6f3e';
+						return;
+					}
+					result.style.color = '#2271b1';
+				};
+				button.addEventListener('click', function () {
+					const url = (input.value || '').trim();
+					const form = new URLSearchParams();
+					form.set('action', 'cmx_test_nextcloud_url');
+					form.set('nonce', button.getAttribute('data-nonce') || '');
+					form.set('url', url);
+					button.disabled = true;
+					spinner.classList.add('is-active');
+					setResult('Prüfe Nextcloud ...', 'info');
+					fetch(ajaxurl, {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+						body: form.toString()
+					}).then(function (response) {
+						return response.json().catch(function () {
+							return {success: false, data: {message: 'Ungültige Serverantwort.'}};
+						});
+					}).then(function (payload) {
+						const message = payload && payload.data && payload.data.message ? payload.data.message : 'Prüfung fehlgeschlagen.';
+						setResult(message, payload && payload.success ? 'success' : 'error');
+					}).catch(function (error) {
+						setResult(error && error.message ? error.message : 'Prüfung fehlgeschlagen.', 'error');
+					}).finally(function () {
+						button.disabled = false;
+						spinner.classList.remove('is-active');
+					});
+				});
+			});
+			</script>
+			<?php
 		},
 		'cmx_tab_system',
 		'cmx_sec_system'
