@@ -116,13 +116,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_sanitize_birthdate'))
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_pattern')) {
 	function cmx_kommunikation_phone_pattern(): string {
-		return '(?:\+41\s?(?:\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\d{3}\s?\d{3}\s?\d{3})|0(?:\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\d{3}\s?\d{3}\s?\d{3}))';
+		return '(?:\+[1-9][\d\s().\/-]{7,20}|00[1-9][\d\s().\/-]{7,20}|41[\d\s().\/-]{9,20}|0[\d\s().\/-]{9,20}|[\d\s().\/-]{9,20})';
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_title')) {
 	function cmx_kommunikation_phone_title(): string {
-		return 'Schweizer Format mit Ländervorwahl: +41 79 123 45 67, +41 44 123 45 67 oder +41 800 123 456';
+		return 'Wird beim Verlassen intern auf E.164 normalisiert und im Feld als Schweizer Nummer angezeigt, z. B. +41 79 123 45 67. Fehlt die Vorwahl, wird automatisch +41 verwendet.';
 	}
 }
 
@@ -143,27 +143,84 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_phone')) {
 		if (\strpos($compact, '00') === 0) {
 			$compact = '+' . \substr($compact, 2);
 		}
+		if (\preg_match('/^\+410\d{9}$/', $compact)) {
+			$compact = '+41' . \substr($compact, 4);
+		}
+		if (\preg_match('/^410\d{9}$/', $compact)) {
+			$compact = '+41' . \substr($compact, 3);
+		}
 
-		if (\preg_match('/^\+41(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
+		if (\preg_match('/^\+([1-9]\d{7,14})$/', $compact, $m)) {
+			return '+' . $m[1];
 		}
-		if (\preg_match('/^\+41(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
+		if (\preg_match('/^41\d{9}$/', $compact)) {
+			return '+' . $compact;
 		}
-		if (\preg_match('/^41(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
+		if (\preg_match('/^0\d{9}$/', $compact)) {
+			return '+41' . \substr($compact, 1);
 		}
-		if (\preg_match('/^41(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
-		}
-		if (\preg_match('/^0(\d{2})(\d{3})(\d{2})(\d{2})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3] . ' ' . $m[4];
-		}
-		if (\preg_match('/^0(\d{3})(\d{3})(\d{3})$/', $compact, $m)) {
-			return '+41 ' . $m[1] . ' ' . $m[2] . ' ' . $m[3];
+		if (\preg_match('/^\d{9}$/', $compact)) {
+			return '+41' . $compact;
 		}
 
 		return \sanitize_text_field($raw);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_format_phone_display')) {
+	function cmx_kommunikation_split_e164_phone(string $normalized): array {
+		$compact = (string) \preg_replace('/[^\d+]+/', '', $normalized);
+		if (!\preg_match('/^\+(\d{8,15})$/', $compact, $matches)) {
+			return ['', ''];
+		}
+
+		$digits = (string) ($matches[1] ?? '');
+		$known_codes = ['423', '372', '41', '49', '43', '44', '39', '33', '1'];
+		foreach ($known_codes as $code) {
+			if (\str_starts_with($digits, $code) && \strlen($digits) > \strlen($code)) {
+				return [$code, \substr($digits, \strlen($code))];
+			}
+		}
+
+		$fallback_len = \strlen($digits) > 11 ? 3 : (\strlen($digits) > 10 ? 2 : 1);
+		return [\substr($digits, 0, $fallback_len), \substr($digits, $fallback_len)];
+	}
+
+	function cmx_kommunikation_format_phone_display(mixed $value): string {
+		$normalized = cmx_kommunikation_normalize_phone($value);
+		if ($normalized === '') {
+			return '';
+		}
+
+		[$country, $national] = cmx_kommunikation_split_e164_phone($normalized);
+		if ($country === '' || $national === '') {
+			return $normalized;
+		}
+
+		if ($country === '41') {
+			if (\preg_match('/^(800|840|842|844|848|860|868|900|901|906)(\d{3})(\d{3})$/', $national, $service)) {
+				return '+41 ' . $service[1] . ' ' . $service[2] . ' ' . $service[3];
+			}
+
+			if (\preg_match('/^(\d{2})(\d{3})(\d{2})(\d{2})$/', $national, $standard)) {
+				return '+41 ' . $standard[1] . ' ' . $standard[2] . ' ' . $standard[3] . ' ' . $standard[4];
+			}
+		}
+
+		if (\preg_match('/^(\d{2})(\d{3})(\d{2})(\d{2})$/', $national, $standard)) {
+			return '+' . $country . ' ' . $standard[1] . ' ' . $standard[2] . ' ' . $standard[3] . ' ' . $standard[4];
+		}
+		if (\preg_match('/^(\d{3})(\d{3})(\d{2})(\d{2})$/', $national, $ten)) {
+			return '+' . $country . ' ' . $ten[1] . ' ' . $ten[2] . ' ' . $ten[3] . ' ' . $ten[4];
+		}
+		if (\preg_match('/^(\d{3})(\d{2})(\d{2})$/', $national, $seven)) {
+			return '+' . $country . ' ' . $seven[1] . ' ' . $seven[2] . ' ' . $seven[3];
+		}
+		if (\preg_match('/^(\d{2})(\d{2})(\d{2})(\d{2})$/', $national, $eight)) {
+			return '+' . $country . ' ' . $eight[1] . ' ' . $eight[2] . ' ' . $eight[3] . ' ' . $eight[4];
+		}
+
+		return $normalized;
 	}
 }
 
@@ -661,14 +718,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 						tabindex="-1"
 					>Telefon</button>
 				</label>
-				<input
-					id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
-					type="tel"
-					name="<?php echo \esc_attr($field_base . '[telefon]'); ?>"
-					value="<?php echo \esc_attr((string) ($row['telefon'] ?? '')); ?>"
-					inputmode="tel"
-					autocomplete="tel-national"
-					placeholder="<?php echo \esc_attr($phone_placeholder); ?>"
+					<input
+						id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+						type="tel"
+						name="<?php echo \esc_attr($field_base . '[telefon]'); ?>"
+						value="<?php echo \esc_attr(cmx_kommunikation_format_phone_display((string) ($row['telefon'] ?? ''))); ?>"
+						inputmode="tel"
+						autocomplete="tel-national"
+						placeholder="<?php echo \esc_attr($phone_placeholder); ?>"
 					pattern="<?php echo \esc_attr($phone_pattern); ?>"
 					title="<?php echo \esc_attr($phone_title); ?>"
 					data-cmx-phone="1"
@@ -1122,57 +1179,139 @@ function cmx_kommunikation_box_html($post): void {
 		}
 
 		function normalizePhoneUriValue(value) {
+			var normalized = normalizeToE164PhoneValue(value);
+			if (normalized) {
+				return normalized;
+			}
 			var raw = String(value || "").trim();
 			var digits = normalizePhoneDigits(raw);
 			if (!digits) return "";
 			return raw.indexOf("+") === 0 ? "+" + digits : digits;
 		}
 
-		function formatSwissPhoneValue(value) {
+		function normalizeToE164PhoneValue(value) {
 			var raw = String(value || "").trim();
 			if (!raw) return "";
 			var compact = raw.replace(/[^\d+]+/g, "");
 			if (compact.indexOf("00") === 0) {
 				compact = "+" + compact.slice(2);
 			}
-			var match = compact.match(/^\+41(\d{2})(\d{3})(\d{2})(\d{2})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			if (/^\+410\d{9}$/.test(compact)) {
+				compact = "+41" + compact.slice(4);
 			}
-			match = compact.match(/^\+41(\d{3})(\d{3})(\d{3})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			if (/^410\d{9}$/.test(compact)) {
+				compact = "+41" + compact.slice(3);
 			}
-			match = compact.match(/^41(\d{2})(\d{3})(\d{2})(\d{2})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			if (/^\+[1-9]\d{7,14}$/.test(compact)) {
+				return compact;
 			}
-			match = compact.match(/^41(\d{3})(\d{3})(\d{3})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			if (/^41\d{9}$/.test(compact)) {
+				return "+" + compact;
 			}
-			match = compact.match(/^0(\d{2})(\d{3})(\d{2})(\d{2})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3] + " " + match[4];
+			if (/^0\d{9}$/.test(compact)) {
+				return "+41" + compact.slice(1);
 			}
-			match = compact.match(/^0(\d{3})(\d{3})(\d{3})$/);
-			if (match) {
-				return "+41 " + match[1] + " " + match[2] + " " + match[3];
+			if (/^\d{9}$/.test(compact)) {
+				return "+41" + compact;
 			}
 			return raw;
 		}
 
-		function updateSwissPhoneValidity(input) {
+		function splitE164PhoneValue(normalized) {
+			var compact = String(normalized || "").replace(/[^\d+]+/g, "");
+			var match = compact.match(/^\+(\d{8,15})$/);
+			if (!match) {
+				return {country: "", national: ""};
+			}
+			var digits = match[1] || "";
+			var knownCodes = ["423", "372", "41", "49", "43", "44", "39", "33", "1"];
+			for (var i = 0; i < knownCodes.length; i += 1) {
+				var code = knownCodes[i];
+				if (digits.indexOf(code) === 0 && digits.length > code.length) {
+					return {
+						country: code,
+						national: digits.slice(code.length)
+					};
+				}
+			}
+			var fallbackLen = digits.length > 11 ? 3 : (digits.length > 10 ? 2 : 1);
+			return {
+				country: digits.slice(0, fallbackLen),
+				national: digits.slice(fallbackLen)
+			};
+		}
+
+		function formatSwissPhoneDisplayValue(value) {
+			var normalized = normalizeToE164PhoneValue(value);
+			if (!normalized) return "";
+			var parts = splitE164PhoneValue(normalized);
+			if (!parts.country || !parts.national) {
+				return normalized;
+			}
+			var country = parts.country;
+			var national = parts.national;
+			if (country === "41") {
+				var service = national.match(/^(800|840|842|844|848|860|868|900|901|906)(\d{3})(\d{3})$/);
+				if (service) {
+					return "+41 " + service[1] + " " + service[2] + " " + service[3];
+				}
+
+				var swiss = national.match(/^(\d{2})(\d{3})(\d{2})(\d{2})$/);
+				if (swiss) {
+					return "+41 " + swiss[1] + " " + swiss[2] + " " + swiss[3] + " " + swiss[4];
+				}
+			}
+
+			var nine = national.match(/^(\d{2})(\d{3})(\d{2})(\d{2})$/);
+			if (nine) {
+				return "+" + country + " " + nine[1] + " " + nine[2] + " " + nine[3] + " " + nine[4];
+			}
+			var ten = national.match(/^(\d{3})(\d{3})(\d{2})(\d{2})$/);
+			if (ten) {
+				return "+" + country + " " + ten[1] + " " + ten[2] + " " + ten[3] + " " + ten[4];
+			}
+			var seven = national.match(/^(\d{3})(\d{2})(\d{2})$/);
+			if (seven) {
+				return "+" + country + " " + seven[1] + " " + seven[2] + " " + seven[3];
+			}
+			var eight = national.match(/^(\d{2})(\d{2})(\d{2})(\d{2})$/);
+			if (eight) {
+				return "+" + country + " " + eight[1] + " " + eight[2] + " " + eight[3] + " " + eight[4];
+			}
+			return normalized;
+		}
+
+		function isValidE164PhoneValue(value) {
+			return /^\+[1-9]\d{7,14}$/.test(String(value || "").trim());
+		}
+
+		function updateE164PhoneValidity(input) {
 			if (!input || !input.matches("[data-cmx-phone]")) return;
-			if (!String(input.value || "").trim()) {
+			var rawValue = String(input.value || "").trim();
+			if (!rawValue) {
 				input.setCustomValidity("");
 				return;
 			}
-			if (input.validity.patternMismatch) {
-				input.setCustomValidity("Bitte im Schweizer Format mit Ländervorwahl eingeben: +41 79 123 45 67, +41 44 123 45 67 oder +41 800 123 456.");
+
+			var normalized = normalizeToE164PhoneValue(rawValue);
+			if (isValidE164PhoneValue(normalized)) {
+				input.setCustomValidity("");
 				return;
 			}
-			input.setCustomValidity("");
+
+			if (input.validity.patternMismatch) {
+				input.setCustomValidity("Bitte eine gültige Telefonnummer eingeben. Beim Verlassen wird sie intern auf E.164 normalisiert und im Feld im Schweizer Format angezeigt, z. B. +41 79 123 45 67.");
+				return;
+			}
+
+			input.setCustomValidity("Bitte eine gültige Telefonnummer eingeben. Schweizer Nummern ohne Ländervorwahl werden automatisch als +41 formatiert.");
+		}
+
+		function normalizePhoneField(input) {
+			if (!input || !input.matches("[data-cmx-phone]")) return;
+			var normalized = normalizeToE164PhoneValue(input.value);
+			input.value = normalized ? formatSwissPhoneDisplayValue(normalized) : String(input.value || "").trim();
+			updateE164PhoneValidity(input);
 		}
 
 		function fetchVideoChatUrl() {
@@ -1346,6 +1485,15 @@ function cmx_kommunikation_box_html($post): void {
 		});
 
 		rows.addEventListener("keydown", function(event) {
+			if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+				var enterPhoneField = event.target.closest("[data-cmx-phone]");
+				if (enterPhoneField) {
+					event.preventDefault();
+					normalizePhoneField(enterPhoneField);
+					enterPhoneField.blur();
+					return;
+				}
+			}
 			if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) {
 				return;
 			}
@@ -1367,9 +1515,39 @@ function cmx_kommunikation_box_html($post): void {
 		rows.addEventListener("blur", function(event) {
 			var phoneInput = event.target.closest("[data-cmx-phone]");
 			if (!phoneInput) return;
-			phoneInput.value = formatSwissPhoneValue(phoneInput.value);
-			updateSwissPhoneValidity(phoneInput);
+			normalizePhoneField(phoneInput);
 		}, true);
+
+		rows.addEventListener("change", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			normalizePhoneField(phoneInput);
+		});
+
+		rows.addEventListener("paste", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			window.setTimeout(function() {
+				normalizePhoneField(phoneInput);
+			}, 0);
+		});
+
+		rows.addEventListener("drop", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			window.setTimeout(function() {
+				normalizePhoneField(phoneInput);
+			}, 0);
+		});
+
+		var form = root.closest("form");
+		if (form) {
+			form.addEventListener("submit", function() {
+				rows.querySelectorAll("[data-cmx-phone]").forEach(function(phoneInput) {
+					normalizePhoneField(phoneInput);
+				});
+			});
+		}
 
 		phoneMenu.addEventListener("click", function(event) {
 			var actionButton = event.target.closest("button[data-action]");
