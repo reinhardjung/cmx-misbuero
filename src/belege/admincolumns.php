@@ -220,6 +220,21 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 			.wp-list-table td.column-title .row-title {
 				white-space: nowrap !important;
 			}
+			.wp-list-table th#title,
+			.wp-list-table th.manage-column.column-title,
+			.wp-list-table td.title.column-title {
+				width: 15ch !important;
+				min-width: 15ch !important;
+				max-width: 15ch !important;
+			}
+			.wp-list-table td.column-title strong,
+			.wp-list-table td.column-title .row-title {
+				display: inline-block;
+				max-width: 15ch;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				vertical-align: bottom;
+			}
 		</style>';
 	});
 
