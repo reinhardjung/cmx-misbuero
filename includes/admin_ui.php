@@ -62,6 +62,55 @@ function cmx_plugin_row_meta_version(array $plugin_meta, string $plugin_file, ar
 	return $plugin_meta;
 }
 
+add_filter('wp_editor_settings', __NAMESPACE__ . '\\cmx_admin_reduce_cpt_content_editor_settings', 25, 2);
+function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $editor_id): array {
+	if ($editor_id !== 'content' || !\is_admin() || !\function_exists('get_current_screen')) {
+		return $settings;
+	}
+
+	$screen = \get_current_screen();
+	if (!$screen || !\in_array((string) ($screen->base ?? ''), ['post', 'post-new'], true)) {
+		return $settings;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '') {
+		return $settings;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return $settings;
+	}
+
+	$note_settings = \function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')
+		? (array) cmx_notizen_editor_settings()
+		: [
+			'mediaButtons' => false,
+			'quicktags'    => true,
+			'tinymce'      => [
+				'wpautop'   => true,
+				'branding'  => false,
+				'menubar'   => false,
+				'statusbar' => false,
+				'resize'    => true,
+				'toolbar1'  => 'formatselect,bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
+				'toolbar2'  => '',
+			],
+		];
+
+	$settings['media_buttons'] = (bool) ($note_settings['mediaButtons'] ?? ($note_settings['media_buttons'] ?? false));
+	$settings['quicktags'] = $note_settings['quicktags'] ?? true;
+
+	if (($settings['tinymce'] ?? true) !== false) {
+		$current_tinymce = \is_array($settings['tinymce'] ?? null) ? $settings['tinymce'] : [];
+		$note_tinymce = \is_array($note_settings['tinymce'] ?? null) ? $note_settings['tinymce'] : [];
+		$settings['tinymce'] = \array_merge($current_tinymce, $note_tinymce);
+	}
+
+	return $settings;
+}
+
 add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
 function cmx_admin_footer_no_tel(): void {
 	echo '<meta name="format-detection" content="telephone=no">' . "\n";
