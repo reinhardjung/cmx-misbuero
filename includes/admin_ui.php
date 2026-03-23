@@ -148,6 +148,277 @@ function cmx_admin_default_cpt_editor_mode(string $default): string {
 	return 'tinymce';
 }
 
+add_action('current_screen', __NAMESPACE__ . '\\cmx_admin_register_cpt_help_tabs', 20);
+function cmx_admin_register_cpt_help_tabs($screen = null): void {
+	if (!\is_admin()) {
+		return;
+	}
+
+	if (!$screen instanceof \WP_Screen) {
+		$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	}
+	if (!$screen || !\method_exists($screen, 'add_help_tab')) {
+		return;
+	}
+
+	$post_type = cmx_admin_help_post_type_from_screen($screen);
+	if ($post_type === '') {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return;
+	}
+
+	$tabs = cmx_admin_help_tabs_for_post_type($post_type, $screen, $post_type_object);
+	foreach ($tabs as $tab) {
+		$id = isset($tab['id']) ? \sanitize_key((string) $tab['id']) : '';
+		$title = isset($tab['title']) ? \trim((string) $tab['title']) : '';
+		$content = isset($tab['content']) ? \trim((string) $tab['content']) : '';
+		if ($id === '' || $title === '' || $content === '') {
+			continue;
+		}
+
+		$screen->add_help_tab([
+			'id'      => $id,
+			'title'   => $title,
+			'content' => \wp_kses_post($content),
+		]);
+	}
+
+	$sidebar = cmx_admin_help_sidebar_for_post_type($post_type, $screen, $post_type_object);
+	if ($sidebar !== '' && \method_exists($screen, 'set_help_sidebar')) {
+		$screen->set_help_sidebar(\wp_kses_post($sidebar));
+	}
+}
+
+function cmx_admin_help_post_type_from_screen(\WP_Screen $screen): string {
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type !== '') {
+		return $post_type;
+	}
+
+	$post_type = isset($_GET['post_type']) ? \sanitize_key((string) \wp_unslash($_GET['post_type'])) : '';
+	if ($post_type !== '') {
+		return $post_type;
+	}
+
+	$post_id = isset($_GET['post']) ? (int) $_GET['post'] : 0;
+	if ($post_id > 0) {
+		$post_type = (string) \get_post_type($post_id);
+	}
+
+	return $post_type;
+}
+
+function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen, \WP_Post_Type $post_type_object): array {
+	$label = \trim((string) ($post_type_object->labels->singular_name ?? $post_type_object->labels->name ?? $post_type));
+	$screen_label = cmx_admin_help_screen_label($screen);
+	$definitions = cmx_admin_help_tab_definitions();
+	$definition = \is_array($definitions[$post_type] ?? null) ? $definitions[$post_type] : [];
+
+	$overview_intro = isset($definition['intro']) && \is_string($definition['intro'])
+		? $definition['intro']
+		: 'Hier findest du kurze Hinweise zur Arbeit mit diesem Bereich.';
+
+	$overview_items = [];
+	if (!empty($definition['overview']) && \is_array($definition['overview'])) {
+		$overview_items = \array_values(\array_filter(\array_map('strval', $definition['overview'])));
+	}
+	if (empty($overview_items)) {
+		$overview_items = [
+			'Diese Hilfe wird zentral in <code>includes/admin_ui.php</code> pro CPT gepflegt.',
+			'Du kannst die Inhalte je nach <code>post_type</code> unterschiedlich ausgeben.',
+			'Zusätzliche Tabs lassen sich über den Filter <code>cmx_admin_help_tabs</code> ergänzen.',
+		];
+	}
+
+	$workflow_items = [];
+	$workflow_key = (string) ($screen->base ?? '');
+	if ($workflow_key === 'edit-tags') {
+		$workflow_key = 'term';
+	}
+	if (!empty($definition[$workflow_key]) && \is_array($definition[$workflow_key])) {
+		$workflow_items = \array_values(\array_filter(\array_map('strval', $definition[$workflow_key])));
+	} elseif (!empty($definition['workflow']) && \is_array($definition['workflow'])) {
+		$workflow_items = \array_values(\array_filter(\array_map('strval', $definition['workflow'])));
+	}
+	if (empty($workflow_items)) {
+		$workflow_items = [
+			'Prüfe zuerst Titel, Stammdaten und die zugehörigen Taxonomien.',
+			'Speichere Änderungen direkt im aktuellen Datensatz.',
+			'Nutze Listenansicht, Filter und Spalten für die schnelle Kontrolle.',
+		];
+	}
+
+	$tabs = [
+		[
+			'id'      => 'cmx-help-' . $post_type . '-overview',
+			'title'   => 'Mis Büro Hilfe',
+			'content' => '<p><strong>' . \esc_html($label) . '</strong> · ' . \esc_html($screen_label) . '</p>'
+				. '<p>' . \esc_html($overview_intro) . '</p>'
+				. cmx_admin_help_html_list($overview_items),
+		],
+		[
+			'id'      => 'cmx-help-' . $post_type . '-workflow',
+			'title'   => 'Hinweise',
+			'content' => '<p>Hinweise für <strong>' . \esc_html($label) . '</strong> auf dieser Seite:</p>'
+				. cmx_admin_help_html_list($workflow_items),
+		],
+	];
+
+	/**
+	 * Zusätzliche Help-Tabs pro CPT ergänzen oder bestehende ersetzen.
+	 *
+	 * Erwartetes Format:
+	 * [
+	 *   ['id' => 'cmx-help-kontakte-extra', 'title' => 'XYZ', 'content' => '<p>...</p>'],
+	 * ]
+	 */
+	return (array) \apply_filters('cmx_admin_help_tabs', $tabs, $post_type, $screen, $post_type_object, $definition);
+}
+
+function cmx_admin_help_sidebar_for_post_type(string $post_type, \WP_Screen $screen, \WP_Post_Type $post_type_object): string {
+	$definitions = cmx_admin_help_tab_definitions();
+	$definition = \is_array($definitions[$post_type] ?? null) ? $definitions[$post_type] : [];
+	$label = \trim((string) ($post_type_object->labels->singular_name ?? $post_type_object->labels->name ?? $post_type));
+
+	$default_sidebar = '<p><strong>' . \esc_html($label) . '</strong></p>'
+		. '<p>Diese Hilfe wird zentral aus <code>includes/admin_ui.php</code> geladen.</p>';
+
+	$sidebar = isset($definition['sidebar']) && \is_string($definition['sidebar']) && \trim($definition['sidebar']) !== ''
+		? $definition['sidebar']
+		: $default_sidebar;
+
+	return (string) \apply_filters('cmx_admin_help_sidebar', $sidebar, $post_type, $screen, $post_type_object, $definition);
+}
+
+function cmx_admin_help_screen_label(\WP_Screen $screen): string {
+	$base = (string) ($screen->base ?? '');
+	if ($base === 'edit-tags') {
+		$base = 'term';
+	}
+
+	return match ($base) {
+		'post'     => 'Bearbeiten',
+		'post-new' => 'Neu anlegen',
+		'edit'     => 'Listenansicht',
+		'term'     => 'Taxonomien',
+		default    => 'Verwaltung',
+	};
+}
+
+function cmx_admin_help_html_list(array $items): string {
+	$items = \array_values(\array_filter(\array_map(static function ($item): string {
+		return \trim((string) $item);
+	}, $items)));
+	if (empty($items)) {
+		return '';
+	}
+
+	$html = '<ul>';
+	foreach ($items as $item) {
+		$html .= '<li>' . \esc_html($item) . '</li>';
+	}
+	$html .= '</ul>';
+
+	return $html;
+}
+
+function cmx_admin_help_tab_definitions(): array {
+	return [
+		'kontakte' => [
+			'intro' => 'Hier verwaltest du Firmen, Ansprechpartner, Kommunikation und Zuordnungen.',
+			'overview' => [
+				'Nutze die Stammdaten für Firma, Form, Handelsregister und Kundennummer.',
+				'Die Reihenfolge in Kommunikation bestimmt den primären Kontakt für Listen und Exporte.',
+				'Telefon-, E-Mail- und weitere Typen werden über die zugehörigen Taxonomien gepflegt.',
+			],
+			'post' => [
+				'Pflege Stammdaten, Kommunikation, Adressen, Bilder und interne Notizen direkt im Datensatz.',
+				'Wenn der Post-Titel leer bleibt, kann er aus Firma oder Kontaktname ergänzt werden.',
+				'Der erste Kommunikationskontakt ist der wichtigste Eintrag für die Übersicht.',
+			],
+			'edit' => [
+				'Filtere Kontakte über Kategorien, Beziehungen, Länder und Geschäftsformen.',
+				'Die Admin-Columns-Liste zeigt den primären Kommunikationskontakt aus der ersten Zeile.',
+				'Import und Export arbeiten mit der aktuellen flachen Kommunikationsstruktur.',
+			],
+		],
+		'artikel' => [
+			'intro' => 'Hier pflegst du Artikelstammdaten, Preise, Lager- und Lieferinformationen.',
+			'overview' => [
+				'Artikel unterstützen Titel, Editor, Bilder, Lieferanten, Konditionen und QR-Code.',
+				'Bilder behalten ihren Originalnamen und erhalten nur bei Konflikten eine laufende Nummer.',
+				'Wichtige Klassifizierungen laufen über Marken, Farben, Einheiten, Typen und Kategorien.',
+			],
+			'post' => [
+				'Pflege Stammdaten, Lieferanten, Belegtexte, Konditionen und Status direkt am Artikel.',
+				'Der Editor ist reduziert und startet standardmässig im visuellen Modus.',
+				'Der Slug wird beim Speichern mit dem Titel synchron gehalten.',
+			],
+			'edit' => [
+				'Nutze die Listenansicht für schnelle Preis-, Lager- und Statuskontrolle.',
+				'Import und Export berücksichtigen die bereinigten Metadaten und Bilder.',
+			],
+		],
+		'projekte' => [
+			'intro' => 'Hier verwaltest du Projekte, Aufgaben, Status und die zugehörige Zeiterfassung.',
+			'overview' => [
+				'Ein Projekt bündelt Stammdaten, Kontakte, Aufgaben und externe Zeitdaten.',
+				'Die Chrome-Erweiterung für Zeitmessung arbeitet mit diesen Projektdatensätzen.',
+				'Status und Aufgaben werden über die Projekt-Taxonomien strukturiert.',
+			],
+			'post' => [
+				'Pflege Projektdetails, Kontakte und Aufgaben direkt auf der Bearbeitungsseite.',
+				'Die Projekt-Exports schreiben strukturierte Metadaten in ein reimportierbares Format.',
+			],
+			'edit' => [
+				'Verwende Status und Aufgaben als schnelle Filter in der Übersicht.',
+				'Die Listenansicht ist der zentrale Einstieg für Projektkontrolle und Exporte.',
+			],
+		],
+		'belege' => [
+			'intro' => 'Hier verwaltest du Offerten, Rechnungen, Gutschriften und weitere Belege.',
+			'overview' => [
+				'Belege bündeln Kopfdaten, Positionen, MwSt, Konditionen, Summen und PDF-Ausgabe.',
+				'ZIP-Exporte enthalten eine importierbare Daten-CSV für den späteren Re-Import.',
+				'Wichtige Zuordnungen laufen über Kontakte, Projekte und Vorlagen.',
+			],
+			'post' => [
+				'Erfasse zuerst Kopfdaten und Positionen, danach MwSt, Summen und PDF-relevante Optionen.',
+				'Die Metaboxen sind aufeinander abgestimmt; Änderungen wirken direkt auf Vorschau und Ausgabe.',
+			],
+			'edit' => [
+				'Die Belegliste ist der schnellste Weg für Statuskontrolle, Versand und Export.',
+				'Beim Import werden technische Metafelder bewusst nicht blind übernommen.',
+			],
+		],
+		'dokumente' => [
+			'intro' => 'Hier pflegst du Dokumente, Module, Gültigkeiten und Statusinformationen.',
+			'overview' => [
+				'Dokumente unterstützen Status, Gültigkeit, Feature-Bild und modulare Zusatzfelder.',
+				'Die Struktur ist auf Dokumentation und wiederverwendbare Inhalte ausgelegt.',
+			],
+		],
+		'emails' => [
+			'intro' => 'Hier verwaltest du interne E-Mails, Vorlagen und die Mailbox-Zuordnung.',
+			'overview' => [
+				'Die E-Mail-Datensätze werden für interne Kommunikation und Zuordnungen verwendet.',
+				'Admin-Spalten und Clients unterstützen die schnelle Bearbeitung in der Übersicht.',
+			],
+		],
+		'scanner' => [
+			'intro' => 'Hier steuerst du Postfach, Scanner-Zuordnung und Mail-Importe.',
+			'overview' => [
+				'Dieser Bereich dient als Eingang für importierte Dateien und Mails.',
+				'Zuordnungen und Importpfade werden direkt in den zugehörigen Modulen verarbeitet.',
+			],
+		],
+	];
+}
+
 add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
 function cmx_admin_footer_no_tel(): void {
 	echo '<meta name="format-detection" content="telephone=no">' . "\n";
