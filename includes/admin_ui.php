@@ -124,6 +124,30 @@ function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $e
 	return $settings;
 }
 
+add_filter('wp_default_editor', __NAMESPACE__ . '\\cmx_admin_default_cpt_editor_mode', 25);
+function cmx_admin_default_cpt_editor_mode(string $default): string {
+	if (!\is_admin() || !\function_exists('get_current_screen')) {
+		return $default;
+	}
+
+	$screen = \get_current_screen();
+	if (!$screen || !\in_array((string) ($screen->base ?? ''), ['post', 'post-new'], true)) {
+		return $default;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '') {
+		return $default;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return $default;
+	}
+
+	return 'tinymce';
+}
+
 add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
 function cmx_admin_footer_no_tel(): void {
 	echo '<meta name="format-detection" content="telephone=no">' . "\n";
