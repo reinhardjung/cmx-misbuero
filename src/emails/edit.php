@@ -21,8 +21,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_edit_screen_active')) {
 	}
 }
 
+\add_filter('default_title', function (string $title, \WP_Post $post): string {
+	if ($post->post_type !== CMX_EMAILS_CPT || !cmx_emails_is_compose_post($post)) {
+		return $title;
+	}
+
+	$prefill = cmx_emails_compose_prefill($post);
+	return (string) ($prefill['subject'] ?? $title);
+}, 10, 2);
+
+\add_filter('default_content', function (string $content, \WP_Post $post): string {
+	if ($post->post_type !== CMX_EMAILS_CPT || !cmx_emails_is_compose_post($post)) {
+		return $content;
+	}
+
+	$prefill = cmx_emails_compose_prefill($post);
+	return (string) ($prefill['body'] ?? $content);
+}, 10, 2);
+
 \add_action('add_meta_boxes', function (string $post_type, \WP_Post $post): void {
 	if ($post_type !== CMX_EMAILS_CPT) {
+		return;
+	}
+
+	if (cmx_emails_is_compose_post($post)) {
+		\add_meta_box(
+			'cmx_email_compose',
+			'E-Mail-Komposition',
+			__NAMESPACE__ . '\\cmx_emails_render_compose_metabox',
+			CMX_EMAILS_CPT,
+			'side',
+			'high'
+		);
 		return;
 	}
 
@@ -54,6 +84,425 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_edit_screen_active')) {
 	);
 }, 10, 2);
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_query_mode')) {
+	function cmx_emails_compose_query_mode(): string {
+		$mode = isset($_GET['cmx_email_compose']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_compose'])) : '';
+		return \in_array($mode, ['reply', 'forward'], true) ? $mode : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_source_id')) {
+	function cmx_emails_compose_source_id(\WP_Post $post): int {
+		$query_source = isset($_GET['cmx_email_source']) ? (int) \wp_unslash($_GET['cmx_email_source']) : 0;
+		if ($query_source > 0 && (string) \get_post_type($query_source) === CMX_EMAILS_CPT) {
+			return $query_source;
+		}
+
+		$stored_source = (int) \get_post_meta($post->ID, cmx_emails_meta_key('compose_source_id'), true);
+		return $stored_source > 0 && (string) \get_post_type($stored_source) === CMX_EMAILS_CPT ? $stored_source : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_is_compose_post')) {
+	function cmx_emails_is_compose_post(\WP_Post $post): bool {
+		if ($post->post_type !== CMX_EMAILS_CPT) {
+			return false;
+		}
+
+		if (cmx_emails_compose_query_mode() !== '' || cmx_emails_compose_source_id($post) > 0) {
+			return true;
+		}
+
+		$direction = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('direction'), true));
+		if ($direction === 'outgoing') {
+			return true;
+		}
+
+		return $post->post_status === 'auto-draft';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_text_from_items')) {
+	function cmx_emails_address_text_from_items(array $items): string {
+		$emails = [];
+		foreach ($items as $item) {
+			if (!\is_array($item)) {
+				continue;
+			}
+			$email = \sanitize_email((string) ($item['email'] ?? ''));
+			if (\is_email($email)) {
+				$emails[] = $email;
+			}
+		}
+		return \implode(', ', \array_values(\array_unique($emails)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_items_from_text')) {
+	function cmx_emails_address_items_from_text(string $raw): array {
+		$parts = \preg_split('/[\s,;]+/', $raw) ?: [];
+		$out = [];
+		foreach ($parts as $part) {
+			$email = \sanitize_email((string) $part);
+			if (!\is_email($email)) {
+				continue;
+			}
+			$key = \strtolower($email);
+			$out[$key] = [
+				'name' => '',
+				'email' => $email,
+				'label' => $email,
+			];
+		}
+		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_emails')) {
+	function cmx_emails_address_emails(array $items): array {
+		$emails = [];
+		foreach ($items as $item) {
+			if (!\is_array($item)) {
+				continue;
+			}
+			$email = \sanitize_email((string) ($item['email'] ?? ''));
+			if (!\is_email($email)) {
+				continue;
+			}
+			$emails[\strtolower($email)] = $email;
+		}
+		return \array_values($emails);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
+	function cmx_emails_queue_redirect_notice(int $post_id, string $message, string $type = 'info'): void {
+		if ($post_id <= 0 || $message === '') {
+			return;
+		}
+
+		if (!isset($GLOBALS['cmx_emails_redirect_notices']) || !\is_array($GLOBALS['cmx_emails_redirect_notices'])) {
+			$GLOBALS['cmx_emails_redirect_notices'] = [];
+		}
+
+		$GLOBALS['cmx_emails_redirect_notices'][(int) $post_id] = [
+			'message' => $message,
+			'type' => \in_array($type, ['success', 'error', 'warning', 'info'], true) ? $type : 'info',
+		];
+	}
+}
+
+\add_filter('redirect_post_location', function (string $location, int $post_id): string {
+	$map = isset($GLOBALS['cmx_emails_redirect_notices']) && \is_array($GLOBALS['cmx_emails_redirect_notices'])
+		? $GLOBALS['cmx_emails_redirect_notices']
+		: [];
+
+	if ($post_id <= 0 || !isset($map[$post_id]) || !\is_array($map[$post_id])) {
+		return $location;
+	}
+
+	$notice = $map[$post_id];
+	unset($GLOBALS['cmx_emails_redirect_notices'][$post_id]);
+
+	return \add_query_arg([
+		'cmx_email_notice' => (string) ($notice['message'] ?? ''),
+		'cmx_email_notice_type' => (string) ($notice['type'] ?? 'info'),
+	], $location);
+}, 20, 2);
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_attachment_list')) {
+	function cmx_emails_compose_attachment_list(int $post_id): array {
+		$list = [];
+		foreach (\get_attached_media('', $post_id) as $attachment) {
+			if (!$attachment instanceof \WP_Post) {
+				continue;
+			}
+
+			$path = \wp_normalize_path((string) \get_attached_file($attachment->ID));
+			if ($path === '' || !\is_file($path) || !\is_readable($path)) {
+				continue;
+			}
+
+			$filename = \sanitize_file_name((string) \basename($path));
+			if ($filename === '') {
+				continue;
+			}
+
+			$mime = \sanitize_text_field((string) \get_post_mime_type($attachment->ID));
+			$list[] = [
+				'filename' => $filename,
+				'mime' => $mime !== '' ? $mime : 'application/octet-stream',
+				'size' => (int) \filesize($path),
+				'rel' => '',
+				'path' => $path,
+				'url' => (string) \wp_get_attachment_url($attachment->ID),
+			];
+		}
+
+		return $list;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_send_compose_post')) {
+	function cmx_emails_send_compose_post(int $post_id) {
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || $post->post_type !== CMX_EMAILS_CPT) {
+			return new \WP_Error('invalid_post', 'Die E-Mail konnte nicht geladen werden.');
+		}
+
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		$client = cmx_emails_get_client($account_id);
+		$from_email = \sanitize_email((string) ($client['email'] ?? ''));
+		$from_name = \sanitize_text_field((string) ($client['name'] ?? ''));
+		$smtp_host = \sanitize_text_field((string) ($client['smtp_host'] ?? ''));
+		$smtp_port = (int) ($client['smtp_port'] ?? 587);
+		$smtp_password = (string) ($client['password'] ?? '');
+
+		if (!\is_email($from_email)) {
+			return new \WP_Error('missing_sender', 'Beim gewaehlten Konto fehlt eine gueltige Absender-Adresse.');
+		}
+		if ($from_name === '') {
+			$from_name = \get_bloginfo('name');
+		}
+		if ($smtp_port <= 0 || $smtp_port > 65535) {
+			$smtp_port = 587;
+		}
+
+		$to = cmx_emails_address_emails((array) \get_post_meta($post_id, cmx_emails_meta_key('to'), true));
+		$cc = cmx_emails_address_emails((array) \get_post_meta($post_id, cmx_emails_meta_key('cc'), true));
+		$bcc = cmx_emails_address_emails((array) \get_post_meta($post_id, cmx_emails_meta_key('bcc'), true));
+		if ($to === []) {
+			return new \WP_Error('missing_recipient', 'Bitte mindestens eine gueltige Empfaenger-Adresse eintragen.');
+		}
+
+		$subject = (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
+		if ($subject === '') {
+			$subject = (string) $post->post_title;
+		}
+
+		$body_html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
+		if ($body_html === '') {
+			$body_html = (string) $post->post_content;
+		}
+		if ($body_html === '') {
+			$body_html = '&nbsp;';
+		} elseif (\strpos($body_html, '<') === false) {
+			$body_html = \wpautop(\esc_html($body_html));
+		} else {
+			$body_html = \wp_kses_post($body_html);
+		}
+
+		$attachments = cmx_emails_compose_attachment_list($post_id);
+		$attachment_paths = [];
+		foreach ($attachments as $attachment) {
+			$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+			if ($path !== '' && \is_file($path) && \is_readable($path)) {
+				$attachment_paths[] = $path;
+			}
+		}
+
+		$headers = [
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . ($from_name !== '' ? $from_name . ' <' . $from_email . '>' : $from_email),
+			'Reply-To: ' . $from_email,
+		];
+		if ($cc !== []) {
+			$headers[] = 'Cc: ' . \implode(', ', $cc);
+		}
+		if ($bcc !== []) {
+			$headers[] = 'Bcc: ' . \implode(', ', $bcc);
+		}
+
+		$wp_mail_failed_message = '';
+		$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
+			if (!$error instanceof \WP_Error) {
+				return;
+			}
+
+			$msg = \trim((string) $error->get_error_message());
+			if ($msg === '') {
+				$messages = \array_map('strval', (array) $error->get_error_messages());
+				$msg = \trim(\implode(' | ', \array_filter($messages, static function (string $item): bool {
+					return $item !== '';
+				})));
+			}
+
+			$data = $error->get_error_data();
+			if (\is_array($data) && !empty($data['phpmailer_exception_code'])) {
+				$msg = $msg !== ''
+					? ($msg . ' (Code ' . (string) $data['phpmailer_exception_code'] . ')')
+					: ('PHPMailer-Fehler (Code ' . (string) $data['phpmailer_exception_code'] . ')');
+			}
+
+			$wp_mail_failed_message = $msg;
+		};
+
+		$smtp_listener = null;
+		if ($smtp_host !== '') {
+			$smtp_listener = static function (\PHPMailer\PHPMailer\PHPMailer $phpmailer) use ($from_email, $from_name, $smtp_host, $smtp_port, $smtp_password): void {
+				$phpmailer->isSMTP();
+				$phpmailer->Host = $smtp_host;
+				$phpmailer->Port = $smtp_port;
+				$phpmailer->Timeout = 20;
+				$phpmailer->SMTPAutoTLS = true;
+				$phpmailer->CharSet = 'UTF-8';
+				$phpmailer->SMTPSecure = $smtp_port === 465
+					? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
+					: \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+				$phpmailer->SMTPOptions = [
+					'ssl' => [
+						'verify_peer' => false,
+						'verify_peer_name' => false,
+						'allow_self_signed' => true,
+					],
+				];
+
+				$phpmailer->setFrom($from_email, $from_name, false);
+				$phpmailer->Sender = $from_email;
+				$phpmailer->clearReplyTos();
+				$phpmailer->addReplyTo($from_email, $from_name);
+
+				if ($from_email !== '' && $smtp_password !== '') {
+					$phpmailer->SMTPAuth = true;
+					$phpmailer->Username = $from_email;
+					$phpmailer->Password = $smtp_password;
+				} else {
+					$phpmailer->SMTPAuth = false;
+				}
+			};
+		}
+
+		\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
+		if ($smtp_listener !== null) {
+			\add_action('phpmailer_init', $smtp_listener, 100, 1);
+		}
+
+		try {
+			$sent = \wp_mail($to, $subject, $body_html, $headers, $attachment_paths);
+		} finally {
+			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
+			if ($smtp_listener !== null) {
+				\remove_action('phpmailer_init', $smtp_listener, 100);
+			}
+		}
+
+		if (!$sent) {
+			$error_message = \trim((string) $wp_mail_failed_message);
+			if ($error_message === '') {
+				$error_message = 'E-Mail konnte nicht gesendet werden.';
+			}
+			return new \WP_Error('mail_failed', $error_message);
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'sent');
+		\update_post_meta($post_id, cmx_emails_meta_key('status'), 'processed');
+		\update_post_meta($post_id, cmx_emails_meta_key('manual_status'), 'processed');
+		\update_post_meta($post_id, cmx_emails_meta_key('sent_at'), (string) \time());
+		\update_post_meta($post_id, cmx_emails_meta_key('attachments'), $attachments);
+		\update_post_meta($post_id, cmx_emails_meta_key('attachment_count'), (string) \count($attachments));
+		\update_post_meta($post_id, cmx_emails_meta_key('has_attachment'), $attachments !== [] ? '1' : '0');
+
+		return [
+			'ok' => true,
+			'to' => $to,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')) {
+	function cmx_emails_compose_admin_url(string $mode, int $source_id): string {
+		$args = [
+			'post_type' => CMX_EMAILS_CPT,
+		];
+		$mode = \sanitize_key($mode);
+		if (\in_array($mode, ['reply', 'forward'], true) && $source_id > 0) {
+			$args['cmx_email_compose'] = $mode;
+			$args['cmx_email_source'] = (int) $source_id;
+		}
+		return \add_query_arg($args, \admin_url('post-new.php'));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_quoted_body')) {
+	function cmx_emails_compose_quoted_body(int $source_id): string {
+		$source = \get_post($source_id);
+		if (!$source instanceof \WP_Post || $source->post_type !== CMX_EMAILS_CPT) {
+			return '';
+		}
+
+		$body = (string) \get_post_meta($source_id, cmx_emails_meta_key('body_plain'), true);
+		if ($body === '') {
+			$body = (string) $source->post_content;
+		}
+
+		$lines = [
+			'',
+			'',
+			'--- Urspruengliche Nachricht ---',
+			'Von: ' . (string) \get_post_meta($source_id, cmx_emails_meta_key('sender_label'), true),
+			'An: ' . cmx_emails_address_text_from_items((array) \get_post_meta($source_id, cmx_emails_meta_key('to'), true)),
+			'Datum: ' . cmx_emails_date_label_long((int) \get_post_meta($source_id, cmx_emails_meta_key('received_ts'), true)),
+			'Betreff: ' . ((string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true) ?: (string) $source->post_title),
+			'',
+			\trim($body),
+		];
+
+		return \implode("\n", $lines);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
+	function cmx_emails_compose_prefill(\WP_Post $post): array {
+		$source_id = cmx_emails_compose_source_id($post);
+		$saved_mode = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('compose_mode'), true));
+		$mode = cmx_emails_compose_query_mode();
+		if ($mode === '' && \in_array($saved_mode, ['reply', 'forward'], true)) {
+			$mode = $saved_mode;
+		}
+		$saved_account_id = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('account_id'), true));
+		$saved_subject = (string) \get_post_meta($post->ID, cmx_emails_meta_key('subject'), true);
+		$saved_to = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('to'), true));
+		$saved_cc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('cc'), true));
+		$saved_bcc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('bcc'), true));
+		$body = (string) $post->post_content;
+
+		$data = [
+			'mode' => $mode,
+			'source_id' => $source_id,
+			'account_id' => $saved_account_id !== '' ? $saved_account_id : cmx_emails_default_client_id(),
+			'subject' => $saved_subject !== '' ? $saved_subject : (string) $post->post_title,
+			'to' => $saved_to,
+			'cc' => $saved_cc,
+			'bcc' => $saved_bcc,
+			'body' => $body,
+		];
+
+		if ($source_id <= 0 || (string) \get_post_type($source_id) !== CMX_EMAILS_CPT) {
+			return $data;
+		}
+
+		$source_subject = (string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true);
+		if ($source_subject === '') {
+			$source_subject = (string) \get_the_title($source_id);
+		}
+
+		if ($data['account_id'] === '') {
+			$data['account_id'] = \sanitize_key((string) \get_post_meta($source_id, cmx_emails_meta_key('account_id'), true));
+		}
+		if ($data['subject'] === '') {
+			$data['subject'] = ($mode === 'forward' ? 'Fwd: ' : 'Re: ') . $source_subject;
+		}
+		if ($mode === 'reply' && $data['to'] === '') {
+			$data['to'] = \sanitize_email((string) \get_post_meta($source_id, cmx_emails_meta_key('sender_email'), true));
+		}
+		if ($data['body'] === '') {
+			$data['body'] = cmx_emails_compose_quoted_body($source_id);
+		}
+
+		return $data;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_reader_metabox')) {
 	function cmx_emails_render_reader_metabox(\WP_Post $post): void {
 		$body_html = (string) \get_post_meta($post->ID, cmx_emails_meta_key('body_html'), true);
@@ -74,6 +523,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_reader_metabox')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
+	function cmx_emails_render_compose_metabox(\WP_Post $post): void {
+		$prefill = cmx_emails_compose_prefill($post);
+		$source_id = (int) ($prefill['source_id'] ?? 0);
+		$mode = \sanitize_key((string) ($prefill['mode'] ?? ''));
+
+		\wp_nonce_field('cmx_emails_compose_save', 'cmx_emails_compose_nonce');
+
+		if ($source_id > 0) {
+			$source_label = $mode === 'forward' ? 'Weiterleitung von' : 'Antwort auf';
+			echo '<div class="cmx-email-compose-note"><strong>' . \esc_html($source_label) . ':</strong> <a href="' . \esc_url(\get_edit_post_link($source_id, '')) . '">' . \esc_html((string) \get_the_title($source_id)) . '</a></div>';
+		}
+
+		echo '<input type="hidden" name="cmx_email_compose_mode" value="' . \esc_attr($mode) . '">';
+		echo '<input type="hidden" name="cmx_email_compose_source_id" value="' . (int) $source_id . '">';
+
+		echo '<p><label for="cmx-email-account-compose"><strong>Konto</strong></label></p>';
+		echo '<p><select id="cmx-email-account-compose" name="cmx_email_account_id" class="widefat">';
+		foreach (cmx_emails_client_list() as $client) {
+			$client = (array) $client;
+			$id = \sanitize_key((string) ($client['id'] ?? ''));
+			echo '<option value="' . \esc_attr($id) . '"' . \selected($id, (string) ($prefill['account_id'] ?? ''), false) . '>' . \esc_html(cmx_emails_client_label($client)) . '</option>';
+		}
+		echo '</select></p>';
+
+		echo '<p><label for="cmx-email-to"><strong>An</strong></label></p>';
+		echo '<p><input id="cmx-email-to" type="text" name="cmx_email_to" class="widefat" value="' . \esc_attr((string) ($prefill['to'] ?? '')) . '" placeholder="mail@beispiel.ch, zweite@adresse.ch"></p>';
+
+		echo '<p><label for="cmx-email-cc"><strong>CC</strong></label></p>';
+		echo '<p><input id="cmx-email-cc" type="text" name="cmx_email_cc" class="widefat" value="' . \esc_attr((string) ($prefill['cc'] ?? '')) . '"></p>';
+
+		echo '<p><label for="cmx-email-bcc"><strong>BCC</strong></label></p>';
+		echo '<p><input id="cmx-email-bcc" type="text" name="cmx_email_bcc" class="widefat" value="' . \esc_attr((string) ($prefill['bcc'] ?? '')) . '"></p>';
+
+		echo '<p class="description">Betreff oben im Titel, Nachricht im Editor links schreiben. Versand rechts ueber den Button "Senden".</p>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	function cmx_emails_render_details_metabox(\WP_Post $post): void {
 		$post_id = (int) $post->ID;
@@ -88,8 +575,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		$cc = (array) \get_post_meta($post_id, cmx_emails_meta_key('cc'), true);
 		$bcc = (array) \get_post_meta($post_id, cmx_emails_meta_key('bcc'), true);
 		$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
-		$reply_url = cmx_emails_mailto_link($sender_email, 'Re:', $subject !== '' ? $subject : (string) $post->post_title);
-		$forward_url = cmx_emails_mailto_link('', 'Fwd:', $subject !== '' ? $subject : (string) $post->post_title);
+		$reply_url = cmx_emails_compose_admin_url('reply', $post_id);
+		$forward_url = cmx_emails_compose_admin_url('forward', $post_id);
 		$import_url = \wp_nonce_url(\add_query_arg([
 			'action' => 'cmx_emails_import',
 			'post_id' => $post_id,
@@ -100,7 +587,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		echo '<dl class="cmx-email-edit-grid">';
 		echo '<dt>Von</dt><dd>' . \esc_html($sender_label !== '' ? $sender_label : $sender_email) . '</dd>';
 		if ($sender_email !== '') {
-			echo '<dt>E-Mail</dt><dd><a href="mailto:' . \esc_attr($sender_email) . '">' . \esc_html($sender_email) . '</a></dd>';
+			echo '<dt>E-Mail</dt><dd>' . \esc_html($sender_email) . '</dd>';
 		}
 		echo '<dt>An</dt><dd>' . cmx_emails_render_address_html($to) . '</dd>';
 		if ($cc !== []) {
@@ -116,12 +603,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		echo '</dl>';
 
 		echo '<div class="cmx-email-edit-actions">';
-		if ($reply_url !== '') {
-			echo '<a class="button button-primary" href="' . \esc_url($reply_url) . '">Antworten</a>';
-		}
-		if ($forward_url !== '') {
-			echo '<a class="button" href="' . \esc_url($forward_url) . '">Weiterleiten</a>';
-		}
+		echo '<a class="button button-primary" href="' . \esc_url($reply_url) . '">Antworten</a>';
+		echo '<a class="button" href="' . \esc_url($forward_url) . '">Weiterleiten</a>';
 		echo '<a class="button" href="' . \esc_url($import_url) . '">Als Beleg uebernehmen</a>';
 		echo '</div>';
 
@@ -152,6 +635,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		echo '</div>';
 	}
 }
+
+\add_action('save_post_' . CMX_EMAILS_CPT, function (int $post_id, \WP_Post $post): void {
+	if ((\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || \wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) {
+		return;
+	}
+	if ($post->post_type !== CMX_EMAILS_CPT) {
+		return;
+	}
+	if (!isset($_POST['cmx_emails_compose_nonce']) || !\wp_verify_nonce((string) \wp_unslash($_POST['cmx_emails_compose_nonce']), 'cmx_emails_compose_save')) {
+		return;
+	}
+	if (!\current_user_can('edit_post', $post_id)) {
+		return;
+	}
+
+	$account_id = isset($_POST['cmx_email_account_id']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_email_account_id'])) : '';
+	$client = cmx_emails_get_client($account_id);
+	$resolved_account_id = \sanitize_key((string) ($client['id'] ?? $account_id));
+	$account_label = $client !== [] ? cmx_emails_client_label($client) : '';
+	$account_email = \sanitize_email((string) ($client['email'] ?? ''));
+	$compose_mode = isset($_POST['cmx_email_compose_mode']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_email_compose_mode'])) : '';
+	$compose_source_id = isset($_POST['cmx_email_compose_source_id']) ? (int) \wp_unslash($_POST['cmx_email_compose_source_id']) : 0;
+	$to = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_to'] ?? '')));
+	$cc = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_cc'] ?? '')));
+	$bcc = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_bcc'] ?? '')));
+	$body_html = (string) $post->post_content;
+	$body_plain = \trim(\wp_strip_all_tags($body_html));
+
+	\update_post_meta($post_id, cmx_emails_meta_key('direction'), 'outgoing');
+	\update_post_meta($post_id, cmx_emails_meta_key('compose_mode'), $compose_mode);
+	\update_post_meta($post_id, cmx_emails_meta_key('compose_source_id'), (string) \max(0, $compose_source_id));
+	\update_post_meta($post_id, cmx_emails_meta_key('account_id'), $resolved_account_id);
+	\update_post_meta($post_id, cmx_emails_meta_key('account_label'), $account_label);
+	\update_post_meta($post_id, cmx_emails_meta_key('account_email'), $account_email);
+	\update_post_meta($post_id, cmx_emails_meta_key('sender_email'), $account_email);
+	\update_post_meta($post_id, cmx_emails_meta_key('sender_label'), $account_label);
+	\update_post_meta($post_id, cmx_emails_meta_key('subject'), (string) \get_the_title($post_id));
+	\update_post_meta($post_id, cmx_emails_meta_key('to'), $to);
+	\update_post_meta($post_id, cmx_emails_meta_key('cc'), $cc);
+	\update_post_meta($post_id, cmx_emails_meta_key('bcc'), $bcc);
+	\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $body_html);
+	\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $body_plain);
+	$existing_folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+	\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'drafts');
+	$received_ts = (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true);
+	if ($received_ts <= 0) {
+		\update_post_meta($post_id, cmx_emails_meta_key('received_ts'), (string) \time());
+	}
+
+	$should_send = !empty($_POST['cmx_email_send_now']);
+	if (!$should_send && cmx_emails_is_compose_post($post)) {
+		$should_send = isset($_POST['publish']) && !isset($_POST['save']) && $existing_folder !== 'sent';
+	}
+
+	if ($should_send) {
+		$result = cmx_emails_send_compose_post($post_id);
+		if (\is_wp_error($result)) {
+			cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
+		} else {
+			cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success');
+		}
+	}
+}, 10, 2);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox')) {
 	function cmx_emails_render_assignment_metabox(\WP_Post $post): void {
@@ -199,6 +745,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 	if (!cmx_emails_edit_screen_active()) {
 		return;
 	}
+	global $post;
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	$screen_post = $post instanceof \WP_Post && $post->post_type === CMX_EMAILS_CPT
+		? $post
+		: ($post_id > 0 ? \get_post($post_id) : null);
+	$is_compose = $screen_post instanceof \WP_Post
+		? cmx_emails_is_compose_post($screen_post)
+		: cmx_emails_compose_query_mode() !== '';
 	?>
 	<style>
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-edit-reader,
@@ -233,6 +787,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			gap: 8px;
 			margin-top: 16px;
 		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-note {
+			margin-bottom: 14px;
+			padding: 10px 12px;
+			border: 1px solid #d0d5dd;
+			border-radius: 10px;
+			background: #f8fafc;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge {
 			display: inline-flex;
 			align-items: center;
@@ -262,6 +823,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-edit-attachments ul {
 			margin: 10px 0 0 18px;
 		}
+		<?php if ($is_compose) : ?>
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv .misc-pub-visibility,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv .misc-pub-curtime {
+			display: none;
+		}
+		<?php endif; ?>
 	</style>
+	<?php
+});
+
+\add_action('admin_footer', function (): void {
+	if (!cmx_emails_edit_screen_active()) {
+		return;
+	}
+	global $post;
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	$post = $post instanceof \WP_Post && $post->post_type === CMX_EMAILS_CPT
+		? $post
+		: ($post_id > 0 ? \get_post($post_id) : null);
+	if (!$post instanceof \WP_Post || !cmx_emails_is_compose_post($post)) {
+		return;
+	}
+	?>
+	<script>
+		document.addEventListener('DOMContentLoaded', function () {
+			var publishButton = document.getElementById('publish');
+			if (publishButton) {
+				publishButton.value = 'Senden';
+			}
+
+			var titleSpan = document.querySelector('#submitdiv .postbox-header .hndle span');
+			if (titleSpan) {
+				titleSpan.textContent = 'Versenden';
+			}
+		});
+	</script>
 	<?php
 });

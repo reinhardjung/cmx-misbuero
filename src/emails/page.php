@@ -730,8 +730,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($selected_id, cmx_emails_meta_key('attachments'), true));
 			$contact_id = (int) \get_post_meta($selected_id, cmx_emails_meta_key('contact_id'), true);
 			$project_id = (int) \get_post_meta($selected_id, cmx_emails_meta_key('project_id'), true);
-			$reply_url = cmx_emails_mailto_link($sender_email, 'Re:', $subject);
-			$forward_url = cmx_emails_mailto_link('', 'Fwd:', $subject);
+			$reply_url = \function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')
+				? cmx_emails_compose_admin_url('reply', $selected_id)
+				: cmx_emails_mailto_link($sender_email, 'Re:', $subject);
+			$forward_url = \function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')
+				? cmx_emails_compose_admin_url('forward', $selected_id)
+				: cmx_emails_mailto_link('', 'Fwd:', $subject);
 
 			echo '<section class="cmx-email-side-section"><header><h3>E-Mail-Details</h3></header><div class="cmx-email-side-content">';
 			echo '<dl class="cmx-email-meta-grid">';
