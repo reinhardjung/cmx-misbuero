@@ -56,6 +56,145 @@ function cmx65_is_instance_home_request(): bool {
 	return (\is_front_page() || \is_home() || cmx65_is_home_request_path());
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_fallback_avatar_url')) {
+	function cmx65_adminbar_fallback_avatar_url(): string {
+		return (string) \plugins_url('assets/login.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_fallback_avatar_markup')) {
+	function cmx65_adminbar_fallback_avatar_markup(int $size, string $fallback_url): string {
+		$size = $size > 0 ? $size : 26;
+		return '<img alt="" src="' . \esc_url($fallback_url) . '" class="avatar avatar-' . $size . ' photo cmx-adminbar-fallback-avatar" height="' . $size . '" width="' . $size . '" decoding="async" loading="lazy" />';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_force_avatar_in_title')) {
+	function cmx65_adminbar_force_avatar_in_title(string $title, int $size, string $fallback_url): string {
+		$fallback_img = cmx65_adminbar_fallback_avatar_markup($size, $fallback_url);
+		if (\preg_match('/<img\b[^>]*>/i', $title)) {
+			return (string) \preg_replace('/<img\b[^>]*>/i', $fallback_img, $title, 1);
+		}
+		return $fallback_img . ' ' . $title;
+	}
+}
+
+add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar_my_account_avatar_fallback', 99999);
+function cmx65_adminbar_my_account_avatar_fallback(\WP_Admin_Bar $wp_admin_bar): void {
+	if (!\is_user_logged_in() || !\is_admin_bar_showing()) {
+		return;
+	}
+
+	$fallback_url = \esc_url(cmx65_adminbar_fallback_avatar_url());
+	if ($fallback_url === '') {
+		return;
+	}
+
+	$current_user = \wp_get_current_user();
+	$user_id = ($current_user instanceof \WP_User && $current_user->exists()) ? (int) $current_user->ID : 0;
+	$should_force_fallback = false;
+	if ($user_id > 0 && \function_exists('\\get_avatar_data')) {
+		$avatar_data = (array) \get_avatar_data($user_id, ['size' => 64]);
+		$should_force_fallback = empty($avatar_data['found_avatar']);
+	}
+
+	$targets = [
+		'my-account' => ['size' => 26],
+		'user-info'  => ['size' => 64],
+	];
+
+	foreach ($targets as $node_id => $config) {
+		$node = $wp_admin_bar->get_node($node_id);
+		if (!$node) {
+			continue;
+		}
+
+		$title = (string) ($node->title ?? '');
+		if ($title === '') {
+			continue;
+		}
+
+		$size = (int) ($config['size'] ?? 26);
+		if ($should_force_fallback || \stripos($title, '<img') === false) {
+			$node->title = cmx65_adminbar_force_avatar_in_title($title, $size, $fallback_url);
+			$wp_admin_bar->add_node((array) $node);
+		}
+	}
+}
+
+add_action('admin_footer', __NAMESPACE__ . '\\cmx65_adminbar_avatar_fallback_script', 20);
+add_action('wp_footer', __NAMESPACE__ . '\\cmx65_adminbar_avatar_fallback_script', 20);
+function cmx65_adminbar_avatar_fallback_script(): void {
+	if (!\is_user_logged_in() || !\is_admin_bar_showing()) {
+		return;
+	}
+
+	$fallback_url = (string) cmx65_adminbar_fallback_avatar_url();
+	if ($fallback_url === '') {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		var fallbackUrl = <?php echo \wp_json_encode($fallback_url); ?>;
+		if (!fallbackUrl) return;
+
+		function applyFallback(img) {
+			if (!img) return;
+			img.setAttribute('src', fallbackUrl);
+			img.removeAttribute('srcset');
+			img.classList.add('cmx-adminbar-fallback-avatar');
+		}
+
+		function isDefaultAvatar(img) {
+			if (!img) return false;
+			if (img.classList.contains('avatar-default')) return true;
+			var src = String(img.getAttribute('src') || '');
+			return /[?&]d=/.test(src) || /gravatar\.com\/avatar/i.test(src);
+		}
+
+		function ensureAvatar(selector, size) {
+			var item = document.querySelector(selector);
+			if (!item) return;
+
+			var img = item.querySelector('img.avatar');
+			if (!img) {
+				img = document.createElement('img');
+				img.alt = '';
+				img.width = size;
+				img.height = size;
+				img.decoding = 'async';
+				img.loading = 'lazy';
+				img.className = 'avatar avatar-' + String(size) + ' photo cmx-adminbar-fallback-avatar';
+				item.insertBefore(img, item.firstChild);
+				applyFallback(img);
+				return;
+			}
+
+			img.addEventListener('error', function handleError() {
+				applyFallback(img);
+			}, { once: true });
+
+			if (!img.getAttribute('src') || isDefaultAvatar(img)) {
+				applyFallback(img);
+			}
+		}
+
+		function ensureAvatars() {
+			ensureAvatar('#wp-admin-bar-my-account > .ab-item', 26);
+			ensureAvatar('#wp-admin-bar-user-info > .ab-item', 64);
+		}
+
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', ensureAvatars, { once: true });
+		} else {
+			ensureAvatars();
+		}
+	})();
+	</script>
+	<?php
+}
+
 add_action('wp_head', __NAMESPACE__ . '\\cmx65_render_front_quicklinks_css', 20);
 function cmx65_render_front_quicklinks_css(): void {
 	if (!cmx65_is_instance_home_request()) {

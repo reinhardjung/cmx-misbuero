@@ -880,6 +880,15 @@ add_action('admin_head', function() {
 		box-shadow: none;
 	}
 
+	#show-settings-link,
+	#contextual-help-link,
+	.screen-meta-toggle .show-settings {
+		border-radius: 12px;
+		min-height: 36px;
+		padding: 0 14px;
+		box-shadow: none;
+	}
+
 	.button-primary {
 		border-radius: 8px;
 		min-height: 36px;
