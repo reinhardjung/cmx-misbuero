@@ -64,7 +64,7 @@ function cmx_plugin_row_meta_version(array $plugin_meta, string $plugin_file, ar
 
 add_filter('wp_editor_settings', __NAMESPACE__ . '\\cmx_admin_reduce_cpt_content_editor_settings', 25, 2);
 function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $editor_id): array {
-	if ($editor_id !== 'content' || !\is_admin() || !\function_exists('get_current_screen')) {
+	if (!\is_admin() || !\function_exists('get_current_screen')) {
 		return $settings;
 	}
 
@@ -84,19 +84,19 @@ function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $e
 	}
 
 	$note_settings = \function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')
-			? (array) cmx_notizen_editor_settings()
-			: [
-				'mediaButtons' => false,
-				'quicktags'    => [
-					'buttons' => 'strong,em,link,ul,ol,li,code',
-				],
+		? (array) cmx_notizen_editor_settings()
+		: [
+			'mediaButtons' => false,
+			'quicktags'    => [
+				'buttons' => 'strong,em,link,ul,ol,li,code',
+			],
 			'tinymce'      => [
 				'wpautop'   => true,
 				'branding'  => false,
 				'menubar'   => false,
 				'statusbar' => false,
 				'resize'    => true,
-				'toolbar1'  => 'formatselect,bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
+				'toolbar1'  => 'bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
 				'toolbar2'  => '',
 			],
 		];
@@ -105,17 +105,19 @@ function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $e
 	$quicktags = $note_settings['quicktags'] ?? true;
 	if ($quicktags === false) {
 		$settings['quicktags'] = false;
-		} else {
-			$quicktags_settings = \is_array($quicktags) ? $quicktags : [];
-			if (empty($quicktags_settings['buttons'])) {
-				$quicktags_settings['buttons'] = 'strong,em,link,ul,ol,li,code';
-			}
-			$settings['quicktags'] = $quicktags_settings;
+	} else {
+		$quicktags_settings = \is_array($quicktags) ? $quicktags : [];
+		if (empty($quicktags_settings['buttons'])) {
+			$quicktags_settings['buttons'] = 'strong,em,link,ul,ol,li,code';
 		}
+		$settings['quicktags'] = $quicktags_settings;
+	}
 
 	if (($settings['tinymce'] ?? true) !== false) {
 		$current_tinymce = \is_array($settings['tinymce'] ?? null) ? $settings['tinymce'] : [];
 		$note_tinymce = \is_array($note_settings['tinymce'] ?? null) ? $note_settings['tinymce'] : [];
+		$note_tinymce['toolbar1'] = 'bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo';
+		$note_tinymce['toolbar2'] = '';
 		$settings['tinymce'] = \array_merge($current_tinymce, $note_tinymce);
 	}
 
