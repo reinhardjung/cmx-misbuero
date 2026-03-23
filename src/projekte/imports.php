@@ -50,6 +50,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_notice_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_decode_meta_value')) {
+	function cmxpr_import_decode_meta_value(string $raw) {
+		$value = \trim($raw);
+		if ($value === '') {
+			return '';
+		}
+
+		$first = $value[0] ?? '';
+		if (($first === '{' || $first === '[') && \function_exists('\\json_decode')) {
+			$decoded = \json_decode($value, true);
+			if (\json_last_error() === JSON_ERROR_NONE) {
+				return $decoded;
+			}
+		}
+
+		if (\function_exists('\\is_serialized') && \is_serialized($value)) {
+			return \maybe_unserialize($value);
+		}
+
+		return $value;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_header_is_valid')) {
 	function cmxpr_import_header_is_valid(array $header): bool {
 		$normalized = [];
@@ -355,10 +378,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_extract_zip')) {
 
 			if (\strpos($key, 'meta__') === 0) {
 				$meta_key = \substr($key, 6);
-				$meta_value = \is_string($value) ? \trim($value) : $value;
+				if ($meta_key === '' || \in_array($meta_key, ['_thumbnail_id', '_edit_lock', '_edit_last'], true)) {
+					continue;
+				}
+
+				$meta_raw = \is_string($value) ? \trim($value) : '';
+				$meta_value = $meta_raw;
 				if ($meta_value === '') {
 					\delete_post_meta($post_id, $meta_key);
 				} else {
+					$meta_value = \function_exists(__NAMESPACE__ . '\\cmxpr_import_decode_meta_value')
+						? cmxpr_import_decode_meta_value($meta_raw)
+						: $meta_raw;
 					\update_post_meta($post_id, $meta_key, $meta_value);
 				}
 			}

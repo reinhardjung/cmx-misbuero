@@ -122,6 +122,27 @@ function cmx_import_clear_lieferanten_meta(int $post_id): void {
 	\delete_post_meta($post_id, '_cmx_art_lieferanten_liste');
 }
 
+function cmx_artikel_import_decode_meta_value(string $raw) {
+	$value = \trim($raw);
+	if ($value === '') {
+		return '';
+	}
+
+	$first = $value[0] ?? '';
+	if (($first === '{' || $first === '[') && \function_exists('\\json_decode')) {
+		$decoded = \json_decode($value, true);
+		if (\json_last_error() === JSON_ERROR_NONE) {
+			return $decoded;
+		}
+	}
+
+	if (\function_exists('\\is_serialized') && \is_serialized($value)) {
+		return \maybe_unserialize($value);
+	}
+
+	return $value;
+}
+
 function cmx_artikel_import_cleanup_dir(string $dir): void {
 	$dir = \wp_normalize_path($dir);
 	if ($dir === '' || !\is_dir($dir)) {
@@ -285,7 +306,7 @@ function cmx_artikel_import_unique_target_path(string $base_dir, string $base_na
 		return $target;
 	}
 
-	$counter = 2;
+	$counter = 1;
 	do {
 		$target = \wp_normalize_path(\trailingslashit($base_dir) . $base_name . '-' . $counter . $ext);
 		$counter++;
@@ -690,14 +711,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 
 			if (\strpos($key, 'meta__') === 0) {
 				$meta_key = \substr($key, 6);
-				if ($meta_key === '_cmx_local_image_artikel_gallery' || $meta_key === '_cmx_local_image_artikel_path' || $meta_key === '_cmx_local_image_artikel_url' || $meta_key === '_thumbnail_id') {
+				if (
+					$meta_key === '_cmx_local_image_artikel_gallery'
+					|| $meta_key === '_cmx_local_image_artikel_path'
+					|| $meta_key === '_cmx_local_image_artikel_url'
+					|| \in_array($meta_key, ['_thumbnail_id', '_edit_lock', '_edit_last'], true)
+				) {
 					continue;
 				}
 
-				$meta_value = \is_string($value) ? \trim($value) : $value;
+				$meta_raw = \is_string($value) ? \trim($value) : '';
+				$meta_value = $meta_raw;
 				if ($meta_value === '') {
 					\delete_post_meta($post_id, $meta_key);
 				} else {
+					$meta_value = cmx_artikel_import_decode_meta_value($meta_raw);
 					\update_post_meta($post_id, $meta_key, $meta_value);
 				}
 			}

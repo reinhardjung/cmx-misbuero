@@ -228,6 +228,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_collect_export_dataset')) {
 				$key = \substr($meta_header, 6);
 				$values = $all_meta[$key] ?? [];
 				$normalized = \array_map(static function ($value): string {
+					$value = \maybe_unserialize($value);
 					if (\is_array($value) || \is_object($value)) {
 						return (string) \wp_json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 					}

@@ -237,6 +237,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_notice_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_decode_meta_value')) {
+	function cmx_kontakte_import_decode_meta_value(string $raw) {
+		$value = \trim($raw);
+		if ($value === '') {
+			return '';
+		}
+
+		$first = $value[0] ?? '';
+		if (($first === '{' || $first === '[') && \function_exists('\\json_decode')) {
+			$decoded = \json_decode($value, true);
+			if (\json_last_error() === JSON_ERROR_NONE) {
+				return $decoded;
+			}
+		}
+
+		if (\function_exists('\\is_serialized') && \is_serialized($value)) {
+			return \maybe_unserialize($value);
+		}
+
+		return $value;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_header_is_valid')) {
 	function cmx_kontakte_import_header_is_valid(array $header): bool {
 		$normalized = [];
@@ -699,7 +722,18 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 			// Meta: meta__key
 			if (strpos($key, 'meta__') === 0) {
 				$meta_key = substr($key, 6);
-				if ($meta_key !== '') \update_post_meta($post_id, $meta_key, $val);
+				if ($meta_key === '' || \in_array($meta_key, ['_thumbnail_id', '_edit_lock', '_edit_last'], true)) {
+					continue;
+				}
+				$meta_raw = \is_string($val) ? \trim($val) : '';
+				if ($meta_raw === '') {
+					\delete_post_meta($post_id, $meta_key);
+					continue;
+				}
+				$meta_value = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_decode_meta_value')
+					? cmx_kontakte_import_decode_meta_value($meta_raw)
+					: $meta_raw;
+				\update_post_meta($post_id, $meta_key, $meta_value);
 			}
 		}
 

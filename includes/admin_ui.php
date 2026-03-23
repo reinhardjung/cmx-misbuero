@@ -744,6 +744,7 @@ add_action('admin_head', function() {
 	.postbox input[type="search"],
 	.postbox select,
 	.postbox textarea,
+	#titlediv #title,
 	.form-table input[type="text"],
 	.form-table input[type="number"],
 	.form-table input[type="email"],
@@ -768,6 +769,7 @@ add_action('admin_head', function() {
 	.postbox input:focus,
 	.postbox select:focus,
 	.postbox textarea:focus,
+	#titlediv #title:focus,
 	.form-table input:focus,
 	.form-table select:focus,
 	.form-table textarea:focus {

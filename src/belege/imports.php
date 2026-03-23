@@ -143,14 +143,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_extract_zip')) {
 		$zip->close();
 
 		$csv_path = '';
+		$fallback_csv_path = '';
 		$iterator = new \RecursiveIteratorIterator(
 			new \RecursiveDirectoryIterator($tmp_dir, \FilesystemIterator::SKIP_DOTS)
 		);
 		foreach ($iterator as $file_info) {
 			if (!$file_info instanceof \SplFileInfo || !$file_info->isFile()) continue;
 			if (\strtolower((string) $file_info->getExtension()) !== 'csv') continue;
-			$csv_path = \wp_normalize_path($file_info->getPathname());
-			break;
+			$candidate = \wp_normalize_path($file_info->getPathname());
+			if ($fallback_csv_path === '') {
+				$fallback_csv_path = $candidate;
+			}
+
+			$handle = @\fopen($candidate, 'r');
+			if (!$handle) {
+				continue;
+			}
+
+			$first = \fread($handle, 3);
+			if ($first !== "\xEF\xBB\xBF") {
+				\fseek($handle, 0);
+			}
+			$header = \fgetcsv($handle, 0, ';');
+			\fclose($handle);
+
+			if ($header && cmxbei_import_header_is_valid(\array_map('trim', $header))) {
+				$csv_path = $candidate;
+				break;
+			}
+		}
+
+		if ($csv_path === '' && $fallback_csv_path !== '') {
+			$csv_path = $fallback_csv_path;
 		}
 
 		if ($csv_path === '') {
