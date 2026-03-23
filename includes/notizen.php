@@ -104,7 +104,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')) {
 				'menubar'   => false,
 				'statusbar' => false,
 				'resize'    => true,
-				'toolbar1'  => 'formatselect,bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
+				'toolbar1'  => 'bold,italic,bullist,numlist,blockquote,link,unlink,undo,redo',
 				'toolbar2'  => '',
 			],
 		];
