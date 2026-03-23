@@ -64,7 +64,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		if ($excerpt === '') {
 			$excerpt = (string) \get_post($post_id)->post_excerpt;
 		}
-		echo '<strong>' . \esc_html((string) \get_the_title($post_id)) . '</strong>';
+		$edit_url = \get_edit_post_link($post_id, '');
+		$title = '<strong>' . \esc_html((string) \get_the_title($post_id)) . '</strong>';
+		echo \is_string($edit_url) && $edit_url !== '' ? '<a href="' . \esc_url($edit_url) . '">' . $title . '</a>' : $title;
 		if ($excerpt !== '') {
 			echo '<span class="cmx-email-admin-excerpt">' . \esc_html(cmx_emails_text_excerpt($excerpt, 100)) . '</span>';
 		}
@@ -103,20 +105,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		return $actions;
 	}
 
-	$context = [
-		'account_id' => \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('account_id'), true)),
-		'folder' => \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('folder'), true)),
-		'email_id' => (int) $post->ID,
-	];
-
 	$actions = [];
-	$actions['open'] = '<a href="' . \esc_url(cmx_emails_mailbox_url($context)) . '">Oeffnen</a>';
+	$edit_url = \get_edit_post_link($post->ID, '');
+	if (\is_string($edit_url) && $edit_url !== '') {
+		$actions['edit'] = '<a href="' . \esc_url($edit_url) . '">Bearbeiten</a>';
+	}
 
 	$import_url = \wp_nonce_url(\add_query_arg([
 		'action' => 'cmx_emails_import',
 		'post_id' => (int) $post->ID,
-		'account_id' => (string) $context['account_id'],
-		'folder' => (string) $context['folder'],
 		'email_id' => (int) $post->ID,
 	], \admin_url('admin-post.php')), 'cmx_emails_import');
 	$actions['import'] = '<a href="' . \esc_url($import_url) . '">Als Beleg uebernehmen</a>';
@@ -124,8 +121,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 	$delete_url = \wp_nonce_url(\add_query_arg([
 		'action' => 'cmx_emails_delete',
 		'post_id' => (int) $post->ID,
-		'account_id' => (string) $context['account_id'],
-		'folder' => (string) $context['folder'],
 	], \admin_url('admin-post.php')), 'cmx_emails_delete');
 	$actions['delete'] = '<a href="' . \esc_url($delete_url) . '" class="submitdelete">Loeschen</a>';
 
@@ -200,6 +195,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		echo '<option value="' . \esc_attr($value) . '"' . \selected($status, $value, false) . '>' . \esc_html($label) . '</option>';
 	}
 	echo '</select>';
+
+	echo '<span class="cmx-email-filter-actions">';
+	$sync_folder = $folder !== '' ? $folder : 'inbox';
+	$sync_args = [
+		'action' => 'cmx_emails_sync',
+		'folder' => $sync_folder,
+	];
+	if ($account !== '') {
+		$sync_args['account_id'] = $account;
+	}
+	$sync_url = \wp_nonce_url(\add_query_arg($sync_args, \admin_url('admin-post.php')), 'cmx_emails_sync');
+	echo '<a class="button" href="' . \esc_url($sync_url) . '">Synchronisieren</a>';
+	echo '<a class="button" href="' . \esc_url(cmx_emails_settings_url()) . '">Einstellungen</a>';
+	echo '</span>';
 });
 
 \add_action('pre_get_posts', function (\WP_Query $query): void {
@@ -270,13 +279,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		.cmx-email-admin-excerpt {
 			display: block;
 		}
+		.cmx-email-admin-sender-copy {
+			font-size: 14px;
+			line-height: 1.35;
+		}
 		.cmx-email-admin-sender-copy strong {
-			font-size: 18px;
-			line-height: 1.2;
+			font-size: inherit;
+			line-height: inherit;
+			font-weight: 600;
 		}
 		.cmx-email-admin-sender-copy span,
 		.cmx-email-admin-excerpt {
-			margin-top: 4px;
+			margin-top: 2px;
 			color: #475467;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-title strong {
@@ -313,20 +327,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .wp-list-table th {
 			vertical-align: top;
 		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex-wrap: wrap;
+			margin: 14px 0 18px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .alignleft.actions,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .tablenav-pages {
+			float: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .alignleft.actions.bulkactions {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			flex: 0 0 auto;
+			margin-right: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav .alignleft.actions:not(.bulkactions) {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex: 1 1 auto;
+			min-width: 0;
+			flex-wrap: nowrap;
+			margin-right: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav .alignleft.actions:not(.bulkactions) #post-query-submit {
+			order: 1;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-filter-actions {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			order: 2;
+			margin-left: auto;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .tablenav-pages {
+			margin-left: auto;
+			padding-top: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .displaying-num,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .pagination-links {
+			margin-bottom: 0;
+		}
 	</style>
 	<?php
-});
-
-\add_filter('parent_file', function (string $parent_file): string {
-	if (cmx_emails_page_is_active()) {
-		return 'edit.php?post_type=' . CMX_EMAILS_CPT;
-	}
-	return $parent_file;
-});
-
-\add_filter('submenu_file', function (?string $submenu_file): ?string {
-	if (cmx_emails_page_is_active()) {
-		return CMX_EMAILS_PAGE_SLUG;
-	}
-	return $submenu_file;
 });

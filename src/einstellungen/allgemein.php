@@ -9,6 +9,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_preserve_backup_setting_when_missing')) {
+	function cmx_preserve_backup_setting_when_missing($value, string $option = '', $original_value = null) {
+		if ($original_value !== null) {
+			return $value;
+		}
+
+		return match ($option) {
+			'misbuero_backup_download_url' => (string) \get_option($option, ''),
+			'misbuero_backup_created_at'   => (string) \get_option($option, ''),
+			'misbuero_backup_file'         => (string) \get_option($option, ''),
+			'misbuero_backup_size_bytes'   => (int) \get_option($option, 0),
+			default                        => $value,
+		};
+	}
+}
+
+foreach ([
+	'misbuero_backup_download_url',
+	'misbuero_backup_created_at',
+	'misbuero_backup_file',
+	'misbuero_backup_size_bytes',
+] as $cmx_backup_option) {
+	\add_filter('sanitize_option_' . $cmx_backup_option, __NAMESPACE__ . '\\cmx_preserve_backup_setting_when_missing', 1, 3);
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_general_tab');
 function cmx_register_general_tab(): void {
 

@@ -612,7 +612,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			return ['ok' => false, 'message' => 'Kein E-Mail-Client gefunden.', 'synced' => 0];
 		}
 		if (!\function_exists('imap_open')) {
-			return ['ok' => false, 'message' => 'PHP-IMAP ist auf diesem Server nicht verfuegbar.', 'synced' => 0];
+			return ['ok' => false, 'message' => 'PHP-IMAP ist auf diesem Server nicht verfuegbar. Bitte die PHP-Erweiterung imap aktivieren.', 'synced' => 0];
 		}
 
 		$limit = $limit > 0 ? $limit : (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT');
@@ -639,6 +639,63 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			'ok' => true,
 			'message' => $synced > 0 ? ($synced . ' E-Mails synchronisiert.') : 'Keine E-Mails gefunden.',
 			'synced' => $synced,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_messages')) {
+	function cmx_emails_sync_messages(string $client_id = '', string $folder = 'inbox', int $limit = 0): array {
+		$client_id = \sanitize_key($client_id);
+		$folder = \sanitize_key($folder);
+		if ($folder === '') {
+			$folder = 'inbox';
+		}
+
+		if ($client_id !== '') {
+			return cmx_emails_sync_client_messages($client_id, $folder, $limit);
+		}
+
+		$clients = cmx_emails_client_list();
+		if ($clients === []) {
+			return ['ok' => false, 'message' => 'Keine E-Mail-Clients gefunden.', 'synced' => 0];
+		}
+
+		$total_synced = 0;
+		$success_count = 0;
+		$error_count = 0;
+
+		foreach ($clients as $client) {
+			$client = (array) $client;
+			$id = \sanitize_key((string) ($client['id'] ?? ''));
+			if ($id === '') {
+				continue;
+			}
+
+			$result = cmx_emails_sync_client_messages($id, $folder, $limit);
+			if (!empty($result['ok'])) {
+				$success_count++;
+				$total_synced += (int) ($result['synced'] ?? 0);
+				continue;
+			}
+
+			$error_count++;
+		}
+
+		if ($success_count <= 0) {
+			return ['ok' => false, 'message' => 'Synchronisierung fuer alle Konten fehlgeschlagen.', 'synced' => 0];
+		}
+
+		$message = $total_synced > 0
+			? ($total_synced . ' E-Mails synchronisiert.')
+			: 'Keine E-Mails gefunden.';
+		if ($error_count > 0) {
+			$message .= ' ' . $error_count . ' Konto/Konten konnten nicht geladen werden.';
+		}
+
+		return [
+			'ok' => true,
+			'message' => $message,
+			'synced' => $total_synced,
 		];
 	}
 }
@@ -957,4 +1014,3 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_count')) {
 		return (int) $query->found_posts;
 	}
 }
-

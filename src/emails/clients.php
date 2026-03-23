@@ -12,14 +12,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_settings_option_name')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_client_list')) {
-	function cmx_emails_client_list(): array {
-		if (\function_exists(__NAMESPACE__ . '\\cmx_email_client_list')) {
-			return (array) cmx_email_client_list();
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_client_rows')) {
+	function cmx_emails_normalize_client_rows($rows): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_email_normalize_client_list')) {
+			return (array) cmx_email_normalize_client_list($rows);
 		}
 
-		$options = (array) \get_option(cmx_emails_settings_option_name(), []);
-		$rows = \is_array($options['email_clients'] ?? null) ? (array) $options['email_clients'] : [];
+		$rows = \is_array($rows) ? $rows : [];
 		$list = [];
 		$index = 1;
 
@@ -40,7 +39,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_client_list')) {
 				$id = 'client_' . $index;
 			}
 
-			if ($name === '' && $email === '' && $password === '' && $smtp_host === '' && $imap_host === '') {
+			if ($name === '' && $email === '' && $password === '' && $smtp_host === '' && $imap_host === '' && $client === '') {
 				continue;
 			}
 
@@ -59,6 +58,63 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_client_list')) {
 		}
 
 		return $list;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_legacy_client_row')) {
+	function cmx_emails_legacy_client_row(array $options): array {
+		$name = \sanitize_text_field((string) ($options['email_name'] ?? ''));
+		$email = \sanitize_email((string) ($options['email_address'] ?? ''));
+		$password = (string) ($options['email_password'] ?? '');
+		$smtp_host = \sanitize_text_field((string) ($options['smtp_host'] ?? ''));
+		$imap_host = \sanitize_text_field((string) ($options['imap_host'] ?? ''));
+
+		if ($name === '' && $email === '' && $password === '' && $smtp_host === '' && $imap_host === '') {
+			return [];
+		}
+
+		return [
+			'id'        => 'default',
+			'client'    => 'Standard',
+			'name'      => $name,
+			'email'     => $email,
+			'password'  => $password,
+			'smtp_host' => $smtp_host,
+			'smtp_port' => '587',
+			'imap_host' => $imap_host,
+			'imap_port' => '993',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_client_list')) {
+	function cmx_emails_client_list(): array {
+		$options = (array) \get_option(cmx_emails_settings_option_name(), []);
+		$list = \function_exists(__NAMESPACE__ . '\\cmx_email_client_list')
+			? (array) cmx_email_client_list()
+			: cmx_emails_normalize_client_rows($options['email_clients'] ?? []);
+
+		$legacy = cmx_emails_legacy_client_row($options);
+		if ($legacy !== []) {
+			$list[] = $legacy;
+		}
+
+		$unique = [];
+		foreach ($list as $client) {
+			$client = \is_array($client) ? $client : [];
+			if ($client === []) {
+				continue;
+			}
+			$id = \sanitize_key((string) ($client['id'] ?? ''));
+			$email = \sanitize_email((string) ($client['email'] ?? ''));
+			$key = $email !== '' ? 'mail:' . \strtolower($email) : ($id !== '' ? 'id:' . $id : '');
+			if ($key === '' || isset($unique[$key])) {
+				continue;
+			}
+			$unique[$key] = $client;
+		}
+
+		return \array_values($unique);
 	}
 }
 

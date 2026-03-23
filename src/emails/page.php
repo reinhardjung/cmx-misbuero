@@ -20,29 +20,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_page_is_active')) {
 		return;
 	}
 
-	$current_script = \basename((string) ($_SERVER['PHP_SELF'] ?? ''));
-	if ($current_script !== 'admin.php') {
-		return;
+	$email_id = isset($_GET['email_id']) ? (int) \wp_unslash($_GET['email_id']) : 0;
+	if ($email_id > 0 && (string) \get_post_type($email_id) === CMX_EMAILS_CPT) {
+		$edit_url = \get_edit_post_link($email_id, '');
+		if (\is_string($edit_url) && $edit_url !== '') {
+			\wp_safe_redirect($edit_url);
+			exit;
+		}
 	}
 
 	$args = [];
-	foreach ($_GET as $key => $value) {
-		$key = \sanitize_key((string) $key);
-		if ($key === '') {
-			continue;
-		}
-
-		if (\is_array($value)) {
-			continue;
-		}
-
-		$args[$key] = \sanitize_text_field((string) \wp_unslash($value));
+	if (isset($_GET['account_id']) && !\is_array($_GET['account_id'])) {
+		$args['cmx_email_account'] = \sanitize_key((string) \wp_unslash($_GET['account_id']));
+	}
+	if (isset($_GET['folder']) && !\is_array($_GET['folder'])) {
+		$args['cmx_email_folder'] = \sanitize_key((string) \wp_unslash($_GET['folder']));
+	}
+	if (isset($_GET['s']) && !\is_array($_GET['s'])) {
+		$args['s'] = \sanitize_text_field((string) \wp_unslash($_GET['s']));
+	}
+	if (isset($_GET['cmx_email_notice']) && !\is_array($_GET['cmx_email_notice'])) {
+		$args['cmx_email_notice'] = \sanitize_text_field((string) \wp_unslash($_GET['cmx_email_notice']));
+	}
+	if (isset($_GET['cmx_email_notice_type']) && !\is_array($_GET['cmx_email_notice_type'])) {
+		$args['cmx_email_notice_type'] = \sanitize_key((string) \wp_unslash($_GET['cmx_email_notice_type']));
 	}
 
-	$args['page'] = CMX_EMAILS_PAGE_SLUG;
-	$args['post_type'] = CMX_EMAILS_CPT;
-
-	\wp_safe_redirect(\add_query_arg($args, \admin_url('edit.php')));
+	\wp_safe_redirect(cmx_emails_admin_list_url($args));
 	exit;
 });
 
@@ -85,19 +89,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_redirect_with_notice')) {
 	function cmx_emails_redirect_with_notice(array $context, string $message, string $type = 'info', array $extra = []): void {
+		$email_id = (int) ($context['email_id'] ?? 0);
 		$args = \array_merge([
-			'account_id' => \sanitize_key((string) ($context['account_id'] ?? '')),
-			'folder' => \sanitize_key((string) ($context['folder'] ?? 'inbox')),
-			'email_id' => (int) ($context['email_id'] ?? 0),
+			'cmx_email_account' => \sanitize_key((string) ($context['account_id'] ?? '')),
+			'cmx_email_folder' => \sanitize_key((string) ($context['folder'] ?? 'inbox')),
 			'cmx_email_notice' => $message,
 			'cmx_email_notice_type' => $type,
 		], $extra);
 
-		if ((int) ($args['email_id'] ?? 0) <= 0) {
-			unset($args['email_id']);
+		if ((string) ($args['cmx_email_account'] ?? '') === '') {
+			unset($args['cmx_email_account']);
+		}
+		if ((string) ($args['cmx_email_folder'] ?? '') === '') {
+			unset($args['cmx_email_folder']);
+		}
+		unset($args['account_id'], $args['folder'], $args['email_id']);
+
+		if ($email_id > 0 && (string) \get_post_type($email_id) === CMX_EMAILS_CPT) {
+			$edit_url = \get_edit_post_link($email_id, '');
+			if (\is_string($edit_url) && $edit_url !== '') {
+				\wp_safe_redirect(\add_query_arg([
+					'cmx_email_notice' => (string) ($args['cmx_email_notice'] ?? ''),
+					'cmx_email_notice_type' => (string) ($args['cmx_email_notice_type'] ?? 'info'),
+				], $edit_url));
+				exit;
+			}
 		}
 
-		\wp_safe_redirect(cmx_emails_mailbox_url($args));
+		\wp_safe_redirect(cmx_emails_admin_list_url($args));
 		exit;
 	}
 }
@@ -139,24 +158,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	}
 }
 
-\add_action('admin_menu', function (): void {
-	\add_submenu_page(
-		'edit.php?post_type=' . CMX_EMAILS_CPT,
-		'Posteingang',
-		'Posteingang',
-		'edit_posts',
-		CMX_EMAILS_PAGE_SLUG,
-		__NAMESPACE__ . '\\cmx_emails_render_mailbox_page'
-	);
-});
-
 \add_action('admin_post_cmx_emails_sync', function (): void {
 	if (!\current_user_can('edit_posts')) {
 		\wp_die('Keine Berechtigung.');
 	}
 	\check_admin_referer('cmx_emails_sync');
-	$context = cmx_emails_action_context();
-	$result = cmx_emails_sync_client_messages((string) $context['account_id'], (string) $context['folder']);
+	$account_id = isset($_REQUEST['account_id']) && !\is_array($_REQUEST['account_id'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['account_id']))
+		: '';
+	$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
+		: 'inbox';
+	$context = [
+		'account_id' => $account_id,
+		'folder' => $folder !== '' ? $folder : 'inbox',
+		'email_id' => 0,
+	];
+	$result = cmx_emails_sync_messages($account_id, (string) $context['folder']);
 	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Synchronisierung beendet.'), !empty($result['ok']) ? 'success' : 'error');
 });
 
@@ -203,6 +221,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	cmx_emails_update_assignment_cache($post_id);
 
 	cmx_emails_redirect_with_notice($context, 'Zuordnung wurde gespeichert.', 'success');
+});
+
+\add_action('all_admin_notices', function (): void {
+	if (!\is_admin()) {
+		return;
+	}
+
+	$notice = cmx_emails_mailbox_notice();
+	if ($notice['message'] === '') {
+		return;
+	}
+
+	$post_type = isset($_GET['post_type']) ? \sanitize_key((string) \wp_unslash($_GET['post_type'])) : '';
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	$is_email_screen = $post_type === CMX_EMAILS_CPT || ($post_id > 0 && (string) \get_post_type($post_id) === CMX_EMAILS_CPT);
+	if (!$is_email_screen) {
+		return;
+	}
+
+	echo '<div class="notice notice-' . \esc_attr($notice['type']) . ' is-dismissible"><p>' . \esc_html($notice['message']) . '</p></div>';
 });
 
 \add_action('admin_head', function (): void {
