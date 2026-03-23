@@ -35,6 +35,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_plugin_post_types')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_cloudmeister_hidden_post_types')) {
+	function cmx_system_cloudmeister_hidden_post_types(): array {
+		$post_types = [];
+		foreach (['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails'] as $post_type) {
+			if (\post_type_exists($post_type)) {
+				$post_types[] = $post_type;
+			}
+		}
+		return $post_types;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_should_hide_post_type_for_cloudmeister')) {
+	function cmx_system_should_hide_post_type_for_cloudmeister(string $post_type): bool {
+		if (!cmx_system_is_cloudmeister_user()) {
+			return false;
+		}
+
+		return \in_array($post_type, cmx_system_cloudmeister_hidden_post_types(), true);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_total_user_count')) {
 	function cmx_system_total_user_count(): int {
 		$counts = \count_users();
@@ -231,6 +253,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 
 	echo '<div class="notice notice-error"><p><strong>Systemfehler: Bitte kaufen Sie eine weitere Arbeitsplatzlizenz.</strong></p></div>';
 });
+
+\add_action('admin_menu', function (): void {
+	if (!cmx_system_is_cloudmeister_user()) {
+		return;
+	}
+
+	foreach (cmx_system_cloudmeister_hidden_post_types() as $post_type) {
+		if (cmx_system_should_hide_post_type_for_cloudmeister($post_type)) {
+			\remove_menu_page('edit.php?post_type=' . $post_type);
+		}
+	}
+}, 999);
+
+\add_action('admin_bar_menu', function (\WP_Admin_Bar $wp_admin_bar): void {
+	if (!cmx_system_is_cloudmeister_user()) {
+		return;
+	}
+
+	foreach (cmx_system_cloudmeister_hidden_post_types() as $post_type) {
+		if (cmx_system_should_hide_post_type_for_cloudmeister($post_type)) {
+			$wp_admin_bar->remove_node('new-' . $post_type);
+		}
+	}
+}, 999);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_session_prepare')) {
 	function cmx_system_session_prepare($session): array {
