@@ -51,7 +51,102 @@ function cmx_get_beleg_default(string $key): string {
 		return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$key]);
 	}
 
+	// Bestehende Einzelvorlagen beim Umstieg als Standard fuer "Sie" anzeigen.
+	if (preg_match('/^mail_([a-z0-9_]+)_sie$/', $key, $matches)) {
+		$legacy_key = 'mail_' . ((string) ($matches[1] ?? ''));
+		if (isset($options[$legacy_key]) && is_string($options[$legacy_key])) {
+			return str_replace(['<br>', '<br/>', '<br />'], "\n", $options[$legacy_key]);
+		}
+	}
+
 	return '';
+}
+
+function cmx_beleg_field_input_id(string $key): string {
+	return 'cmx_belege_' . $key;
+}
+
+function cmx_render_beleg_placeholder_buttons(string $field_id, array $placeholders): void {
+	if ($field_id === '' || empty($placeholders)) {
+		return;
+	}
+
+	$buttons = [];
+	foreach ($placeholders as $placeholder) {
+		$placeholder = trim((string) $placeholder);
+		if ($placeholder === '') {
+			continue;
+		}
+		$buttons[] = '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($field_id) . '" data-placeholder="' . esc_attr($placeholder) . '">' . esc_html($placeholder) . '</button>';
+	}
+
+	if (empty($buttons)) {
+		return;
+	}
+
+	echo '<p class="description">Platzhalter: ' . implode(' · ', $buttons) . '</p>';
+
+	static $script_printed = false;
+	if ($script_printed) {
+		return;
+	}
+	$script_printed = true;
+
+	echo '<script>
+	(function(){
+		function needsSpace(ch) {
+			return !(ch && /\\s/.test(ch));
+		}
+		function withSmartSpacing(text, beforeChar, afterChar) {
+			var out = text;
+			if (needsSpace(beforeChar)) out = " " + out;
+			if (needsSpace(afterChar)) out = out + " ";
+			return out;
+		}
+		function insertAtCursor(el, text) {
+			if (!el) return;
+			var start = typeof el.selectionStart === "number" ? el.selectionStart : (el.value || "").length;
+			var end = typeof el.selectionEnd === "number" ? el.selectionEnd : start;
+			var beforeChar = start > 0 ? (el.value || "").charAt(start - 1) : "";
+			var afterChar = end < (el.value || "").length ? (el.value || "").charAt(end) : "";
+			text = withSmartSpacing(text, beforeChar, afterChar);
+			var val = el.value || "";
+			el.value = val.slice(0, start) + text + val.slice(end);
+			var pos = start + text.length;
+			if (typeof el.selectionStart === "number") {
+				el.selectionStart = pos;
+				el.selectionEnd = pos;
+			}
+			el.focus();
+		}
+		function insertPlaceholder(editorId, text) {
+			if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
+				var editor = tinyMCE.get(editorId);
+				editor.focus();
+				var beforeChar = "";
+				var afterChar = "";
+				var rng = editor.selection.getRng();
+				if (rng && rng.collapsed && rng.startContainer && rng.startContainer.nodeType === 3) {
+					var nodeText = rng.startContainer.textContent || "";
+					var offset = rng.startOffset || 0;
+					beforeChar = offset > 0 ? nodeText.charAt(offset - 1) : "";
+					afterChar = offset < nodeText.length ? nodeText.charAt(offset) : "";
+				}
+				text = withSmartSpacing(text, beforeChar, afterChar);
+				editor.selection.setContent(text);
+				return;
+			}
+			var field = document.getElementById(editorId);
+			insertAtCursor(field, text);
+		}
+		document.addEventListener("click", function(e){
+			var btn = e.target.closest ? e.target.closest(".cmx-insert-placeholder") : null;
+			if (!btn) return;
+			e.preventDefault();
+			insertPlaceholder(btn.getAttribute("data-editor"), btn.getAttribute("data-placeholder"));
+		});
+	})();
+	</script>';
 }
 
 
@@ -72,7 +167,7 @@ function cmx_field_textarea_beleg(array $args): void {
 	if ($is_mail_field || $is_belegfuss_field) {
 		$default = cmx_get_beleg_default($key);
 		$display = ($value === '') ? (string) $default : (string) $value;
-		$editor_id = 'cmx_belege_' . $key;
+		$editor_id = cmx_beleg_field_input_id($key);
 		\wp_editor($display, $editor_id, [
 			'textarea_name' => 'cmx_belege[' . $key . ']',
 			'textarea_rows' => $rows,
@@ -91,65 +186,7 @@ function cmx_field_textarea_beleg(array $args): void {
 			],
 		]);
 		if ($is_mail_field) {
-			echo '<p class="description">Platzhalter: '
-				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{anrede}">{anrede}</button>'
-				. ' · '
-				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{beleg}">{beleg}</button>'
-				. ' · '
-				. '<button type="button" class="button-link cmx-insert-placeholder" data-editor="' . esc_attr($editor_id) . '" data-placeholder="{logo}">{logo}</button>'
-				. '</p>';
-			echo '<script>
-			(function(){
-				function needsSpace(ch) {
-					return !(ch && /\\s/.test(ch));
-				}
-				function withSmartSpacing(text, beforeChar, afterChar) {
-					var out = text;
-					if (needsSpace(beforeChar)) out = " " + out;
-					if (needsSpace(afterChar)) out = out + " ";
-					return out;
-				}
-				function insertAtCursor(el, text) {
-					if (!el) return;
-					var start = el.selectionStart || 0;
-					var end = el.selectionEnd || 0;
-					var beforeChar = start > 0 ? el.value.charAt(start - 1) : "";
-					var afterChar = end < el.value.length ? el.value.charAt(end) : "";
-					text = withSmartSpacing(text, beforeChar, afterChar);
-					var val = el.value || "";
-					el.value = val.slice(0, start) + text + val.slice(end);
-					var pos = start + text.length;
-					el.selectionStart = el.selectionEnd = pos;
-					el.focus();
-				}
-				function insertPlaceholder(editorId, text) {
-					if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
-						var editor = tinyMCE.get(editorId);
-						editor.focus();
-						var beforeChar = "";
-						var afterChar = "";
-						var rng = editor.selection.getRng();
-						if (rng && rng.collapsed && rng.startContainer && rng.startContainer.nodeType === 3) {
-							var nodeText = rng.startContainer.textContent || "";
-							var offset = rng.startOffset || 0;
-							beforeChar = offset > 0 ? nodeText.charAt(offset - 1) : "";
-							afterChar = offset < nodeText.length ? nodeText.charAt(offset) : "";
-						}
-						text = withSmartSpacing(text, beforeChar, afterChar);
-						editor.selection.setContent(text);
-						return;
-					}
-					var textarea = document.getElementById(editorId);
-					insertAtCursor(textarea, text);
-				}
-				document.addEventListener("click", function(e){
-					var btn = e.target.closest ? e.target.closest(".cmx-insert-placeholder") : null;
-					if (!btn) return;
-					e.preventDefault();
-					insertPlaceholder(btn.getAttribute("data-editor"), btn.getAttribute("data-placeholder"));
-				});
-			})();
-			</script>';
+			cmx_render_beleg_placeholder_buttons($editor_id, ['{anrede}', '{beleg}', '{beleg_datum}', '{faellig_bis}', '{betrag}', '{logo}']);
 		}
 		return;
 	}
@@ -215,7 +252,6 @@ add_action('admin_init', function() {
 			]
 		);
 	};
-
 	$tabs = [
 		'offerte'      => 'Offerte',
 		'gutschrift'   => 'Gutschrift',
@@ -235,8 +271,9 @@ add_action('admin_init', function() {
 			$page
 		);
 
-		$add($page, "sec_{$sub}", 'Belegfuss',   "belegfuss_{$sub}", 4);
-		$add($page, "sec_{$sub}", 'E-Mail Text', "mail_{$sub}",      8);
+		$add($page, "sec_{$sub}", 'Belegfuss',            "belegfuss_{$sub}",        4);
+		$add($page, "sec_{$sub}", 'E-Mail Text Sie',      "mail_{$sub}_sie",         8);
+		$add($page, "sec_{$sub}", 'E-Mail Text Du',       "mail_{$sub}_du",          8);
 	}
 });
 

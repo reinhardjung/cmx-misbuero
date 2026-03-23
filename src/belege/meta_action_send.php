@@ -30,6 +30,63 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_mail_subject_beleg_date')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_normalize_belegmail_mode')) {
+	function cmxbu_normalize_belegmail_mode(string $mode): string {
+		$mode = \sanitize_key($mode);
+		return $mode === 'du' ? 'du' : 'sie';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_communication_row')) {
+	function cmxbu_get_contact_primary_communication_row(int $kontakt_id): array {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0 || !\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+			return [];
+		}
+
+		foreach ((array) cmx_kommunikation_read_contacts($kontakt_id) as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$has_content = false;
+			foreach (['vorname', 'nachname', 'telefon', 'email', 'geburtsdatum', 'telefon_label', 'email_label'] as $field) {
+				if (\trim((string) ($row[$field] ?? '')) !== '') {
+					$has_content = true;
+					break;
+				}
+			}
+			if ($has_content) {
+				return $row;
+			}
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_belegmail_mode')) {
+	function cmxbu_get_belegmail_mode(?int $kontakt_id = null, string $recipient_email = ''): string {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0) {
+			return 'sie';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_communication_row')) {
+			$row = (array) cmxbu_get_contact_primary_communication_row($kontakt_id);
+			if (!empty($row)) {
+				return !empty($row['duzis']) ? 'du' : 'sie';
+			}
+		}
+
+		$count = (int) \get_post_meta($kontakt_id, '_cmx_kommunikation_count', true);
+		if ($count > 0) {
+			$row_mode = !empty(\get_post_meta($kontakt_id, '_cmx_kommunikation_1_duzis', true)) ? 'du' : 'sie';
+			return $row_mode;
+		}
+
+		return 'sie';
+	}
+}
 
 /**
  * Metabox-Teil: "versenden"-Button
@@ -98,9 +155,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 			return new \WP_Error('missing_kontakt', 'Kontakt / Adresse fehlt.');
 		}
 
-		$to = \function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')
-			? (string) cmxbu_get_contact_primary_email($kontakt_id)
-			: (string) \get_post_meta($kontakt_id, '_cmx_email_1', true);
+		$recipient_result = \function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email_result')
+			? (array) cmxbu_get_contact_primary_email_result($kontakt_id)
+			: ['email' => (string) \get_post_meta($kontakt_id, '_cmx_email_1', true), 'error' => 'Keine gültige Empfänger-E-Mailadresse hinterlegt.'];
+		$to = (string) ($recipient_result['email'] ?? '');
 
 		$anrede_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
 			? CMX_KONTAKTE_META_ANREDE
@@ -117,7 +175,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 				cmxbu_log('MAIL: invalid email', ['post_id' => $post_id, 'email' => (string) $to]);
 			}
 
-			return new \WP_Error('invalid_recipient', 'Keine gültige Empfänger-E-Mailadresse hinterlegt.');
+			$error_message = \trim((string) ($recipient_result['error'] ?? ''));
+			if ($error_message === '') {
+				$error_message = 'Keine gültige Empfänger-E-Mailadresse hinterlegt.';
+			}
+
+			return new \WP_Error('invalid_recipient', $error_message);
 		}
 
 		[, $beleg_slug] = cmx_get_beleg_type($post);
@@ -127,6 +190,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 			'lieferschein' => 'Lieferschein',
 			'gutschrift'   => 'Gutschrift',
 		][$beleg_slug] ?? ($beleg_slug !== '' ? \ucfirst($beleg_slug) : 'Beleg');
+		$mail_mode = \function_exists(__NAMESPACE__ . '\\cmxbu_get_belegmail_mode')
+			? (string) cmxbu_get_belegmail_mode($kontakt_id, $to)
+			: 'sie';
 		$subject = $beleg_label . ': ' . $beleg_id;
 		$beleg_mail_date = cmxbu_get_mail_subject_beleg_date($post_id);
 		if ($beleg_mail_date !== '') {
@@ -136,7 +202,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 		$catalog_url = \function_exists(__NAMESPACE__ . '\\cmx_katalog_online') && cmx_katalog_online()
 			? \home_url('/katalog/')
 			: '';
-		$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id);
+		$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id, $mail_mode, $to);
+		if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
+			return new \WP_Error('missing_mail_template', 'Fuer ' . $beleg_label . ' fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+		}
 		$custom_has_anrede_token = $custom_message !== ''
 			&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
 			&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
@@ -317,8 +386,16 @@ function cmxbu_handle_beleg_send(): void {
 			\wp_safe_redirect(\get_edit_post_link($post_id, ''));
 			exit;
 		}
-
-		\wp_die(\esc_html($result->get_error_message()));
+		$args = ['cmx_beleg_mail_error' => '1'];
+		$error_message = \trim((string) $result->get_error_message());
+		if ($error_message !== '') {
+			$token = \wp_generate_password(12, false, false);
+			$key = 'cmx_beleg_mail_error_' . (int) \get_current_user_id() . '_' . $token;
+			\set_transient($key, \substr($error_message, 0, 400), 10 * MINUTE_IN_SECONDS);
+			$args['cmx_beleg_mail_error_token'] = $token;
+		}
+		\wp_safe_redirect(\add_query_arg($args, $redirect_base));
+		exit;
 	}
 
 	$redirect = \add_query_arg(
@@ -345,6 +422,7 @@ function cmxbu_handle_beleg_send(): void {
 	}
 	if (!empty($_GET['cmx_beleg_mail_error'])) {
 		$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email');
+		$belege_settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=belege');
 		$detail = '';
 		$token = isset($_GET['cmx_beleg_mail_error_token']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_mail_error_token'])) : '';
 		if ($token !== '') {
@@ -355,10 +433,8 @@ function cmxbu_handle_beleg_send(): void {
 			}
 			\delete_transient($key);
 		}
-		echo '<div class="notice notice-error is-dismissible"><p><strong>E-Mail konnte nicht gesendet werden.</strong> Bitte prüfe Deine SMTP-/Alias-Einstellungen. <a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;" target="_blank" rel="noopener noreferrer">Einstellungen / E-Mail</a></p>';
-		if ($detail !== '') {
-			echo '<p style="margin-top:6px;"><small>Technischer Hinweis: ' . \esc_html($detail) . '</small></p>';
-		}
+		$detail_text = $detail !== '' ? $detail : 'Bitte prüfe Deine Vorlagen sowie Deine SMTP-/Alias-Einstellungen.';
+		echo '<div class="notice notice-error is-dismissible"><p><strong>E-Mail konnte nicht vorbereitet oder gesendet werden.</strong> ' . \esc_html($detail_text) . ' <a href="' . \esc_url($belege_settings_url) . '" class="button button-secondary" style="margin-left:8px;" target="_blank" rel="noopener noreferrer">Einstellungen / Belege</a><a href="' . \esc_url($settings_url) . '" class="button button-secondary" style="margin-left:8px;" target="_blank" rel="noopener noreferrer">Einstellungen / E-Mail</a></p>';
 		echo '</div>';
 		return;
 	}
@@ -387,14 +463,26 @@ function cmxbu_handle_beleg_send(): void {
 
 
 
-function cmx_get_belegmail(string $key, ?int $kontakt_id = null): string {
-	// cmx_belege[belegfuss_rechnung], cmx_belege[mail_rechnung]
-	$key = 'mail_' . strtolower(trim($key));
-	$options = get_option('cmx_belege', []); // var_dump($options['belegfuss_rechnung']); exit;
-	$message = '';
+function cmx_get_belegmail(string $key, ?int $kontakt_id = null, string $mode = '', string $recipient_email = ''): string {
+	$slug = strtolower(trim($key));
+	if ($slug === '') {
+		return '';
+	}
 
-	if (isset($options[$key]) && is_string($options[$key])) {
-		$message = $options[$key];
+	$mode = $mode !== ''
+		? cmxbu_normalize_belegmail_mode($mode)
+		: cmxbu_get_belegmail_mode($kontakt_id, $recipient_email);
+	$options = (array) get_option('cmx_belege', []);
+	$variant_key = 'mail_' . $slug . '_' . $mode;
+	$message = isset($options[$variant_key]) && is_string($options[$variant_key])
+		? (string) $options[$variant_key]
+		: '';
+
+	if ($message === '' && $mode === 'sie') {
+		$legacy_key = 'mail_' . $slug;
+		if (isset($options[$legacy_key]) && is_string($options[$legacy_key])) {
+			$message = (string) $options[$legacy_key];
+		}
 	}
 
 	return $message;
@@ -496,30 +584,58 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_contact_category_taxonomies')) {
 }
 
 if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
-	function cmxbu_get_contact_primary_email(int $post_id): string {
-		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
-			foreach ((array) cmx_kommunikation_read_contacts($post_id) as $row) {
-				if (!\is_array($row)) {
-					continue;
+	function cmxbu_get_contact_primary_email_result(int $post_id): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_communication_row')) {
+			$row = (array) cmxbu_get_contact_primary_communication_row($post_id);
+			if (!empty($row)) {
+				$raw = \trim((string) ($row['email'] ?? ''));
+				if ($raw === '') {
+					return [
+						'email' => '',
+						'error' => 'Im obersten Kommunikations-Eintrag des Kontakts ist keine E-Mail-Adresse hinterlegt.',
+					];
 				}
-				$candidate = \sanitize_email((string) ($row['email'] ?? ''));
-				if (\is_email($candidate)) {
-					return $candidate;
+
+				$candidate = \sanitize_email($raw);
+				if (!\is_email($candidate)) {
+					return [
+						'email' => '',
+						'error' => 'Im obersten Kommunikations-Eintrag des Kontakts ist keine gültige E-Mail-Adresse hinterlegt.',
+					];
 				}
+
+				return [
+					'email' => $candidate,
+					'error' => '',
+				];
 			}
 		}
 
 		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
 		if (\is_array($bundle)) {
-			$candidate = \sanitize_email((string) ($bundle['email'][1]['value'] ?? ''));
-			if (\is_email($candidate)) {
-				return $candidate;
+			$raw = \trim((string) ($bundle['email'][1]['value'] ?? ''));
+			if ($raw !== '') {
+				$candidate = \sanitize_email($raw);
+				if (\is_email($candidate)) {
+					return [
+						'email' => $candidate,
+						'error' => '',
+					];
+				}
+
+				return [
+					'email' => '',
+					'error' => 'Im ersten Kommunikations-Eintrag des Kontakts ist keine gültige E-Mail-Adresse hinterlegt.',
+				];
 			}
 		}
 
 		$direct = \sanitize_email((string) \get_post_meta($post_id, '_cmx_email_1', true));
 		if (\is_email($direct)) {
-			return $direct;
+			return [
+				'email' => $direct,
+				'error' => '',
+			];
 		}
 
 		$fallback_keys = (array) \apply_filters('cmx_kontakte_email1_meta_keys', [
@@ -532,11 +648,22 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
 			}
 			$candidate = \sanitize_email((string) \get_post_meta($post_id, $key, true));
 			if (\is_email($candidate)) {
-				return $candidate;
+				return [
+					'email' => $candidate,
+					'error' => '',
+				];
 			}
 		}
 
-		return '';
+		return [
+			'email' => '',
+			'error' => 'Keine gültige Empfänger-E-Mailadresse hinterlegt.',
+		];
+	}
+
+	function cmxbu_get_contact_primary_email(int $post_id): string {
+		$result = cmxbu_get_contact_primary_email_result($post_id);
+		return (string) ($result['email'] ?? '');
 	}
 }
 

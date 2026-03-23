@@ -416,7 +416,14 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 
 		$to = cmx_cockpit_mahnwesen_contact_email($post_id);
 		if (!\is_email($to)) {
-			return new \WP_Error('missing_email', 'Keine gültige Empfänger-E-Mail gefunden.');
+			$recipient_result = \function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email_result')
+				? (array) cmxbu_get_contact_primary_email_result((int) cmx_cockpit_mahnwesen_contact_id($post_id))
+				: [];
+			$error_message = \trim((string) ($recipient_result['error'] ?? ''));
+			if ($error_message === '') {
+				$error_message = 'Keine gültige Empfänger-E-Mail gefunden.';
+			}
+			return new \WP_Error('missing_email', $error_message);
 		}
 
 		$opts_general = (array) \get_option('cmx_einstellungen', []);
@@ -449,6 +456,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		$beleg_mail_date = \function_exists(__NAMESPACE__ . '\\cmxbu_get_mail_subject_beleg_date')
 			? (string) cmxbu_get_mail_subject_beleg_date($post_id)
 			: '';
+		$mail_mode = \function_exists(__NAMESPACE__ . '\\cmxbu_get_belegmail_mode')
+			? (string) cmxbu_get_belegmail_mode($kontakt_id, $to)
+			: 'sie';
 
 		$mail_data = [
 			'anrede' => $anrede,
@@ -469,8 +479,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 
 		if ($is_overdue) {
 			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
-				? (string) cmx_get_belegmail('mahnung', $kontakt_id)
+				? (string) cmx_get_belegmail('mahnung', $kontakt_id, $mail_mode, $to)
 				: '';
+			if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
+				return new \WP_Error('missing_mail_template', 'Fuer Mahnung fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+			}
 			$custom_has_anrede_token = $custom_message !== ''
 				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
 				&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
@@ -484,8 +497,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 			$mail_action_label = 'Zahlungserinnerung';
 		} else {
 			$custom_message = \function_exists(__NAMESPACE__ . '\\cmx_get_belegmail')
-				? (string) cmx_get_belegmail('rechnung', $kontakt_id)
+				? (string) cmx_get_belegmail('rechnung', $kontakt_id, $mail_mode, $to)
 				: '';
+			if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
+				return new \WP_Error('missing_mail_template', 'Fuer Rechnung fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+			}
 			$custom_has_anrede_token = $custom_message !== ''
 				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
 				&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
