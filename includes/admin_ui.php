@@ -84,10 +84,12 @@ function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $e
 	}
 
 	$note_settings = \function_exists(__NAMESPACE__ . '\\cmx_notizen_editor_settings')
-		? (array) cmx_notizen_editor_settings()
-		: [
-			'mediaButtons' => false,
-			'quicktags'    => true,
+			? (array) cmx_notizen_editor_settings()
+			: [
+				'mediaButtons' => false,
+				'quicktags'    => [
+					'buttons' => 'strong,em,link,ul,ol,li,code',
+				],
 			'tinymce'      => [
 				'wpautop'   => true,
 				'branding'  => false,
@@ -100,7 +102,16 @@ function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $e
 		];
 
 	$settings['media_buttons'] = (bool) ($note_settings['mediaButtons'] ?? ($note_settings['media_buttons'] ?? false));
-	$settings['quicktags'] = $note_settings['quicktags'] ?? true;
+	$quicktags = $note_settings['quicktags'] ?? true;
+	if ($quicktags === false) {
+		$settings['quicktags'] = false;
+		} else {
+			$quicktags_settings = \is_array($quicktags) ? $quicktags : [];
+			if (empty($quicktags_settings['buttons'])) {
+				$quicktags_settings['buttons'] = 'strong,em,link,ul,ol,li,code';
+			}
+			$settings['quicktags'] = $quicktags_settings;
+		}
 
 	if (($settings['tinymce'] ?? true) !== false) {
 		$current_tinymce = \is_array($settings['tinymce'] ?? null) ? $settings['tinymce'] : [];
