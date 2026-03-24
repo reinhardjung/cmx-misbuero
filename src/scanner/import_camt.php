@@ -1563,8 +1563,23 @@ function cmx_bank_import_render_log_page(): void {
 	}
 	.cmx-camt-card--hero{
 		margin:0 0 18px;
-		background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);
-		border-color:#cfe0f7;
+		background:transparent;
+		border:0;
+		border-radius:0;
+		padding:0;
+		box-shadow:none;
+	}
+	.cmx-camt-hero-layout{
+		display:grid;
+		grid-template-columns:minmax(300px, 1fr) minmax(360px, 1.2fr);
+		gap:18px;
+		align-items:stretch;
+	}
+	.cmx-camt-hero-copy{
+		display:flex;
+		flex-direction:column;
+		justify-content:center;
+		min-width:0;
 	}
 	.cmx-camt-card--hero h1{
 		margin:0 0 12px;
@@ -1574,14 +1589,12 @@ function cmx_bank_import_render_log_page(): void {
 		font-weight:700;
 	}
 	.cmx-camt-intro{
-		max-width:780px;
 		margin:0;
 		color:#4e5968;
 		font-size:14px;
 		line-height:1.55;
 	}
 	.cmx-camt-upload{
-		margin-top:18px;
 		border:2px dashed #cfd9e7;
 		border-radius:16px;
 		padding:34px 28px;
@@ -1590,6 +1603,11 @@ function cmx_bank_import_render_log_page(): void {
 		box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04);
 		transition:border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .15s ease;
 		cursor:pointer;
+		min-height:100%;
+		box-sizing:border-box;
+		display:flex;
+		flex-direction:column;
+		justify-content:center;
 	}
 	.cmx-camt-upload.is-dragover{
 		border-color:#66a7e8;
@@ -1749,19 +1767,25 @@ function cmx_bank_import_render_log_page(): void {
 		box-shadow:0 1px 2px rgba(16,24,40,.03);
 	}
 	@media (max-width: 1200px){
+		.cmx-camt-hero-layout{grid-template-columns:1fr}
+		.cmx-camt-upload{min-height:auto}
 		.cmx-camt-layout{flex-direction:column}
 		.cmx-camt-pane{max-height:none}
 	}
 	</style>';
 
 	echo '<section class="cmx-camt-card cmx-camt-card--hero">';
+	echo '<div class="cmx-camt-hero-layout">';
+	echo '<div class="cmx-camt-hero-copy">';
 	echo '<h1>Banken Import</h1>';
 	echo '<p class="cmx-camt-intro">camt.053 und camt.054 werden gemeinsam eingelesen und über ihre Buchungsmerkmale zusammengeführt, damit dieselbe Buchung nicht doppelt zugeordnet wird.</p>';
+	echo '</div>';
 
 	echo '<div id="cmx-camt-upload" class="cmx-camt-upload" tabindex="0" role="button" aria-label="CAMT Dateien hochladen">';
 	echo '<h2>camt.053 / camt.054 hier ablegen</h2>';
 	echo '<p>XML-Dateien per Drag & Drop oder per Klick auswählen. Bereits geladene Dateien werden mit den neuen CAMT-Dateien zusammengeführt.</p>';
 	echo '<input type="file" id="cmx-camt-files" accept=".xml,text/xml,application/xml" multiple style="display:none;">';
+	echo '</div>';
 	echo '</div>';
 
 	echo '<div class="cmx-camt-toolbar">';
