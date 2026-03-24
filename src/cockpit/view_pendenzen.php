@@ -551,6 +551,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-body{padding:0}
 			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
 			.cmx-pend-postbox{margin:0}
+			.cmx-pend-board-grid .cmx-pend-postbox .hndle{font-size:16px;line-height:1.3;padding:7px 18px}
 			.cmx-pend-postbox--full{grid-column:1 / -1}
 			.cmx-pend-postbox .hndle{padding:14px 18px}
 			.cmx-pend-postbox-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
