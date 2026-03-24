@@ -551,9 +551,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-body{padding:0}
 			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
 			.cmx-pend-postbox{margin:0}
-			.cmx-pend-board-grid .cmx-pend-postbox .hndle{font-size:16px;line-height:1.3;padding:7px 18px}
+			.cmx-pend-postbox .postbox-header .hndle,
+			.cmx-pend-postbox .postbox-header h2{font-size:16px !important;line-height:1.3 !important;padding:7px 18px !important;min-height:0}
 			.cmx-pend-postbox--full{grid-column:1 / -1}
-			.cmx-pend-postbox .hndle{padding:14px 18px}
 			.cmx-pend-postbox-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
 			.cmx-pend-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:999px;background:#eef4fb;color:#1f5180;font-size:12px;font-weight:700;line-height:1}
 			.cmx-pend-postbox .inside{padding:16px 18px 18px}
@@ -590,7 +590,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-empty{padding:8px 0 2px;color:#646970;font-size:14px;font-style:italic}
 			.cmx-pend-calendar-shell{padding:0}
 			.cmx-pend-calendar-nav{display:flex;align-items:center;gap:8px}
-			.cmx-pend-calendar-nav .button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:0 10px}
+			.cmx-pend-calendar-nav .button{display:inline-flex;align-items:center;justify-content:center;min-width:26px;min-height:26px;height:26px;padding:0 6px;line-height:1}
+			.cmx-pend-calendar-nav .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
 			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
 			.cmx-pend-calendar-weekday{padding:0 4px;color:#646970;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;text-align:center}
 			.cmx-pend-calendar-cell{min-height:160px;padding:10px;border:1px solid #e6ebf0;border-radius:10px;background:#fff;box-shadow:none}
