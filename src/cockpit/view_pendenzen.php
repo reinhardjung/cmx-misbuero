@@ -542,84 +542,83 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 	function cmx_cockpit_pendenzen_css(): string {
 		return '
 			.cmx-pend-wrap{margin:20px 0 0;padding:0 20px 0 0;box-sizing:border-box}
-			.cmx-pend-shell{background:linear-gradient(135deg,#f6fbff 0%,#ffffff 56%,#f4f8ff 100%);border:1px solid #cfe0f7;border-radius:14px;padding:18px;box-sizing:border-box;box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
-			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 18px}
-			.cmx-pend-title-wrap{display:flex;align-items:flex-start;gap:14px;min-width:0;flex:1 1 auto}
-			.cmx-pend-title-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;color:#3b8ed9;box-shadow:inset 0 0 0 1px #d9e6f6,0 1px 2px rgba(16,24,40,.06)}
-			.cmx-pend-title-icon .dashicons{width:22px;height:22px;font-size:22px;line-height:22px}
-			.cmx-pend-title-copy{min-width:0}
-			.cmx-pend-title{margin:0;color:#162033;font-size:20px !important;line-height:1.2;font-weight:700}
-			.cmx-pend-subtitle{margin:8px 0 0;color:#4e5968;font-size:14px;line-height:1.55;max-width:780px}
-			.cmx-pend-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-			.cmx-pend-tab{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid #cfd9e7;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);color:#344054;text-decoration:none;font-size:15px;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.05)}
-			.cmx-pend-tab:hover{background:#fff;color:#162033;border-color:#b7cce9}
-			.cmx-pend-tab.is-active{background:#fff;color:#173d6d;border-color:#bcd2ee;box-shadow:0 0 0 2px rgba(59,142,217,.08),0 1px 2px rgba(16,24,40,.05)}
+			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 18px}
+			.cmx-pend-title-copy{min-width:0;flex:1 1 auto}
+			.cmx-pend-title{margin:0;color:#1d2327;font-size:20px !important;line-height:1.2;font-weight:600}
+			.cmx-pend-subtitle{margin:8px 0 0;color:#646970;font-size:14px;line-height:1.55;max-width:760px}
+			.cmx-pend-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+			.cmx-pend-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px}
 			.cmx-pend-body{padding:0}
-			.cmx-pend-board-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr) minmax(220px,1fr);gap:18px;align-items:center;margin:0 0 18px;padding:12px 14px;border:1px solid #d9e6f6;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)}
-			.cmx-pend-board-filter{text-align:left}
-			.cmx-pend-board-filter--center{text-align:center}
-			.cmx-pend-board-filter--right{text-align:right}
-			.cmx-pend-board-select{display:inline-flex;align-items:center;gap:10px;max-width:100%}
-			.cmx-pend-board-select select{min-width:196px;max-width:100%;padding:8px 34px 8px 12px;border:1px solid #cfd9e7;border-radius:8px;background:#fff;color:#162033;font-size:14px;font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.04)}
-			.cmx-pend-board-today{display:inline-block;min-width:240px;color:#41556d;font-size:18px;line-height:1.25;font-weight:700}
-			.cmx-pend-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-			.cmx-pend-column{min-width:0;padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
-			.cmx-pend-column-title{display:block;margin:0 0 14px;font-size:12px;font-weight:700;line-height:1.2;color:#667085;letter-spacing:.04em;text-transform:uppercase}
-			.cmx-pend-card-list{display:flex;flex-direction:column;gap:12px}
-			.cmx-pend-card{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid #d9e6f6;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 18px rgba(16,24,40,.04)}
-			.cmx-pend-card-icon{display:flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;height:32px;border-radius:7px;color:#42556d;background:#f3f6fa;border:1px solid #d9e6f6;box-shadow:none}
-			.cmx-pend-card-icon svg{display:block;width:14px;height:14px;fill:currentColor}
+			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+			.cmx-pend-postbox{margin:0}
+			.cmx-pend-postbox--full{grid-column:1 / -1}
+			.cmx-pend-postbox .hndle{padding:14px 18px}
+			.cmx-pend-postbox-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+			.cmx-pend-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:999px;background:#eef4fb;color:#1f5180;font-size:12px;font-weight:700;line-height:1}
+			.cmx-pend-postbox .inside{padding:16px 18px 18px}
+			.cmx-pend-toolbar-form{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:end}
+			.cmx-pend-field{display:flex;flex-direction:column;gap:6px}
+			.cmx-pend-field label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;color:#646970}
+			.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
+			.cmx-pend-field--right select{align-self:flex-end}
+			.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
+			.cmx-pend-field--right{align-items:flex-end}
+			.cmx-pend-card-list{display:flex;flex-direction:column}
+			.cmx-pend-card{display:grid;grid-template-columns:10px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
+			.cmx-pend-card:first-child{padding-top:0}
+			.cmx-pend-card:last-child{padding-bottom:0;border-bottom:0}
+			.cmx-pend-card-dot{display:block;width:10px;height:10px;border-radius:999px;background:#c0cad5;margin-top:6px}
 			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
-			.cmx-pend-card-line{display:block;font-size:15px;line-height:1.35;color:#42556d}
+			.cmx-pend-card-line{display:block;font-size:15px;line-height:1.4;color:#2c3338}
 			.cmx-pend-card-label{font-weight:800}
-			.cmx-pend-card-link{color:inherit;text-decoration:none}
+			.cmx-pend-card-link{color:inherit;text-decoration:none;font-weight:600}
 			.cmx-pend-card-link:hover{text-decoration:underline}
-			.cmx-pend-card-meta{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:#56687d}
-			.cmx-pend-card--red .cmx-pend-card-label{color:#c44a3d}
-			.cmx-pend-card--red .cmx-pend-card-icon{background:#feefee;border-color:#f7d0cb;color:#df4137}
-			.cmx-pend-card--orange .cmx-pend-card-label{color:#d27b1f}
-			.cmx-pend-card--orange .cmx-pend-card-icon{background:#fff4e2;border-color:#ffdca9;color:#e38b23}
-			.cmx-pend-card--blue .cmx-pend-card-label{color:#3f73a7}
-			.cmx-pend-card--blue .cmx-pend-card-icon{background:#edf6ff;border-color:#cfe4fb;color:#3194de}
-			.cmx-pend-card--green .cmx-pend-card-label{color:#3d8642}
-			.cmx-pend-card--green .cmx-pend-card-icon{background:#eef9ef;border-color:#cfeecf;color:#58b749}
-			.cmx-pend-empty{padding:18px;border:1px dashed #d6dde7;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);color:#75859a;font-size:14px;text-align:center}
-			.cmx-pend-calendar-shell{padding:16px;border:1px solid #d7dce3;border-radius:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%);box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04)}
-			.cmx-pend-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
-			.cmx-pend-calendar-nav{display:inline-flex;align-items:center;gap:8px}
-			.cmx-pend-calendar-nav a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid #d4dbe5;border-radius:10px;background:#fff;color:#41556d;text-decoration:none}
-			.cmx-pend-calendar-nav a:hover{background:#f3f7fb}
-			.cmx-pend-calendar-title{margin:0;color:#162033;font-size:20px;font-weight:700}
+			.cmx-pend-card-meta{display:block;margin-top:3px;font-size:12px;line-height:1.45;color:#646970}
+			.cmx-pend-card--red .cmx-pend-card-label,
+			.cmx-pend-card--red .cmx-pend-card-link{color:#b32d2e}
+			.cmx-pend-card--red .cmx-pend-card-dot{background:#d63638}
+			.cmx-pend-card--orange .cmx-pend-card-label,
+			.cmx-pend-card--orange .cmx-pend-card-link{color:#b96f00}
+			.cmx-pend-card--orange .cmx-pend-card-dot{background:#dba617}
+			.cmx-pend-card--blue .cmx-pend-card-label,
+			.cmx-pend-card--blue .cmx-pend-card-link{color:#135e96}
+			.cmx-pend-card--blue .cmx-pend-card-dot{background:#2271b1}
+			.cmx-pend-card--green .cmx-pend-card-label,
+			.cmx-pend-card--green .cmx-pend-card-link{color:#2f7d32}
+			.cmx-pend-card--green .cmx-pend-card-dot{background:#46a546}
+			.cmx-pend-empty{padding:8px 0 2px;color:#646970;font-size:14px;font-style:italic}
+			.cmx-pend-calendar-shell{padding:0}
+			.cmx-pend-calendar-nav{display:flex;align-items:center;gap:8px}
+			.cmx-pend-calendar-nav .button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:0 10px}
 			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
-			.cmx-pend-calendar-weekday{padding:6px 4px;color:#7a8898;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center}
-			.cmx-pend-calendar-cell{min-height:168px;padding:10px 10px 12px;border:1px solid #dbe3ec;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 18px rgba(16,24,40,.04)}
-			.cmx-pend-calendar-cell.is-muted{background:rgba(255,255,255,.42);border-style:dashed}
-			.cmx-pend-calendar-cell.is-today{border-color:#78a9df;box-shadow:0 0 0 2px rgba(50,120,200,.12),0 10px 18px rgba(16,24,40,.06)}
+			.cmx-pend-calendar-weekday{padding:0 4px;color:#646970;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;text-align:center}
+			.cmx-pend-calendar-cell{min-height:160px;padding:10px;border:1px solid #e6ebf0;border-radius:10px;background:#fff;box-shadow:none}
+			.cmx-pend-calendar-cell.is-muted{background:#fafbfc}
+			.cmx-pend-calendar-cell.is-today{border-color:#c8daf6;box-shadow:0 0 0 1px #c8daf6}
 			.cmx-pend-calendar-day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
-			.cmx-pend-calendar-number{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:999px;color:#41556d;font-size:14px;font-weight:800}
-			.cmx-pend-calendar-cell.is-today .cmx-pend-calendar-number{background:#2f7dd3;color:#fff}
+			.cmx-pend-calendar-number{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;color:#1d2327;font-size:13px;font-weight:700}
+			.cmx-pend-calendar-cell.is-today .cmx-pend-calendar-number{background:#135e96;color:#fff}
 			.cmx-pend-calendar-items{display:flex;flex-direction:column;gap:8px}
-			.cmx-pend-calendar-chip{display:block;padding:8px 10px;border-radius:10px;border:1px solid #d9e6f6;background:#f8fbff;color:#42556d;text-decoration:none;font-size:12px;line-height:1.3;font-weight:700}
-			.cmx-pend-calendar-chip:hover{opacity:1;filter:brightness(.99)}
-			.cmx-pend-calendar-chip--red{background:#feefee;border-color:#f7d0cb;color:#df4137}
-			.cmx-pend-calendar-chip--orange{background:#fff4e2;border-color:#ffdca9;color:#e38b23}
-			.cmx-pend-calendar-chip--blue{background:#edf6ff;border-color:#cfe4fb;color:#3194de}
-			.cmx-pend-calendar-chip--green{background:#eef9ef;border-color:#cfeecf;color:#58b749}
-			.cmx-pend-calendar-more{margin-top:2px;color:#74849a;font-size:12px}
+			.cmx-pend-calendar-chip{display:block;padding:8px 10px;border-radius:8px;border:1px solid #e6ebf0;background:#fff;color:#2c3338;text-decoration:none;font-size:12px;line-height:1.35;font-weight:600}
+			.cmx-pend-calendar-chip:hover{text-decoration:none;background:#fafcff}
+			.cmx-pend-calendar-chip--red{border-color:#f3d0d2;background:#fff7f7;color:#b32d2e}
+			.cmx-pend-calendar-chip--orange{border-color:#f4dfb1;background:#fffbf2;color:#b96f00}
+			.cmx-pend-calendar-chip--blue{border-color:#cfe0f0;background:#f7fbff;color:#135e96}
+			.cmx-pend-calendar-chip--green{border-color:#d3e7d3;background:#f7fcf7;color:#2f7d32}
+			.cmx-pend-calendar-more{margin-top:2px;color:#646970;font-size:12px}
 			@media (max-width: 1280px){
-				.cmx-pend-board-toolbar,.cmx-pend-columns{grid-template-columns:1fr}
-				.cmx-pend-board-filter--center,
-				.cmx-pend-board-filter--right{text-align:left}
-				.cmx-pend-board-today{min-width:0}
+				.cmx-pend-board-grid{grid-template-columns:1fr}
+				.cmx-pend-postbox--full{grid-column:auto}
+				.cmx-pend-toolbar-form{grid-template-columns:1fr}
+				.cmx-pend-toolbar-today{justify-self:start;text-align:left;white-space:normal}
+				.cmx-pend-field--right{align-items:stretch}
 				.cmx-pend-calendar-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 			}
 			@media (max-width: 782px){
 				.cmx-pend-wrap{padding-right:10px}
-				.cmx-pend-shell{padding:16px}
 				.cmx-pend-head{flex-direction:column;align-items:stretch}
-				.cmx-pend-actions{width:100%}
-				.cmx-pend-tab{flex:1 1 auto}
-				.cmx-pend-board-select select{min-width:0;width:100%}
+				.cmx-pend-actions{justify-content:flex-start}
+				.cmx-pend-actions .button{flex:1 1 auto}
 				.cmx-pend-calendar-grid{grid-template-columns:1fr}
 			}
 		';
@@ -635,7 +634,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_event_card
 		$url = \trim((string) ($event['url'] ?? ''));
 
 		echo '<article class="cmx-pend-card cmx-pend-card--' . \esc_attr($tone) . '">';
-		echo '<div class="cmx-pend-card-icon">' . cmx_cockpit_pendenzen_icon_svg((string) ($event['icon'] ?? 'warning')) . '</div>';
+		echo '<span class="cmx-pend-card-dot" aria-hidden="true"></span>';
 		echo '<div class="cmx-pend-card-body">';
 		echo '<span class="cmx-pend-card-line">';
 		echo '<span class="cmx-pend-card-label">' . \esc_html($label) . ':</span> ';
@@ -712,44 +711,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_board')) {
 			60 => '60 Tage',
 		];
 
-		echo '<form class="cmx-pend-board-toolbar" method="get">';
+		echo '<div class="cmx-pend-board-grid">';
+		echo '<section class="postbox cmx-pend-postbox cmx-pend-postbox--full">';
+		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Zeitraum</span></span></h2></div>';
+		echo '<div class="inside">';
+		echo '<form class="cmx-pend-toolbar-form" method="get">';
 		echo '<input type="hidden" name="page" value="' . \esc_attr(cmx_cockpit_pendenzen_slug()) . '">';
 		echo '<input type="hidden" name="view" value="board">';
-		echo '<div class="cmx-pend-board-filter">';
-		echo '<div class="cmx-pend-board-select">';
-		echo '<select name="past" aria-label="Vergangene Tage">';
+		echo '<div class="cmx-pend-field cmx-pend-board-select">';
+		echo '<label for="cmx-pend-past">Vergangenheit</label>';
+		echo '<select id="cmx-pend-past" name="past" aria-label="Vergangene Tage">';
 		foreach ($day_options as $value => $label) {
 			echo '<option value="' . (int) $value . '"' . \selected($past_days, $value, false) . '>Letzte ' . \esc_html($label) . '</option>';
 		}
 		echo '</select>';
 		echo '</div>';
-		echo '</div>';
-		echo '<div class="cmx-pend-board-filter cmx-pend-board-filter--center">';
-		echo '<span class="cmx-pend-board-today">' . \esc_html(cmx_cockpit_pendenzen_format_board_date($today_ts)) . ' - Heute</span>';
-		echo '</div>';
-		echo '<div class="cmx-pend-board-filter cmx-pend-board-filter--right">';
-		echo '<div class="cmx-pend-board-select">';
-		echo '<select name="future" aria-label="Nächste Tage">';
+		echo '<div class="cmx-pend-toolbar-today">' . \esc_html(cmx_cockpit_pendenzen_format_board_date($today_ts)) . ' - Heute</div>';
+		echo '<div class="cmx-pend-field cmx-pend-field--right cmx-pend-board-select">';
+		echo '<label for="cmx-pend-future">Zukunft</label>';
+		echo '<select id="cmx-pend-future" name="future" aria-label="Nächste Tage">';
 		foreach ($day_options as $value => $label) {
 			echo '<option value="' . (int) $value . '"' . \selected($future_days, $value, false) . '>Nächste ' . \esc_html($label) . '</option>';
 		}
 		echo '</select>';
 		echo '</div>';
-		echo '</div>';
 		echo '</form>';
+		echo '</div>';
+		echo '</section>';
 
-		echo '<div class="cmx-pend-columns">';
-		echo '<section class="cmx-pend-column">';
-		echo '<h2 class="cmx-pend-column-title">Vergangenheit</h2>';
+		echo '<section class="postbox cmx-pend-postbox">';
+		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Vergangenheit</span><span class="cmx-pend-count">' . (int) \count($past_events) . '</span></span></h2></div>';
+		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($past_events, 'Keine Einträge in den letzten ' . $past_days . ' Tagen.');
+		echo '</div>';
 		echo '</section>';
-		echo '<section class="cmx-pend-column">';
-		echo '<h2 class="cmx-pend-column-title">Heute</h2>';
+		echo '<section class="postbox cmx-pend-postbox">';
+		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Heute</span><span class="cmx-pend-count">' . (int) \count($today_events) . '</span></span></h2></div>';
+		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($today_events, 'Heute sind keine Fristen erfasst.');
+		echo '</div>';
 		echo '</section>';
-		echo '<section class="cmx-pend-column">';
-		echo '<h2 class="cmx-pend-column-title">Zukunft</h2>';
+		echo '<section class="postbox cmx-pend-postbox">';
+		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Zukunft</span><span class="cmx-pend-count">' . (int) \count($future_events) . '</span></span></h2></div>';
+		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($future_events, 'Keine Einträge in den nächsten ' . $future_days . ' Tagen.');
+		echo '</div>';
 		echo '</section>';
 		echo '</div>';
 	}
@@ -782,17 +788,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 		$month_title = (string) \wp_date('F Y', (int) $month_start->getTimestamp(), $tz);
 		$weekday_labels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-		echo '<div class="cmx-pend-calendar-shell">';
-		echo '<div class="cmx-pend-calendar-head">';
-		echo '<div class="cmx-pend-calendar-nav">';
-		echo '<a href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $prev_month])) . '" aria-label="Vorheriger Monat"><span class="dashicons dashicons-arrow-left-alt2"></span></a>';
-		echo '</div>';
-		echo '<h2 class="cmx-pend-calendar-title">' . \esc_html($month_title) . '</h2>';
-		echo '<div class="cmx-pend-calendar-nav">';
-		echo '<a href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $next_month])) . '" aria-label="Nächster Monat"><span class="dashicons dashicons-arrow-right-alt2"></span></a>';
-		echo '</div>';
-		echo '</div>';
-
+		echo '<section class="postbox cmx-pend-postbox">';
+		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>' . \esc_html($month_title) . '</span><span class="cmx-pend-calendar-nav"><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $prev_month])) . '" aria-label="Vorheriger Monat"><span class="dashicons dashicons-arrow-left-alt2"></span></a><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $next_month])) . '" aria-label="Nächster Monat"><span class="dashicons dashicons-arrow-right-alt2"></span></a></span></span></h2></div>';
+		echo '<div class="inside cmx-pend-calendar-shell">';
 		echo '<div class="cmx-pend-calendar-grid">';
 		foreach ($weekday_labels as $weekday_label) {
 			echo '<div class="cmx-pend-calendar-weekday">' . \esc_html($weekday_label) . '</div>';
@@ -842,6 +840,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 		}
 		echo '</div>';
 		echo '</div>';
+		echo '</section>';
 	}
 }
 
@@ -854,18 +853,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		}
 
 		echo '<div class="wrap cmx-pend-wrap">';
-		echo '<div class="cmx-pend-shell">';
 		echo '<div class="cmx-pend-head">';
-		echo '<div class="cmx-pend-title-wrap">';
 		echo '<div class="cmx-pend-title-copy">';
 		echo '<h1 class="cmx-pend-title">Pendenzenübersicht</h1>';
 		echo '<p class="cmx-pend-subtitle">Alle Fristen aus Belegen, Kontakten und Projekten in einer gemeinsamen Ansicht.</p>';
 		echo '</div>';
-		echo '</div>';
 		echo '<div class="cmx-pend-actions">';
-		echo '<a class="cmx-pend-tab' . ($view === 'board' && $active_range === 30 ? ' is-active' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'board', 'range' => 30, 'past' => 15, 'future' => 15])) . '">30 Tage Ansicht</a>';
-		echo '<a class="cmx-pend-tab' . ($view === 'board' && $active_range === 7 ? ' is-active' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'board', 'range' => 7, 'past' => 3, 'future' => 3])) . '">7 Tage</a>';
-		echo '<a class="cmx-pend-tab' . ($view === 'calendar' ? ' is-active' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar'])) . '">Kalender</a>';
+		echo '<a class="button' . ($view === 'board' && $active_range === 30 ? ' button-primary' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'board', 'range' => 30, 'past' => 15, 'future' => 15])) . '">30 Tage Ansicht</a>';
+		echo '<a class="button' . ($view === 'board' && $active_range === 7 ? ' button-primary' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'board', 'range' => 7, 'past' => 3, 'future' => 3])) . '">7 Tage</a>';
+		echo '<a class="button' . ($view === 'calendar' ? ' button-primary' : '') . '" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar'])) . '">Kalender</a>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-pend-body">';
@@ -876,7 +872,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			cmx_cockpit_pendenzen_render_board();
 		}
 
-		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 	}
