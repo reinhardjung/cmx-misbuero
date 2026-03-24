@@ -1230,6 +1230,12 @@ add_action('admin_head', function() {
 		font-weight: 600;
 	}
 
+	body.index-php .wrap > h1,
+	body.index-php .wrap .wp-heading-inline {
+		font-size: 20px;
+		line-height: 1.3;
+	}
+
 	/* Akkordeon / wiederkehrende Boxen */
 	.accordion-section {
 		border-radius: 10px;
