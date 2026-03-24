@@ -1578,8 +1578,11 @@ function cmx_bank_import_render_log_page(): void {
 	.cmx-camt-hero-copy{
 		display:flex;
 		flex-direction:column;
-		justify-content:center;
+		justify-content:flex-start;
 		min-width:0;
+		padding-top:0;
+		box-sizing:border-box;
+		transform:translateY(-7px);
 	}
 	.cmx-camt-card--hero h1{
 		margin:0 0 12px;
