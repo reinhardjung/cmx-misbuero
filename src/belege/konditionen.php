@@ -221,10 +221,15 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 		? cmx_belege_uses_leistungszeitraum($opts_general)
 		: !empty($opts_general['belege_use_leistungszeitraum']);
 
-	// Aktueller Monat als Default, wenn leer
+	if (!\is_string($rng) || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
+		$rng = \current_time('Y-m-d');
+	}
+
+	// Belegmonat als Default, wenn leer
 	if ($use_leistungszeitraum && !$leistMon) {
-		$ts = \current_time('timestamp');
-		$leistMon = \gmdate('m', $ts);
+		$leistMon = \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $rng)
+			? (string) \substr((string) $rng, 5, 2)
+			: \current_time('m');
 	}
 
 	$monate = [
@@ -326,11 +331,13 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}';
 	echo 'function today(){return fmt(new Date());}';
 	echo 'function isYmd(v){return /^\\d{4}-\\d{2}-\\d{2}$/.test(v||"");}';
+	echo 'function monthFromYmd(v){return isYmd(v)?String(v).slice(5,7):"";}';
 	echo 'function monthEnd(){var b=baseDate(),y=b.getFullYear(),m=b.getMonth()+1;var last=new Date(y,m,0);return y+"-"+pad(m)+"-"+pad(last.getDate());}';
-	echo 'function nextMonthVal(){var d=new Date(),m=d.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
+	echo 'function nextMonthVal(){var b=baseDate(),m=b.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function addDays(n){var b=baseDate(); b.setDate(b.getDate()+n); return fmt(b);}';
 	echo 'function applyDefaultDueFromInvoice(force){if(!inpR||!inpF)return;if(!force&&(inpF.value||"")!=="")return;var n=parseInt(defaultDueDays,10);if(isNaN(n)||n<0)n=0;var b=baseDate();b.setDate(b.getDate()+n);inpF.value=fmt(b);}';
+	echo 'function syncLeistungsmonatFromDue(){if(!selL||!inpF)return;var m=monthFromYmd(inpF.value);if(m!==""){selL.value=m;}}';
 	echo 'function lastPartialDate(){var latest="";document.querySelectorAll("#cmx-anzahlungen-wrap .cmx-anzahlung-date").forEach(function(el){var val=(el&&el.value)?String(el.value).trim():"";if(!isYmd(val)) return;if(latest===""||val>latest){latest=val;}});return latest;}';
 
 	// Rechnungsdatum -> heute
@@ -342,7 +349,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'if(l10&&inpF){l10.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=addDays(10);});}';
 	echo 'if(l14&&inpF){l14.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=addDays(14);});}';
 	echo 'if(l30&&inpF){l30.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=addDays(30);});}';
-	echo 'if(lend&&inpF){lend.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=monthEnd();});}';
+	echo 'if(lend&&inpF){lend.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();inpF.value=monthEnd();syncLeistungsmonatFromDue();});}';
 
 	// Bezahlt am -> heute
 	echo 'if(lblB&&inpB){lblB.addEventListener("click",function(e){var tid=(e.target&&e.target.id)?e.target.id:"";if(tid==="cmx_bezahlt_clear"||tid==="cmx_bezahlt_today"||tid==="cmx_bezahlt_rng"||tid==="cmx_bezahlt_partial"){return;}e.preventDefault();inpB.value=today();inpB.dispatchEvent(new Event("change",{bubbles:true}));});}';
