@@ -1322,7 +1322,8 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 		&& \in_array($status, ['', 'offen', 'teilbezahlt'], true)
 		&& !($doc_ref_title_match || $doc_ref_contact_match || $counterparty_match)
 	) {
-		$score = -100000;
+		// Teilzahlungen ohne starken Texttreffer weiterhin anzeigen, aber klar abwerten.
+		$score -= 80;
 	}
 
 	if ($booking_date !== '') {
