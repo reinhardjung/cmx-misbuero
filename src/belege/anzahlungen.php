@@ -293,13 +293,14 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 	$clean = [];
 	foreach ($rows as $row) {
 		if (!\is_array($row)) continue;
-		$datum  = isset($row['datum']) ? \trim((string)\sanitize_text_field($row['datum'])) : '';
-		$betrag_raw = isset($row['betrag']) ? \trim((string)\sanitize_text_field($row['betrag'])) : '';
+		$datum  = isset($row['datum']) ? \trim((string)\sanitize_text_field(\wp_unslash($row['datum']))) : '';
+		$betrag_raw = isset($row['betrag']) ? \trim((string)\sanitize_text_field(\wp_unslash($row['betrag']))) : '';
+		$betrag_raw = $betrag_raw !== '' ? (string) \preg_replace('/\s*(chf|fr\.?)\s*/i', '', $betrag_raw) : '';
 		$betrag = '';
 		if ($betrag_raw !== '' && preg_match('/\d/', $betrag_raw)) {
 			$betrag = number_format(cmx_parse_number($betrag_raw), 2, '.', '');
 		}
-		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)\sanitize_text_field($row['zahlungsart'])) : '';
+		$zahlungsart = isset($row['zahlungsart']) ? \trim((string)\sanitize_text_field(\wp_unslash($row['zahlungsart']))) : '';
 		if ($datum === '' && $betrag === '') continue;
 		$clean[] = ['datum'=>$datum, 'betrag'=>$betrag, 'zahlungsart'=>$zahlungsart];
 	}
