@@ -25,6 +25,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_beleg_is_paid')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_amount_display')) {
+	function cmx_online_shop_amount_display(int $post_id): string {
+		$display = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
+			? \trim((string) cmxbu_get_beleg_amount_display($post_id))
+			: '';
+
+		if ($display === '') {
+			return '';
+		}
+
+		$display = (string) \preg_replace('/\s+[A-Z]{3}$/', '', $display);
+		return \trim($display);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_beleg_number')) {
+	function cmx_online_shop_beleg_number(int $post_id, \WP_Post $post): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_ensure_rechnungsnummer')) {
+			$number = \trim((string) cmx_ensure_rechnungsnummer($post_id));
+			if ($number !== '') {
+				return $number;
+			}
+		}
+
+		$number = \trim((string) \get_post_meta($post_id, '_cmx_rechnungsnummer', true));
+		if ($number !== '') {
+			return $number;
+		}
+
+		$title = \trim((string) $post->post_title);
+		return $title !== '' ? $title : ('Beleg #' . $post_id);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_beleg_date_display')) {
+	function cmx_online_shop_beleg_date_display(int $post_id, \WP_Post $post): string {
+		$date_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+			: '_cmx_beleg_rng_datum';
+		$raw = \trim((string) \get_post_meta($post_id, $date_key, true));
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+			$ts = \strtotime($raw);
+			if ($ts) {
+				return \wp_date('d.m.Y', $ts);
+			}
+		}
+
+		return \get_post_time('d.m.Y', false, $post);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_widget_items')) {
 	function cmx_online_shop_widget_items(): array {
 		$meta_key = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_webhook_beleg_meta_key')
@@ -61,16 +112,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_online_shop_widget_items')) {
 			$is_paid = cmx_online_shop_beleg_is_paid($post_id);
 			$items[] = [
 				'post_id'            => $post_id,
-				'title'              => (string) $post->post_title,
+				'number'             => cmx_online_shop_beleg_number($post_id, $post),
 				'edit_link'          => (string) \get_edit_post_link($post_id, ''),
-				'post_date_display'  => \get_post_time('d.m.Y', false, $post),
-				'amount_display'     => \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_amount_display')
-					? \trim((string) cmxbu_get_beleg_amount_display($post_id))
-					: '',
-				'paid_date'          => $paid_date,
-				'paid_date_display'  => $paid_date !== '' ? \wp_date('d.m.Y', \strtotime($paid_date)) : '',
+				'date_display'       => cmx_online_shop_beleg_date_display($post_id, $post),
+				'amount_display'     => cmx_online_shop_amount_display($post_id),
 				'is_paid'            => $is_paid,
-				'can_mark_paid'      => \current_user_can('edit_post', $post_id),
 			];
 		}
 
@@ -105,67 +151,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_online_shop_widget')) {
 		}
 
 		echo '<style>
+			#cmx_online_shop_widget .inside{margin:0;padding:10px 12px 12px;background:#fff}
 			#cmx_online_shop_widget .cmx-online-shop-table{width:100%;border-collapse:collapse;table-layout:fixed}
-			#cmx_online_shop_widget .cmx-online-shop-table th,#cmx_online_shop_widget .cmx-online-shop-table td{padding:8px 6px;text-align:left;vertical-align:middle;border-bottom:1px solid #f0f0f1}
-			#cmx_online_shop_widget .cmx-online-shop-table th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#646970}
-			#cmx_online_shop_widget .cmx-online-shop-title{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none;font-weight:600}
-			#cmx_online_shop_widget .cmx-online-shop-title:hover{text-decoration:underline}
-			#cmx_online_shop_widget .cmx-online-shop-title-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
-			#cmx_online_shop_widget .cmx-online-shop-amount{font-weight:700}
+			#cmx_online_shop_widget .cmx-online-shop-table th,#cmx_online_shop_widget .cmx-online-shop-table td{padding:8px 6px;border-bottom:1px solid #eef1f5;text-align:left;vertical-align:middle}
+			#cmx_online_shop_widget .cmx-online-shop-table thead th{font-size:11px;line-height:1.2;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#667085}
+			#cmx_online_shop_widget .cmx-online-shop-table tbody tr:last-child td{border-bottom:none}
+			#cmx_online_shop_widget .cmx-online-shop-number{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;color:#111827;text-decoration:none}
+			#cmx_online_shop_widget .cmx-online-shop-number:hover{text-decoration:underline}
+			#cmx_online_shop_widget .cmx-online-shop-date{color:#475467;font-variant-numeric:tabular-nums;white-space:nowrap}
+			#cmx_online_shop_widget .cmx-online-shop-col-amount{text-align:right}
+			#cmx_online_shop_widget .cmx-online-shop-amount{display:inline-block;min-width:7ch;text-align:right;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 			#cmx_online_shop_widget .cmx-online-shop-amount.is-paid{color:#1f7a1f}
-			#cmx_online_shop_widget .cmx-online-shop-amount.is-open{color:#b32d2e}
-			#cmx_online_shop_widget .cmx-online-shop-payment-cell{text-align:right}
-			#cmx_online_shop_widget .cmx-online-shop-pay-control{display:flex;justify-content:flex-end;align-items:center;gap:8px}
-			#cmx_online_shop_widget .cmx-online-shop-pay-control input[type="date"]{min-width:145px}
-			#cmx_online_shop_widget .cmx-online-shop-open-text{font-size:12px;color:#b32d2e;font-weight:600}
-			#cmx_online_shop_widget .cmx-online-shop-paid-text{font-size:12px;color:#1f7a1f;font-weight:700;white-space:nowrap}
-			#cmx_online_shop_widget .cmx-online-shop-saving{opacity:.55;pointer-events:none}
+			#cmx_online_shop_widget .cmx-online-shop-amount.is-open{color:#c2342b}
 		</style>';
 
 		echo '<table class="cmx-online-shop-table">';
 		echo '<colgroup>';
 		echo '<col>';
-		echo '<col style="width:90px;">';
-		echo '<col style="width:120px;">';
-		echo '<col style="width:210px;">';
+		echo '<col style="width:96px">';
+		echo '<col style="width:96px">';
 		echo '</colgroup>';
 		echo '<thead><tr>';
-		echo '<th>' . \esc_html__('Bestell-Titel', 'cmx-misbuero') . '</th>';
+		echo '<th>' . \esc_html__('BelegNr', 'cmx-misbuero') . '</th>';
 		echo '<th>' . \esc_html__('Datum', 'cmx-misbuero') . '</th>';
-		echo '<th>' . \esc_html__('Betrag', 'cmx-misbuero') . '</th>';
-		echo '<th>' . \esc_html__('Zahlung', 'cmx-misbuero') . '</th>';
+		echo '<th class="cmx-online-shop-col-amount">' . \esc_html__('Betrag', 'cmx-misbuero') . '</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ($items as $item) {
-			$post_id = (int) $item['post_id'];
-			$title = (string) ($item['title'] !== '' ? $item['title'] : ('#' . $post_id));
-			$edit_link = (string) $item['edit_link'];
 			$amount_class = !empty($item['is_paid']) ? 'is-paid' : 'is-open';
-
-			echo '<tr data-beleg-id="' . $post_id . '">';
+			echo '<tr>';
 			echo '<td>';
-			if ($edit_link !== '') {
-				echo '<a class="cmx-online-shop-title" href="' . \esc_url($edit_link) . '">' . \esc_html($title) . '</a>';
+			if ((string) $item['edit_link'] !== '') {
+				echo '<a class="cmx-online-shop-number" href="' . \esc_url((string) $item['edit_link']) . '">' . \esc_html((string) $item['number']) . '</a>';
 			} else {
-				echo '<span class="cmx-online-shop-title-text">' . \esc_html($title) . '</span>';
+				echo '<span class="cmx-online-shop-number">' . \esc_html((string) $item['number']) . '</span>';
 			}
 			echo '</td>';
-			echo '<td>' . \esc_html((string) $item['post_date_display']) . '</td>';
-			echo '<td class="cmx-online-shop-amount ' . \esc_attr($amount_class) . '">' . \esc_html((string) $item['amount_display']) . '</td>';
-			echo '<td class="cmx-online-shop-payment-cell">';
-
-			if (!empty($item['is_paid'])) {
-				$paid_label = (string) ($item['paid_date_display'] !== '' ? $item['paid_date_display'] : __('Bezahlt', 'cmx-misbuero'));
-				echo '<span class="cmx-online-shop-paid-text">' . \esc_html($paid_label) . '</span>';
-			} elseif (!empty($item['can_mark_paid'])) {
-				echo '<div class="cmx-online-shop-pay-control">';
-				echo '<span class="cmx-online-shop-open-text">' . \esc_html__('offen', 'cmx-misbuero') . '</span>';
-				echo '<input type="date" class="cmx-online-shop-paid-date" data-beleg="' . $post_id . '" value="">';
-				echo '</div>';
-			} else {
-				echo '<span class="cmx-online-shop-open-text">' . \esc_html__('offen', 'cmx-misbuero') . '</span>';
-			}
-
+			echo '<td class="cmx-online-shop-date">' . \esc_html((string) $item['date_display']) . '</td>';
+			echo '<td class="cmx-online-shop-col-amount">';
+			echo '<span class="cmx-online-shop-amount ' . \esc_attr($amount_class) . '">' . \esc_html((string) $item['amount_display']) . '</span>';
 			echo '</td>';
 			echo '</tr>';
 		}
@@ -173,81 +197,3 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_online_shop_widget')) {
 		echo '</tbody></table>';
 	}
 }
-
-\add_action('admin_footer-index.php', function (): void {
-	if (!\current_user_can('edit_posts')) {
-		return;
-	}
-
-	$ajax_url = \admin_url('admin-ajax.php');
-	$nonce = \wp_create_nonce('cmx_mark_paid');
-	?>
-	<script>
-	(function(){
-		var widget = document.getElementById('cmx_online_shop_widget');
-		if (!widget) return;
-
-		function escapeHtml(value){
-			return String(value || '')
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;')
-				.replace(/"/g, '&quot;')
-				.replace(/'/g, '&#039;');
-		}
-
-		function submitPaidDate(input){
-			var belegId = parseInt(input.getAttribute('data-beleg') || '0', 10);
-			var paidDate = String(input.value || '');
-			var row = input.closest('tr');
-			if (!belegId || !row || !/^\d{4}-\d{2}-\d{2}$/.test(paidDate)) return;
-
-			var body = new URLSearchParams();
-			body.set('action', 'cmx_mark_beleg_paid');
-			body.set('post_id', String(belegId));
-			body.set('paid_date', paidDate);
-			body.set('_ajax_nonce', <?php echo \wp_json_encode($nonce); ?>);
-
-			row.classList.add('cmx-online-shop-saving');
-
-			fetch(<?php echo \wp_json_encode($ajax_url); ?>, {
-				method: 'POST',
-				credentials: 'same-origin',
-				headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
-				body: body.toString()
-			}).then(function(resp){
-				return resp.json();
-			}).then(function(resp){
-				if (!resp || !resp.success || !resp.data) {
-					throw new Error(resp && resp.data ? String(resp.data) : 'Fehler beim Speichern.');
-				}
-
-				var amountCell = row.querySelector('.cmx-online-shop-amount');
-				var paymentCell = row.querySelector('.cmx-online-shop-payment-cell');
-				if (amountCell) {
-					amountCell.classList.remove('is-open');
-					amountCell.classList.add('is-paid');
-					if (resp.data.amount_display) {
-						amountCell.textContent = String(resp.data.amount_display);
-					}
-				}
-				if (paymentCell) {
-					var label = resp.data.paid_date_display ? String(resp.data.paid_date_display) : 'Bezahlt';
-					paymentCell.innerHTML = '<span class="cmx-online-shop-paid-text">' + escapeHtml(label) + '</span>';
-				}
-			}).catch(function(err){
-				window.alert(err && err.message ? err.message : 'Fehler beim Speichern.');
-			}).finally(function(){
-				row.classList.remove('cmx-online-shop-saving');
-			});
-		}
-
-		widget.addEventListener('change', function(event){
-			var input = event.target && event.target.closest ? event.target.closest('.cmx-online-shop-paid-date') : null;
-			if (!input) return;
-			submitPaidDate(input);
-		});
-	})();
-	</script>
-	<?php
-});
