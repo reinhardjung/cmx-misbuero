@@ -185,6 +185,50 @@ function cmx_no_umlaute(string $text): string {
 	return strtr($text, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue','Ä' => 'Ae', 'Ö' => 'Oe', 'Ü' => 'Ue','ß' => 'ss',]);
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_normalize_iban')) {
+	function cmx_normalize_iban(string $iban): string {
+		$iban = (string) \preg_replace('/[^A-Za-z0-9]/', '', $iban);
+		return \strtoupper($iban);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_is_valid_iban')) {
+	function cmx_is_valid_iban(string $iban): bool {
+		$iban = cmx_normalize_iban($iban);
+		if ($iban === '' || !\preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/', $iban)) {
+			return false;
+		}
+
+		$rearranged = \substr($iban, 4) . \substr($iban, 0, 4);
+		$remainder = 0;
+
+		for ($i = 0, $len = \strlen($rearranged); $i < $len; $i++) {
+			$char = $rearranged[$i];
+			$digits = \ctype_alpha($char) ? (string) (\ord($char) - 55) : $char;
+			for ($j = 0, $digits_len = \strlen($digits); $j < $digits_len; $j++) {
+				$remainder = (($remainder * 10) + (int) $digits[$j]) % 97;
+			}
+		}
+
+		return $remainder === 1;
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_is_valid_qr_iban')) {
+	function cmx_is_valid_qr_iban(string $iban): bool {
+		$iban = cmx_normalize_iban($iban);
+		if (!\preg_match('/^(CH|LI)[0-9A-Z]+$/', $iban) || \strlen($iban) !== 21) {
+			return false;
+		}
+		if (!cmx_is_valid_iban($iban)) {
+			return false;
+		}
+
+		$iid = (int) \substr($iban, 4, 5);
+		return $iid >= 30000 && $iid <= 31999;
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_export_slugify')) {
 	function cmx_export_slugify(string $value, string $fallback = 'misbuero'): string {
 		$value = \strtolower(\trim($value));

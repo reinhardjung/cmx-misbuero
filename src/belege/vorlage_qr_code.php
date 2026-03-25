@@ -148,8 +148,7 @@ function cmx_qr_text_key(string $value): string
  */
 function cmx_qr_normalize_iban(string $iban): string
 {
-    $iban = (string) \preg_replace('/[^A-Za-z0-9]/', '', $iban);
-    return \strtoupper($iban);
+    return cmx_normalize_iban($iban);
 }
 
 /**
@@ -517,9 +516,12 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
      * ---------------------------------------------------------------- */
     $qr_iban_norm = cmx_qr_normalize_iban($qr_iban);
     $bank_iban_norm = cmx_qr_normalize_iban($bank_iban);
+    $qr_iban_is_valid = cmx_is_valid_qr_iban($qr_iban_norm);
+    $bank_iban_is_valid = cmx_is_valid_iban($bank_iban_norm);
+    $qr_iban_fallback_is_valid = cmx_is_valid_iban($qr_iban_norm);
 
-    // QRR braucht zwingend eine QR-IBAN. Wenn diese fehlt, auf NON degradieren.
-    if ($ref_mode === 'QRR' && $qr_iban_norm === '') {
+    // QRR braucht zwingend eine echte QR-IBAN mit QR-IID.
+    if ($ref_mode === 'QRR' && !$qr_iban_is_valid) {
         $ref_mode = 'NON';
         $ref_value = '';
         $ref_print = '';
@@ -529,8 +531,16 @@ function cmx_add_qr_page(Dompdf $dom, array $tpl, int $post_id): void
         $iban = $qr_iban_norm;
         $iban_print = $qr_iban !== '' ? $qr_iban : $qr_iban_norm;
     } else {
-        $iban = ($bank_iban_norm !== '') ? $bank_iban_norm : $qr_iban_norm;
-        $iban_print = $bank_iban !== '' ? $bank_iban : (($qr_iban !== '') ? $qr_iban : $iban);
+        if ($bank_iban_is_valid) {
+            $iban = $bank_iban_norm;
+            $iban_print = $bank_iban !== '' ? $bank_iban : $bank_iban_norm;
+        } elseif ($qr_iban_fallback_is_valid) {
+            $iban = $qr_iban_norm;
+            $iban_print = $qr_iban !== '' ? $qr_iban : $qr_iban_norm;
+        } else {
+            $iban = '';
+            $iban_print = '';
+        }
     }
 
     if ($iban === '') {
