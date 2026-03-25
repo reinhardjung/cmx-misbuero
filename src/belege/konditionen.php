@@ -326,7 +326,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}';
 	echo 'function today(){return fmt(new Date());}';
 	echo 'function isYmd(v){return /^\\d{4}-\\d{2}-\\d{2}$/.test(v||"");}';
-	echo 'function monthEnd(){var d=new Date(),y=d.getFullYear(),m=d.getMonth()+1;var last=new Date(y,m,0);return y+"-"+pad(m)+"-"+pad(last.getDate());}';
+	echo 'function monthEnd(){var b=baseDate(),y=b.getFullYear(),m=b.getMonth()+1;var last=new Date(y,m,0);return y+"-"+pad(m)+"-"+pad(last.getDate());}';
 	echo 'function nextMonthVal(){var d=new Date(),m=d.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
 	echo 'function addDays(n){var b=baseDate(); b.setDate(b.getDate()+n); return fmt(b);}';
