@@ -147,6 +147,9 @@ function cmx_camt_assignments_get(): array {
 			'direction'     => (string) ($row['direction'] ?? ''),
 			'counterparty'  => (string) ($row['counterparty'] ?? ''),
 			'reference'     => (string) ($row['reference'] ?? ''),
+			'previous_status' => \sanitize_key((string) ($row['previous_status'] ?? '')),
+			'previous_paid_date' => cmx_camt_normalize_date((string) ($row['previous_paid_date'] ?? '')),
+			'payment_mode' => \sanitize_key((string) ($row['payment_mode'] ?? '')),
 		];
 	}
 
@@ -284,6 +287,238 @@ function cmx_camt_store_assignment(string $signature, int $beleg_id, array $entr
 	\update_option((string) \constant(__NAMESPACE__ . '\\CMX_CAMT_ASSIGNMENTS_OPTION'), $assignments, false);
 	cmx_camt_append_beleg_signature($beleg_id, $signature, $entry);
 	return true;
+}
+
+function cmx_camt_assignment_update(string $signature, array $updates): void {
+	$signature = \sanitize_key($signature);
+	if ($signature === '' || empty($updates)) {
+		return;
+	}
+
+	$assignments = cmx_camt_assignments_get();
+	if (!isset($assignments[$signature]) || !\is_array($assignments[$signature])) {
+		return;
+	}
+
+	$assignments[$signature] = \array_merge((array) $assignments[$signature], $updates);
+	\update_option((string) \constant(__NAMESPACE__ . '\\CMX_CAMT_ASSIGNMENTS_OPTION'), $assignments, false);
+}
+
+function cmx_camt_beleg_status_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')
+		: '_cmx_beleg_status';
+}
+
+function cmx_camt_beleg_paid_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+		: '_cmx_beleg_bezahlt_am';
+}
+
+function cmx_camt_beleg_partial_meta_key(): string {
+	return \defined(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_ANZAHLUNGEN')
+		: '_cmx_beleg_anzahlungen';
+}
+
+function cmx_camt_beleg_partial_rows(int $beleg_id): array {
+	if ($beleg_id <= 0) {
+		return [];
+	}
+
+	$raw = \get_post_meta($beleg_id, cmx_camt_beleg_partial_meta_key(), true);
+	if (\is_string($raw) && $raw !== '') {
+		$decoded = \json_decode($raw, true);
+		if (\json_last_error() === \JSON_ERROR_NONE && \is_array($decoded)) {
+			$raw = $decoded;
+		} else {
+			$maybe = @\maybe_unserialize($raw);
+			$raw = \is_array($maybe) ? $maybe : [];
+		}
+	} elseif (!\is_array($raw)) {
+		$raw = [];
+	}
+
+	$rows = [];
+	foreach ((array) $raw as $row) {
+		if (\is_array($row)) {
+			$rows[] = $row;
+		}
+	}
+
+	return $rows;
+}
+
+function cmx_camt_store_beleg_partial_rows(int $beleg_id, array $rows): void {
+	$clean = [];
+	foreach ($rows as $row) {
+		if (\is_array($row)) {
+			$clean[] = $row;
+		}
+	}
+
+	if (empty($clean)) {
+		\delete_post_meta($beleg_id, cmx_camt_beleg_partial_meta_key());
+		return;
+	}
+
+	\update_post_meta($beleg_id, cmx_camt_beleg_partial_meta_key(), \wp_json_encode(\array_values($clean)));
+}
+
+function cmx_camt_beleg_partial_sum(int $beleg_id): float {
+	$sum = 0.0;
+	foreach (cmx_camt_beleg_partial_rows($beleg_id) as $row) {
+		$betrag = cmx_camt_normalize_amount((string) ($row['betrag'] ?? ''));
+		if ($betrag === '') {
+			continue;
+		}
+		$sum += (float) $betrag;
+	}
+
+	return (float) \round($sum, 2);
+}
+
+function cmx_camt_beleg_open_amount(int $beleg_id): float {
+	$total = cmx_camt_beleg_amount($beleg_id);
+	if ($total <= 0.0) {
+		return 0.0;
+	}
+
+	$paid = cmx_camt_beleg_partial_sum($beleg_id);
+	$open = (float) \round($total - $paid, 2);
+	return $open > 0.0 ? $open : 0.0;
+}
+
+function cmx_camt_beleg_add_partial_payment(int $beleg_id, string $signature, string $booking_date, float $amount): bool {
+	$signature = \sanitize_key($signature);
+	if ($beleg_id <= 0 || $signature === '' || $amount <= 0.0) {
+		return false;
+	}
+
+	$rows = cmx_camt_beleg_partial_rows($beleg_id);
+	$filtered = [];
+	foreach ($rows as $row) {
+		if (\sanitize_key((string) ($row['camt_signature'] ?? '')) === $signature) {
+			continue;
+		}
+		$filtered[] = $row;
+	}
+
+	$filtered[] = [
+		'datum'          => cmx_camt_normalize_date($booking_date),
+		'betrag'         => \number_format($amount, 2, '.', ''),
+		'zahlungsart'    => '',
+		'camt_signature' => $signature,
+		'camt_source'    => 'bank_import',
+	];
+
+	cmx_camt_store_beleg_partial_rows($beleg_id, $filtered);
+	return true;
+}
+
+function cmx_camt_beleg_remove_partial_payment(int $beleg_id, string $signature): bool {
+	$signature = \sanitize_key($signature);
+	if ($beleg_id <= 0 || $signature === '') {
+		return false;
+	}
+
+	$rows = cmx_camt_beleg_partial_rows($beleg_id);
+	$filtered = [];
+	$removed = false;
+	foreach ($rows as $row) {
+		if (\sanitize_key((string) ($row['camt_signature'] ?? '')) === $signature) {
+			$removed = true;
+			continue;
+		}
+		$filtered[] = $row;
+	}
+
+	if ($removed) {
+		cmx_camt_store_beleg_partial_rows($beleg_id, $filtered);
+	}
+
+	return $removed;
+}
+
+function cmx_camt_apply_assignment_to_beleg(int $beleg_id, string $signature, array $entry): array {
+	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+		return [];
+	}
+
+	$status_key = cmx_camt_beleg_status_meta_key();
+	$paid_key = cmx_camt_beleg_paid_meta_key();
+	$previous_status = \sanitize_key((string) \get_post_meta($beleg_id, $status_key, true));
+	$previous_paid_date = cmx_camt_normalize_date((string) \get_post_meta($beleg_id, $paid_key, true));
+	$total_amount = cmx_camt_beleg_amount($beleg_id);
+	$partial_sum_before = cmx_camt_beleg_partial_sum($beleg_id);
+	$open_amount_before = $total_amount > 0.0
+		? (float) \round(\max($total_amount - $partial_sum_before, 0.0), 2)
+		: 0.0;
+	$payment_amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? ''));
+	$booking_date = cmx_camt_normalize_date((string) ($entry['booking_date'] ?? ''));
+	$has_partial_history = $partial_sum_before > 0.009;
+	$applied_amount = $open_amount_before > 0.0
+		? (float) \round(\min($payment_amount, $open_amount_before), 2)
+		: $payment_amount;
+	$should_add_partial = $payment_amount > 0.0
+		&& $open_amount_before > 0.009
+		&& ($payment_amount < ($open_amount_before - 0.009) || $has_partial_history);
+	$partial_added = false;
+
+	if ($should_add_partial) {
+		$partial_added = cmx_camt_beleg_add_partial_payment($beleg_id, $signature, $booking_date, $applied_amount);
+	}
+
+	$open_amount_after = $open_amount_before > 0.0
+		? (float) \round(\max($open_amount_before - $applied_amount, 0.0), 2)
+		: 0.0;
+	$is_partial = $total_amount > 0.0 && $open_amount_before > 0.009 && $open_amount_after > 0.009;
+
+	if ($is_partial) {
+		\update_post_meta($beleg_id, $status_key, 'offen');
+		\delete_post_meta($beleg_id, $paid_key);
+	} else {
+		\update_post_meta($beleg_id, $status_key, 'bezahlt');
+		if ($booking_date !== '') {
+			\update_post_meta($beleg_id, $paid_key, $booking_date);
+		} else {
+			\delete_post_meta($beleg_id, $paid_key);
+		}
+	}
+
+	return [
+		'previous_status'    => $previous_status,
+		'previous_paid_date' => $previous_paid_date,
+		'payment_mode'       => $is_partial ? 'partial' : ($partial_added ? 'settled' : 'paid'),
+	];
+}
+
+function cmx_camt_revert_assignment_on_beleg(string $signature, array $assignment): void {
+	$beleg_id = (int) ($assignment['beleg_id'] ?? 0);
+	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+		return;
+	}
+
+	cmx_camt_beleg_remove_partial_payment($beleg_id, $signature);
+
+	$status_key = cmx_camt_beleg_status_meta_key();
+	$paid_key = cmx_camt_beleg_paid_meta_key();
+	$previous_status = \sanitize_key((string) ($assignment['previous_status'] ?? ''));
+	if (!\in_array($previous_status, ['offen', 'bezahlt', 'teilbezahlt'], true)) {
+		$previous_status = 'offen';
+	}
+	$previous_paid_date = cmx_camt_normalize_date((string) ($assignment['previous_paid_date'] ?? ''));
+	if (!\in_array($previous_status, ['bezahlt', 'teilbezahlt'], true)) {
+		$previous_paid_date = '';
+	}
+
+	\update_post_meta($beleg_id, $status_key, $previous_status);
+	if ($previous_paid_date !== '') {
+		\update_post_meta($beleg_id, $paid_key, $previous_paid_date);
+	} else {
+		\delete_post_meta($beleg_id, $paid_key);
+	}
 }
 
 function cmx_camt_clean_ws(string $value): string {
@@ -954,7 +1189,7 @@ function cmx_camt_beleg_ids_by_amount_window(array $entry, float $window = 0.0):
 		if ($beleg_id <= 0) {
 			continue;
 		}
-		$amount = cmx_camt_beleg_amount($beleg_id);
+		$amount = cmx_camt_beleg_open_amount($beleg_id);
 		if ($amount <= 0.0) {
 			continue;
 		}
@@ -1027,7 +1262,7 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 	$title = \trim((string) \get_the_title($beleg_id));
 	$contact = cmx_camt_beleg_contact_label($beleg_id);
 	$direction = \sanitize_key((string) \get_post_meta($beleg_id, \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung', true));
-	$amount = cmx_camt_beleg_amount($beleg_id);
+	$amount = cmx_camt_beleg_open_amount($beleg_id);
 	$entry_amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? ''));
 	$bounds = cmx_camt_amount_filter_bounds($entry, $amount_window);
 	$amount_from = (float) ($bounds['from'] ?? 0.0);
@@ -1040,6 +1275,9 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 	$doc_ref = \trim((string) ($entry['document_ref'] ?? ''));
 	$counterparty_name = \trim((string) ($entry['counterparty_name'] ?? ''));
 	$score = 0;
+	$doc_ref_title_match = ($doc_ref !== '' && $title !== '' && \stripos($title, $doc_ref) !== false);
+	$doc_ref_contact_match = ($doc_ref !== '' && $contact !== '' && \stripos($contact, $doc_ref) !== false);
+	$counterparty_match = false;
 
 	if ($direction !== '' && $direction === (string) ($entry['beleg_direction'] ?? '')) {
 		$score += 120;
@@ -1052,22 +1290,39 @@ function cmx_camt_beleg_score_candidate(int $beleg_id, array $entry, float $amou
 	} elseif ($amount >= ($amount_from - 0.009) && $amount <= ($amount_to + 0.009)) {
 		$distance = \abs($amount - $target_amount);
 		$score += \max(40, 160 - (int) \round($distance * 8));
+	} elseif (
+		$entry_amount > 0.0
+		&& $amount > ($entry_amount + 0.009)
+		&& \in_array($status, ['', 'offen', 'teilbezahlt'], true)
+	) {
+		$score += 40;
 	} else {
 		$score = -100000;
 	}
 
-	if ($doc_ref !== '' && $title !== '' && \stripos($title, $doc_ref) !== false) {
+	if ($doc_ref_title_match) {
 		$score += 320;
 	}
-	if ($doc_ref !== '' && $contact !== '' && \stripos($contact, $doc_ref) !== false) {
+	if ($doc_ref_contact_match) {
 		$score += 50;
 	}
 
 	if ($counterparty_name !== '') {
 		$cp_norm = cmx_camt_normalize_name($counterparty_name);
 		if ($cp_norm !== '' && (\str_contains(cmx_camt_normalize_name($title), $cp_norm) || \str_contains(cmx_camt_normalize_name($contact), $cp_norm))) {
+			$counterparty_match = true;
 			$score += 90;
 		}
+	}
+
+	if (
+		$score > -100000
+		&& $entry_amount > 0.0
+		&& $amount > ($entry_amount + 0.009)
+		&& \in_array($status, ['', 'offen', 'teilbezahlt'], true)
+		&& !($doc_ref_title_match || $doc_ref_contact_match || $counterparty_match)
+	) {
+		$score = -100000;
 	}
 
 	if ($booking_date !== '') {
@@ -2234,16 +2489,16 @@ HTML;
 		\wp_send_json_error(['message' => 'Diese Buchung ist bereits einem anderen Beleg zugeordnet.'], 409);
 	}
 
-	$booking_date = cmx_camt_normalize_date((string) ($entry['booking_date'] ?? ''));
-	if ($booking_date !== '') {
-		\update_post_meta(
-			$beleg_id,
-			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM') ? CMX_BELEG_META_BEZAHLT_AM : '_cmx_beleg_bezahlt_am',
-			$booking_date
-		);
+	$assignment_effect = cmx_camt_apply_assignment_to_beleg($beleg_id, $signature, $entry);
+	if (!empty($assignment_effect)) {
+		cmx_camt_assignment_update($signature, $assignment_effect);
 	}
 
-	cmx_bank_import_log('CAMT Buchung zugeordnet', ['signature' => $signature, 'beleg_id' => $beleg_id]);
+	cmx_bank_import_log('CAMT Buchung zugeordnet', [
+		'signature' => $signature,
+		'beleg_id' => $beleg_id,
+		'payment_mode' => (string) ($assignment_effect['payment_mode'] ?? 'paid'),
+	]);
 	\wp_send_json_success([
 		'status_html' => cmx_camt_row_status_html($entry),
 		'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
@@ -2264,11 +2519,19 @@ HTML;
 		\wp_send_json_error(['message' => 'Buchung nicht gefunden.'], 404);
 	}
 
+	$current_assignment = cmx_camt_assignment_get($signature);
+	if (!empty($current_assignment)) {
+		cmx_camt_revert_assignment_on_beleg($signature, $current_assignment);
+	}
+
 	if (!cmx_camt_remove_assignment($signature)) {
 		\wp_send_json_error(['message' => 'Zuordnung konnte nicht aufgehoben werden.'], 400);
 	}
 
-	cmx_bank_import_log('CAMT Zuordnung aufgehoben', ['signature' => $signature]);
+	cmx_bank_import_log('CAMT Zuordnung aufgehoben', [
+		'signature' => $signature,
+		'beleg_id' => (int) ($current_assignment['beleg_id'] ?? 0),
+	]);
 	\wp_send_json_success([
 		'status_html' => cmx_camt_row_status_html($entry),
 		'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
@@ -2308,6 +2571,11 @@ HTML;
 	if ($beleg_id <= 0 || !cmx_camt_store_assignment($signature, $beleg_id, $entry)) {
 		\wp_send_json_error(['message' => 'Buchung konnte nicht zugeordnet werden.'], 500);
 	}
+	cmx_camt_assignment_update($signature, [
+		'previous_status' => 'offen',
+		'previous_paid_date' => '',
+		'payment_mode' => 'paid',
+	]);
 
 	cmx_bank_import_log('CAMT Beleg neu angelegt', ['signature' => $signature, 'beleg_id' => $beleg_id]);
 	\wp_send_json_success([
