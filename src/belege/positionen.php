@@ -1454,23 +1454,13 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 		$nr    = cmx_get_artikel_nr($id);
 		$base_label = trim(($nr !== '' ? $nr . ' – ' : '') . $title);
 
-			$items[] = [
-				'label' => $base_label,
-				'value' => $id,
-				'nr'    => $nr,
-				'title' => $title,
-				'variant_index' => '',
-			];
-
 		$variant_entries = [];
 		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_entries')) {
 			$include_all_variants = ($term === '' || isset($title_match_map[$id]) || isset($meta_match_map[$id]));
 			$variant_entries = cmx_artikel_search_variant_entries($id, $include_all_variants ? '' : $term);
 		}
-		if (empty($variant_entries)) {
-			continue;
-		}
 
+		$variant_items = [];
 		$seen_variant_labels = [];
 		foreach ($variant_entries as $entry) {
 			if (!\is_array($entry)) {
@@ -1501,14 +1491,27 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 				$variant_title = $title;
 			}
 
-				$items[] = [
-					'label' => $variant_label,
-					'value' => $id,
-					'nr'    => \trim((string) ($entry['sku'] ?? '')) ?: $nr,
-					'title' => $variant_title,
-					'variant_index' => isset($entry['index']) ? (int) $entry['index'] : '',
-				];
-			}
+			$variant_items[] = [
+				'label' => $variant_label,
+				'value' => $id,
+				'nr'    => \trim((string) ($entry['sku'] ?? '')) ?: $nr,
+				'title' => $variant_title,
+				'variant_index' => isset($entry['index']) ? (int) $entry['index'] : '',
+			];
+		}
+
+		if (!empty($variant_items)) {
+			$items = \array_merge($items, $variant_items);
+			continue;
+		}
+
+		$items[] = [
+			'label' => $base_label,
+			'value' => $id,
+			'nr'    => $nr,
+			'title' => $title,
+			'variant_index' => '',
+		];
 	}
 
 	$priority_threshold = (int) \apply_filters('cmx_beleg_artikel_priority_threshold', 3);
