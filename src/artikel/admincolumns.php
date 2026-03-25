@@ -104,8 +104,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
 			$title = $parent_title !== '' ? $parent_title : '(ohne Titel)';
 			if (!empty($title_parts)) {
 				$title .= ' - ' . \implode(' / ', $title_parts);
-			} elseif ($sku !== '') {
-				$title .= ' - ' . $sku;
 			}
 
 			$search_blob = \implode(' ', \array_filter([
