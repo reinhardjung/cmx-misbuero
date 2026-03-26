@@ -228,6 +228,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 		return;
 	}
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_emails_edit_screen_active') && cmx_emails_edit_screen_active()) {
+		return;
+	}
+
 	$notice = cmx_emails_mailbox_notice();
 	if ($notice['message'] === '') {
 		return;

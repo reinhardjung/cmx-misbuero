@@ -245,6 +245,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_emails')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_notice_user_meta_key')) {
+	function cmx_emails_notice_user_meta_key(int $post_id): string {
+		return '_cmx_emails_edit_notice_' . (int) $post_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_edit_notice')) {
+	function cmx_emails_store_edit_notice(int $post_id, string $message, string $type = 'info'): void {
+		$user_id = \get_current_user_id();
+		if ($post_id <= 0 || $user_id <= 0 || $message === '') {
+			return;
+		}
+
+		\update_user_meta($user_id, cmx_emails_notice_user_meta_key($post_id), [
+			'message' => $message,
+			'type' => \in_array($type, ['success', 'error', 'warning', 'info'], true) ? $type : 'info',
+		]);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_pull_edit_notice')) {
+	function cmx_emails_pull_edit_notice(int $post_id): array {
+		$user_id = \get_current_user_id();
+		if ($post_id <= 0 || $user_id <= 0) {
+			return ['message' => '', 'type' => 'info'];
+		}
+
+		$key = cmx_emails_notice_user_meta_key($post_id);
+		$notice = \get_user_meta($user_id, $key, true);
+		\delete_user_meta($user_id, $key);
+
+		if (!\is_array($notice)) {
+			return ['message' => '', 'type' => 'info'];
+		}
+
+		return [
+			'message' => (string) ($notice['message'] ?? ''),
+			'type' => \in_array((string) ($notice['type'] ?? 'info'), ['success', 'error', 'warning', 'info'], true)
+				? (string) ($notice['type'] ?? 'info')
+				: 'info',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 	function cmx_emails_queue_redirect_notice(int $post_id, string $message, string $type = 'info', string $redirect_target = ''): void {
 		if ($post_id <= 0 || $message === '') {
@@ -260,6 +304,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 			'type' => \in_array($type, ['success', 'error', 'warning', 'info'], true) ? $type : 'info',
 			'redirect_target' => $redirect_target === 'list' ? 'list' : '',
 		];
+
+		if ($redirect_target !== 'list') {
+			cmx_emails_store_edit_notice($post_id, $message, $type);
+		}
 	}
 }
 
@@ -286,6 +334,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 
 	return \add_query_arg($notice_args, $location);
 }, 20, 2);
+
+\add_action('all_admin_notices', function (): void {
+	if (!cmx_emails_edit_screen_active() || !\function_exists(__NAMESPACE__ . '\\cmx_emails_mailbox_notice')) {
+		return;
+	}
+
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	$notice = $post_id > 0 ? cmx_emails_pull_edit_notice($post_id) : ['message' => '', 'type' => 'info'];
+	if ((string) ($notice['message'] ?? '') === '') {
+		$notice = cmx_emails_mailbox_notice();
+	}
+
+	if ((string) ($notice['message'] ?? '') === '') {
+		return;
+	}
+
+	echo '<div class="notice notice-' . \esc_attr((string) ($notice['type'] ?? 'info')) . ' is-dismissible"><p>' . \esc_html((string) $notice['message']) . '</p></div>';
+});
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_attachment_list')) {
 	function cmx_emails_compose_attachment_list(int $post_id): array {
@@ -825,17 +891,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	cmx_emails_ensure_publish_status($post_id);
 
 	$should_send = !empty($_POST['cmx_email_send_now']);
+	$recipient_notice = \trim($to_raw) === ''
+		? 'Versand blockiert. Im Feld An fehlt eine E-Mail-Adresse.'
+		: ($to === []
+			? 'Versand blockiert. Bitte mindestens eine gueltige Empfaenger-Adresse in An eintragen.'
+			: '');
+	$subject_notice = cmx_emails_is_auto_draft_title((string) \get_the_title($post_id))
+		? 'Versand blockiert. Bitte einen Betreff eingeben.'
+		: '';
 
 	if ($should_send) {
 		$invalid_notice = cmx_emails_invalid_address_notice($invalid_addresses);
 		if ($invalid_notice !== '') {
 			cmx_emails_queue_redirect_notice($post_id, $invalid_notice, 'error');
+		} elseif ($recipient_notice !== '') {
+			cmx_emails_queue_redirect_notice($post_id, $recipient_notice, 'error');
+		} elseif ($subject_notice !== '') {
+			cmx_emails_queue_redirect_notice($post_id, $subject_notice, 'error');
 		} else {
 			$result = cmx_emails_send_compose_post($post_id);
 			if (\is_wp_error($result)) {
-				if ((string) $result->get_error_code() !== 'missing_recipient') {
-					cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
-				}
+				cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
 			} else {
 				cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success', 'list');
 			}
@@ -1020,6 +1096,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		document.addEventListener('DOMContentLoaded', function () {
 			var publishButton = document.getElementById('publish');
 			var sendNowField = document.getElementById('cmx-email-send-now');
+			var isSendSubmit = false;
 			var submitBox = document.getElementById('submitdiv');
 			var ccToggle = document.getElementById('cmx-email-cc-toggle');
 			var ccWrap = document.getElementById('cmx-email-cc-wrap');
@@ -1074,7 +1151,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				publishButton.classList.remove('button-primary');
 				publishButton.classList.add('button-secondary');
 				publishButton.addEventListener('click', function () {
-					if (sendNowField) {
+					if (sendNowField && !isSendSubmit) {
 						sendNowField.value = '';
 					}
 				});
@@ -1089,6 +1166,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				sendButton.style.width = '100%';
 				sendButton.style.marginTop = '8px';
 				sendButton.addEventListener('click', function () {
+					isSendSubmit = true;
 					if (sendNowField) {
 						sendNowField.value = '1';
 					}

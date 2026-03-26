@@ -50,6 +50,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_sender_display_label')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
+	function cmx_emails_admin_subject_label(int $post_id): string {
+		$subject = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
+		if ($subject !== '') {
+			return $subject;
+		}
+
+		$post = \get_post($post_id);
+		$post_title = $post instanceof \WP_Post ? \trim((string) $post->post_title) : '';
+		if ($post_title !== '') {
+			return $post_title;
+		}
+
+		return 'Betreffzeile fehlt';
+	}
+}
+
 \add_filter('manage_edit-' . CMX_EMAILS_CPT . '_columns', function ($columns) {
 	$new = [];
 	$new['cb'] = $columns['cb'] ?? '<input type="checkbox">';
@@ -96,7 +113,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_sender_display_label')
 			$excerpt = (string) \get_post($post_id)->post_excerpt;
 		}
 		$edit_url = \get_edit_post_link($post_id, '');
-		$title = '<strong>' . \esc_html((string) \get_the_title($post_id)) . '</strong>';
+		$title = '<strong>' . \esc_html(cmx_emails_admin_subject_label($post_id)) . '</strong>';
 		echo \is_string($edit_url) && $edit_url !== '' ? '<a href="' . \esc_url($edit_url) . '">' . $title . '</a>' : $title;
 		if ($excerpt !== '') {
 			echo '<span class="cmx-email-admin-excerpt">' . \esc_html(cmx_emails_text_excerpt($excerpt, 100)) . '</span>';
@@ -153,7 +170,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_sender_display_label')
 		'action' => 'cmx_emails_delete',
 		'post_id' => (int) $post->ID,
 	], \admin_url('admin-post.php')), 'cmx_emails_delete');
-	$actions['delete'] = '<a href="' . \esc_url($delete_url) . '" class="submitdelete">Loeschen</a>';
+	$actions['delete'] = '<a href="' . \esc_url($delete_url) . '" class="submitdelete">L&ouml;schen</a>';
 
 	return $actions;
 }, 10, 2);
