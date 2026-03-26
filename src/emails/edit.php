@@ -21,6 +21,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_edit_screen_active')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_is_auto_draft_title')) {
+	function cmx_emails_is_auto_draft_title(string $value): bool {
+		$value = \trim((string) $value);
+		if ($value === '') {
+			return true;
+		}
+
+		$normalized = \function_exists('mb_strtolower')
+			? (string) \mb_strtolower($value, 'UTF-8')
+			: (string) \strtolower($value);
+		$normalized = \str_replace(['_', ' '], '-', $normalized);
+
+		return $normalized === 'auto-draft'
+			|| \str_contains($normalized, 'automatisch-gespeicherter-entwurf')
+			|| \str_contains($normalized, 'auto-draft');
+	}
+}
+
 \add_filter('default_title', function (string $title, \WP_Post $post): string {
 	if ($post->post_type !== CMX_EMAILS_CPT || !cmx_emails_is_compose_post($post)) {
 		return $title;
@@ -416,6 +434,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_send_compose_post')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_ensure_publish_status')) {
+	function cmx_emails_ensure_publish_status(int $post_id): void {
+		static $running = [];
+
+		if ($post_id <= 0 || isset($running[$post_id])) {
+			return;
+		}
+
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || $post->post_type !== CMX_EMAILS_CPT) {
+			return;
+		}
+
+		$status = \sanitize_key((string) $post->post_status);
+		if ($status === 'publish' || $status === 'trash') {
+			return;
+		}
+
+		$running[$post_id] = true;
+		\wp_update_post([
+			'ID' => $post_id,
+			'post_status' => 'publish',
+		]);
+		unset($running[$post_id]);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')) {
 	function cmx_emails_compose_admin_url(string $mode, int $source_id): string {
 		$args = [
@@ -468,16 +513,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 		}
 		$saved_account_id = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('account_id'), true));
 		$saved_subject = (string) \get_post_meta($post->ID, cmx_emails_meta_key('subject'), true);
+		if (cmx_emails_is_auto_draft_title($saved_subject)) {
+			$saved_subject = '';
+		}
 		$saved_to = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('to'), true));
 		$saved_cc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('cc'), true));
 		$saved_bcc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('bcc'), true));
 		$body = (string) $post->post_content;
+		$post_title = (string) $post->post_title;
+		if (cmx_emails_is_auto_draft_title($post_title)) {
+			$post_title = '';
+		}
 
 		$data = [
 			'mode' => $mode,
 			'source_id' => $source_id,
 			'account_id' => $saved_account_id !== '' ? $saved_account_id : cmx_emails_default_client_id(),
-			'subject' => $saved_subject !== '' ? $saved_subject : (string) $post->post_title,
+			'subject' => $saved_subject !== '' ? $saved_subject : $post_title,
 			'to' => $saved_to,
 			'cc' => $saved_cc,
 			'bcc' => $saved_bcc,
@@ -685,17 +737,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	\update_post_meta($post_id, cmx_emails_meta_key('bcc'), $bcc);
 	\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $body_html);
 	\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $body_plain);
-	$existing_folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 	\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'drafts');
 	$received_ts = (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true);
 	if ($received_ts <= 0) {
 		\update_post_meta($post_id, cmx_emails_meta_key('received_ts'), (string) \time());
 	}
+	cmx_emails_ensure_publish_status($post_id);
 
 	$should_send = !empty($_POST['cmx_email_send_now']);
-	if (!$should_send && cmx_emails_is_compose_post($post)) {
-		$should_send = isset($_POST['publish']) && !isset($_POST['save']) && $existing_folder !== 'sent';
-	}
 
 	if ($should_send) {
 		$result = cmx_emails_send_compose_post($post_id);
@@ -747,6 +796,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 	\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
 	\update_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), '1');
 	cmx_emails_update_assignment_cache($post_id);
+	cmx_emails_ensure_publish_status($post_id);
 }, 10, 2);
 
 \add_action('admin_head', function (): void {
@@ -858,18 +908,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		document.addEventListener('DOMContentLoaded', function () {
 			var publishButton = document.getElementById('publish');
 			var sendNowField = document.getElementById('cmx-email-send-now');
+			var submitBox = document.getElementById('submitdiv');
 			if (publishButton) {
-				publishButton.value = 'Senden';
+				publishButton.value = 'Speichern';
+				publishButton.classList.remove('button-primary');
+				publishButton.classList.add('button-secondary');
 				publishButton.addEventListener('click', function () {
 					if (sendNowField) {
-						sendNowField.value = '1';
+						sendNowField.value = '';
 					}
 				});
 			}
 
+			if (submitBox && publishButton && !document.getElementById('cmx-email-send-button')) {
+				var sendButton = document.createElement('button');
+				sendButton.type = 'button';
+				sendButton.id = 'cmx-email-send-button';
+				sendButton.className = 'button button-primary button-large';
+				sendButton.textContent = 'Senden';
+				sendButton.style.width = '100%';
+				sendButton.style.marginTop = '8px';
+				sendButton.addEventListener('click', function () {
+					if (sendNowField) {
+						sendNowField.value = '1';
+					}
+					publishButton.click();
+				});
+
+				var publishAction = submitBox.querySelector('#major-publishing-actions');
+				if (publishAction) {
+					publishAction.appendChild(sendButton);
+				} else if (publishButton.parentNode) {
+					publishButton.parentNode.appendChild(sendButton);
+				}
+			}
+
 			var titleSpan = document.querySelector('#submitdiv .postbox-header .hndle span');
 			if (titleSpan) {
-				titleSpan.textContent = 'Versenden';
+				titleSpan.textContent = 'Aktion';
 			}
 		});
 	</script>

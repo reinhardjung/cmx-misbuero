@@ -181,7 +181,7 @@ require_once 'dublicate.php';
 // TITLE Bereich
 add_filter('enter_title_here', function($title, $post) {
 	if ($post->post_type === 'belege') {
-		$title = '{Der Name des Beleges wird hier automatisch vergeben}';
+		$title = '{Die Nummer des Beleges wird hier automatisch vergeben}';
 	}
 	return $title;
 }, 10, 2);

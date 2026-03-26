@@ -29,15 +29,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_sender_display_label')) {
+	function cmx_emails_admin_sender_display_label(string $label, string $email): string {
+		$label = \trim((string) $label);
+		$email = \sanitize_email($email);
+
+		if ($label === '') {
+			return $email;
+		}
+
+		if ($email !== '') {
+			$quoted_email = \preg_quote($email, '/');
+			$label = (string) \preg_replace('/\s*<\s*' . $quoted_email . '\s*>\s*/i', '', $label);
+		}
+
+		$label = (string) \preg_replace('/\s*<[^>]+>\s*/', '', $label);
+		$label = \trim($label);
+
+		return $label !== '' ? $label : $email;
+	}
+}
+
 \add_filter('manage_edit-' . CMX_EMAILS_CPT . '_columns', function ($columns) {
 	$new = [];
 	$new['cb'] = $columns['cb'] ?? '<input type="checkbox">';
-	$new['cmx_email_sender'] = 'Absender';
 	$new['title'] = 'Betreff';
+	$new['cmx_email_sender'] = 'Absender';
+	$new['cmx_email_traffic'] = 'Traffic';
 	$new['cmx_email_account'] = 'Konto';
-	$new['cmx_email_date'] = 'Datum';
 	$new['cmx_email_status'] = 'Status';
 	$new['cmx_email_assignment'] = 'Zuordnung';
+	$new['cmx_email_date'] = 'Datum';
 	return $new;
 });
 
@@ -49,12 +71,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 \add_action('manage_' . CMX_EMAILS_CPT . '_posts_custom_column', function ($column, $post_id) {
 	$post_id = (int) $post_id;
 
+	if ($column === 'cmx_email_traffic') {
+		$direction = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('direction'), true));
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		$is_outgoing = $direction === 'outgoing' || \in_array($folder, ['sent', 'drafts'], true);
+		echo \esc_html($is_outgoing ? 'ausgang' : 'eingang');
+		return;
+	}
+
 	if ($column === 'cmx_email_sender') {
 		$sender_email = \sanitize_email((string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true));
 		$sender_label = (string) \get_post_meta($post_id, cmx_emails_meta_key('sender_label'), true);
+		$sender_display = cmx_emails_admin_sender_display_label($sender_label, $sender_email);
 		echo '<div class="cmx-email-admin-sender">';
 		echo \get_avatar($sender_email, 52);
-		echo '<div class="cmx-email-admin-sender-copy"><strong>' . \esc_html($sender_label !== '' ? $sender_label : $sender_email) . '</strong><span>' . \esc_html($sender_email) . '</span></div>';
+		echo '<div class="cmx-email-admin-sender-copy"><strong>' . \esc_html($sender_display) . '</strong><span>' . \esc_html($sender_email) . '</span></div>';
 		echo '</div>';
 		return;
 	}
@@ -258,6 +289,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 	}
 	?>
 	<style>
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_traffic {
+			width: 110px;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_sender {
 			width: 320px;
 		}

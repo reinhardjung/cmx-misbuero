@@ -338,8 +338,8 @@ function cmx_lieferanten_args(): array {
 \add_filter('manage_edit-artikel_columns', function (array $cols): array {
 	$new = [];
 	$new['cb']             = $cols['cb'] ?? '<input type="checkbox" />';
-	$new['title']          = 'Titel';
-	$new['sku']            = 'Artikel-Nr.';
+	$new['title']          = 'Artikel';
+	$new['sku']            = 'Nr';
 	$new['typen']          = 'Typen';
 	$new['kategorien']     = 'Kategorien';
 	$new['groessen']       = 'Grössen';

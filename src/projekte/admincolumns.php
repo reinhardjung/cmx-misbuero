@@ -991,6 +991,13 @@ add_filter('manage_edit-projekte_columns', function(array $columns): array {
 	]);
 }, 950);
 
+add_filter('manage_edit-projekte_columns', function(array $columns): array {
+	if (isset($columns['title'])) {
+		$columns['title'] = 'Name';
+	}
+	return $columns;
+}, 99999);
+
 add_action('manage_projekte_posts_custom_column', function(string $column, int $post_id): void {
 	if ($column !== 'cmx_deckungsbeitrag' || !cmx_admin_deckungsbeitrag_view_active('projekte')) {
 		return;

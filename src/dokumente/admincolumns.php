@@ -15,7 +15,7 @@
 
 	$new = [];
 	foreach ($cols as $key => $label) {
-		$new[$key] = $label;
+		$new[$key] = ($key === 'title') ? 'Name' : $label;
 		if ($key === 'title') {
 			$new += $after_title;
 		}

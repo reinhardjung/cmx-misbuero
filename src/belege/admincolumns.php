@@ -328,6 +328,13 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 	return cmx_admin_deckungsbeitrag_insert_column($columns, 'cmx_deckungsbeitrag', 'Deckungsbeitrag');
 }, 900);
 
+\add_filter('manage_edit-belege_columns', function(array $columns): array {
+	if (isset($columns['title'])) {
+		$columns['title'] = 'Nummer';
+	}
+	return $columns;
+}, 9999);
+
 \add_action('manage_belege_posts_custom_column', function(string $column, int $post_id): void {
 	if ($column !== 'cmx_deckungsbeitrag') {
 		return;

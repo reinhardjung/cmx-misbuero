@@ -46,6 +46,11 @@ function cmx_cpt_custom_title_placeholder(string $placeholder, \WP_Post $post): 
 	$map = [
 		'belege'   => 'Belegtitel eingeben',
 		'artikel'  => 'Artikelbezeichung',
+		'kontakte' => 'Bezeichnung festlegen',
+		'dokumente' => 'Name des Dokuments',
+		'projekte' => 'Projektname',
+		'scanner'  => 'Name hinzufügen',
+		'emails'   => 'Betreff eingeben',
 		// weitere CPTs hier ergänzen …
 	];
 

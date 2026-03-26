@@ -306,7 +306,7 @@ function cmx_kontakte_columns($columns) {
 		if ($key === 'cb') { $new[$key] = $label; continue; }
 
 		if ($key === 'title') {
-			$new['title']          = 'Firmenname';
+			$new['title']          = 'Name';
 			$new['cmx_kategorie']  = 'Kategorie'; // NEU
 			$new['cmx_stufen']     = 'Stufen';    // NEU
 			$new['cmx_tel_1']      = 'Telefon 1';
