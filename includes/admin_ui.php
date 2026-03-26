@@ -1284,6 +1284,24 @@ add_action('admin_head', function (): void {
 		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .search-box input[type="submit"] {
 			border-radius: 8px;
 		}
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .subsubsub li {
+			margin-right: 10px;
+		}
 	</style>
+	<script>
+		document.addEventListener('DOMContentLoaded', function () {
+			document.querySelectorAll('body.edit-php.post-type-<?php echo \esc_js($post_type); ?> .subsubsub li').forEach(function (item) {
+				Array.prototype.slice.call(item.childNodes).forEach(function (node) {
+					if (node.nodeType !== Node.TEXT_NODE) {
+						return;
+					}
+					if (node.nodeValue.indexOf('|') === -1) {
+						return;
+					}
+					node.nodeValue = node.nodeValue.replace(/\s*\|\s*/g, ' ').trim();
+				});
+			});
+		});
+	</script>
 	<?php
 });
