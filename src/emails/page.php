@@ -149,10 +149,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_address_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options')) {
-	function cmx_emails_render_assignment_options(array $options, int $selected, string $placeholder): string {
-		$html = '<option value="0">' . \esc_html($placeholder) . '</option>';
+	function cmx_emails_render_assignment_options(array $options, array $selected_ids = []): string {
+		$selected_map = [];
+		foreach ($selected_ids as $selected_id) {
+			$selected_map[(int) $selected_id] = true;
+		}
+
+		$html = '';
 		foreach ($options as $id => $label) {
-			$html .= '<option value="' . (int) $id . '"' . \selected($selected, (int) $id, false) . '>' . \esc_html((string) $label) . '</option>';
+			$id = (int) $id;
+			$html .= '<option value="' . $id . '"' . (!empty($selected_map[$id]) ? ' selected="selected"' : '') . '>' . \esc_html((string) $label) . '</option>';
 		}
 		return $html;
 	}
@@ -207,18 +213,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	}
 	\check_admin_referer('cmx_emails_assign');
 	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
-	$contact_id = isset($_POST['contact_id']) ? (int) \wp_unslash($_POST['contact_id']) : 0;
-	$project_id = isset($_POST['project_id']) ? (int) \wp_unslash($_POST['project_id']) : 0;
+	$contact_ids = isset($_POST['contact_ids']) ? cmx_emails_normalize_post_id_list(\wp_unslash((array) $_POST['contact_ids']), cmx_emails_contact_post_types()) : [];
+	$project_ids = isset($_POST['project_ids']) ? cmx_emails_normalize_post_id_list(\wp_unslash((array) $_POST['project_ids']), cmx_emails_project_post_types()) : [];
 	$context = cmx_emails_action_context($post_id);
 
 	if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
 		cmx_emails_redirect_with_notice($context, 'E-Mail wurde nicht gefunden.', 'error');
 	}
 
-	\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) \max(0, $contact_id));
-	\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
-	\update_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), '1');
-	cmx_emails_update_assignment_cache($post_id);
+	cmx_emails_save_assignments($post_id, $contact_ids, $project_ids, true, true);
 
 	cmx_emails_redirect_with_notice($context, 'Zuordnung wurde gespeichert.', 'success');
 });
@@ -313,6 +316,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			max-width: none;
 			min-height: 44px;
 			border-radius: 10px;
+		}
+		.cmx-email-assign select[multiple] {
+			min-height: 150px;
 		}
 		.cmx-email-tabbar {
 			display: flex;
@@ -732,8 +738,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			$subject = (string) \get_post_meta($selected_id, cmx_emails_meta_key('subject'), true);
 			$ts = (int) \get_post_meta($selected_id, cmx_emails_meta_key('received_ts'), true);
 			$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($selected_id, cmx_emails_meta_key('attachments'), true));
-			$contact_id = (int) \get_post_meta($selected_id, cmx_emails_meta_key('contact_id'), true);
-			$project_id = (int) \get_post_meta($selected_id, cmx_emails_meta_key('project_id'), true);
+			$contact_ids = cmx_emails_assignment_contact_ids($selected_id);
+			$project_ids = cmx_emails_assignment_project_ids($selected_id);
 			$reply_url = \function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')
 				? cmx_emails_compose_admin_url('reply', $selected_id)
 				: cmx_emails_mailto_link($sender_email, 'Re:', $subject);
@@ -797,9 +803,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			echo '<input type="hidden" name="account_id" value="' . \esc_attr($account_id) . '">';
 			echo '<input type="hidden" name="folder" value="' . \esc_attr($folder) . '">';
 			echo '<div class="cmx-email-assign">';
-			echo '<select name="contact_id">' . cmx_emails_render_assignment_options($contact_options, $contact_id, 'Kunde zuordnen') . '</select>';
-			echo '<select name="project_id">' . cmx_emails_render_assignment_options($project_options, $project_id, 'Projekt zuweisen') . '</select>';
+			echo '<div><label for="cmx-email-assign-contact"><strong>Kunde</strong></label><select id="cmx-email-assign-contact" name="contact_ids[]" multiple size="6">' . cmx_emails_render_assignment_options($contact_options, $contact_ids) . '</select></div>';
+			echo '<div><label for="cmx-email-assign-project"><strong>Projekt</strong></label><select id="cmx-email-assign-project" name="project_ids[]" multiple size="6">' . cmx_emails_render_assignment_options($project_options, $project_ids) . '</select></div>';
 			echo '</div>';
+			echo '<p style="margin:10px 0 0;color:#64748b;font-size:12px;">Mehrfachauswahl mit Cmd/Ctrl oder Shift.</p>';
 			echo '<div class="cmx-email-assign-actions">';
 			echo '<button type="submit" class="button">Zuordnung speichern</button>';
 			echo '</form>';

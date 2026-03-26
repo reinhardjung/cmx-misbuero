@@ -1332,7 +1332,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			$sql = $wpdb->prepare(
 				"SELECT ID FROM {$post_tbl}
 				 {$art_join}
-				 WHERE post_type=%s AND post_status<>'trash'
+				 WHERE post_type=%s AND post_status='publish'
 				 {$art_where}
 				 ORDER BY post_title ASC
 				 LIMIT %d",
@@ -1344,7 +1344,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			$ids = $wpdb->get_col(
 				$wpdb->prepare(
 					"SELECT ID FROM {$post_tbl}
-					 WHERE post_type=%s AND post_status<>'trash'
+					 WHERE post_type=%s AND post_status='publish'
 					 ORDER BY post_title ASC
 					 LIMIT %d",
 					$post_type, $limit
@@ -1360,7 +1360,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			$title_sql = $wpdb->prepare(
 				"SELECT ID FROM {$post_tbl}
 				 {$art_join}
-				 WHERE post_type=%s AND post_status<>'trash'
+				 WHERE post_type=%s AND post_status='publish'
 				   {$art_where}
 				   AND post_title LIKE %s
 				 ORDER BY post_title ASC
@@ -1374,7 +1374,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 			$title_ids = $wpdb->get_col(
 				$wpdb->prepare(
 					"SELECT ID FROM {$post_tbl}
-					 WHERE post_type=%s AND post_status<>'trash'
+					 WHERE post_type=%s AND post_status='publish'
 					   AND post_title LIKE %s
 					 ORDER BY post_title ASC
 					 LIMIT %d",
@@ -1393,7 +1393,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 				   JOIN {$meta_tbl} m ON m.post_id = p.ID
 				   JOIN {$meta_tbl} art_meta ON art_meta.post_id = p.ID AND art_meta.meta_key = '_cmx_artikel_art'
 				  WHERE p.post_type=%s
-				    AND p.post_status<>'trash'
+				    AND p.post_status='publish'
 				    AND art_meta.meta_value=%s
 				    AND m.meta_key IN ($in_keys)
 				    AND (
@@ -1411,7 +1411,7 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 				   FROM {$post_tbl} p
 				   JOIN {$meta_tbl} m ON m.post_id = p.ID
 				  WHERE p.post_type=%s
-				    AND p.post_status<>'trash'
+				    AND p.post_status='publish'
 				    AND m.meta_key IN ($in_keys)
 				    AND (
 						m.meta_value LIKE %s
@@ -1433,6 +1433,11 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 		$variant_ids = \function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_search_ids')
 			? \array_values(\array_map('intval', (array) cmx_artikel_admin_variant_search_ids($term)))
 			: [];
+		if (!empty($variant_ids)) {
+			$variant_ids = \array_values(\array_filter($variant_ids, static function($post_id): bool {
+				return (string) \get_post_status((int) $post_id) === 'publish';
+			}));
+		}
 		if ($art_filter !== '' && !empty($variant_ids)) {
 			$variant_ids = \array_values(\array_filter($variant_ids, static function($post_id) use ($art_filter): bool {
 				return (string) \get_post_meta((int) $post_id, '_cmx_artikel_art', true) === $art_filter;
@@ -1448,6 +1453,9 @@ add_action('wp_ajax_cmx_search_artikel', function() {
 	$items = [];
 	foreach ($ids as $id) {
 		$id = (int) $id;
+		if ((string) \get_post_status($id) !== 'publish') {
+			continue;
+		}
 		$title = \function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')
 			? cmx_beleg_decode_label_text((string) get_the_title($id))
 			: (string) get_the_title($id);

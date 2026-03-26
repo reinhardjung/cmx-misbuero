@@ -65,7 +65,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 			return $post_title;
 		}
 
-		return 'Betreffzeile fehlt';
+		return \function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')
+			? cmx_emails_missing_subject_label()
+			: 'Betreffzeile fehlt';
 	}
 }
 
@@ -81,6 +83,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		return 'emails_kategorien';
 	}
 }
+
+\add_filter('the_title', function (string $title, $post_id = 0): string {
+	if (!cmx_emails_admin_list_active()) {
+		return $title;
+	}
+
+	$post_id = (int) $post_id;
+	if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+		return $title;
+	}
+
+	return cmx_emails_admin_subject_label($post_id);
+}, 20, 2);
 
 \add_filter('manage_edit-' . CMX_EMAILS_CPT . '_columns', function ($columns) {
 	$new = [];

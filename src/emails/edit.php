@@ -39,6 +39,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_is_auto_draft_title')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')) {
+	function cmx_emails_missing_subject_label(): string {
+		return 'Betreffzeile fehlt';
+	}
+}
+
+\add_filter('wp_insert_post_data', function (array $data, array $postarr): array {
+	$post_type = \sanitize_key((string) ($data['post_type'] ?? $postarr['post_type'] ?? ''));
+	if ($post_type !== CMX_EMAILS_CPT) {
+		return $data;
+	}
+
+	$status = \sanitize_key((string) ($data['post_status'] ?? ''));
+	if ($status === 'auto-draft') {
+		return $data;
+	}
+
+	$title = \trim((string) ($data['post_title'] ?? ''));
+	if (!cmx_emails_is_auto_draft_title($title)) {
+		return $data;
+	}
+
+	$data['post_title'] = cmx_emails_missing_subject_label();
+	return $data;
+}, 20, 2);
+
 \add_filter('default_title', function (string $title, \WP_Post $post): string {
 	if ($post->post_type !== CMX_EMAILS_CPT || !cmx_emails_is_compose_post($post)) {
 		return $title;
@@ -931,18 +957,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox')) {
 	function cmx_emails_render_assignment_metabox(\WP_Post $post): void {
 		$post_id = (int) $post->ID;
-		$contact_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('contact_id'), true);
-		$project_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('project_id'), true);
+		$contact_ids = cmx_emails_assignment_contact_ids($post_id);
+		$project_ids = cmx_emails_assignment_project_ids($post_id);
 		$contact_options = cmx_emails_assignment_options('contact');
 		$project_options = cmx_emails_assignment_options('project');
 
 		\wp_nonce_field('cmx_emails_assignment_save', 'cmx_emails_assignment_nonce');
 
 		echo '<p><label for="cmx-email-contact"><strong>Kunde</strong></label></p>';
-		echo '<p><select id="cmx-email-contact" name="cmx_email_contact_id" style="width:100%;">' . cmx_emails_render_assignment_options($contact_options, $contact_id, 'Kunde zuordnen') . '</select></p>';
+		echo '<p><select id="cmx-email-contact" name="cmx_email_contact_ids[]" multiple size="6" style="width:100%;min-height:150px;">' . cmx_emails_render_assignment_options($contact_options, $contact_ids) . '</select></p>';
 
 		echo '<p><label for="cmx-email-project"><strong>Projekt</strong></label></p>';
-		echo '<p><select id="cmx-email-project" name="cmx_email_project_id" style="width:100%;">' . cmx_emails_render_assignment_options($project_options, $project_id, 'Projekt zuweisen') . '</select></p>';
+		echo '<p><select id="cmx-email-project" name="cmx_email_project_ids[]" multiple size="6" style="width:100%;min-height:150px;">' . cmx_emails_render_assignment_options($project_options, $project_ids) . '</select></p>';
+		echo '<p style="margin-top:8px;color:#646970;font-size:12px;">Mehrfachauswahl mit Cmd/Ctrl oder Shift.</p>';
 		echo '<p>Speichern ueber "Aktualisieren".</p>';
 	}
 }
@@ -961,13 +988,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		return;
 	}
 
-	$contact_id = isset($_POST['cmx_email_contact_id']) ? (int) \wp_unslash($_POST['cmx_email_contact_id']) : 0;
-	$project_id = isset($_POST['cmx_email_project_id']) ? (int) \wp_unslash($_POST['cmx_email_project_id']) : 0;
+	$contact_ids = isset($_POST['cmx_email_contact_ids']) ? cmx_emails_normalize_post_id_list(\wp_unslash((array) $_POST['cmx_email_contact_ids']), cmx_emails_contact_post_types()) : [];
+	$project_ids = isset($_POST['cmx_email_project_ids']) ? cmx_emails_normalize_post_id_list(\wp_unslash((array) $_POST['cmx_email_project_ids']), cmx_emails_project_post_types()) : [];
 
-	\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) \max(0, $contact_id));
-	\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
-	\update_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), '1');
-	cmx_emails_update_assignment_cache($post_id);
+	cmx_emails_save_assignments($post_id, $contact_ids, $project_ids, true, true);
 	cmx_emails_ensure_publish_status($post_id);
 }, 10, 2);
 

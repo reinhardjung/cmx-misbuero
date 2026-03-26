@@ -370,17 +370,251 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_text_excerpt')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_post_id_list')) {
+	function cmx_emails_normalize_post_id_list($raw, array $allowed_post_types = []): array {
+		if (\is_string($raw)) {
+			$raw = \trim($raw);
+			if ($raw !== '' && (\str_starts_with($raw, '[') || \str_starts_with($raw, 'a:'))) {
+				$decoded = \maybe_unserialize($raw);
+				if ($decoded !== $raw) {
+					$raw = $decoded;
+				}
+			}
+		}
+
+		if (!\is_array($raw)) {
+			$raw = $raw === null || $raw === '' ? [] : [$raw];
+		}
+
+		$allowed_post_types = \array_values(\array_unique(\array_filter(\array_map('strval', $allowed_post_types))));
+		$ids = [];
+		foreach ($raw as $value) {
+			$id = (int) $value;
+			if ($id <= 0) {
+				continue;
+			}
+			if ($allowed_post_types !== []) {
+				$post_type = (string) \get_post_type($id);
+				if ($post_type === '' || !\in_array($post_type, $allowed_post_types, true)) {
+					continue;
+				}
+			}
+			$ids[$id] = $id;
+		}
+
+		return \array_values($ids);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_primary_assignment_id')) {
+	function cmx_emails_primary_assignment_id(array $ids): int {
+		return isset($ids[0]) ? (int) $ids[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_contact_ids')) {
+	function cmx_emails_assignment_contact_ids(int $post_id): array {
+		$ids = cmx_emails_normalize_post_id_list(
+			\get_post_meta($post_id, cmx_emails_meta_key('contact_ids'), true),
+			cmx_emails_contact_post_types()
+		);
+		if ($ids !== []) {
+			return $ids;
+		}
+
+		return cmx_emails_normalize_post_id_list(
+			[\get_post_meta($post_id, cmx_emails_meta_key('contact_id'), true)],
+			cmx_emails_contact_post_types()
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_project_ids')) {
+	function cmx_emails_assignment_project_ids(int $post_id): array {
+		$ids = cmx_emails_normalize_post_id_list(
+			\get_post_meta($post_id, cmx_emails_meta_key('project_ids'), true),
+			cmx_emails_project_post_types()
+		);
+		if ($ids !== []) {
+			return $ids;
+		}
+
+		return cmx_emails_normalize_post_id_list(
+			[\get_post_meta($post_id, cmx_emails_meta_key('project_id'), true)],
+			cmx_emails_project_post_types()
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_subject_label')) {
+	function cmx_emails_assignment_subject_label(int $post_id): string {
+		$subject = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
+		if ($subject !== '') {
+			return $subject;
+		}
+
+		$title = \trim((string) \get_the_title($post_id));
+		if ($title !== '') {
+			return $title;
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')
+			? cmx_emails_missing_subject_label()
+			: 'Betreffzeile fehlt';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_link_html')) {
+	function cmx_emails_assignment_link_html(int $post_id): string {
+		$label = \trim(cmx_emails_assignment_subject_label($post_id));
+		if ($label === '') {
+			return '';
+		}
+
+		$edit_url = \get_edit_post_link($post_id, '');
+		if (!\is_string($edit_url) || $edit_url === '') {
+			return \esc_html($label);
+		}
+
+		return '<a href="' . \esc_url($edit_url) . '">' . \esc_html($label) . '</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_note_post_type')) {
+	function cmx_emails_assignment_note_post_type(int $post_id, string $kind): string {
+		$post_type = (string) \get_post_type($post_id);
+		$supported = \function_exists(__NAMESPACE__ . '\\cmx_notizen_supported_post_types')
+			? cmx_notizen_supported_post_types()
+			: [];
+
+		if ($post_type !== '' && \in_array($post_type, $supported, true)) {
+			return $post_type;
+		}
+
+		return $kind === 'project' ? 'projekte' : 'kontakte';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_internal_note')) {
+	function cmx_emails_append_internal_note(int $target_id, string $target_post_type, string $text): void {
+		if ($target_id <= 0 || $target_post_type === '') {
+			return;
+		}
+
+		$text = \trim($text);
+		if ($text === '') {
+			return;
+		}
+
+		$meta_key = cmx_notizen_meta_key_for_post_type($target_post_type);
+		$rows = cmx_notizen_load_rows($target_id, $target_post_type);
+		$rows[] = [
+			'betreff' => 'E-Mail',
+			'datum'   => cmx_notizen_now_date(),
+			'zeit'    => cmx_notizen_now_time(),
+			'text'    => $text,
+		];
+		\update_post_meta($target_id, $meta_key, $rows);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_assignment_notes')) {
+	function cmx_emails_append_assignment_notes(int $post_id, array $contact_ids, array $project_ids): void {
+		$link_html = cmx_emails_assignment_link_html($post_id);
+		if ($link_html === '') {
+			return;
+		}
+
+		foreach ($contact_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0) {
+				continue;
+			}
+			cmx_emails_append_internal_note($contact_id, cmx_emails_assignment_note_post_type($contact_id, 'contact'), $link_html);
+		}
+
+		$project_contact_meta = \defined(__NAMESPACE__ . '\\CMX_KONTAKT_META')
+			? (string) CMX_KONTAKT_META
+			: '_cmx_projekt_kontakt_id';
+
+		foreach ($project_ids as $project_id) {
+			$project_id = (int) $project_id;
+			if ($project_id <= 0) {
+				continue;
+			}
+
+			cmx_emails_append_internal_note($project_id, cmx_emails_assignment_note_post_type($project_id, 'project'), $link_html);
+
+			$project_contact_id = (int) \get_post_meta($project_id, $project_contact_meta, true);
+			if ($project_contact_id > 0) {
+				cmx_emails_append_internal_note($project_contact_id, cmx_emails_assignment_note_post_type($project_contact_id, 'contact'), $link_html);
+			}
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_save_assignments')) {
+	function cmx_emails_save_assignments(int $post_id, array $contact_ids, array $project_ids, bool $manual = true, bool $write_notes = true): void {
+		$contact_ids = cmx_emails_normalize_post_id_list($contact_ids, cmx_emails_contact_post_types());
+		$project_ids = cmx_emails_normalize_post_id_list($project_ids, cmx_emails_project_post_types());
+
+		if ($contact_ids === []) {
+			\delete_post_meta($post_id, cmx_emails_meta_key('contact_ids'));
+		} else {
+			\update_post_meta($post_id, cmx_emails_meta_key('contact_ids'), $contact_ids);
+		}
+
+		if ($project_ids === []) {
+			\delete_post_meta($post_id, cmx_emails_meta_key('project_ids'));
+		} else {
+			\update_post_meta($post_id, cmx_emails_meta_key('project_ids'), $project_ids);
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) cmx_emails_primary_assignment_id($contact_ids));
+		\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) cmx_emails_primary_assignment_id($project_ids));
+
+		if ($manual) {
+			\update_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), '1');
+		} else {
+			\delete_post_meta($post_id, cmx_emails_meta_key('assignment_manual'));
+		}
+
+		cmx_emails_update_assignment_cache($post_id);
+
+		if ($write_notes) {
+			cmx_emails_append_assignment_notes($post_id, $contact_ids, $project_ids);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_label')) {
 	function cmx_emails_assignment_label(int $post_id): string {
-		$contact_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('contact_id'), true);
-		$project_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('project_id'), true);
+		$contact_ids = cmx_emails_assignment_contact_ids($post_id);
+		$project_ids = cmx_emails_assignment_project_ids($post_id);
 		$parts = [];
 
-		if ($contact_id > 0 && \get_post_status($contact_id) !== false) {
-			$parts[] = 'Kunde: ' . (string) \get_the_title($contact_id);
+		$contact_titles = [];
+		foreach ($contact_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0 || \get_post_status($contact_id) === false) {
+				continue;
+			}
+			$contact_titles[] = (string) \get_the_title($contact_id);
 		}
-		if ($project_id > 0 && \get_post_status($project_id) !== false) {
-			$parts[] = 'Projekt: ' . (string) \get_the_title($project_id);
+		if ($contact_titles !== []) {
+			$parts[] = 'Kunde: ' . \implode(', ', $contact_titles);
+		}
+
+		$project_titles = [];
+		foreach ($project_ids as $project_id) {
+			$project_id = (int) $project_id;
+			if ($project_id <= 0 || \get_post_status($project_id) === false) {
+				continue;
+			}
+			$project_titles[] = (string) \get_the_title($project_id);
+		}
+		if ($project_titles !== []) {
+			$parts[] = 'Projekt: ' . \implode(', ', $project_titles);
 		}
 
 		return $parts !== [] ? \implode(' | ', $parts) : 'nicht zugeordnet';
