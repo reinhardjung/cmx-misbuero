@@ -339,7 +339,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id')) {
 	function cmx_emails_find_post_id(string $client_id, string $folder, int $uid): int {
 		$ids = \get_posts([
 			'post_type'        => CMX_EMAILS_CPT,
-			'post_status'      => ['publish', 'draft', 'private', 'pending'],
+			'post_status'      => ['publish', 'draft', 'private', 'pending', 'trash'],
 			'posts_per_page'   => 1,
 			'fields'           => 'ids',
 			'no_found_rows'    => true,
@@ -681,6 +681,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$message_id = \sanitize_text_field((string) ($header->message_id ?? ''));
 		$account_id = \sanitize_key((string) ($client['id'] ?? ''));
 		$existing_id = cmx_emails_find_post_id($account_id, $folder, $uid);
+		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
+			return ['post_id' => $existing_id, 'uid' => $uid];
+		}
 		$existing_attachments = $existing_id > 0 ? cmx_emails_normalize_attachment_list(\get_post_meta($existing_id, cmx_emails_meta_key('attachments'), true)) : [];
 		$stored_attachments = $existing_attachments;
 
@@ -1165,7 +1168,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_picker')) 
 				.cmx-email-rel-selected-main { min-width: 0; flex: 1 1 auto; }
 				.cmx-email-rel-selected-main a { display: block; text-decoration: none; font-weight: 600; }
 				.cmx-email-rel-selected-sub { display: block; margin-top: 2px; color: #646970; font-size: 12px; white-space: normal; }
-				.cmx-email-rel-remove { line-height: 1; flex: 0 0 auto; }
+				.cmx-email-rel-remove {
+					line-height: 1;
+					flex: 0 0 auto;
+					margin-top: 0;
+					transform: translateY(6px);
+				}
 			</style>
 			<script>
 				(function(){
@@ -1493,22 +1501,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_message')) {
 			return ['ok' => false, 'message' => 'E-Mail wurde nicht gefunden.'];
 		}
 
-		$client = cmx_emails_get_client((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
-		$folder = (string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true);
-		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
-
-		if ($client !== [] && $uid > 0 && \function_exists('imap_open')) {
-			$mailbox = '';
-			$imap = cmx_emails_open_client_folder($client, $folder !== '' ? $folder : 'inbox', $mailbox);
-			if ($imap !== false) {
-				@\imap_delete($imap, (string) $uid, \FT_UID);
-				@\imap_expunge($imap);
-				@\imap_close($imap);
-			}
+		if ((string) \get_post_status($post_id) === 'trash') {
+			return ['ok' => true, 'message' => 'E-Mail liegt bereits im Papierkorb.'];
 		}
 
 		\wp_trash_post($post_id);
-		return ['ok' => true, 'message' => 'E-Mail wurde geloescht.'];
+		return ['ok' => true, 'message' => 'E-Mail wurde in den Papierkorb verschoben.'];
 	}
 }
 
@@ -1714,9 +1712,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_tax_query')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_query_args')) {
 	function cmx_emails_query_args(array $filters = [], array $overrides = []): array {
+		$post_status = \sanitize_key((string) ($filters['post_status'] ?? 'publish'));
+		if (!\in_array($post_status, ['publish', 'trash'], true)) {
+			$post_status = 'publish';
+		}
+
 		$args = [
 			'post_type'        => CMX_EMAILS_CPT,
-			'post_status'      => ['publish'],
+			'post_status'      => [$post_status],
 			'posts_per_page'   => (int) ($filters['posts_per_page'] ?? 25),
 			'paged'            => \max(1, (int) ($filters['paged'] ?? 1)),
 			'meta_key'         => cmx_emails_meta_key('received_ts'),

@@ -752,8 +752,7 @@ function inject_styles(): void {
 		border-color: var(--mb-primary-dark);
 	}
 
-	/* Papierkorb-Icon statt Text in Listen-Aktionen (alle CPT) */
-	/* Nur im Edit-Formular (post.php) – Papierkorb-Icon statt Text im Delete-Button */
+	/* Papierkorb-Icon statt Text im Delete-Button */
 	body.post-php #delete-action .submitdelete {
 		position: relative;
 		display: inline-flex;
@@ -805,7 +804,7 @@ add_action('admin_head', function () {
 	if (is_network_admin()) return;
 	?>
 	<style id="cmx-trash-icon-global">
-	/* Classic + Block Editor: nur im Edit-Modus (post.php) alle CPTs */
+	/* Classic + Block Editor: nur im Edit-Modus fuer alle CPTs */
 	body.post-php .submitdelete,
 	body.post-php .editor-post-trash .components-button {
 		position: relative;

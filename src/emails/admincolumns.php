@@ -12,8 +12,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_list_active')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_view')) {
 	function cmx_emails_current_view(): string {
+		$post_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
+		if ($post_status === 'trash') {
+			return 'trash';
+		}
+
 		$view = isset($_GET['cmx_email_view']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_view'])) : 'all';
-		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed'], true) ? $view : 'all';
+		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed', 'trash'], true) ? $view : 'all';
 	}
 }
 
@@ -23,7 +28,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			'account_id' => isset($_GET['cmx_email_account']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_account'])) : '',
 			'folder' => isset($_GET['cmx_email_folder']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_folder'])) : '',
 			'status' => isset($_GET['cmx_email_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_status'])) : '',
-			'direction' => isset($_GET['cmx_email_direction']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_direction'])) : '',
 			'category' => isset($_GET['cmx_email_category']) ? \sanitize_title((string) \wp_unslash($_GET['cmx_email_category'])) : '',
 		];
 
@@ -68,6 +72,47 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 		return \function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')
 			? cmx_emails_missing_subject_label()
 			: 'Betreffzeile fehlt';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_assignment_html')) {
+	function cmx_emails_admin_assignment_html(string $label): string {
+		$label = \trim($label);
+		if ($label === '') {
+			return 'nicht zugeordnet';
+		}
+
+		$parts = \array_values(\array_filter(\array_map(static function ($part): string {
+			return \trim((string) $part);
+		}, \explode('|', $label)), static function (string $part): bool {
+			return $part !== '';
+		}));
+
+		if ($parts === []) {
+			return \esc_html($label);
+		}
+
+		return \implode('<br>', \array_map(static function (string $part): string {
+			return \esc_html($part);
+		}, $parts));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_folder_badge_class')) {
+	function cmx_emails_admin_folder_badge_class(string $folder): string {
+		$folder = \sanitize_key($folder);
+
+		if ($folder === 'sent') {
+			return 'is-folder-sent';
+		}
+		if ($folder === 'drafts') {
+			return 'is-folder-drafts';
+		}
+		if ($folder === 'archive') {
+			return 'is-folder-archive';
+		}
+
+		return 'is-folder-inbox';
 	}
 }
 
@@ -121,7 +166,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 
 	if ($column === 'cmx_email_folder') {
 		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
-		echo \esc_html(cmx_emails_folder_label($folder));
+		echo '<span class="cmx-email-badge cmx-email-folder-badge ' . \esc_attr(cmx_emails_admin_folder_badge_class($folder)) . '">' . \esc_html(cmx_emails_folder_label($folder)) . '</span>';
 		return;
 	}
 
@@ -190,12 +235,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		if ($attachment_count > 0) {
 			echo '<div class="cmx-email-admin-attachments">📎 ' . (int) $attachment_count . '</div>';
 		}
-		echo \esc_html($label !== '' ? $label : 'nicht zugeordnet');
+		echo cmx_emails_admin_assignment_html($label);
 	}
 }, 10, 2);
 
 \add_filter('post_row_actions', function (array $actions, \WP_Post $post): array {
 	if ($post->post_type !== CMX_EMAILS_CPT) {
+		return $actions;
+	}
+
+	if ((string) $post->post_status === 'trash') {
 		return $actions;
 	}
 
@@ -226,7 +275,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$base_filters = [
 		'account_id' => (string) ($filters['account_id'] ?? ''),
 		'folder' => (string) ($filters['folder'] ?? ''),
-		'direction' => (string) ($filters['direction'] ?? ''),
 		'category' => (string) ($filters['category'] ?? ''),
 	];
 	$view = cmx_emails_current_view();
@@ -238,9 +286,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		'unassigned' => ['label' => 'Nicht zugeordnet', 'filters' => ['unassigned' => true]],
 		'processed' => ['label' => 'Verarbeitet', 'filters' => ['status' => 'processed']],
 	];
+	$trash_count = cmx_emails_count(\array_merge($base_filters, ['post_status' => 'trash']));
+	if ($trash_count > 0 || $view === 'trash') {
+		$defs['trash'] = [
+			'label' => 'Papierkorb',
+			'filters' => ['post_status' => 'trash'],
+			'url_args' => ['post_status' => 'trash'],
+		];
+	}
 
 	$args_keep = [];
-	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 'cmx_email_direction', 'cmx_email_category', 's'] as $key) {
+	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 'cmx_email_category', 's'] as $key) {
 		if (isset($_GET[$key])) {
 			$args_keep[$key] = \sanitize_text_field((string) \wp_unslash($_GET[$key]));
 		}
@@ -251,7 +307,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$count = cmx_emails_count(\array_merge($base_filters, (array) ($def['filters'] ?? [])));
 		$url = cmx_emails_admin_list_url(\array_merge($args_keep, [
 			'cmx_email_view' => $key,
-		]));
+		], (array) ($def['url_args'] ?? [])));
 		$current = $view === $key ? ' class="current" aria-current="page"' : '';
 		$views[$key] = '<a href="' . \esc_url($url) . '"' . $current . '>' . \esc_html((string) $def['label']) . ' <span class="count">(' . (int) $count . ')</span></a>';
 	}
@@ -276,8 +332,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$status = \sanitize_key((string) ($filters['status'] ?? ''));
 	$folder = \sanitize_key((string) ($filters['folder'] ?? ''));
 	$account = \sanitize_key((string) ($filters['account_id'] ?? ''));
-	$direction = \sanitize_key((string) ($filters['direction'] ?? ''));
 	$category = \sanitize_title((string) ($filters['category'] ?? ''));
+	$view = cmx_emails_current_view();
+
+	if ($view === 'trash') {
+		echo '<input type="hidden" name="post_status" value="trash">';
+	}
 
 	echo '<select name="cmx_email_account">';
 	echo '<option value="">Alle Konten</option>';
@@ -299,13 +359,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	echo '<option value="">Alle Status</option>';
 	foreach (['new' => 'Neu', 'read' => 'Gelesen', 'processed' => 'Verarbeitet'] as $value => $label) {
 		echo '<option value="' . \esc_attr($value) . '"' . \selected($status, $value, false) . '>' . \esc_html($label) . '</option>';
-	}
-	echo '</select>';
-
-	echo '<select name="cmx_email_direction">';
-	echo '<option value="">Alle Richtungen</option>';
-	foreach (['incoming' => 'eingang', 'outgoing' => 'ausgang'] as $value => $label) {
-		echo '<option value="' . \esc_attr($value) . '"' . \selected($direction, $value, false) . '>' . \esc_html($label) . '</option>';
 	}
 	echo '</select>';
 
@@ -354,6 +407,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 
 	$filters = cmx_emails_current_filters();
 	$view = cmx_emails_current_view();
+	$query->set('post_status', 'publish');
 
 	if ($view === 'new') {
 		$filters['status'] = 'new';
@@ -365,6 +419,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$filters['has_attachment'] = true;
 	} elseif ($view === 'unassigned') {
 		$filters['unassigned'] = true;
+	} elseif ($view === 'trash') {
+		$filters['post_status'] = 'trash';
+		$query->set('post_status', 'trash');
 	}
 
 	$meta_query = cmx_emails_build_meta_query($filters);
@@ -466,6 +523,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			color: #2f7d32;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-processed {
+			border-color: #e6ebf0;
+			background: #fbfcfd;
+			color: #5b6673;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-folder-badge {
+			justify-content: flex-start;
+			min-width: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-inbox {
+			border-color: #cfe0f0;
+			background: #f7fbff;
+			color: #135e96;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-sent {
+			border-color: #d3e7d3;
+			background: #f7fcf7;
+			color: #2f7d32;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-drafts {
+			border-color: #ead9b7;
+			background: #fffaf2;
+			color: #9a6700;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-archive {
 			border-color: #e6ebf0;
 			background: #fbfcfd;
 			color: #5b6673;

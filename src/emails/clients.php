@@ -213,7 +213,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_folder_map')) {
 				'candidates' => ['Sent', 'INBOX.Sent', 'INBOX/Sent', 'Sent Messages', 'Gesendet'],
 			],
 			'drafts' => [
-				'label' => 'Entwuerfe',
+				'label' => 'Entwürfe',
 				'candidates' => ['Drafts', 'INBOX.Drafts', 'INBOX/Drafts', 'Entwuerfe', 'Draft'],
 			],
 			'archive' => [
