@@ -945,6 +945,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_import_post_attachments')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_direction_meta_query')) {
+	function cmx_emails_direction_meta_query(string $direction): array {
+		$direction = \sanitize_key($direction);
+
+		if ($direction === 'outgoing') {
+			return [
+				'relation' => 'OR',
+				['key' => cmx_emails_meta_key('direction'), 'value' => 'outgoing'],
+				['key' => cmx_emails_meta_key('folder'), 'value' => ['sent', 'drafts'], 'compare' => 'IN'],
+			];
+		}
+
+		if ($direction === 'incoming') {
+			return [
+				'relation' => 'AND',
+				[
+					'relation' => 'OR',
+					['key' => cmx_emails_meta_key('direction'), 'compare' => 'NOT EXISTS'],
+					['key' => cmx_emails_meta_key('direction'), 'value' => 'outgoing', 'compare' => '!='],
+				],
+				[
+					'relation' => 'OR',
+					['key' => cmx_emails_meta_key('folder'), 'compare' => 'NOT EXISTS'],
+					['key' => cmx_emails_meta_key('folder'), 'value' => ['sent', 'drafts'], 'compare' => 'NOT IN'],
+				],
+			];
+		}
+
+		return [];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 	function cmx_emails_build_meta_query(array $filters = []): array {
 		$meta_query = [];
@@ -962,6 +994,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 		$status = \sanitize_key((string) ($filters['status'] ?? ''));
 		if ($status !== '') {
 			$meta_query[] = ['key' => cmx_emails_meta_key('status'), 'value' => $status];
+		}
+
+		$direction = \sanitize_key((string) ($filters['direction'] ?? ''));
+		if ($direction !== '') {
+			$direction_query = cmx_emails_direction_meta_query($direction);
+			if ($direction_query !== []) {
+				$meta_query[] = $direction_query;
+			}
 		}
 
 		if (!empty($filters['has_attachment'])) {

@@ -23,6 +23,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			'account_id' => isset($_GET['cmx_email_account']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_account'])) : '',
 			'folder' => isset($_GET['cmx_email_folder']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_folder'])) : '',
 			'status' => isset($_GET['cmx_email_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_status'])) : '',
+			'direction' => isset($_GET['cmx_email_direction']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_direction'])) : '',
 		];
 
 		return $filters;
@@ -72,7 +73,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$new['cb'] = $columns['cb'] ?? '<input type="checkbox">';
 	$new['title'] = 'Betreff';
 	$new['cmx_email_sender'] = 'Absender';
-	$new['cmx_email_traffic'] = 'Traffic';
+	$new['cmx_email_folder'] = 'Ordner';
 	$new['cmx_email_account'] = 'Konto';
 	$new['cmx_email_status'] = 'Status';
 	$new['cmx_email_assignment'] = 'Zuordnung';
@@ -88,11 +89,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 \add_action('manage_' . CMX_EMAILS_CPT . '_posts_custom_column', function ($column, $post_id) {
 	$post_id = (int) $post_id;
 
-	if ($column === 'cmx_email_traffic') {
-		$direction = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('direction'), true));
+	if ($column === 'cmx_email_folder') {
 		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
-		$is_outgoing = $direction === 'outgoing' || \in_array($folder, ['sent', 'drafts'], true);
-		echo \esc_html($is_outgoing ? 'ausgang' : 'eingang');
+		echo \esc_html(cmx_emails_folder_label($folder));
 		return;
 	}
 
@@ -180,6 +179,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$base_filters = [
 		'account_id' => (string) ($filters['account_id'] ?? ''),
 		'folder' => (string) ($filters['folder'] ?? ''),
+		'direction' => (string) ($filters['direction'] ?? ''),
 	];
 	$view = cmx_emails_current_view();
 	$defs = [
@@ -192,7 +192,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	];
 
 	$args_keep = [];
-	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 's'] as $key) {
+	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 'cmx_email_direction', 's'] as $key) {
 		if (isset($_GET[$key])) {
 			$args_keep[$key] = \sanitize_text_field((string) \wp_unslash($_GET[$key]));
 		}
@@ -211,6 +211,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	return $views;
 });
 
+\add_filter('months_dropdown_results', function ($months, $post_type) {
+	if ((string) $post_type === CMX_EMAILS_CPT) {
+		return [];
+	}
+
+	return $months;
+}, 10, 2);
+
 \add_action('restrict_manage_posts', function (): void {
 	if (!cmx_emails_admin_list_active()) {
 		return;
@@ -220,6 +228,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$status = \sanitize_key((string) ($filters['status'] ?? ''));
 	$folder = \sanitize_key((string) ($filters['folder'] ?? ''));
 	$account = \sanitize_key((string) ($filters['account_id'] ?? ''));
+	$direction = \sanitize_key((string) ($filters['direction'] ?? ''));
 
 	echo '<select name="cmx_email_account">';
 	echo '<option value="">Alle Konten</option>';
@@ -241,6 +250,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	echo '<option value="">Alle Status</option>';
 	foreach (['new' => 'Neu', 'read' => 'Gelesen', 'processed' => 'Verarbeitet'] as $value => $label) {
 		echo '<option value="' . \esc_attr($value) . '"' . \selected($status, $value, false) . '>' . \esc_html($label) . '</option>';
+	}
+	echo '</select>';
+
+	echo '<select name="cmx_email_direction">';
+	echo '<option value="">Alle Richtungen</option>';
+	foreach (['incoming' => 'eingang', 'outgoing' => 'ausgang'] as $value => $label) {
+		echo '<option value="' . \esc_attr($value) . '"' . \selected($direction, $value, false) . '>' . \esc_html($label) . '</option>';
 	}
 	echo '</select>';
 
@@ -306,7 +322,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	}
 	?>
 	<style>
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_traffic {
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_folder {
 			width: 110px;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_sender {
