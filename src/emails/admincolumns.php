@@ -396,6 +396,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_folder {
 			width: 110px;
 		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .wrap .page-title-action {
+			border-radius: 8px;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_sender {
 			width: 320px;
 		}
@@ -507,6 +510,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			gap: 8px;
 			order: 2;
 			margin-left: auto;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav .button,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav input.button,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav button.button,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav select,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .search-box input[type="search"],
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .search-box input[type="submit"] {
+			border-radius: 8px;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav.top .tablenav-pages {
 			margin-left: auto;
