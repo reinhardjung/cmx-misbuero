@@ -1253,3 +1253,37 @@ add_action('admin_head', function() {
 
 	</style>';
 });
+
+add_action('admin_head', function (): void {
+	if (!\is_admin() || !\function_exists('get_current_screen')) {
+		return;
+	}
+
+	$screen = \get_current_screen();
+	if (!$screen || (string) ($screen->base ?? '') !== 'edit') {
+		return;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '') {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return;
+	}
+	?>
+	<style>
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .wrap .page-title-action,
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .tablenav .button,
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .tablenav input.button,
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .tablenav button.button,
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .tablenav select,
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .search-box input[type="search"],
+		body.edit-php.post-type-<?php echo \esc_html($post_type); ?> .search-box input[type="submit"] {
+			border-radius: 8px;
+		}
+	</style>
+	<?php
+});
