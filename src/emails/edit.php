@@ -176,7 +176,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_emails')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
-	function cmx_emails_queue_redirect_notice(int $post_id, string $message, string $type = 'info'): void {
+	function cmx_emails_queue_redirect_notice(int $post_id, string $message, string $type = 'info', string $redirect_target = ''): void {
 		if ($post_id <= 0 || $message === '') {
 			return;
 		}
@@ -188,6 +188,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 		$GLOBALS['cmx_emails_redirect_notices'][(int) $post_id] = [
 			'message' => $message,
 			'type' => \in_array($type, ['success', 'error', 'warning', 'info'], true) ? $type : 'info',
+			'redirect_target' => $redirect_target === 'list' ? 'list' : '',
 		];
 	}
 }
@@ -204,10 +205,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 	$notice = $map[$post_id];
 	unset($GLOBALS['cmx_emails_redirect_notices'][$post_id]);
 
-	return \add_query_arg([
+	$notice_args = [
 		'cmx_email_notice' => (string) ($notice['message'] ?? ''),
 		'cmx_email_notice_type' => (string) ($notice['type'] ?? 'info'),
-	], $location);
+	];
+
+	if ((string) ($notice['redirect_target'] ?? '') === 'list') {
+		return cmx_emails_admin_list_url($notice_args);
+	}
+
+	return \add_query_arg($notice_args, $location);
 }, 20, 2);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_attachment_list')) {
@@ -538,6 +545,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
 
 		echo '<input type="hidden" name="cmx_email_compose_mode" value="' . \esc_attr($mode) . '">';
 		echo '<input type="hidden" name="cmx_email_compose_source_id" value="' . (int) $source_id . '">';
+		echo '<input type="hidden" name="cmx_email_send_now" id="cmx-email-send-now" value="">';
 
 		echo '<p><label for="cmx-email-account-compose"><strong>Konto</strong></label></p>';
 		echo '<p><select id="cmx-email-account-compose" name="cmx_email_account_id" class="widefat">';
@@ -694,7 +702,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		if (\is_wp_error($result)) {
 			cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
 		} else {
-			cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success');
+			cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success', 'list');
 		}
 	}
 }, 10, 2);
@@ -849,8 +857,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 	<script>
 		document.addEventListener('DOMContentLoaded', function () {
 			var publishButton = document.getElementById('publish');
+			var sendNowField = document.getElementById('cmx-email-send-now');
 			if (publishButton) {
 				publishButton.value = 'Senden';
+				publishButton.addEventListener('click', function () {
+					if (sendNowField) {
+						sendNowField.value = '1';
+					}
+				});
 			}
 
 			var titleSpan = document.querySelector('#submitdiv .postbox-header .hndle span');
