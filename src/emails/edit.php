@@ -71,6 +71,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_is_auto_draft_title')) {
 			'side',
 			'high'
 		);
+
+		\add_meta_box(
+			'cmx_email_assignment',
+			'Zuordnung',
+			__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox',
+			CMX_EMAILS_CPT,
+			'side',
+			'default'
+		);
 		return;
 	}
 
@@ -1164,7 +1173,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				sendButton.className = 'button button-primary button-large';
 				sendButton.textContent = 'Senden';
 				sendButton.style.width = '100%';
-				sendButton.style.marginTop = '8px';
+				sendButton.style.marginBottom = '8px';
 				sendButton.addEventListener('click', function () {
 					isSendSubmit = true;
 					if (sendNowField) {
@@ -1175,7 +1184,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 
 				var publishAction = submitBox.querySelector('#major-publishing-actions');
 				if (publishAction) {
-					publishAction.appendChild(sendButton);
+					publishAction.insertBefore(sendButton, publishAction.firstChild);
 				} else if (publishButton.parentNode) {
 					publishButton.parentNode.appendChild(sendButton);
 				}

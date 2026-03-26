@@ -1017,6 +1017,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_tax_query')) {
+	function cmx_emails_build_tax_query(array $filters = []): array {
+		$tax_query = [];
+
+		$category = \sanitize_title((string) ($filters['category'] ?? ''));
+		if ($category !== '') {
+			$tax = \function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')
+				? (string) cmx_emails_category_taxonomy()
+				: 'emails_kategorien';
+			if (\taxonomy_exists($tax) && \is_object_in_taxonomy(CMX_EMAILS_CPT, $tax)) {
+				$tax_query[] = [
+					'taxonomy' => $tax,
+					'field' => 'slug',
+					'terms' => [$category],
+				];
+			}
+		}
+
+		return $tax_query;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_query_args')) {
 	function cmx_emails_query_args(array $filters = [], array $overrides = []): array {
 		$args = [
@@ -1038,6 +1060,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_query_args')) {
 		$meta_query = cmx_emails_build_meta_query($filters);
 		if ($meta_query !== []) {
 			$args['meta_query'] = $meta_query;
+		}
+
+		$tax_query = cmx_emails_build_tax_query($filters);
+		if ($tax_query !== []) {
+			$args['tax_query'] = $tax_query;
 		}
 
 		return \array_merge($args, $overrides);

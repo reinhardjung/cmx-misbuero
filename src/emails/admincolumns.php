@@ -24,6 +24,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			'folder' => isset($_GET['cmx_email_folder']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_folder'])) : '',
 			'status' => isset($_GET['cmx_email_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_status'])) : '',
 			'direction' => isset($_GET['cmx_email_direction']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_direction'])) : '',
+			'category' => isset($_GET['cmx_email_category']) ? \sanitize_title((string) \wp_unslash($_GET['cmx_email_category'])) : '',
 		];
 
 		return $filters;
@@ -68,6 +69,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
+	function cmx_emails_category_taxonomy(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_tax_key')) {
+			$tax = (string) cmx_tax_key('emails', 'Kategorien');
+			if ($tax !== '') {
+				return $tax;
+			}
+		}
+
+		return 'emails_kategorien';
+	}
+}
+
 \add_filter('manage_edit-' . CMX_EMAILS_CPT . '_columns', function ($columns) {
 	$new = [];
 	$new['cb'] = $columns['cb'] ?? '<input type="checkbox">';
@@ -76,6 +90,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$new['cmx_email_folder'] = 'Ordner';
 	$new['cmx_email_account'] = 'Konto';
 	$new['cmx_email_status'] = 'Status';
+	$new['cmx_email_category'] = 'Kategorie';
 	$new['cmx_email_assignment'] = 'Zuordnung';
 	$new['cmx_email_date'] = 'Datum';
 	return $new;
@@ -137,6 +152,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 		return;
 	}
 
+	if ($column === 'cmx_email_category') {
+		$tax = cmx_emails_category_taxonomy();
+		if (!\taxonomy_exists($tax)) {
+			echo '';
+			return;
+		}
+
+		$terms = \get_the_terms($post_id, $tax);
+		if (\is_wp_error($terms) || empty($terms)) {
+			echo '';
+			return;
+		}
+
+		echo \esc_html(\implode(', ', \wp_list_pluck($terms, 'name')));
+		return;
+	}
+
 	if ($column === 'cmx_email_assignment') {
 		$attachment_count = (int) \get_post_meta($post_id, cmx_emails_meta_key('attachment_count'), true);
 		$label = (string) \get_post_meta($post_id, cmx_emails_meta_key('assignment_label'), true);
@@ -180,6 +212,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 		'account_id' => (string) ($filters['account_id'] ?? ''),
 		'folder' => (string) ($filters['folder'] ?? ''),
 		'direction' => (string) ($filters['direction'] ?? ''),
+		'category' => (string) ($filters['category'] ?? ''),
 	];
 	$view = cmx_emails_current_view();
 	$defs = [
@@ -192,7 +225,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	];
 
 	$args_keep = [];
-	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 'cmx_email_direction', 's'] as $key) {
+	foreach (['cmx_email_account', 'cmx_email_folder', 'cmx_email_status', 'cmx_email_direction', 'cmx_email_category', 's'] as $key) {
 		if (isset($_GET[$key])) {
 			$args_keep[$key] = \sanitize_text_field((string) \wp_unslash($_GET[$key]));
 		}
@@ -229,6 +262,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$folder = \sanitize_key((string) ($filters['folder'] ?? ''));
 	$account = \sanitize_key((string) ($filters['account_id'] ?? ''));
 	$direction = \sanitize_key((string) ($filters['direction'] ?? ''));
+	$category = \sanitize_title((string) ($filters['category'] ?? ''));
 
 	echo '<select name="cmx_email_account">';
 	echo '<option value="">Alle Konten</option>';
@@ -259,6 +293,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 		echo '<option value="' . \esc_attr($value) . '"' . \selected($direction, $value, false) . '>' . \esc_html($label) . '</option>';
 	}
 	echo '</select>';
+
+	$category_tax = cmx_emails_category_taxonomy();
+	if (\taxonomy_exists($category_tax) && \is_object_in_taxonomy(CMX_EMAILS_CPT, $category_tax)) {
+		\wp_dropdown_categories([
+			'show_option_all' => 'Alle Kategorien',
+			'taxonomy' => $category_tax,
+			'name' => 'cmx_email_category',
+			'orderby' => 'name',
+			'selected' => $category,
+			'hierarchical' => true,
+			'show_count' => false,
+			'hide_empty' => false,
+			'value_field' => 'slug',
+		]);
+	}
 
 	echo '<span class="cmx-email-filter-actions">';
 	$sync_folder = $folder !== '' ? $folder : 'inbox';
@@ -306,6 +355,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_subject_label')) {
 	$meta_query = cmx_emails_build_meta_query($filters);
 	if ($meta_query !== []) {
 		$query->set('meta_query', $meta_query);
+	}
+
+	$tax_query = \function_exists(__NAMESPACE__ . '\\cmx_emails_build_tax_query')
+		? cmx_emails_build_tax_query($filters)
+		: [];
+	if ($tax_query !== []) {
+		$query->set('tax_query', $tax_query);
 	}
 
 	$orderby = isset($_GET['orderby']) ? \sanitize_key((string) \wp_unslash($_GET['orderby'])) : '';
