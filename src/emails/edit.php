@@ -83,6 +83,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')) {
 	return (string) ($prefill['body'] ?? $content);
 }, 10, 2);
 
+\add_filter('wp_editor_settings', function (array $settings, string $editor_id): array {
+	if ($editor_id !== 'content' || !cmx_emails_edit_screen_active()) {
+		return $settings;
+	}
+
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	$post = $post_id > 0 ? \get_post($post_id) : null;
+	if ($post instanceof \WP_Post && !cmx_emails_is_compose_post($post)) {
+		return $settings;
+	}
+
+	if (($settings['tinymce'] ?? true) !== false) {
+		$current_tinymce = \is_array($settings['tinymce'] ?? null) ? $settings['tinymce'] : [];
+		$settings['tinymce'] = \array_merge($current_tinymce, [
+			'resize'    => true,
+			'statusbar' => true,
+		]);
+	}
+
+	return $settings;
+}, 30, 2);
+
 \add_action('add_meta_boxes', function (string $post_type, \WP_Post $post): void {
 	if ($post_type !== CMX_EMAILS_CPT) {
 		return;
@@ -1104,8 +1126,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			margin: 10px 0 0 18px;
 		}
 		<?php if ($is_compose) : ?>
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #postdivrich #content,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #postdivrich textarea.wp-editor-area {
+			resize: vertical;
+			min-height: 260px;
+			overflow: auto;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #minor-publishing {
 			display: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #major-publishing-actions {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			grid-template-areas:
+				"send send"
+				"save delete";
+			align-items: center;
+			column-gap: 8px;
+			row-gap: 8px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #cmx-email-send-button {
+			grid-area: send;
+			width: 100%;
+			margin: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #publishing-action {
+			grid-area: save;
+			display: flex;
+			justify-content: flex-start;
+			width: auto;
+			float: none;
+			justify-self: start;
+			text-align: left;
+			margin: 0 !important;
+			padding: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #publishing-action #publish {
+			float: none;
+			margin: 0 !important;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #publishing-action .spinner {
+			display: none !important;
+			margin: 0 !important;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #delete-action {
+			grid-area: delete;
+			float: none;
+			justify-self: end;
+			margin: 0 !important;
 		}
 		<?php endif; ?>
 	</style>
@@ -1143,12 +1211,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				}
 				var titleNode = submitBox.querySelector('.postbox-header .hndle span');
 				if (titleNode) {
-					titleNode.textContent = 'Aktion';
+					titleNode.textContent = 'E-Mail...';
 					return;
 				}
 				titleNode = submitBox.querySelector('.postbox-header .hndle, h2.hndle');
 				if (titleNode) {
-					titleNode.textContent = 'Aktion';
+					titleNode.textContent = 'E-Mail...';
 				}
 			}
 			function syncOptionalState(toggle, wrap) {
