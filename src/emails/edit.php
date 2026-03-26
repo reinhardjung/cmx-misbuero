@@ -156,11 +156,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_text_from_items')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_items_from_text')) {
-	function cmx_emails_address_items_from_text(string $raw): array {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_parts_from_text')) {
+	function cmx_emails_address_parts_from_text(string $raw): array {
 		$parts = \preg_split('/[\s,;]+/', $raw) ?: [];
 		$out = [];
 		foreach ($parts as $part) {
+			$part = \trim((string) $part);
+			if ($part === '') {
+				continue;
+			}
+			$out[] = $part;
+		}
+		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_items_from_text')) {
+	function cmx_emails_address_items_from_text(string $raw): array {
+		$out = [];
+		foreach (cmx_emails_address_parts_from_text($raw) as $part) {
 			$email = \sanitize_email((string) $part);
 			if (!\is_email($email)) {
 				continue;
@@ -173,6 +187,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_address_items_from_text')) {
 			];
 		}
 		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_invalid_address_parts')) {
+	function cmx_emails_invalid_address_parts(string $raw): array {
+		$out = [];
+		foreach (cmx_emails_address_parts_from_text($raw) as $part) {
+			$email = \sanitize_email((string) $part);
+			if (\is_email($email)) {
+				continue;
+			}
+			$key = \function_exists('mb_strtolower')
+				? (string) \mb_strtolower($part, 'UTF-8')
+				: (string) \strtolower($part);
+			$out[$key] = $part;
+		}
+		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_invalid_address_notice')) {
+	function cmx_emails_invalid_address_notice(array $invalid_by_field): string {
+		$parts = [];
+		foreach ($invalid_by_field as $label => $items) {
+			$items = \array_values(\array_filter(\array_map('strval', (array) $items), static function (string $item): bool {
+				return \trim($item) !== '';
+			}));
+			if ($items === []) {
+				continue;
+			}
+			$parts[] = (string) $label . ': ' . \implode(', ', $items);
+		}
+
+		if ($parts === []) {
+			return '';
+		}
+
+		return 'Versand blockiert. Bitte gueltige E-Mail-Adressen eintragen. Ungueltig in ' . \implode(' | ', $parts);
 	}
 }
 
@@ -516,6 +568,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 		if (cmx_emails_is_auto_draft_title($saved_subject)) {
 			$saved_subject = '';
 		}
+		$saved_to_raw = \trim((string) \get_post_meta($post->ID, cmx_emails_meta_key('to_raw'), true));
+		$saved_cc_raw = \trim((string) \get_post_meta($post->ID, cmx_emails_meta_key('cc_raw'), true));
+		$saved_bcc_raw = \trim((string) \get_post_meta($post->ID, cmx_emails_meta_key('bcc_raw'), true));
 		$saved_to = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('to'), true));
 		$saved_cc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('cc'), true));
 		$saved_bcc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('bcc'), true));
@@ -530,9 +585,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 			'source_id' => $source_id,
 			'account_id' => $saved_account_id !== '' ? $saved_account_id : cmx_emails_default_client_id(),
 			'subject' => $saved_subject !== '' ? $saved_subject : $post_title,
-			'to' => $saved_to,
-			'cc' => $saved_cc,
-			'bcc' => $saved_bcc,
+			'to' => $saved_to_raw !== '' ? $saved_to_raw : $saved_to,
+			'cc' => $saved_cc_raw !== '' ? $saved_cc_raw : $saved_cc,
+			'bcc' => $saved_bcc_raw !== '' ? $saved_bcc_raw : $saved_bcc,
 			'body' => $body,
 		];
 
@@ -587,6 +642,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
 		$prefill = cmx_emails_compose_prefill($post);
 		$source_id = (int) ($prefill['source_id'] ?? 0);
 		$mode = \sanitize_key((string) ($prefill['mode'] ?? ''));
+		$cc_value = (string) ($prefill['cc'] ?? '');
+		$show_cc = \trim($cc_value) !== '';
+		$bcc_value = (string) ($prefill['bcc'] ?? '');
+		$show_bcc = \trim($bcc_value) !== '';
 
 		\wp_nonce_field('cmx_emails_compose_save', 'cmx_emails_compose_nonce');
 
@@ -608,14 +667,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
 		}
 		echo '</select></p>';
 
-		echo '<p><label for="cmx-email-to"><strong>An</strong></label></p>';
+		echo '<div class="cmx-email-compose-label-row">';
+		echo '<label for="cmx-email-to"><strong>An</strong></label>';
+		echo '<div class="cmx-email-compose-toggle-group">';
+		echo '<button type="button" id="cmx-email-cc-toggle" class="button-link cmx-email-compose-toggle" aria-expanded="' . ($show_cc ? 'true' : 'false') . '">CC</button>';
+		echo '<button type="button" id="cmx-email-bcc-toggle" class="button-link cmx-email-compose-toggle" aria-expanded="' . ($show_bcc ? 'true' : 'false') . '">BCC</button>';
+		echo '</div>';
+		echo '</div>';
 		echo '<p><input id="cmx-email-to" type="text" name="cmx_email_to" class="widefat" value="' . \esc_attr((string) ($prefill['to'] ?? '')) . '" placeholder="mail@beispiel.ch, zweite@adresse.ch"></p>';
 
+		echo '<div id="cmx-email-cc-wrap" class="cmx-email-compose-optional"' . ($show_cc ? '' : ' style="display:none;"') . '>';
 		echo '<p><label for="cmx-email-cc"><strong>CC</strong></label></p>';
-		echo '<p><input id="cmx-email-cc" type="text" name="cmx_email_cc" class="widefat" value="' . \esc_attr((string) ($prefill['cc'] ?? '')) . '"></p>';
+		echo '<p><input id="cmx-email-cc" type="text" name="cmx_email_cc" class="widefat" value="' . \esc_attr($cc_value) . '"></p>';
+		echo '</div>';
 
+		echo '<div id="cmx-email-bcc-wrap" class="cmx-email-compose-optional"' . ($show_bcc ? '' : ' style="display:none;"') . '>';
 		echo '<p><label for="cmx-email-bcc"><strong>BCC</strong></label></p>';
-		echo '<p><input id="cmx-email-bcc" type="text" name="cmx_email_bcc" class="widefat" value="' . \esc_attr((string) ($prefill['bcc'] ?? '')) . '"></p>';
+		echo '<p><input id="cmx-email-bcc" type="text" name="cmx_email_bcc" class="widefat" value="' . \esc_attr($bcc_value) . '"></p>';
+		echo '</div>';
 
 		// echo '<p class="description">Betreff oben im Titel, Nachricht im Editor links schreiben. Versand rechts ueber den Button "Senden".</p>';
 	}
@@ -717,9 +786,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	$account_email = \sanitize_email((string) ($client['email'] ?? ''));
 	$compose_mode = isset($_POST['cmx_email_compose_mode']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_email_compose_mode'])) : '';
 	$compose_source_id = isset($_POST['cmx_email_compose_source_id']) ? (int) \wp_unslash($_POST['cmx_email_compose_source_id']) : 0;
-	$to = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_to'] ?? '')));
-	$cc = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_cc'] ?? '')));
-	$bcc = cmx_emails_address_items_from_text((string) (\wp_unslash($_POST['cmx_email_bcc'] ?? '')));
+	$to_raw = (string) \wp_unslash($_POST['cmx_email_to'] ?? '');
+	$cc_raw = (string) \wp_unslash($_POST['cmx_email_cc'] ?? '');
+	$bcc_raw = (string) \wp_unslash($_POST['cmx_email_bcc'] ?? '');
+	$to = cmx_emails_address_items_from_text($to_raw);
+	$cc = cmx_emails_address_items_from_text($cc_raw);
+	$bcc = cmx_emails_address_items_from_text($bcc_raw);
+	$invalid_addresses = [
+		'An' => cmx_emails_invalid_address_parts($to_raw),
+		'CC' => cmx_emails_invalid_address_parts($cc_raw),
+		'BCC' => cmx_emails_invalid_address_parts($bcc_raw),
+	];
 	$body_html = (string) $post->post_content;
 	$body_plain = \trim(\wp_strip_all_tags($body_html));
 
@@ -732,6 +809,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	\update_post_meta($post_id, cmx_emails_meta_key('sender_email'), $account_email);
 	\update_post_meta($post_id, cmx_emails_meta_key('sender_label'), $account_label);
 	\update_post_meta($post_id, cmx_emails_meta_key('subject'), (string) \get_the_title($post_id));
+	\update_post_meta($post_id, cmx_emails_meta_key('to_raw'), $to_raw);
+	\update_post_meta($post_id, cmx_emails_meta_key('cc_raw'), $cc_raw);
+	\update_post_meta($post_id, cmx_emails_meta_key('bcc_raw'), $bcc_raw);
 	\update_post_meta($post_id, cmx_emails_meta_key('to'), $to);
 	\update_post_meta($post_id, cmx_emails_meta_key('cc'), $cc);
 	\update_post_meta($post_id, cmx_emails_meta_key('bcc'), $bcc);
@@ -747,13 +827,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	$should_send = !empty($_POST['cmx_email_send_now']);
 
 	if ($should_send) {
-		$result = cmx_emails_send_compose_post($post_id);
-		if (\is_wp_error($result)) {
-			if ((string) $result->get_error_code() !== 'missing_recipient') {
-				cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
-			}
+		$invalid_notice = cmx_emails_invalid_address_notice($invalid_addresses);
+		if ($invalid_notice !== '') {
+			cmx_emails_queue_redirect_notice($post_id, $invalid_notice, 'error');
 		} else {
-			cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success', 'list');
+			$result = cmx_emails_send_compose_post($post_id);
+			if (\is_wp_error($result)) {
+				if ((string) $result->get_error_code() !== 'missing_recipient') {
+					cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
+				}
+			} else {
+				cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success', 'list');
+			}
 		}
 	}
 }, 10, 2);
@@ -854,6 +939,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			border-radius: 10px;
 			background: #f8fafc;
 		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-label-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			margin-bottom: 6px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-label-row label {
+			margin: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-toggle-group {
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-toggle {
+			font-size: 12px;
+			font-weight: 600;
+			text-decoration: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-toggle.is-active {
+			color: #135e96;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-optional {
+			margin-top: 0;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge {
 			display: inline-flex;
 			align-items: center;
@@ -910,6 +1021,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			var publishButton = document.getElementById('publish');
 			var sendNowField = document.getElementById('cmx-email-send-now');
 			var submitBox = document.getElementById('submitdiv');
+			var ccToggle = document.getElementById('cmx-email-cc-toggle');
+			var ccWrap = document.getElementById('cmx-email-cc-wrap');
+			var ccInput = document.getElementById('cmx-email-cc');
+			var bccToggle = document.getElementById('cmx-email-bcc-toggle');
+			var bccWrap = document.getElementById('cmx-email-bcc-wrap');
+			var bccInput = document.getElementById('cmx-email-bcc');
 			function syncSubmitBoxTitle() {
 				if (!submitBox) {
 					return;
@@ -923,6 +1040,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				if (titleNode) {
 					titleNode.textContent = 'Aktion';
 				}
+			}
+			function syncOptionalState(toggle, wrap) {
+				if (!toggle || !wrap) {
+					return;
+				}
+				var visible = wrap.style.display !== 'none';
+				toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+				toggle.classList.toggle('is-active', visible);
+			}
+			function bindOptionalToggle(toggle, wrap, input) {
+				if (!toggle || !wrap) {
+					return;
+				}
+				toggle.addEventListener('click', function (e) {
+					e.preventDefault();
+					var visible = wrap.style.display !== 'none';
+					if (visible && input) {
+						input.value = '';
+						input.dispatchEvent(new Event('input', { bubbles: true }));
+						input.dispatchEvent(new Event('change', { bubbles: true }));
+					}
+					wrap.style.display = visible ? 'none' : '';
+					syncOptionalState(toggle, wrap);
+					if (!visible && input) {
+						input.focus();
+					}
+				});
+				syncOptionalState(toggle, wrap);
 			}
 			if (publishButton) {
 				publishButton.value = 'Speichern';
@@ -957,6 +1102,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 					publishButton.parentNode.appendChild(sendButton);
 				}
 			}
+
+			bindOptionalToggle(ccToggle, ccWrap, ccInput);
+			bindOptionalToggle(bccToggle, bccWrap, bccInput);
 
 			syncSubmitBoxTitle();
 			setTimeout(syncSubmitBoxTitle, 0);
