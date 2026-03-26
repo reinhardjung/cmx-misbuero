@@ -617,7 +617,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
 		echo '<p><label for="cmx-email-bcc"><strong>BCC</strong></label></p>';
 		echo '<p><input id="cmx-email-bcc" type="text" name="cmx_email_bcc" class="widefat" value="' . \esc_attr((string) ($prefill['bcc'] ?? '')) . '"></p>';
 
-		echo '<p class="description">Betreff oben im Titel, Nachricht im Editor links schreiben. Versand rechts ueber den Button "Senden".</p>';
+		// echo '<p class="description">Betreff oben im Titel, Nachricht im Editor links schreiben. Versand rechts ueber den Button "Senden".</p>';
 	}
 }
 
@@ -749,7 +749,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	if ($should_send) {
 		$result = cmx_emails_send_compose_post($post_id);
 		if (\is_wp_error($result)) {
-			cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
+			if ((string) $result->get_error_code() !== 'missing_recipient') {
+				cmx_emails_queue_redirect_notice($post_id, (string) $result->get_error_message(), 'error');
+			}
 		} else {
 			cmx_emails_queue_redirect_notice($post_id, 'E-Mail wurde versendet.', 'success', 'list');
 		}
@@ -882,8 +884,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			margin: 10px 0 0 18px;
 		}
 		<?php if ($is_compose) : ?>
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv .misc-pub-visibility,
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv .misc-pub-curtime {
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #minor-publishing {
 			display: none;
 		}
 		<?php endif; ?>
@@ -909,6 +910,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			var publishButton = document.getElementById('publish');
 			var sendNowField = document.getElementById('cmx-email-send-now');
 			var submitBox = document.getElementById('submitdiv');
+			function syncSubmitBoxTitle() {
+				if (!submitBox) {
+					return;
+				}
+				var titleNode = submitBox.querySelector('.postbox-header .hndle span');
+				if (titleNode) {
+					titleNode.textContent = 'Aktion';
+					return;
+				}
+				titleNode = submitBox.querySelector('.postbox-header .hndle, h2.hndle');
+				if (titleNode) {
+					titleNode.textContent = 'Aktion';
+				}
+			}
 			if (publishButton) {
 				publishButton.value = 'Speichern';
 				publishButton.classList.remove('button-primary');
@@ -943,10 +958,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				}
 			}
 
-			var titleSpan = document.querySelector('#submitdiv .postbox-header .hndle span');
-			if (titleSpan) {
-				titleSpan.textContent = 'Aktion';
-			}
+			syncSubmitBoxTitle();
+			setTimeout(syncSubmitBoxTitle, 0);
+			setTimeout(syncSubmitBoxTitle, 250);
 		});
 	</script>
 	<?php
