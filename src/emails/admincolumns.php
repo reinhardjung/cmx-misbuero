@@ -446,20 +446,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			justify-content: center;
 			padding: 6px 12px;
 			border-radius: 8px;
+			border: 1px solid #e6ebf0;
+			background: #fff;
+			color: #2c3338;
 			font-size: 12px;
-			font-weight: 700;
+			font-weight: 600;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-new {
-			background: #1d69d8;
-			color: #fff;
+			border-color: #cfe0f0;
+			background: #f7fbff;
+			color: #135e96;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-read {
-			background: #0f766e;
-			color: #fff;
+			border-color: #d3e7d3;
+			background: #f7fcf7;
+			color: #2f7d32;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-processed {
-			background: #6b7280;
-			color: #fff;
+			border-color: #e6ebf0;
+			background: #fbfcfd;
+			color: #5b6673;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .wp-list-table td,
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .wp-list-table th {

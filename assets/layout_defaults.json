@@ -1,6 +1,6 @@
 {
     "format": 1,
-    "exported_at": "2026-03-21T03:16:35+00:00",
+    "exported_at": "2026-03-26T09:45:48+00:00",
     "site_url": "http://misbuero.local/",
     "blog_id": 1,
     "blog_prefix": "wp_",
@@ -50,6 +50,11 @@
         "meta-box-order_dokumente": {
             "side": "cmx_savebox,cmx_dokumente_box,dokumente_kategoriendiv,cmx_dokumente_validity,cmx_dokumente_status,cmx_dok_zuordnung,cmx_dok_rel_artikel,cmx_dok_rel_kontakte,cmx_dok_rel_projekte,cmx_dok_rel_belege,cmx_mail_import_meta",
             "normal": "cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_emails": {
+            "side": "submitdiv,cmx_email_compose,cmx_dokumente_box,emails_kategoriendiv,cmx_email_assignment",
+            "normal": "slugdiv",
             "advanced": ""
         },
         "meta-box-order_kassenbuch": [
@@ -105,6 +110,7 @@
         "screen_layout_ausgaben": "2",
         "screen_layout_belege": "2",
         "screen_layout_dokumente": "2",
+        "screen_layout_emails": "2",
         "screen_layout_kontakte": "2",
         "screen_layout_projekte": "2",
         "screen_layout_scanner": "2"

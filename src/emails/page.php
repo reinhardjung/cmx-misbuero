@@ -310,15 +310,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			margin-bottom: 8px;
 		}
 		.cmx-email-account-box select,
-		.cmx-email-account-box input[type="search"],
-		.cmx-email-assign select {
+		.cmx-email-account-box input[type="search"] {
 			width: 100%;
 			max-width: none;
 			min-height: 44px;
 			border-radius: 10px;
-		}
-		.cmx-email-assign select[multiple] {
-			min-height: 150px;
 		}
 		.cmx-email-tabbar {
 			display: flex;
@@ -484,6 +480,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 		.cmx-email-side-content {
 			padding: 18px;
 		}
+		.cmx-email-side-section.cmx-email-side-section-assign {
+			overflow: visible;
+			position: relative;
+			z-index: 20;
+		}
+		.cmx-email-side-section.cmx-email-side-section-assign .cmx-email-side-content,
+		.cmx-email-side-section.cmx-email-side-section-assign .cmx-email-assign {
+			overflow: visible;
+			position: relative;
+		}
 		.cmx-email-meta-grid {
 			display: grid;
 			grid-template-columns: 62px 1fr;
@@ -522,9 +528,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			margin: 0;
 		}
 		.cmx-email-assign {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
 		}
 		.cmx-email-assign-actions {
 			margin-top: 12px;
@@ -612,9 +618,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 				'folder' => $folder_key,
 			]);
 		}
-
-		$contact_options = cmx_emails_assignment_options('contact');
-		$project_options = cmx_emails_assignment_options('project');
 
 		echo '<div class="wrap cmx-email-app">';
 		if ($notice['message'] !== '') {
@@ -795,7 +798,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			echo '</div>';
 			echo '</div></section>';
 
-			echo '<section class="cmx-email-side-section"><header><h3>Zuordnung</h3></header><div class="cmx-email-side-content">';
+			echo '<section class="cmx-email-side-section cmx-email-side-section-assign"><header><h3>Zuordnung</h3></header><div class="cmx-email-side-content">';
 			echo '<form method="post" action="' . \esc_url(\admin_url('admin-post.php')) . '">';
 			\wp_nonce_field('cmx_emails_assign');
 			echo '<input type="hidden" name="action" value="cmx_emails_assign">';
@@ -803,10 +806,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			echo '<input type="hidden" name="account_id" value="' . \esc_attr($account_id) . '">';
 			echo '<input type="hidden" name="folder" value="' . \esc_attr($folder) . '">';
 			echo '<div class="cmx-email-assign">';
-			echo '<div><label for="cmx-email-assign-contact"><strong>Kunde</strong></label><select id="cmx-email-assign-contact" name="contact_ids[]" multiple size="6">' . cmx_emails_render_assignment_options($contact_options, $contact_ids) . '</select></div>';
-			echo '<div><label for="cmx-email-assign-project"><strong>Projekt</strong></label><select id="cmx-email-assign-project" name="project_ids[]" multiple size="6">' . cmx_emails_render_assignment_options($project_options, $project_ids) . '</select></div>';
+			cmx_emails_render_assignment_picker('contact', $contact_ids, 'contact_ids[]', 'mailbox');
+			cmx_emails_render_assignment_picker('project', $project_ids, 'project_ids[]', 'mailbox');
 			echo '</div>';
-			echo '<p style="margin:10px 0 0;color:#64748b;font-size:12px;">Mehrfachauswahl mit Cmd/Ctrl oder Shift.</p>';
 			echo '<div class="cmx-email-assign-actions">';
 			echo '<button type="submit" class="button">Zuordnung speichern</button>';
 			echo '</form>';

@@ -981,18 +981,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		$post_id = (int) $post->ID;
 		$contact_ids = cmx_emails_assignment_contact_ids($post_id);
 		$project_ids = cmx_emails_assignment_project_ids($post_id);
-		$contact_options = cmx_emails_assignment_options('contact');
-		$project_options = cmx_emails_assignment_options('project');
 
 		\wp_nonce_field('cmx_emails_assignment_save', 'cmx_emails_assignment_nonce');
 
-		echo '<p><label for="cmx-email-contact"><strong>Kunde</strong></label></p>';
-		echo '<p><select id="cmx-email-contact" name="cmx_email_contact_ids[]" multiple size="6" style="width:100%;min-height:150px;">' . cmx_emails_render_assignment_options($contact_options, $contact_ids) . '</select></p>';
-
-		echo '<p><label for="cmx-email-project"><strong>Projekt</strong></label></p>';
-		echo '<p><select id="cmx-email-project" name="cmx_email_project_ids[]" multiple size="6" style="width:100%;min-height:150px;">' . cmx_emails_render_assignment_options($project_options, $project_ids) . '</select></p>';
-		echo '<p style="margin-top:8px;color:#646970;font-size:12px;">Mehrfachauswahl mit Cmd/Ctrl oder Shift.</p>';
-		echo '<p>Speichern ueber "Aktualisieren".</p>';
+		cmx_emails_render_assignment_picker('contact', $contact_ids, 'cmx_email_contact_ids[]', 'editor');
+		echo '<div style="height:12px;"></div>';
+		cmx_emails_render_assignment_picker('project', $project_ids, 'cmx_email_project_ids[]', 'editor');
 	}
 }
 
@@ -1062,6 +1056,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			flex-wrap: wrap;
 			gap: 8px;
 			margin-top: 16px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #side-sortables,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #cmx_email_assignment,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #cmx_email_assignment .inside {
+			overflow: visible;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #cmx_email_assignment {
+			position: relative;
+			z-index: 30;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #cmx_email_assignment .inside {
+			position: relative;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-compose-note {
 			margin-bottom: 14px;

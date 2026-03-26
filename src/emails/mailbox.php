@@ -1034,6 +1034,445 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_options')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_picker_config')) {
+	function cmx_emails_assignment_picker_config(string $kind): array {
+		$is_project = $kind === 'project';
+		$label = $is_project ? 'Projekt' : 'Kunde';
+		$nonce_action = $is_project ? 'cmx_search_projekte' : 'cmx_search_kontakte';
+
+		return [
+			'label'       => $label,
+			'placeholder' => $label . ' suchen...',
+			'ajax_action' => $nonce_action,
+			'ajax_nonce'  => \wp_create_nonce($nonce_action),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_picker_selected_items')) {
+	function cmx_emails_assignment_picker_selected_items(string $kind, array $selected_ids): array {
+		$selected_ids = $kind === 'project'
+			? cmx_emails_assignment_project_ids_from_list($selected_ids ?? [])
+			: cmx_emails_assignment_contact_ids_from_list($selected_ids ?? []);
+		$items = [];
+
+		foreach ($selected_ids as $selected_id) {
+			$selected_id = (int) $selected_id;
+			if ($selected_id <= 0 || \get_post_status($selected_id) === false) {
+				continue;
+			}
+
+			$title = \trim((string) \get_the_title($selected_id));
+			if ($title === '') {
+				continue;
+			}
+
+			$subtitle = '';
+			if ($kind === 'project') {
+				$project_contact_meta = \defined(__NAMESPACE__ . '\\CMX_KONTAKT_META')
+					? (string) CMX_KONTAKT_META
+					: '_cmx_projekt_kontakt_id';
+				$contact_id = (int) \get_post_meta($selected_id, $project_contact_meta, true);
+				if ($contact_id > 0) {
+					$subtitle = \trim((string) \get_the_title($contact_id));
+				}
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')) {
+				$subtitle = \trim((string) cmx_build_kontakt_postanschrift($selected_id));
+			}
+
+			$items[] = [
+				'id'       => $selected_id,
+				'title'    => $title,
+				'subtitle' => $subtitle,
+				'link'     => (string) \get_edit_post_link($selected_id, ''),
+			];
+		}
+
+		return $items;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_contact_ids_from_list')) {
+	function cmx_emails_assignment_contact_ids_from_list(array $ids): array {
+		return cmx_emails_normalize_post_id_list($ids, cmx_emails_contact_post_types());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_project_ids_from_list')) {
+	function cmx_emails_assignment_project_ids_from_list(array $ids): array {
+		return cmx_emails_normalize_post_id_list($ids, cmx_emails_project_post_types());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_picker')) {
+	function cmx_emails_render_assignment_picker(string $kind, array $selected_ids, string $input_name, string $context_key = ''): void {
+		$config = cmx_emails_assignment_picker_config($kind);
+		$selected_items = cmx_emails_assignment_picker_selected_items($kind, $selected_ids);
+		$context_key = \preg_replace('/[^a-z0-9_]+/i', '_', $context_key !== '' ? $context_key : ($kind . '_' . \wp_generate_password(6, false, false)));
+		$root_id = 'cmx-email-assign-' . \sanitize_html_class($context_key . '-' . $kind);
+		$input_id = $root_id . '-search';
+		$results_id = $root_id . '-results';
+
+		static $printed_assets = false;
+		if (!$printed_assets) {
+			$printed_assets = true;
+			$ajax_url = \admin_url('admin-ajax.php');
+			?>
+			<style>
+				.cmx-email-rel-picker { position: relative; z-index: 1; }
+				.cmx-email-rel-picker.is-open { z-index: 100004; }
+				.cmx-email-rel-picker label { display: block; margin: 0 0 6px; }
+				.cmx-email-rel-suggest { position: relative; overflow: visible; }
+				.cmx-email-rel-results {
+					position: absolute;
+					z-index: 100005;
+					left: 0;
+					right: 0;
+					max-height: 240px;
+					overflow: auto;
+					margin: 2px 0 0;
+					padding: 0;
+					border: 1px solid #ccd0d4;
+					border-radius: 4px;
+					background: #fff;
+					box-shadow: 0 10px 24px rgba(0, 0, 0, .10);
+					list-style: none;
+				}
+				.cmx-email-rel-results li { margin: 0; padding: 8px 10px; cursor: pointer; }
+				.cmx-email-rel-results li.active,
+				.cmx-email-rel-results li:hover { background: #e5f3ff; }
+				.cmx-email-rel-results li.is-empty { color: #646970; cursor: default; }
+				.cmx-email-rel-result-title { display: block; font-weight: 600; }
+				.cmx-email-rel-result-sub { display: block; margin-top: 2px; color: #646970; font-size: 12px; white-space: normal; }
+				.cmx-email-rel-selected {
+					margin: 8px 0 0;
+					padding: 0;
+					list-style: none;
+					display: flex;
+					flex-direction: column;
+					gap: 6px;
+				}
+				.cmx-email-rel-selected li {
+					display: flex;
+					align-items: flex-start;
+					justify-content: space-between;
+					gap: 8px;
+					padding: 8px 10px;
+					border: 1px solid #d0d7de;
+					border-radius: 8px;
+					background: #fff;
+				}
+				.cmx-email-rel-selected-main { min-width: 0; flex: 1 1 auto; }
+				.cmx-email-rel-selected-main a { display: block; text-decoration: none; font-weight: 600; }
+				.cmx-email-rel-selected-sub { display: block; margin-top: 2px; color: #646970; font-size: 12px; white-space: normal; }
+				.cmx-email-rel-remove { line-height: 1; flex: 0 0 auto; }
+			</style>
+			<script>
+				(function(){
+					if (window.cmxEmailAssignPickerInit) return;
+					window.cmxEmailAssignPickerInit = true;
+					var ajaxUrl = <?php echo \wp_json_encode($ajax_url); ?>;
+
+					function escHtml(str){
+						return String(str || '').replace(/[&<>"']/g, function(c){
+							if (c === '&') return '&amp;';
+							if (c === '<') return '&lt;';
+							if (c === '>') return '&gt;';
+							if (c.charCodeAt(0) === 34) return '&quot;';
+							return '&#039;';
+						});
+					}
+
+					function normalize(str){
+						str = String(str || '');
+						if (str.normalize) {
+							try {
+								str = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+							} catch (err) {}
+						}
+						return str.toLowerCase().trim();
+					}
+
+					function selectedIds(root){
+						var hiddenWrap = root.querySelector('.cmx-email-rel-hidden');
+						if (!hiddenWrap) return [];
+						return Array.prototype.map.call(hiddenWrap.querySelectorAll('input[type="hidden"]'), function(input){
+							return String(input.value || '');
+						});
+					}
+
+					function findHidden(root, id){
+						var hiddenWrap = root.querySelector('.cmx-email-rel-hidden');
+						if (!hiddenWrap) return null;
+						var idStr = String(id || '');
+						var inputs = hiddenWrap.querySelectorAll('input[type="hidden"]');
+						for (var i = 0; i < inputs.length; i++) {
+							if (String(inputs[i].value || '') === idStr) {
+								return inputs[i];
+							}
+						}
+						return null;
+					}
+
+					function closeResults(root){
+						var results = root.querySelector('.cmx-email-rel-results');
+						if (!results) return;
+						results.style.display = 'none';
+						results.innerHTML = '';
+						root.classList.remove('is-open');
+						root._cmxItems = [];
+						root._cmxActive = -1;
+					}
+
+					function renderSelectedItem(item){
+						var link = String(item.link || '');
+						var title = escHtml(String(item.title || ''));
+						var subtitle = escHtml(String(item.subtitle || ''));
+						var main = link
+							? '<a href="' + escHtml(link) + '" target="_blank" rel="noopener noreferrer">' + title + '</a>'
+							: '<span>' + title + '</span>';
+						if (subtitle) {
+							main += '<span class="cmx-email-rel-selected-sub">' + subtitle + '</span>';
+						}
+						return '<li data-id="' + escHtml(String(item.id || '')) + '"><div class="cmx-email-rel-selected-main">' + main + '</div><button type="button" class="button-link-delete cmx-email-rel-remove" data-id="' + escHtml(String(item.id || '')) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
+					}
+
+					function addSelected(root, item){
+						if (!item || !item.id || findHidden(root, item.id)) return;
+						var hiddenWrap = root.querySelector('.cmx-email-rel-hidden');
+						var selectedList = root.querySelector('.cmx-email-rel-selected');
+						if (!hiddenWrap || !selectedList) return;
+
+						var hidden = document.createElement('input');
+						hidden.type = 'hidden';
+						hidden.name = root.getAttribute('data-field-name') || '';
+						hidden.value = String(item.id || '');
+						hiddenWrap.appendChild(hidden);
+
+						selectedList.insertAdjacentHTML('beforeend', renderSelectedItem(item));
+					}
+
+					function removeSelected(root, id){
+						var hidden = findHidden(root, id);
+						if (hidden && hidden.parentNode) {
+							hidden.parentNode.removeChild(hidden);
+						}
+						var idStr = String(id || '');
+						var items = root.querySelectorAll('.cmx-email-rel-selected li[data-id]');
+						for (var i = 0; i < items.length; i++) {
+							if (String(items[i].getAttribute('data-id') || '') === idStr) {
+								if (items[i].parentNode) {
+									items[i].parentNode.removeChild(items[i]);
+								}
+								break;
+							}
+						}
+					}
+
+					function resultItems(root){
+						var results = root.querySelector('.cmx-email-rel-results');
+						return results ? Array.prototype.slice.call(results.querySelectorAll('li[data-index]')) : [];
+					}
+
+					function setActive(root, next){
+						var items = resultItems(root);
+						if (!items.length) {
+							root._cmxActive = -1;
+							return;
+						}
+						if (next < 0) next = items.length - 1;
+						if (next >= items.length) next = 0;
+						root._cmxActive = next;
+						items.forEach(function(item, idx){
+							item.classList.toggle('active', idx === next);
+							if (idx === next) {
+								try { item.scrollIntoView({ block: 'nearest' }); } catch (err) {}
+							}
+						});
+					}
+
+					function renderResults(root, items){
+						var results = root.querySelector('.cmx-email-rel-results');
+						if (!results) return;
+
+						root._cmxItems = Array.isArray(items) ? items : [];
+						root._cmxActive = -1;
+
+						if (!root._cmxItems.length) {
+							results.innerHTML = '<li class="is-empty">Keine Treffer gefunden.</li>';
+							results.style.display = 'block';
+							root.classList.add('is-open');
+							return;
+						}
+
+						results.innerHTML = root._cmxItems.map(function(item, index){
+							var title = escHtml(String(item.title || ''));
+							var subtitle = escHtml(String(item.subtitle || ''));
+							return '<li data-index="' + index + '"><span class="cmx-email-rel-result-title">' + title + '</span>' + (subtitle ? '<span class="cmx-email-rel-result-sub">' + subtitle + '</span>' : '') + '</li>';
+						}).join('');
+						results.style.display = 'block';
+						root.classList.add('is-open');
+					}
+
+					function fetchResults(root, query){
+						var action = root.getAttribute('data-ajax-action') || '';
+						var nonce = root.getAttribute('data-ajax-nonce') || '';
+						if (!action || !nonce) return;
+
+						var requestId = (root._cmxRequestId || 0) + 1;
+						root._cmxRequestId = requestId;
+
+						var url = ajaxUrl + '?action=' + encodeURIComponent(action) + '&_ajax_nonce=' + encodeURIComponent(nonce) + '&q=' + encodeURIComponent(query || '');
+						fetch(url, { credentials: 'same-origin' }).then(function(response){
+							return response.json();
+						}).then(function(json){
+							if (root._cmxRequestId !== requestId) return;
+							if (!json || !json.success || !json.data || !Array.isArray(json.data.items)) {
+								closeResults(root);
+								return;
+							}
+
+							var selected = selectedIds(root);
+							var selectedMap = {};
+							selected.forEach(function(id){ selectedMap[String(id)] = true; });
+
+							var items = json.data.items.map(function(item){
+								return {
+									id: String(item.id || ''),
+									title: String(item.title || ''),
+									subtitle: String(item.addr || item.kontakt_title || item.kontakt_addr || ''),
+									link: String(item.link || '')
+								};
+							}).filter(function(item){
+								return item.id !== '' && !selectedMap[item.id];
+							});
+
+							renderResults(root, items);
+						}).catch(function(){
+							closeResults(root);
+						});
+					}
+
+					function bindPicker(root){
+						if (!root || root.dataset.cmxBound === '1') return;
+						root.dataset.cmxBound = '1';
+
+						var search = root.querySelector('.cmx-email-rel-search');
+						var results = root.querySelector('.cmx-email-rel-results');
+						if (!search || !results) return;
+
+						var timer = null;
+						function triggerSearch(){
+							if (timer) clearTimeout(timer);
+							var q = String(search.value || '').trim();
+							timer = setTimeout(function(){ fetchResults(root, q); }, q === '' ? 0 : 180);
+						}
+
+						search.addEventListener('input', triggerSearch);
+						search.addEventListener('focus', triggerSearch);
+						search.addEventListener('click', triggerSearch);
+						search.addEventListener('keydown', function(e){
+							var items = root._cmxItems || [];
+							if (e.key === 'ArrowDown') {
+								e.preventDefault();
+								setActive(root, (root._cmxActive || 0) + 1);
+							} else if (e.key === 'ArrowUp') {
+								e.preventDefault();
+								setActive(root, (root._cmxActive || 0) - 1);
+							} else if (e.key === 'Enter') {
+								if (!items.length) return;
+								e.preventDefault();
+								var index = typeof root._cmxActive === 'number' && root._cmxActive >= 0 ? root._cmxActive : 0;
+								var item = items[index];
+								if (!item) return;
+								addSelected(root, item);
+								search.value = '';
+								triggerSearch();
+							} else if (e.key === 'Escape') {
+								closeResults(root);
+							}
+						});
+
+						results.addEventListener('mousedown', function(e){
+							e.preventDefault();
+						});
+						results.addEventListener('click', function(e){
+							var itemNode = e.target && e.target.closest ? e.target.closest('li[data-index]') : null;
+							if (!itemNode) return;
+							var index = parseInt(itemNode.getAttribute('data-index') || '-1', 10);
+							var item = (root._cmxItems || [])[index];
+							if (!item) return;
+							addSelected(root, item);
+							search.value = '';
+							triggerSearch();
+							search.focus();
+						});
+
+						root.addEventListener('click', function(e){
+							var removeButton = e.target && e.target.closest ? e.target.closest('.cmx-email-rel-remove') : null;
+							if (!removeButton) return;
+							e.preventDefault();
+							removeSelected(root, removeButton.getAttribute('data-id') || '');
+						});
+					}
+
+					function initAll(){
+						document.querySelectorAll('.cmx-email-rel-picker').forEach(bindPicker);
+					}
+
+					document.addEventListener('click', function(e){
+						document.querySelectorAll('.cmx-email-rel-picker').forEach(function(root){
+							if (!root.contains(e.target)) {
+								closeResults(root);
+							}
+						});
+					});
+
+					if (document.readyState === 'loading') {
+						document.addEventListener('DOMContentLoaded', initAll, { once: true });
+					} else {
+						initAll();
+					}
+				})();
+			</script>
+			<?php
+		}
+
+		echo '<div id="' . \esc_attr($root_id) . '" class="cmx-email-rel-picker" data-field-name="' . \esc_attr($input_name) . '" data-ajax-action="' . \esc_attr((string) $config['ajax_action']) . '" data-ajax-nonce="' . \esc_attr((string) $config['ajax_nonce']) . '">';
+		echo '<label for="' . \esc_attr($input_id) . '"><strong>' . \esc_html((string) $config['label']) . '</strong></label>';
+		echo '<div class="cmx-email-rel-suggest">';
+		echo '<input type="search" id="' . \esc_attr($input_id) . '" class="widefat cmx-email-rel-search" autocomplete="off" placeholder="' . \esc_attr((string) $config['placeholder']) . '">';
+		echo '<ul id="' . \esc_attr($results_id) . '" class="cmx-email-rel-results" style="display:none"></ul>';
+		echo '</div>';
+		echo '<div class="cmx-email-rel-hidden">';
+		foreach ($selected_items as $item) {
+			echo '<input type="hidden" name="' . \esc_attr($input_name) . '" value="' . \esc_attr((string) ($item['id'] ?? 0)) . '">';
+		}
+		echo '</div>';
+		echo '<ul class="cmx-email-rel-selected">';
+		foreach ($selected_items as $item) {
+			$title = \esc_html((string) ($item['title'] ?? ''));
+			$subtitle = \trim((string) ($item['subtitle'] ?? ''));
+			$link = (string) ($item['link'] ?? '');
+			echo '<li data-id="' . \esc_attr((string) ($item['id'] ?? 0)) . '">';
+			echo '<div class="cmx-email-rel-selected-main">';
+			if ($link !== '') {
+				echo '<a href="' . \esc_url($link) . '" target="_blank" rel="noopener noreferrer">' . $title . '</a>';
+			} else {
+				echo '<span>' . $title . '</span>';
+			}
+			if ($subtitle !== '') {
+				echo '<span class="cmx-email-rel-selected-sub">' . \esc_html($subtitle) . '</span>';
+			}
+			echo '</div>';
+			echo '<button type="button" class="button-link-delete cmx-email-rel-remove" data-id="' . \esc_attr((string) ($item['id'] ?? 0)) . '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
+			echo '</li>';
+		}
+		echo '</ul>';
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_as_read')) {
 	function cmx_emails_mark_as_read(int $post_id): void {
 		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
