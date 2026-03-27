@@ -43,19 +43,62 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_mail_button_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
+	function cmxbu_belegmail_daytime_text(): string {
+		$hour = 12;
+		if (\function_exists('wp_timezone')) {
+			$now = new \DateTimeImmutable('now', \wp_timezone());
+			$hour = (int) $now->format('G');
+		} else {
+			$hour = (int) \date('G');
+		}
+
+		if ($hour < 11) {
+			return 'Morgen';
+		}
+		if ($hour < 18) {
+			return 'Tag';
+		}
+		return 'Abend';
+	}
+
+	function cmxbu_belegmail_company_label(array $data = []): string {
+		$label = \trim((string) ($data['firma_bezeichnung'] ?? ''));
+		if ($label !== '') {
+			return $label;
+		}
+
+		$kontakt_id = (int) ($data['kontakt_id'] ?? 0);
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+
+		$meta_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			: '_cmx_kontakte_firma';
+		$label = \trim((string) \get_post_meta($kontakt_id, $meta_key, true));
+		if ($label !== '') {
+			return $label;
+		}
+
+		return \trim((string) \get_the_title($kontakt_id));
+	}
+
 	function cmxbu_belegmail_salutation_text(array $data = []): string {
 		$stored_anrede = \trim((string) ($data['anrede'] ?? ''));
 		if ($stored_anrede !== '') {
 			return $stored_anrede;
 		}
 
+		$mail_mode = \function_exists(__NAMESPACE__ . '\\cmxbu_normalize_belegmail_mode')
+			? (string) cmxbu_normalize_belegmail_mode((string) ($data['mail_mode'] ?? (!empty($data['duzis']) ? 'du' : 'sie')))
+			: (!empty($data['duzis']) ? 'du' : 'sie');
 		$vorname = \trim((string) ($data['vorname'] ?? ''));
-		$nachname = \trim((string) ($data['nachname'] ?? ''));
-		if ($vorname !== '' || $nachname !== '') {
-			return 'Guten Tag ' . \trim($vorname . ' ' . $nachname);
+		if ($mail_mode === 'du') {
+			return $vorname !== '' ? 'Hallo ' . $vorname : 'Hallo';
 		}
 
-		return '';
+		$greeting = 'Guten ' . cmxbu_belegmail_daytime_text();
+		return $vorname !== '' ? $greeting . ' ' . $vorname : $greeting;
 	}
 }
 
@@ -72,14 +115,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_editor_to_text')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens')) {
-	function cmxbu_belegmail_replace_content_tokens(string $text, array $data = []): string {
-		$replacements = [
-			'{anrede}' => \trim((string) ($data['anrede_text'] ?? '')),
+	function cmxbu_belegmail_content_token_values(array $data = []): array {
+		$anrede_text = \trim((string) ($data['anrede_text'] ?? ''));
+		if ($anrede_text === '') {
+			$anrede_text = cmxbu_belegmail_salutation_text($data);
+		}
+
+		return [
+			'{anrede}' => $anrede_text,
+			'{vorname}' => \trim((string) ($data['vorname'] ?? '')),
+			'{nachname}' => \trim((string) ($data['nachname'] ?? '')),
+			'{firma_bezeichnung}' => cmxbu_belegmail_company_label($data),
 			'{beleg_datum}' => \trim((string) ($data['beleg_date'] ?? '')),
 			'{faellig_bis}' => \trim((string) ($data['faellig_bis'] ?? '')),
 			'{betrag}' => \trim((string) ($data['betrag'] ?? '')),
 			'{beleg_id}' => \trim((string) ($data['beleg_id'] ?? '')),
 			'{beleg_label}' => \trim((string) ($data['beleg_label'] ?? '')),
+		];
+	}
+
+	function cmxbu_belegmail_replace_content_tokens(string $text, array $data = []): string {
+		$replacements = cmxbu_belegmail_content_token_values($data) + [
 			'{logo}' => '',
 		];
 		return \strtr($text, $replacements);
@@ -282,17 +338,22 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 	$salutation_line_html = $anrede_esc !== ''
 		? '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.6;">' . $anrede_esc . ',</p>'
 		: '';
-	$default_body_html = $salutation_line_html
-		. '<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst ihn jetzt bequem als PDF herunterladen.</p>'
-		. '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>'
-		. $button_outlook_gap_html
-		. '<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Dienstleistungen.</p>';
-	$body_html = cmxbu_render_belegmail_body_html([
-		'custom_content' => (string) ($data['custom_content'] ?? ''),
-		'anrede_text' => $anrede_text,
-		'beleg_date' => $beleg_date,
-		'faellig_bis' => $faellig_bis,
-		'betrag' => $betrag,
+		$default_body_html = $salutation_line_html
+			. '<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Dein Beleg wurde erfolgreich erstellt.<br>Du kannst ihn jetzt bequem als PDF herunterladen.</p>'
+			. '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>'
+			. $button_outlook_gap_html
+			. '<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Dienstleistungen.</p>';
+		$body_html = cmxbu_render_belegmail_body_html([
+			'custom_content' => (string) ($data['custom_content'] ?? ''),
+			'anrede_text' => $anrede_text,
+			'mail_mode' => (string) ($data['mail_mode'] ?? ''),
+			'vorname' => (string) ($data['vorname'] ?? ''),
+			'nachname' => (string) ($data['nachname'] ?? ''),
+			'kontakt_id' => $kontakt_id,
+			'firma_bezeichnung' => cmxbu_belegmail_company_label($data),
+			'beleg_date' => $beleg_date,
+			'faellig_bis' => $faellig_bis,
+			'betrag' => $betrag,
 		'beleg_id' => $beleg_id,
 		'beleg_label' => $beleg_label,
 	], $default_body_html, $download_button_html, $thank_you_margin_bottom);

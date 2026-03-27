@@ -462,12 +462,13 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 
 		$mail_data = [
 			'anrede' => $anrede,
+			'mail_mode' => $mail_mode,
 			'vorname' => $vorname,
 			'nachname' => $nachname,
 			'kontakt_id' => (int) $kontakt_id,
-			'beleg_label' => $beleg_label,
-			'beleg_id' => $beleg_id,
-			'beleg_date' => $beleg_mail_date,
+				'beleg_label' => $beleg_label,
+				'beleg_id' => $beleg_id,
+				'beleg_date' => $beleg_mail_date,
 			'download_url' => $download_url,
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,
@@ -519,6 +520,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 		$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
 			? (string) cmxbu_belegmail_salutation_text([
 				'anrede' => $anrede,
+				'mail_mode' => $mail_mode,
 				'vorname' => $vorname,
 				'nachname' => $nachname,
 			])

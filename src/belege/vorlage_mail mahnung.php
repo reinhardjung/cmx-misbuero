@@ -145,13 +145,20 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 		. '<table role="presentation" cellpadding="0" cellspacing="0" style="' . \esc_attr($button_block_style) . '"><tr><td>' . $download_button_html . '</td></tr></table>'
 		. $button_outlook_gap_html
 		. '<p style="margin:0 0 ' . $thank_you_margin_bottom . ' 0;font-size:16px;line-height:1.6;">Vielen Dank für Dein Vertrauen in meine Dienstleistungen.</p>';
-	$body_html = \function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')
-		? cmxbu_render_belegmail_body_html([
-			'custom_content' => (string) ($data['custom_content'] ?? ''),
-			'anrede_text' => $anrede_text,
-			'beleg_date' => $beleg_date,
-			'faellig_bis' => $faellig_bis,
-			'betrag' => $betrag,
+		$body_html = \function_exists(__NAMESPACE__ . '\\cmxbu_render_belegmail_body_html')
+			? cmxbu_render_belegmail_body_html([
+				'custom_content' => (string) ($data['custom_content'] ?? ''),
+				'anrede_text' => $anrede_text,
+				'mail_mode' => (string) ($data['mail_mode'] ?? ''),
+				'vorname' => (string) ($data['vorname'] ?? ''),
+				'nachname' => (string) ($data['nachname'] ?? ''),
+				'kontakt_id' => $kontakt_id,
+				'firma_bezeichnung' => \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_company_label')
+					? (string) cmxbu_belegmail_company_label($data)
+					: '',
+				'beleg_date' => $beleg_date,
+				'faellig_bis' => $faellig_bis,
+				'betrag' => $betrag,
 			'beleg_id' => $beleg_id,
 			'beleg_label' => $beleg_label,
 		], $default_body_html, $download_button_html, $thank_you_margin_bottom)

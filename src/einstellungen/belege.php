@@ -184,12 +184,12 @@ function cmx_field_textarea_beleg(array $args): void {
 				'toolbar3' => '',
 				'toolbar4' => '',
 			],
-		]);
-		if ($is_mail_field) {
-			cmx_render_beleg_placeholder_buttons($editor_id, ['{anrede}', '{beleg}', '{beleg_datum}', '{faellig_bis}', '{betrag}', '{logo}']);
+			]);
+			if ($is_mail_field) {
+				cmx_render_beleg_placeholder_buttons($editor_id, ['{anrede}', '{vorname}', '{nachname}', '{firma_bezeichnung}', '{beleg}', '{beleg_datum}', '{faellig_bis}', '{betrag}', '{logo}']);
+			}
+			return;
 		}
-		return;
-	}
 
 	// Wenn leer -> Placeholder aus INI
 	$default = cmx_get_beleg_default($key);

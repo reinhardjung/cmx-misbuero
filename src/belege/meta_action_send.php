@@ -206,17 +206,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 		if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
 			return new \WP_Error('missing_mail_template', 'Fuer ' . $beleg_label . ' fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
 		}
-		$custom_has_anrede_token = $custom_message !== ''
-			&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
-			&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
-		$message = cmxbu_render_belegmail_template([
-			'anrede' => $anrede,
-			'vorname' => $vorname,
-			'nachname' => $nachname,
-			'kontakt_id' => $kontakt_id,
-			'beleg_label' => $beleg_label,
-			'beleg_id' => $beleg_id,
-			'beleg_date' => $beleg_mail_date,
+			$custom_has_anrede_token = $custom_message !== ''
+				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
+				&& cmxbu_belegmail_content_has_placeholder($custom_message, '{anrede}');
+			$message = cmxbu_render_belegmail_template([
+				'anrede' => $anrede,
+				'mail_mode' => $mail_mode,
+				'vorname' => $vorname,
+				'nachname' => $nachname,
+				'kontakt_id' => $kontakt_id,
+				'beleg_label' => $beleg_label,
+				'beleg_id' => $beleg_id,
+				'beleg_date' => $beleg_mail_date,
 			'download_url' => $download_url,
 			'faellig_bis' => $faellig_bis,
 			'betrag' => $betrag,
@@ -230,16 +231,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 		if ($betrag !== '') {
 			$message = cmxbu_replace_placeholder_with_spacing($message, '{betrag}', \esc_html($betrag));
 		}
-		if ($beleg_mail_date !== '') {
-			$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', \esc_html($beleg_mail_date));
-		}
-		$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
-			? (string) cmxbu_belegmail_salutation_text([
-				'anrede' => $anrede,
-				'vorname' => $vorname,
-				'nachname' => $nachname,
-			])
-			: '';
+			if ($beleg_mail_date !== '') {
+				$message = cmxbu_replace_placeholder_with_spacing($message, '{beleg_datum}', \esc_html($beleg_mail_date));
+			}
+			$anrede_text = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')
+				? (string) cmxbu_belegmail_salutation_text([
+					'anrede' => $anrede,
+					'mail_mode' => $mail_mode,
+					'vorname' => $vorname,
+					'nachname' => $nachname,
+				])
+				: '';
 		if (($custom_message === '' || $custom_has_anrede_token) && $anrede_text !== '') {
 			$message = cmxbu_replace_placeholder_with_spacing($message, '{anrede}', \esc_html($anrede_text));
 		} elseif ($custom_has_anrede_token && \strpos($message, '{anrede}') !== false) {
