@@ -961,29 +961,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field'))
 				status.textContent = text || "";
 				status.style.color = isError ? "#b32d2e" : "#646970";
 			}
-			function setStatusHtml(html, isError){
-				status.innerHTML = html || "";
-				status.style.color = isError ? "#b32d2e" : "#646970";
-			}
-			function fallbackCopyText(text){
-				var field = document.createElement("textarea");
-				field.value = text;
-				field.setAttribute("readonly", "readonly");
-				field.style.position = "fixed";
-				field.style.opacity = "0";
-				field.style.pointerEvents = "none";
-				document.body.appendChild(field);
-				field.focus();
-				field.select();
-				var ok = false;
-				try {
-					ok = document.execCommand("copy");
-				} catch (err) {
-					ok = false;
+				function setStatusHtml(html, isError){
+					status.innerHTML = html || "";
+					status.style.color = isError ? "#b32d2e" : "#646970";
 				}
-				document.body.removeChild(field);
-				return ok;
-			}
+				function chromeExtensionsLinkHtml(){
+					return "<a href=\"#\" data-copy-text=\"chrome://extensions\" title=\"In die Zwischenablage kopieren\" style=\"color:inherit;text-decoration:underline;cursor:pointer;\"><code>chrome://extensions</code></a>";
+				}
+				function fallbackCopyText(text){
+					var field = document.createElement("textarea");
+					field.value = text;
+					field.setAttribute("readonly", "readonly");
+					field.style.position = "fixed";
+					field.style.opacity = "0";
+					field.style.pointerEvents = "none";
+					document.body.appendChild(field);
+					field.focus();
+					field.select();
+					var ok = false;
+					try {
+						ok = document.execCommand("copy");
+					} catch (err) {
+						ok = false;
+					}
+					document.body.removeChild(field);
+					return ok;
+				}
 			function copyText(text){
 				if (navigator.clipboard && window.isSecureContext) {
 					return navigator.clipboard.writeText(text).then(function(){
@@ -1005,26 +1008,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field'))
 				}
 				return /Chrome\\//.test(ua) && /Google Inc/i.test(vendor) && !/Edg\\//.test(ua) && !/OPR\\//.test(ua);
 			}
-			if (help && helpBox) {
-				help.addEventListener("click", function(){
-					var isOpen = helpBox.style.display !== "none";
-					helpBox.style.display = isOpen ? "none" : "block";
-				});
-			}
-			button.addEventListener("click", function(){
-				if (!isChromeBrowser()) {
-					setStatus("Diese Erweiterung kann nur in Google Chrome heruntergeladen werden.", true);
-					return;
+				if (help && helpBox) {
+					help.addEventListener("click", function(){
+						var isOpen = helpBox.style.display !== "none";
+						helpBox.style.display = isOpen ? "none" : "block";
+					});
 				}
-				copyText("chrome://extensions").then(function(copied){
-					var message = "Das Erweiterungspaket wird heruntergeladen. Chrome erlaubt die direkte Installation ausserhalb des Chrome Web Store nicht.<br>Bitte danach in <code>chrome://extensions</code> als entpackte Erweiterung laden.";
-					if (copied) {
-						message += "<br><code>chrome://extensions</code> wurde in die Zwischenablage kopiert. Die Erweiterung dann auch im Chrome auswählen und anzeigen lassen.";
+				status.addEventListener("click", function(event){
+					var target = event.target;
+					while (target && target !== status) {
+						if (target.getAttribute && target.getAttribute("data-copy-text")) {
+							break;
+						}
+						target = target.parentNode;
 					}
-					setStatusHtml(message, false);
-					window.location.href = ' . \wp_json_encode($download_url) . ';
+					if (!target || target === status) return;
+					event.preventDefault();
+					copyText(target.getAttribute("data-copy-text")).then(function(copied){
+						if (!copied) return;
+						var originalHtml = target.getAttribute("data-original-html") || target.innerHTML;
+						var resetTimer = parseInt(target.getAttribute("data-copy-timeout") || "0", 10);
+						target.setAttribute("data-original-html", originalHtml);
+						target.innerHTML = originalHtml + " <span style=\"font-size:11px;\">kopiert</span>";
+						if (resetTimer) {
+							window.clearTimeout(resetTimer);
+						}
+						resetTimer = window.setTimeout(function(){
+							target.innerHTML = target.getAttribute("data-original-html") || originalHtml;
+							target.removeAttribute("data-copy-timeout");
+						}, 1600);
+						target.setAttribute("data-copy-timeout", String(resetTimer));
+					});
 				});
-			});
+				button.addEventListener("click", function(){
+					if (!isChromeBrowser()) {
+						setStatus("Diese Erweiterung kann nur in Google Chrome heruntergeladen werden.", true);
+						return;
+					}
+					copyText("chrome://extensions").then(function(copied){
+						var message = "Das Erweiterungspaket wird heruntergeladen. Chrome erlaubt die direkte Installation ausserhalb des Chrome Web Store nicht.<br>Bitte danach in " + chromeExtensionsLinkHtml() + " als entpackte Erweiterung laden.";
+						if (copied) {
+							message += "<br>" + chromeExtensionsLinkHtml() + " wurde in die Zwischenablage kopiert. Die Erweiterung dann auch im Chrome auswählen und anzeigen lassen.";
+						}
+						setStatusHtml(message, false);
+						window.location.href = ' . \wp_json_encode($download_url) . ';
+					});
+				});
 			if (crxButton) {
 				crxButton.addEventListener("click", function(){
 					if (!isChromeBrowser()) {
@@ -1034,7 +1063,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_settings_field'))
 					copyText("chrome://extensions").then(function(copied){
 						var message = "Die <code>.crx</code>-Datei wird heruntergeladen.";
 						if (copied) {
-							message += "<br><code>chrome://extensions</code> wurde in die Zwischenablage kopiert. Die Erweiterung dann auch im Chrome auswählen und anzeigen lassen.";
+							message += "<br>" + chromeExtensionsLinkHtml() + " wurde in die Zwischenablage kopiert. Die Erweiterung dann auch im Chrome auswählen und anzeigen lassen.";
 						}
 						message += "<br>Falls Chrome die direkte Installation blockiert, bitte weiter die ZIP-Datei als entpackte Erweiterung laden.";
 						setStatusHtml(message, false);
