@@ -390,8 +390,8 @@ function cmx_admin_help_common_sidebar_links_html(): string {
 		. '<p><strong>Weitere Hilfen gibt es</strong></p>'
 		. '<ul>'
 		. '<li>auf der Homepage <a href="' . \esc_url('https://misbuero.ch/faq/') . '" target="_blank" rel="noopener noreferrer">FAQ</a></li>'
-		. '<li>sowie auf <a href="' . \esc_url('https://www.youtube.com/@MisBuero') . '" target="_blank" rel="noopener noreferrer">YouTube</a></li>'
-		. '<li><br>oder einfach ein Ticket machen <a href="' . \esc_url(\admin_url('admin.php?page=cmx-einstellungen&tab=support')) . '" target="_blank" rel="noopener noreferrer">Support-Team</a></li>'
+		. '<li>sowie auf <a href="' . \esc_url('https://www.youtube.com/@MisBuero') . '" target="_blank" rel="noopener noreferrer">YouTube</a>.</li>'
+		. '<li><br>Oder einfach ein Ticket machen <a href="' . \esc_url(\admin_url('admin.php?page=cmx-einstellungen&tab=support')) . '" target="_blank" rel="noopener noreferrer">Support-Team</a></li>'
 		. '</ul>'
 		. '</div>';
 }
