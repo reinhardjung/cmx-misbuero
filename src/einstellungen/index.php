@@ -233,11 +233,9 @@ function cmx_render_settings_page(): void {
 	/* Subtabs */
 	if ($subtabs) {
 		echo '<ul class="subsubsub">';
-		$i=0; $n=count($subtabs);
 		foreach ($subtabs as $k => $label) {
 			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$k.'"'
-			     .' class="'.($k === $sub ? 'current' : '').'">'.$label.'</a>'
-			     .(++$i < $n ? ' | ' : '').'</li>';
+			     .' class="'.($k === $sub ? 'current' : '').'">'.$label.'</a></li>';
 		}
 		echo '</ul><br><br>';
 	}

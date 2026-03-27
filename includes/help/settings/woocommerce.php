@@ -5,8 +5,10 @@ return [
 
 	'overview' => [
 		'Dein Secret Key kannst Du mir dem Button [Secret neu erzeugen] ganz rechts auf der Zeile neu erzeigen.',
-		'Webhooks, Beispiel-URLs und Automatikfunktionen müssen zusammenpassen.',
-		'Fehler hier wirken sich meist auf Import und Folgeprozesse aus.',
+		'Beim Klick auf das Icon kopieren, wird der akt. Secret Key in den Zwischenspeicher kopiert',
+		'und Du kannst ihn dann in Deinem WooCommerce Shop WP-Admin → WooCommerce → Einstellungen → Erweitert → Webhooks nutzen.',
+		'&nbsp;',
+		'und Du kannst ihn dann in Deinem WooCommerce Shop WP-Admin → WooCommerce → Einstellungen → Erweitert → Webhooks nutzen.',
 	],
 
 	'workflow' => [
