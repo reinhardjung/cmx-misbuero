@@ -272,7 +272,10 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		position:relative;
 		z-index:50;
 	}
-	#cmx-stammdaten,
+	#cmx-stammdaten{
+		position:relative;
+		overflow:visible;
+	}
 	#cmx-stammdaten .grid {
 		position:relative;
 		overflow:visible;
@@ -280,15 +283,16 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		flex-wrap:nowrap;
 		gap:10px;
 		align-items:flex-start;
+		width:100%;
 	}
 	#cmx-stammdaten .field {margin:0; display:block !important; flex:1 1 0; min-width:0;}
-	#cmx-stammdaten .field--firma{flex:1.9 1 0}
-	#cmx-stammdaten .field--form{flex:0.95 1 0}
-	#cmx-stammdaten .field--url{flex:1.05 1 0}
+	#cmx-stammdaten .field--firma{flex:1.75 1 0}
+	#cmx-stammdaten .field--form{flex:0.9 1 0}
+	#cmx-stammdaten .field--url{flex:1.45 1 0}
 	#cmx-stammdaten .field--hr-uid{flex:1.05 1 0}
-	#cmx-stammdaten .field--datum{flex:0.82 1 0}
+	#cmx-stammdaten .field--datum{flex:0.92 1 0}
 	#cmx-stammdaten .field--kunden-nr{flex:0 0 150px;max-width:150px;}
-	#cmx-stammdaten .field--status{flex:0 0 78px;min-width:78px;align-self:flex-start;display:flex !important;flex-direction:column;align-items:flex-start;gap:6px;position:relative;overflow:visible;z-index:60}
+	#cmx-stammdaten .field--status{flex:0 0 60px;min-width:60px;align-self:flex-start;display:flex !important;flex-direction:column;align-items:flex-start;gap:6px;position:relative;overflow:visible;z-index:60}
 	#cmx-stammdaten .field--status > label{display:block !important;width:100%;margin:0;text-align:left}
 	#cmx-stammdaten .field--status .cmx-status-field-control{display:block;width:100%}
 	#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:inline-flex;margin:0}
@@ -307,7 +311,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	@media (max-width: 1200px) {
 		#cmx-stammdaten .grid { flex-wrap:wrap; }
 		#cmx-stammdaten .field { flex:1 1 calc(50% - 10px); min-width:220px; }
-		#cmx-stammdaten .field--status { flex:0 0 78px; min-width:78px; }
+		#cmx-stammdaten .field--status { flex:0 0 60px; min-width:60px; }
 		#cmx-stammdaten .field--kunden-nr { flex:1 1 180px; max-width:none; }
 	}
 	@media (max-width: 640px) {
@@ -369,9 +373,9 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	<label for="cmx_kunde_seit"><strong>Kunde seit</strong></label><br>
 	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
-	echo '<p class="field field--status">
+	echo '<div class="field field--status">
 		<label for="cmx_status"><strong>Status</strong></label>
-		<span class="cmx-status-field-control">';
+		<div class="cmx-status-field-control">';
 	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_control_html')) {
 		echo cmx_kontakte_status_control_html((int) $post->ID, [
 			'context'    => 'edit',
@@ -381,8 +385,8 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	} else {
 		echo '<input id="cmx_status" name="cmx_status" type="text" class="text" value="play">';
 	}
-	echo '	</span>
-	</p>';
+	echo '	</div>
+	</div>';
 	echo '<p class="field field--kunden-nr">
 		<label for="cmx_kunden_nr"><strong>Kunden Nr</strong></label><br>
 		<input id="cmx_kunden_nr" name="cmx_kunden_nr" type="text" class="text" readonly value="' . \esc_attr($kunden_nr) . '">
