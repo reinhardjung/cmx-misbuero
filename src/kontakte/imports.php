@@ -141,7 +141,7 @@ function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
 	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
 	foreach ($all_keys as $raw_key) {
 		$key = \strtolower((string) $raw_key);
-		if (!\preg_match('/^kontakt_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|duzis)$/', $key, $matches)) {
+		if (!\preg_match('/^kontakt_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|anrede|duzis)$/', $key, $matches)) {
 			continue;
 		}
 		$slot = (int) ($matches[1] ?? 0);
@@ -159,18 +159,19 @@ function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
 			$first_birthdate = cmx_kontakte_import_row_value($row, $row_l, 'cmx_geburtsdatum');
 		}
 
-		for ($slot = 1; $slot <= 3; $slot++) {
-			$row_data = [
-				'vorname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'vorname') : '',
-				'nachname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'nachname') : '',
-				'telefon_label' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_label_' . $slot),
-				'telefon' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_' . $slot),
-				'email_label' => cmx_kontakte_import_row_value($row, $row_l, 'email_label_' . $slot),
-				'email' => cmx_kontakte_import_row_value($row, $row_l, 'email_' . $slot),
-				'geburtsdatum' => $slot === 1 ? $first_birthdate : '',
-				'duzis' => '0',
-			];
-			$contacts[$slot] = $row_data;
+			for ($slot = 1; $slot <= 3; $slot++) {
+				$row_data = [
+					'vorname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'vorname') : '',
+					'nachname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'nachname') : '',
+					'telefon_label' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_label_' . $slot),
+					'telefon' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_' . $slot),
+					'email_label' => cmx_kontakte_import_row_value($row, $row_l, 'email_label_' . $slot),
+					'email' => cmx_kontakte_import_row_value($row, $row_l, 'email_' . $slot),
+					'geburtsdatum' => $slot === 1 ? $first_birthdate : '',
+					'anrede' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'anrede') : '',
+					'duzis' => '0',
+				];
+				$contacts[$slot] = $row_data;
 		}
 	}
 

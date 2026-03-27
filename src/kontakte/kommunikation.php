@@ -255,11 +255,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_resolve_label_term_sl
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_row_fields')) {
-	function cmx_kommunikation_row_fields(): array {
-		return ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'duzis'];
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_row_fields')) {
+		function cmx_kommunikation_row_fields(): array {
+			return ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'anrede', 'duzis'];
+		}
 	}
-}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_count_meta_key')) {
 	function cmx_kommunikation_count_meta_key(): string {
@@ -286,26 +286,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_contact_row
 			$email = \trim((string) $row['email']);
 		}
 
-		return [
-			'vorname'      => \sanitize_text_field((string) ($row['vorname'] ?? '')),
-			'nachname'     => \sanitize_text_field((string) ($row['nachname'] ?? '')),
-			'telefon_label'=> cmx_kommunikation_normalize_label_slug($row['telefon_label'] ?? '', CMX_TAX_PHONE_LABELS),
-			'telefon'      => cmx_kommunikation_normalize_phone($row['telefon'] ?? ''),
-			'email_label'  => cmx_kommunikation_normalize_label_slug($row['email_label'] ?? '', CMX_TAX_MAIL_LABELS),
-			'email'        => $email,
-			'geburtsdatum' => cmx_kommunikation_sanitize_birthdate($row['geburtsdatum'] ?? ''),
-			'duzis'        => !empty($row['duzis']) ? '1' : '0',
-		];
-	}
-}
-
-if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty')) {
-	function cmx_kommunikation_contact_row_is_empty(array $row): bool {
-		foreach (['vorname', 'nachname', 'telefon', 'email', 'geburtsdatum'] as $key) {
-			if (\trim((string) ($row[$key] ?? '')) !== '') {
-				return false;
-			}
+			return [
+				'vorname'      => \sanitize_text_field((string) ($row['vorname'] ?? '')),
+				'nachname'     => \sanitize_text_field((string) ($row['nachname'] ?? '')),
+				'telefon_label'=> cmx_kommunikation_normalize_label_slug($row['telefon_label'] ?? '', CMX_TAX_PHONE_LABELS),
+				'telefon'      => cmx_kommunikation_normalize_phone($row['telefon'] ?? ''),
+				'email_label'  => cmx_kommunikation_normalize_label_slug($row['email_label'] ?? '', CMX_TAX_MAIL_LABELS),
+				'email'        => $email,
+				'geburtsdatum' => cmx_kommunikation_sanitize_birthdate($row['geburtsdatum'] ?? ''),
+				'anrede'       => \sanitize_text_field((string) ($row['anrede'] ?? '')),
+				'duzis'        => !empty($row['duzis']) ? '1' : '0',
+			];
 		}
+	}
+
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty')) {
+		function cmx_kommunikation_contact_row_is_empty(array $row): bool {
+			foreach (['vorname', 'nachname', 'telefon', 'email', 'geburtsdatum', 'anrede'] as $key) {
+				if (\trim((string) ($row[$key] ?? '')) !== '') {
+					return false;
+				}
+			}
 		return true;
 	}
 }
@@ -321,13 +322,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_saved_slots')) {
 			}
 		}
 
-		$all_meta = \get_post_meta($post_id);
-		if (\is_array($all_meta)) {
-			foreach (\array_keys($all_meta) as $meta_key) {
-				if (\preg_match('/^_cmx_kommunikation_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|duzis)$/', (string) $meta_key, $matches)) {
-					$slot = (int) ($matches[1] ?? 0);
-					if ($slot > 0) {
-						$slots[$slot] = $slot;
+			$all_meta = \get_post_meta($post_id);
+			if (\is_array($all_meta)) {
+				foreach (\array_keys($all_meta) as $meta_key) {
+					if (\preg_match('/^_cmx_kommunikation_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|anrede|duzis)$/', (string) $meta_key, $matches)) {
+						$slot = (int) ($matches[1] ?? 0);
+						if ($slot > 0) {
+							$slots[$slot] = $slot;
 					}
 				}
 			}
@@ -462,16 +463,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
 				\delete_post_meta($post_id, CMX_KONTAKTE_META_VORNAME);
 			}
 		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
-			if ($first && (string) ($first['nachname'] ?? '') !== '') {
-				\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
-			} else {
-				\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+				if ($first && (string) ($first['nachname'] ?? '') !== '') {
+					\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
+				} else {
+					\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
+				}
 			}
-		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
-			$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
-			if ($birthdate !== '') {
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')) {
+				$salutation = $first ? (string) ($first['anrede'] ?? '') : '';
+				if ($salutation !== '') {
+					\update_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, $salutation);
+				} else {
+					\delete_post_meta($post_id, CMX_KONTAKTE_META_ANREDE);
+				}
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+				$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
+				if ($birthdate !== '') {
 				\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $birthdate);
 			} else {
 				\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
@@ -504,12 +513,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_legacy_data')) {
 		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
 			$keys[] = CMX_KONTAKTE_META_VORNAME;
 		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
-			$keys[] = CMX_KONTAKTE_META_NACHNAME;
-		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
-			$keys[] = CMX_KONTAKTE_META_GEBURTSDATUM;
-		}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+				$keys[] = CMX_KONTAKTE_META_NACHNAME;
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')) {
+				$keys[] = CMX_KONTAKTE_META_ANREDE;
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+				$keys[] = CMX_KONTAKTE_META_GEBURTSDATUM;
+			}
 
 		foreach ($keys as $key) {
 			$value = \get_post_meta($post_id, (string) $key, true);
@@ -557,12 +569,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migration_query_args'
 		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
 			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_VORNAME, 'compare' => 'EXISTS'];
 		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
-			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_NACHNAME, 'compare' => 'EXISTS'];
-		}
-		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
-			$meta_query[1][] = ['key' => CMX_KONTAKTE_META_GEBURTSDATUM, 'compare' => 'EXISTS'];
-		}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+				$meta_query[1][] = ['key' => CMX_KONTAKTE_META_NACHNAME, 'compare' => 'EXISTS'];
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')) {
+				$meta_query[1][] = ['key' => CMX_KONTAKTE_META_ANREDE, 'compare' => 'EXISTS'];
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+				$meta_query[1][] = ['key' => CMX_KONTAKTE_META_GEBURTSDATUM, 'compare' => 'EXISTS'];
+			}
 
 		return [
 			'post_type' => 'kontakte',
@@ -638,23 +653,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 
 		$legacy_rows = [];
 		for ($slot = 1; $slot <= 3; $slot++) {
-			$row = [
-				'vorname'      => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
-					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, true)
-					: '',
-				'nachname'     => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+				$row = [
+					'vorname'      => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, true)
+						: '',
+					'nachname'     => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
 					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, true)
 					: '',
 				'telefon_label'=> cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'telefon', $slot),
 				'telefon'      => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'telefon', $slot),
-				'email_label'  => cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'email', $slot),
-				'email'        => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'email', $slot),
-				'geburtsdatum' => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
-					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true)
-					: '',
-				'duzis'        => '0',
-			];
-			$row = cmx_kommunikation_normalize_contact_row($row);
+					'email_label'  => cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'email', $slot),
+					'email'        => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'email', $slot),
+					'geburtsdatum' => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true)
+						: '',
+					'anrede'       => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, true)
+						: '',
+					'duzis'        => '0',
+				];
+				$row = cmx_kommunikation_normalize_contact_row($row);
 			if (!cmx_kommunikation_contact_row_is_empty($row)) {
 				$legacy_rows[] = $row;
 			}
@@ -756,13 +774,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				</label>
 				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>" data-cmx-tab-role="email">
 			</div>
-			<div class="cmx-kommu-field cmx-kommu-field-date">
-				<label for="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>">Geburtsdatum</label>
-				<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>" data-cmx-tab-role="geburtsdatum">
-			</div>
-			<div class="cmx-kommu-field cmx-kommu-field-check">
-				<span class="cmx-kommu-field-title">Duzis</span>
-				<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
+				<div class="cmx-kommu-field cmx-kommu-field-date">
+					<label for="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>">Geburtsdatum</label>
+					<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>" data-cmx-tab-role="geburtsdatum">
+				</div>
+				<div class="cmx-kommu-field">
+					<label for="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>">Anrede</label>
+					<input id="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[anrede]'); ?>" value="<?php echo \esc_attr((string) ($row['anrede'] ?? '')); ?>" data-cmx-tab-role="anrede">
+				</div>
+				<div class="cmx-kommu-field cmx-kommu-field-check">
+					<span class="cmx-kommu-field-title">Duzis</span>
+					<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
 					<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?> data-cmx-tab-role="duzis">
 					<span class="cmx-kommu-toggle-ui" aria-hidden="true"></span>
 				</label>
@@ -840,18 +862,18 @@ function cmx_kommunikation_box_html($post): void {
 	$videochat_nonce = \wp_create_nonce('cmx_kommunikation_videochat');
 	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
 	?>
-	<style>
-		#cmx_kommunikation_box .cmx-kommu-rows {
-			display: flex;
-			flex-direction: column;
-			gap: 10px;
-		}
-		#cmx_kommunikation_box .cmx-kommu-contact-row {
-			display: grid;
-			grid-template-columns: 40px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.82fr) minmax(138px, 1fr) minmax(108px, 0.82fr) minmax(168px, 1.08fr) 136px 72px 34px;
-			gap: 8px;
-			padding: 10px;
-			border: 1px solid #dcdcde;
+		<style>
+			#cmx_kommunikation_box .cmx-kommu-rows {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-contact-row {
+				display: grid;
+				grid-template-columns: 40px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.82fr) minmax(138px, 1fr) minmax(108px, 0.82fr) minmax(168px, 1.08fr) 136px minmax(108px, 0.85fr) 72px 34px;
+				gap: 8px;
+				padding: 10px;
+				border: 1px solid #dcdcde;
 			border-radius: 7px;
 			background: #fff;
 			align-items: end;
@@ -1398,14 +1420,14 @@ function cmx_kommunikation_box_html($post): void {
 			});
 		}
 
-		function focusNextTabField(currentField, backwards) {
-			if (!currentField) return false;
-			var row = currentField.closest(".cmx-kommu-contact-row");
-			if (!row) return false;
-			var order = ["vorname", "nachname", "telefon_label", "telefon", "email_label", "email", "geburtsdatum", "duzis"];
-			var currentRole = currentField.getAttribute("data-cmx-tab-role") || "";
-			var currentIndex = order.indexOf(currentRole);
-			if (currentIndex === -1) return false;
+			function focusNextTabField(currentField, backwards) {
+				if (!currentField) return false;
+				var row = currentField.closest(".cmx-kommu-contact-row");
+				if (!row) return false;
+				var order = ["vorname", "nachname", "telefon_label", "telefon", "email_label", "email", "geburtsdatum", "anrede", "duzis"];
+				var currentRole = currentField.getAttribute("data-cmx-tab-role") || "";
+				var currentIndex = order.indexOf(currentRole);
+				if (currentIndex === -1) return false;
 			var nextIndex = currentIndex + (backwards ? -1 : 1);
 			if (nextIndex < 0 || nextIndex >= order.length) {
 				return false;

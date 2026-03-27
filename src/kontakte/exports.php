@@ -407,19 +407,20 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_export_contact_rows')) {
 }
 
 if (!function_exists(__NAMESPACE__.'\\cmxkl_contact_headers')) {
-	function cmxkl_contact_headers(int $max_contacts): array {
-		$headers = ['kontakt_count'];
-		for ($slot = 1; $slot <= \max(1, $max_contacts); $slot++) {
-			$headers[] = 'kontakt_' . $slot . '_vorname';
-			$headers[] = 'kontakt_' . $slot . '_nachname';
+		function cmxkl_contact_headers(int $max_contacts): array {
+			$headers = ['kontakt_count'];
+			for ($slot = 1; $slot <= \max(1, $max_contacts); $slot++) {
+				$headers[] = 'kontakt_' . $slot . '_vorname';
+				$headers[] = 'kontakt_' . $slot . '_nachname';
 			$headers[] = 'kontakt_' . $slot . '_telefon_label';
 			$headers[] = 'kontakt_' . $slot . '_telefon';
-			$headers[] = 'kontakt_' . $slot . '_email_label';
-			$headers[] = 'kontakt_' . $slot . '_email';
-			$headers[] = 'kontakt_' . $slot . '_geburtsdatum';
-			$headers[] = 'kontakt_' . $slot . '_duzis';
-		}
-		return $headers;
+				$headers[] = 'kontakt_' . $slot . '_email_label';
+				$headers[] = 'kontakt_' . $slot . '_email';
+				$headers[] = 'kontakt_' . $slot . '_geburtsdatum';
+				$headers[] = 'kontakt_' . $slot . '_anrede';
+				$headers[] = 'kontakt_' . $slot . '_duzis';
+			}
+			return $headers;
 	}
 }
 
@@ -434,12 +435,13 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_contact_row_values')) {
 			$values[] = (string) ($row['nachname'] ?? '');
 			$values[] = $tel_slug !== '' ? cmxkl_term_name_by_slug(CMX_TAX_PHONE_LABELS, $tel_slug) : '';
 			$values[] = (string) ($row['telefon'] ?? '');
-			$values[] = $mail_slug !== '' ? cmxkl_term_name_by_slug(CMX_TAX_MAIL_LABELS, $mail_slug) : '';
-			$values[] = (string) ($row['email'] ?? '');
-			$values[] = (string) ($row['geburtsdatum'] ?? '');
-			$values[] = ((string) ($row['duzis'] ?? '0') === '1') ? '1' : '0';
-		}
-		return $values;
+				$values[] = $mail_slug !== '' ? cmxkl_term_name_by_slug(CMX_TAX_MAIL_LABELS, $mail_slug) : '';
+				$values[] = (string) ($row['email'] ?? '');
+				$values[] = (string) ($row['geburtsdatum'] ?? '');
+				$values[] = (string) ($row['anrede'] ?? '');
+				$values[] = ((string) ($row['duzis'] ?? '0') === '1') ? '1' : '0';
+			}
+			return $values;
 	}
 }
 
