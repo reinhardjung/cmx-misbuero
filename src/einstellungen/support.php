@@ -78,6 +78,7 @@ function cmx_render_support_tab(): void {
 
 	$support_mail = 'support@misbuero.ch';
 	$current_user = wp_get_current_user();
+	$help_reload_url = admin_url('admin.php?page=cmx-einstellungen&tab=general');
 	?>
 
 	<h3 class="title">Support-Ticket erstellen</h3>
@@ -87,7 +88,7 @@ function cmx_render_support_tab(): void {
 		<br>A: Deine Fragen schon
 		<a href="https://www.youtube.com/@MisBuero" target="_blank">auf YoutTube </a>
 		nachgeschaut?
-		<br>B: Beim drücken und halten Deines Mauszeigers (3 Sekunden) auf ein Eingabefeld zeigt Dir eine konkrete Hilfe an. <a href="/wp-admin/admin.php?page=cmx-einstellungen&tab=general" target="_blank">Hilfetexte neu laden kannst Du hier.</a>
+		<br>B: Beim drücken und halten Deines Mauszeigers (5 Sekunden) auf ein Eingabefeld zeigt Dir eine konkrete Hilfe an. <a href="<?php echo esc_url($help_reload_url); ?>" target="_blank" rel="noopener noreferrer">Hilfetexte neu laden kannst Du hier.</a>
 	</p>
 
 	<form action="" method="post" enctype="multipart/form-data">

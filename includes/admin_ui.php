@@ -332,7 +332,7 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 	}
 	if (empty($overview_items)) {
 		$overview_items = [
-			'Diese Hilfe wird zentral in <code>includes/admin_ui.php</code> pro CPT gepflegt.',
+			'Diese Hilfe wird zentral in Dateien unter <code>includes/help/post_types</code> gepflegt.',
 			'Du kannst die Inhalte je nach <code>post_type</code> unterschiedlich ausgeben.',
 			'Zusätzliche Tabs lassen sich über den Filter <code>cmx_admin_help_tabs</code> ergänzen.',
 		];
@@ -383,17 +383,38 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 	return (array) \apply_filters('cmx_admin_help_tabs', $tabs, $post_type, $screen, $post_type_object, $definition);
 }
 
+function cmx_admin_help_common_sidebar_links_html(): string {
+	return '<div class="cmx-admin-help-common-links">'
+		. '<p><strong>Weitere Hilfen:</strong></p>'
+		. '<ul>'
+		. '<li>Auf der Homepage <a href="' . \esc_url('https://misbuero.ch/faq/') . '" target="_blank" rel="noopener noreferrer">FAQ</a></li>'
+		. '<li>sowie auf <a href="' . \esc_url('https://www.youtube.com/@MisBuero') . '" target="_blank" rel="noopener noreferrer">YouTube</a></li>'
+		. '<li><br>Oder einfach ein Ticket machen <a href="' . \esc_url(\admin_url('admin.php?page=cmx-einstellungen&tab=support')) . '" target="_blank" rel="noopener noreferrer">Support-Team</a></li>'
+		. '</ul>'
+		. '</div>';
+}
+
+function cmx_admin_help_append_common_sidebar_links(string $sidebar): string {
+	if (\strpos($sidebar, 'cmx-admin-help-common-links') !== false) {
+		return $sidebar;
+	}
+
+	return $sidebar . cmx_admin_help_common_sidebar_links_html();
+}
+
 function cmx_admin_help_sidebar_for_post_type(string $post_type, \WP_Screen $screen, \WP_Post_Type $post_type_object): string {
 	$definitions = cmx_admin_help_tab_definitions();
 	$definition = \is_array($definitions[$post_type] ?? null) ? $definitions[$post_type] : [];
 	$label = \trim((string) ($post_type_object->labels->singular_name ?? $post_type_object->labels->name ?? $post_type));
 
-	$default_sidebar = '<p><strong>' . \esc_html($label) . '</strong></p>'
-		. '<p>Diese Hilfe wird zentral aus <code>includes/admin_ui.php</code> geladen.</p>';
+	// $default_sidebar = '<p><strong>' . \esc_html($label) . '</strong></p>' . '<p>Diese Hilfe wird zentral aus <code>includes/help/post_types</code> geladen.</p>';
+	$default_sidebar = '';
 
 	$sidebar = isset($definition['sidebar']) && \is_string($definition['sidebar']) && \trim($definition['sidebar']) !== ''
 		? $definition['sidebar']
 		: $default_sidebar;
+
+	$sidebar = cmx_admin_help_append_common_sidebar_links($sidebar);
 
 	return (string) \apply_filters('cmx_admin_help_sidebar', $sidebar, $post_type, $screen, $post_type_object, $definition);
 }
@@ -415,7 +436,7 @@ function cmx_admin_help_tabs_for_settings_screen(array $context, \WP_Screen $scr
 			: [
 				'Änderungen in den Einstellungen wirken oft bereichsübergreifend.',
 				'Viele Felder definieren Standards für neue Datensätze oder Ausgaben.',
-				'Diese Hilfe wird zentral in includes/admin_ui.php gepflegt.',
+				'Diese Hilfe wird zentral in Dateien unter <code>includes/help/settings</code> gepflegt.',
 			];
 	$workflow_items = !empty($definition['workflow']) && \is_array($definition['workflow'])
 		? \array_values(\array_filter(\array_map('strval', $definition['workflow'])))
@@ -451,8 +472,10 @@ function cmx_admin_help_sidebar_for_settings_screen(array $context, \WP_Screen $
 		$section_label = 'Einstellungen';
 	}
 
-	$sidebar = '<p><strong>' . \esc_html($section_label) . '</strong></p>'
-		. '<p>Diese Hilfe wird zentral aus <code>includes/admin_ui.php</code> geladen.</p>';
+	// $sidebar = '<p><strong>' . \esc_html($section_label) . '</strong></p>' . '<p>Diese Hilfe wird zentral aus <code>includes/help/settings</code> geladen.</p>';
+	$sidebar = '';
+
+	$sidebar = cmx_admin_help_append_common_sidebar_links($sidebar);
 
 	return (string) \apply_filters('cmx_admin_help_sidebar_settings', $sidebar, $context, $screen);
 }
@@ -490,238 +513,93 @@ function cmx_admin_help_html_list(array $items): string {
 }
 
 function cmx_admin_help_tab_definitions(): array {
+	$definitions = [];
+	foreach (cmx_admin_help_post_type_definition_file_map() as $post_type => $path) {
+		$loaded = cmx_admin_help_load_definition_file($path);
+		if ($loaded === []) {
+			continue;
+		}
+
+		$definitions[$post_type] = $loaded;
+	}
+
+	return $definitions;
+}
+
+function cmx_admin_help_post_type_definition_file_map(): array {
+	$dir = cmx_admin_help_post_type_definitions_dir();
 	return [
-		'kontakte' => [
-			'intro' => 'Hier verwaltest du Firmen, Ansprechpartner, Kommunikation und Zuordnungen.',
-			'overview' => [
-				'Nutze die Stammdaten für Firma, Form, Handelsregister und Kundennummer.',
-				'Die Reihenfolge in Kommunikation bestimmt den primären Kontakt für Listen und Exporte.',
-				'Telefon-, E-Mail- und weitere Typen werden über die zugehörigen Taxonomien gepflegt.',
-			],
-			'post' => [
-				'Pflege Stammdaten, Kommunikation, Adressen, Bilder und interne Notizen direkt im Datensatz.',
-				'Wenn der Post-Titel leer bleibt, kann er aus Firma oder Kontaktname ergänzt werden.',
-				'Der erste Kommunikationskontakt ist der wichtigste Eintrag für die Übersicht.',
-			],
-			'edit' => [
-				'Filtere Kontakte über Kategorien, Beziehungen, Länder und Geschäftsformen.',
-				'Die Admin-Columns-Liste zeigt den primären Kommunikationskontakt aus der ersten Zeile.',
-				'Import und Export arbeiten mit der aktuellen flachen Kommunikationsstruktur.',
-			],
-		],
-		'artikel' => [
-			'intro' => 'Hier pflegst du Artikelstammdaten, Preise, Lager- und Lieferinformationen.',
-			'overview' => [
-				'Artikel unterstützen Titel, Editor, Bilder, Lieferanten, Konditionen und QR-Code.',
-				'Bilder behalten ihren Originalnamen und erhalten nur bei Konflikten eine laufende Nummer.',
-				'Wichtige Klassifizierungen laufen über Marken, Farben, Einheiten, Typen und Kategorien.',
-			],
-			'post' => [
-				'Pflege Stammdaten, Lieferanten, Belegtexte, Konditionen und Status direkt am Artikel.',
-				'Der Editor ist reduziert und startet standardmässig im visuellen Modus.',
-				'Der Slug wird beim Speichern mit dem Titel synchron gehalten.',
-			],
-			'edit' => [
-				'Nutze die Listenansicht für schnelle Preis-, Lager- und Statuskontrolle.',
-				'Import und Export berücksichtigen die bereinigten Metadaten und Bilder.',
-			],
-		],
-		'projekte' => [
-			'intro' => 'Hier verwaltest du Projekte, Aufgaben, Status und die zugehörige Zeiterfassung.',
-			'overview' => [
-				'Ein Projekt bündelt Stammdaten, Kontakte, Aufgaben und externe Zeitdaten.',
-				'Die Chrome-Erweiterung für Zeitmessung arbeitet mit diesen Projektdatensätzen.',
-				'Status und Aufgaben werden über die Projekt-Taxonomien strukturiert.',
-			],
-			'post' => [
-				'Pflege Projektdetails, Kontakte und Aufgaben direkt auf der Bearbeitungsseite.',
-				'Die Projekt-Exports schreiben strukturierte Metadaten in ein reimportierbares Format.',
-			],
-			'edit' => [
-				'Verwende Status und Aufgaben als schnelle Filter in der Übersicht.',
-				'Die Listenansicht ist der zentrale Einstieg für Projektkontrolle und Exporte.',
-			],
-		],
-		'belege' => [
-			'intro' => 'Hier verwaltest du Offerten, Rechnungen, Gutschriften und weitere Belege.',
-			'overview' => [
-				'Belege bündeln Kopfdaten, Positionen, MwSt, Konditionen, Summen und PDF-Ausgabe.',
-				'ZIP-Exporte enthalten eine importierbare Daten-CSV für den späteren Re-Import.',
-				'Wichtige Zuordnungen laufen über Kontakte, Projekte und Vorlagen.',
-			],
-			'post' => [
-				'Erfasse zuerst Kopfdaten und Positionen, danach MwSt, Summen und PDF-relevante Optionen.',
-				'Die Metaboxen sind aufeinander abgestimmt; Änderungen wirken direkt auf Vorschau und Ausgabe.',
-			],
-			'edit' => [
-				'Die Belegliste ist der schnellste Weg für Statuskontrolle, Versand und Export.',
-				'Beim Import werden technische Metafelder bewusst nicht blind übernommen.',
-			],
-		],
-		'dokumente' => [
-			'intro' => 'Hier pflegst du Dokumente, Module, Gültigkeiten und Statusinformationen.',
-			'overview' => [
-				'Dokumente unterstützen Status, Gültigkeit, Feature-Bild und modulare Zusatzfelder.',
-				'Die Struktur ist auf Dokumentation und wiederverwendbare Inhalte ausgelegt.',
-			],
-		],
-		'emails' => [
-			'intro' => 'Hier verwaltest du interne E-Mails, Vorlagen und die Mailbox-Zuordnung.',
-			'overview' => [
-				'Die E-Mail-Datensätze werden für interne Kommunikation und Zuordnungen verwendet.',
-				'Admin-Spalten und Clients unterstützen die schnelle Bearbeitung in der Übersicht.',
-			],
-		],
-		'scanner' => [
-			'intro' => 'Hier steuerst du Postfach, Scanner-Zuordnung und Mail-Importe.',
-			'overview' => [
-				'Dieser Bereich dient als Eingang für importierte Dateien und Mails.',
-				'Zuordnungen und Importpfade werden direkt in den zugehörigen Modulen verarbeitet.',
-			],
-		],
+		'kontakte' => $dir . '/kontakte.php',
+		'artikel' => $dir . '/artikel.php',
+		'projekte' => $dir . '/projekte.php',
+		'belege' => $dir . '/belege.php',
+		'dokumente' => $dir . '/dokumente.php',
+		'emails' => $dir . '/emails.php',
+		'scanner' => $dir . '/scanner.php',
 	];
 }
 
+function cmx_admin_help_post_type_definitions_dir(): string {
+	return __DIR__ . '/help/post_types';
+}
+
 function cmx_admin_help_settings_definitions(): array {
+	$definitions = [];
+	foreach (cmx_admin_help_settings_definition_file_map() as $target => $path) {
+		$loaded = cmx_admin_help_load_definition_file($path);
+		if ($loaded === []) {
+			continue;
+		}
+
+		if (\str_contains($target, '.')) {
+			[$tab, $subtab] = \explode('.', $target, 2);
+			if ($tab === '' || $subtab === '') {
+				continue;
+			}
+			if (!isset($definitions[$tab]) || !\is_array($definitions[$tab])) {
+				$definitions[$tab] = [];
+			}
+			if (!isset($definitions[$tab]['subtabs']) || !\is_array($definitions[$tab]['subtabs'])) {
+				$definitions[$tab]['subtabs'] = [];
+			}
+			$definitions[$tab]['subtabs'][$subtab] = $loaded;
+			continue;
+		}
+
+		$definitions[$target] = $loaded;
+	}
+
+	return $definitions;
+}
+
+function cmx_admin_help_settings_definition_file_map(): array {
+	$dir = cmx_admin_help_settings_definitions_dir();
 	return [
-		'general' => [
-			'intro' => 'Hier pflegst du globale Basiswerte, Zuordnungen und Hilfetexte für das gesamte Plugin.',
-			'overview' => [
-				'Dieser Bereich enthält zentrale Einstellungen, die mehrere Module gleichzeitig beeinflussen.',
-				'Hilfetexte und allgemeine Vorgaben lassen sich hier zentral verwalten oder neu laden.',
-				'Änderungen sollten nach dem Speichern kurz in der betroffenen Oberfläche geprüft werden.',
-			],
-			'workflow' => [
-				'Grundlagen zuerst pflegen, bevor bereichsspezifische Vorlagen angepasst werden.',
-				'Nach Änderungen an Hilfetexten die Seite neu laden oder die Texte erneut synchronisieren.',
-				'Globale Optionen nur ändern, wenn die Auswirkung auf mehrere Bereiche gewollt ist.',
-			],
-		],
-		'vorgaben' => [
-			'intro' => 'Hier definierst du Standardwerte für neue Datensätze und zentrale Vorgaben für Ausgaben.',
-			'overview' => [
-				'Vorgaben greifen in Artikel, Belege, Projekte und E-Mail hinein.',
-				'Der jeweilige Untertab bestimmt, für welchen Bereich die Defaults gelten.',
-				'Mails, Texte und Layout-Standards werden hier zentral vorbereitet.',
-			],
-			'workflow' => [
-				'Standards nur dort anpassen, wo sie wirklich für neue Inhalte gelten sollen.',
-				'Nach Layout- oder Textänderungen die Zielausgabe kurz testen.',
-				'Du- und Sie-Varianten in Vorlagen konsistent halten.',
-			],
-			'subtabs' => [
-				'email' => [
-					'intro' => 'Hier steuerst du das Erscheinungsbild der versendeten E-Mails zentral.',
-					'overview' => [
-						'Theme, Header-Logo und Button-Text wirken direkt auf Beleg-E-Mails.',
-						'Leerer Button-Text rendert den Download-Button bewusst nur mit Icon.',
-						'Änderungen hier betreffen die aktiven Mail-Templates direkt.',
-					],
-					'workflow' => [
-						'Nach Änderungen an Theme oder Button-Text mindestens eine Testmail prüfen.',
-						'Leere Werte nur absichtlich speichern, wenn die Icon-only-Darstellung gewünscht ist.',
-						'Zentrale Mail-Vorgaben mit den Beleg-Textvorlagen abgestimmt halten.',
-					],
-				],
-			],
-		],
-		'banken' => [
-			'intro' => 'Hier verwaltest du Zahlungsanbieter, Hausbanken und Zahlungsstandards.',
-			'overview' => [
-				'Die markierte Standardbank wird in Belegen und Zahlungsabläufen bevorzugt verwendet.',
-				'Bankdaten sollten vollständig und konsistent gepflegt sein.',
-				'Einige Integrationen erwarten zusätzliche IDs oder externe Einstellungen.',
-			],
-			'workflow' => [
-				'Hausbank vollständig pflegen und als Standard markieren.',
-				'Nach Änderungen QR- oder Zahlungsbelege kurz testen.',
-				'Externe Zahlungsdienste nur mit gültigen Live-Daten aktivieren.',
-			],
-		],
-		'belege' => [
-			'intro' => 'Hier pflegst du Vorlagen, Defaults und Verhalten für Offerten, Rechnungen und weitere Belegtypen.',
-			'overview' => [
-				'Jeder Untertab enthält Einstellungen für einen konkreten Belegtyp.',
-				'Texte, PDF-Ausgabe und Mail-Vorlagen werden hier typbezogen gepflegt.',
-				'Platzhalter in Vorlagen sollten nach Änderungen kurz getestet werden.',
-			],
-			'workflow' => [
-				'Änderungen immer im passenden Belegtyp vornehmen.',
-				'Nach Vorlagenanpassungen PDF und Mail mit einem Testbeleg prüfen.',
-				'Du-/Sie-Mailvorlagen und Fälligkeitstexte konsistent halten.',
-			],
-		],
-		'woocommerce' => [
-			'intro' => 'Hier richtest du die Anbindung an einen externen WooCommerce-Shop ein.',
-			'overview' => [
-				'Die Einstellungen betreffen die Synchronisation mit einem externen Shop-System.',
-				'Webhooks, Beispiel-URLs und Automatikfunktionen müssen zusammenpassen.',
-				'Fehler hier wirken sich meist auf Import und Folgeprozesse aus.',
-			],
-			'workflow' => [
-				'Zuerst Verbindungsdaten prüfen, danach Webhook-Konfiguration im Shop testen.',
-				'Nach Änderungen mindestens einen Probe-Import oder Testlauf durchführen.',
-				'Automatische Abläufe nur aktivieren, wenn die Zielpfade stabil funktionieren.',
-			],
-		],
-		'email' => [
-			'intro' => 'Hier pflegst du Postfächer, Alias-Adressen und Versandparameter.',
-			'overview' => [
-				'Dieser Bereich enthält die technischen Mail-Einstellungen für Versand und Empfang.',
-				'Untertabs trennen Beleg-bezogene Mailoptionen von Client-Konfigurationen.',
-				'Absender, Alias und SMTP/IMAP-Daten sollten zusammen stimmig sein.',
-			],
-			'workflow' => [
-				'Nach Änderungen an Serverdaten die Verbindung testen.',
-				'Alias-Adressen nur verwenden, wenn sie im Mailserver korrekt eingerichtet sind.',
-				'Vor Belegversand Absenderadresse, Antwortadresse und Beleg-Alias gegenprüfen.',
-			],
-			'subtabs' => [
-				'belege' => [
-					'intro' => 'Hier verwaltest du die Mailbox und Aliase für den Belegversand.',
-					'overview' => [
-						'Diese Einstellungen steuern den praktischen Versand von Beleg-E-Mails.',
-						'Absendername, Absenderadresse und Reply-To sollten zueinander passen.',
-						'AGB- und Kundenportal-Links werden im Mail-Footer mitverwendet.',
-					],
-				],
-				'clients' => [
-					'intro' => 'Hier pflegst du zusätzliche Mail-Clients bzw. Konten.',
-					'overview' => [
-						'Mehrere Clients lassen sich getrennt mit eigenen SMTP-/IMAP-Daten pflegen.',
-						'Jeder Client sollte vollständig und mit funktionierenden Zugangsdaten gespeichert werden.',
-						'Teste neue Clients direkt nach dem Anlegen.',
-					],
-				],
-			],
-		],
-		'system' => [
-			'intro' => 'Hier liegen System-Integrationen und technische Schalter für Mis Büro.',
-			'overview' => [
-				'Dieser Bereich enthält zentrale Verbindungs- und Systemoptionen.',
-				'API-Keys, Cloud-URLs und Integrationen wirken oft pluginweit.',
-				'Fehleinstellungen können Folgefunktionen in mehreren Modulen blockieren.',
-			],
-			'workflow' => [
-				'Technische Werte nur mit bekannten gültigen Daten ändern.',
-				'Nach Änderungen Integrationen im betroffenen Modul direkt prüfen.',
-				'Sensible Zugangsdaten konsistent und ohne Testreste pflegen.',
-			],
-		],
-		'support' => [
-			'intro' => 'Hier findest du Bedienhinweise und Support-nahe Informationen zum Plugin.',
-			'overview' => [
-				'Dieser Bereich dient als Einstieg für Hilfe, Support und Bedienhinweise.',
-				'Verweise führen teilweise direkt zu passenden Einstellungs- oder Diagnosebereichen.',
-				'Viele Fragen lassen sich über die zentralen Hilfetexte und Tests eingrenzen.',
-			],
-			'workflow' => [
-				'Zuerst den betroffenen Bereich identifizieren, dann den passenden Tab prüfen.',
-				'Bei Konfigurationsproblemen zuerst zentrale Einstellungen und Verbindungen kontrollieren.',
-				'Nach Support-Schritten die Zielaktion direkt noch einmal testen.',
-			],
-		],
+		'general' => $dir . '/general.php',
+		'vorgaben' => $dir . '/vorgaben.php',
+		'vorgaben.email' => $dir . '/vorgaben.email.php',
+		'banken' => $dir . '/banken.php',
+		'belege' => $dir . '/belege.php',
+		'woocommerce' => $dir . '/woocommerce.php',
+		'email' => $dir . '/email.php',
+		'email.belege' => $dir . '/email.belege.php',
+		'email.clients' => $dir . '/email.clients.php',
+		'system' => $dir . '/system.php',
+		'support' => $dir . '/support.php',
 	];
+}
+
+function cmx_admin_help_settings_definitions_dir(): string {
+	return __DIR__ . '/help/settings';
+}
+
+function cmx_admin_help_load_definition_file(string $path): array {
+	if ($path === '' || !\is_readable($path)) {
+		return [];
+	}
+
+	$data = require $path;
+	return \is_array($data) ? $data : [];
 }
 
 add_action('admin_head', __NAMESPACE__ . '\\cmx_admin_footer_no_tel');
