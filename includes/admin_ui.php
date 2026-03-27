@@ -372,7 +372,7 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 			],
 		];
 
-	$tabs = \array_merge($tabs, cmx_admin_help_extra_tabs_from_definition($definition, 'cmx-help-' . $post_type));
+	$tabs = \array_merge($tabs, cmx_admin_help_extra_tabs_from_definition($definition, 'cmx-help-' . $post_type, $workflow_key));
 
 	/**
 	 * Zusätzliche Help-Tabs pro CPT ergänzen oder bestehende ersetzen.
@@ -543,9 +543,18 @@ function cmx_admin_help_is_spacer_item(string $item): bool {
 	return \trim($normalized) === '';
 }
 
-function cmx_admin_help_extra_tabs_from_definition(array $definition, string $id_prefix): array {
-	$configured_tabs = $definition['tabs'] ?? null;
-	if (!\is_array($configured_tabs) || $configured_tabs === []) {
+function cmx_admin_help_extra_tabs_from_definition(array $definition, string $id_prefix, string $screen_key = ''): array {
+	$configured_tabs = [];
+	if (\is_array($definition['tabs'] ?? null)) {
+		$configured_tabs = \array_merge($configured_tabs, (array) $definition['tabs']);
+	}
+
+	$screen_specific_tabs = cmx_admin_help_screen_specific_tabs_from_definition($definition, $screen_key);
+	if ($screen_specific_tabs !== []) {
+		$configured_tabs = \array_merge($configured_tabs, $screen_specific_tabs);
+	}
+
+	if ($configured_tabs === []) {
 		return [];
 	}
 
@@ -562,6 +571,33 @@ function cmx_admin_help_extra_tabs_from_definition(array $definition, string $id
 	}
 
 	return $tabs;
+}
+
+function cmx_admin_help_screen_specific_tabs_from_definition(array $definition, string $screen_key): array {
+	$screen_key = \trim($screen_key);
+	if ($screen_key === '') {
+		return [];
+	}
+
+	$configured_tabs = [];
+	$normalized_screen_key = \str_replace('-', '_', \sanitize_key($screen_key));
+
+	$tabs_by_screen = $definition['tabs_by_screen'] ?? null;
+	if (\is_array($tabs_by_screen)) {
+		if (\is_array($tabs_by_screen[$screen_key] ?? null)) {
+			$configured_tabs = \array_merge($configured_tabs, (array) $tabs_by_screen[$screen_key]);
+		}
+		if ($normalized_screen_key !== $screen_key && \is_array($tabs_by_screen[$normalized_screen_key] ?? null)) {
+			$configured_tabs = \array_merge($configured_tabs, (array) $tabs_by_screen[$normalized_screen_key]);
+		}
+	}
+
+	$legacy_key = 'tabs_' . $normalized_screen_key;
+	if (\is_array($definition[$legacy_key] ?? null)) {
+		$configured_tabs = \array_merge($configured_tabs, (array) $definition[$legacy_key]);
+	}
+
+	return $configured_tabs;
 }
 
 function cmx_admin_help_normalize_extra_tab_definition(mixed $tab_definition, mixed $tab_key, string $id_prefix, int $index): ?array {

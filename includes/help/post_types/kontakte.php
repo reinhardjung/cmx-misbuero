@@ -1,19 +1,57 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+
 return [
-	'intro' => 'Hier verwaltest du Firmen, Ansprechpartner, Kommunikation und Zuordnungen.',
+	'intro' => 'Liste aller Kontakte. Hier kannst Du alle Kontakte nach belieben filtern um sie bestmöglichst betreuen zuu können.',
+
 	'overview' => [
-		'Nutze die Stammdaten für Firma, Form, Handelsregister und Kundennummer.',
-		'Die Reihenfolge in Kommunikation bestimmt den primären Kontakt für Listen und Exporte.',
-		'Telefon-, E-Mail- und weitere Typen werden über die zugehörigen Taxonomien gepflegt.',
+		'<strong>vCard</strong> kann nur importiert werden',
+		'Beim <strong>exportieren</strong> werden alle Kontakte inkl. deren Bilder exportiert. <em>(perfekt für Dich als Backup)</em>',
+		'<strong>importieren</strong> ist dann das Gegestück zum exportieren.</em>',
 	],
+
+	'tabs' => [
+		[
+			'title' => 'Allgemein',
+			'content' => 'Bevor Du Belege also Rechnungen etc. schreiben kannst, musst Du immer erst einen Kontakt dazu haben.',
+		],
+	],
+
 	'post' => [
-		'Pflege Stammdaten, Kommunikation, Adressen, Bilder und interne Notizen direkt im Datensatz.',
-		'Wenn der Post-Titel leer bleibt, kann er aus Firma oder Kontaktname ergänzt werden.',
-		'Der erste Kommunikationskontakt ist der wichtigste Eintrag für die Übersicht.',
+		'Texte für bestehenden Kontakt bearbeiten.',
 	],
+
 	'edit' => [
-		'Filtere Kontakte über Kategorien, Beziehungen, Länder und Geschäftsformen.',
-		'Die Admin-Columns-Liste zeigt den primären Kommunikationskontakt aus der ersten Zeile.',
-		'Import und Export arbeiten mit der aktuellen flachen Kommunikationsstruktur.',
+		'Du musst mindestens einen bzw. zwei Kontakte anlegen: Deinen eigenen und einen Kunden, dem Du eine Rechnung schreiben könntest.',
+		'Wenn Du keinen Treuhänder brauchst, kannst Du diesse Funktion deaktivieren',
+	],
+
+	'tabs_by_screen' => [
+		'edit' => [
+			[
+				'title' => 'E-Mail 1',
+				'content' =>
+					'Die erste E-Mail in der Kommunikation aller Ansprechparter wird hier angezeigt.<br>'.
+					'Um diese zu ändern gehst Du in den gewünschten Kontakt und verschiebst den gewünschten Ansprechpartner an die erste Stelle in der Liste.<br>',
+			],
+		],
+		'post' => [
+			[
+				'title' => 'Bearbeiten',
+				'content' => 'Nur beim Bearbeiten eines bestehenden Kontakts sichtbar.',
+			],
+		],
+		'post-new' => [
+			[
+				'title' => 'Neu anlegen',
+				'content' => 'Nur beim Neuanlegen sichtbar.',
+			],
+		],
+		'term' => [
+			[
+				'title' => 'Taxonomien',
+				'content' => 'Nur auf Taxonomie-Screens sichtbar.',
+			],
+		],
 	],
 ];

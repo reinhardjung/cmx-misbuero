@@ -10,7 +10,7 @@ if (!defined(__NAMESPACE__.'\\CMX_VCARD_DEBUG')) {
  */
 add_filter('views_edit-kontakte', __NAMESPACE__ . '\\cmx_kontakte_add_vcard_view_link');
 function cmx_kontakte_add_vcard_view_link(array $views): array {
-	$views['cmx_vcard'] = '<a href="#" class="cmx-vcard-link">vcard</a>';
+	$views['cmx_vcard'] = '<a href="#" class="cmx-vcard-link">vCard</a>';
 	return $views;
 }
 

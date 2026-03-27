@@ -175,10 +175,10 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_sec_vorgaben_belege'
 	);
 
-	\add_settings_field(
-		'belege_use_leistungszeitraum',
-		'Leistungszeitraum nutzen',
-		function () {
+		\add_settings_field(
+			'belege_use_leistungszeitraum',
+			'Leistungszeitraum nutzen',
+			function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$enabled = \array_key_exists('belege_use_leistungszeitraum', $opts)
 				? !empty($opts['belege_use_leistungszeitraum'])
@@ -189,13 +189,13 @@ function cmx_register_vorgaben_tab(): void {
 			echo 'Leistungszeitraum in Belegen verwenden';
 			echo '</label>';
 		},
-		'cmx_tab_vorgaben__belege',
-		'cmx_sec_vorgaben_belege'
-	);
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege'
+		);
 
-	\add_settings_field(
-		'belege_faelligkeit_tage',
-		'Fälligkeitsfrist (Tage)',
+		\add_settings_field(
+			'belege_faelligkeit_tage',
+			'Fälligkeitsfrist (Tage)',
 		function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$raw = isset($opts['belege_faelligkeit_tage']) ? (string) $opts['belege_faelligkeit_tage'] : '';
@@ -285,6 +285,27 @@ function cmx_register_vorgaben_tab(): void {
 			echo '<p class="description">mein mind. gewünschter Gewinn in Prozent</p>';
 		},
 		'cmx_tab_vorgaben__artikel',
-		'cmx_sec_vorgaben_artikel'
+			'cmx_sec_vorgaben_artikel'
+		);
+	}
+
+\add_action('admin_init', __NAMESPACE__ . '\\cmx_register_vorgaben_belege_trustee_field', 99);
+function cmx_register_vorgaben_belege_trustee_field(): void {
+	\add_settings_field(
+		'belege_use_treuhaender_notice',
+		'Treuhänder',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$enabled = \array_key_exists('belege_use_treuhaender_notice', $opts)
+				? !empty($opts['belege_use_treuhaender_notice'])
+				: true;
+			echo '<label>';
+			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_treuhaender_notice]" value="0">';
+			echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_treuhaender_notice]" value="1" '.\checked($enabled, true, false).'> ';
+			echo 'Kann Milchbüchli an den Treuhänder versenden';
+			echo '</label>';
+		},
+		'cmx_tab_vorgaben__belege',
+		'cmx_sec_vorgaben_belege'
 	);
 }

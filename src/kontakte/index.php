@@ -181,6 +181,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 			['field' => 'name', 'terms' => ['Das bin ich', 'Ich']],
 		]);
 	}
+
+	function cmx_kontakte_trustee_notice_enabled(): bool {
+		$settings_key = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$opts = (array) \get_option($settings_key, []);
+
+		return \array_key_exists('belege_use_treuhaender_notice', $opts)
+			? !empty($opts['belege_use_treuhaender_notice'])
+			: true;
+	}
 }
 
 \add_action('all_admin_notices', function (): void {
@@ -201,7 +212,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 		return;
 	}
 
-	$needs_trustee = !cmx_kontakte_has_trustee_contact();
+	$needs_trustee = cmx_kontakte_trustee_notice_enabled() && !cmx_kontakte_has_trustee_contact();
 	$needs_das_bin_ich = !cmx_kontakte_has_das_bin_ich_contact();
 
 	if ($needs_das_bin_ich) {

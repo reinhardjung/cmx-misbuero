@@ -1,5 +1,6 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+
 return [
 	'intro' => 'Hier richtest Du die Anbindung an Deinen externen WooCommerce Online-Shop ein.<br><i>(Die Version Deines Woo Shops wird autom. anhand einer Bestellung ermittelt.)</i>',
 
