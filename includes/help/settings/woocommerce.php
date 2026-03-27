@@ -14,4 +14,17 @@ return [
 		'Nach Änderungen mindestens einen Probe-Import oder Testlauf durchführen.',
 		'Automatische Abläufe nur aktivieren, wenn die Zielpfade stabil funktionieren.',
 	],
+
+	'tabs' => [
+		'Ballaal' => [
+			'Zuerst Verbindungsdaten prüfen, danach Webhook-Konfiguration im Shop testen.',
+			'Nach Änderungen mindestens einen Probe-Import oder Testlauf durchführen.',
+			'Automatische Abläufe nur aktivieren, wenn die Zielpfade stabil funktionieren.',
+		],
+		'susi2' => [
+			'Naaa geht sod.rbindungsdaten prüfen, danach Webhook-Konfiguration im Shop testen.',
+			'Nach Änderungen mindestens einen Probe-Import oder Testlauf durchführen.',
+			'Automatische Abläufe nur aktivieren, wenn die Zielpfade stabil funktionieren.',
+		],
+	],
 ];

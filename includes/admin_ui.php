@@ -369,8 +369,10 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 			'title'   => 'Hinweise',
 			'content' => '<p>Hinweise für <strong>' . \esc_html($label) . '</strong> auf dieser Seite:</p>'
 				. cmx_admin_help_html_list($workflow_items),
-		],
-	];
+			],
+		];
+
+	$tabs = \array_merge($tabs, cmx_admin_help_extra_tabs_from_definition($definition, 'cmx-help-' . $post_type));
 
 	/**
 	 * Zusätzliche Help-Tabs pro CPT ergänzen oder bestehende ersetzen.
@@ -385,11 +387,11 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 
 function cmx_admin_help_common_sidebar_links_html(): string {
 	return '<div class="cmx-admin-help-common-links">'
-		. '<p><strong>Weitere Hilfen:</strong></p>'
+		. '<p><strong>Weitere Hilfen gibt es</strong></p>'
 		. '<ul>'
-		. '<li>Auf der Homepage <a href="' . \esc_url('https://misbuero.ch/faq/') . '" target="_blank" rel="noopener noreferrer">FAQ</a></li>'
+		. '<li>auf der Homepage <a href="' . \esc_url('https://misbuero.ch/faq/') . '" target="_blank" rel="noopener noreferrer">FAQ</a></li>'
 		. '<li>sowie auf <a href="' . \esc_url('https://www.youtube.com/@MisBuero') . '" target="_blank" rel="noopener noreferrer">YouTube</a></li>'
-		. '<li><br>Oder einfach ein Ticket machen <a href="' . \esc_url(\admin_url('admin.php?page=cmx-einstellungen&tab=support')) . '" target="_blank" rel="noopener noreferrer">Support-Team</a></li>'
+		. '<li><br>oder einfach ein Ticket machen <a href="' . \esc_url(\admin_url('admin.php?page=cmx-einstellungen&tab=support')) . '" target="_blank" rel="noopener noreferrer">Support-Team</a></li>'
 		. '</ul>'
 		. '</div>';
 }
@@ -460,8 +462,13 @@ function cmx_admin_help_tabs_for_settings_screen(array $context, \WP_Screen $scr
 			'title'   => 'Hinweise',
 			'content' => '<p>Hinweise für <strong>' . \esc_html($section_label) . '</strong>:</p>'
 				. cmx_admin_help_html_list($workflow_items),
-		],
-	];
+			],
+		];
+
+	$settings_tab_slug = \sanitize_key((string) ($context['tab'] ?? 'settings'));
+	$settings_sub_slug = \sanitize_key((string) ($context['sub'] ?? ''));
+	$tab_prefix = 'cmx-help-settings-' . ($settings_sub_slug !== '' ? $settings_tab_slug . '-' . $settings_sub_slug : $settings_tab_slug);
+	$tabs = \array_merge($tabs, cmx_admin_help_extra_tabs_from_definition($definition, $tab_prefix));
 
 	return (array) \apply_filters('cmx_admin_help_tabs_settings', $tabs, $context, $screen, $definition);
 }
@@ -510,6 +517,100 @@ function cmx_admin_help_html_list(array $items): string {
 	$html .= '</ul>';
 
 	return $html;
+}
+
+function cmx_admin_help_extra_tabs_from_definition(array $definition, string $id_prefix): array {
+	$configured_tabs = $definition['tabs'] ?? null;
+	if (!\is_array($configured_tabs) || $configured_tabs === []) {
+		return [];
+	}
+
+	$tabs = [];
+	$index = 0;
+	foreach ($configured_tabs as $tab_key => $tab_definition) {
+		$index++;
+		$tab = cmx_admin_help_normalize_extra_tab_definition($tab_definition, $tab_key, $id_prefix, $index);
+		if ($tab === null) {
+			continue;
+		}
+
+		$tabs[] = $tab;
+	}
+
+	return $tabs;
+}
+
+function cmx_admin_help_normalize_extra_tab_definition(mixed $tab_definition, mixed $tab_key, string $id_prefix, int $index): ?array {
+	$key_title = \is_string($tab_key) ? \trim($tab_key) : '';
+	$title = '';
+	$id = '';
+	$intro = '';
+	$content = '';
+	$items = [];
+
+	if (\is_string($tab_definition)) {
+		$title = $key_title;
+		$content = '<p>' . \esc_html(\trim($tab_definition)) . '</p>';
+	} elseif (\is_array($tab_definition)) {
+		$title = \trim((string) ($tab_definition['title'] ?? $key_title));
+		$id = \sanitize_key((string) ($tab_definition['id'] ?? $key_title));
+		$intro = \trim((string) ($tab_definition['intro'] ?? ''));
+		$content = isset($tab_definition['content']) && \is_string($tab_definition['content'])
+			? \trim($tab_definition['content'])
+			: '';
+
+		if (isset($tab_definition['items']) && \is_array($tab_definition['items'])) {
+			$items = \array_values(\array_filter(\array_map('strval', $tab_definition['items'])));
+		} elseif (cmx_admin_help_is_list_array($tab_definition)) {
+			$items = \array_values(\array_filter(\array_map('strval', $tab_definition)));
+		}
+	}
+
+	if ($title === '') {
+		return null;
+	}
+
+	if ($id === '') {
+		$id = \sanitize_key($title);
+	}
+
+	if ($id === '') {
+		$id = 'tab-' . $index;
+	}
+
+	$parts = [];
+	if ($intro !== '') {
+		$parts[] = '<p>' . \esc_html($intro) . '</p>';
+	}
+	if ($content !== '') {
+		$parts[] = $content;
+	}
+	if ($items !== []) {
+		$parts[] = cmx_admin_help_html_list($items);
+	}
+
+	$tab_content = \trim(\implode('', $parts));
+	if ($tab_content === '') {
+		return null;
+	}
+
+	return [
+		'id' => $id_prefix . '-' . \sanitize_key($id),
+		'title' => $title,
+		'content' => $tab_content,
+	];
+}
+
+function cmx_admin_help_is_list_array(array $array): bool {
+	$expected_key = 0;
+	foreach (\array_keys($array) as $key) {
+		if ($key !== $expected_key) {
+			return false;
+		}
+		$expected_key++;
+	}
+
+	return true;
 }
 
 function cmx_admin_help_tab_definitions(): array {
