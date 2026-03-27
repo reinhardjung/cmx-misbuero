@@ -25,7 +25,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_definitions')) {
 			'stop' => [
 				'label'      => 'Stop',
 				'info'       => 'Kontakt-Stop',
-				'icon'       => 'dashicons-controls-stop',
+				'icon'       => 'dashicons-minus',
 				'selectable' => false,
 			],
 			'no' => [
@@ -183,15 +183,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_control_html')) {
 			$html .= '<input type="hidden" class="cmx-kontakt-status-value" name="' . \esc_attr($input_name) . '" value="' . \esc_attr($status) . '"' . ($input_id !== '' ? ' id="' . \esc_attr($input_id) . '"' : '') . '>';
 		}
 
-		$html .= '<button type="button" class="button cmx-kontakt-status-trigger" aria-haspopup="true" aria-expanded="false">';
+		$trigger_label = \trim((string) $current['label'] . ' - ' . (string) $current['info']);
+		$html .= '<button type="button" class="button cmx-kontakt-status-trigger" aria-haspopup="true" aria-expanded="false" title="' . \esc_attr($trigger_label) . '" aria-label="' . \esc_attr($trigger_label) . '">';
 		$html .= '<span class="dashicons ' . \esc_attr((string) $current['icon']) . ' cmx-kontakt-status-trigger-icon" aria-hidden="true"></span>';
-		$html .= '<span class="cmx-kontakt-status-trigger-text">' . \esc_html((string) $current['info']) . '</span>';
+		$html .= '<span class="screen-reader-text cmx-kontakt-status-trigger-text">' . \esc_html($trigger_label) . '</span>';
 		$html .= '</button>';
 		$html .= '<div class="cmx-kontakt-status-menu" hidden>';
 
 		foreach (cmx_kontakte_status_definitions() as $value => $item) {
 			$is_current = $value === $status;
-			$html .= '<button type="button" class="cmx-kontakt-status-menu-item' . ($is_current ? ' is-current' : '') . '" data-status="' . \esc_attr($value) . '" data-icon="' . \esc_attr((string) $item['icon']) . '" data-info="' . \esc_attr((string) $item['info']) . '">';
+			$html .= '<button type="button" class="cmx-kontakt-status-menu-item' . ($is_current ? ' is-current' : '') . '" data-status="' . \esc_attr($value) . '" data-icon="' . \esc_attr((string) $item['icon']) . '" data-label="' . \esc_attr((string) $item['label']) . '" data-info="' . \esc_attr((string) $item['info']) . '">';
 			$html .= '<span class="cmx-kontakt-status-menu-line">';
 			$html .= '<span class="dashicons ' . \esc_attr((string) $item['icon']) . '" aria-hidden="true"></span>';
 			$html .= '<span class="cmx-kontakt-status-menu-title">' . \esc_html((string) $item['label']) . '</span>';
@@ -245,19 +246,21 @@ function cmx_kontakte_status_admin_assets_head(): void {
 	}
 
 	echo '<style>
-		.cmx-kontakt-status-control{position:relative;display:inline-flex;min-width:0}
+		.cmx-kontakt-status-control{position:relative;display:inline-flex;min-width:0;z-index:1}
+		.cmx-kontakt-status-control.is-open{z-index:100030}
 		.cmx-kontakt-status-control .cmx-kontakt-status-trigger{
 			display:inline-flex;
 			align-items:center;
-			gap:6px;
-			width:100%;
-			min-height:34px;
-			padding:0 10px;
+			gap:0;
+			width:36px;
+			min-width:36px;
+			min-height:36px;
+			padding:0;
 			border-radius:8px;
-			justify-content:flex-start;
+			justify-content:center;
 		}
-		.cmx-kontakt-status-control.is-list{width:100%}
-		.cmx-kontakt-status-control.is-list .cmx-kontakt-status-trigger{min-height:32px;padding:0 8px}
+		.cmx-kontakt-status-control.is-list{width:36px}
+		.cmx-kontakt-status-control.is-list .cmx-kontakt-status-trigger{width:32px;min-width:32px;min-height:32px}
 		.cmx-kontakt-status-control .cmx-kontakt-status-trigger .dashicons,
 		.cmx-kontakt-status-control .cmx-kontakt-status-menu .dashicons{
 			width:16px;
@@ -281,7 +284,7 @@ function cmx_kontakte_status_admin_assets_head(): void {
 			border-radius:10px;
 			background:#fff;
 			box-shadow:0 12px 28px rgba(15,23,42,.16);
-			z-index:100020;
+			z-index:100031;
 		}
 		.cmx-kontakt-status-menu-item{
 			display:block;
@@ -300,10 +303,10 @@ function cmx_kontakte_status_admin_assets_head(): void {
 		.cmx-kontakt-status-menu-line{display:flex;align-items:center;gap:6px;font-weight:600}
 		.cmx-kontakt-status-menu-desc{display:block;margin-left:22px;font-size:11px;color:#646970}
 		.post-type-kontakte .column-cmx_status,
-		.post-type-kontakt .column-cmx_status{width:165px;overflow:visible}
+		.post-type-kontakt .column-cmx_status{width:42px;overflow:visible}
 		.post-type-kontakte .column-cmx_status .cmx-kontakt-status-control,
-		.post-type-kontakt .column-cmx_status .cmx-kontakt-status-control{width:100%}
-		#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:flex;width:100%}
+		.post-type-kontakt .column-cmx_status .cmx-kontakt-status-control{width:32px}
+		#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:inline-flex;width:auto}
 	</style>';
 }
 
@@ -330,6 +333,7 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 				var menu = root.querySelector(".cmx-kontakt-status-menu");
 				var trigger = root.querySelector(".cmx-kontakt-status-trigger");
 				if (menu) menu.hidden = true;
+				root.classList.remove("is-open");
 				if (trigger) trigger.setAttribute("aria-expanded", "false");
 			});
 		}
@@ -349,8 +353,15 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 			if (trigger) {
 				var icon = trigger.querySelector(".cmx-kontakt-status-trigger-icon");
 				var text = trigger.querySelector(".cmx-kontakt-status-trigger-text");
+				var label = String(payload.label || "");
+				var info = String(payload.info || "");
+				var triggerLabel = (label && info) ? (label + " - " + info) : (label || info);
 				if (icon) icon.className = "dashicons " + String(payload.icon || "") + " cmx-kontakt-status-trigger-icon";
-				if (text) text.textContent = String(payload.info || "");
+				if (text) text.textContent = triggerLabel;
+				if (triggerLabel) {
+					trigger.setAttribute("title", triggerLabel);
+					trigger.setAttribute("aria-label", triggerLabel);
+				}
 			}
 
 			root.querySelectorAll(".cmx-kontakt-status-menu-item").forEach(function(item){
@@ -374,10 +385,13 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 			var currentItem = root.querySelector('.cmx-kontakt-status-menu-item[data-status="' + String(status || "") + '"]');
 
 			if (!ajaxUrl || !(postId > 0) || !nonce) {
+				var fallbackLabel = currentItem ? String(currentItem.getAttribute("data-label") || "") : "";
+				var fallbackInfo = currentItem ? String(currentItem.getAttribute("data-info") || "") : status;
 				applyPayload(root, {
 					status: status,
 					icon: currentItem ? String(currentItem.getAttribute("data-icon") || "") : "",
-					info: currentItem ? String(currentItem.getAttribute("data-info") || "") : status
+					label: fallbackLabel,
+					info: fallbackInfo
 				});
 				return;
 			}
@@ -433,6 +447,7 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 				var willOpen = !!menu.hidden;
 				closeAllMenus(root);
 				menu.hidden = !willOpen;
+				root.classList.toggle("is-open", willOpen);
 				trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
 				return;
 			}
