@@ -193,6 +193,46 @@ function cmx_admin_register_cpt_help_tabs($screen = null): void {
 	}
 }
 
+add_action('current_screen', __NAMESPACE__ . '\\cmx_admin_register_settings_help_tabs', 21);
+function cmx_admin_register_settings_help_tabs($screen = null): void {
+	if (!\is_admin()) {
+		return;
+	}
+
+	if (!$screen instanceof \WP_Screen) {
+		$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	}
+	if (!$screen || !\method_exists($screen, 'add_help_tab')) {
+		return;
+	}
+
+	$context = cmx_admin_help_settings_context();
+	if ($context === []) {
+		return;
+	}
+
+	$tabs = cmx_admin_help_tabs_for_settings_screen($context, $screen);
+	foreach ($tabs as $tab) {
+		$id = isset($tab['id']) ? \sanitize_key((string) $tab['id']) : '';
+		$title = isset($tab['title']) ? \trim((string) $tab['title']) : '';
+		$content = isset($tab['content']) ? \trim((string) $tab['content']) : '';
+		if ($id === '' || $title === '' || $content === '') {
+			continue;
+		}
+
+		$screen->add_help_tab([
+			'id'      => $id,
+			'title'   => $title,
+			'content' => \wp_kses_post($content),
+		]);
+	}
+
+	$sidebar = cmx_admin_help_sidebar_for_settings_screen($context, $screen);
+	if ($sidebar !== '' && \method_exists($screen, 'set_help_sidebar')) {
+		$screen->set_help_sidebar(\wp_kses_post($sidebar));
+	}
+}
+
 function cmx_admin_help_post_type_from_screen(\WP_Screen $screen): string {
 	$post_type = (string) ($screen->post_type ?? '');
 	if ($post_type !== '') {
@@ -210,6 +250,70 @@ function cmx_admin_help_post_type_from_screen(\WP_Screen $screen): string {
 	}
 
 	return $post_type;
+}
+
+function cmx_admin_help_settings_context(): array {
+	$settings_slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		: 'cmx-einstellungen';
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page !== $settings_slug) {
+		return [];
+	}
+
+	$tabs = \function_exists(__NAMESPACE__ . '\\cmx_get_tabs')
+		? (array) cmx_get_tabs()
+		: [
+			'general'     => 'Allgemein',
+			'vorgaben'    => 'Vorgaben',
+			'banken'      => 'Zahlungen',
+			'belege'      => 'Belege',
+			'woocommerce' => 'WooCommerce',
+			'email'       => 'E-Mails',
+			'system'      => 'System',
+			'support'     => 'Support',
+		];
+	if ($tabs === []) {
+		return [];
+	}
+
+	$tab = isset($_GET['tab']) ? \sanitize_key((string) \wp_unslash($_GET['tab'])) : 'general';
+	if (!isset($tabs[$tab])) {
+		$tab = (string) \array_key_first($tabs);
+	}
+
+	$subtabs = \function_exists(__NAMESPACE__ . '\\cmx_get_subtabs')
+		? (array) cmx_get_subtabs($tab)
+		: [];
+	$sub = isset($_GET['sub']) ? \sanitize_key((string) \wp_unslash($_GET['sub'])) : '';
+	if ($subtabs !== []) {
+		if ($sub === '' || !isset($subtabs[$sub])) {
+			$sub = (string) \array_key_first($subtabs);
+		}
+	} else {
+		$sub = '';
+	}
+
+	$tab_label = \trim((string) ($tabs[$tab] ?? $tab));
+	$sub_label = $sub !== '' ? \trim((string) ($subtabs[$sub] ?? $sub)) : '';
+	$section_label = 'Einstellungen';
+	if ($tab_label !== '') {
+		$section_label .= ' · ' . $tab_label;
+	}
+	if ($sub_label !== '') {
+		$section_label .= ' · ' . $sub_label;
+	}
+
+	return [
+		'page'          => $page,
+		'tab'           => $tab,
+		'sub'           => $sub,
+		'tabs'          => $tabs,
+		'subtabs'       => $subtabs,
+		'tab_label'     => $tab_label,
+		'sub_label'     => $sub_label,
+		'section_label' => $section_label,
+	];
 }
 
 function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen, \WP_Post_Type $post_type_object): array {
@@ -292,6 +396,65 @@ function cmx_admin_help_sidebar_for_post_type(string $post_type, \WP_Screen $scr
 		: $default_sidebar;
 
 	return (string) \apply_filters('cmx_admin_help_sidebar', $sidebar, $post_type, $screen, $post_type_object, $definition);
+}
+
+function cmx_admin_help_tabs_for_settings_screen(array $context, \WP_Screen $screen): array {
+	$definitions = cmx_admin_help_settings_definitions();
+	$tab = (string) ($context['tab'] ?? '');
+	$sub = (string) ($context['sub'] ?? '');
+	$definition = \is_array($definitions[$tab] ?? null) ? $definitions[$tab] : [];
+	if ($sub !== '' && \is_array($definition['subtabs'][$sub] ?? null)) {
+		$definition = \array_merge($definition, (array) $definition['subtabs'][$sub]);
+	}
+
+	$intro = isset($definition['intro']) && \is_string($definition['intro'])
+		? $definition['intro']
+		: 'Hier verwaltest du zentrale Einstellungen und Vorgaben von Mis Büro.';
+	$overview_items = !empty($definition['overview']) && \is_array($definition['overview'])
+			? \array_values(\array_filter(\array_map('strval', $definition['overview'])))
+			: [
+				'Änderungen in den Einstellungen wirken oft bereichsübergreifend.',
+				'Viele Felder definieren Standards für neue Datensätze oder Ausgaben.',
+				'Diese Hilfe wird zentral in includes/admin_ui.php gepflegt.',
+			];
+	$workflow_items = !empty($definition['workflow']) && \is_array($definition['workflow'])
+		? \array_values(\array_filter(\array_map('strval', $definition['workflow'])))
+		: [
+			'Änderungen speichern und die betroffene Oberfläche danach kurz neu laden.',
+			'Bereichsspezifische Einstellungen immer direkt im passenden Tab prüfen.',
+			'Nach Mail- oder PDF-Anpassungen einen kurzen Praxistest machen.',
+		];
+
+	$section_label = \trim((string) ($context['section_label'] ?? 'Einstellungen'));
+	$tabs = [
+		[
+			'id'      => 'cmx-help-settings-overview',
+			'title'   => 'Mis Büro Hilfe',
+			'content' => '<p><strong>' . \esc_html($section_label) . '</strong></p>'
+				. '<p>' . \esc_html($intro) . '</p>'
+				. cmx_admin_help_html_list($overview_items),
+		],
+		[
+			'id'      => 'cmx-help-settings-workflow',
+			'title'   => 'Hinweise',
+			'content' => '<p>Hinweise für <strong>' . \esc_html($section_label) . '</strong>:</p>'
+				. cmx_admin_help_html_list($workflow_items),
+		],
+	];
+
+	return (array) \apply_filters('cmx_admin_help_tabs_settings', $tabs, $context, $screen, $definition);
+}
+
+function cmx_admin_help_sidebar_for_settings_screen(array $context, \WP_Screen $screen): string {
+	$section_label = \trim((string) ($context['sub_label'] !== '' ? $context['sub_label'] : ($context['tab_label'] ?? 'Einstellungen')));
+	if ($section_label === '') {
+		$section_label = 'Einstellungen';
+	}
+
+	$sidebar = '<p><strong>' . \esc_html($section_label) . '</strong></p>'
+		. '<p>Diese Hilfe wird zentral aus <code>includes/admin_ui.php</code> geladen.</p>';
+
+	return (string) \apply_filters('cmx_admin_help_sidebar_settings', $sidebar, $context, $screen);
 }
 
 function cmx_admin_help_screen_label(\WP_Screen $screen): string {
@@ -414,6 +577,148 @@ function cmx_admin_help_tab_definitions(): array {
 			'overview' => [
 				'Dieser Bereich dient als Eingang für importierte Dateien und Mails.',
 				'Zuordnungen und Importpfade werden direkt in den zugehörigen Modulen verarbeitet.',
+			],
+		],
+	];
+}
+
+function cmx_admin_help_settings_definitions(): array {
+	return [
+		'general' => [
+			'intro' => 'Hier pflegst du globale Basiswerte, Zuordnungen und Hilfetexte für das gesamte Plugin.',
+			'overview' => [
+				'Dieser Bereich enthält zentrale Einstellungen, die mehrere Module gleichzeitig beeinflussen.',
+				'Hilfetexte und allgemeine Vorgaben lassen sich hier zentral verwalten oder neu laden.',
+				'Änderungen sollten nach dem Speichern kurz in der betroffenen Oberfläche geprüft werden.',
+			],
+			'workflow' => [
+				'Grundlagen zuerst pflegen, bevor bereichsspezifische Vorlagen angepasst werden.',
+				'Nach Änderungen an Hilfetexten die Seite neu laden oder die Texte erneut synchronisieren.',
+				'Globale Optionen nur ändern, wenn die Auswirkung auf mehrere Bereiche gewollt ist.',
+			],
+		],
+		'vorgaben' => [
+			'intro' => 'Hier definierst du Standardwerte für neue Datensätze und zentrale Vorgaben für Ausgaben.',
+			'overview' => [
+				'Vorgaben greifen in Artikel, Belege, Projekte und E-Mail hinein.',
+				'Der jeweilige Untertab bestimmt, für welchen Bereich die Defaults gelten.',
+				'Mails, Texte und Layout-Standards werden hier zentral vorbereitet.',
+			],
+			'workflow' => [
+				'Standards nur dort anpassen, wo sie wirklich für neue Inhalte gelten sollen.',
+				'Nach Layout- oder Textänderungen die Zielausgabe kurz testen.',
+				'Du- und Sie-Varianten in Vorlagen konsistent halten.',
+			],
+			'subtabs' => [
+				'email' => [
+					'intro' => 'Hier steuerst du das Erscheinungsbild der versendeten E-Mails zentral.',
+					'overview' => [
+						'Theme, Header-Logo und Button-Text wirken direkt auf Beleg-E-Mails.',
+						'Leerer Button-Text rendert den Download-Button bewusst nur mit Icon.',
+						'Änderungen hier betreffen die aktiven Mail-Templates direkt.',
+					],
+					'workflow' => [
+						'Nach Änderungen an Theme oder Button-Text mindestens eine Testmail prüfen.',
+						'Leere Werte nur absichtlich speichern, wenn die Icon-only-Darstellung gewünscht ist.',
+						'Zentrale Mail-Vorgaben mit den Beleg-Textvorlagen abgestimmt halten.',
+					],
+				],
+			],
+		],
+		'banken' => [
+			'intro' => 'Hier verwaltest du Zahlungsanbieter, Hausbanken und Zahlungsstandards.',
+			'overview' => [
+				'Die markierte Standardbank wird in Belegen und Zahlungsabläufen bevorzugt verwendet.',
+				'Bankdaten sollten vollständig und konsistent gepflegt sein.',
+				'Einige Integrationen erwarten zusätzliche IDs oder externe Einstellungen.',
+			],
+			'workflow' => [
+				'Hausbank vollständig pflegen und als Standard markieren.',
+				'Nach Änderungen QR- oder Zahlungsbelege kurz testen.',
+				'Externe Zahlungsdienste nur mit gültigen Live-Daten aktivieren.',
+			],
+		],
+		'belege' => [
+			'intro' => 'Hier pflegst du Vorlagen, Defaults und Verhalten für Offerten, Rechnungen und weitere Belegtypen.',
+			'overview' => [
+				'Jeder Untertab enthält Einstellungen für einen konkreten Belegtyp.',
+				'Texte, PDF-Ausgabe und Mail-Vorlagen werden hier typbezogen gepflegt.',
+				'Platzhalter in Vorlagen sollten nach Änderungen kurz getestet werden.',
+			],
+			'workflow' => [
+				'Änderungen immer im passenden Belegtyp vornehmen.',
+				'Nach Vorlagenanpassungen PDF und Mail mit einem Testbeleg prüfen.',
+				'Du-/Sie-Mailvorlagen und Fälligkeitstexte konsistent halten.',
+			],
+		],
+		'woocommerce' => [
+			'intro' => 'Hier richtest du die Anbindung an einen externen WooCommerce-Shop ein.',
+			'overview' => [
+				'Die Einstellungen betreffen die Synchronisation mit einem externen Shop-System.',
+				'Webhooks, Beispiel-URLs und Automatikfunktionen müssen zusammenpassen.',
+				'Fehler hier wirken sich meist auf Import und Folgeprozesse aus.',
+			],
+			'workflow' => [
+				'Zuerst Verbindungsdaten prüfen, danach Webhook-Konfiguration im Shop testen.',
+				'Nach Änderungen mindestens einen Probe-Import oder Testlauf durchführen.',
+				'Automatische Abläufe nur aktivieren, wenn die Zielpfade stabil funktionieren.',
+			],
+		],
+		'email' => [
+			'intro' => 'Hier pflegst du Postfächer, Alias-Adressen und Versandparameter.',
+			'overview' => [
+				'Dieser Bereich enthält die technischen Mail-Einstellungen für Versand und Empfang.',
+				'Untertabs trennen Beleg-bezogene Mailoptionen von Client-Konfigurationen.',
+				'Absender, Alias und SMTP/IMAP-Daten sollten zusammen stimmig sein.',
+			],
+			'workflow' => [
+				'Nach Änderungen an Serverdaten die Verbindung testen.',
+				'Alias-Adressen nur verwenden, wenn sie im Mailserver korrekt eingerichtet sind.',
+				'Vor Belegversand Absenderadresse, Antwortadresse und Beleg-Alias gegenprüfen.',
+			],
+			'subtabs' => [
+				'belege' => [
+					'intro' => 'Hier verwaltest du die Mailbox und Aliase für den Belegversand.',
+					'overview' => [
+						'Diese Einstellungen steuern den praktischen Versand von Beleg-E-Mails.',
+						'Absendername, Absenderadresse und Reply-To sollten zueinander passen.',
+						'AGB- und Kundenportal-Links werden im Mail-Footer mitverwendet.',
+					],
+				],
+				'clients' => [
+					'intro' => 'Hier pflegst du zusätzliche Mail-Clients bzw. Konten.',
+					'overview' => [
+						'Mehrere Clients lassen sich getrennt mit eigenen SMTP-/IMAP-Daten pflegen.',
+						'Jeder Client sollte vollständig und mit funktionierenden Zugangsdaten gespeichert werden.',
+						'Teste neue Clients direkt nach dem Anlegen.',
+					],
+				],
+			],
+		],
+		'system' => [
+			'intro' => 'Hier liegen System-Integrationen und technische Schalter für Mis Büro.',
+			'overview' => [
+				'Dieser Bereich enthält zentrale Verbindungs- und Systemoptionen.',
+				'API-Keys, Cloud-URLs und Integrationen wirken oft pluginweit.',
+				'Fehleinstellungen können Folgefunktionen in mehreren Modulen blockieren.',
+			],
+			'workflow' => [
+				'Technische Werte nur mit bekannten gültigen Daten ändern.',
+				'Nach Änderungen Integrationen im betroffenen Modul direkt prüfen.',
+				'Sensible Zugangsdaten konsistent und ohne Testreste pflegen.',
+			],
+		],
+		'support' => [
+			'intro' => 'Hier findest du Bedienhinweise und Support-nahe Informationen zum Plugin.',
+			'overview' => [
+				'Dieser Bereich dient als Einstieg für Hilfe, Support und Bedienhinweise.',
+				'Verweise führen teilweise direkt zu passenden Einstellungs- oder Diagnosebereichen.',
+				'Viele Fragen lassen sich über die zentralen Hilfetexte und Tests eingrenzen.',
+			],
+			'workflow' => [
+				'Zuerst den betroffenen Bereich identifizieren, dann den passenden Tab prüfen.',
+				'Bei Konfigurationsproblemen zuerst zentrale Einstellungen und Verbindungen kontrollieren.',
+				'Nach Support-Schritten die Zielaktion direkt noch einmal testen.',
 			],
 		],
 	];

@@ -41,10 +41,10 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_tab_vorgaben__projekte'
 	);
 
-	\add_settings_field(
-		'email_theme',
-		'Theme',
-		function () {
+		\add_settings_field(
+			'email_theme',
+			'Theme',
+			function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$current = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
 				? (string) cmx_email_theme_sanitize((string) ($opts['email_theme'] ?? 'rot'))
@@ -70,13 +70,30 @@ function cmx_register_vorgaben_tab(): void {
 			echo '<label><input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[email_hide_logo]" value="1" '.\checked($hide_logo, true, false).'> Ohne Logo im Header</label>';
 			echo '</div>';
 		},
-		'cmx_tab_vorgaben__email',
-		'cmx_sec_vorgaben_email'
-	);
+			'cmx_tab_vorgaben__email',
+			'cmx_sec_vorgaben_email'
+		);
 
-	\add_settings_field(
-		'mwst_pflichtig',
-		'MwSt-pflichtig?',
+		\add_settings_field(
+			'email_button_text',
+			'Button Text',
+			function () {
+				$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+				$default = 'PDF-Beleg herunterladen';
+				$value = \array_key_exists('email_button_text', $opts)
+					? (string) ($opts['email_button_text'] ?? '')
+					: $default;
+
+				echo '<input type="text" class="regular-text" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[email_button_text]" value="'.\esc_attr($value).'" placeholder="'.\esc_attr($default).'" autocomplete="off">';
+				echo '<p class="description">Leer = es wird nur das Button-Icon angezeigt.</p>';
+			},
+			'cmx_tab_vorgaben__email',
+			'cmx_sec_vorgaben_email'
+		);
+
+		\add_settings_field(
+			'mwst_pflichtig',
+			'MwSt-pflichtig?',
 		function () {
 			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
 				'key'   => 'mwst_pflichtig',

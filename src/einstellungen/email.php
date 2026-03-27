@@ -698,12 +698,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
 	$new['AGB_Belege'] = !empty($new['AGB_Belege']) ? '1' : '0';
 	$new['kundenportal_link'] = !empty($new['kundenportal_link']) ? '1' : '0';
-	$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
-		? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
-		: 'rot';
-	$new['email_hide_logo'] = !empty($new['email_hide_logo']) ? '1' : '0';
-	$new['smtp_port'] = '587';
-	$new['imap_port'] = '993';
+		$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
+			? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
+			: 'rot';
+		$new['email_button_text'] = \sanitize_text_field((string) ($new['email_button_text'] ?? ''));
+		$new['email_hide_logo'] = !empty($new['email_hide_logo']) ? '1' : '0';
+		$new['smtp_port'] = '587';
+		$new['imap_port'] = '993';
 
 	return $new;
 }, 20, 2);
