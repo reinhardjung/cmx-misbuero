@@ -728,7 +728,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		th#cmx_kontakt_belege { text-indent:2ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
 		.column-cmx_email_1 { width:220px; min-width:220px; }
-		.column-cmx_status { width:42px; overflow:visible; text-align:center; padding-left:0 !important; padding-right:0 !important; }
+		.column-cmx_status { width:54px; overflow:visible; text-align:center; padding-left:0 !important; padding-right:0 !important; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
 		.column-cmx_hersteller_url a,

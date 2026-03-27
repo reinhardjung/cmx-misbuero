@@ -266,26 +266,33 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		opacity:1 !important;
 		pointer-events:auto !important;
 	}
-	#cmx-stammdaten .grid {
-		display: grid !important;
-		grid-template-columns:
-			minmax(220px, 1.9fr)
-			minmax(130px, 1fr)
-			minmax(160px, 1.1fr)
-			minmax(160px, 1.1fr)
-			minmax(105px, 0.8fr)
-			minmax(105px, 0.8fr)
-			minmax(140px, 0.95fr)
-			minmax(120px, 0.9fr);
-		column-gap: 10px;
-		row-gap: 10px;
-		align-items: start;
+	body.post-type-kontakte #cmx_kontakte_stammdaten,
+	body.post-type-kontakte #cmx_kontakte_stammdaten .inside{
+		overflow:visible !important;
+		position:relative;
+		z-index:50;
 	}
-	#cmx-stammdaten .field {margin:0; display:block !important; flex:none !important;}
-	#cmx-stammdaten .field--kunden-nr{max-width:220px;}
-	#cmx-stammdaten .field--status{min-width:140px;}
-	#cmx-stammdaten .field--firma{grid-column:span 1}
-	#cmx-stammdaten .field--hr-uid{min-width:170px;}
+	#cmx-stammdaten,
+	#cmx-stammdaten .grid {
+		position:relative;
+		overflow:visible;
+		display:flex !important;
+		flex-wrap:nowrap;
+		gap:10px;
+		align-items:flex-start;
+	}
+	#cmx-stammdaten .field {margin:0; display:block !important; flex:1 1 0; min-width:0;}
+	#cmx-stammdaten .field--firma{flex:1.9 1 0}
+	#cmx-stammdaten .field--form{flex:0.95 1 0}
+	#cmx-stammdaten .field--url{flex:1.05 1 0}
+	#cmx-stammdaten .field--hr-uid{flex:1.05 1 0}
+	#cmx-stammdaten .field--datum{flex:0.82 1 0}
+	#cmx-stammdaten .field--kunden-nr{flex:0 0 150px;max-width:150px;}
+	#cmx-stammdaten .field--status{flex:0 0 78px;min-width:78px;align-self:flex-start;display:flex !important;flex-direction:column;align-items:flex-start;gap:6px;position:relative;overflow:visible;z-index:60}
+	#cmx-stammdaten .field--status > label{display:block !important;width:100%;margin:0;text-align:left}
+	#cmx-stammdaten .field--status .cmx-status-field-control{display:block;width:100%}
+	#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:inline-flex;margin:0}
+	#cmx-stammdaten .field--status .cmx-kontakt-status-control.is-open{z-index:1000006}
 	#cmx-stammdaten .text,
 	#cmx-stammdaten .date,
 	#cmx-stammdaten select {width:100% !important; max-width:100% !important}
@@ -298,10 +305,14 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .url-label a{text-decoration:none}
 	#cmx-stammdaten .url-label a:hover{text-decoration:underline}
 	@media (max-width: 1200px) {
-		#cmx-stammdaten .grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+		#cmx-stammdaten .grid { flex-wrap:wrap; }
+		#cmx-stammdaten .field { flex:1 1 calc(50% - 10px); min-width:220px; }
+		#cmx-stammdaten .field--status { flex:0 0 78px; min-width:78px; }
+		#cmx-stammdaten .field--kunden-nr { flex:1 1 180px; max-width:none; }
 	}
 	@media (max-width: 640px) {
-		#cmx-stammdaten .grid { grid-template-columns: minmax(0, 1fr); }
+		#cmx-stammdaten .grid { display:block !important; }
+		#cmx-stammdaten .field { min-width:0; }
 		#cmx-stammdaten .field--kunden-nr{max-width:none;}
 	}
 </style>';
@@ -359,7 +370,8 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
 	echo '<p class="field field--status">
-		<label for="cmx_status"><strong>Status</strong></label><br>';
+		<label for="cmx_status"><strong>Status</strong></label>
+		<span class="cmx-status-field-control">';
 	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_control_html')) {
 		echo cmx_kontakte_status_control_html((int) $post->ID, [
 			'context'    => 'edit',
@@ -369,7 +381,8 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	} else {
 		echo '<input id="cmx_status" name="cmx_status" type="text" class="text" value="play">';
 	}
-	echo '</p>';
+	echo '	</span>
+	</p>';
 	echo '<p class="field field--kunden-nr">
 		<label for="cmx_kunden_nr"><strong>Kunden Nr</strong></label><br>
 		<input id="cmx_kunden_nr" name="cmx_kunden_nr" type="text" class="text" readonly value="' . \esc_attr($kunden_nr) . '">

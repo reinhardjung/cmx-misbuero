@@ -247,7 +247,7 @@ function cmx_kontakte_status_admin_assets_head(): void {
 
 	echo '<style>
 		.cmx-kontakt-status-control{position:relative;display:inline-flex;min-width:0;z-index:1}
-		.cmx-kontakt-status-control.is-open{z-index:100030}
+		.cmx-kontakt-status-control.is-open{z-index:1000000}
 		.cmx-kontakt-status-control .cmx-kontakt-status-trigger{
 			display:inline-flex;
 			align-items:center;
@@ -271,20 +271,21 @@ function cmx_kontakte_status_admin_assets_head(): void {
 		.cmx-kontakt-status-control.is-play .cmx-kontakt-status-trigger{border-color:#b7e4c7;background:#f0fdf4;color:#166534}
 		.cmx-kontakt-status-control.is-pause .cmx-kontakt-status-trigger{border-color:#d6bbfb;background:#faf5ff;color:#7c3aed}
 		.cmx-kontakt-status-control.is-stop .cmx-kontakt-status-trigger{border-color:#fecaca;background:#fef2f2;color:#b91c1c}
-		.cmx-kontakt-status-control.is-no .cmx-kontakt-status-trigger{border-color:#e5e7eb;background:#f8fafc;color:#475569}
+		.cmx-kontakt-status-control.is-no .cmx-kontakt-status-trigger{border-color:#fda4af;background:#fff1f2;color:#b42318}
 		.cmx-kontakt-status-control.is-busy .cmx-kontakt-status-trigger{opacity:.65;pointer-events:none}
 		.cmx-kontakt-status-menu{
-			position:absolute;
-			left:0;
+			position:fixed;
+			left:-9999px;
+			top:-9999px;
 			right:auto;
-			top:calc(100% + 4px);
+			bottom:auto;
 			min-width:190px;
 			padding:6px;
 			border:1px solid #d0d7de;
 			border-radius:10px;
 			background:#fff;
 			box-shadow:0 12px 28px rgba(15,23,42,.16);
-			z-index:100031;
+			z-index:1000008;
 		}
 		.cmx-kontakt-status-menu-item{
 			display:block;
@@ -303,7 +304,17 @@ function cmx_kontakte_status_admin_assets_head(): void {
 		.cmx-kontakt-status-menu-line{display:flex;align-items:center;gap:6px;font-weight:600}
 		.cmx-kontakt-status-menu-desc{display:block;margin-left:22px;font-size:11px;color:#646970}
 		.post-type-kontakte .column-cmx_status,
-		.post-type-kontakt .column-cmx_status{width:42px;overflow:visible}
+		.post-type-kontakt .column-cmx_status{width:54px;overflow:visible;position:relative;z-index:1}
+		.post-type-kontakte .wp-list-table tr.cmx-status-menu-open,
+		.post-type-kontakt .wp-list-table tr.cmx-status-menu-open{position:relative;z-index:1000003}
+		.post-type-kontakte .wp-list-table tr.cmx-status-menu-open > td,
+		.post-type-kontakt .wp-list-table tr.cmx-status-menu-open > td,
+		.post-type-kontakte .wp-list-table tr.cmx-status-menu-open > th,
+		.post-type-kontakt .wp-list-table tr.cmx-status-menu-open > th{position:relative;overflow:visible;z-index:1000003}
+		.post-type-kontakte .column-cmx_status.is-open,
+		.post-type-kontakt .column-cmx_status.is-open{z-index:1000004}
+		.post-type-kontakte .column-cmx_status .cmx-kontakt-status-control.is-open,
+		.post-type-kontakt .column-cmx_status .cmx-kontakt-status-control.is-open{z-index:1000002}
 		.post-type-kontakte .column-cmx_status .cmx-kontakt-status-control,
 		.post-type-kontakt .column-cmx_status .cmx-kontakt-status-control{width:32px}
 		#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:inline-flex;width:auto}
@@ -327,14 +338,74 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 			return Array.prototype.slice.call(document.querySelectorAll(".cmx-kontakt-status-control"));
 		}
 
+		function statusCell(root){
+			return root ? root.closest("td.column-cmx_status, th.column-cmx_status") : null;
+		}
+
+		function statusRow(root){
+			return root ? root.closest("tr") : null;
+		}
+
+		function setOpenState(root, isOpen){
+			if (!root) return;
+			var menu = root.querySelector(".cmx-kontakt-status-menu");
+			var trigger = root.querySelector(".cmx-kontakt-status-trigger");
+			var cell = statusCell(root);
+			var row = statusRow(root);
+			if (menu) menu.hidden = !isOpen;
+			root.classList.toggle("is-open", isOpen);
+			if (!isOpen && menu) {
+				menu.style.left = "-9999px";
+				menu.style.top = "-9999px";
+				menu.style.visibility = "";
+			}
+			if (cell) cell.classList.toggle("is-open", isOpen);
+			if (row) row.classList.toggle("cmx-status-menu-open", isOpen);
+			if (trigger) trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+		}
+
+		function updateMenuPlacement(root){
+			if (!root) return;
+			var menu = root.querySelector(".cmx-kontakt-status-menu");
+			var trigger = root.querySelector(".cmx-kontakt-status-trigger");
+			if (!menu || !trigger) return;
+			var previousHidden = menu.hidden;
+			if (previousHidden) {
+				menu.hidden = false;
+				menu.style.visibility = "hidden";
+			}
+			var triggerRect = trigger.getBoundingClientRect();
+			var menuRect = menu.getBoundingClientRect();
+			var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+			var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+			var left = triggerRect.left;
+			var top = triggerRect.bottom + 4;
+			var maxLeft = Math.max(8, viewportWidth - menuRect.width - 8);
+			if (left > maxLeft) {
+				left = maxLeft;
+			}
+			if (left < 8) {
+				left = 8;
+			}
+			var belowBottom = top + menuRect.height;
+			var upwardTop = triggerRect.top - menuRect.height - 4;
+			if (belowBottom > (viewportHeight - 8) && upwardTop >= 8) {
+				top = upwardTop;
+			} else if (belowBottom > (viewportHeight - 8)) {
+				top = Math.max(8, viewportHeight - menuRect.height - 8);
+			}
+			menu.style.left = String(Math.round(left)) + "px";
+			menu.style.top = String(Math.round(top)) + "px";
+			if (previousHidden) {
+				menu.hidden = true;
+				menu.style.visibility = "";
+			}
+		}
+
 		function closeAllMenus(exceptRoot){
 			allControls().forEach(function(root){
 				if (exceptRoot && root === exceptRoot) return;
-				var menu = root.querySelector(".cmx-kontakt-status-menu");
-				var trigger = root.querySelector(".cmx-kontakt-status-trigger");
-				if (menu) menu.hidden = true;
-				root.classList.remove("is-open");
-				if (trigger) trigger.setAttribute("aria-expanded", "false");
+				setOpenState(root, false);
 			});
 		}
 
@@ -446,22 +517,29 @@ function cmx_kontakte_status_admin_assets_footer(): void {
 				event.preventDefault();
 				var willOpen = !!menu.hidden;
 				closeAllMenus(root);
-				menu.hidden = !willOpen;
-				root.classList.toggle("is-open", willOpen);
-				trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+				if (willOpen) updateMenuPlacement(root);
+				setOpenState(root, willOpen);
 				return;
 			}
 
 			closeAllMenus();
 		});
 
-		document.addEventListener("keydown", function(event){
-			if (event.key === "Escape") {
+			document.addEventListener("keydown", function(event){
+				if (event.key === "Escape") {
+					closeAllMenus();
+				}
+			});
+
+			window.addEventListener("resize", function(){
 				closeAllMenus();
-			}
-		});
-	})();
-	</script>
+			});
+
+			document.addEventListener("scroll", function(){
+				closeAllMenus();
+			}, true);
+		})();
+		</script>
 	<?php
 }
 
