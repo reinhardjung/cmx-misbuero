@@ -357,13 +357,13 @@ function cmx_admin_help_tabs_for_post_type(string $post_type, \WP_Screen $screen
 	}
 
 	$tabs = [
-		[
-			'id'      => 'cmx-help-' . $post_type . '-overview',
-			'title'   => 'Mis Büro Hilfe',
-			'content' => '<p><strong>' . \esc_html($label) . '</strong> · ' . \esc_html($screen_label) . '</p>'
-				. '<p>' . \esc_html($overview_intro) . '</p>'
-				. cmx_admin_help_html_list($overview_items),
-		],
+			[
+				'id'      => 'cmx-help-' . $post_type . '-overview',
+				'title'   => 'Mis Büro Hilfe',
+				'content' => '<p><strong>' . \esc_html($label) . '</strong> · ' . \esc_html($screen_label) . '</p>'
+					. cmx_admin_help_normalize_extra_tab_content_html($overview_intro)
+					. cmx_admin_help_html_list($overview_items),
+			],
 		[
 			'id'      => 'cmx-help-' . $post_type . '-workflow',
 			'title'   => 'Hinweise',
@@ -450,13 +450,13 @@ function cmx_admin_help_tabs_for_settings_screen(array $context, \WP_Screen $scr
 
 	$section_label = \trim((string) ($context['section_label'] ?? 'Einstellungen'));
 	$tabs = [
-		[
-			'id'      => 'cmx-help-settings-overview',
-			'title'   => 'Mis Büro Hilfe',
-			'content' => '<p><strong>' . \esc_html($section_label) . '</strong></p>'
-				. '<p>' . \esc_html($intro) . '</p>'
-				. cmx_admin_help_html_list($overview_items),
-		],
+			[
+				'id'      => 'cmx-help-settings-overview',
+				'title'   => 'Mis Büro Hilfe',
+				'content' => '<p><strong>' . \esc_html($section_label) . '</strong></p>'
+					. cmx_admin_help_normalize_extra_tab_content_html($intro)
+					. cmx_admin_help_html_list($overview_items),
+			],
 		[
 			'id'      => 'cmx-help-settings-workflow',
 			'title'   => 'Hinweise',
@@ -510,13 +510,37 @@ function cmx_admin_help_html_list(array $items): string {
 		return '';
 	}
 
-	$html = '<ul>';
+	$html = '';
+	$list_open = false;
 	foreach ($items as $item) {
-		$html .= '<li>' . \esc_html($item) . '</li>';
+		if (cmx_admin_help_is_spacer_item($item)) {
+			if ($list_open) {
+				$html .= '</ul>';
+				$list_open = false;
+			}
+			$html .= '<div class="cmx-admin-help-spacer" aria-hidden="true"></div>';
+			continue;
+		}
+
+		if (!$list_open) {
+			$html .= '<ul>';
+			$list_open = true;
+		}
+
+		$html .= '<li>' . \wp_kses_post($item) . '</li>';
 	}
-	$html .= '</ul>';
+	if ($list_open) {
+		$html .= '</ul>';
+	}
 
 	return $html;
+}
+
+function cmx_admin_help_is_spacer_item(string $item): bool {
+	$normalized = \html_entity_decode($item, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+	$normalized = \str_replace("\u{00A0}", '', $normalized);
+
+	return \trim($normalized) === '';
 }
 
 function cmx_admin_help_extra_tabs_from_definition(array $definition, string $id_prefix): array {
@@ -578,16 +602,16 @@ function cmx_admin_help_normalize_extra_tab_definition(mixed $tab_definition, mi
 		$id = 'tab-' . $index;
 	}
 
-	$parts = [];
-	if ($intro !== '') {
-		$parts[] = '<p>' . \esc_html($intro) . '</p>';
-	}
-	if ($content !== '') {
-		$parts[] = $content;
-	}
-	if ($items !== []) {
-		$parts[] = cmx_admin_help_html_list($items);
-	}
+		$parts = [];
+		if ($intro !== '') {
+			$parts[] = cmx_admin_help_normalize_extra_tab_content_html($intro);
+		}
+		if ($content !== '') {
+			$parts[] = cmx_admin_help_normalize_extra_tab_content_html($content);
+		}
+		if ($items !== []) {
+			$parts[] = cmx_admin_help_html_list($items);
+		}
 
 	$tab_content = \trim(\implode('', $parts));
 	if ($tab_content === '') {
@@ -599,6 +623,19 @@ function cmx_admin_help_normalize_extra_tab_definition(mixed $tab_definition, mi
 		'title' => $title,
 		'content' => $tab_content,
 	];
+}
+
+function cmx_admin_help_normalize_extra_tab_content_html(string $content): string {
+	$content = \trim($content);
+	if ($content === '') {
+		return '';
+	}
+
+	if (\preg_match('/^\s*<(p|ul|ol|div|table|blockquote|pre|h[1-6])\b/i', $content) === 1) {
+		return $content;
+	}
+
+	return '<p>' . $content . '</p>';
 }
 
 function cmx_admin_help_is_list_array(array $array): bool {
@@ -1528,14 +1565,20 @@ add_action('admin_head', function() {
 		background: #ffffff;
 	}
 
-	/* Checkboxen / Radios etwas luftiger */
-	input[type="checkbox"],
-	input[type="radio"] {
-		margin-right: 6px;
-	}
+		/* Checkboxen / Radios etwas luftiger */
+		input[type="checkbox"],
+		input[type="radio"] {
+			margin-right: 6px;
+		}
 
-	</style>';
-});
+		/* Help-Spacer zwischen Listenblöcken etwas kompakter */
+		.cmx-admin-help-spacer {
+			height: 0.35em;
+			margin: 0;
+		}
+
+		</style>';
+	});
 
 add_action('admin_head', function (): void {
 	if (!\is_admin() || !\function_exists('get_current_screen')) {
