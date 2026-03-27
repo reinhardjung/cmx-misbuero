@@ -1,10 +1,10 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 return [
-	'intro' => 'Hier richtest du die Anbindung an einen externen WooCommerce-Shop ein.',
+	'intro' => 'Hier richtest Du die Anbindung an Deinen externen WooCommerce-Shop ein.',
 
 	'overview' => [
-		'Die Einstellungen betreffen die Synchronisation mit einem externen Shop-System.',
+		'Dein Secret Key kannst Du mir dem Button [Secret neu erzeugen] ganz rechts auf der Zeile neu erzeigen.',
 		'Webhooks, Beispiel-URLs und Automatikfunktionen müssen zusammenpassen.',
 		'Fehler hier wirken sich meist auf Import und Folgeprozesse aus.',
 	],

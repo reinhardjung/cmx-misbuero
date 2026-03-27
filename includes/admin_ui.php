@@ -1585,6 +1585,71 @@ add_action('admin_head', function (): void {
 				});
 			});
 		});
-	</script>
+		</script>
+		<?php
+	});
+
+add_action('admin_head', function (): void {
+	if (!\is_admin()) {
+		return;
+	}
+
+	$settings_slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		: 'cmx-einstellungen';
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page !== $settings_slug) {
+		return;
+	}
+	?>
+	<style>
+		.wrap h2.nav-tab-wrapper {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			padding-bottom: 0;
+			border-bottom: 1px solid #e6ebf0;
+		}
+
+		.wrap h2.nav-tab-wrapper .nav-tab {
+			margin: 0;
+			padding: 8px 14px;
+			border-radius: 8px 8px 0 0;
+			font-weight: 500;
+		}
+
+		.wrap h2.nav-tab-wrapper .nav-tab-active {
+			background: #ffffff;
+			border-bottom-color: #ffffff;
+		}
+
+		.wrap .subsubsub {
+			margin: 12px 0 0;
+		}
+
+		.wrap .subsubsub li {
+			margin-right: 8px;
+		}
+
+		.wrap .subsubsub a {
+			display: inline-block;
+			padding: 6px 10px;
+			border-radius: 999px;
+			text-decoration: none;
+		}
+
+		.wrap .subsubsub a.current {
+			background: #ffffff;
+			box-shadow: inset 0 0 0 1px #cfd8e3;
+		}
+
+		.wrap .cmx-tabpanel .button,
+		.wrap .cmx-tabpanel .button-secondary,
+		.wrap .cmx-tabpanel .button-primary,
+		.wrap .cmx-tabpanel input.button,
+		.wrap .cmx-tabpanel button.button {
+			border-radius: 8px;
+		}
+	</style>
 	<?php
 });
