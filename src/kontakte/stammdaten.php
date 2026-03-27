@@ -279,20 +279,15 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .grid {
 		position:relative;
 		overflow:visible;
-		display:flex !important;
-		flex-wrap:nowrap;
-		gap:10px;
+		display:grid !important;
+		grid-template-columns:minmax(260px,1.75fr) minmax(140px,0.9fr) minmax(170px,1.45fr) minmax(160px,1.05fr) minmax(120px,0.95fr) minmax(120px,0.95fr) max-content 150px;
+		column-gap:12px;
+		row-gap:0;
 		align-items:flex-start;
 		width:100%;
 	}
-	#cmx-stammdaten .field {margin:0; display:block !important; flex:1 1 0; min-width:0;}
-	#cmx-stammdaten .field--firma{flex:1.75 1 0}
-	#cmx-stammdaten .field--form{flex:0.9 1 0}
-	#cmx-stammdaten .field--url{flex:1.45 1 0}
-	#cmx-stammdaten .field--hr-uid{flex:1.05 1 0}
-	#cmx-stammdaten .field--datum{flex:0.92 1 0}
-	#cmx-stammdaten .field--kunden-nr{flex:0 0 150px;max-width:150px;}
-	#cmx-stammdaten .field--status{flex:0 0 60px;min-width:60px;align-self:flex-start;display:flex !important;flex-direction:column;align-items:flex-start;gap:6px;position:relative;overflow:visible;z-index:60}
+	#cmx-stammdaten .field {margin:0; display:block !important; min-width:0;}
+	#cmx-stammdaten .field--status{align-self:flex-start;display:flex !important;flex-direction:column;align-items:flex-start;gap:6px;position:relative;overflow:visible;z-index:60}
 	#cmx-stammdaten .field--status > label{display:block !important;width:100%;margin:0;text-align:left}
 	#cmx-stammdaten .field--status .cmx-status-field-control{display:block;width:100%}
 	#cmx-stammdaten .field--status .cmx-kontakt-status-control{display:inline-flex;margin:0}
@@ -309,15 +304,12 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	#cmx-stammdaten .url-label a{text-decoration:none}
 	#cmx-stammdaten .url-label a:hover{text-decoration:underline}
 	@media (max-width: 1200px) {
-		#cmx-stammdaten .grid { flex-wrap:wrap; }
-		#cmx-stammdaten .field { flex:1 1 calc(50% - 10px); min-width:220px; }
-		#cmx-stammdaten .field--status { flex:0 0 60px; min-width:60px; }
-		#cmx-stammdaten .field--kunden-nr { flex:1 1 180px; max-width:none; }
+		#cmx-stammdaten .grid { grid-template-columns:repeat(2, minmax(220px, 1fr)); row-gap:12px; }
 	}
 	@media (max-width: 640px) {
 		#cmx-stammdaten .grid { display:block !important; }
 		#cmx-stammdaten .field { min-width:0; }
-		#cmx-stammdaten .field--kunden-nr{max-width:none;}
+		#cmx-stammdaten .field + .field{margin-top:12px;}
 	}
 </style>';
 

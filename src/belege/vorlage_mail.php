@@ -98,12 +98,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
 			? (string) cmxbu_normalize_belegmail_mode((string) ($data['mail_mode'] ?? (!empty($data['duzis']) ? 'du' : 'sie')))
 			: (!empty($data['duzis']) ? 'du' : 'sie');
 		$vorname = \trim((string) ($data['vorname'] ?? ''));
+		$nachname = \trim((string) ($data['nachname'] ?? ''));
 		if ($mail_mode === 'du') {
 			return $vorname !== '' ? 'Hallo ' . $vorname : 'Hallo';
 		}
 
+		$full_name = \trim((string) \preg_replace('/\s+/u', ' ', $vorname . ' ' . $nachname));
 		$greeting = 'Guten ' . cmxbu_belegmail_daytime_text();
-		return $vorname !== '' ? $greeting . ' ' . $vorname : $greeting;
+		return $full_name !== '' ? $greeting . ' ' . $full_name : $greeting;
 	}
 }
 
