@@ -234,7 +234,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 			],
 			\admin_url('post-new.php')
 		);
-		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Kategorie <strong>Treuhänder</strong> anlegen. Der Treuhänder muss zwingend eine gültige <strong>E-Mail 1</strong> hinterlegt haben. <a href="' . \esc_url($new_trustee_url) . '" class="button button-secondary" style="margin-left:8px;">Treuhänder-Kontakt anlegen</a></p></div>';
+		echo '<div class="notice notice-warning"><p><strong>Hinweis:</strong> Bitte mindestens einen Kontakt mit Kategorie <strong>Treuhänder</strong> anlegen oder diese <a href="/wp-admin/admin.php?page=cmx-einstellungen&tab=vorgaben&sub=belege" target="_blank" rel="noopener noreferrer">Funktion deaktivieren</a>. Der Treuhänder muss sonst eine gültige <strong>E-Mail 1</strong> hinterlegt haben. <a href="' . \esc_url($new_trustee_url) . '" class="button button-secondary" style="margin-left:8px;">Treuhänder-Kontakt anlegen</a></p></div>';
 	}
 });
 
@@ -304,4 +304,4 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,zuordnung_kontakt,kommunikation,adressen,bilder,admincolumns,doppelte,stufen,exports,imports,sichern,vcards,umsatz');
+cmx_require_files(__DIR__,'stammdaten,status,zuordnung_kontakt,kommunikation,adressen,bilder,admincolumns,doppelte,stufen,exports,imports,sichern,vcards,umsatz');

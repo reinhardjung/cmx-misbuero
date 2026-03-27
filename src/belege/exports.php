@@ -833,6 +833,9 @@ function cmxbu_belege_export_trustee_contacts(): array {
 		if ($post_id <= 0) {
 			continue;
 		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_is_selectable_contact') && !cmx_kontakte_is_selectable_contact($post_id)) {
+			continue;
+		}
 
 		$email = '';
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {

@@ -59,12 +59,16 @@ function cmx_render_projekt_kontakt_box(\WP_Post $post): void {
 	$edit_prefix = \admin_url('post.php?post=');
 	$ajax_url = \admin_url('admin-ajax.php');
 	$ajax_nonce = \wp_create_nonce('cmx_search_kontakte');
-	$has_kontakte = !empty(\get_posts([
+	$has_kontakte_args = [
 		'post_type'      => 'kontakte',
 		'post_status'    => 'any',
 		'posts_per_page' => 1,
 		'fields'         => 'ids',
-	]));
+	];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_apply_selection_query_args')) {
+		$has_kontakte_args = cmx_kontakte_apply_selection_query_args($has_kontakte_args);
+	}
+	$has_kontakte = !empty(\get_posts($has_kontakte_args));
 	$box_id = 'cmx-projekt-kontakt-box-' . (int) $post->ID;
 
 	wp_nonce_field('cmx_save_projekt_kontakt', 'cmx_projekt_kontakt_nonce');

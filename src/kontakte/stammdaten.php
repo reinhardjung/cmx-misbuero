@@ -275,6 +275,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 			minmax(160px, 1.1fr)
 			minmax(105px, 0.8fr)
 			minmax(105px, 0.8fr)
+			minmax(140px, 0.95fr)
 			minmax(120px, 0.9fr);
 		column-gap: 10px;
 		row-gap: 10px;
@@ -282,6 +283,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	}
 	#cmx-stammdaten .field {margin:0; display:block !important; flex:none !important;}
 	#cmx-stammdaten .field--kunden-nr{max-width:220px;}
+	#cmx-stammdaten .field--status{min-width:140px;}
 	#cmx-stammdaten .field--firma{grid-column:span 1}
 	#cmx-stammdaten .field--hr-uid{min-width:170px;}
 	#cmx-stammdaten .text,
@@ -356,6 +358,18 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	<label for="cmx_kunde_seit"><strong>Kunde seit</strong></label><br>
 	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
+	echo '<p class="field field--status">
+		<label for="cmx_status"><strong>Status</strong></label><br>';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_control_html')) {
+		echo cmx_kontakte_status_control_html((int) $post->ID, [
+			'context'    => 'edit',
+			'input_name' => 'cmx_status',
+			'input_id'   => 'cmx_status',
+		]);
+	} else {
+		echo '<input id="cmx_status" name="cmx_status" type="text" class="text" value="play">';
+	}
+	echo '</p>';
 	echo '<p class="field field--kunden-nr">
 		<label for="cmx_kunden_nr"><strong>Kunden Nr</strong></label><br>
 		<input id="cmx_kunden_nr" name="cmx_kunden_nr" type="text" class="text" readonly value="' . \esc_attr($kunden_nr) . '">
@@ -405,6 +419,10 @@ function cmx_save_kontakte_meta(int $post_id): void {
 			$url = 'https://' . \ltrim($url, '/');
 		}
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
+	}
+
+	if (isset($_POST['cmx_status']) && \function_exists(__NAMESPACE__ . '\\cmx_kontakte_store_status')) {
+		cmx_kontakte_store_status($post_id, (string) \wp_unslash($_POST['cmx_status']));
 	}
 
 	$business_form_taxonomy = cmx_kontakte_business_form_taxonomy();

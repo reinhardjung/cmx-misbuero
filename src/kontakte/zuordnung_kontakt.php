@@ -460,7 +460,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakte_zu_kontakt_box')) {
 					try { requestCtrl.abort(); } catch (err) {}
 					}
 					requestCtrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-					var url = ajaxUrl + "?action=cmx_search_kontakte&_ajax_nonce=" + encodeURIComponent(ajaxNonce) + "&include_liefer=1&q=" + encodeURIComponent(q || "");
+					var url = ajaxUrl + "?action=cmx_search_kontakte&_ajax_nonce=" + encodeURIComponent(ajaxNonce) + "&include_liefer=1&allow_inactive=1&q=" + encodeURIComponent(q || "");
 					var fetchOptions = { credentials: "same-origin" };
 					if (requestCtrl) {
 						fetchOptions.signal = requestCtrl.signal;

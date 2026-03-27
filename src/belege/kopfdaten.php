@@ -1055,17 +1055,22 @@ function cmx_ajax_search_kontakte(): void {
 	$q   = isset($_GET['q']) ? \sanitize_text_field(\wp_unslash($_GET['q'])) : '';
 	$cpt = cmx_kontakte_cpt();
 	$include_liefer = !empty($_GET['include_liefer']);
+	$allow_inactive = !empty($_GET['allow_inactive']);
 
 	if ($q === '') {
 		// Leere Suche: einfach die zuletzt geänderten Kontakte anzeigen
-		$ids = \get_posts([
+		$args = [
 			'post_type'      => $cpt,
 			'post_status'    => 'any',
 			'posts_per_page' => 20,
 			'orderby'        => 'modified',
 			'order'          => 'DESC',
 			'fields'         => 'ids',
-		]);
+		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_apply_selection_query_args')) {
+			$args = cmx_kontakte_apply_selection_query_args($args, $allow_inactive);
+		}
+		$ids = \get_posts($args);
 	} else {
 		$search_terms = cmx_ajax_kontakte_search_terms($q);
 		$lookup_args = [
@@ -1075,6 +1080,9 @@ function cmx_ajax_search_kontakte(): void {
 			'fields'         => 'ids',
 			'no_found_rows'  => true,
 		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_apply_selection_query_args')) {
+			$lookup_args = cmx_kontakte_apply_selection_query_args($lookup_args, $allow_inactive);
+		}
 
 		$default_match_ids = [];
 		foreach ($search_terms as $lookup_term) {
@@ -1109,6 +1117,9 @@ function cmx_ajax_search_kontakte(): void {
 				return cmx_ajax_kontakt_matches_search((int) $id, $search_terms, $include_liefer);
 			}));
 			$ids = \array_slice($ids, 0, 20);
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_filter_selectable_ids')) {
+		$ids = cmx_kontakte_filter_selectable_ids((array) $ids, $allow_inactive);
 	}
 
 	$out = [];

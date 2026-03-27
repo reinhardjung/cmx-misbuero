@@ -79,11 +79,20 @@ function cmx_is_lieferant_unified(int $post_id): bool {
 function cmx_fetch_lieferanten_ids_unified(string $post_type): array {
 	$ids = \get_posts(cmx_lieferanten_query_args_unified($post_type));
 	$ids = \is_array($ids) ? \array_map('intval',$ids) : [];
-	if ($ids) return $ids;
+	if ($ids) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_filter_selectable_ids')) {
+			$ids = cmx_kontakte_filter_selectable_ids($ids);
+		}
+		return $ids;
+	}
 	$all = \get_posts(['post_type'=>$post_type,'post_status'=>['publish','private'],'posts_per_page'=>-1,'fields'=>'ids','suppress_filters'=>true]);
 	$all = \is_array($all) ? \array_map('intval',$all) : [];
 	if (!$all) return [];
-	$out=[]; foreach ($all as $pid) if (cmx_is_lieferant_unified($pid)) $out[]=$pid; return $out;
+	$out=[]; foreach ($all as $pid) if (cmx_is_lieferant_unified($pid)) $out[]=$pid;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_filter_selectable_ids')) {
+		$out = cmx_kontakte_filter_selectable_ids($out);
+	}
+	return $out;
 }
 function cmx_artikel_lieferanten_list_url_unified(): string {
 	$kontakt_pt = cmx_first_existing_kontakt_cpt_unified();

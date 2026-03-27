@@ -728,6 +728,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		th#cmx_kontakt_belege { text-indent:2ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
 		.column-cmx_email_1 { width:220px; min-width:220px; }
+		.column-cmx_status { width:165px; overflow:visible; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
 		.column-cmx_hersteller_url a,
@@ -798,6 +799,7 @@ function cmx_kontakte_add_columns(array $columns): array {
 	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = 'P';
 	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Firmengründung';
 	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburtsdatum';
+	if (!isset($new['cmx_status'])) $new['cmx_status'] = 'Status';
 
 	if ($logo_label !== null) {
 		$new['cmx_logo'] = $logo_label; // Logo ans Ende
@@ -813,6 +815,13 @@ function cmx_kontakte_add_columns(array $columns): array {
  */
 \add_action('manage_kontakte_posts_custom_column', __NAMESPACE__ . '\\cmx_kontakte_render_custom_columns', 10, 2);
 function cmx_kontakte_render_custom_columns(string $column, int $post_id): void {
+	if ($column === 'cmx_status') {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_status_control_html')) {
+			echo cmx_kontakte_status_control_html($post_id, ['context' => 'list']);
+		}
+		return;
+	}
+
 	if ($column === 'cmx_hersteller_url') {
 		$raw  = (string) \get_post_meta($post_id, CMX_KONTAKTE_META_URL, true);
 		if ($raw === '') { echo ''; return; }
