@@ -200,14 +200,22 @@ function cmx_register_vorgaben_tab(): void {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$raw = isset($opts['belege_faelligkeit_tage']) ? (string) $opts['belege_faelligkeit_tage'] : '';
 			$days = ($raw === '') ? 30 : (int) $raw;
+			$month_end = !empty($opts['belege_faelligkeit_monatsende']);
 			if ($days < 0) {
 				$days = 0;
 			}
 			if ($days > 3650) {
 				$days = 3650;
 			}
-			echo '<input type="number" min="0" max="3650" step="1" style="width:120px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_tage]" value="'.\esc_attr((string) $days).'">';
-			echo '<p class="description">Standard für "Fällig am" in Belegen. Beim Setzen des Belegdatums wird das Fälligkeitsdatum auf Belegdatum + diese Tage gesetzt.</p>';
+			echo '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+			echo '<input type="number" min="0" max="3650" step="1" style="width:120px;" id="cmx-belege-faelligkeit-tage" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_tage]" value="'.\esc_attr((string) $days).'" '.($month_end ? 'readonly aria-readonly="true"' : '').'>';
+			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_monatsende]" value="0">';
+			echo '<label for="cmx-belege-faelligkeit-monatsende" style="display:inline-flex;align-items:center;gap:6px;">';
+			echo '<input type="checkbox" id="cmx-belege-faelligkeit-monatsende" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_faelligkeit_monatsende]" value="1" '.\checked($month_end, true, false).'> Monatsende';
+			echo '</label>';
+			echo '</div>';
+			echo '<p class="description">Standard für "Fällig am" in Belegen. Beim Setzen des Belegdatums wird das Fälligkeitsdatum auf Belegdatum + diese Tage gesetzt. Ist "Monatsende" aktiv, wird stattdessen immer der letzte Tag des Beleg-Monats übernommen.</p>';
+			echo '<script>(function(){var days=document.getElementById("cmx-belege-faelligkeit-tage");var monthEnd=document.getElementById("cmx-belege-faelligkeit-monatsende");if(!days||!monthEnd){return;}function sync(){var active=!!monthEnd.checked;days.readOnly=active;days.setAttribute("aria-readonly",active?"true":"false");days.style.backgroundColor=active?"#f3f4f6":"";days.style.color=active?"#6b7280":"";}monthEnd.addEventListener("change",sync);sync();})();</script>';
 		},
 		'cmx_tab_vorgaben__belege',
 		'cmx_sec_vorgaben_belege'

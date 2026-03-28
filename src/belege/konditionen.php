@@ -39,7 +39,7 @@ function cmx_beleg_status_options(): array {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')) {
 	function cmx_belege_default_due_days(array $opts = []): int {
 		if (empty($opts)) {
-			$opts = (array) \get_option('cmx_einstellungen', []);
+			$opts = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
 		}
 		$raw = isset($opts['belege_faelligkeit_tage']) ? (string) $opts['belege_faelligkeit_tage'] : '';
 		$days = ($raw === '') ? 30 : (int) $raw;
@@ -50,6 +50,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')) {
 			$days = 3650;
 		}
 		return $days;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belege_use_month_end_due')) {
+	function cmx_belege_use_month_end_due(array $opts = []): bool {
+		if (empty($opts)) {
+			$opts = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		}
+
+		return !empty($opts['belege_faelligkeit_monatsende']);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_date')) {
+	function cmx_belege_default_due_date(string $invoice_date = '', array $opts = []): string {
+		if (empty($opts)) {
+			$opts = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		}
+
+		$timezone = \function_exists('wp_timezone')
+			? \wp_timezone()
+			: new \DateTimeZone('UTC');
+		$invoice_date = \trim($invoice_date);
+		$invoice_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $invoice_date, $timezone);
+		if (!$invoice_dt instanceof \DateTimeImmutable) {
+			$fallback_date = (string) \current_time('Y-m-d');
+			$invoice_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $fallback_date, $timezone);
+		}
+		if (!$invoice_dt instanceof \DateTimeImmutable) {
+			$invoice_dt = new \DateTimeImmutable('now', $timezone);
+		}
+
+		if (cmx_belege_use_month_end_due($opts)) {
+			$due_dt = $invoice_dt->modify('last day of this month');
+		} else {
+			$due_dt = $invoice_dt->modify('+' . cmx_belege_default_due_days($opts) . ' days');
+		}
+		if (!$due_dt instanceof \DateTimeImmutable) {
+			$due_dt = $invoice_dt;
+		}
+
+		return $due_dt->format('Y-m-d');
 	}
 }
 
@@ -217,12 +259,20 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	$default_due_days = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')
 		? cmx_belege_default_due_days($opts_general)
 		: 30;
+	$default_due_month_end = \function_exists(__NAMESPACE__ . '\\cmx_belege_use_month_end_due')
+		? cmx_belege_use_month_end_due($opts_general)
+		: !empty($opts_general['belege_faelligkeit_monatsende']);
 	$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
 		? cmx_belege_uses_leistungszeitraum($opts_general)
 		: !empty($opts_general['belege_use_leistungszeitraum']);
 
 	if (!\is_string($rng) || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $rng)) {
 		$rng = \current_time('Y-m-d');
+	}
+	if (!\is_string($faellig) || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $faellig)) {
+		$faellig = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_date')
+			? cmx_belege_default_due_date($rng, $opts_general)
+			: '';
 	}
 
 	// Belegmonat als Default, wenn leer
@@ -323,9 +373,10 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'var lblR=document.getElementById("cmx_rng_label"),inpR=document.getElementById("cmx_beleg_rng_datum");';
 	echo 'var inpF=document.getElementById("cmx_beleg_faelligkeitsdatum");';
 	echo 'var ltdy=document.getElementById("cmx_f_today"), l10=document.getElementById("cmx_f_10"), l14=document.getElementById("cmx_f_14"), l30=document.getElementById("cmx_f_30"), lend=document.getElementById("cmx_f_end");';
-	echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBToday=document.getElementById("cmx_bezahlt_today"),btnBRng=document.getElementById("cmx_bezahlt_rng"),btnBPartial=document.getElementById("cmx_bezahlt_partial"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
-	echo 'var lblL=document.getElementById("cmx_leistungs_label"),selL=document.getElementById("cmx_beleg_leistungsmonat");';
-	echo 'var defaultDueDays=' . (int) $default_due_days . ';';
+		echo 'var lblB=document.getElementById("cmx_bezahlt_label"),inpB=document.getElementById("cmx_beleg_bezahlt_am"),btnBToday=document.getElementById("cmx_bezahlt_today"),btnBRng=document.getElementById("cmx_bezahlt_rng"),btnBPartial=document.getElementById("cmx_bezahlt_partial"),btnBClear=document.getElementById("cmx_bezahlt_clear");';
+		echo 'var lblL=document.getElementById("cmx_leistungs_label"),selL=document.getElementById("cmx_beleg_leistungsmonat");';
+		echo 'var defaultDueDays=' . (int) $default_due_days . ';';
+		echo 'var defaultDueMonthEnd=' . ($default_due_month_end ? 'true' : 'false') . ';';
 
 	// helpers
 	echo 'function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}';
@@ -336,7 +387,7 @@ function cmx_render_beleg_waehrung_box(\WP_Post $post): void {
 	echo 'function baseDate(){var v=(inpR&&inpR.value)?new Date(inpR.value):new Date(); if(isNaN(v)) v=new Date(); return v;}';
 	echo 'function nextMonthVal(){var b=baseDate(),m=b.getMonth()+2;if(m===13)m=1;return pad(m);}';
 	echo 'function addDays(n){var b=baseDate(); b.setDate(b.getDate()+n); return fmt(b);}';
-	echo 'function applyDefaultDueFromInvoice(force){if(!inpR||!inpF)return;if(!force&&(inpF.value||"")!=="")return;var n=parseInt(defaultDueDays,10);if(isNaN(n)||n<0)n=0;var b=baseDate();b.setDate(b.getDate()+n);inpF.value=fmt(b);}';
+		echo 'function applyDefaultDueFromInvoice(force){if(!inpR||!inpF)return;if(!force&&(inpF.value||"")!=="")return;if(defaultDueMonthEnd){inpF.value=monthEnd();syncLeistungsmonatFromDue();return;}var n=parseInt(defaultDueDays,10);if(isNaN(n)||n<0)n=0;var b=baseDate();b.setDate(b.getDate()+n);inpF.value=fmt(b);}';
 	echo 'function syncLeistungsmonatFromDue(){if(!selL||!inpF)return;var m=monthFromYmd(inpF.value);if(m!==""){selL.value=m;}}';
 	echo 'function lastPartialDate(){var latest="";document.querySelectorAll("#cmx-anzahlungen-wrap .cmx-anzahlung-date").forEach(function(el){var val=(el&&el.value)?String(el.value).trim():"";if(!isYmd(val)) return;if(latest===""||val>latest){latest=val;}});return latest;}';
 

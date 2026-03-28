@@ -2419,13 +2419,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_assign_rechnung_term'))
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_order_due_date')) {
 	function cmx_woocommerce_order_due_date(string $invoice_date): string {
+		if (!\preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoice_date)) {
+			return '';
+		}
+		$opts = (array) \get_option(cmx_woocommerce_option_name(), []);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_date')) {
+			return (string) cmx_belege_default_due_date($invoice_date, $opts);
+		}
+
 		$timestamp = \strtotime($invoice_date);
 		if (!$timestamp) {
 			return '';
 		}
-
 		$days = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')
-			? (int) cmx_belege_default_due_days((array) \get_option(cmx_woocommerce_option_name(), []))
+			? (int) cmx_belege_default_due_days($opts)
 			: 30;
 
 		return \gmdate('Y-m-d', \strtotime('+' . \max(0, $days) . ' days', $timestamp));

@@ -280,6 +280,7 @@ add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 	$new = \is_array($new) ? $new : [];
 	$normalize_due_days = static function(array $data): array {
 		if (!\array_key_exists('belege_faelligkeit_tage', $data)) {
+			$data['belege_faelligkeit_monatsende'] = !empty($data['belege_faelligkeit_monatsende']) ? '1' : '0';
 			return $data;
 		}
 		$days = (int) $data['belege_faelligkeit_tage'];
@@ -290,6 +291,7 @@ add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function($new, $old) {
 			$days = 3650;
 		}
 		$data['belege_faelligkeit_tage'] = $days;
+		$data['belege_faelligkeit_monatsende'] = !empty($data['belege_faelligkeit_monatsende']) ? '1' : '0';
 		return $data;
 	};
 	$new = $normalize_due_days($new);

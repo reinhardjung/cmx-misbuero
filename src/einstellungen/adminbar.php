@@ -212,6 +212,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_position_row_from_
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_default_dates')) {
+	function cmx65_adminbar_beleg_default_dates(): array {
+		$opts = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+		$timezone = \function_exists('wp_timezone')
+			? \wp_timezone()
+			: new \DateTimeZone('UTC');
+		$invoice_date = (string) \current_time('Y-m-d');
+		$invoice_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $invoice_date, $timezone);
+		if (!$invoice_dt instanceof \DateTimeImmutable) {
+			$invoice_dt = new \DateTimeImmutable('now', $timezone);
+		}
+		$due_date = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_date')
+			? (string) cmx_belege_default_due_date($invoice_dt->format('Y-m-d'), $opts)
+			: '';
+		if ($due_date !== '' && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date)) {
+			$due_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $due_date, $timezone);
+		} else {
+			$due_days = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')
+				? (int) cmx_belege_default_due_days($opts)
+				: ((isset($opts['belege_faelligkeit_tage']) && $opts['belege_faelligkeit_tage'] !== '') ? (int) $opts['belege_faelligkeit_tage'] : 30);
+			if ($due_days < 0) {
+				$due_days = 0;
+			}
+			if ($due_days > 3650) {
+				$due_days = 3650;
+			}
+			if (!empty($opts['belege_faelligkeit_monatsende'])) {
+				$due_dt = $invoice_dt->modify('last day of this month');
+			} else {
+				$due_dt = $invoice_dt->modify('+' . $due_days . ' days');
+			}
+		}
+		if (!$due_dt instanceof \DateTimeImmutable) {
+			$due_dt = $invoice_dt;
+		}
+
+		return [
+			'invoice' => $invoice_dt->format('Y-m-d'),
+			'due'     => $due_dt->format('Y-m-d'),
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup')) {
 	function cmx65_adminbar_beleg_quickcreate_markup(): string {
 		if (!cmx65_adminbar_beleg_quickcreate_allowed()) {
@@ -300,25 +345,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 			? (string) cmx_build_kontakt_postanschrift($kontakt_id)
 			: '';
 
-		$position_row = cmx65_adminbar_beleg_position_row_from_artikel($artikel_id, $artikel_name, $artikel_variant_index);
-		if ($position_row === []) {
-			\wp_safe_redirect($redirect_url);
-			exit;
-		}
+			$position_row = cmx65_adminbar_beleg_position_row_from_artikel($artikel_id, $artikel_name, $artikel_variant_index);
+			if ($position_row === []) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$default_dates = cmx65_adminbar_beleg_default_dates();
+			$invoice_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+				? CMX_BELEG_META_RNG_DATUM
+				: '_cmx_beleg_rng_datum';
+			$due_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')
+				? CMX_BELEG_META_FAELLIG
+				: '_cmx_beleg_faelligkeitsdatum';
 
-		$beleg_id = \wp_insert_post([
-			'post_type'   => 'belege',
+			$beleg_id = \wp_insert_post([
+				'post_type'   => 'belege',
 			'post_status' => 'draft',
 			'post_title'  => '',
 			'post_author' => (int) \get_current_user_id(),
 			'meta_input'  => [
-				'_cmx_title_auto'         => 1,
-				'_cmx_beleg_kontakt_id'   => $kontakt_id,
-				'_cmx_beleg_kontakt_label'=> $kontakt_label,
-				'_cmx_beleg_kontakt_addr' => $kontakt_addr,
-				'_cmx_beleg_positionen'   => [$position_row],
-			],
-		], true);
+					'_cmx_title_auto'         => 1,
+					'_cmx_beleg_kontakt_id'   => $kontakt_id,
+					'_cmx_beleg_kontakt_label'=> $kontakt_label,
+					'_cmx_beleg_kontakt_addr' => $kontakt_addr,
+					$invoice_meta_key         => (string) ($default_dates['invoice'] ?? ''),
+					$due_meta_key             => (string) ($default_dates['due'] ?? ''),
+					'_cmx_beleg_positionen'   => [$position_row],
+				],
+			], true);
 
 		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
 			\wp_safe_redirect($redirect_url);
