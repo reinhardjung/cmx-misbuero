@@ -1218,7 +1218,22 @@ add_action('admin_head', function () {
 	body.post-php .cmx-dup-link:focus::before {
 		color: #b42527;
 	}
-	</style>
+	body.post-php .cmx-kontakt-new-beleg-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		color: #d63638;
+	}
+	body.post-php .cmx-kontakt-new-beleg-link:hover,
+	body.post-php .cmx-kontakt-new-beleg-link:focus {
+		color: #b42527;
+	}
+	body.post-php .cmx-kontakt-belege-link {
+		margin-left: 15px;
+	}
+		</style>
 	<script>
 	document.addEventListener('DOMContentLoaded', function() {
 		if (document.body && !document.body.classList.contains('post-php')) return;

@@ -1588,6 +1588,7 @@ add_action('wp_ajax_cmx_search_beleg_tasks', function() {
  * ------------------------------ */
 function cmx_beleg_positionen_js() {
 	$ajax_url = admin_url('admin-ajax.php');
+	$should_autofocus_article = isset($_GET['cmx_focus_article']) && (string) $_GET['cmx_focus_article'] === '1';
 	?>
 	<script>
 	jQuery(function($){
@@ -1595,6 +1596,7 @@ function cmx_beleg_positionen_js() {
 		const table   = $positionTable.find('tbody');
 		const AJAX_URL = <?php echo wp_json_encode($ajax_url); ?>;
 		const ARTICLE_EDIT_BASE = <?php echo wp_json_encode(admin_url('post.php?post=')); ?>;
+		const SHOULD_AUTOFOCUS_FIRST_ARTICLE = <?php echo $should_autofocus_article ? 'true' : 'false'; ?>;
 		const INITIAL_ARTICLE_ROW_HTML = (function(){
 			const $tpl = table.find('tr.cmx-pos-row:not(.cmx-pos-row-abschnitt):first').first();
 			return $tpl.length ? $('<div>').append($tpl.clone()).html() : '';
@@ -1689,6 +1691,19 @@ function cmx_beleg_positionen_js() {
 			txt = txt.replace(/chf|fr\.?/gi, '').trim();
 			if (txt === '') return '';
 			return formatSwiss(parseNumberFlexible(txt)) + (isPercent ? '%' : '');
+		}
+		function focusFirstArticleField(attempt){
+			if (!SHOULD_AUTOFOCUS_FIRST_ARTICLE) return;
+			const $input = table.find('.cmx-artikel-autocomplete').filter(':visible').first();
+			if ($input.length) {
+				$input.trigger('focus');
+				try { $input[0].select(); } catch (err) {}
+				return;
+			}
+			if ((attempt || 0) >= 12) return;
+			window.setTimeout(function(){
+				focusFirstArticleField((attempt || 0) + 1);
+			}, 120);
 		}
 		function rememberActivePositionRow(el){
 			const $row = $(el).closest('tr.cmx-pos-row');
@@ -2635,6 +2650,9 @@ function cmx_beleg_positionen_js() {
 				reindexPositionRows();
 			});
 		}
+		window.setTimeout(function(){
+			focusFirstArticleField(0);
+		}, 140);
 	});
 	</script>
 		<style>

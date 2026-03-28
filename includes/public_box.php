@@ -1,5 +1,116 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_post_type_can_create')) {
+	function cmx_post_type_can_create(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->create_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('edit_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url')) {
+	function cmx_kontakt_create_beleg_action_url(int $kontakt_id): string {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+
+		return (string) \wp_nonce_url(
+			\add_query_arg(
+				[
+					'action'     => 'cmx_kontakt_create_beleg',
+					'kontakt_id' => $kontakt_id,
+				],
+				\admin_url('admin-post.php')
+			),
+			'cmx_kontakt_create_beleg_' . $kontakt_id
+		);
+	}
+}
+
+\add_action('admin_post_cmx_kontakt_create_beleg', __NAMESPACE__ . '\\cmx_kontakt_create_beleg_handler');
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_handler')) {
+	function cmx_kontakt_create_beleg_handler(): void {
+		$kontakt_id = isset($_REQUEST['kontakt_id']) ? (int) \wp_unslash($_REQUEST['kontakt_id']) : 0;
+		$redirect_url = $kontakt_id > 0
+			? (string) \get_edit_post_link($kontakt_id, '')
+			: (string) \admin_url('edit.php?post_type=kontakte');
+
+		if ($kontakt_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_REQUEST['_wpnonce']), 'cmx_kontakt_create_beleg_' . $kontakt_id)) {
+			\wp_die('Ungültige Anfrage.');
+		}
+
+		$kontakt_post = \get_post($kontakt_id);
+		$kontakt_types = ['kontakte', 'kontakt'];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_cpt')) {
+			$kontakt_types[] = (string) cmx_kontakte_cpt();
+		}
+		$kontakt_types = \array_values(\array_unique(\array_filter(\array_map('strval', $kontakt_types))));
+		if (
+			!$kontakt_post instanceof \WP_Post
+			|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
+			|| !\current_user_can('edit_post', $kontakt_id)
+			|| !\post_type_exists('belege')
+			|| !cmx_post_type_can_create('belege')
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$kontakt_label = (string) \get_the_title($kontakt_id);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$kontakt_label = (string) cmx_normalize_minus_sign($kontakt_label);
+		}
+		$kontakt_addr = \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')
+			? (string) cmx_build_kontakt_postanschrift($kontakt_id)
+			: '';
+
+		$beleg_id = \wp_insert_post([
+			'post_type'   => 'belege',
+			'post_status' => 'draft',
+			'post_title'  => '',
+			'post_author' => (int) \get_current_user_id(),
+			'meta_input'  => [
+				'_cmx_title_auto'         => 1,
+				'_cmx_beleg_kontakt_id'   => $kontakt_id,
+				'_cmx_beleg_kontakt_label'=> $kontakt_label,
+				'_cmx_beleg_kontakt_addr' => $kontakt_addr,
+			],
+		], true);
+
+		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$edit_url = (string) \get_edit_post_link((int) $beleg_id, '');
+		if ($edit_url === '') {
+			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
+		}
+		$edit_url = (string) \add_query_arg(
+			[
+				'cmx_focus_article'       => '1',
+				'cmx_created_from_kontakt'=> $kontakt_id,
+			],
+			$edit_url
+		);
+
+		\wp_safe_redirect($edit_url);
+		exit;
+	}
+}
+
 
 add_action('admin_head', function () {
 	echo '<style>.button-full { width:100%; display:block; box-sizing:border-box; text-align:center; } </style>';
@@ -81,6 +192,9 @@ add_action('add_meta_boxes', function() {
 			if ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
 				$kontakt_belege_url = (string) cmx_kontakt_belege_share_url((int) $post->ID);
 			}
+			$new_beleg_url = ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url'))
+				? (string) cmx_kontakt_create_beleg_action_url((int) $post->ID)
+				: '';
 
 				echo '<div style="padding:2px 0 8px;">';
 			if ($is_belege) {
@@ -341,11 +455,14 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
-				if ($delete_link || $dup_link !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
+				if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
 					$justify = $is_belege ? 'space-between' : 'flex-start';
 						echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 					if ($dup_link !== '') {
 						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
+					}
+					if ($new_beleg_url !== '') {
+						echo '<a href="' . esc_url($new_beleg_url) . '" class="cmx-kontakt-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg anlegen"><span class="screen-reader-text">Neuen Beleg anlegen</span></a>';
 					}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';

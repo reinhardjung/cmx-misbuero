@@ -347,22 +347,50 @@ function cmx65_adminbar($wp_admin_bar) {
 	$wp_admin_bar->remove_node('new-content');
 	$wp_admin_bar->remove_node('comments');
 
-	echo '
+	if (\is_admin()) {
+		echo '
 		<style>
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"]:hover > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"].hover > .ab-item {
+            background: #a42c24 !important;
+            color: #fff !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:hover,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"]:hover > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"].hover > .ab-item {
+            background: #a42c24 !important;
+            color: #ffeb3b !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-submenu,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-submenu .ab-item {
+            background: #a42c24 !important;
+            color: #fff !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:hover,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:active {
+            background: #a42c24 !important;
+            color: #ffeb3b !important;
+        }
         #wpadminbar .cmx-nohover > .ab-item {
             cursor: default !important;
             pointer-events: none !important;
-            background: none !important;
+            background: #a42c24 !important;
             color: #fff !important;
         }
         #wpadminbar .cmx-nohover > .ab-item:hover {
-            background: none !important;
-            color: yellow !important;
+            background: #a42c24 !important;
+            color: #ffeb3b !important;
         }
         #wpadminbar #wp-admin-bar-cmx65_monitoring_id > .ab-item {
             cursor: copy !important;
         }
     </style>';
+	}
 
 	// $wp_admin_bar->add_menu([
 	// 	'id'    => 'cmx65_name_id',

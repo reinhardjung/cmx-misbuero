@@ -157,7 +157,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					align-items:center;
 					justify-content:center;
 					padding:20px;
-					background:linear-gradient(145deg,#f6efe6,#eadbc8);
+					background:#fff;
 					font:16px/1.45 "Avenir Next","Segoe UI","Helvetica Neue",sans-serif;
 					color:#241b16;
 				}
@@ -219,6 +219,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 			? cmx_ext_time_preview_icon_src()
 			: '');
 		$site_name = (string) ($bootstrap['siteName'] ?? \get_bloginfo('name'));
+		$site_name_display = $site_name;
+		if (\strpos($site_name, '-') !== false) {
+			$site_name_parts = \preg_split('/\s*-\s*/u', $site_name);
+			$site_name_parts = \array_values(\array_filter(\array_map('trim', (array) $site_name_parts), 'strlen'));
+			if (!empty($site_name_parts)) {
+				$site_name_display = (string) \end($site_name_parts);
+			}
+		}
 		$user_display = (string) ($bootstrap['userDisplay'] ?? '');
 		$stopwatch_url = (string) ($bootstrap['stopwatchUrl'] ?? cmx_ext_time_stopwatch_url((int) ($bootstrap['userId'] ?? 0)));
 		?>
@@ -256,9 +264,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 					margin:0;
 					font:14px/1.5 "Avenir Next","Segoe UI","Helvetica Neue",sans-serif;
 					color:var(--cmx-text);
-					background:
-						radial-gradient(circle at top left, rgba(255,255,255,.7), transparent 36%),
-						linear-gradient(145deg,var(--cmx-bg-1),var(--cmx-bg-2));
+					background:#fff;
 					padding:28px 16px;
 				}
 				body.cmx-stopwatch-dialog-open{overflow:hidden}
@@ -311,10 +317,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 				.wrap{
 					padding:18px;
 					border-radius:28px;
-					background:rgba(255,255,255,.58);
-					border:1px solid rgba(255,255,255,.6);
-					box-shadow:var(--cmx-shadow);
-					backdrop-filter:blur(12px);
+					background:transparent;
+					border:0;
+					box-shadow:none;
+					backdrop-filter:none;
 				}
 				.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 				.brand{display:flex;align-items:center;gap:12px}
@@ -666,7 +672,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 						<p>Projekt oder Kontakt wählen und die Zeit direkt in Mis Buero speichern.</p>
 					</div>
 					<div class="hero-meta">
-						<strong><?php echo \esc_html($site_name); ?></strong>
+						<strong><?php echo \esc_html($site_name_display); ?></strong>
 						<?php if ($user_display !== '') : ?>
 							<span><?php echo \esc_html($user_display); ?></span>
 						<?php endif; ?>
@@ -969,8 +975,84 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 						}
 					}
 
-					function buildInstance(source) {
+					function decodeHtmlEntities(value) {
+						var source = String(value || '');
+						if (!source || !/[&<]/.test(source)) {
+							return source;
+						}
+						var field = document.createElement('textarea');
+						field.innerHTML = source;
+						return field.value || source;
+					}
+
+					function normalizeText(value) {
+						return decodeHtmlEntities(String(value || ''))
+							.replace(/<[^>]*>/g, ' ')
+							.replace(/\s+/g, ' ')
+							.trim();
+					}
+
+					function normalizeEntity(entity, fallbackType) {
+						if (!entity || typeof entity !== 'object') {
+							return null;
+						}
+						var next = {};
+						Object.keys(entity).forEach(function (key) {
+							next[key] = entity[key];
+						});
+						var title = normalizeText(entity.title || entity.label || '');
+						var label = normalizeText(entity.label || entity.title || '');
+						next.title = title || label || '';
+						next.label = label || title || '';
+						if (!next.entity_type && fallbackType) {
+							next.entity_type = fallbackType;
+						}
+						return next;
+					}
+
+					function normalizeEntityList(items, fallbackType) {
+						return (Array.isArray(items) ? items : []).map(function (item) {
+							return normalizeEntity(item, fallbackType);
+						}).filter(function (item) {
+							return !!item;
+						});
+					}
+
+					function normalizeInstanceRecord(source) {
 						source = source && typeof source === 'object' ? source : {};
+						var next = {};
+						Object.keys(source).forEach(function (key) {
+							next[key] = source[key];
+						});
+						next.siteName = normalizeText(source.siteName || source.siteUrl || source.baseUrl || 'Mis Buero');
+						next.userLogin = normalizeText(source.userLogin || '');
+						next.userDisplay = normalizeText(source.userDisplay || '');
+						next.projects = normalizeEntityList(source.projects, 'project');
+						next.contacts = normalizeEntityList(source.contacts, 'contact');
+						return next;
+					}
+
+					function normalizeSessionRecord(session) {
+						if (!session || typeof session !== 'object') {
+							return null;
+						}
+						var next = {};
+						Object.keys(session).forEach(function (key) {
+							next[key] = session[key];
+						});
+						next.instance = session.instance && typeof session.instance === 'object'
+							? normalizeInstanceRecord(session.instance)
+							: null;
+						next.target = normalizeEntity(session.target, session.targetType === 'contact' ? 'contact' : 'project');
+						next.project = normalizeEntity(session.project, 'project');
+						next.contact = normalizeEntity(session.contact, 'contact');
+						next.article = normalizeEntity(session.article);
+						next.product = normalizeEntity(session.product);
+						return next;
+					}
+
+					function buildInstance(source) {
+						source = normalizeInstanceRecord(source);
 						var siteUrl = String(source.siteUrl || '').replace(/\/+$/, '');
 						var ajaxUrl = String(source.ajaxUrl || '').trim();
 						var slug = '';
@@ -991,16 +1073,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 						return {
 							slug: slug,
 							baseUrl: siteUrl,
-							siteName: String(source.siteName || siteUrl || 'Mis Buero'),
+							siteName: normalizeText(source.siteName || siteUrl || 'Mis Buero'),
 							token: String(source.token || ''),
-							userLogin: String(source.userLogin || ''),
-							userDisplay: String(source.userDisplay || ''),
+							userLogin: normalizeText(source.userLogin || ''),
+							userDisplay: normalizeText(source.userDisplay || ''),
 							intervals: intervals,
 							defaultInterval: Number(source.defaultInterval || intervals[0] || 5),
 							ajaxUrl: ajaxUrl !== '' ? ajaxUrl : (siteUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
 							supports: source.supports && typeof source.supports === 'object' ? source.supports : {},
-							projects: Array.isArray(source.projects) ? source.projects : [],
-							contacts: Array.isArray(source.contacts) ? source.contacts : [],
+							projects: normalizeEntityList(source.projects, 'project'),
+							contacts: normalizeEntityList(source.contacts, 'contact'),
 							stopwatchUrl: String(source.stopwatchUrl || window.location.href),
 							updatedAt: new Date().toISOString()
 						};
@@ -1117,7 +1199,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 					}
 
 					function getActiveSession() {
-						var session = readValue(RAW_ACTIVE_KEY);
+						var session = normalizeSessionRecord(readValue(RAW_ACTIVE_KEY));
 						if (!isStoredSessionValid(session)) {
 							removeValue(RAW_ACTIVE_KEY);
 							return null;
@@ -1127,7 +1209,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 
 					function storeActiveSession(session) {
 						if (session) {
-							writeValue(RAW_ACTIVE_KEY, session);
+							writeValue(RAW_ACTIVE_KEY, normalizeSessionRecord(session));
 						} else {
 							removeValue(RAW_ACTIVE_KEY);
 						}
@@ -1215,9 +1297,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 							throw new Error(instanceResponseError(response, json, rawText));
 						}
 
-						var next = json.data || {};
+						var next = normalizeInstanceRecord(json.data || {});
 						next.userId = BOOTSTRAP.userId || next.userId || 0;
-						next.userLogin = BOOTSTRAP.userLogin || next.userLogin || '';
+						next.userLogin = normalizeText(BOOTSTRAP.userLogin || next.userLogin || '');
 						next.storageNamespace = storageNamespace;
 						next.stopwatchUrl = BOOTSTRAP.stopwatchUrl || window.location.href;
 						return next;
@@ -1225,10 +1307,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 
 					function normalizeSessionTarget(source) {
 						source = source && typeof source === 'object' ? source : {};
-						var project = source.project && Number(source.project.id || 0) ? source.project : null;
-						var contact = source.contact && Number(source.contact.id || 0) ? source.contact : null;
+						var project = source.project && Number(source.project.id || 0) ? normalizeEntity(source.project, 'project') : null;
+						var contact = source.contact && Number(source.contact.id || 0) ? normalizeEntity(source.contact, 'contact') : null;
 						var targetType = source.targetType === 'contact' ? 'contact' : 'project';
-						var target = source.target && Number(source.target.id || 0) ? source.target : null;
+						var target = source.target && Number(source.target.id || 0)
+							? normalizeEntity(source.target, targetType === 'contact' ? 'contact' : 'project')
+							: null;
 						var entityType = target && typeof target.entity_type === 'string'
 							? target.entity_type.toLowerCase()
 							: '';
