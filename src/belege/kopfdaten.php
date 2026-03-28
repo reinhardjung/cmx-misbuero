@@ -1359,6 +1359,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	/* Inline JS */
 	$ajax_url = \admin_url('admin-ajax.php');
 	$edit_post_prefix = \admin_url('post.php?post=');
+	$should_autofocus_kontakt = isset($_GET['cmx_focus_contact']) && (string) $_GET['cmx_focus_contact'] === '1';
 	echo '<script>
 		(function(){
 			function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -1523,12 +1524,13 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 			/* --- Kontakte --- */
 			const kI=document.getElementById("cmx_kontakt_search");
 			const kH=document.getElementById("cmx_kontakt_id");
-			const kS=document.getElementById("cmx_kontakt_selected");
-			const kL=document.getElementById("cmx_kontakt_suggest");
-			const kC=document.getElementById("cmx_kontakt_clear");
-			const kA=document.getElementById("cmx_kontakt_addr");
-			let kT=null;
-			const kontNav=makeNavigator(kI,kL,chooseKontakt);
+				const kS=document.getElementById("cmx_kontakt_selected");
+				const kL=document.getElementById("cmx_kontakt_suggest");
+				const kC=document.getElementById("cmx_kontakt_clear");
+				const kA=document.getElementById("cmx_kontakt_addr");
+				const SHOULD_AUTOFOCUS_KONTAKT=' . ($should_autofocus_kontakt ? 'true' : 'false') . ';
+				let kT=null;
+				const kontNav=makeNavigator(kI,kL,chooseKontakt);
 
 			function chooseKontakt(it){
 				const projektRaw = pH && pH.value ? pH.value : "";
@@ -1567,16 +1569,22 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				kI.addEventListener("focus", ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 				kI.addEventListener("click",  ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
 			}
-			if(kC){ kC.addEventListener("click",()=>{
-				const projektRaw = pH && pH.value ? pH.value : "";
-				const projektId = parseInt(projektRaw, 10);
-				if(isNaN(projektId) || projektId <= 0){
-					resetTaskPrefillState();
+				if(kC){ kC.addEventListener("click",()=>{
+					const projektRaw = pH && pH.value ? pH.value : "";
+					const projektId = parseInt(projektRaw, 10);
+					if(isNaN(projektId) || projektId <= 0){
+						resetTaskPrefillState();
+					}
+					kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus();
+				}); }
+				if(SHOULD_AUTOFOCUS_KONTAKT && kI){
+					window.setTimeout(function(){
+						kI.focus();
+						try { kI.select(); } catch(err) {}
+					}, 140);
 				}
-				kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus();
-			}); }
-		})();
-	</script>';
+			})();
+		</script>';
 
 	echo '</div></div>';
 }

@@ -34,6 +34,150 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url')) 
 	}
 }
 
+\add_action('admin_post_cmx_artikel_create_beleg', __NAMESPACE__ . '\\cmx_artikel_create_beleg_handler');
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')) {
+	function cmx_beleg_position_row_from_artikel(int $artikel_id): array {
+		$artikel_id = (int) $artikel_id;
+		if ($artikel_id <= 0) {
+			return [];
+		}
+
+		$artikel_name = (string) \get_the_title($artikel_id);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$artikel_name = (string) cmx_beleg_decode_label_text($artikel_name);
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$artikel_name = (string) cmx_normalize_minus_sign($artikel_name);
+		}
+		$artikel_name = \trim($artikel_name);
+		if ($artikel_name === '') {
+			$artikel_name = '#' . $artikel_id;
+		}
+
+		$vk_meta_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
+		$vk_raw = (string) \get_post_meta($artikel_id, $vk_meta_key, true);
+		$vk = 0.0;
+		if ($vk_raw !== '') {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
+				$vk = (float) cmx_norm_decimal($vk_raw);
+			} else {
+				$vk = (float) \str_replace(',', '.', $vk_raw);
+			}
+		}
+		if (!\is_finite($vk) || $vk < 0) {
+			$vk = 0.0;
+		}
+
+		$unit_id = 0;
+		$unit_name = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
+			$default_unit = (array) cmx_artikel_default_einheit($artikel_id);
+			$unit_id = (int) ($default_unit['id'] ?? 0);
+			$unit_name = \trim((string) ($default_unit['name'] ?? ''));
+		}
+
+		return [
+			'artikel_id'            => $artikel_id,
+			'artikel_name'          => $artikel_name,
+			'artikel_variant_index' => '',
+			'menge'                 => 1,
+			'einheit_id'            => $unit_id > 0 ? $unit_id : 0,
+			'unit'                  => $unit_name,
+			'preis'                 => $vk > 0 ? (string) \round($vk, 2) : '',
+			'rabatt'                => '',
+			'beschreibung'          => '',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_action_url')) {
+	function cmx_artikel_create_beleg_action_url(int $artikel_id): string {
+		$artikel_id = (int) $artikel_id;
+		if ($artikel_id <= 0) {
+			return '';
+		}
+
+		return (string) \wp_nonce_url(
+			\add_query_arg(
+				[
+					'action'     => 'cmx_artikel_create_beleg',
+					'artikel_id' => $artikel_id,
+				],
+				\admin_url('admin-post.php')
+			),
+			'cmx_artikel_create_beleg_' . $artikel_id
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_handler')) {
+	function cmx_artikel_create_beleg_handler(): void {
+		$artikel_id = isset($_REQUEST['artikel_id']) ? (int) \wp_unslash($_REQUEST['artikel_id']) : 0;
+		$redirect_url = $artikel_id > 0
+			? (string) \get_edit_post_link($artikel_id, '')
+			: (string) \admin_url('edit.php?post_type=artikel');
+
+		if ($artikel_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_REQUEST['_wpnonce']), 'cmx_artikel_create_beleg_' . $artikel_id)) {
+			\wp_die('Ungültige Anfrage.');
+		}
+
+		$artikel_post = \get_post($artikel_id);
+		if (
+			!$artikel_post instanceof \WP_Post
+			|| (string) $artikel_post->post_type !== 'artikel'
+			|| !\current_user_can('edit_post', $artikel_id)
+			|| !\post_type_exists('belege')
+			|| !cmx_post_type_can_create('belege')
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$position_row = \function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')
+			? (array) cmx_beleg_position_row_from_artikel($artikel_id)
+			: [];
+		if ($position_row === []) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$beleg_id = \wp_insert_post([
+			'post_type'   => 'belege',
+			'post_status' => 'draft',
+			'post_title'  => '',
+			'post_author' => (int) \get_current_user_id(),
+			'meta_input'  => [
+				'_cmx_title_auto'       => 1,
+				'_cmx_beleg_positionen' => [$position_row],
+			],
+		], true);
+
+		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$edit_url = (string) \get_edit_post_link((int) $beleg_id, '');
+		if ($edit_url === '') {
+			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
+		}
+		$edit_url = (string) \add_query_arg(
+			[
+				'cmx_focus_contact'       => '1',
+				'cmx_created_from_artikel'=> $artikel_id,
+			],
+			$edit_url
+		);
+
+		\wp_safe_redirect($edit_url);
+		exit;
+	}
+}
+
 \add_action('admin_post_cmx_kontakt_create_beleg', __NAMESPACE__ . '\\cmx_kontakt_create_beleg_handler');
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_handler')) {
 	function cmx_kontakt_create_beleg_handler(): void {
@@ -133,11 +277,12 @@ add_action('add_meta_boxes', function() {
 	add_meta_box('cmx_savebox', $box_title,
 		function($post) use ($screen) {
 
-			$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
-			$post_type    = $screen->post_type;
-			$is_belege    = ($post_type === 'belege');
-			$is_kontakte  = ($post_type === 'kontakte');
-			$is_add_screen = (($screen->action ?? '') === 'add');
+				$is_new       = ($post->ID === 0 || $post->post_status === 'auto-draft');
+				$post_type    = $screen->post_type;
+				$is_belege    = ($post_type === 'belege');
+				$is_kontakte  = ($post_type === 'kontakte');
+				$is_artikel   = ($post_type === 'artikel');
+				$is_add_screen = (($screen->action ?? '') === 'add');
 			$pt_obj       = get_post_type_object($post_type);
 			$singular     = $pt_obj->labels->singular_name ?? '';
 
@@ -192,9 +337,12 @@ add_action('add_meta_boxes', function() {
 			if ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
 				$kontakt_belege_url = (string) cmx_kontakt_belege_share_url((int) $post->ID);
 			}
-			$new_beleg_url = ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url'))
-				? (string) cmx_kontakt_create_beleg_action_url((int) $post->ID)
-				: '';
+				$new_beleg_url = ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url'))
+					? (string) cmx_kontakt_create_beleg_action_url((int) $post->ID)
+					: '';
+				$new_beleg_from_artikel_url = ($is_artikel && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_action_url'))
+					? (string) cmx_artikel_create_beleg_action_url((int) $post->ID)
+					: '';
 
 				echo '<div style="padding:2px 0 8px;">';
 			if ($is_belege) {
@@ -455,15 +603,18 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
-				if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
-					$justify = $is_belege ? 'space-between' : 'flex-start';
-						echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
-					if ($dup_link !== '') {
-						echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
-					}
-					if ($new_beleg_url !== '') {
-						echo '<a href="' . esc_url($new_beleg_url) . '" class="cmx-kontakt-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg anlegen"><span class="screen-reader-text">Neuen Beleg anlegen</span></a>';
-					}
+					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
+						$justify = $is_belege ? 'space-between' : 'flex-start';
+							echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
+						if ($dup_link !== '') {
+							echo '<a href="'.esc_url($dup_link).'" class="cmx-dup-link dashicons dashicons-clipboard" style="text-decoration:none;" title="'.esc_attr__('Duplizieren','default').'"><span class="screen-reader-text">'.esc_html__('Duplizieren','default').'</span></a>';
+						}
+						if ($new_beleg_from_artikel_url !== '') {
+							echo '<a href="' . esc_url($new_beleg_from_artikel_url) . '" class="cmx-artikel-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg mit diesem Artikel anlegen"><span class="screen-reader-text">Neuen Beleg mit diesem Artikel anlegen</span></a>';
+						}
+						if ($new_beleg_url !== '') {
+							echo '<a href="' . esc_url($new_beleg_url) . '" class="cmx-kontakt-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg anlegen"><span class="screen-reader-text">Neuen Beleg anlegen</span></a>';
+						}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
 					}

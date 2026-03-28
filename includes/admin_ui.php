@@ -1218,7 +1218,8 @@ add_action('admin_head', function () {
 	body.post-php .cmx-dup-link:focus::before {
 		color: #b42527;
 	}
-	body.post-php .cmx-kontakt-new-beleg-link {
+	body.post-php .cmx-kontakt-new-beleg-link,
+	body.post-php .cmx-artikel-new-beleg-link {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1227,7 +1228,9 @@ add_action('admin_head', function () {
 		color: #d63638;
 	}
 	body.post-php .cmx-kontakt-new-beleg-link:hover,
-	body.post-php .cmx-kontakt-new-beleg-link:focus {
+	body.post-php .cmx-kontakt-new-beleg-link:focus,
+	body.post-php .cmx-artikel-new-beleg-link:hover,
+	body.post-php .cmx-artikel-new-beleg-link:focus {
 		color: #b42527;
 	}
 	body.post-php .cmx-kontakt-belege-link {
