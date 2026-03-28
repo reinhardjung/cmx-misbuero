@@ -79,6 +79,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_force_avatar_in_title'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_pdf_upload_url')) {
+	function cmx65_adminbar_pdf_upload_url(): string {
+		$token = (string) \get_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, '');
+		if ($token === '') {
+			$token = \wp_generate_uuid4();
+			\update_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false);
+		}
+
+		return (string) \home_url('/mis-upload/?token=' . \rawurlencode($token));
+	}
+}
+
 add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar_my_account_avatar_fallback', 99999);
 function cmx65_adminbar_my_account_avatar_fallback(\WP_Admin_Bar $wp_admin_bar): void {
 	if (!\is_user_logged_in() || !\is_admin_bar_showing()) {
@@ -397,20 +409,26 @@ function cmx65_adminbar($wp_admin_bar) {
 	// ]);
 
 	if ( current_user_can( 'manage_options' ) ) {
-		$token = get_option( MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN );
-		if ( empty( $token ) ) {
-			$token = wp_generate_uuid4();
-			update_option( MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false );
-		}
-
-		$url = home_url( '/mis-upload/?token=' . $token );
+		$url = cmx65_adminbar_pdf_upload_url();
 
 		$wp_admin_bar->add_menu( [
-			'id'    => 'mis-buero-upload',
-			'title' => 'Upload-Link',
-			'href'  => esc_url( $url ),
+			'id'    => 'cmx65_apps_id',
+			'title' => 'Apps',
+			'href'  => false,
 			'meta'  => [
-				'class'    => 'mis-buero-upload-link',
+				'title' => 'Apps',
+			],
+		] );
+
+		$wp_admin_bar->add_menu( [
+			'id'     => 'cmx65_apps_pdf_upload_id',
+			'parent' => 'cmx65_apps_id',
+			'title'  => 'PDF Upload',
+			'href'   => esc_url( $url ),
+			'meta'   => [
+				'title'  => 'PDF Upload',
+				'target' => '_blank',
+				'rel'    => 'noopener noreferrer',
 			],
 		] );
 	}
@@ -502,8 +520,8 @@ function cmx65_adminbar($wp_admin_bar) {
 	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
 	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
 	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
-	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
-	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_upload_copy_script');
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_apps_pdf_upload_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_apps_pdf_upload_script');
 }
 
 function cmx65_anyboard_copy_script(): void
@@ -568,21 +586,16 @@ function cmx65_anyboard_copy_script(): void
         </script>';
 }
 
-function cmx65_upload_copy_script(): void
+function cmx65_apps_pdf_upload_script(): void
 {
 	echo '
 		<script>
         document.addEventListener("DOMContentLoaded", function () {
-            var link = document.querySelector("#wp-admin-bar-mis-buero-upload > .ab-item");
+            var link = document.querySelector("#wp-admin-bar-cmx65_apps_pdf_upload_id > .ab-item");
             if (!link) return;
             link.addEventListener("click", function (event) {
-                event.preventDefault();
-            var url = link.getAttribute("href");
-            if (!url) return;
-                var done = function () {
-                    alert("Upload-Link wurde in die Zwischenablage kopiert");
-                    window.open("https://www.youtube.com/shorts/ScpGtbqrpkY", "_blank", "noopener");
-                };
+                var url = link.getAttribute("href");
+                if (!url) return;
                 var fallbackCopy = function () {
                     var textarea = document.createElement("textarea");
                     textarea.value = url;
@@ -593,15 +606,13 @@ function cmx65_upload_copy_script(): void
                     textarea.select();
                     try {
                         document.execCommand("copy");
-                        done();
                     } catch (e) {
-                        window.prompt("Upload-Link kopieren:", url);
                     } finally {
                         document.body.removeChild(textarea);
                     }
                 };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).then(done, fallbackCopy);
+                    navigator.clipboard.writeText(url).catch(fallbackCopy);
                 } else {
                     fallbackCopy();
                 }
