@@ -800,7 +800,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_auth_error')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler')) {
 	function cmx_ext_time_bootstrap_handler(): void {
-		$user_id = cmx_ext_time_authenticated_user_id(false);
+		$user_id = cmx_ext_time_authenticated_user_id(true);
 		if ($user_id <= 0) {
 			cmx_ext_time_auth_error();
 		}
@@ -808,6 +808,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler')) {
 		\wp_send_json_success(cmx_ext_time_bootstrap_data($user_id));
 	}
 	\add_action('wp_ajax_' . CMX_EXT_TIME_BOOTSTRAP_ACTION, __NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_BOOTSTRAP_ACTION, __NAMESPACE__ . '\\cmx_ext_time_bootstrap_handler');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_connect_handler')) {

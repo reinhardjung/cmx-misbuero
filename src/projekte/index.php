@@ -90,4 +90,4 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_projekte_make_taxonomy_metabox_titl
 
 // Include: @ll metaboxes
 // cmx_require_files(__DIR__,'stammdaten, kontakt, admincolumns, exports, imports, dokumente, tasks, tasks-side');
-cmx_require_files(__DIR__,'stammdaten, kontakt, status, admincolumns, exports, imports, exports_pdf, tasks, tasks-side, ext_time');
+cmx_require_files(__DIR__,'stammdaten, kontakt, status, admincolumns, exports, imports, exports_pdf, tasks, tasks-side, ext_time, stopuhr');
