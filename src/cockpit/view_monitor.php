@@ -1767,7 +1767,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					<div class="mb-monitor-deckungsbeitrag-group">
 				<section class="mb-card mb-card--soft mb-monitor-nested-card">
 					<div class="mb-monitor-card-head">
-						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=artikel&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Artikel öffnen"><span class="dashicons dashicons-cart" aria-hidden="true"></span></a><span>Artikel</span></h3>
+						<h3><a class="mb-monitor-cpt-link" href="<?php echo esc_url(\admin_url('edit.php?post_type=artikel&cmx_view=deckungsbeitrag')); ?>" target="_blank" rel="noopener noreferrer" title="Artikel öffnen"><span class="dashicons dashicons-tag" aria-hidden="true"></span></a><span>Artikel</span></h3>
 						<button type="button" class="mb-monitor-card-toggle" data-target="cmx-monitor-article-card-body" aria-expanded="false" aria-label="Deckungsbeitrag pro Artikel einklappen">
 							<span class="dashicons dashicons-arrow-up-alt2" aria-hidden="true"></span>
 						</button>

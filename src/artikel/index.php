@@ -3,7 +3,7 @@
 
 // Define: Custom-Post-Type based on DIR
 register_post_type(basename(__DIR__), ['labels' => ['name' => cmx_sani_key(basename(__DIR__), 'title'), 'singular_name' => cmx_sani_key(basename(__DIR__), 'title'), 'add_new_item' => 'Hinzufügen', 'edit_item' => 'Bearbeiten',],
-	'menu_position' => 20, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-cart', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
+	'menu_position' => 20, 'supports' => ['title', 'editor'], 'public' => true, 'menu_icon' => 'dashicons-tag', 'show_in_rest' => true, 'has_archive' => true, 'rewrite' => ['slug' => basename(__DIR__)],
 ]);
 
 \add_filter('wp_editor_settings', function (array $settings, string $editor_id): array {
