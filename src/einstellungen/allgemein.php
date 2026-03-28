@@ -45,6 +45,20 @@ function cmx_register_general_tab(): void {
 	);
 
 	\add_settings_field(
+		'quick_edit',
+		'Quick Edit',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'quick_edit',
+				'label' => 'Beleg Schnell-Erfassung in der Admin-Bar anzeigen',
+			]);
+			echo '<p class="description">Blendet im WP-Admin zentriert die beiden Auswahllisten für Kontakt und Artikel sowie den Button zum direkten Erstellen eines Belegs ein.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
 		'support_user_switch',
 		'Support',
 		function () {

@@ -115,8 +115,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_kontakt_post_types')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_quickcreate_enabled')) {
+	function cmx65_adminbar_quickcreate_enabled(): bool {
+		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+		return !empty($options['quick_edit']);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_allowed')) {
 	function cmx65_adminbar_beleg_quickcreate_allowed(): bool {
+		if (!cmx65_adminbar_quickcreate_enabled()) {
+			return false;
+		}
 		if (!\is_admin() || !\is_user_logged_in() || !\is_admin_bar_showing()) {
 			return false;
 		}
@@ -239,6 +251,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) {
 	function cmx65_adminbar_create_beleg_handler(): void {
 		$redirect_url = (string) (\wp_get_referer() ?: \admin_url());
+		if (!cmx65_adminbar_quickcreate_enabled()) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
 		if (!\current_user_can('edit_posts')) {
 			\wp_safe_redirect($redirect_url);
 			exit;
