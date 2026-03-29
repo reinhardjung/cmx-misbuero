@@ -1142,25 +1142,25 @@ function cmx65_adminbar($wp_admin_bar) {
 		],
 	]);
 
-	$wp_admin_bar->add_menu([
-		'id'    => 'cmx65_archiv_id',
-		'title' => 'Archiv',
-		'href'  => '/archiv/',
-		'meta'  => [
-			'title'  => __('Dein Archiv', 'textdomain'),
-			'target' => '_blank',
-		],
-	]);
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_archiv_id',
+	// 	'title' => 'Archiv',
+	// 	'href'  => '/archiv/',
+	// 	'meta'  => [
+	// 		'title'  => __('Dein Archiv', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
 
-	$wp_admin_bar->add_menu([
-		'id'    => 'cmx65_scanner_id',
-		'title' => 'Scanner',
-		'href'  => '/scanner/',
-		'meta'  => [
-			'title'  => __('Deine digitale Post', 'textdomain'),
-			'target' => '_blank',
-		],
-	]);
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_scanner_id',
+	// 	'title' => 'Scanner',
+	// 	'href'  => '/scanner/',
+	// 	'meta'  => [
+	// 		'title'  => __('Deine digitale Post', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
 
 
 	// $wp_admin_bar->add_menu([

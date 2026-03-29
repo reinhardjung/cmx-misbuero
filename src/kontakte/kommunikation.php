@@ -695,7 +695,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$index_attr = (string) $index;
 		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
-		$internal_email_url = \admin_url('post-new.php?post_type=' . \rawurlencode(\defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails'));
+		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails';
+		$emails_enabled = \post_type_exists($email_post_type);
+		$internal_email_url = $emails_enabled
+			? \admin_url('post-new.php?post_type=' . \rawurlencode($email_post_type))
+			: '';
 		$phone_pattern = cmx_kommunikation_phone_pattern();
 		$phone_title = cmx_kommunikation_phone_title();
 		$phone_placeholder = cmx_kommunikation_phone_placeholder();
@@ -764,13 +768,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 			</div>
 			<div class="cmx-kommu-field">
 				<label for="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" class="cmx-kommu-email-label">
-					<button
-						type="button"
-						class="button-link cmx-kommu-email-action"
-						data-email-target="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>"
-						data-internal-url="<?php echo \esc_url($internal_email_url); ?>"
-						tabindex="-1"
-					>E-Mail</button>
+					<?php if ($emails_enabled) : ?>
+						<button
+							type="button"
+							class="button-link cmx-kommu-email-action"
+							data-email-target="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>"
+							data-internal-url="<?php echo \esc_url($internal_email_url); ?>"
+							tabindex="-1"
+						>E-Mail</button>
+					<?php else : ?>
+						<span>E-Mail</span>
+					<?php endif; ?>
 				</label>
 				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>" data-cmx-tab-role="email">
 			</div>

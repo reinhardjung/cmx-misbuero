@@ -8,6 +8,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_MAX_WORKPLACES_KEY')) {
 	\define(__NAMESPACE__ . '\\CMX_SYSTEM_MAX_WORKPLACES_KEY', 'max_workplaces');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY')) {
+	\define(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY', 'pro_version');
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_settings_option_name')) {
 	function cmx_system_settings_option_name(): string {
 		return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
@@ -97,6 +101,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_max_workplaces')) {
 		$options = (array) \get_option(cmx_system_settings_option_name(), []);
 		$value = isset($options[CMX_SYSTEM_MAX_WORKPLACES_KEY]) ? (int) $options[CMX_SYSTEM_MAX_WORKPLACES_KEY] : 1;
 		return $value > 0 ? $value : 1;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_pro_version_enabled')) {
+	function cmx_system_is_pro_version_enabled(): bool {
+		$options = (array) \get_option(cmx_system_settings_option_name(), []);
+		return !empty($options[CMX_SYSTEM_PRO_VERSION_KEY]);
 	}
 }
 
