@@ -917,20 +917,33 @@ function cmx_kommunikation_box_html($post): void {
 			font-size: 12px;
 			line-height: 1.2;
 		}
-		#cmx_kommunikation_box .cmx-kommu-field input {
-			width: 100%;
-		}
-		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone] {
-			height: 46px;
-			padding: 0 11px;
-			line-height: 44px;
-			box-sizing: border-box;
-			-webkit-appearance: none;
-			appearance: none;
-		}
+		#cmx_kommunikation_box .cmx-kommu-field input:not([type="checkbox"]),
 		#cmx_kommunikation_box .cmx-kommu-field select {
 			width: 100%;
 			max-width: none;
+			min-height: 40px;
+			padding: 8px 12px;
+			box-sizing: border-box;
+			border: 1px solid #cfd8e3;
+			border-radius: 8px;
+			background: #fff;
+			color: #2c3338;
+			box-shadow: none;
+			transition: border-color 0.2s ease, box-shadow 0.2s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone] {
+			-webkit-appearance: none;
+			appearance: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone]:invalid {
+			border-color: #cfd8e3;
+			box-shadow: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input:not([type="checkbox"]):focus,
+		#cmx_kommunikation_box .cmx-kommu-field select:focus {
+			border-color: #2271b1;
+			box-shadow: 0 0 0 1px #2271b1;
+			outline: none;
 		}
 		#cmx_kommunikation_box .cmx-kommu-email-label,
 		#cmx_kommunikation_box .cmx-kommu-phone-label {

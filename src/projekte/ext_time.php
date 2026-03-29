@@ -4,6 +4,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_USER_TOKEN_META')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_USER_TOKEN_META', '_cmx_ext_time_token');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_TOKEN_PREFIX')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_TOKEN_PREFIX', 'cmxexttime_');
+}
+
 if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_DOWNLOAD_ACTION', 'cmx_ext_time_download');
 }
@@ -34,6 +38,22 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SEARCH_ARTICLES_ACTION')) {
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_SAVE_ACTION')) {
 	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_SAVE_ACTION', 'cmx_ext_time_save');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_CONNECT_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_CONNECT_ACTION', 'cmx_ext_time_proxy_connect');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION', 'cmx_ext_time_proxy_bootstrap');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SEARCH_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SEARCH_ACTION', 'cmx_ext_time_proxy_search');
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SAVE_ACTION')) {
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SAVE_ACTION', 'cmx_ext_time_proxy_save');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_plugin_version')) {
@@ -170,6 +190,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_preview_icon_src')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_normalize_token')) {
+	function cmx_ext_time_normalize_token(string $token): string {
+		$token = \trim($token);
+		if ($token === '') {
+			return '';
+		}
+
+		$prefix = (string) CMX_EXT_TIME_TOKEN_PREFIX;
+		if ($prefix !== '' && \strpos($token, $prefix) === 0) {
+			$token = (string) \substr($token, \strlen($prefix));
+		}
+
+		return \trim($token);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_token_candidates')) {
+	function cmx_ext_time_token_candidates(string $token): array {
+		$original = \trim($token);
+		$normalized = cmx_ext_time_normalize_token($original);
+		$prefix = (string) CMX_EXT_TIME_TOKEN_PREFIX;
+		$candidates = [];
+
+		foreach ([$original, $normalized, $normalized !== '' ? $prefix . $normalized : ''] as $candidate) {
+			$candidate = \trim((string) $candidate);
+			if ($candidate === '' || \in_array($candidate, $candidates, true)) {
+				continue;
+			}
+			$candidates[] = $candidate;
+		}
+
+		return $candidates;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_current_user_token')) {
 	function cmx_ext_time_current_user_token(int $user_id = 0): string {
 		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
@@ -177,15 +232,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_current_user_token')) {
 			return '';
 		}
 
-		$token = \trim((string) \get_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, true));
+		$stored_token = \trim((string) \get_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, true));
+		$token = cmx_ext_time_normalize_token($stored_token);
 		if ($token !== '') {
+			if ($stored_token !== $token) {
+				\update_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, $token);
+			}
 			return $token;
 		}
 
 		try {
-			$token = 'cmxexttime_' . \bin2hex(\random_bytes(24));
+			$token = \bin2hex(\random_bytes(24));
 		} catch (\Throwable $exception) {
-			$token = 'cmxexttime_' . \wp_generate_password(48, false, false);
+			$token = \wp_generate_password(48, false, false);
 		}
 		\update_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, $token);
 
@@ -212,28 +271,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_request_token')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_token_user_id')) {
 	function cmx_ext_time_token_user_id(string $token): int {
-		$token = \trim($token);
-		if ($token === '') {
+		$candidates = cmx_ext_time_token_candidates($token);
+		if (empty($candidates)) {
 			return 0;
 		}
 
-		$user_ids = \get_users([
-			'meta_key'   => CMX_EXT_TIME_USER_TOKEN_META,
-			'meta_value' => $token,
-			'number'     => 1,
-			'fields'     => 'ID',
-		]);
-		if (!\is_array($user_ids) || empty($user_ids[0])) {
-			return 0;
+		foreach ($candidates as $candidate) {
+			$user_ids = \get_users([
+				'meta_key'   => CMX_EXT_TIME_USER_TOKEN_META,
+				'meta_value' => $candidate,
+				'number'     => 1,
+				'fields'     => 'ID',
+			]);
+			if (!\is_array($user_ids) || empty($user_ids[0])) {
+				continue;
+			}
+
+			$user_id = (int) $user_ids[0];
+			$user = \get_userdata($user_id);
+			if (!$user instanceof \WP_User || !\user_can($user, 'edit_posts')) {
+				return 0;
+			}
+
+			$normalized = cmx_ext_time_normalize_token($candidate);
+			if ($normalized !== '') {
+				$stored_token = \trim((string) \get_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, true));
+				if ($stored_token !== $normalized) {
+					\update_user_meta($user_id, CMX_EXT_TIME_USER_TOKEN_META, $normalized);
+				}
+			}
+
+			return $user_id;
 		}
 
-		$user_id = (int) $user_ids[0];
-		$user = \get_userdata($user_id);
-		if (!$user instanceof \WP_User) {
-			return 0;
-		}
-
-		return \user_can($user, 'edit_posts') ? $user_id : 0;
+		return 0;
 	}
 }
 
@@ -259,6 +330,175 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_admin_ajax_url')) {
 			$url = (string) \add_query_arg(['action' => $action], $url);
 		}
 		return $url;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_authenticated_user_id')) {
+	function cmx_ext_time_proxy_authenticated_user_id(): int {
+		$current_user_id = \get_current_user_id();
+		if ($current_user_id > 0 && \current_user_can('edit_posts')) {
+			return (int) $current_user_id;
+		}
+
+		$proxy_token = isset($_REQUEST['proxy_token']) ? (string) \wp_unslash($_REQUEST['proxy_token']) : '';
+		if ($proxy_token !== '') {
+			return cmx_ext_time_token_user_id($proxy_token);
+		}
+
+		return cmx_ext_time_authenticated_user_id(true);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_remote_base_url')) {
+	function cmx_ext_time_proxy_remote_base_url(): string {
+		$raw = isset($_REQUEST['remote_base_url']) ? (string) \wp_unslash($_REQUEST['remote_base_url']) : '';
+		$raw = \trim((string) \esc_url_raw($raw));
+		if ($raw === '') {
+			return '';
+		}
+
+		$parts = \wp_parse_url($raw);
+		if (!\is_array($parts)) {
+			return '';
+		}
+
+		$scheme = \strtolower((string) ($parts['scheme'] ?? ''));
+		$host = (string) ($parts['host'] ?? '');
+		if ($host === '' || !\in_array($scheme, ['http', 'https'], true)) {
+			return '';
+		}
+
+		$port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+		$path = isset($parts['path']) ? \rtrim((string) $parts['path'], '/') : '';
+
+		return $scheme . '://' . $host . $port . $path;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_remote_ajax_url')) {
+	function cmx_ext_time_proxy_remote_ajax_url(): string {
+		$raw = isset($_REQUEST['remote_ajax_url']) ? (string) \wp_unslash($_REQUEST['remote_ajax_url']) : '';
+		$raw = \trim((string) \esc_url_raw($raw));
+		if ($raw !== '') {
+			$parts = \wp_parse_url($raw);
+			$scheme = \strtolower((string) ($parts['scheme'] ?? ''));
+			$host = (string) ($parts['host'] ?? '');
+			if ($host !== '' && \in_array($scheme, ['http', 'https'], true)) {
+				return $raw;
+			}
+		}
+
+		$base_url = cmx_ext_time_proxy_remote_base_url();
+		if ($base_url === '') {
+			return '';
+		}
+
+		return $base_url . '/wp-admin/admin-ajax.php';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_remote_token')) {
+	function cmx_ext_time_proxy_remote_token(): string {
+		$token = isset($_REQUEST['remote_token']) ? (string) \wp_unslash($_REQUEST['remote_token']) : '';
+		return cmx_ext_time_normalize_token($token);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_relay_response')) {
+	function cmx_ext_time_proxy_relay_response($response): void {
+		if (\is_wp_error($response)) {
+			\wp_send_json_error(['message' => 'Die Instanz ist nicht erreichbar.'], 502);
+		}
+
+		$status = (int) \wp_remote_retrieve_response_code($response);
+		$status = $status > 0 ? $status : 502;
+		$raw_body = (string) \wp_remote_retrieve_body($response);
+		$body = \trim($raw_body);
+		$json = null;
+		if ($body !== '') {
+			$decoded = \json_decode($body, true);
+			if (\is_array($decoded)) {
+				$json = $decoded;
+			}
+		}
+
+		if (\is_array($json) && \array_key_exists('success', $json)) {
+			if (!empty($json['success'])) {
+				\wp_send_json_success($json['data'] ?? [], 200);
+			}
+
+			$message = '';
+			if (isset($json['data']) && \is_array($json['data']) && isset($json['data']['message']) && \is_string($json['data']['message'])) {
+				$message = \trim($json['data']['message']);
+			}
+			if ($message === '') {
+				$message = 'Die Instanz hat die Anfrage abgewiesen.';
+			}
+			\wp_send_json_error(['message' => $message], $status >= 400 ? $status : 400);
+		}
+
+		if ($body === '0') {
+			\wp_send_json_error(['message' => 'Die Instanz kennt die Zeiterfassungs-Schnittstelle noch nicht.'], $status >= 400 ? $status : 502);
+		}
+		if (\preg_match('/<!doctype html|<html[\s>]/i', $body)) {
+			\wp_send_json_error(['message' => 'Die Instanz liefert HTML statt der Zeiterfassungs-Daten.'], $status >= 400 ? $status : 502);
+		}
+
+		\wp_send_json_error(['message' => 'Die Instanz antwortet nicht mit gültigen Daten.'], $status >= 400 ? $status : 502);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_request')) {
+	function cmx_ext_time_proxy_request(string $method, string $remote_action, array $query = [], array $body = []): void {
+		$user_id = cmx_ext_time_proxy_authenticated_user_id();
+		if ($user_id <= 0) {
+			cmx_ext_time_auth_error();
+		}
+
+		$ajax_url = cmx_ext_time_proxy_remote_ajax_url();
+		if ($ajax_url === '') {
+			\wp_send_json_error(['message' => 'Eine gültige Instanz fehlt.'], 400);
+		}
+
+		$normalize_map = static function (array $values): array {
+			$out = [];
+			foreach ($values as $key => $value) {
+				if (!\is_scalar($value) && $value !== null) {
+					continue;
+				}
+				if ($value === null) {
+					continue;
+				}
+				$out[(string) $key] = (string) $value;
+			}
+			return $out;
+		};
+
+		$method = \strtoupper($method);
+		$token = cmx_ext_time_proxy_remote_token();
+		$query_args = \array_merge(['action' => $remote_action], $normalize_map($query));
+		if ($method === 'GET' && $token !== '') {
+			$query_args['token'] = $token;
+		}
+
+		$request_args = [
+			'method'      => $method,
+			'timeout'     => 25,
+			'redirection' => 2,
+			'headers'     => [],
+		];
+		if ($token !== '') {
+			$request_args['headers']['X-CMX-Extension-Token'] = $token;
+		}
+		if ($method === 'POST') {
+			$request_args['body'] = \array_merge(['action' => $remote_action], $normalize_map($body));
+			if ($token !== '') {
+				$request_args['body']['token'] = $token;
+			}
+		}
+
+		$response = \wp_remote_request((string) \add_query_arg($query_args, $ajax_url), $request_args);
+		cmx_ext_time_proxy_relay_response($response);
 	}
 }
 
@@ -782,6 +1022,100 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_active_contacts')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_find_target_id_by_label')) {
+	function cmx_ext_time_find_target_id_by_label(string $target_type, string $label = '', string $title = ''): int {
+		global $wpdb;
+
+		$target_type = $target_type === 'contact' ? 'contact' : 'project';
+		$candidates = \array_values(\array_filter([
+			cmx_ext_time_plain_text($label),
+			cmx_ext_time_plain_text($title),
+		], 'strlen'));
+		if (empty($candidates)) {
+			return 0;
+		}
+
+		$needles = [];
+		foreach ($candidates as $candidate) {
+			$key = \function_exists('mb_strtolower') ? \mb_strtolower($candidate, 'UTF-8') : \strtolower($candidate);
+			if ($key === '' || isset($needles[$key])) {
+				continue;
+			}
+			$needles[$key] = true;
+		}
+		if (empty($needles)) {
+			return 0;
+		}
+
+		$rows = $target_type === 'contact'
+			? cmx_ext_time_active_contacts(500)
+			: cmx_ext_time_active_projects(500);
+
+		foreach ((array) $rows as $row) {
+			$row_id = isset($row['id']) ? (int) $row['id'] : 0;
+			if ($row_id <= 0) {
+				continue;
+			}
+			$haystacks = [
+				cmx_ext_time_plain_text((string) ($row['label'] ?? '')),
+				cmx_ext_time_plain_text((string) ($row['title'] ?? '')),
+			];
+			foreach ($haystacks as $haystack) {
+				$key = \function_exists('mb_strtolower') ? \mb_strtolower($haystack, 'UTF-8') : \strtolower($haystack);
+				if ($key !== '' && isset($needles[$key])) {
+					return $row_id;
+				}
+			}
+		}
+
+		$post_types = $target_type === 'contact'
+			? cmx_ext_time_contacts_post_types()
+			: ['projekte'];
+		$post_types = \array_values(\array_filter(\array_map('strval', $post_types), 'strlen'));
+		if (empty($post_types)) {
+			return 0;
+		}
+
+		$placeholders = \implode(',', \array_fill(0, \count($post_types), '%s'));
+		foreach ($candidates as $candidate) {
+			$candidate = cmx_ext_time_plain_text($candidate);
+			if ($candidate === '') {
+				continue;
+			}
+
+			$exact_sql = $wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts}
+				WHERE post_type IN ($placeholders)
+					AND post_status NOT IN ('trash', 'auto-draft', 'inherit')
+					AND post_title = %s
+				ORDER BY ID DESC
+				LIMIT 1",
+				\array_merge($post_types, [$candidate])
+			);
+			$exact_id = (int) $wpdb->get_var($exact_sql);
+			if ($exact_id > 0) {
+				return $exact_id;
+			}
+
+			$like_sql = $wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts}
+				WHERE post_type IN ($placeholders)
+					AND post_status NOT IN ('trash', 'auto-draft', 'inherit')
+					AND post_title LIKE %s
+				ORDER BY ID DESC
+				LIMIT 1",
+				\array_merge($post_types, ['%' . $wpdb->esc_like($candidate) . '%'])
+			);
+			$like_id = (int) $wpdb->get_var($like_sql);
+			if ($like_id > 0) {
+				return $like_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')) {
 	function cmx_ext_time_bootstrap_data(int $user_id = 0): array {
 		$user_id = $user_id > 0 ? $user_id : \get_current_user_id();
@@ -1180,6 +1514,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 		$project_id = isset($_POST['project_id']) ? (int) \wp_unslash($_POST['project_id']) : 0;
 		$contact_id = isset($_POST['contact_id']) ? (int) \wp_unslash($_POST['contact_id']) : 0;
 		$target_id = isset($_POST['target_id']) ? (int) \wp_unslash($_POST['target_id']) : 0;
+		$target_label = isset($_POST['target_label']) ? \sanitize_text_field((string) \wp_unslash($_POST['target_label'])) : '';
+		$target_title = isset($_POST['target_title']) ? \sanitize_text_field((string) \wp_unslash($_POST['target_title'])) : '';
 		if ($target_id <= 0) {
 			$target_id = $target_type === 'contact' ? $contact_id : $project_id;
 		}
@@ -1212,6 +1548,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 		$is_valid_target = $target_type === 'contact'
 			? ($target_id > 0 && cmx_ext_time_is_contact_post_type($target_post_type))
 			: ($target_id > 0 && $target_post_type === 'projekte');
+		if (!$is_valid_target && ($target_label !== '' || $target_title !== '')) {
+			$fallback_target_id = cmx_ext_time_find_target_id_by_label($target_type, $target_label, $target_title);
+			if ($fallback_target_id > 0) {
+				$target_id = $fallback_target_id;
+				$target_post_type = (string) \get_post_type($target_id);
+				$is_valid_target = $target_type === 'contact'
+					? ($target_id > 0 && cmx_ext_time_is_contact_post_type($target_post_type))
+					: ($target_id > 0 && $target_post_type === 'projekte');
+			}
+		}
 		if (!$is_valid_target) {
 			\wp_send_json_error(['message' => $target_type === 'contact' ? 'Kontakt wurde nicht gefunden.' : 'Projekt wurde nicht gefunden.'], 400);
 		}
@@ -1272,6 +1618,87 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_save_handler')) {
 	}
 	\add_action('wp_ajax_' . CMX_EXT_TIME_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_save_handler');
 	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_save_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_bootstrap_handler')) {
+	function cmx_ext_time_proxy_bootstrap_handler(): void {
+		cmx_ext_time_proxy_request('GET', CMX_EXT_TIME_BOOTSTRAP_ACTION);
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_bootstrap_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_bootstrap_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_connect_handler')) {
+	function cmx_ext_time_proxy_connect_handler(): void {
+		$username = isset($_REQUEST['username']) ? (string) \wp_unslash($_REQUEST['username']) : '';
+		$password = isset($_REQUEST['password']) ? (string) \wp_unslash($_REQUEST['password']) : '';
+		if (\trim($username) === '' || \trim($password) === '') {
+			\wp_send_json_error(['message' => 'Bitte Benutzername und Passwort eingeben.'], 400);
+		}
+
+		cmx_ext_time_proxy_request('POST', CMX_EXT_TIME_CONNECT_ACTION, [], [
+			'username' => $username,
+			'password' => $password,
+		]);
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_PROXY_CONNECT_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_connect_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_PROXY_CONNECT_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_connect_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_search_handler')) {
+	function cmx_ext_time_proxy_search_handler(): void {
+		$remote_action = isset($_REQUEST['remote_action']) ? \sanitize_key((string) \wp_unslash($_REQUEST['remote_action'])) : '';
+		$allowed = [
+			CMX_EXT_TIME_SEARCH_PROJECTS_ACTION,
+			CMX_EXT_TIME_SEARCH_CONTACTS_ACTION,
+			CMX_EXT_TIME_SEARCH_ARTICLES_ACTION,
+		];
+		if (!\in_array($remote_action, $allowed, true)) {
+			\wp_send_json_error(['message' => 'Ungültige Suchanfrage.'], 400);
+		}
+
+		$term = isset($_REQUEST['term']) ? (string) \wp_unslash($_REQUEST['term']) : '';
+		cmx_ext_time_proxy_request('GET', $remote_action, ['term' => $term]);
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_PROXY_SEARCH_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_search_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_PROXY_SEARCH_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_search_handler');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_proxy_save_handler')) {
+	function cmx_ext_time_proxy_save_handler(): void {
+		$allowed_keys = [
+			'target_type',
+			'target_id',
+			'project_id',
+			'contact_id',
+			'target_label',
+			'target_title',
+			'mode',
+			'artikel_id',
+			'produkt_id',
+			'verrechenbar',
+			'info',
+			'betreff',
+			'artikel_label',
+			'produkt_label',
+			'start_at',
+			'end_at',
+			'start_date',
+			'start_time',
+			'reason',
+		];
+		$payload = [];
+		foreach ($allowed_keys as $key) {
+			if (!isset($_REQUEST[$key])) {
+				continue;
+			}
+			$payload[$key] = (string) \wp_unslash($_REQUEST[$key]);
+		}
+
+		cmx_ext_time_proxy_request('POST', CMX_EXT_TIME_SAVE_ACTION, [], $payload);
+	}
+	\add_action('wp_ajax_' . CMX_EXT_TIME_PROXY_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_save_handler');
+	\add_action('wp_ajax_nopriv_' . CMX_EXT_TIME_PROXY_SAVE_ACTION, __NAMESPACE__ . '\\cmx_ext_time_proxy_save_handler');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_manifest_json')) {
@@ -1422,8 +1849,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <div class="mode-field">
           <div class="field-caption">Speichern als</div>
           <div class="inline mode-options" id="mode-select">
-            <label><input type="radio" name="cmx-ext-time-mode" value="note"> Notiz</label>
-            <label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Tätigkeit</label>
+            <label><input type="radio" name="cmx-ext-time-mode" value="note" checked> Notiz</label>
+            <label><input type="radio" name="cmx-ext-time-mode" value="task"> Tätigkeit</label>
             <label class="task-inline task-only" id="task-inline"><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
           </div>
         </div>
@@ -1437,7 +1864,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 	        <div id="session-message" class="session-message" hidden></div>
 	      </div>
       <div class="target-row">
-        <button type="button" class="target-toggle is-active" id="target-project" data-target="project">Projekt</button>
+        <button type="button" class="target-toggle" id="target-project" data-target="project">Projekt</button>
         <button type="button" class="target-toggle" id="target-contact" data-target="contact">Kontakt</button>
       </div>
       <label class="suggest-wrap">
@@ -1449,7 +1876,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
       </div>
       <div class="footer">
 	        <div class="muted" id="selection-hint" hidden></div>
-	        <button type="button" id="start-stop">Start</button>
+	        <button type="button" id="start-stop" disabled>Start</button>
 	      </div>
     </div>
   </div>
@@ -2097,6 +2524,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_popup_js')) {
 		return <<<'JS'
 const CONFIG = self.CMX_EXT_TIME_CONFIG || {};
 const INSTANCE_KEY = 'cmxExtTime.instances';
+const SELECTED_INSTANCE_KEY = 'cmxExtTime.selectedInstance';
 
 const instanceSelect = document.getElementById('instance-select');
 const modeSelect = document.getElementById('mode-select');
@@ -2120,7 +2548,7 @@ const noteSubjectEl = document.getElementById('note-subject');
 const state = {
   instances: [],
   activeSession: null,
-  selectedTargetType: 'project',
+  selectedTargetType: '',
   selectedProject: null,
   selectedContact: null,
   statusNotice: null,
@@ -2128,6 +2556,7 @@ const state = {
 
 let statusTimer = null;
 let activeSessionSyncTimer = null;
+let errorResetTimer = null;
 
 function fillNoteSubjectOptions(selectedValue = '') {
   if (!noteSubjectEl) {
@@ -2244,6 +2673,10 @@ function setStatus(text, type = '', durationMs = 5000) {
     window.clearTimeout(statusTimer);
     statusTimer = null;
   }
+  if (errorResetTimer) {
+    window.clearTimeout(errorResetTimer);
+    errorResetTimer = null;
+  }
   if (!text) {
     state.statusNotice = null;
     renderSessionCard();
@@ -2263,6 +2696,52 @@ function setStatus(text, type = '', durationMs = 5000) {
       renderSessionCard();
     }, durationMs);
   }
+}
+
+function applyDefaultFormState() {
+  setMode('note');
+  setTargetType('');
+  setPicked('project', null);
+  setPicked('contact', null);
+  projectSearch.value = '';
+  infoInput.value = '';
+  fillNoteSubjectOptions();
+  if (noteSubjectEl && noteSubjectEl.options.length) {
+    noteSubjectEl.selectedIndex = 0;
+  }
+  verrechenbarInput.checked = true;
+  updateModeUi();
+  updateSelectionHint();
+  updateIntervalHint();
+}
+
+async function resetRuntimeSession() {
+  await chrome.runtime.sendMessage({ type: 'cmx-ext-time-reset-session' }).catch(() => null);
+  state.activeSession = null;
+}
+
+async function resetToDefaults(forceRuntimeReset = false) {
+  if (errorResetTimer) {
+    window.clearTimeout(errorResetTimer);
+    errorResetTimer = null;
+  }
+  if (forceRuntimeReset) {
+    await resetRuntimeSession();
+  }
+  await refreshState();
+  state.activeSession = null;
+  startStopButton.textContent = 'Start';
+  startStopButton.classList.remove('danger');
+  applyDefaultFormState();
+  setStatus('');
+}
+
+function scheduleErrorReset(message) {
+  setStatus(message, 'error', 5000);
+  errorResetTimer = window.setTimeout(async () => {
+    errorResetTimer = null;
+    await resetToDefaults(true);
+  }, 5000);
 }
 
 function getStorage(key) {
@@ -2387,7 +2866,48 @@ function currentSelectedTarget() {
   return currentTargetType() === 'contact' ? state.selectedContact : state.selectedProject;
 }
 
+function updateStartStopAvailability() {
+  if (!startStopButton) {
+    return;
+  }
+  if (state.activeSession) {
+    startStopButton.disabled = false;
+    return;
+  }
+  const selectedTarget = currentSelectedTarget();
+  startStopButton.disabled = !(selectedTarget && selectedTarget.id);
+}
+
+function proxySearchEnabled() {
+  return !!(CONFIG.proxyAjaxUrl && CONFIG.proxySearchAction);
+}
+
 function buildAjaxUrl(instance, action, extra = {}) {
+  if (proxySearchEnabled() && instance) {
+    const url = new URL(String(CONFIG.proxyAjaxUrl), window.location.origin);
+    url.searchParams.set('action', String(CONFIG.proxySearchAction || ''));
+    url.searchParams.set('remote_action', String(action || ''));
+    if (CONFIG.proxyAuthToken) {
+      url.searchParams.set('proxy_token', String(CONFIG.proxyAuthToken));
+    }
+    if (instance.baseUrl) {
+      url.searchParams.set('remote_base_url', String(instance.baseUrl));
+    }
+    if (instance.ajaxUrl) {
+      url.searchParams.set('remote_ajax_url', String(instance.ajaxUrl));
+    }
+    if (instance.token) {
+      url.searchParams.set('remote_token', String(instance.token));
+    }
+    Object.keys(extra || {}).forEach((key) => {
+      const value = extra[key];
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(key, String(value));
+      }
+    });
+    return url.toString();
+  }
+
   const base = instance && instance.ajaxUrl ? instance.ajaxUrl : ((instance.baseUrl || '').replace(/\/+$/, '') + '/wp-admin/admin-ajax.php');
   const url = new URL(base);
   url.searchParams.set('action', action);
@@ -2441,7 +2961,7 @@ function instanceResponseError(response, json, rawText) {
   return 'Die Instanz antwortet nicht mit gültigen Daten.';
 }
 
-function fillSelect() {
+function fillSelect(preferredKey = '') {
   instanceSelect.innerHTML = '';
   if (!state.instances.length) {
     instanceSelect.innerHTML = '<option value="">Erst eine Instanz auswählen.</option>';
@@ -2450,9 +2970,11 @@ function fillSelect() {
     return;
   }
   instanceSelect.disabled = false;
+  const selectedKey = String(preferredKey || CONFIG.preferredInstanceKey || '');
   instanceSelect.innerHTML = state.instances.map((instance, index) => {
     const key = instance.slug || instance.baseUrl;
-    return '<option value="' + key + '"' + (index === 0 ? ' selected' : '') + '>' + key + '</option>';
+    const selected = selectedKey !== '' ? key === selectedKey : index === 0;
+    return '<option value="' + key + '"' + (selected ? ' selected' : '') + '>' + key + '</option>';
   }).join('');
   updateIntervalHint();
 }
@@ -2464,15 +2986,18 @@ function updateIntervalHint() {
 
 function updateTargetUi() {
   const targetType = currentTargetType();
+  const selectedTargetType = state.selectedTargetType === 'contact'
+    ? 'contact'
+    : (state.selectedTargetType === 'project' ? 'project' : '');
   const instance = selectedInstance();
   const contactSupported = instanceSupportsContactSave(instance);
   if (targetProjectButton) {
-    targetProjectButton.classList.toggle('is-active', targetType === 'project');
-    targetProjectButton.setAttribute('aria-pressed', targetType === 'project' ? 'true' : 'false');
+    targetProjectButton.classList.toggle('is-active', selectedTargetType === 'project');
+    targetProjectButton.setAttribute('aria-pressed', selectedTargetType === 'project' ? 'true' : 'false');
   }
   if (targetContactButton) {
-    targetContactButton.classList.toggle('is-active', targetType === 'contact');
-    targetContactButton.setAttribute('aria-pressed', targetType === 'contact' ? 'true' : 'false');
+    targetContactButton.classList.toggle('is-active', selectedTargetType === 'contact');
+    targetContactButton.setAttribute('aria-pressed', selectedTargetType === 'contact' ? 'true' : 'false');
     targetContactButton.title = contactSupported ? '' : 'Kontakt-Speicherung wird von dieser Instanz noch nicht unterstützt';
   }
 
@@ -2480,10 +3005,11 @@ function updateTargetUi() {
   const config = currentTargetConfig();
   projectSearch.placeholder = config.placeholder;
   projectSearch.value = selected ? (selected.label || selected.title || '') : '';
+  updateStartStopAvailability();
 }
 
 function setTargetType(type) {
-  state.selectedTargetType = type === 'contact' ? 'contact' : 'project';
+  state.selectedTargetType = type === 'contact' || type === 'project' ? type : '';
   updateTargetUi();
 }
 
@@ -2491,11 +3017,13 @@ function setPicked(type, item) {
   if (type === 'project') {
     state.selectedProject = item || null;
     if (item && item.id) {
+      state.selectedTargetType = 'project';
       state.selectedContact = null;
     }
   } else if (type === 'contact') {
     state.selectedContact = item || null;
     if (item && item.id) {
+      state.selectedTargetType = 'contact';
       state.selectedProject = null;
     }
   }
@@ -2567,7 +3095,7 @@ function persistInstanceSelection(instance) {
 
 function currentMode() {
   const checked = modeSelect ? modeSelect.querySelector('input[name="cmx-ext-time-mode"]:checked') : null;
-  return checked ? (checked.value || 'task') : 'task';
+  return checked ? (checked.value || 'note') : 'note';
 }
 
 function setMode(value) {
@@ -2641,24 +3169,20 @@ async function flushActiveSessionInfoSync() {
   await persistActiveSessionInfo();
 }
 
-function resetForm() {
-  if (state.activeSession) return;
-  setPicked('project', null);
-  setPicked('contact', null);
-  infoInput.value = '';
-  if (noteSubjectEl && noteSubjectEl.options.length) {
-    noteSubjectEl.selectedIndex = 0;
-  }
-  verrechenbarInput.checked = true;
+function resetForm(force = false) {
+  if (state.activeSession && !force) return;
+  applyDefaultFormState();
   setStatus('');
 }
 
 async function fetchJson(url, token, fallbackType = '') {
   let response;
   try {
+    const useProxy = proxySearchEnabled();
+    const headers = useProxy || !token ? {} : { 'X-CMX-Extension-Token': token };
     response = await fetch(url, {
-      credentials: 'omit',
-      headers: token ? { 'X-CMX-Extension-Token': token } : {},
+      credentials: useProxy ? 'same-origin' : 'omit',
+      headers: headers,
       cache: 'no-store',
     });
   } catch (error) {
@@ -2749,6 +3273,7 @@ function makeSuggest(input, box) {
     } else {
       state.selectedProject = null;
     }
+    updateStartStopAvailability();
     updateSelectionHint();
     window.clearTimeout(timer);
     timer = window.setTimeout(load, 180);
@@ -2808,11 +3333,12 @@ function makeSuggest(input, box) {
 }
 
 async function refreshState() {
+  const preferredInstanceKey = await getStorage(SELECTED_INSTANCE_KEY);
   const storedInstances = await getStorage(INSTANCE_KEY);
   state.instances = Array.isArray(storedInstances)
     ? storedInstances.map((instance) => normalizeInstance(instance)).filter(Boolean)
     : [];
-  fillSelect();
+  fillSelect(typeof preferredInstanceKey === 'string' ? preferredInstanceKey : '');
   fillNoteSubjectOptions();
   state.activeSession = normalizeSession(await chrome.runtime.sendMessage({ type: 'cmx-ext-time-get-active-session' }).catch(() => null));
   if (state.activeSession) {
@@ -2830,11 +3356,13 @@ async function refreshState() {
     verrechenbarInput.checked = !!state.activeSession.verrechenbar;
     startStopButton.textContent = 'Stop';
     startStopButton.classList.add('danger');
+    updateStartStopAvailability();
     updateSelectionHint();
   } else {
-    setTargetType(currentTargetType());
+    updateTargetUi();
     startStopButton.textContent = 'Start';
     startStopButton.classList.remove('danger');
+    updateStartStopAvailability();
   }
   updateSelectionHint();
   updateModeUi();
@@ -2875,7 +3403,7 @@ async function handleStartStop() {
       await refreshState();
       setStatus('Erfassung wurde gespeichert.', 'success');
     } catch (error) {
-      setStatus(error && error.message ? error.message : 'Die Erfassung konnte nicht gespeichert werden.', 'error');
+      scheduleErrorReset(error && error.message ? error.message : 'Die Erfassung konnte nicht gespeichert werden.');
     }
     return;
   }
@@ -2883,7 +3411,7 @@ async function handleStartStop() {
   const targetType = currentTargetType();
   const selectedTarget = currentSelectedTarget();
   if (!selectedTarget || !selectedTarget.id) {
-    setStatus(targetType === 'contact' ? 'Einen Kontakt auswählen.' : 'Ein Projekt auswählen.', 'error');
+    setStatus(targetType === 'contact' ? 'Einen Kontakt auswählen.' : 'Ein Projekt oder Kontakt auswählen.', 'error');
     return;
   }
 
@@ -2908,7 +3436,7 @@ async function handleStartStop() {
     await refreshState();
     setStatus('Erfassung wurde gestartet.', 'success');
   } catch (error) {
-    setStatus(error && error.message ? error.message : 'Die Erfassung konnte nicht gestartet werden.', 'error');
+    scheduleErrorReset(error && error.message ? error.message : 'Die Erfassung konnte nicht gestartet werden.');
   }
 }
 
@@ -2927,6 +3455,10 @@ function handleEmptyInstanceSelect(event) {
 
 function handleTargetSwitch(type) {
   setTargetType(type);
+  if (projectSearch) {
+    projectSearch.focus({ preventScroll: true });
+    projectSearch.select();
+  }
   if (!selectedInstance()) {
     return;
   }
@@ -2955,6 +3487,8 @@ instanceSelect.addEventListener('keydown', (event) => {
   }
 });
 instanceSelect.addEventListener('change', () => {
+  CONFIG.preferredInstanceKey = instanceSelect.value || '';
+  chrome.storage.local.set({ [SELECTED_INSTANCE_KEY]: CONFIG.preferredInstanceKey }).catch(() => undefined);
   if (!state.instances.length) {
     openSettings();
     return;
@@ -2965,6 +3499,7 @@ instanceSelect.addEventListener('change', () => {
   }
   updateIntervalHint();
   updateTargetUi();
+  updateStartStopAvailability();
 });
 if (intervalSelect) {
   intervalSelect.addEventListener('change', async () => {
@@ -3003,10 +3538,22 @@ startStopButton.addEventListener('click', handleStartStop);
 
 const targetSuggest = makeSuggest(projectSearch, document.getElementById('project-suggest'));
 
+window.addEventListener('cmx-ext-time-instances-changed', async (event) => {
+  const selectedKey = event && event.detail && event.detail.selectedKey ? String(event.detail.selectedKey) : '';
+  CONFIG.preferredInstanceKey = selectedKey;
+  await chrome.storage.local.set({ [SELECTED_INSTANCE_KEY]: selectedKey }).catch(() => undefined);
+  await refreshState();
+  if (!state.activeSession && selectedKey && Array.from(instanceSelect.options).some((option) => option.value === selectedKey)) {
+    instanceSelect.value = selectedKey;
+    updateIntervalHint();
+    updateTargetUi();
+  }
+});
+
 document.addEventListener('DOMContentLoaded', refreshState);
 JS;
+		}
 	}
-}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_service_worker_js')) {
 	function cmx_ext_time_service_worker_js(): string {
@@ -3141,6 +3688,8 @@ async function persistSession(session, reason) {
   formData.append('token', session.instance.token || '');
   formData.append('target_type', targetType);
   formData.append('target_id', String((target && target.id) || 0));
+  formData.append('target_label', (target && (target.label || target.title)) || '');
+  formData.append('target_title', (target && (target.title || target.label)) || '');
   if (targetType === 'project') {
     formData.append('project_id', String((target && target.id) || 0));
   } else {
@@ -3285,6 +3834,14 @@ async function stopSession(reason) {
   }
 }
 
+async function resetSession() {
+  await clearReminderUi();
+  await chrome.alarms.clear(ALARM_REMINDER);
+  await removeStorage(ACTIVE_KEY);
+  await setActiveBadge(false);
+  return { success: true };
+}
+
 async function continueSession() {
   const session = await getStorage(ACTIVE_KEY);
   if (!session) {
@@ -3394,6 +3951,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'cmx-ext-time-stop-session') {
     stopSession('manual')
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
+    return true;
+  }
+
+  if (message.type === 'cmx-ext-time-reset-session') {
+    resetSession()
       .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ success: false, error: error && error.message ? error.message : String(error) }));
     return true;

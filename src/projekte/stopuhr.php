@@ -70,16 +70,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_config_array')) 
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_bootstrap')) {
-	function cmx_ext_time_stopwatch_bootstrap(int $user_id): array {
-		$bootstrap = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')
-			? (array) cmx_ext_time_bootstrap_data($user_id)
-			: [];
-		$user = $user_id > 0 ? \get_userdata($user_id) : null;
-		$user_login = $user instanceof \WP_User ? (string) $user->user_login : '';
-		$bootstrap['userId'] = $user_id;
-		$bootstrap['userLogin'] = $user_login;
-		$bootstrap['storageNamespace'] = 'cmxStopwatch.user.' . $user_id;
-		$bootstrap['stopwatchUrl'] = cmx_ext_time_stopwatch_url($user_id);
+		function cmx_ext_time_stopwatch_bootstrap(int $user_id): array {
+			$bootstrap = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_bootstrap_data')
+				? (array) cmx_ext_time_bootstrap_data($user_id)
+				: [];
+			$user = $user_id > 0 ? \get_userdata($user_id) : null;
+				$user_login = $user instanceof \WP_User ? (string) $user->user_login : '';
+				$user_display = $user instanceof \WP_User ? (string) $user->display_name : '';
+				$page_token = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_current_user_token')
+					? (string) cmx_ext_time_current_user_token($user_id)
+					: '';
+				$bootstrap['userId'] = $user_id;
+				$bootstrap['userLogin'] = $user_login;
+				$bootstrap['userDisplay'] = $user_display;
+				$bootstrap['pageToken'] = $page_token;
+				$bootstrap['storageNamespace'] = 'cmxStopwatch.user.' . $user_id;
+				$bootstrap['stopwatchUrl'] = cmx_ext_time_stopwatch_url($user_id);
 
 		return $bootstrap;
 	}
@@ -196,9 +202,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 							if (!key) {
 								continue;
 							}
-							if (key === 'cmxExtTime.activeSession' || key === 'cmxExtTime.instances' || key.indexOf('cmxStopwatch.') === 0) {
-								keysToRemove.push(key);
-							}
+								if (key === 'cmxExtTime.activeSession' || key.indexOf('cmxStopwatch.') === 0) {
+									keysToRemove.push(key);
+								}
 						}
 						keysToRemove.forEach(function (key) {
 							window.localStorage.removeItem(key);
@@ -218,11 +224,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 			$site_name = (string) ($bootstrap['siteName'] ?? \get_bloginfo('name'));
 			$site_url = (string) ($bootstrap['siteUrl'] ?? \home_url('/'));
 			$site_name_display = $site_name;
-			$site_name_parts = \preg_split('/\s*[-\x{2010}-\x{2015}]+\s*/u', $site_name);
-			$site_name_parts = \array_values(\array_filter(\array_map('trim', (array) $site_name_parts), 'strlen'));
-			if (!empty($site_name_parts)) {
-				$site_name_display = (string) \end($site_name_parts);
-			}
+				$site_name_parts = \preg_split('/\s*[-\x{2010}-\x{2015}]+\s*/u', $site_name);
+				$site_name_parts = \array_values(\array_filter(\array_map('trim', (array) $site_name_parts), 'strlen'));
+				if (!empty($site_name_parts)) {
+					$site_name_display = (string) \end($site_name_parts);
+				}
 			if ($site_name_display === '' || $site_name_display === $site_name) {
 				$site_host = (string) \parse_url($site_url, \PHP_URL_HOST);
 				$site_host = \preg_replace('/^www\./i', '', $site_host);
@@ -233,272 +239,287 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					$site_name_display = $site_host;
 				}
 			}
-			$user_display = (string) ($bootstrap['userLogin'] ?? '');
-			if ($user_display === '') {
-				$user_display = (string) ($bootstrap['userDisplay'] ?? '');
-			}
-			$stopwatch_url = (string) ($bootstrap['stopwatchUrl'] ?? cmx_ext_time_stopwatch_url((int) ($bootstrap['userId'] ?? 0)));
-		?>
+					$user_display = (string) ($bootstrap['userDisplay'] ?? '');
+					if ($user_display === '') {
+						$user_display = (string) ($bootstrap['userLogin'] ?? '');
+					}
+					$stopwatch_url = (string) ($bootstrap['stopwatchUrl'] ?? cmx_ext_time_stopwatch_url((int) ($bootstrap['userId'] ?? 0)));
+					$config['proxyAjaxUrl'] = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_admin_ajax_url')
+						? (string) cmx_ext_time_admin_ajax_url()
+						: (string) \admin_url('admin-ajax.php');
+					$config['proxyConnectAction'] = \defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_CONNECT_ACTION')
+						? (string) \constant(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_CONNECT_ACTION')
+						: 'cmx_ext_time_proxy_connect';
+					$config['proxyBootstrapAction'] = \defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION')
+						? (string) \constant(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_BOOTSTRAP_ACTION')
+						: 'cmx_ext_time_proxy_bootstrap';
+					$config['proxySearchAction'] = \defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SEARCH_ACTION')
+						? (string) \constant(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SEARCH_ACTION')
+						: 'cmx_ext_time_proxy_search';
+					$config['proxySaveAction'] = \defined(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SAVE_ACTION')
+						? (string) \constant(__NAMESPACE__ . '\\CMX_EXT_TIME_PROXY_SAVE_ACTION')
+						: 'cmx_ext_time_proxy_save';
+					$config['proxyAuthToken'] = (string) ($bootstrap['pageToken'] ?? '');
+					$config['stopwatchRoute'] = cmx_ext_time_stopwatch_route_slug();
+					$logo_src = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_icon_asset_url')
+						? (string) cmx_ext_time_icon_asset_url()
+						: '';
+			?>
 		<!doctype html>
 		<html lang="de">
 		<head>
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<title>Mis Büro - Stopuhr</title>
-			<style>
-				:root{
-					--cmx-bg-1:#f6efe6;
-					--cmx-bg-2:#eadbc8;
-					--cmx-panel:#fffaf4;
-					--cmx-panel-strong:#ffffff;
-					--cmx-text:#241b16;
-					--cmx-muted:#6e6257;
-					--cmx-border:#dccfc1;
-					--cmx-accent:#a42c24;
-					--cmx-accent-dark:#7d201b;
-					--cmx-accent-soft:#f4e2dc;
-					--cmx-success:#147d3f;
-					--cmx-success-soft:#edf9f0;
-					--cmx-info:#1d4f91;
-					--cmx-info-soft:#edf4ff;
-					--cmx-error:#b32d2e;
-					--cmx-error-soft:#fff1f1;
-					--cmx-shadow:0 22px 64px rgba(64, 31, 12, .12);
-				}
-				*,
-				*::before,
-				*::after{box-sizing:border-box}
-				html,body{min-height:100%}
-				body{
-					margin:0;
-					font:14px/1.5 "Avenir Next","Segoe UI","Helvetica Neue",sans-serif;
-					color:var(--cmx-text);
-					background:#fff;
-					padding:28px 16px;
-				}
-				body.cmx-stopwatch-dialog-open{overflow:hidden}
-				.page{
-					max-width:640px;
-					margin:0 auto;
-				}
+				<style>
+					:root{
+						--wp-blue:#2271b1;
+						--wp-blue-dark:#135e96;
+						--wp-gray-100:#f6f7f7;
+						--wp-gray-200:#f0f0f1;
+						--wp-gray-700:#3c434a;
+						--wp-border:#c3c4c7;
+						--wp-danger:#d63638;
+						--wp-danger-dark:#b32d2e;
+					}
+					*,
+					*::before,
+					*::after{box-sizing:border-box}
+					html,body{min-height:100%}
+					body{
+						margin:0;
+						font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+						color:var(--wp-gray-700);
+						background:var(--wp-gray-100);
+						padding:32px 16px;
+					}
+					body.cmx-stopwatch-dialog-open{overflow:hidden}
+					.page{
+						max-width:560px;
+						margin:0 auto;
+						background:#fff;
+						border:1px solid var(--wp-border);
+						border-radius:8px;
+						padding:24px;
+						box-shadow:0 1px 1px rgba(0,0,0,.04);
+					}
 					.hero{
-						display:flex;
-						align-items:flex-end;
-						justify-content:space-between;
-						gap:20px;
-						margin-bottom:18px;
-					}
-					.hero-copy{
-						max-width:460px;
-					}
-					.hero-side{
-						display:flex;
-						flex-direction:column;
-						align-items:flex-end;
-						gap:12px;
-						flex-shrink:0;
-					}
-					.hero-kicker{
-						display:inline-flex;
+						display:grid;
+						grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
 						align-items:center;
-						gap:8px;
-						padding:6px 12px;
-						border-radius:999px;
-					background:rgba(255,255,255,.5);
-					color:var(--cmx-accent);
-					font-size:12px;
-					font-weight:700;
-					letter-spacing:.08em;
-					text-transform:uppercase;
-				}
-				.hero h1{
-					margin:12px 0 6px;
-					font-size:34px;
-					line-height:1.05;
-					letter-spacing:-.03em;
-				}
-				.hero p{
-					margin:0;
-					color:var(--cmx-muted);
-				}
+						gap:16px;
+						margin-bottom:24px;
+					}
+					.hero-kicker{display:none}
+					.hero-logo-link{
+						display:inline-flex;
+						justify-self:center;
+					}
+					.hero-logo{
+						display:block;
+						max-width:72px;
+						height:auto;
+						margin:0;
+					}
 					.hero-meta{
 						display:flex;
 						flex-direction:column;
-						align-items:flex-end;
-						gap:4px;
-						text-align:right;
-						flex-shrink:0;
+						align-items:flex-start;
+						gap:2px;
+						text-align:left;
+						min-width:0;
 					}
 					.hero-meta strong{
 						display:block;
-						font-size:15px;
-						text-decoration:underline;
-						text-decoration-color:var(--cmx-accent);
-						text-decoration-thickness:1px;
-						text-underline-offset:4px;
+						font-size:14px;
+						font-weight:600;
 					}
-					.hero-meta span{color:var(--cmx-muted);font-size:13px}
+					.hero-meta a{
+						color:#1d2327;
+						text-decoration:none;
+					}
+					.hero-meta a:hover,
+					.hero-meta a:focus{
+						color:var(--wp-blue);
+						outline:none;
+					}
+					.hero-user{
+						min-width:0;
+						text-align:right;
+						font-size:13px;
+						color:#646970;
+						justify-self:end;
+					}
 					.wrap{
 						padding:0;
-						border-radius:28px;
 						background:transparent;
 						border:0;
-						box-shadow:none;
-						backdrop-filter:none;
 					}
 					.gear{
 						appearance:none;
-						border:1px solid var(--cmx-accent);
-						background:var(--cmx-panel-strong);
-						color:var(--cmx-accent);
-						border-radius:16px;
-					width:48px;
-					height:48px;
-					padding:0;
-					cursor:pointer;
-					display:flex;
-					align-items:center;
-					justify-content:center;
-					line-height:1;
-					box-shadow:0 10px 24px rgba(36,27,22,.08);
+						border:1px solid var(--wp-blue);
+						background:#fff;
+						color:var(--wp-blue);
+						border-radius:4px;
+						width:42px;
+						height:42px;
+						padding:0;
+						cursor:pointer;
+						display:flex;
+						align-items:center;
+						justify-content:center;
+						line-height:1;
 					}
 					.gear:hover,
-					.gear:focus{background:var(--cmx-accent);border-color:var(--cmx-accent);color:#fff;outline:none}
-					.gear svg{display:block;width:24px;height:24px}
-				.panel{
-					background:var(--cmx-panel);
-					border:1px solid var(--cmx-border);
-					border-radius:22px;
-					padding:16px;
-				}
-				.stack{display:flex;flex-direction:column;gap:12px}
-				label{display:flex;flex-direction:column;gap:5px;font-weight:700}
-				input[type=text],select,textarea{
-					width:100%;
-					box-sizing:border-box;
-					border:1px solid var(--cmx-border);
-					border-radius:14px;
-					padding:10px 12px;
-					background:var(--cmx-panel-strong);
-					font:inherit;
-					color:inherit;
-				}
-				textarea{min-height:90px;resize:vertical}
-				.mode-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
-				.mode-field{display:flex;flex-direction:column;gap:5px;min-width:0}
-				.field-caption{font-weight:700}
-				.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:138px;align-items:flex-end}
-				.note-subject select{min-width:138px;width:auto;max-width:170px}
-				.note-subject.is-hidden{visibility:hidden;pointer-events:none}
-				.inline{display:flex;align-items:center;gap:8px}
-				.inline label{font-weight:500;flex-direction:row;align-items:center;gap:6px}
-				.mode-options{flex-wrap:nowrap;gap:14px}
-				.mode-options label{white-space:nowrap}
-					.target-row{display:flex;align-items:center;justify-content:flex-start;gap:12px}
+					.gear:focus{background:var(--wp-blue);border-color:var(--wp-blue);color:#fff;outline:none}
+					.gear svg{display:block;width:22px;height:22px}
+					.panel{
+						background:transparent;
+						border:0;
+						padding:0;
+					}
+					.stack{display:flex;flex-direction:column;gap:16px}
+					label{display:flex;flex-direction:column;gap:6px;font-weight:600}
+						input[type=text],input[type=password],select,textarea{
+							width:100%;
+							box-sizing:border-box;
+							border:1px solid var(--wp-border);
+							border-radius:4px;
+							padding:10px 12px;
+						background:#fff;
+						font:inherit;
+						color:inherit;
+					}
+						input[type=text]:focus,input[type=password]:focus,select:focus,textarea:focus{
+							border-color:var(--wp-blue);
+							outline:1px solid var(--wp-blue);
+						}
+						.cmx-stopwatch-settings-note{
+							font-weight:400;
+							font-size:12px;
+							color:#646970;
+						}
+						textarea{min-height:96px;resize:vertical}
+					.mode-row{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:12px;align-items:end}
+					.mode-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+					.field-caption{font-weight:600}
+					.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:160px;align-items:flex-end}
+					.note-subject select{min-width:160px;width:auto;max-width:160px}
+					.note-subject.is-hidden{visibility:hidden;pointer-events:none}
+					.inline{display:flex;align-items:center;gap:8px}
+					.inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
+					.mode-options{flex-wrap:nowrap;gap:14px}
+					.mode-options label{white-space:nowrap}
+					.target-row{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap}
 					.target-toggle{
 						appearance:none;
-						border:1px solid var(--cmx-accent);
-						background:var(--cmx-panel-strong);
-						padding:10px 16px;
-						color:var(--cmx-accent);
+						border:1px solid var(--wp-blue);
+						background:#fff;
+						padding:10px 14px;
+						color:var(--wp-blue);
 						font:inherit;
-						font-weight:800;
+						font-weight:600;
 						cursor:pointer;
-						border-radius:14px;
+						border-radius:4px;
 						transition:background-color .16s ease,color .16s ease,border-color .16s ease;
 					}
 					.target-toggle:hover,
 					.target-toggle:focus,
-					.target-toggle.is-active{background:var(--cmx-accent);border-color:var(--cmx-accent);color:#fff;outline:none}
-				.muted{color:var(--cmx-muted);font-size:12px}
-				.pill{
-					display:inline-flex;
-					align-items:center;
-					gap:6px;
-					padding:5px 10px;
-					border-radius:999px;
-					background:var(--cmx-info-soft);
-					color:var(--cmx-info);
-					font-size:12px;
-					font-weight:700;
-				}
-				button{
-					appearance:none;
-					border:1px solid var(--cmx-accent);
-					background:var(--cmx-accent);
-					color:#fff;
-					border-radius:14px;
-					padding:10px 14px;
-					cursor:pointer;
-					font-weight:800;
-					letter-spacing:.01em;
-				}
-				button:hover,
-				button:focus{background:var(--cmx-accent-dark);border-color:var(--cmx-accent-dark)}
-				button.secondary{background:var(--cmx-panel-strong);color:var(--cmx-accent)}
-				button.secondary:hover,
-				button.secondary:focus{background:var(--cmx-accent-soft)}
-				button.danger{background:var(--cmx-error);border-color:var(--cmx-error)}
-				button.danger:hover,
-				button.danger:focus{background:#922326;border-color:#922326}
-				button:disabled{opacity:.55;cursor:not-allowed}
-				.suggest-wrap{position:relative}
-				.suggest{
-					position:absolute;
-					left:0;
-					right:0;
-					top:calc(100% + 4px);
-					z-index:1000;
-					background:var(--cmx-panel-strong);
-					border:1px solid var(--cmx-border);
-					border-radius:16px;
-					max-height:240px;
-					overflow:auto;
-					display:none;
-					box-shadow:0 12px 28px rgba(36,27,22,.14);
-				}
-				.suggest button{
-					width:100%;
-					border:0;
-					background:none;
-					color:inherit;
-					text-align:left;
-					padding:11px 12px;
-					border-radius:0;
-					font-weight:500;
-				}
-				.suggest button:hover,
-				.suggest button.active{background:var(--cmx-info-soft);color:var(--cmx-info)}
-				.suggest .hint{padding:10px 12px;color:var(--cmx-muted)}
+					.target-toggle.is-active{background:var(--wp-blue);border-color:var(--wp-blue);color:#fff;outline:none}
+					.muted{color:#646970;font-size:12px}
+					button{
+						appearance:none;
+						border:1px solid var(--wp-blue);
+						background:var(--wp-blue);
+						color:#fff;
+						border-radius:4px;
+						padding:10px 14px;
+						cursor:pointer;
+						font-weight:600;
+					}
+					button:hover,
+					button:focus{background:var(--wp-blue-dark);border-color:var(--wp-blue-dark)}
+					button.secondary{background:#fff;color:var(--wp-blue)}
+					button.secondary:hover,
+					button.secondary:focus{background:var(--wp-gray-200)}
+					button.danger{background:var(--wp-danger);border-color:var(--wp-danger)}
+					button.danger:hover,
+					button.danger:focus{background:var(--wp-danger-dark);border-color:var(--wp-danger-dark)}
+					button:disabled{opacity:.55;cursor:not-allowed}
+					.suggest-wrap{position:relative}
+					.suggest{
+						position:absolute;
+						left:0;
+						right:0;
+						top:calc(100% + 4px);
+						z-index:1000;
+						background:#fff;
+						border:1px solid var(--wp-border);
+						border-radius:4px;
+						max-height:240px;
+						overflow:auto;
+						display:none;
+						box-shadow:0 8px 22px rgba(0,0,0,.12);
+					}
+					.suggest button{
+						display:block;
+						width:100%;
+						border:0;
+						background:none;
+						color:inherit;
+						text-align:left;
+						padding:10px 12px;
+						border-radius:0;
+						font-weight:400;
+					}
+					.suggest button:hover,
+					.suggest button.active{background:var(--wp-gray-200);color:inherit}
+					.suggest .hint{padding:10px 12px;color:#646970}
 					.footer{
-						display:grid;
-						grid-template-columns:minmax(0,1fr) auto;
-						gap:10px 12px;
-						align-items:center;
-						margin-top:2px;
+						display:flex;
+						flex-direction:column;
+						gap:10px;
+						align-items:stretch;
+						margin-top:4px;
+					}
+					.footer-actions{
+						display:flex;
+						align-items:stretch;
+						gap:10px;
 					}
 					#selection-hint{text-align:left;min-width:0}
-					#start-stop{justify-self:end}
-					.session{
-						padding:12px;
-					border-radius:18px;
-					background:#f8f2ea;
-					border:1px solid var(--cmx-border);
-					display:flex;
-					flex-direction:column;
-					justify-content:center;
-					gap:6px;
-					min-height:72px;
+					.footer .gear{
+						flex:0 0 42px;
+						width:42px;
+						height:42px;
 					}
-					.session.is-info{border-color:var(--cmx-info);background:var(--cmx-info-soft)}
-					.session.is-success{border-color:var(--cmx-success);background:var(--cmx-success-soft)}
-					.session.is-error{border-color:var(--cmx-error);background:var(--cmx-error-soft)}
-					.session-message{font-size:13px;font-weight:700;line-height:1.35}
+					#start-stop{width:auto;flex:1 1 auto}
+					.session{
+						padding:0;
+						background:transparent;
+						border:0;
+						display:flex;
+						flex-direction:column;
+						gap:6px;
+						min-height:0;
+					}
+					.session.is-info,
+					.session.is-success,
+					.session.is-error{
+						padding:10px 12px;
+						border-radius:4px;
+						border:1px solid var(--wp-border);
+						background:var(--wp-gray-100);
+					}
+					.session.is-info{border-color:var(--wp-blue)}
+					.session.is-success{border-color:#00a32a;background:#f2fff4}
+					.session.is-error{border-color:var(--wp-danger);background:#fff1f1}
+					.session-message{font-size:13px;font-weight:600;line-height:1.35}
 					.task-inline{margin-left:8px;white-space:nowrap}
-				.task-inline.is-hidden{visibility:hidden;pointer-events:none}
-				dialog.cmx-stopwatch-dialog{
-					width:min(calc(100vw - 24px), 560px);
-					max-width:560px;
+					.task-inline.is-hidden{visibility:hidden;pointer-events:none}
+					dialog.cmx-stopwatch-dialog{
+						width:min(calc(100vw - 24px), 560px);
+						max-width:560px;
 					margin:auto;
 					padding:0;
 					border:0;
@@ -506,22 +527,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					color:inherit;
 					overflow:visible;
 				}
-				dialog.cmx-stopwatch-dialog:not([open]){display:none}
-				dialog.cmx-stopwatch-dialog::backdrop{
-					background:rgba(36,27,22,.48);
-					backdrop-filter:blur(2px);
-				}
-				.cmx-stopwatch-dialog-card{
-					width:100%;
-					border-radius:24px;
-					background:var(--cmx-panel-strong);
-					border:1px solid rgba(255,255,255,.7);
-					box-shadow:0 30px 80px rgba(0,0,0,.28);
-					padding:20px;
-				}
-				.cmx-stopwatch-dialog-head{
-					display:flex;
-					align-items:flex-start;
+					dialog.cmx-stopwatch-dialog:not([open]){display:none}
+					dialog.cmx-stopwatch-dialog::backdrop{
+						background:rgba(17,24,39,.32);
+					}
+					.cmx-stopwatch-dialog-card{
+						width:100%;
+						border-radius:8px;
+						background:#fff;
+						border:1px solid var(--wp-border);
+						box-shadow:0 12px 30px rgba(0,0,0,.12);
+						padding:24px;
+					}
+					.cmx-stopwatch-dialog-head{
+						display:flex;
+						align-items:flex-start;
 					justify-content:space-between;
 					gap:16px;
 					margin-bottom:14px;
@@ -532,111 +552,176 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					line-height:1.1;
 					letter-spacing:-.02em;
 				}
-				.cmx-stopwatch-dialog-head p{
-					margin:6px 0 0;
-					color:var(--cmx-muted);
-				}
-				.cmx-stopwatch-dialog-close{
-					display:inline-flex;
-					align-items:center;
-					justify-content:center;
-					width:36px;
-					height:36px;
-					padding:0;
-					border-radius:999px;
-					border:1px solid rgba(164,44,36,.22);
-					background:#fff;
-					color:var(--cmx-accent);
-					font-size:22px;
-					font-weight:800;
-					line-height:1;
-					box-shadow:0 8px 18px rgba(0,0,0,.08);
-				}
-				.cmx-stopwatch-dialog-close:hover,
-				.cmx-stopwatch-dialog-close:focus{
-					background:var(--cmx-accent-soft);
-					border-color:#e8c7bf;
-					outline:none;
-				}
-				.cmx-stopwatch-dialog-grid{
-					display:grid;
-					grid-template-columns:1fr 1fr;
-					gap:12px;
-					margin-bottom:14px;
-				}
-				.cmx-stopwatch-stat{
-					padding:12px;
-					border-radius:16px;
-					background:#faf4ed;
-					border:1px solid var(--cmx-border);
-				}
-				.cmx-stopwatch-stat strong{
-					display:block;
-					font-size:12px;
-					text-transform:uppercase;
-					letter-spacing:.08em;
-					color:var(--cmx-muted);
-				}
-				.cmx-stopwatch-stat span{
-					display:block;
-					margin-top:6px;
-					font-size:16px;
-					font-weight:800;
-				}
-				.cmx-stopwatch-dialog-actions{
-					display:flex;
-					flex-wrap:wrap;
-					gap:10px;
-					justify-content:flex-end;
-				}
-				.cmx-stopwatch-dialog-status{
-					margin-top:12px;
-					min-height:20px;
-					color:var(--cmx-muted);
-					font-size:13px;
-				}
-				.cmx-stopwatch-reminder-card{
-					position:relative;
-					width:100%;
-					border-radius:26px;
-					background:linear-gradient(180deg,#fffaf4,#fff);
-					border:1px solid rgba(255,255,255,.72);
-					box-shadow:0 30px 80px rgba(0,0,0,.28);
-					padding:24px 24px 22px;
-					text-align:center;
-				}
+					.cmx-stopwatch-dialog-head p{
+						margin:6px 0 0;
+						color:#646970;
+					}
+					.cmx-stopwatch-dialog-close{
+						display:inline-flex;
+						align-items:center;
+						justify-content:center;
+						width:32px;
+						height:32px;
+						padding:0;
+						border-radius:4px;
+						border:1px solid var(--wp-blue);
+						background:#fff;
+						color:var(--wp-blue);
+						font-size:22px;
+						font-weight:600;
+						line-height:1;
+					}
+					.cmx-stopwatch-dialog-close:hover,
+					.cmx-stopwatch-dialog-close:focus{
+						background:var(--wp-blue);
+						border-color:var(--wp-blue);
+						color:#fff;
+						outline:none;
+					}
+						.cmx-stopwatch-settings-grid{
+							display:grid;
+							grid-template-columns:1fr 1fr;
+							gap:14px;
+							margin-bottom:16px;
+						}
+						.cmx-stopwatch-settings-grid label{
+							font-weight:600;
+						}
+						.cmx-stopwatch-settings-wide{
+							grid-column:1 / -1;
+						}
+						.cmx-stopwatch-settings-suffix{
+							display:flex;
+							align-items:center;
+							gap:8px;
+						}
+						.cmx-stopwatch-settings-suffix input{
+							flex:1 1 auto;
+						}
+						.cmx-stopwatch-settings-suffix span{
+							white-space:nowrap;
+							color:#646970;
+							font-weight:400;
+						}
+						.cmx-stopwatch-password-wrap{
+							position:relative;
+						}
+						.cmx-stopwatch-password-wrap input{
+							padding-right:46px;
+						}
+						.cmx-stopwatch-password-toggle{
+							position:absolute;
+							top:50%;
+							right:8px;
+							transform:translateY(-50%);
+							width:30px;
+							height:30px;
+							padding:0;
+							border:0;
+							background:transparent;
+							color:#646970;
+							display:inline-flex;
+							align-items:center;
+							justify-content:center;
+							cursor:pointer;
+						}
+						.cmx-stopwatch-password-toggle:hover,
+						.cmx-stopwatch-password-toggle:focus{
+							background:transparent;
+							border:0;
+							color:var(--wp-blue);
+							outline:none;
+						}
+						.cmx-stopwatch-password-toggle svg{
+							display:block;
+							width:18px;
+							height:18px;
+						}
+						.cmx-stopwatch-dialog-actions{
+							display:flex;
+							flex-wrap:wrap;
+						gap:10px;
+						justify-content:flex-end;
+						}
+						.cmx-stopwatch-settings-actions-primary{
+							justify-content:flex-start;
+							margin-bottom:8px;
+						}
+						.cmx-stopwatch-instance-list{
+							margin-top:16px;
+							padding-top:16px;
+							border-top:1px solid var(--wp-border);
+						}
+						.cmx-stopwatch-instance-list.is-empty{
+							color:#646970;
+							font-size:13px;
+						}
+						.cmx-stopwatch-instance-card{
+							padding:12px;
+							border-radius:4px;
+							background:var(--wp-gray-100);
+							border:1px solid var(--wp-border);
+						}
+						.cmx-stopwatch-instance-card + .cmx-stopwatch-instance-card{
+							margin-top:10px;
+						}
+						.cmx-stopwatch-instance-card strong{
+							display:block;
+							font-size:14px;
+							color:#1d2327;
+						}
+						.cmx-stopwatch-instance-meta{
+							margin-top:4px;
+							color:#646970;
+							font-size:13px;
+						}
+						.cmx-stopwatch-dialog-status{
+							margin-top:12px;
+							min-height:20px;
+							color:#646970;
+							font-size:13px;
+					}
+					.cmx-stopwatch-reminder-card{
+						position:relative;
+						width:100%;
+						border-radius:8px;
+						background:#fff;
+						border:1px solid var(--wp-border);
+						box-shadow:0 12px 30px rgba(0,0,0,.12);
+						padding:24px 24px 22px;
+						text-align:center;
+					}
 				.cmx-stopwatch-reminder-card h2{
 					margin:0 32px 0 0;
 					font-size:26px;
 					letter-spacing:-.03em;
 				}
-				.cmx-stopwatch-reminder-card p{
-					margin:10px 0 0;
-					color:var(--cmx-muted);
-				}
-				.cmx-stopwatch-reminder-target{
-					margin:18px 0 8px;
-					padding:14px;
-					border-radius:20px;
-					background:var(--cmx-accent-soft);
-					border:1px solid #e8c7bf;
-					font-size:18px;
-					font-weight:800;
-				}
-				.cmx-stopwatch-reminder-count{
-					display:inline-flex;
-					align-items:center;
+					.cmx-stopwatch-reminder-card p{
+						margin:10px 0 0;
+						color:#646970;
+					}
+					.cmx-stopwatch-reminder-target{
+						margin:18px 0 8px;
+						padding:14px;
+						border-radius:6px;
+						background:var(--wp-gray-200);
+						border:1px dashed var(--wp-border);
+						font-size:18px;
+						font-weight:600;
+					}
+					.cmx-stopwatch-reminder-count{
+						display:inline-flex;
+						align-items:center;
 					justify-content:center;
 					width:76px;
-					height:76px;
-					margin:14px auto 4px;
-					border-radius:999px;
-					background:var(--cmx-accent);
-					color:#fff;
-					font-size:28px;
-					font-weight:800;
-					box-shadow:0 14px 30px rgba(164,44,36,.24);
-				}
+						height:76px;
+						margin:14px auto 4px;
+						border-radius:999px;
+						background:var(--wp-blue);
+						color:#fff;
+						font-size:28px;
+						font-weight:600;
+					}
 				.cmx-stopwatch-reminder-actions{
 					display:flex;
 					justify-content:center;
@@ -650,51 +735,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					justify-content:center;
 					min-width:132px;
 				}
-				.cmx-stopwatch-reminder-status{
-					margin-top:12px;
-					min-height:20px;
-					color:var(--cmx-muted);
-					font-size:13px;
+					.cmx-stopwatch-reminder-status{
+						margin-top:12px;
+						min-height:20px;
+						color:#646970;
+						font-size:13px;
 					}
-					@media (max-width:680px){
-						.hero{flex-direction:column;align-items:flex-start}
-						.hero-side{align-items:flex-start}
-						.hero-meta{align-items:flex-start;text-align:left}
-					}
-						@media (max-width:520px){
-							body{padding:18px 12px}
-							.hero h1{font-size:28px}
-							.panel{padding:14px}
-							.mode-row,
-							.cmx-stopwatch-dialog-grid{grid-template-columns:1fr}
-						.footer{grid-template-columns:1fr}
-						#selection-hint{text-align:left}
-						#start-stop{justify-self:stretch}
-					}
-			</style>
+							@media (max-width:520px){
+								body{padding:16px 12px}
+								.page{padding:20px 16px}
+								.hero{
+									grid-template-columns:1fr;
+									justify-items:center;
+								}
+								.hero-meta{
+									align-items:center;
+									text-align:center;
+								}
+								.hero-user{
+									width:100%;
+									text-align:center;
+									justify-self:center;
+								}
+								.footer-actions{
+									width:100%;
+								}
+								.mode-row,
+								.cmx-stopwatch-settings-grid{grid-template-columns:1fr}
+							}
+					</style>
 		</head>
 		<body>
 				<div class="page">
-					<div class="hero">
-						<div class="hero-copy">
-							<div class="hero-kicker">Mis Büro</div>
-							<h1>Zeiterfassung</h1>
-							<p>Projekt oder Kontakt wählen und die Zeit direkt in Mis Buero speichern.</p>
-						</div>
-						<div class="hero-side">
-							<button type="button" class="gear" id="open-settings" aria-label="Stopuhr-Einstellungen" title="Stopuhr-Einstellungen">
-								<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-									<path fill="currentColor" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14.1 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.24-1.17.56-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.66-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.42 1.08.74 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.24 1.17-.56 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
-								</svg>
-							</button>
-							<div class="hero-meta">
-								<strong><?php echo \esc_html($site_name_display); ?></strong>
-								<?php if ($user_display !== '') : ?>
-									<span><?php echo \esc_html($user_display); ?></span>
+							<div class="hero">
+								<div class="hero-meta">
+									<strong><a href="<?php echo \esc_url($site_url); ?>"><?php echo \esc_html($site_name_display); ?></a></strong>
+								</div>
+								<?php if ($logo_src !== '') : ?>
+									<a class="hero-logo-link" href="<?php echo \esc_url($site_url); ?>">
+										<img class="hero-logo" src="<?php echo \esc_url($logo_src); ?>" alt="Mis Büro">
+									</a>
 								<?php endif; ?>
-							</div>
+								<?php if ($user_display !== '') : ?>
+									<div class="hero-user"><?php echo \esc_html($user_display); ?></div>
+								<?php endif; ?>
 						</div>
-					</div>
 
 					<div class="wrap">
 						<div class="panel">
@@ -707,8 +792,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 								<div class="mode-field">
 									<div class="field-caption">Speichern als</div>
 									<div class="inline mode-options" id="mode-select">
-										<label><input type="radio" name="cmx-ext-time-mode" value="note"> Notiz</label>
-										<label><input type="radio" name="cmx-ext-time-mode" value="task" checked> Taetigkeit</label>
+										<label><input type="radio" name="cmx-ext-time-mode" value="note" checked> Notiz</label>
+										<label><input type="radio" name="cmx-ext-time-mode" value="task"> Taetigkeit</label>
 										<label class="task-inline task-only" id="task-inline"><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
 									</div>
 								</div>
@@ -722,60 +807,80 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 									<div id="session-message" class="session-message" hidden></div>
 								</div>
 							<div class="target-row">
-								<button type="button" class="target-toggle is-active" id="target-project" data-target="project">Projekt</button>
+								<button type="button" class="target-toggle" id="target-project" data-target="project">Projekt</button>
 								<button type="button" class="target-toggle" id="target-contact" data-target="contact">Kontakt</button>
 							</div>
 							<label class="suggest-wrap">
 								<input type="text" id="project-search" autocomplete="off" placeholder="Projekt suchen...">
 								<div class="suggest" id="project-suggest"></div>
 							</label>
-								<div>
-									<textarea id="info-input" aria-label="Weitere Infos im Detail" placeholder="Weitere Infos im Detail..."></textarea>
-								</div>
-								<div class="footer">
-									<div class="muted" id="selection-hint" hidden></div>
-									<button type="button" id="start-stop">Start</button>
-								</div>
+									<div>
+										<textarea id="info-input" aria-label="Weitere Infos im Detail" placeholder="Weitere Infos im Detail..."></textarea>
+									</div>
+									<div class="footer">
+										<div class="muted" id="selection-hint" hidden></div>
+										<div class="footer-actions">
+											<button type="button" class="gear" id="open-settings" aria-label="Stopuhr-Einstellungen" title="Stopuhr-Einstellungen">
+												<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+													<path fill="currentColor" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14.1 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.24-1.17.56-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.66-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.42 1.08.74 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.24 1.17-.56 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
+												</svg>
+											</button>
+											<button type="button" id="start-stop" disabled>Start</button>
+										</div>
+									</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<dialog class="cmx-stopwatch-dialog" id="cmx-stopwatch-settings" aria-labelledby="cmx-stopwatch-settings-title">
-				<div class="cmx-stopwatch-dialog-card">
-					<div class="cmx-stopwatch-dialog-head">
-						<div>
-							<h2 id="cmx-stopwatch-settings-title">Stopuhr</h2>
-							<p>Diese Seite ist direkt mit Deiner aktuellen Mis Buero Instanz verbunden.</p>
+				<dialog class="cmx-stopwatch-dialog" id="cmx-stopwatch-settings" aria-labelledby="cmx-stopwatch-settings-title">
+					<div class="cmx-stopwatch-dialog-card">
+						<div class="cmx-stopwatch-dialog-head">
+							<div>
+								<h2 id="cmx-stopwatch-settings-title">Stopuhr</h2>
+								<p>Instanzen verbinden und Standard-Intervall pro Instanz setzen.</p>
+							</div>
+							<button type="button" class="cmx-stopwatch-dialog-close" data-stopwatch-close="settings" aria-label="Fenster schließen" title="Fenster schließen">×</button>
 						</div>
-						<button type="button" class="cmx-stopwatch-dialog-close" data-stopwatch-close="settings" aria-label="Fenster schließen" title="Fenster schließen">×</button>
-					</div>
-					<div class="cmx-stopwatch-dialog-grid">
-						<div class="cmx-stopwatch-stat">
-							<strong>Instanz</strong>
-							<span id="cmx-stopwatch-setting-instance">-</span>
+						<div class="cmx-stopwatch-settings-grid">
+							<label>
+								<span>Gespeicherte Instanzen</span>
+								<select id="cmx-stopwatch-saved-instance"></select>
+							</label>
+							<label>
+								<span>Erfassungsintervall</span>
+								<select id="cmx-stopwatch-default-interval"></select>
+							</label>
+							<label>
+								<span>Benutzername</span>
+								<input type="text" id="cmx-stopwatch-instance-username" autocomplete="username" placeholder="WP-Benutzername">
+							</label>
+							<label>
+								<span>Passwort</span>
+								<div class="cmx-stopwatch-password-wrap">
+									<input type="password" id="cmx-stopwatch-instance-password" autocomplete="current-password" placeholder="Passwort">
+									<button type="button" class="cmx-stopwatch-password-toggle" id="cmx-stopwatch-password-toggle" aria-label="Passwort anzeigen" aria-pressed="false" title="Passwort anzeigen">
+										<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+											<path fill="currentColor" d="M12 5c5.58 0 9.36 4.42 10.55 6-.58.78-1.83 2.29-3.66 3.63l1.42 1.42-.71.71-15-15 .71-.71 2.53 2.53A11.2 11.2 0 0 1 12 5Zm0 2a9.1 9.1 0 0 0-2.69.4l1.68 1.68A3.5 3.5 0 0 1 15.92 13l1.65 1.65A14.76 14.76 0 0 0 21.14 11 15.5 15.5 0 0 0 12 7Zm-8.14.99A15.5 15.5 0 0 0 1.86 11c.58.78 1.83 2.29 3.66 3.63A10.85 10.85 0 0 0 12 17c1.25 0 2.42-.2 3.5-.56l-1.69-1.69a3.5 3.5 0 0 1-4.56-4.56L7.57 8.5A14.42 14.42 0 0 0 3.86 7.99Z"/>
+										</svg>
+									</button>
+								</div>
+							</label>
+							<label class="cmx-stopwatch-settings-wide">
+								<span>Neue Instanz</span>
+								<input type="text" id="cmx-stopwatch-instance-input" placeholder="cmx, cmx.misbuero.ch, misbuero.local oder https://...">
+								<span class="cmx-stopwatch-settings-note">Eingabe als Subdomain, Domain oder komplette URL.</span>
+							</label>
 						</div>
-						<div class="cmx-stopwatch-stat">
-							<strong>Benutzer</strong>
-							<span id="cmx-stopwatch-setting-user">-</span>
+							<div class="cmx-stopwatch-dialog-actions cmx-stopwatch-settings-actions-primary">
+								<button type="button" id="cmx-stopwatch-connect-instance">Instanz laden</button>
+								<button type="button" class="secondary" id="cmx-stopwatch-save-instance">Einstellungen speichern</button>
+								<button type="button" class="danger" id="cmx-stopwatch-remove-instance">Instanz entfernen</button>
+							</div>
+							<div class="cmx-stopwatch-dialog-status" id="cmx-stopwatch-settings-status"></div>
+							<div class="cmx-stopwatch-instance-list" id="cmx-stopwatch-instance-list"></div>
 						</div>
-						<div class="cmx-stopwatch-stat">
-							<strong>Intervall</strong>
-							<span id="cmx-stopwatch-setting-interval">-</span>
-						</div>
-						<div class="cmx-stopwatch-stat">
-							<strong>Link</strong>
-							<span id="cmx-stopwatch-setting-link">bereit</span>
-						</div>
-					</div>
-					<div class="cmx-stopwatch-dialog-actions">
-						<button type="button" class="secondary" id="cmx-stopwatch-copy-link">Link kopieren</button>
-						<button type="button" class="secondary" id="cmx-stopwatch-reload-bootstrap">Daten neu laden</button>
-						<button type="button" class="secondary" data-stopwatch-close="settings">Schließen</button>
-					</div>
-					<div class="cmx-stopwatch-dialog-status" id="cmx-stopwatch-settings-status"></div>
-				</div>
-			</dialog>
+					</dialog>
 
 			<dialog class="cmx-stopwatch-dialog" id="cmx-stopwatch-reminder" aria-labelledby="cmx-stopwatch-reminder-title">
 				<div class="cmx-stopwatch-reminder-card">
@@ -810,17 +915,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					var storageNamespace = String(BOOTSTRAP.storageNamespace || 'cmxStopwatch.default');
 					var reminderTimer = 0;
 					var reminderCountdownTimer = 0;
-					var reminderDeadlineMs = 0;
+					var reminderResetTimer = 0;
+						var reminderDeadlineMs = 0;
 
-					var settingsRoot = document.getElementById('cmx-stopwatch-settings');
-					var settingsStatus = document.getElementById('cmx-stopwatch-settings-status');
-					var settingsInstance = document.getElementById('cmx-stopwatch-setting-instance');
-					var settingsUser = document.getElementById('cmx-stopwatch-setting-user');
-					var settingsInterval = document.getElementById('cmx-stopwatch-setting-interval');
-					var settingsLink = document.getElementById('cmx-stopwatch-setting-link');
-					var settingsReload = document.getElementById('cmx-stopwatch-reload-bootstrap');
-					var settingsCopy = document.getElementById('cmx-stopwatch-copy-link');
-					var reminderRoot = document.getElementById('cmx-stopwatch-reminder');
+						var settingsRoot = document.getElementById('cmx-stopwatch-settings');
+						var settingsStatus = document.getElementById('cmx-stopwatch-settings-status');
+						var settingsSavedInstance = document.getElementById('cmx-stopwatch-saved-instance');
+							var settingsDefaultInterval = document.getElementById('cmx-stopwatch-default-interval');
+							var settingsInstanceInput = document.getElementById('cmx-stopwatch-instance-input');
+							var settingsUsernameInput = document.getElementById('cmx-stopwatch-instance-username');
+							var settingsPasswordInput = document.getElementById('cmx-stopwatch-instance-password');
+							var settingsPasswordToggle = document.getElementById('cmx-stopwatch-password-toggle');
+							var settingsConnect = document.getElementById('cmx-stopwatch-connect-instance');
+							var settingsSave = document.getElementById('cmx-stopwatch-save-instance');
+							var settingsRemove = document.getElementById('cmx-stopwatch-remove-instance');
+							var settingsList = document.getElementById('cmx-stopwatch-instance-list');
+							var reminderRoot = document.getElementById('cmx-stopwatch-reminder');
 					var reminderProject = document.getElementById('cmx-stopwatch-reminder-project');
 					var reminderCountdown = document.getElementById('cmx-stopwatch-reminder-countdown');
 					var reminderSeconds = document.getElementById('cmx-stopwatch-reminder-seconds');
@@ -929,20 +1039,168 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						return copied;
 					}
 
-					function setSettingsStatus(text, isError) {
-						if (!settingsStatus) {
-							return;
-						}
-						settingsStatus.textContent = text || '';
-						settingsStatus.style.color = isError ? 'var(--cmx-error)' : 'var(--cmx-muted)';
-					}
+							function setSettingsStatus(text, isError) {
+								if (!settingsStatus) {
+									return;
+								}
+								settingsStatus.textContent = text || '';
+								settingsStatus.style.color = isError ? 'var(--wp-danger)' : '#646970';
+							}
 
-					function openSettingsDialog() {
-						if (!settingsRoot) {
-							return;
+						function stopwatchAuthToken() {
+							return String(CONFIG.proxyAuthToken || BOOTSTRAP.pageToken || BOOTSTRAP.token || '');
 						}
-						openModal(settingsRoot);
-					}
+
+						function stopwatchProxyUrl(action, instance, extra) {
+							var url = new URL(String(CONFIG.proxyAjaxUrl || BOOTSTRAP.ajaxUrl || window.location.origin + '/wp-admin/admin-ajax.php'), window.location.origin);
+							url.searchParams.set('action', String(action || ''));
+							var proxyToken = stopwatchAuthToken();
+							if (proxyToken !== '') {
+								url.searchParams.set('proxy_token', proxyToken);
+							}
+							if (instance && instance.baseUrl) {
+								url.searchParams.set('remote_base_url', String(instance.baseUrl));
+							}
+							if (instance && instance.ajaxUrl) {
+								url.searchParams.set('remote_ajax_url', String(instance.ajaxUrl));
+							}
+							if (instance && instance.token) {
+								url.searchParams.set('remote_token', String(instance.token));
+							}
+							Object.keys(extra || {}).forEach(function (key) {
+								var value = extra[key];
+								if (value === null || typeof value === 'undefined' || value === '') {
+									return;
+								}
+								url.searchParams.set(key, String(value));
+							});
+							return url;
+						}
+
+						function appendProxyFields(formData, action, instance) {
+							if (!(formData instanceof FormData)) {
+								return formData;
+							}
+							if (!formData.has('action')) {
+								formData.append('action', String(action || ''));
+							}
+							var proxyToken = stopwatchAuthToken();
+							if (proxyToken !== '' && !formData.has('proxy_token')) {
+								formData.append('proxy_token', proxyToken);
+							}
+							if (instance && instance.baseUrl && !formData.has('remote_base_url')) {
+								formData.append('remote_base_url', String(instance.baseUrl));
+							}
+							if (instance && instance.ajaxUrl && !formData.has('remote_ajax_url')) {
+								formData.append('remote_ajax_url', String(instance.ajaxUrl));
+							}
+							if (instance && instance.token && !formData.has('remote_token')) {
+								formData.append('remote_token', String(instance.token));
+							}
+							return formData;
+						}
+
+						async function requestStopwatchJson(method, action, instance, options) {
+							options = options && typeof options === 'object' ? options : {};
+							var response;
+							var fetchOptions = {
+								method: String(method || 'GET').toUpperCase(),
+								credentials: 'same-origin',
+								cache: 'no-store',
+								headers: {}
+							};
+							try {
+								if (fetchOptions.method === 'POST') {
+									var body = options.body instanceof FormData ? options.body : new FormData();
+									if (!(options.body instanceof FormData)) {
+										Object.keys(options.body || {}).forEach(function (key) {
+											var value = options.body[key];
+											if (value === null || typeof value === 'undefined') {
+												return;
+											}
+											body.append(key, String(value));
+										});
+									}
+									fetchOptions.body = appendProxyFields(body, action, instance);
+									response = await fetch(String(CONFIG.proxyAjaxUrl || BOOTSTRAP.ajaxUrl || window.location.origin + '/wp-admin/admin-ajax.php'), fetchOptions);
+								} else {
+									response = await fetch(stopwatchProxyUrl(action, instance, options.query || {}).toString(), fetchOptions);
+								}
+							} catch (error) {
+								throw new Error('Die Stopuhr kann die Instanz gerade nicht erreichen.');
+							}
+
+							var rawText = await response.text().catch(function () { return ''; });
+							var json = null;
+							if (rawText !== '') {
+								try {
+									json = JSON.parse(rawText);
+								} catch (error) {
+									json = null;
+								}
+							}
+							if (!response.ok || !json || !json.success) {
+								throw new Error(instanceResponseError(response, json, rawText));
+							}
+							return json.data || {};
+						}
+
+						function normalizeInstanceInput(raw) {
+							var value = String(raw || '').trim();
+							if (!value) {
+								return { slug: '', baseUrl: '' };
+							}
+							if (/^https?:\/\//i.test(value)) {
+								try {
+									var parsed = new URL(value);
+									var host = String(parsed.hostname || '').trim().toLowerCase();
+									var slug = /\.misbuero\.ch$/i.test(host)
+										? host.replace(/\.misbuero\.ch$/i, '')
+										: host;
+									return {
+										slug: slug || host || '',
+										baseUrl: parsed.origin
+									};
+								} catch (error) {
+									return { slug: '', baseUrl: '' };
+								}
+							}
+							var looksLikeHost = /[.:/]/.test(value);
+							if (looksLikeHost) {
+								try {
+									var scheme = /\.local(?::\d+)?$/i.test(value) || /^localhost(?::\d+)?$/i.test(value) ? 'http://' : 'https://';
+									var parsedHost = new URL(scheme + value.replace(/^\/+/, ''));
+									var hostname = String(parsedHost.hostname || '').trim().toLowerCase();
+									var nextSlug = /\.misbuero\.ch$/i.test(hostname)
+										? hostname.replace(/\.misbuero\.ch$/i, '')
+										: hostname;
+									return {
+										slug: nextSlug || hostname || '',
+										baseUrl: parsedHost.origin
+									};
+								} catch (error) {
+									return { slug: '', baseUrl: '' };
+								}
+							}
+							var slug = value.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').trim().toLowerCase();
+							if (slug === '') {
+								return { slug: '', baseUrl: '' };
+							}
+							return {
+								slug: slug,
+								baseUrl: 'https://' + slug + '.misbuero.ch'
+							};
+						}
+
+						function openSettingsDialog() {
+							if (!settingsRoot) {
+								return;
+							}
+							var currentInstanceSelect = document.getElementById('instance-select');
+							var preferredKey = currentInstanceSelect ? String(currentInstanceSelect.value || '') : '';
+							refreshSettingsUi(preferredKey || settingsSelectedKey());
+							openModal(settingsRoot);
+						}
 
 					function closeSettingsDialog() {
 						if (!settingsRoot) {
@@ -967,6 +1225,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						if (reminderTimer) {
 							window.clearTimeout(reminderTimer);
 							reminderTimer = 0;
+						}
+						if (reminderResetTimer) {
+							window.clearTimeout(reminderResetTimer);
+							reminderResetTimer = 0;
 						}
 						if (reminderCountdownTimer) {
 							window.clearInterval(reminderCountdownTimer);
@@ -1050,71 +1312,275 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						return next;
 					}
 
-					function buildInstance(source) {
-						source = normalizeInstanceRecord(source);
-						var siteUrl = String(source.siteUrl || '').replace(/\/+$/, '');
-						var ajaxUrl = String(source.ajaxUrl || '').trim();
-						var slug = '';
-						try {
-							slug = new URL(siteUrl || window.location.origin).hostname.replace(/\.misbuero\.ch$/i, '');
-						} catch (error) {
-							slug = String(siteUrl || window.location.hostname || 'misbuero');
-						}
+						function buildInstance(source) {
+							source = normalizeInstanceRecord(source);
+							var siteUrl = String(source.siteUrl || source.baseUrl || '').replace(/\/+$/, '');
+							var ajaxUrl = String(source.ajaxUrl || '').trim();
+							var slug = String(source.slug || '').trim().toLowerCase();
+							try {
+								if (slug === '') {
+									slug = new URL(siteUrl || window.location.origin).hostname.replace(/\.misbuero\.ch$/i, '');
+								}
+							} catch (error) {
+								if (slug === '') {
+									slug = String(siteUrl || window.location.hostname || 'misbuero');
+								}
+							}
 						var intervals = Array.isArray(source.intervals) && source.intervals.length ? source.intervals : [5, 10, 15, 20, 30, 45, 60];
 						intervals = intervals.map(function (value) {
 							return Number(value);
 						}).filter(function (value) {
 							return Number.isFinite(value) && value > 0;
 						});
-						if (!intervals.length) {
-							intervals = [5, 10, 15, 20, 30, 45, 60];
-						}
-						return {
-							slug: slug,
-							baseUrl: siteUrl,
-							siteName: normalizeText(source.siteName || siteUrl || 'Mis Buero'),
-							token: String(source.token || ''),
+							if (!intervals.length) {
+								intervals = [5, 10, 15, 20, 30, 45, 60];
+							}
+							var stopwatchUrl = String(source.stopwatchUrl || '').trim();
+							if (stopwatchUrl === '' && siteUrl !== '') {
+								var route = String(CONFIG.stopwatchRoute || 'mis-stopuhr').replace(/^\/+|\/+$/g, '');
+								var url = new URL(siteUrl + '/' + route + '/', window.location.origin);
+								if (source.token) {
+									url.searchParams.set('token', String(source.token));
+								}
+								stopwatchUrl = url.toString();
+							}
+							if (stopwatchUrl === '') {
+								stopwatchUrl = String(BOOTSTRAP.stopwatchUrl || window.location.href);
+							}
+							return {
+								slug: slug,
+								baseUrl: siteUrl,
+								siteName: normalizeText(source.siteName || siteUrl || 'Mis Buero'),
+								token: String(source.token || ''),
 							userLogin: normalizeText(source.userLogin || ''),
 							userDisplay: normalizeText(source.userDisplay || ''),
 							intervals: intervals,
 							defaultInterval: Number(source.defaultInterval || intervals[0] || 5),
-							ajaxUrl: ajaxUrl !== '' ? ajaxUrl : (siteUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
-							supports: source.supports && typeof source.supports === 'object' ? source.supports : {},
-							projects: normalizeEntityList(source.projects, 'project'),
-							contacts: normalizeEntityList(source.contacts, 'contact'),
-							stopwatchUrl: String(source.stopwatchUrl || window.location.href),
-							updatedAt: new Date().toISOString()
-						};
-					}
+								ajaxUrl: ajaxUrl !== '' ? ajaxUrl : (siteUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
+								supports: source.supports && typeof source.supports === 'object' ? source.supports : {},
+								projects: normalizeEntityList(source.projects, 'project'),
+								contacts: normalizeEntityList(source.contacts, 'contact'),
+								stopwatchUrl: stopwatchUrl,
+								updatedAt: new Date().toISOString()
+							};
+						}
 
-					function writeInstances(instances) {
-						writeValue(RAW_INSTANCE_KEY, Array.isArray(instances) ? instances : []);
-					}
+						function instanceKey(source) {
+							return String(source && (source.slug || source.baseUrl) ? (source.slug || source.baseUrl) : '').trim();
+						}
 
-					function seedInstance(source) {
-						var instance = buildInstance(source);
-						writeInstances([instance]);
-						updateSettingsSummary(instance);
-						return instance;
-					}
+						function settingsSelectedKey() {
+							return settingsSavedInstance ? String(settingsSavedInstance.value || '') : '';
+						}
 
-					function updateSettingsSummary(instance) {
-						if (!instance) {
-							return;
+						function getInstances() {
+							var stored = readValue(RAW_INSTANCE_KEY);
+							return (Array.isArray(stored) ? stored : []).map(function (entry) {
+								return buildInstance(entry);
+							}).filter(function (entry) {
+								return instanceKey(entry) !== '';
+							});
 						}
-						if (settingsInstance) {
-							settingsInstance.textContent = instance.siteName || instance.baseUrl || '-';
+
+						function saveInstances(instances) {
+							var byKey = {};
+							(Array.isArray(instances) ? instances : []).forEach(function (entry) {
+								var normalized = buildInstance(entry);
+								var key = instanceKey(normalized);
+								if (key === '') {
+									return;
+								}
+								byKey[key] = normalized;
+							});
+							var next = Object.keys(byKey).map(function (key) {
+								return byKey[key];
+							}).sort(function (left, right) {
+								return String(instanceKey(left)).localeCompare(String(instanceKey(right)), 'de');
+							});
+							writeValue(RAW_INSTANCE_KEY, next);
+							return next;
 						}
-						if (settingsUser) {
-							settingsUser.textContent = instance.userDisplay || instance.userLogin || '-';
+
+						function upsertInstance(source) {
+							var nextInstance = buildInstance(source);
+							var key = instanceKey(nextInstance);
+							var instances = getInstances().filter(function (entry) {
+								return instanceKey(entry) !== key;
+							});
+							instances.push(nextInstance);
+							saveInstances(instances);
+							return nextInstance;
 						}
-						if (settingsInterval) {
-							settingsInterval.textContent = String(instance.defaultInterval || 5) + ' min';
+
+						function seedInstance(source) {
+							return upsertInstance(source);
 						}
-						if (settingsLink) {
-							settingsLink.textContent = instance.stopwatchUrl ? 'aktiv' : '-';
+
+						function findStoredInstance(selectedKey, instances) {
+							var key = String(selectedKey || '');
+							var list = Array.isArray(instances) ? instances : getInstances();
+							return list.find(function (entry) {
+								return instanceKey(entry) === key;
+							}) || null;
 						}
-					}
+
+						function pickDefaultInterval(intervals, preferred) {
+							var allowed = (Array.isArray(intervals) ? intervals : []).map(function (value) {
+								return Number(value);
+							}).filter(function (value) {
+								return Number.isFinite(value) && value > 0;
+							});
+							if (!allowed.length) {
+								allowed = [5, 10, 15, 20, 30, 45, 60];
+							}
+							var wanted = Number(preferred || 0);
+							if (allowed.indexOf(wanted) !== -1) {
+								return wanted;
+							}
+							return Number(allowed[0] || 5);
+						}
+
+						function renderSettingsSavedInstanceSelect(instances, selectedKey) {
+							if (!settingsSavedInstance) {
+								return;
+							}
+							var list = Array.isArray(instances) ? instances : [];
+							if (!list.length) {
+								settingsSavedInstance.innerHTML = '<option value="">Noch keine Instanz gespeichert</option>';
+								settingsSavedInstance.disabled = true;
+								if (settingsRemove) {
+									settingsRemove.disabled = true;
+								}
+								if (settingsSave) {
+									settingsSave.disabled = true;
+								}
+								return;
+							}
+
+							var activeKey = String(selectedKey || instanceKey(list[0]));
+							settingsSavedInstance.disabled = false;
+							if (settingsRemove) {
+								settingsRemove.disabled = false;
+							}
+							if (settingsSave) {
+								settingsSave.disabled = false;
+							}
+							settingsSavedInstance.innerHTML = list.map(function (entry) {
+								var key = instanceKey(entry);
+								return '<option value="' + key.replace(/[&<>"']/g, function (char) {
+									return ({
+										'&': '&amp;',
+										'<': '&lt;',
+										'>': '&gt;',
+										'"': '&quot;',
+										"'": '&#39;'
+									}[char] || char);
+								}) + '"' + (key === activeKey ? ' selected' : '') + '>' + key + '</option>';
+							}).join('');
+						}
+
+						function renderSettingsIntervalOptions(instance) {
+							if (!settingsDefaultInterval) {
+								return;
+							}
+							var intervals = Array.isArray(instance && instance.intervals) && instance.intervals.length
+								? instance.intervals
+								: [5, 10, 15, 20, 30, 45, 60];
+							var current = pickDefaultInterval(intervals, instance && instance.defaultInterval ? instance.defaultInterval : 5);
+							settingsDefaultInterval.innerHTML = intervals.map(function (value) {
+								var n = Number(value);
+								return '<option value="' + String(n) + '"' + (n === current ? ' selected' : '') + '>' + String(n) + '</option>';
+							}).join('');
+						}
+
+						function renderSettingsInstanceList(instances) {
+							if (!settingsList) {
+								return;
+							}
+							var list = Array.isArray(instances) ? instances : [];
+							if (!list.length) {
+								settingsList.classList.add('is-empty');
+								settingsList.innerHTML = 'Noch keine Instanz gespeichert.';
+								return;
+							}
+
+							settingsList.classList.remove('is-empty');
+							settingsList.innerHTML = list.map(function (entry) {
+								var projectCount = Array.isArray(entry.projects) ? entry.projects.length : 0;
+								var contactCount = Array.isArray(entry.contacts) ? entry.contacts.length : 0;
+								var intervals = Array.isArray(entry.intervals) && entry.intervals.length ? entry.intervals.join(', ') : '-';
+								return '<div class="cmx-stopwatch-instance-card">'
+									+ '<strong>' + String(instanceKey(entry)).replace(/[&<>"']/g, function (char) {
+										return ({
+											'&': '&amp;',
+											'<': '&lt;',
+											'>': '&gt;',
+											'"': '&quot;',
+											"'": '&#39;'
+										}[char] || char);
+									}) + '</strong>'
+									+ '<div class="cmx-stopwatch-instance-meta">' + String(entry.siteName || entry.baseUrl || '-').replace(/[&<>"']/g, function (char) {
+										return ({
+											'&': '&amp;',
+											'<': '&lt;',
+											'>': '&gt;',
+											'"': '&quot;',
+											"'": '&#39;'
+										}[char] || char);
+									}) + '</div>'
+									+ '<div class="cmx-stopwatch-instance-meta">Benutzer: ' + String(entry.userDisplay || entry.userLogin || '-').replace(/[&<>"']/g, function (char) {
+										return ({
+											'&': '&amp;',
+											'<': '&lt;',
+											'>': '&gt;',
+											'"': '&quot;',
+											"'": '&#39;'
+										}[char] || char);
+									}) + '</div>'
+									+ '<div class="cmx-stopwatch-instance-meta">Intervall standardmässig: ' + String(entry.defaultInterval || '-') + ' Minuten</div>'
+									+ '<div class="cmx-stopwatch-instance-meta">Mögliche Intervalle: ' + intervals + '</div>'
+									+ '<div class="cmx-stopwatch-instance-meta">Aktive Projekte geladen: ' + String(projectCount) + '</div>'
+									+ '<div class="cmx-stopwatch-instance-meta">Kontakte geladen: ' + String(contactCount) + '</div>'
+									+ '</div>';
+							}).join('');
+						}
+
+						function fillSettingsForm(instance) {
+							renderSettingsIntervalOptions(instance);
+							if (settingsInstanceInput) {
+								settingsInstanceInput.value = '';
+							}
+							if (settingsUsernameInput) {
+								settingsUsernameInput.value = instance ? String(instance.userLogin || '') : '';
+							}
+							if (settingsPasswordInput) {
+								settingsPasswordInput.value = '';
+							}
+						}
+
+						function refreshSettingsUi(selectedKey) {
+							var instances = getInstances();
+							var activeKey = String(selectedKey || settingsSelectedKey() || instanceKey(instances[0]));
+							renderSettingsSavedInstanceSelect(instances, activeKey);
+							renderSettingsInstanceList(instances);
+							var selected = findStoredInstance(activeKey, instances) || instances[0] || null;
+							fillSettingsForm(selected);
+							return {
+								instances: instances,
+								selected: selected
+							};
+						}
+
+						function dispatchInstancesChanged(selectedKey) {
+							if (window.CMX_EXT_TIME_CONFIG && typeof window.CMX_EXT_TIME_CONFIG === 'object') {
+								window.CMX_EXT_TIME_CONFIG.preferredInstanceKey = String(selectedKey || '');
+							}
+							window.dispatchEvent(new CustomEvent('cmx-ext-time-instances-changed', {
+								detail: {
+									selectedKey: String(selectedKey || '')
+								}
+							}));
+						}
 
 					function sessionTargetId(session) {
 						if (!session || typeof session !== 'object') {
@@ -1160,14 +1626,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						closeReminderDialog();
 					}
 
-					function purgeStopwatchStorage() {
-						clearReminderTimers();
-						var keysToRemove = [
-							translatedKey(RAW_ACTIVE_KEY),
-							translatedKey(RAW_INSTANCE_KEY),
-							RAW_ACTIVE_KEY,
-							RAW_INSTANCE_KEY
-						];
+						function purgeStopwatchStorage() {
+							clearReminderTimers();
+							var keysToRemove = [
+								translatedKey(RAW_ACTIVE_KEY),
+								RAW_ACTIVE_KEY
+							];
 						try {
 							for (var index = 0; index < window.localStorage.length; index += 1) {
 								var key = window.localStorage.key(index);
@@ -1263,46 +1727,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						return 'Die Instanz antwortet nicht mit gueltigen Daten.';
 					}
 
-					async function fetchBootstrapData(instance) {
-						var action = String(CONFIG.bootstrapAction || 'cmx_ext_time_bootstrap');
-						var url = new URL(buildAjaxUrl(instance, action));
-						if (instance && instance.token) {
-							url.searchParams.set('token', instance.token);
-						}
+						async function fetchBootstrapData(instance) {
+							var next;
+							if (CONFIG.proxyBootstrapAction) {
+								next = normalizeInstanceRecord(await requestStopwatchJson('GET', String(CONFIG.proxyBootstrapAction), instance));
+							} else {
+								var action = String(CONFIG.bootstrapAction || 'cmx_ext_time_bootstrap');
+								var url = new URL(buildAjaxUrl(instance, action));
+								if (instance && instance.token) {
+									url.searchParams.set('token', instance.token);
+								}
 
-						var response;
-						try {
-							response = await fetch(url.toString(), {
-								method: 'GET',
-								credentials: 'same-origin',
-								cache: 'no-store',
-								headers: instance && instance.token ? { 'X-CMX-Extension-Token': instance.token } : {}
-							});
-						} catch (error) {
-							throw new Error('Die Stopuhr kann die Instanz gerade nicht erreichen.');
-						}
+								var response;
+								try {
+									response = await fetch(url.toString(), {
+										method: 'GET',
+										credentials: 'same-origin',
+										cache: 'no-store',
+										headers: instance && instance.token ? { 'X-CMX-Extension-Token': instance.token } : {}
+									});
+								} catch (error) {
+									throw new Error('Die Stopuhr kann die Instanz gerade nicht erreichen.');
+								}
 
-						var rawText = await response.text().catch(function () { return ''; });
-						var json = null;
-						if (rawText !== '') {
-							try {
-								json = JSON.parse(rawText);
-							} catch (error) {
-								json = null;
+								var rawText = await response.text().catch(function () { return ''; });
+								var json = null;
+								if (rawText !== '') {
+									try {
+										json = JSON.parse(rawText);
+									} catch (error) {
+										json = null;
+									}
+								}
+
+								if (!response.ok || !json || !json.success) {
+									throw new Error(instanceResponseError(response, json, rawText));
+								}
+								next = normalizeInstanceRecord(json.data || {});
 							}
+							next.userLogin = normalizeText(next.userLogin || (instance && instance.userLogin) || '');
+							next.userDisplay = normalizeText(next.userDisplay || (instance && instance.userDisplay) || next.userLogin || '');
+							next.storageNamespace = storageNamespace;
+							next.stopwatchUrl = String(next.stopwatchUrl || (instance && instance.stopwatchUrl) || '');
+							return next;
 						}
 
-						if (!response.ok || !json || !json.success) {
-							throw new Error(instanceResponseError(response, json, rawText));
+						async function connectInstanceData(instance, credentials) {
+							credentials = credentials && typeof credentials === 'object' ? credentials : {};
+							if (!CONFIG.proxyConnectAction) {
+								throw new Error('Die Instanz-Verbindung ist auf dieser Seite nicht verfügbar.');
+							}
+							var username = String(credentials.username || '').trim();
+							var password = String(credentials.password || '').trim();
+							var next = normalizeInstanceRecord(await requestStopwatchJson('POST', String(CONFIG.proxyConnectAction), instance, {
+								body: {
+									username: username,
+									password: password
+								}
+							}));
+							next.userLogin = normalizeText(username);
+							next.userDisplay = normalizeText(next.userDisplay || username);
+							next.stopwatchUrl = String(next.stopwatchUrl || '');
+							return next;
 						}
-
-						var next = normalizeInstanceRecord(json.data || {});
-						next.userId = BOOTSTRAP.userId || next.userId || 0;
-						next.userLogin = normalizeText(BOOTSTRAP.userLogin || next.userLogin || '');
-						next.storageNamespace = storageNamespace;
-						next.stopwatchUrl = BOOTSTRAP.stopwatchUrl || window.location.href;
-						return next;
-					}
 
 					function normalizeSessionTarget(source) {
 						source = source && typeof source === 'object' ? source : {};
@@ -1351,11 +1838,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						};
 					}
 
-					async function persistSession(session, reason) {
-						var normalizedTarget = normalizeSessionTarget(session || {});
-						var targetType = normalizedTarget.targetType;
-						var target = normalizedTarget.target;
-						if (!session || !session.instance || !target || !target.id) {
+						async function persistSession(session, reason) {
+							var normalizedTarget = normalizeSessionTarget(session || {});
+							var targetType = normalizedTarget.targetType;
+							var target = normalizedTarget.target;
+							if (!session || !session.instance || !target || !target.id) {
 							throw new Error(targetType === 'contact' ? 'Kontakt oder Instanz fehlen.' : 'Projekt oder Instanz fehlen.');
 						}
 
@@ -1364,11 +1851,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						if (session.instance.token) {
 							formData.append('token', session.instance.token);
 						}
-						formData.append('target_type', targetType);
-						formData.append('target_id', String(target.id || 0));
-						if (targetType === 'project') {
-							formData.append('project_id', String(target.id || 0));
-						} else {
+							formData.append('target_type', targetType);
+							formData.append('target_id', String(target.id || 0));
+							formData.append('target_label', String(target.label || target.title || ''));
+							formData.append('target_title', String(target.title || target.label || ''));
+							if (targetType === 'project') {
+								formData.append('project_id', String(target.id || 0));
+							} else {
 							formData.append('contact_id', String(target.id || 0));
 						}
 						formData.append('mode', String(session.mode || 'task'));
@@ -1379,41 +1868,47 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						formData.append('betreff', String(session.betreff || ''));
 						formData.append('artikel_label', (session.article && (session.article.label || session.article.title)) || '');
 						formData.append('produkt_label', (session.product && (session.product.label || session.product.title)) || '');
-						formData.append('start_at', new Date(Number(session.startMs || Date.now())).toISOString());
-						formData.append('end_at', new Date().toISOString());
-						formData.append('start_date', String(session.startDate || formatLocalDate(session.startMs)));
-						formData.append('start_time', String(session.startTime || formatLocalTime(session.startMs)));
-						formData.append('reason', String(reason || 'manual'));
+							formData.append('start_at', new Date(Number(session.startMs || Date.now())).toISOString());
+							formData.append('end_at', new Date().toISOString());
+							formData.append('start_date', String(session.startDate || formatLocalDate(session.startMs)));
+							formData.append('start_time', String(session.startTime || formatLocalTime(session.startMs)));
+							formData.append('reason', String(reason || 'manual'));
 
-						var response;
-						try {
-							response = await fetch(buildAjaxUrl(session.instance, String(CONFIG.saveAction || 'cmx_ext_time_save')), {
-								method: 'POST',
-								credentials: 'same-origin',
-								cache: 'no-store',
-								headers: session.instance.token ? { 'X-CMX-Extension-Token': session.instance.token } : {},
-								body: formData
-							});
-						} catch (error) {
-							throw new Error('Die Zeit konnte nicht gespeichert werden.');
-						}
-
-						var rawText = await response.text().catch(function () { return ''; });
-						var json = null;
-						if (rawText !== '') {
-							try {
-								json = JSON.parse(rawText);
-							} catch (error) {
-								json = null;
+							if (CONFIG.proxySaveAction) {
+								return requestStopwatchJson('POST', String(CONFIG.proxySaveAction), session.instance, {
+									body: formData
+								});
 							}
-						}
 
-						if (!response.ok || !json || !json.success) {
-							throw new Error(instanceResponseError(response, json, rawText));
-						}
+							var response;
+							try {
+								response = await fetch(buildAjaxUrl(session.instance, String(CONFIG.saveAction || 'cmx_ext_time_save')), {
+									method: 'POST',
+									credentials: 'same-origin',
+									cache: 'no-store',
+									headers: session.instance.token ? { 'X-CMX-Extension-Token': session.instance.token } : {},
+									body: formData
+								});
+							} catch (error) {
+								throw new Error('Die Zeit konnte nicht gespeichert werden.');
+							}
 
-						return json.data || {};
-					}
+							var rawText = await response.text().catch(function () { return ''; });
+							var json = null;
+							if (rawText !== '') {
+								try {
+									json = JSON.parse(rawText);
+								} catch (error) {
+									json = null;
+								}
+							}
+
+							if (!response.ok || !json || !json.success) {
+								throw new Error(instanceResponseError(response, json, rawText));
+							}
+
+							return json.data || {};
+						}
 
 					function scheduleReminder(session) {
 						clearReminderTimers();
@@ -1489,6 +1984,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					}
 
 					async function handleReminderContinue() {
+						if (reminderResetTimer) {
+							window.clearTimeout(reminderResetTimer);
+							reminderResetTimer = 0;
+						}
 						var session = getActiveSession();
 						if (!session) {
 							clearActiveSessionState();
@@ -1501,6 +2000,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					}
 
 					async function handleReminderStop(reason) {
+						if (reminderResetTimer) {
+							window.clearTimeout(reminderResetTimer);
+							reminderResetTimer = 0;
+						}
 						if (!getActiveSession()) {
 							clearActiveSessionState();
 							window.location.reload();
@@ -1519,6 +2022,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 							if (reminderStatus) {
 								reminderStatus.textContent = result && result.error ? result.error : 'Die Zeit konnte nicht gespeichert werden.';
 							}
+							reminderResetTimer = window.setTimeout(function () {
+								reminderResetTimer = 0;
+								handleReminderAbort(cleanedStopwatchUrl());
+							}, 5000);
 							return;
 						}
 						window.location.reload();
@@ -1534,24 +2041,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						window.location.reload();
 					}
 
-					function refreshActiveSessionInstance(instance) {
-						var session = getActiveSession();
-						if (!session) {
-							clearReminderTimers();
-							closeReminderDialog();
-							return;
+						function refreshActiveSessionInstance(instance) {
+							var session = getActiveSession();
+							if (!session) {
+								clearReminderTimers();
+								closeReminderDialog();
+								return;
+							}
+							var nextInstanceKey = instanceKey(instance);
+							var activeInstanceKey = String(session.instanceKey || '');
+							if (nextInstanceKey !== '' && activeInstanceKey !== '' && activeInstanceKey !== nextInstanceKey) {
+								return;
+							}
+							session.instance = instance;
+							session.instanceKey = nextInstanceKey;
+							storeActiveSession(session);
+							scheduleReminder(session);
 						}
-						session.instance = instance;
-						session.instanceKey = instance.slug || instance.baseUrl;
-						storeActiveSession(session);
-						scheduleReminder(session);
-					}
 
-					function cleanedStopwatchUrl() {
-						var url = new URL(String(instance && instance.stopwatchUrl ? instance.stopwatchUrl : window.location.href), window.location.origin);
-						url.searchParams.delete('cmx_stopwatch_action');
-						return url.toString();
-					}
+						function cleanedStopwatchUrl() {
+							var url = new URL(String(BOOTSTRAP.stopwatchUrl || window.location.href), window.location.origin);
+							url.searchParams.delete('cmx_stopwatch_action');
+							return url.toString();
+						}
 
 					function replaceActionUrl() {
 						if (!window.history || typeof window.history.replaceState !== 'function') {
@@ -1731,42 +2243,164 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						if (message.type === 'cmx-ext-time-stop-session') {
 							return stopSession('manual');
 						}
+						if (message.type === 'cmx-ext-time-reset-session') {
+							clearActiveSessionState();
+							return Promise.resolve({ success: true });
+						}
 
 						return Promise.resolve(null);
 					};
-					window.chrome = chromeShim;
+						window.chrome = chromeShim;
 
-					var instance = seedInstance(BOOTSTRAP);
-					refreshActiveSessionInstance(instance);
+						var instance = seedInstance(BOOTSTRAP);
+						if (window.CMX_EXT_TIME_CONFIG && typeof window.CMX_EXT_TIME_CONFIG === 'object') {
+							window.CMX_EXT_TIME_CONFIG.preferredInstanceKey = instanceKey(instance);
+						}
+						refreshActiveSessionInstance(instance);
+						refreshSettingsUi(instanceKey(instance));
 
-					if (settingsReload) {
-						settingsReload.addEventListener('click', async function () {
-							setSettingsStatus('Daten werden neu geladen...', false);
-							try {
-								var nextBootstrap = await fetchBootstrapData(instance);
-								instance = seedInstance(nextBootstrap);
-								refreshActiveSessionInstance(instance);
-								setSettingsStatus('Daten aktualisiert. Seite wird neu geladen.', false);
-								window.setTimeout(function () {
-									window.location.reload();
-								}, 260);
-							} catch (error) {
-								setSettingsStatus(error && error.message ? error.message : 'Die Stopuhr konnte die Daten nicht neu laden.', true);
-							}
-						});
-					}
-
-					if (settingsCopy) {
-						settingsCopy.addEventListener('click', function () {
-							copyText(String(instance.stopwatchUrl || window.location.href)).then(function (copied) {
-								setSettingsStatus(copied ? 'Link wurde in die Zwischenablage kopiert.' : 'Link konnte nicht kopiert werden.', !copied);
+						if (settingsSavedInstance) {
+							settingsSavedInstance.addEventListener('change', function () {
+								refreshSettingsUi(settingsSelectedKey());
+								setSettingsStatus('', false);
 							});
-						});
-					}
+						}
 
-					Array.prototype.slice.call(document.querySelectorAll('[data-stopwatch-close="settings"]')).forEach(function (button) {
-						button.addEventListener('click', closeSettingsDialog);
-					});
+						if (settingsInstanceInput) {
+							settingsInstanceInput.addEventListener('keydown', function (event) {
+								if (event.key !== 'Enter') {
+									return;
+								}
+								event.preventDefault();
+								if (settingsConnect) {
+									settingsConnect.click();
+								}
+							});
+						}
+
+						if (settingsPasswordInput) {
+							settingsPasswordInput.addEventListener('keydown', function (event) {
+								if (event.key !== 'Enter') {
+									return;
+								}
+								event.preventDefault();
+								if (settingsConnect) {
+									settingsConnect.click();
+								}
+							});
+						}
+
+						if (settingsPasswordToggle && settingsPasswordInput) {
+							settingsPasswordToggle.addEventListener('click', function () {
+								var isVisible = settingsPasswordInput.getAttribute('type') === 'text';
+								settingsPasswordInput.setAttribute('type', isVisible ? 'password' : 'text');
+								settingsPasswordToggle.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
+								settingsPasswordToggle.setAttribute('aria-label', isVisible ? 'Passwort anzeigen' : 'Passwort ausblenden');
+								settingsPasswordToggle.setAttribute('title', isVisible ? 'Passwort anzeigen' : 'Passwort ausblenden');
+							});
+						}
+
+						if (settingsConnect) {
+							settingsConnect.addEventListener('click', async function () {
+								var normalized = normalizeInstanceInput(settingsInstanceInput ? settingsInstanceInput.value : '');
+								var selectedStoredInstance = findStoredInstance(settingsSelectedKey());
+								if ((!normalized.slug || !normalized.baseUrl) && selectedStoredInstance) {
+									normalized = {
+										slug: selectedStoredInstance.slug || '',
+										baseUrl: selectedStoredInstance.baseUrl || '',
+										token: selectedStoredInstance.token || '',
+										ajaxUrl: selectedStoredInstance.ajaxUrl || ''
+									};
+								}
+								if (!normalized.slug || !normalized.baseUrl) {
+									setSettingsStatus('Eine gültige Instanz eingeben.', true);
+									return;
+								}
+								var storedInstance = findStoredInstance(normalized.slug || normalized.baseUrl);
+
+								var username = settingsUsernameInput ? String(settingsUsernameInput.value || '').trim() : '';
+								var password = settingsPasswordInput ? String(settingsPasswordInput.value || '').trim() : '';
+								if (username === '' || password === '') {
+									setSettingsStatus('Bitte Benutzername und Passwort eingeben.', true);
+									return;
+								}
+
+								setSettingsStatus('Instanz wird geladen...', false);
+								try {
+									var bootstrapData = await connectInstanceData(normalized, {
+										username: username,
+										password: password
+									});
+									var intervals = Array.isArray(bootstrapData.intervals) && bootstrapData.intervals.length ? bootstrapData.intervals : [5, 10, 15, 20, 30, 45, 60];
+									var merged = upsertInstance({
+										slug: normalized.slug,
+										baseUrl: normalized.baseUrl,
+										siteName: bootstrapData.siteName || normalized.baseUrl,
+										token: bootstrapData.token || (storedInstance && storedInstance.token) || '',
+										userLogin: username,
+										userDisplay: bootstrapData.userDisplay || username,
+										intervals: intervals,
+										defaultInterval: pickDefaultInterval(intervals, settingsDefaultInterval ? settingsDefaultInterval.value : (bootstrapData.defaultInterval || 5)),
+										ajaxUrl: bootstrapData.ajaxUrl || (storedInstance && storedInstance.ajaxUrl) || (normalized.baseUrl.replace(/\/+$/, '') + '/wp-admin/admin-ajax.php'),
+										supports: bootstrapData.supports && typeof bootstrapData.supports === 'object' ? bootstrapData.supports : {},
+										projects: Array.isArray(bootstrapData.projects) ? bootstrapData.projects : [],
+										contacts: Array.isArray(bootstrapData.contacts) ? bootstrapData.contacts : [],
+										stopwatchUrl: bootstrapData.stopwatchUrl || ''
+									});
+									refreshSettingsUi(instanceKey(merged));
+									dispatchInstancesChanged(instanceKey(merged));
+									setSettingsStatus('Instanz wurde erfolgreich geladen und gespeichert. ' + String((merged.projects || []).length) + ' Projekte und ' + String((merged.contacts || []).length) + ' Kontakte wurden übernommen.', false);
+								} catch (error) {
+									setSettingsStatus(error && error.message ? error.message : 'Die Instanz konnte nicht geladen werden.', true);
+								}
+							});
+						}
+
+						if (settingsSave) {
+							settingsSave.addEventListener('click', function () {
+								var selected = findStoredInstance(settingsSelectedKey());
+								if (!selected) {
+									setSettingsStatus('Erst eine Instanz auswählen.', true);
+									return;
+								}
+								var value = Number(settingsDefaultInterval ? settingsDefaultInterval.value : 0);
+								if (!Number.isFinite(value) || value <= 0) {
+									setSettingsStatus('Bitte ein Intervall auswählen.', true);
+									return;
+								}
+								selected.defaultInterval = pickDefaultInterval(selected.intervals, value);
+								var merged = upsertInstance(selected);
+								refreshSettingsUi(instanceKey(merged));
+								dispatchInstancesChanged(instanceKey(merged));
+								setSettingsStatus('Standard-Intervall wurde gespeichert.', false);
+							});
+						}
+
+						if (settingsRemove) {
+							settingsRemove.addEventListener('click', function () {
+								var selected = findStoredInstance(settingsSelectedKey());
+								if (!selected) {
+									setSettingsStatus('Keine Instanz ausgewählt.', true);
+									return;
+								}
+								var activeSession = getActiveSession();
+								if (activeSession && instanceKey(selected) === String(activeSession.instanceKey || '')) {
+									setSettingsStatus('Diese Instanz hat gerade eine laufende Erfassung.', true);
+									return;
+								}
+								var nextInstances = saveInstances(getInstances().filter(function (entry) {
+									return instanceKey(entry) !== instanceKey(selected);
+								}));
+								var nextSelectedKey = instanceKey(nextInstances[0] || '');
+								refreshSettingsUi(nextSelectedKey);
+								dispatchInstancesChanged(nextSelectedKey);
+								setSettingsStatus('Instanz wurde entfernt.', false);
+							});
+						}
+
+						Array.prototype.slice.call(document.querySelectorAll('[data-stopwatch-close="settings"]')).forEach(function (button) {
+							button.addEventListener('click', closeSettingsDialog);
+						});
 
 					if (settingsRoot) {
 						settingsRoot.addEventListener('close', setDialogState);
