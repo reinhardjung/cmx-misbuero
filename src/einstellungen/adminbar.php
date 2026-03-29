@@ -105,6 +105,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_can_create_post_type')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_can_publish_post_type')) {
+	function cmx65_adminbar_can_publish_post_type(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->publish_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('publish_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_kontakt_post_types')) {
 	function cmx65_adminbar_kontakt_post_types(): array {
 		$types = ['kontakte', 'kontakt'];
@@ -322,19 +336,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 		$kontakt_types = cmx65_adminbar_kontakt_post_types();
 		$artikel_post = \get_post($artikel_id);
 
-		if (
-			!$kontakt_post instanceof \WP_Post
-			|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
-			|| !\current_user_can('edit_post', $kontakt_id)
-			|| !$artikel_post instanceof \WP_Post
-			|| (string) $artikel_post->post_type !== 'artikel'
-			|| !\current_user_can('edit_post', $artikel_id)
-			|| !\post_type_exists('belege')
-			|| !cmx65_adminbar_can_create_post_type('belege')
-		) {
-			\wp_safe_redirect($redirect_url);
-			exit;
-		}
+			if (
+				!$kontakt_post instanceof \WP_Post
+				|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
+				|| !\current_user_can('edit_post', $kontakt_id)
+				|| !$artikel_post instanceof \WP_Post
+				|| (string) $artikel_post->post_type !== 'artikel'
+				|| !\current_user_can('edit_post', $artikel_id)
+				|| !\post_type_exists('belege')
+				|| !cmx65_adminbar_can_create_post_type('belege')
+				|| !cmx65_adminbar_can_publish_post_type('belege')
+			) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
 
 		$kontakt_label = (string) \get_the_title($kontakt_id);
 		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
@@ -358,13 +373,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 				? CMX_BELEG_META_FAELLIG
 				: '_cmx_beleg_faelligkeitsdatum';
 
-			$beleg_id = \wp_insert_post([
-				'post_type'   => 'belege',
-			'post_status' => 'draft',
-			'post_title'  => '',
-			'post_author' => (int) \get_current_user_id(),
-			'meta_input'  => [
-					'_cmx_title_auto'         => 1,
+				$beleg_id = \wp_insert_post([
+					'post_type'   => 'belege',
+				'post_status' => 'publish',
+				'post_title'  => '',
+				'post_author' => (int) \get_current_user_id(),
+				'meta_input'  => [
+						'_cmx_title_auto'         => 1,
 					'_cmx_beleg_kontakt_id'   => $kontakt_id,
 					'_cmx_beleg_kontakt_label'=> $kontakt_label,
 					'_cmx_beleg_kontakt_addr' => $kontakt_addr,
@@ -374,12 +389,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 				],
 			], true);
 
-		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
-			\wp_safe_redirect($redirect_url);
-			exit;
-		}
+			if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$beleg_id = (int) $beleg_id;
+			if ((string) \get_post_status($beleg_id) !== 'publish') {
+				$publish_result = \wp_update_post([
+					'ID'          => $beleg_id,
+					'post_status' => 'publish',
+				], true);
+				if (\is_wp_error($publish_result)) {
+					\wp_safe_redirect($redirect_url);
+					exit;
+				}
+			}
 
-		$edit_url = (string) \get_edit_post_link((int) $beleg_id, '');
+			$edit_url = (string) \get_edit_post_link($beleg_id, '');
 		if ($edit_url === '') {
 			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
 		}
