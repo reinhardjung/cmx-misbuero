@@ -218,17 +218,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 		$icon_src = (string) (\function_exists(__NAMESPACE__ . '\\cmx_ext_time_preview_icon_src')
 			? cmx_ext_time_preview_icon_src()
 			: '');
-		$site_name = (string) ($bootstrap['siteName'] ?? \get_bloginfo('name'));
-		$site_name_display = $site_name;
-		if (\strpos($site_name, '-') !== false) {
-			$site_name_parts = \preg_split('/\s*-\s*/u', $site_name);
+			$site_name = (string) ($bootstrap['siteName'] ?? \get_bloginfo('name'));
+			$site_url = (string) ($bootstrap['siteUrl'] ?? \home_url('/'));
+			$site_name_display = $site_name;
+			$site_name_parts = \preg_split('/\s*[-\x{2010}-\x{2015}]+\s*/u', $site_name);
 			$site_name_parts = \array_values(\array_filter(\array_map('trim', (array) $site_name_parts), 'strlen'));
 			if (!empty($site_name_parts)) {
 				$site_name_display = (string) \end($site_name_parts);
 			}
-		}
-		$user_display = (string) ($bootstrap['userDisplay'] ?? '');
-		$stopwatch_url = (string) ($bootstrap['stopwatchUrl'] ?? cmx_ext_time_stopwatch_url((int) ($bootstrap['userId'] ?? 0)));
+			if ($site_name_display === '' || $site_name_display === $site_name) {
+				$site_host = (string) \parse_url($site_url, \PHP_URL_HOST);
+				$site_host = \preg_replace('/^www\./i', '', $site_host);
+				$site_host = \preg_replace('/\.misbuero\.ch$/i', '', (string) $site_host);
+				$site_host = \preg_replace('/\.local$/i', '', (string) $site_host);
+				$site_host = \trim((string) $site_host, '.');
+				if ($site_host !== '') {
+					$site_name_display = $site_host;
+				}
+			}
+			$user_display = (string) ($bootstrap['userLogin'] ?? '');
+			if ($user_display === '') {
+				$user_display = (string) ($bootstrap['userDisplay'] ?? '');
+			}
+			$stopwatch_url = (string) ($bootstrap['stopwatchUrl'] ?? cmx_ext_time_stopwatch_url((int) ($bootstrap['userId'] ?? 0)));
 		?>
 		<!doctype html>
 		<html lang="de">
@@ -312,7 +324,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_page')) {
 					gap:8px;
 					text-align:right;
 				}
-				.hero-meta strong{display:block;font-size:15px}
+					.hero-meta strong{
+						display:block;
+						font-size:15px;
+						text-decoration:underline;
+						text-decoration-color:var(--cmx-accent);
+						text-decoration-thickness:1px;
+						text-underline-offset:4px;
+					}
 				.hero-meta span{color:var(--cmx-muted);font-size:13px}
 				.wrap{
 					padding:18px;
