@@ -1346,8 +1346,9 @@ body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-se
 .icon{width:62px;height:62px;border-radius:18px;background:#fff;border:1px solid #dcdcde;display:flex;align-items:center;justify-content:center}
 .title{font-weight:700;font-size:15px}
 .subtitle{color:#646970}
-.gear{appearance:none;border:1px solid #ccd0d4;background:#fff;color:#1d2327;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
-.gear svg{display:block;width:22px;height:22px}
+	.gear{appearance:none;border:1px solid #d63638;background:#fff;color:#d63638;border-radius:12px;width:42px;height:42px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+	.gear:hover,.gear:focus{background:#d63638;border-color:#d63638;color:#fff;outline:none}
+	.gear svg{display:block;width:22px;height:22px}
 .panel{background:#fff;border:1px solid #dcdcde;border-radius:14px;padding:12px}
 .stack{display:flex;flex-direction:column;gap:10px}
 label{display:flex;flex-direction:column;gap:4px;font-weight:600}
@@ -1364,11 +1365,11 @@ textarea{min-height:76px;resize:vertical}
 .inline label{font-weight:400;flex-direction:row;align-items:center;gap:6px}
 .mode-options{flex-wrap:nowrap;gap:12px}
 .mode-options label{white-space:nowrap}
-.target-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.target-toggle{appearance:none;border:0;background:none;padding:0;color:#646970;font:inherit;font-weight:600;cursor:pointer}
-.target-toggle.is-active{color:#1d2327}
-.muted{color:#646970;font-size:12px}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
+	.target-row{display:flex;align-items:center;justify-content:flex-start;gap:12px}
+	.target-toggle{appearance:none;border:1px solid #d63638;background:#fff;padding:9px 14px;color:#d63638;font:inherit;font-weight:600;cursor:pointer;border-radius:10px;transition:background-color .16s ease,color .16s ease,border-color .16s ease}
+	.target-toggle:hover,.target-toggle:focus,.target-toggle.is-active{background:#d63638;color:#fff;border-color:#d63638;outline:none}
+	.muted{color:#646970;font-size:12px}
+	.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#1d4f91;font-size:12px}
 button{appearance:none;border:1px solid #2271b1;background:#2271b1;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600}
 button.secondary{background:#fff;color:#2271b1}
 button.danger{background:#d63638;border-color:#d63638}
@@ -1379,19 +1380,18 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .status.is-info{display:block}
 .suggest-wrap{position:relative}
 .suggest{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:9999;background:#fff;border:1px solid #ccd0d4;border-radius:10px;max-height:220px;overflow:auto;display:none;box-shadow:0 8px 22px rgba(0,0,0,.12)}
-.suggest button{width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 12px;border-radius:0;font-weight:400}
-.suggest button:hover,.suggest button.active{background:#eef4ff}
-.suggest .hint{padding:10px 12px;color:#646970}
-.footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:10px}
-#selection-hint{text-align:center;min-width:0}
-#reset-form{justify-self:start}
-#start-stop{justify-self:end}
-.session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-height:64px}
-.session.is-info{border-color:#2271b1;background:#eef4ff}
-.session.is-success{border-color:#00a32a;background:#f2fff4}
-.session.is-error{border-color:#d63638;background:#fff1f1}
-.session-message{font-size:13px;font-weight:600;line-height:1.35}
-.task-inline{margin-left:8px;white-space:nowrap}
+	.suggest button{display:block;width:100%;border:0;background:none;color:inherit;text-align:left;padding:10px 12px;border-radius:0;font-weight:400}
+	.suggest button:hover,.suggest button.active{background:#eef4ff}
+	.suggest .hint{padding:10px 12px;color:#646970}
+	.footer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:10px}
+	#selection-hint{text-align:left;min-width:0}
+	#start-stop{justify-self:end}
+	.session{padding:8px 10px;border-radius:10px;background:#f6f7fb;border:1px solid #e2e4e7;display:flex;flex-direction:column;justify-content:center;gap:6px;min-height:64px}
+	.session.is-info{border-color:#2271b1;background:#eef4ff}
+	.session.is-success{border-color:#00a32a;background:#f2fff4}
+	.session.is-error{border-color:#d63638;background:#fff1f1}
+	.session-message{font-size:13px;font-weight:600;line-height:1.35}
+	.task-inline{margin-left:8px;white-space:nowrap}
 .task-inline.is-hidden{visibility:hidden;pointer-events:none}
 @media (max-width:420px){.row{grid-template-columns:1fr}}
 </style>
@@ -1433,9 +1433,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
       </div>
       <div class="session" id="session-card">
         <div class="muted" id="session-label">Intervall</div>
-        <div id="interval-display" class="pill">-</div>
-        <div id="session-message" class="session-message" hidden></div>
-      </div>
+	        <select id="interval-select" aria-label="Intervall"></select>
+	        <div id="session-message" class="session-message" hidden></div>
+	      </div>
       <div class="target-row">
         <button type="button" class="target-toggle is-active" id="target-project" data-target="project">Projekt</button>
         <button type="button" class="target-toggle" id="target-contact" data-target="contact">Kontakt</button>
@@ -1448,10 +1448,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
         <textarea id="info-input" aria-label="Weitere Infos im Detail" placeholder="Weitere Infos im Detail..."></textarea>
       </div>
       <div class="footer">
-        <button type="button" class="secondary" id="reset-form">Zurücksetzen</button>
-        <div class="muted" id="selection-hint" hidden></div>
-        <button type="button" id="start-stop">Start</button>
-      </div>
+	        <div class="muted" id="selection-hint" hidden></div>
+	        <button type="button" id="start-stop">Start</button>
+	      </div>
     </div>
   </div>
 </div>
@@ -2113,7 +2112,7 @@ const selectionHint = document.getElementById('selection-hint');
 const sessionCardEl = document.getElementById('session-card');
 const sessionLabelEl = document.getElementById('session-label');
 const sessionMessageEl = document.getElementById('session-message');
-const intervalDisplay = document.getElementById('interval-display');
+const intervalSelect = document.getElementById('interval-select');
 const taskInlineEl = document.getElementById('task-inline');
 const noteSubjectWrapEl = document.getElementById('note-subject-wrap');
 const noteSubjectEl = document.getElementById('note-subject');
@@ -2157,13 +2156,72 @@ function currentNoteSubject() {
   return noteSubjectEl ? String(noteSubjectEl.value || '').trim() : '';
 }
 
+function availableIntervals(instance) {
+  const values = Array.isArray(instance && instance.intervals) ? instance.intervals : [];
+  const intervals = values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+  const fallback = Number(instance && instance.defaultInterval ? instance.defaultInterval : 0);
+  if (Number.isFinite(fallback) && fallback > 0 && !intervals.includes(fallback)) {
+    intervals.unshift(fallback);
+  }
+  if (!intervals.length) {
+    return [5, 10, 15, 20, 30, 45, 60];
+  }
+  return intervals.filter((value, index) => intervals.indexOf(value) === index);
+}
+
+function currentIntervalMinutes() {
+  const instance = selectedInstance();
+  if (state.activeSession && instance) {
+    const activeInstanceKey = state.activeSession.instanceKey || '';
+    const selectedInstanceKey = instance.slug || instance.baseUrl || '';
+    if (activeInstanceKey !== '' && activeInstanceKey === selectedInstanceKey) {
+      const activeInterval = Number(state.activeSession.intervalMinutes || 0);
+      if (Number.isFinite(activeInterval) && activeInterval > 0) {
+        return activeInterval;
+      }
+    }
+  }
+
+  const instanceIntervals = availableIntervals(instance);
+  const defaultInterval = Number(instance && instance.defaultInterval ? instance.defaultInterval : 0);
+  if (Number.isFinite(defaultInterval) && defaultInterval > 0) {
+    return defaultInterval;
+  }
+  return instanceIntervals[0] || 5;
+}
+
+function renderIntervalOptions() {
+  if (!intervalSelect) {
+    return;
+  }
+
+  const instance = selectedInstance();
+  if (!instance) {
+    intervalSelect.innerHTML = '<option value="">-</option>';
+    intervalSelect.disabled = true;
+    return;
+  }
+
+  const intervals = availableIntervals(instance);
+  const selectedValue = String(currentIntervalMinutes());
+  intervalSelect.innerHTML = intervals.map((value) => (
+    '<option value="' + String(value) + '">' + String(value) + ' min</option>'
+  )).join('');
+  if (intervals.some((value) => String(value) === selectedValue)) {
+    intervalSelect.value = selectedValue;
+  } else if (intervals[0]) {
+    intervalSelect.value = String(intervals[0]);
+  }
+  intervalSelect.disabled = false;
+}
+
 function renderSessionCard() {
-  if (!sessionCardEl || !sessionLabelEl || !intervalDisplay || !sessionMessageEl) return;
+  if (!sessionCardEl || !sessionLabelEl || !sessionMessageEl || !intervalSelect) return;
 
   sessionCardEl.classList.remove('is-error', 'is-success', 'is-info');
   if (state.statusNotice && state.statusNotice.text) {
     sessionLabelEl.textContent = 'Status';
-    intervalDisplay.hidden = true;
+    intervalSelect.hidden = true;
     sessionMessageEl.hidden = false;
     sessionMessageEl.textContent = state.statusNotice.text;
     sessionCardEl.classList.add(
@@ -2175,11 +2233,10 @@ function renderSessionCard() {
   }
 
   sessionLabelEl.textContent = 'Intervall';
-  intervalDisplay.hidden = false;
+  intervalSelect.hidden = false;
   sessionMessageEl.hidden = true;
   sessionMessageEl.textContent = '';
-  const instance = selectedInstance();
-  intervalDisplay.textContent = instance ? ((instance.defaultInterval || 5) + ' min') : '-';
+  renderIntervalOptions();
 }
 
 function setStatus(text, type = '', durationMs = 5000) {
@@ -2263,10 +2320,21 @@ function normalizeInstance(instance) {
   next.siteName = normalizeText(next.siteName || next.baseUrl || '');
   next.userDisplay = normalizeText(next.userDisplay || '');
   next.userLogin = normalizeText(next.userLogin || '');
+  next.intervals = availableIntervals(next);
+  next.defaultInterval = currentDefaultInterval(next);
   next.projects = normalizeEntityList(next.projects, 'project');
   next.contacts = normalizeEntityList(next.contacts, 'contact');
 
   return next;
+}
+
+function currentDefaultInterval(instance) {
+  const intervals = availableIntervals(instance);
+  const value = Number(instance && instance.defaultInterval ? instance.defaultInterval : 0);
+  if (Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return intervals[0] || 5;
 }
 
 function normalizeSession(session) {
@@ -2390,6 +2458,7 @@ function fillSelect() {
 }
 
 function updateIntervalHint() {
+  renderIntervalOptions();
   renderSessionCard();
 }
 
@@ -2421,12 +2490,16 @@ function setTargetType(type) {
 function setPicked(type, item) {
   if (type === 'project') {
     state.selectedProject = item || null;
+    if (item && item.id) {
+      state.selectedContact = null;
+    }
   } else if (type === 'contact') {
     state.selectedContact = item || null;
+    if (item && item.id) {
+      state.selectedProject = null;
+    }
   }
-  if (type === currentTargetType()) {
-    projectSearch.value = item ? (item.label || item.title || '') : '';
-  }
+  updateTargetUi();
   updateSelectionHint();
   if (state.activeSession && item && item.id) {
     chrome.runtime.sendMessage({
@@ -2483,6 +2556,13 @@ function updateSelectionHint() {
   }
   selectionHint.textContent = '';
   selectionHint.hidden = true;
+}
+
+function persistInstanceSelection(instance) {
+  if (!instance) {
+    return Promise.resolve();
+  }
+  return chrome.storage.local.set({ [INSTANCE_KEY]: state.instances }).catch(() => undefined);
 }
 
 function currentMode() {
@@ -2758,6 +2838,7 @@ async function refreshState() {
   }
   updateSelectionHint();
   updateModeUi();
+  updateIntervalHint();
 }
 
 async function handleStartStop() {
@@ -2814,6 +2895,7 @@ async function handleStartStop() {
     info: (infoInput.value || '').trim(),
     betreff: currentNoteSubject(),
     verrechenbar: !!verrechenbarInput.checked,
+    intervalMinutes: currentIntervalMinutes(),
   };
 
   setStatus('Erfassung wird gestartet...', 'info', 0);
@@ -2884,7 +2966,39 @@ instanceSelect.addEventListener('change', () => {
   updateIntervalHint();
   updateTargetUi();
 });
-resetButton.addEventListener('click', resetForm);
+if (intervalSelect) {
+  intervalSelect.addEventListener('change', async () => {
+    const instance = selectedInstance();
+    const value = Number(intervalSelect.value || 0);
+    if (!instance || !Number.isFinite(value) || value <= 0) {
+      return;
+    }
+
+    instance.defaultInterval = value;
+    await persistInstanceSelection(instance);
+
+    if (state.activeSession) {
+      const activeInstanceKey = state.activeSession.instanceKey || '';
+      const selectedInstanceKey = instance.slug || instance.baseUrl || '';
+      if (activeInstanceKey !== '' && activeInstanceKey === selectedInstanceKey) {
+        const result = await chrome.runtime.sendMessage({
+          type: 'cmx-ext-time-update-session',
+          payload: {
+            intervalMinutes: value,
+          },
+        }).catch(() => null);
+        if (result && result.success && result.session) {
+          state.activeSession = result.session;
+        }
+      }
+    }
+
+    updateIntervalHint();
+  });
+}
+if (resetButton) {
+  resetButton.addEventListener('click', resetForm);
+}
 startStopButton.addEventListener('click', handleStartStop);
 
 const targetSuggest = makeSuggest(projectSearch, document.getElementById('project-suggest'));
@@ -3085,7 +3199,7 @@ async function startSession(payload) {
     info: payload.info || '',
     betreff: payload.betreff || '',
     verrechenbar: !!payload.verrechenbar,
-    intervalMinutes: Number(payload.instance.defaultInterval || 5),
+    intervalMinutes: Number(payload.intervalMinutes || payload.instance.defaultInterval || 5),
     startMs: Date.now(),
   };
   session.startDate = formatLocalDate(session.startMs);
@@ -3115,6 +3229,17 @@ async function updateSession(payload) {
   if (payload && Object.prototype.hasOwnProperty.call(payload, 'betreff')) {
     nextSession.betreff = typeof payload.betreff === 'string' ? payload.betreff : '';
   }
+  let shouldRescheduleReminder = false;
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'intervalMinutes')) {
+    const nextInterval = Number(payload.intervalMinutes || 0);
+    if (Number.isFinite(nextInterval) && nextInterval > 0) {
+      nextSession.intervalMinutes = nextInterval;
+      if (nextSession.instance && typeof nextSession.instance === 'object') {
+        nextSession.instance.defaultInterval = nextInterval;
+      }
+      shouldRescheduleReminder = true;
+    }
+  }
 
   if (payload && (
     Object.prototype.hasOwnProperty.call(payload, 'targetType')
@@ -3136,6 +3261,9 @@ async function updateSession(payload) {
   }
 
   await setStorage({ [ACTIVE_KEY]: nextSession });
+  if (shouldRescheduleReminder) {
+    await scheduleReminder(nextSession);
+  }
   return { success: true, session: nextSession };
 }
 
