@@ -88,7 +88,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
 		return \trim((string) \get_the_title($kontakt_id));
 	}
 
-	function cmxbu_belegmail_salutation_text(array $data = []): string {
+	function cmxbu_belegmail_salutation_text(array $data = [], bool $include_name = true): string {
 		$stored_anrede = \trim((string) ($data['anrede'] ?? ''));
 		if ($stored_anrede !== '') {
 			return $stored_anrede;
@@ -100,11 +100,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
 		$vorname = \trim((string) ($data['vorname'] ?? ''));
 		$nachname = \trim((string) ($data['nachname'] ?? ''));
 		if ($mail_mode === 'du') {
+			if (!$include_name) {
+				return 'Hallo';
+			}
 			return $vorname !== '' ? 'Hallo ' . $vorname : 'Hallo';
 		}
 
-		$full_name = \trim((string) \preg_replace('/\s+/u', ' ', $vorname . ' ' . $nachname));
 		$greeting = 'Guten ' . cmxbu_belegmail_daytime_text();
+		if (!$include_name) {
+			return $greeting;
+		}
+		$full_name = \trim((string) \preg_replace('/\s+/u', ' ', $vorname . ' ' . $nachname));
 		return $full_name !== '' ? $greeting . ' ' . $full_name : $greeting;
 	}
 }
@@ -122,16 +128,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_editor_to_text')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens')) {
-	function cmxbu_belegmail_content_token_values(array $data = []): array {
-		$anrede_text = \trim((string) ($data['anrede_text'] ?? ''));
+	function cmxbu_belegmail_content_token_values(array $data = [], string $context = ''): array {
+		$vorname = \trim((string) ($data['vorname'] ?? ''));
+		$nachname = \trim((string) ($data['nachname'] ?? ''));
+		$daytime = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_daytime_text')
+			? cmxbu_belegmail_daytime_text()
+			: 'Tag';
+		$has_name_tokens = $context !== ''
+			&& (bool) \preg_match('/\{(?:vorname|nachname|Vorname|Nachname)\}/u', $context);
+		$anrede_text = '';
+		if ($has_name_tokens && \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
+			$anrede_text = cmxbu_belegmail_salutation_text($data, false);
+		}
+		if ($anrede_text === '') {
+			$anrede_text = \trim((string) ($data['anrede_text'] ?? ''));
+		}
 		if ($anrede_text === '') {
 			$anrede_text = cmxbu_belegmail_salutation_text($data);
 		}
 
 		return [
 			'{anrede}' => $anrede_text,
-			'{vorname}' => \trim((string) ($data['vorname'] ?? '')),
-			'{nachname}' => \trim((string) ($data['nachname'] ?? '')),
+			'{Anrede}' => $anrede_text,
+			'{vorname}' => $vorname,
+			'{Vorname}' => $vorname,
+			'{nachname}' => $nachname,
+			'{Nachname}' => $nachname,
+			'{tageszeit}' => $daytime,
+			'{Tageszeit}' => $daytime,
+			'{tagenszeit}' => $daytime,
+			'{Tagenszeit}' => $daytime,
 			'{firma_bezeichnung}' => cmxbu_belegmail_company_label($data),
 			'{beleg_datum}' => \trim((string) ($data['beleg_date'] ?? '')),
 			'{faellig_bis}' => \trim((string) ($data['faellig_bis'] ?? '')),
@@ -142,7 +168,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 	}
 
 	function cmxbu_belegmail_replace_content_tokens(string $text, array $data = []): string {
-		$replacements = cmxbu_belegmail_content_token_values($data) + [
+		$replacements = cmxbu_belegmail_content_token_values($data, $text) + [
 			'{logo}' => '',
 		];
 		return \strtr($text, $replacements);
