@@ -1,12 +1,87 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EXT_TIME_STOPWATCH_QUERY_VAR')) {
-	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_STOPWATCH_QUERY_VAR', 'mis-stopuhr');
+	\define(__NAMESPACE__ . '\\CMX_EXT_TIME_STOPWATCH_QUERY_VAR', 'mis-stoppuhr');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_route_slug')) {
 	function cmx_ext_time_stopwatch_route_slug(): string {
-		return 'mis-stopuhr';
+		return 'mis-stoppuhr';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_route_aliases')) {
+	function cmx_ext_time_stopwatch_route_aliases(): array {
+		$canonical = cmx_ext_time_stopwatch_route_slug();
+		$legacy = (string) \preg_replace('/pp(?=uhr$)/', 'p', $canonical, 1);
+
+		return \array_values(\array_unique(\array_filter([
+			$canonical,
+			$legacy,
+		], 'strlen')));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_icon_asset_url')) {
+	function cmx_ext_time_stopwatch_icon_asset_url(): string {
+		$relative_asset = 'assets/stoppuhr.png';
+		$url = (string) \plugins_url($relative_asset, \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+		$path = \dirname(__DIR__, 2) . '/' . $relative_asset;
+		$version = @\filemtime($path);
+
+		if ($version) {
+			$url = (string) \add_query_arg('ver', (string) $version, $url);
+		}
+
+		return $url;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_canonicalize_request_url')) {
+	function cmx_ext_time_stopwatch_canonicalize_request_url(string $request_uri): string {
+		$request_uri = \trim($request_uri);
+		if ($request_uri === '') {
+			return '';
+		}
+
+		$parsed = \wp_parse_url($request_uri);
+		$request_path = (string) ($parsed['path'] ?? '');
+		if ($request_path === '') {
+			return '';
+		}
+
+		$home_path = (string) \wp_parse_url(\home_url('/'), \PHP_URL_PATH);
+		$home_path = '/' . \trim($home_path, '/');
+		if ($home_path === '/') {
+			$home_path = '';
+		}
+
+		$relative_path = $request_path;
+		if ($home_path !== '' && \strpos($request_path, $home_path) === 0) {
+			$relative_path = (string) \substr($request_path, \strlen($home_path));
+		}
+		$relative_path = '/' . \ltrim($relative_path, '/');
+		$relative_trimmed = \trim($relative_path, '/');
+
+		if ($relative_trimmed === '' || $relative_trimmed === cmx_ext_time_stopwatch_route_slug()) {
+			return '';
+		}
+
+		$legacy_aliases = \array_values(\array_filter(
+			cmx_ext_time_stopwatch_route_aliases(),
+			static fn(string $route): bool => $route !== cmx_ext_time_stopwatch_route_slug()
+		));
+		if (!\in_array($relative_trimmed, $legacy_aliases, true)) {
+			return '';
+		}
+
+		$canonical_url = \home_url('/' . cmx_ext_time_stopwatch_route_slug() . '/');
+		$query = isset($parsed['query']) ? (string) $parsed['query'] : '';
+		if ($query !== '') {
+			$canonical_url .= '?' . $query;
+		}
+
+		return (string) $canonical_url;
 	}
 }
 
@@ -26,8 +101,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_url')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_register_rewrite')) {
 	function cmx_ext_time_stopwatch_register_rewrite(): void {
-		$route = cmx_ext_time_stopwatch_route_slug();
-		\add_rewrite_rule('^' . \preg_quote($route, '/') . '/?$', 'index.php?' . CMX_EXT_TIME_STOPWATCH_QUERY_VAR . '=1', 'top');
+		foreach (cmx_ext_time_stopwatch_route_aliases() as $route) {
+			\add_rewrite_rule('^' . \preg_quote($route, '/') . '/?$', 'index.php?' . CMX_EXT_TIME_STOPWATCH_QUERY_VAR . '=1', 'top');
+		}
 		\add_rewrite_tag('%' . CMX_EXT_TIME_STOPWATCH_QUERY_VAR . '%', '1');
 	}
 	\add_action('init', __NAMESPACE__ . '\\cmx_ext_time_stopwatch_register_rewrite', 20);
@@ -35,9 +111,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_register_rewrite
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_maybe_flush_rewrite')) {
 	function cmx_ext_time_stopwatch_maybe_flush_rewrite(): void {
-		$route_key = '^' . \preg_quote(cmx_ext_time_stopwatch_route_slug(), '/') . '/?$';
 		$rules = \get_option('rewrite_rules');
-		if (\is_array($rules) && isset($rules[$route_key])) {
+		$needs_flush = false;
+		foreach (cmx_ext_time_stopwatch_route_aliases() as $route) {
+			$route_key = '^' . \preg_quote($route, '/') . '/?$';
+			if (!\is_array($rules) || !isset($rules[$route_key])) {
+				$needs_flush = true;
+				break;
+			}
+		}
+		if (!$needs_flush) {
 			return;
 		}
 
@@ -107,6 +190,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_handle_request')
 			$request_uri = '/' . cmx_ext_time_stopwatch_route_slug() . '/';
 		}
 
+		$canonical_request_url = cmx_ext_time_stopwatch_canonicalize_request_url($request_uri);
+		if ($canonical_request_url !== '') {
+			\wp_redirect($canonical_request_url, 301, 'CMX Stoppuhr Canonical');
+			exit;
+		}
+
 		if (isset($_GET['swv'])) {
 			$redirect_url = (string) \remove_query_arg('swv', $request_uri);
 			\wp_redirect($redirect_url, 302, 'CMX Stopwatch Cleanup');
@@ -132,7 +221,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_handle_request')
 
 		if ($user_id <= 0) {
 			if ($token !== '') {
-				\wp_die('Ungültiger Stopuhr-Link.');
+				\wp_die('Ungültiger Stoppuhr-Link.');
 			}
 			\auth_redirect();
 			exit;
@@ -154,7 +243,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<meta http-equiv="refresh" content="0;url=<?php echo \esc_attr($redirect_url); ?>">
-			<title>Stopuhr wird zurückgesetzt</title>
+			<title>Stoppuhr wird zurückgesetzt</title>
 			<style>
 				body{
 					margin:0;
@@ -189,7 +278,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 		</head>
 		<body>
 			<div class="card">
-				<h1>Stopuhr wird zurückgesetzt</h1>
+				<h1>Stoppuhr wird zurückgesetzt</h1>
 				<p>Lokale Sitzungen werden gelöscht und die Seite wird neu geladen.</p>
 				<a href="<?php echo \esc_url($redirect_url); ?>">Falls nichts passiert: hier klicken</a>
 			</div>
@@ -262,8 +351,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 						: 'cmx_ext_time_proxy_save';
 					$config['proxyAuthToken'] = (string) ($bootstrap['pageToken'] ?? '');
 					$config['stopwatchRoute'] = cmx_ext_time_stopwatch_route_slug();
-					$logo_src = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_icon_asset_url')
-						? (string) cmx_ext_time_icon_asset_url()
+					$logo_src = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_icon_asset_url')
+						? (string) cmx_ext_time_stopwatch_icon_asset_url()
 						: '';
 			?>
 		<!doctype html>
@@ -271,7 +360,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 		<head>
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<title>Mis Büro - Stopuhr</title>
+			<title>Mis Büro - Stoppuhr</title>
 				<style>
 					:root{
 						--wp-blue:#2271b1;
@@ -826,7 +915,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 									<div class="footer">
 										<div class="muted" id="selection-hint" hidden></div>
 										<div class="footer-actions">
-											<button type="button" class="gear" id="open-settings" aria-label="Stopuhr-Einstellungen" title="Stopuhr-Einstellungen">
+											<button type="button" class="gear" id="open-settings" aria-label="Stoppuhr-Einstellungen" title="Stoppuhr-Einstellungen">
 												<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 													<path fill="currentColor" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.03 7.03 0 0 0-1.69-.98l-.38-2.65A.5.5 0 0 0 14.1 1h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.24-1.17.56-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.66-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .6.22l2.49-1c.52.42 1.08.74 1.69.98l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.24 1.17-.56 1.69-.98l2.49 1a.5.5 0 0 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
 												</svg>
@@ -843,7 +932,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					<div class="cmx-stopwatch-dialog-card">
 						<div class="cmx-stopwatch-dialog-head">
 							<div>
-								<h2 id="cmx-stopwatch-settings-title">Stopuhr</h2>
+								<h2 id="cmx-stopwatch-settings-title">Stoppuhr</h2>
 								<p>Instanzen verbinden und Standard-Intervall pro Instanz setzen.</p>
 							</div>
 							<button type="button" class="cmx-stopwatch-dialog-close" data-stopwatch-close="settings" aria-label="Fenster schließen" title="Fenster schließen">×</button>
@@ -1136,7 +1225,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 									response = await fetch(stopwatchProxyUrl(action, instance, options.query || {}).toString(), fetchOptions);
 								}
 							} catch (error) {
-								throw new Error('Die Stopuhr kann die Instanz gerade nicht erreichen.');
+								throw new Error('Die Stoppuhr kann die Instanz gerade nicht erreichen.');
 							}
 
 							var rawText = await response.text().catch(function () { return ''; });
@@ -1346,7 +1435,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 							}
 							var stopwatchUrl = String(source.stopwatchUrl || '').trim();
 							if (stopwatchUrl === '' && siteUrl !== '') {
-								var route = String(CONFIG.stopwatchRoute || 'mis-stopuhr').replace(/^\/+|\/+$/g, '');
+								var route = String(CONFIG.stopwatchRoute || 'mis-stoppuhr').replace(/^\/+|\/+$/g, '');
 								var url = new URL(siteUrl + '/' + route + '/', window.location.origin);
 								if (source.token) {
 									url.searchParams.set('token', String(source.token));
@@ -1718,7 +1807,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 
 						var body = String(rawText || '').trim();
 						if (body === '0') {
-							return 'Die Stopuhr-Schnittstelle ist auf dieser Instanz noch nicht verfuegbar.';
+							return 'Die Stoppuhr-Schnittstelle ist auf dieser Instanz noch nicht verfuegbar.';
 						}
 						if (/<!doctype html|<html[\s>]/i.test(body)) {
 							return 'Die Instanz liefert HTML statt JSON. Bitte Anmeldung oder Link pruefen.';
@@ -1756,7 +1845,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 										headers: instance && instance.token ? { 'X-CMX-Extension-Token': instance.token } : {}
 									});
 								} catch (error) {
-									throw new Error('Die Stopuhr kann die Instanz gerade nicht erreichen.');
+									throw new Error('Die Stoppuhr kann die Instanz gerade nicht erreichen.');
 								}
 
 								var rawText = await response.text().catch(function () { return ''; });

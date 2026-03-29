@@ -943,7 +943,7 @@ function cmx65_render_front_quicklinks(): void {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_url')) {
 			$stopwatch_url = (string) cmx_ext_time_stopwatch_url();
 			if ($stopwatch_url !== '') {
-				$apps_links[] = ['label' => 'Stopuhr', 'href' => $stopwatch_url, 'target' => '_blank'];
+				$apps_links[] = ['label' => 'Stoppuhr', 'href' => $stopwatch_url, 'target' => '_blank'];
 			}
 		}
 		$apps_links[] = ['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'];
@@ -1204,10 +1204,10 @@ function cmx65_adminbar($wp_admin_bar) {
 			$wp_admin_bar->add_menu( [
 				'id'     => 'cmx65_apps_stopwatch_id',
 				'parent' => 'cmx65_apps_id',
-				'title'  => 'Stopuhr',
+				'title'  => 'Stoppuhr',
 				'href'   => esc_url( $stopwatch_url ),
 				'meta'   => [
-					'title'  => 'Stopuhr',
+					'title'  => 'Stoppuhr',
 					'target' => '_blank',
 					'rel'    => 'noopener noreferrer',
 				],
