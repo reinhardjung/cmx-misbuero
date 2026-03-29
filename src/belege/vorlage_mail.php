@@ -66,27 +66,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
 		return 'Abend';
 	}
 
-	function cmxbu_belegmail_company_label(array $data = []): string {
-		$label = \trim((string) ($data['firma_bezeichnung'] ?? ''));
-		if ($label !== '') {
-			return $label;
-		}
-
-		$kontakt_id = (int) ($data['kontakt_id'] ?? 0);
-		if ($kontakt_id <= 0) {
-			return '';
-		}
+		function cmxbu_belegmail_contact_firma(array $data = []): string {
+			$label = \trim((string) ($data['firma'] ?? ''));
+			if ($label !== '') {
+				return $label;
+			}
+			$kontakt_id = (int) ($data['kontakt_id'] ?? 0);
+			if ($kontakt_id <= 0) {
+				return '';
+			}
 
 		$meta_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
 			: '_cmx_kontakte_firma';
-		$label = \trim((string) \get_post_meta($kontakt_id, $meta_key, true));
-		if ($label !== '') {
-			return $label;
+			$label = \trim((string) \get_post_meta($kontakt_id, $meta_key, true));
+			if ($label !== '') {
+				return $label;
+			}
+
+			return '';
 		}
 
-		return \trim((string) \get_the_title($kontakt_id));
-	}
+		function cmxbu_belegmail_contact_bezeichnung(array $data = []): string {
+			$label = \trim((string) ($data['bezeichnung'] ?? ''));
+			if ($label !== '') {
+				return $label;
+			}
+
+			$kontakt_id = (int) ($data['kontakt_id'] ?? 0);
+			if ($kontakt_id > 0) {
+				$label = \trim((string) \get_the_title($kontakt_id));
+				if ($label !== '') {
+					return $label;
+				}
+			}
+
+			return \trim((string) ($data['firma_bezeichnung'] ?? ''));
+		}
+
+		function cmxbu_belegmail_company_label(array $data = []): string {
+			$label = \trim((string) ($data['firma_bezeichnung'] ?? ''));
+			if ($label !== '') {
+				return $label;
+			}
+
+			$firma = cmxbu_belegmail_contact_firma($data);
+			if ($firma !== '') {
+				return $firma;
+			}
+
+			return cmxbu_belegmail_contact_bezeichnung($data);
+		}
 
 	function cmxbu_belegmail_salutation_text(array $data = [], bool $include_name = true): string {
 		$stored_anrede = \trim((string) ($data['anrede'] ?? ''));
@@ -128,12 +158,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_editor_to_text')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens')) {
-	function cmxbu_belegmail_content_token_values(array $data = [], string $context = ''): array {
-		$vorname = \trim((string) ($data['vorname'] ?? ''));
-		$nachname = \trim((string) ($data['nachname'] ?? ''));
-		$daytime = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_daytime_text')
-			? cmxbu_belegmail_daytime_text()
-			: 'Tag';
+		function cmxbu_belegmail_content_token_values(array $data = [], string $context = ''): array {
+			$vorname = \trim((string) ($data['vorname'] ?? ''));
+			$nachname = \trim((string) ($data['nachname'] ?? ''));
+			$firma = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_contact_firma')
+				? cmxbu_belegmail_contact_firma($data)
+				: '';
+			$bezeichnung = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_contact_bezeichnung')
+				? cmxbu_belegmail_contact_bezeichnung($data)
+				: '';
+			$daytime = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_daytime_text')
+				? cmxbu_belegmail_daytime_text()
+				: 'Tag';
 		$has_name_tokens = $context !== ''
 			&& (bool) \preg_match('/\{(?:vorname|nachname|Vorname|Nachname)\}/u', $context);
 		$anrede_text = '';
@@ -152,11 +188,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 			'{Anrede}' => $anrede_text,
 			'{vorname}' => $vorname,
 			'{Vorname}' => $vorname,
-			'{nachname}' => $nachname,
-			'{Nachname}' => $nachname,
-			'{tageszeit}' => $daytime,
-			'{Tageszeit}' => $daytime,
-			'{tagenszeit}' => $daytime,
+				'{nachname}' => $nachname,
+				'{Nachname}' => $nachname,
+				'{firma}' => $firma,
+				'{Firma}' => $firma,
+				'{bezeichnung}' => $bezeichnung,
+				'{Bezeichnung}' => $bezeichnung,
+				'{tageszeit}' => $daytime,
+				'{Tageszeit}' => $daytime,
+				'{tagenszeit}' => $daytime,
 			'{Tagenszeit}' => $daytime,
 			'{firma_bezeichnung}' => cmxbu_belegmail_company_label($data),
 			'{beleg_datum}' => \trim((string) ($data['beleg_date'] ?? '')),
