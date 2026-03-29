@@ -2531,6 +2531,7 @@ const modeSelect = document.getElementById('mode-select');
 const targetProjectButton = document.getElementById('target-project');
 const targetContactButton = document.getElementById('target-contact');
 const projectSearch = document.getElementById('project-search');
+const heroInstanceAdminLink = document.getElementById('cmx-stopwatch-instance-admin-link');
 const infoInput = document.getElementById('info-input');
 const verrechenbarInput = document.getElementById('verrechenbar');
 const startStopButton = document.getElementById('start-stop');
@@ -2837,6 +2838,25 @@ function selectedInstance() {
   return state.instances.find((instance) => (instance.slug || instance.baseUrl) === key) || null;
 }
 
+function instanceAdminUrl(instance) {
+  const baseUrl = String(instance && instance.baseUrl ? instance.baseUrl : '').replace(/\/+$/, '');
+  if (!baseUrl) {
+    return heroInstanceAdminLink ? String(heroInstanceAdminLink.getAttribute('href') || '') : '';
+  }
+  return baseUrl + '/wp-admin/index.php';
+}
+
+function updateHeroInstanceAdminLink() {
+  if (!heroInstanceAdminLink) {
+    return;
+  }
+  const instance = selectedInstance();
+  const nextHref = instanceAdminUrl(instance);
+  if (nextHref) {
+    heroInstanceAdminLink.setAttribute('href', nextHref);
+  }
+}
+
 function currentTargetType() {
   return state.selectedTargetType === 'contact' ? 'contact' : 'project';
 }
@@ -2966,6 +2986,7 @@ function fillSelect(preferredKey = '') {
   if (!state.instances.length) {
     instanceSelect.innerHTML = '<option value="">Erst eine Instanz auswählen.</option>';
     instanceSelect.disabled = false;
+    updateHeroInstanceAdminLink();
     renderSessionCard();
     return;
   }
@@ -2976,6 +2997,7 @@ function fillSelect(preferredKey = '') {
     const selected = selectedKey !== '' ? key === selectedKey : index === 0;
     return '<option value="' + key + '"' + (selected ? ' selected' : '') + '>' + key + '</option>';
   }).join('');
+  updateHeroInstanceAdminLink();
   updateIntervalHint();
 }
 
@@ -3364,6 +3386,7 @@ async function refreshState() {
     startStopButton.classList.remove('danger');
     updateStartStopAvailability();
   }
+  updateHeroInstanceAdminLink();
   updateSelectionHint();
   updateModeUi();
   updateIntervalHint();
@@ -3500,6 +3523,7 @@ instanceSelect.addEventListener('change', () => {
   updateIntervalHint();
   updateTargetUi();
   updateStartStopAvailability();
+  updateHeroInstanceAdminLink();
 });
 if (intervalSelect) {
   intervalSelect.addEventListener('change', async () => {

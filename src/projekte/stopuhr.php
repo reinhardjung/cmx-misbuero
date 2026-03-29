@@ -223,6 +223,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 		function cmx_ext_time_stopwatch_render_page(array $bootstrap, array $config): void {
 			$site_name = (string) ($bootstrap['siteName'] ?? \get_bloginfo('name'));
 			$site_url = (string) ($bootstrap['siteUrl'] ?? \home_url('/'));
+			$site_admin_url = \trailingslashit($site_url) . 'wp-admin/index.php';
 			$site_name_display = $site_name;
 				$site_name_parts = \preg_split('/\s*[-\x{2010}-\x{2015}]+\s*/u', $site_name);
 				$site_name_parts = \array_values(\array_filter(\array_map('trim', (array) $site_name_parts), 'strlen'));
@@ -651,6 +652,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 							margin-top:16px;
 							padding-top:16px;
 							border-top:1px solid var(--wp-border);
+							max-height:260px;
+							overflow-y:auto;
+							overflow-x:hidden;
+							overscroll-behavior:contain;
+							padding-right:4px;
 						}
 						.cmx-stopwatch-instance-list.is-empty{
 							color:#646970;
@@ -769,7 +775,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 				<div class="page">
 							<div class="hero">
 								<div class="hero-meta">
-									<strong><a href="<?php echo \esc_url($site_url); ?>"><?php echo \esc_html($site_name_display); ?></a></strong>
+									<strong><a id="cmx-stopwatch-instance-admin-link" href="<?php echo \esc_url($site_admin_url); ?>"><?php echo \esc_html($site_name_display); ?></a></strong>
 								</div>
 								<?php if ($logo_src !== '') : ?>
 									<a class="hero-logo-link" href="<?php echo \esc_url($site_url); ?>">
@@ -868,7 +874,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 							</label>
 							<label class="cmx-stopwatch-settings-wide">
 								<span>Neue Instanz</span>
-								<input type="text" id="cmx-stopwatch-instance-input" placeholder="cmx, cmx.misbuero.ch, misbuero.local oder https://...">
+								<div class="cmx-stopwatch-settings-suffix">
+									<input type="text" id="cmx-stopwatch-instance-input" placeholder="DeinKundenName">
+									<span>misbuero.ch</span>
+								</div>
 								<span class="cmx-stopwatch-settings-note">Eingabe als Subdomain, Domain oder komplette URL.</span>
 							</label>
 						</div>
