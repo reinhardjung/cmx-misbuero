@@ -931,6 +931,11 @@ function cmx65_render_front_quicklinks(): void {
 		['label' => 'YouTube', 'href' => 'https://www.youtube.com/@MisBuero', 'target' => '_blank'],
 	];
 
+	$pages_links = [
+		['label' => 'Katalog', 'href' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/'), 'target' => '_blank'],
+		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/'), 'target' => '_blank'],
+	];
+
 	$apps_links = [];
 
 	if (\current_user_can('manage_options')) {
@@ -985,10 +990,30 @@ function cmx65_render_front_quicklinks(): void {
 			}
 			echo '<a href="' . \esc_url($href) . '"' . $class_attr . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
 		}
+	if (!empty($pages_links)) {
+		if (!$first) {
+			echo '<span class="cmx-front-sep">|</span>';
+		}
+		$first = false;
+		echo '<details class="cmx-front-dropdown">';
+		echo '<summary class="cmx-front-dropdown-toggle">Seiten</summary>';
+		echo '<div class="cmx-front-dropdown-menu">';
+		foreach ($pages_links as $link) {
+			$href = (string) ($link['href'] ?? '');
+			$label = (string) ($link['label'] ?? '');
+			$target = (string) ($link['target'] ?? '');
+			$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+			$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+			echo '<a href="' . \esc_url($href) . '"' . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+		}
+		echo '</div>';
+		echo '</details>';
+	}
 	if (!empty($apps_links)) {
 		if (!$first) {
 			echo '<span class="cmx-front-sep">|</span>';
 		}
+		$first = false;
 		echo '<details class="cmx-front-dropdown">';
 		echo '<summary class="cmx-front-dropdown-toggle">Apps</summary>';
 		echo '<div class="cmx-front-dropdown-menu">';
@@ -1123,7 +1148,17 @@ function cmx65_adminbar($wp_admin_bar) {
 	}
 
 	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_pages_id',
+		'title' => 'Seiten',
+		'href'  => false,
+		'meta'  => [
+			'title' => 'Seiten',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_katalog_id',
+		'parent' => 'cmx65_pages_id',
 		'title' => 'Katalog',
 		'href'  => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/'),
 		'meta'  => [
@@ -1134,8 +1169,9 @@ function cmx65_adminbar($wp_admin_bar) {
 
 	$wp_admin_bar->add_menu([
 		'id'    => 'cmx65_telefon_id',
+		'parent' => 'cmx65_pages_id',
 		'title' => 'Telefonbuch',
-		'href'  => '/telefonbuch/',
+		'href'  => \home_url('/telefonbuch/'),
 		'meta'  => [
 			'title'  => __('Dein Telefonbuch', 'textdomain'),
 			'target' => '_blank',
