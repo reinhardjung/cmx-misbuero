@@ -292,6 +292,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	], \admin_url('admin-post.php')), 'cmx_emails_import');
 	$actions['import'] = '<a href="' . \esc_url($import_url) . '">Als Beleg uebernehmen</a>';
 
+	$folder = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('folder'), true));
+	if ($folder === 'spam') {
+		$filters = cmx_emails_current_filters();
+		$not_spam_args = [
+			'action' => 'cmx_emails_not_spam',
+			'post_id' => (int) $post->ID,
+		];
+		if ((string) ($filters['account_id'] ?? '') !== '') {
+			$not_spam_args['account_id'] = (string) $filters['account_id'];
+		}
+		if ((string) ($filters['folder'] ?? '') !== '') {
+			$not_spam_args['folder'] = (string) $filters['folder'];
+		}
+		if ((string) ($filters['archive_year'] ?? '') !== '') {
+			$not_spam_args['archive_year'] = (string) $filters['archive_year'];
+		}
+		if ((string) ($filters['archive_month'] ?? '') !== '') {
+			$not_spam_args['archive_month'] = (string) $filters['archive_month'];
+		}
+		$not_spam_url = \wp_nonce_url(\add_query_arg($not_spam_args, \admin_url('admin-post.php')), 'cmx_emails_not_spam');
+		$actions['not_spam'] = '<a href="' . \esc_url($not_spam_url) . '">Kein Spam</a>';
+	}
+
 	$delete_url = \wp_nonce_url(\add_query_arg([
 		'action' => 'cmx_emails_delete',
 		'post_id' => (int) $post->ID,

@@ -1852,7 +1852,7 @@ function cmx_mail_import_run(array $run_context = []): array {
 				]);
 			} else {
 				$spam_move = [];
-				if (\in_array($reason, ['spam_detected', 'suspicious_detected'], true)) {
+				if ($reason === 'spam_detected') {
 					$spam_move = cmx_mail_import_move_message_to_spam($imap, $msg_no, $current_mailbox);
 				}
 				$mark_seen_on_skip = cmx_mail_import_should_mark_seen_for_reason($reason);

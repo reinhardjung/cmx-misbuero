@@ -134,6 +134,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_meta_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_is_manual_ham_post')) {
+	function cmx_emails_is_manual_ham_post(int $post_id): bool {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return false;
+		}
+
+		return \get_post_meta($post_id, cmx_emails_meta_key('spam_override'), true) === 'ham';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_post_as_inbox')) {
+	function cmx_emails_mark_post_as_inbox(int $post_id, string $mailbox = ''): int {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+			return 0;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'inbox');
+		if ($mailbox !== '') {
+			\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
+		}
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
+
+		return $post_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_post_as_manual_ham')) {
+	function cmx_emails_mark_post_as_manual_ham(int $post_id, string $mailbox = ''): int {
+		$post_id = cmx_emails_mark_post_as_inbox($post_id, $mailbox);
+		if ($post_id <= 0) {
+			return 0;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_override'), 'ham');
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_status'), 'clean');
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_score'), '0');
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_reasons'), []);
+
+		return $post_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_upload_rel_from_abs')) {
 	function cmx_emails_upload_rel_from_abs(string $abs): string {
 		$abs = \wp_normalize_path($abs);
@@ -680,6 +725,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_collect_matching_post_ids_fo
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_post_ids_have_manual_ham')) {
+	function cmx_emails_post_ids_have_manual_ham(array $post_ids): bool {
+		foreach ($post_ids as $post_id) {
+			if (cmx_emails_is_manual_ham_post((int) $post_id)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_has_manual_ham_override')) {
+	function cmx_emails_message_has_manual_ham_override(string $client_id, int $uid, string $message_id, array $fingerprint = []): bool {
+		return cmx_emails_post_ids_have_manual_ham(
+			cmx_emails_collect_matching_post_ids_for_spam($client_id, $uid, $message_id, $fingerprint)
+		);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
 	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = '', array $fingerprint = []): int {
 		$post_ids = cmx_emails_collect_matching_post_ids_for_spam($client_id, $uid, $message_id, $fingerprint);
@@ -703,11 +768,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spa
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_manual_ham')) {
+	function cmx_emails_mark_existing_message_as_manual_ham(string $client_id, int $uid, string $message_id, string $mailbox = '', array $fingerprint = []): int {
+		$post_ids = cmx_emails_collect_matching_post_ids_for_spam($client_id, $uid, $message_id, $fingerprint);
+		if ($post_ids === []) {
+			return 0;
+		}
+
+		$first_post_id = 0;
+		foreach ($post_ids as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+				continue;
+			}
+			if ($first_post_id <= 0) {
+				$first_post_id = $post_id;
+			}
+			cmx_emails_mark_post_as_manual_ham($post_id, $mailbox);
+		}
+
+		return $first_post_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_post_as_spam')) {
 	function cmx_emails_mark_post_as_spam(int $post_id, string $mailbox = ''): int {
 		$post_id = (int) $post_id;
 		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
 			return 0;
+		}
+		if (cmx_emails_is_manual_ham_post($post_id)) {
+			return $post_id;
 		}
 
 		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'spam');
@@ -770,6 +861,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_existing_post_spam_analysis'
 		if ($post_id <= 0) {
 			return [];
 		}
+		if (cmx_emails_is_manual_ham_post($post_id)) {
+			return [
+				'status' => 'clean',
+				'score' => 0,
+				'reasons' => [],
+			];
+		}
 
 		$sender_email = \sanitize_email((string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true));
 		$sender_label = \sanitize_text_field((string) \get_post_meta($post_id, cmx_emails_meta_key('sender_label'), true));
@@ -799,7 +897,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_existing_posts_for_s
 		foreach (cmx_emails_existing_recheckable_post_ids($account_id, $limit) as $post_id) {
 			$analysis = cmx_emails_existing_post_spam_analysis($post_id);
 			$spam_status = \sanitize_key((string) ($analysis['status'] ?? ''));
-			if (!\in_array($spam_status, ['spam', 'suspicious'], true)) {
+			if ($spam_status !== 'spam') {
 				continue;
 			}
 
@@ -1042,6 +1140,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_spam_target')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_inbox_target')) {
+	function cmx_emails_imap_inbox_target($imap, string $current_mailbox): array {
+		$root = cmx_emails_imap_root_from_mailbox($current_mailbox);
+		if ($root === '') {
+			return ['ok' => false];
+		}
+
+		return [
+			'ok' => true,
+			'target' => 'INBOX',
+			'full_mailbox' => $root . 'INBOX',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_inbox_message_to_spam')) {
 	function cmx_emails_move_inbox_message_to_spam($imap, int $uid, string $current_mailbox): array {
 		if ($uid <= 0 || $current_mailbox === '' || !\function_exists('imap_mail_move')) {
@@ -1049,6 +1162,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_inbox_message_to_spam')
 		}
 
 		$target = cmx_emails_imap_spam_target($imap, $current_mailbox);
+		if (empty($target['ok']) || (string) ($target['target'] ?? '') === '') {
+			return ['moved' => false];
+		}
+
+		$flags = \defined('CP_UID') ? (int) \constant('CP_UID') : 0;
+		$moved = @\imap_mail_move($imap, (string) $uid, (string) $target['target'], $flags);
+		if (!$moved) {
+			return ['moved' => false];
+		}
+
+		return [
+			'moved' => true,
+			'target' => (string) ($target['target'] ?? ''),
+			'full_mailbox' => (string) ($target['full_mailbox'] ?? ''),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_message_to_inbox')) {
+	function cmx_emails_move_message_to_inbox($imap, int $uid, string $current_mailbox): array {
+		if ($uid <= 0 || $current_mailbox === '' || !\function_exists('imap_mail_move')) {
+			return ['moved' => false];
+		}
+
+		$target = cmx_emails_imap_inbox_target($imap, $current_mailbox);
 		if (empty($target['ok']) || (string) ($target['target'] ?? '') === '') {
 			return ['moved' => false];
 		}
@@ -1655,53 +1793,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 				'received_ts' => $ts,
 				'folders' => ['archive', 'inbox', 'spam'],
 			];
-			$spam = cmx_emails_analyze_message_spam([
-				'subject' => $subject,
-				'from' => (string) ($sender['label'] ?? ''),
-				'headers_raw' => $raw_header,
-				'body_text' => $plain,
-				'body_html' => $html,
-			]);
-			$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
-			if (\in_array($spam_status, ['spam', 'suspicious'], true)) {
-				$local_spam_post_id = cmx_emails_mark_existing_message_as_spam(
-					$account_id,
-					$uid,
-					$message_id,
-					'',
-					$spam_fingerprint
-				);
-				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $mailbox);
-				if (!empty($spam_move['moved'])) {
-					$spam_post_id = cmx_emails_mark_existing_message_as_spam(
+			$manual_ham = cmx_emails_message_has_manual_ham_override($account_id, $uid, $message_id, $spam_fingerprint);
+			if (!$manual_ham) {
+				$spam = cmx_emails_analyze_message_spam([
+					'subject' => $subject,
+					'from' => (string) ($sender['label'] ?? ''),
+					'headers_raw' => $raw_header,
+					'body_text' => $plain,
+					'body_html' => $html,
+				]);
+				$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
+				if ($spam_status === 'spam') {
+					$local_spam_post_id = cmx_emails_mark_existing_message_as_spam(
 						$account_id,
 						$uid,
 						$message_id,
-						(string) ($spam_move['full_mailbox'] ?? ''),
+						'',
 						$spam_fingerprint
 					);
+					$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $mailbox);
+					if (!empty($spam_move['moved'])) {
+						$spam_post_id = cmx_emails_mark_existing_message_as_spam(
+							$account_id,
+							$uid,
+							$message_id,
+							(string) ($spam_move['full_mailbox'] ?? ''),
+							$spam_fingerprint
+						);
 
-					return [
-						'post_id' => $spam_post_id,
-						'uid' => $uid,
-						'archived' => false,
-						'spam_moved' => true,
-						'spam_status' => $spam_status,
-						'spam_target' => (string) ($spam_move['target'] ?? ''),
-					];
-				}
+						return [
+							'post_id' => $spam_post_id,
+							'uid' => $uid,
+							'archived' => false,
+							'spam_moved' => true,
+							'spam_status' => $spam_status,
+							'spam_target' => (string) ($spam_move['target'] ?? ''),
+						];
+					}
 
-				$logical_folder = 'spam';
-				$logical_mailbox = $mailbox;
-				if ($local_spam_post_id > 0) {
-					return [
-						'post_id' => $local_spam_post_id,
-						'uid' => $uid,
-						'archived' => false,
-						'spam_moved' => true,
-						'spam_status' => $spam_status,
-						'spam_target' => '',
-					];
+					$logical_folder = 'spam';
+					$logical_mailbox = $mailbox;
+					if ($local_spam_post_id > 0) {
+						return [
+							'post_id' => $local_spam_post_id,
+							'uid' => $uid,
+							'archived' => false,
+							'spam_moved' => true,
+							'spam_status' => $spam_status,
+							'spam_target' => '',
+						];
+					}
 				}
 			}
 		}
@@ -2161,7 +2302,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 					'body_html' => (string) ($payload['html'] ?? ''),
 				]);
 				$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
-				if (!\in_array($spam_status, ['spam', 'suspicious'], true)) {
+				if (
+					cmx_emails_message_has_manual_ham_override(
+						$account_id,
+						$uid,
+						$message_id,
+						[
+							'subject' => $subject,
+							'sender_email' => (string) ($sender['email'] ?? ''),
+							'received_ts' => $received_ts,
+							'folders' => ['archive', 'inbox', 'spam'],
+						]
+					)
+				) {
+					continue;
+				}
+				if ($spam_status !== 'spam') {
 					continue;
 				}
 
@@ -2347,6 +2503,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')
 		if ($post_id <= 0) {
 			return false;
 		}
+		if (cmx_emails_is_manual_ham_post($post_id)) {
+			return false;
+		}
 
 		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
 		if ($account_id === '') {
@@ -2402,6 +2561,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')
 				$resolved_uid,
 				$message_id,
 				$target_mailbox
+			);
+			if (\function_exists('imap_expunge')) {
+				@\imap_expunge($imap);
+			}
+			@\imap_close($imap);
+			return true;
+		}
+
+		@\imap_close($imap);
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_inbox')) {
+	function cmx_emails_move_existing_post_to_inbox(int $post_id, array $client = []): bool {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return false;
+		}
+
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		if ($account_id === '') {
+			return false;
+		}
+
+		if ($client === [] || \sanitize_key((string) ($client['id'] ?? '')) !== $account_id) {
+			$client = cmx_emails_get_client($account_id);
+		}
+		if ($client === []) {
+			return false;
+		}
+
+		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
+		$message_id = \sanitize_text_field((string) \get_post_meta($post_id, cmx_emails_meta_key('message_id'), true));
+		$mailbox = (string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true);
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+
+		$resolved_mailbox = '';
+		$imap = $mailbox !== '' ? cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox) : false;
+		if ($imap === false && $folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '') {
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+		}
+		if ($imap === false && $folder === 'spam') {
+			$imap = cmx_emails_open_client_folder($client, 'spam', $resolved_mailbox);
+		}
+		if ($imap === false) {
+			return false;
+		}
+
+		$resolved_uid = cmx_emails_resolve_uid_in_mailbox($imap, $uid, $message_id);
+		if ($resolved_uid <= 0) {
+			@\imap_close($imap);
+			return false;
+		}
+		if ($resolved_uid !== $uid) {
+			\update_post_meta($post_id, cmx_emails_meta_key('uid'), (string) $resolved_uid);
+		}
+
+		$inbox_move = cmx_emails_move_message_to_inbox($imap, $resolved_uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
+		if (!empty($inbox_move['moved'])) {
+			$target_mailbox = (string) ($inbox_move['full_mailbox'] ?? '');
+			cmx_emails_mark_post_as_manual_ham($post_id, $target_mailbox);
+			cmx_emails_mark_existing_message_as_manual_ham(
+				$account_id,
+				$resolved_uid,
+				$message_id,
+				$target_mailbox,
+				[
+					'subject' => (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true),
+					'sender_email' => (string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true),
+					'received_ts' => (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true),
+					'folders' => ['archive', 'inbox', 'spam'],
+				]
 			);
 			if (\function_exists('imap_expunge')) {
 				@\imap_expunge($imap);

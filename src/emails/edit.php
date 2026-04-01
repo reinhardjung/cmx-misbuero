@@ -51,14 +51,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_post_for_spam')) {
 		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
 			return;
 		}
-		if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_existing_post_spam_analysis')) {
-			return;
-		}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_existing_post_spam_analysis')) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_emails_is_manual_ham_post') && cmx_emails_is_manual_ham_post($post_id)) {
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_status'), 'clean');
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_score'), '0');
+		\update_post_meta($post_id, cmx_emails_meta_key('spam_reasons'), []);
+		return;
+	}
 
-		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
-		$direction = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('direction'), true));
-		if ($direction === 'outgoing' || \in_array($folder, ['sent', 'drafts', 'spam'], true)) {
-			return;
+	$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+	$direction = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('direction'), true));
+	if ($direction === 'outgoing' || \in_array($folder, ['sent', 'drafts', 'spam'], true)) {
+		return;
 		}
 
 		$analysis = cmx_emails_existing_post_spam_analysis($post_id);
@@ -66,15 +72,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_post_for_spam')) {
 		$spam_score = \max(0, (int) ($analysis['score'] ?? 0));
 		$spam_reasons = \array_values(\array_filter(\array_map('sanitize_text_field', (array) ($analysis['reasons'] ?? []))));
 
-		\update_post_meta($post_id, cmx_emails_meta_key('spam_status'), $spam_status);
-		\update_post_meta($post_id, cmx_emails_meta_key('spam_score'), (string) $spam_score);
-		\update_post_meta($post_id, cmx_emails_meta_key('spam_reasons'), $spam_reasons);
+	\update_post_meta($post_id, cmx_emails_meta_key('spam_status'), $spam_status);
+	\update_post_meta($post_id, cmx_emails_meta_key('spam_score'), (string) $spam_score);
+	\update_post_meta($post_id, cmx_emails_meta_key('spam_reasons'), $spam_reasons);
 
-		if (!\in_array($spam_status, ['spam', 'suspicious'], true)) {
-			return;
-		}
-		if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')) {
-			return;
+	if ($spam_status !== 'spam') {
+		return;
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')) {
+		return;
 		}
 		cmx_emails_move_existing_post_to_spam($post_id);
 	}

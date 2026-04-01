@@ -276,6 +276,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	cmx_emails_redirect_with_notice($context, 'Zuordnung wurde gespeichert.', 'success');
 });
 
+\add_action('admin_post_cmx_emails_not_spam', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_die('Keine Berechtigung.');
+	}
+	\check_admin_referer('cmx_emails_not_spam');
+	$post_id = isset($_REQUEST['post_id']) ? (int) \wp_unslash($_REQUEST['post_id']) : 0;
+	$context = cmx_emails_action_context($post_id);
+	if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+		cmx_emails_redirect_with_notice($context, 'E-Mail wurde nicht gefunden.', 'error');
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_inbox')) {
+		cmx_emails_redirect_with_notice($context, 'Kein Spam-Aktion ist aktuell nicht verfuegbar.', 'error');
+	}
+
+	$moved = cmx_emails_move_existing_post_to_inbox($post_id);
+	cmx_emails_redirect_with_notice(
+		$context,
+		$moved ? 'E-Mail wurde als Kein Spam in den Posteingang verschoben.' : 'E-Mail konnte nicht in den Posteingang verschoben werden.',
+		$moved ? 'success' : 'error'
+	);
+});
+
 \add_action('all_admin_notices', function (): void {
 	if (!\is_admin()) {
 		return;
