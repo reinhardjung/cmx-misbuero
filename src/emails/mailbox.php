@@ -539,14 +539,107 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_message_id')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint')) {
+	function cmx_emails_find_post_id_by_fingerprint(string $client_id, string $subject = '', string $sender_email = '', int $received_ts = 0, array $folders = ['archive', 'inbox']): int {
+		$client_id = \sanitize_key($client_id);
+		$subject = \sanitize_text_field($subject);
+		$sender_email = \sanitize_email($sender_email);
+		$received_ts = (int) $received_ts;
+		$folders = \array_values(\array_filter(\array_map('sanitize_key', $folders), static function (string $folder): bool {
+			return $folder !== '';
+		}));
+
+		if ($client_id === '' || ($subject === '' && $sender_email === '' && $received_ts <= 0)) {
+			return 0;
+		}
+
+		$meta_query = [
+			['key' => cmx_emails_meta_key('account_id'), 'value' => $client_id],
+		];
+		if ($subject !== '') {
+			$meta_query[] = ['key' => cmx_emails_meta_key('subject'), 'value' => $subject];
+		}
+		if ($sender_email !== '') {
+			$meta_query[] = ['key' => cmx_emails_meta_key('sender_email'), 'value' => $sender_email];
+		}
+
+		$ids = \get_posts([
+			'post_type'        => CMX_EMAILS_CPT,
+			'post_status'      => ['publish', 'draft', 'private', 'pending', 'trash'],
+			'posts_per_page'   => 25,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+			'meta_query'       => $meta_query,
+		]);
+
+		$best_id = 0;
+		$best_score = -1;
+		foreach ((array) $ids as $candidate_id) {
+			$candidate_id = (int) $candidate_id;
+			if ($candidate_id <= 0 || (string) \get_post_status($candidate_id) === 'trash') {
+				continue;
+			}
+
+			$candidate_folder = \sanitize_key((string) \get_post_meta($candidate_id, cmx_emails_meta_key('folder'), true));
+			if ($folders !== [] && !\in_array($candidate_folder, $folders, true)) {
+				continue;
+			}
+
+			$score = 0;
+			if ($candidate_folder !== '') {
+				$score += 2;
+			}
+
+			$candidate_subject = \sanitize_text_field((string) \get_post_meta($candidate_id, cmx_emails_meta_key('subject'), true));
+			if ($subject !== '' && $candidate_subject === $subject) {
+				$score += 5;
+			}
+
+			$candidate_sender_email = \sanitize_email((string) \get_post_meta($candidate_id, cmx_emails_meta_key('sender_email'), true));
+			if ($sender_email !== '' && $candidate_sender_email === $sender_email) {
+				$score += 5;
+			}
+
+			$candidate_ts = (int) \get_post_meta($candidate_id, cmx_emails_meta_key('received_ts'), true);
+			if ($received_ts > 0 && $candidate_ts > 0) {
+				$delta = \abs($candidate_ts - $received_ts);
+				if ($delta === 0) {
+					$score += 6;
+				} elseif ($delta <= 300) {
+					$score += 5;
+				} elseif ($delta <= 3600) {
+					$score += 3;
+				}
+			}
+
+			if ($score > $best_score) {
+				$best_score = $score;
+				$best_id = $candidate_id;
+			}
+		}
+
+		return $best_score >= 5 ? $best_id : 0;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
-	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = ''): int {
+	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = '', array $fingerprint = []): int {
 		$post_id = cmx_emails_find_post_id($client_id, 'inbox', $uid);
 		if ($post_id <= 0) {
 			$post_id = cmx_emails_find_post_id($client_id, 'archive', $uid);
 		}
 		if ($post_id <= 0 && $message_id !== '') {
 			$post_id = cmx_emails_find_post_id_by_message_id($client_id, $message_id);
+		}
+		if ($post_id <= 0) {
+			$post_id = cmx_emails_find_post_id_by_fingerprint(
+				$client_id,
+				(string) ($fingerprint['subject'] ?? ''),
+				(string) ($fingerprint['sender_email'] ?? ''),
+				(int) ($fingerprint['received_ts'] ?? 0),
+				(array) (($fingerprint['folders'] ?? ['archive', 'inbox']))
+			);
 		}
 		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
 			return 0;
@@ -1943,10 +2036,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 		$spam_moved = 0;
 
 		foreach (cmx_emails_list_client_archive_mailboxes($client) as $archive_mailbox) {
-			if ($processed >= $limit) {
-				break;
-			}
-
 			$mailbox = (string) ($archive_mailbox['mailbox'] ?? '');
 			if ($mailbox === '') {
 				continue;
@@ -1960,8 +2049,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 
 			$total = \function_exists('imap_num_msg') ? (int) @\imap_num_msg($imap) : 0;
 			$mailbox_changed = false;
-			for ($msg_no = $total; $msg_no >= 1 && $processed < $limit; $msg_no--) {
+			$mailbox_processed = 0;
+			for ($msg_no = $total; $msg_no >= 1 && $mailbox_processed < $limit; $msg_no--) {
 				$processed++;
+				$mailbox_processed++;
 
 				$overview_rows = @\imap_fetch_overview($imap, (string) $msg_no, 0);
 				$overview = (\is_array($overview_rows) && isset($overview_rows[0]) && \is_object($overview_rows[0])) ? $overview_rows[0] : null;
@@ -1984,6 +2075,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 				$sender = cmx_emails_sender_from_header($header);
 				$subject = isset($header->subject) ? \sanitize_text_field(cmx_emails_decode_mime_text((string) $header->subject)) : '';
 				$message_id = \sanitize_text_field((string) ($header->message_id ?? ''));
+				$received_ts = cmx_emails_parse_message_timestamp($overview, $header);
 				$spam = cmx_emails_analyze_message_spam([
 					'subject' => $subject,
 					'from' => (string) ($sender['label'] ?? ''),
@@ -2005,7 +2097,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 					$account_id,
 					$uid,
 					$message_id,
-					(string) ($spam_move['full_mailbox'] ?? '')
+					(string) ($spam_move['full_mailbox'] ?? ''),
+					[
+						'subject' => $subject,
+						'sender_email' => (string) ($sender['email'] ?? ''),
+						'received_ts' => $received_ts,
+						'folders' => ['archive', 'inbox'],
+					]
 				);
 				$spam_moved++;
 				$mailbox_changed = true;
