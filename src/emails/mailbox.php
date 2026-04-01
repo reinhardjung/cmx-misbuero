@@ -1784,6 +1784,243 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_mailbox')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_archive_mailbox')) {
+	function cmx_emails_open_client_archive_mailbox(array $client, string $year, string $month, ?string &$resolved_mailbox = null) {
+		$host = \sanitize_text_field((string) ($client['imap_host'] ?? ''));
+		$user = \sanitize_email((string) ($client['email'] ?? ''));
+		$pass = (string) ($client['password'] ?? '');
+		$port = (int) (($client['imap_port'] ?? 993) ?: 993);
+		$year = \preg_replace('/[^0-9]/', '', $year);
+		$month = cmx_emails_normalize_archive_month($month);
+		$resolved_mailbox = null;
+
+		if ($host === '' || $user === '' || $pass === '' || \strlen($year) !== 4 || $month === '' || !\function_exists('imap_open')) {
+			return false;
+		}
+
+		$root_candidates = [
+			'{' . $host . ':' . $port . '/imap/ssl}',
+			'{' . $host . ':' . $port . '/imap/ssl/novalidate-cert}',
+		];
+		$archive_candidates = (array) (cmx_emails_folder_map()['archive']['candidates'] ?? ['Archive']);
+
+		foreach ($root_candidates as $root) {
+			$imap = @\imap_open($root . 'INBOX', $user, $pass);
+			if ($imap === false) {
+				continue;
+			}
+
+			$mailboxes = cmx_emails_imap_mailboxes($imap, $root);
+			foreach ($mailboxes as $mailbox_info) {
+				$full_name = (string) ($mailbox_info['name'] ?? '');
+				$short_name = (string) ($mailbox_info['short'] ?? '');
+				$delimiter = (string) ($mailbox_info['delimiter'] ?? '.');
+				if ($full_name === '' || $short_name === '' || $delimiter === '') {
+					continue;
+				}
+
+				$suffix = $delimiter . $year . $delimiter . $month;
+				if (!\str_ends_with(\strtolower($short_name), \strtolower($suffix))) {
+					continue;
+				}
+
+				$prefix = \substr($short_name, 0, -\strlen($suffix));
+				foreach ($archive_candidates as $candidate) {
+					$candidate = (string) $candidate;
+					if ($candidate === '') {
+						continue;
+					}
+
+					if (\strcasecmp($prefix, $candidate) === 0 || \str_ends_with(\strtolower($prefix), \strtolower($candidate))) {
+						if (@\imap_reopen($imap, $full_name)) {
+							$resolved_mailbox = $full_name;
+							return $imap;
+						}
+					}
+				}
+			}
+
+			@\imap_close($imap);
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_list_client_archive_mailboxes')) {
+	function cmx_emails_list_client_archive_mailboxes(array $client): array {
+		$host = \sanitize_text_field((string) ($client['imap_host'] ?? ''));
+		$user = \sanitize_email((string) ($client['email'] ?? ''));
+		$pass = (string) ($client['password'] ?? '');
+		$port = (int) (($client['imap_port'] ?? 993) ?: 993);
+		if ($host === '' || $user === '' || $pass === '' || !\function_exists('imap_open')) {
+			return [];
+		}
+
+		$root_candidates = [
+			'{' . $host . ':' . $port . '/imap/ssl}',
+			'{' . $host . ':' . $port . '/imap/ssl/novalidate-cert}',
+		];
+		$archive_candidates = (array) (cmx_emails_folder_map()['archive']['candidates'] ?? ['Archive']);
+
+		foreach ($root_candidates as $root) {
+			$imap = @\imap_open($root . 'INBOX', $user, $pass);
+			if ($imap === false) {
+				continue;
+			}
+
+			$mailboxes = cmx_emails_imap_mailboxes($imap, $root);
+			@\imap_close($imap);
+			if ($mailboxes === []) {
+				continue;
+			}
+
+			$archive_mailboxes = [];
+			foreach ($mailboxes as $mailbox_info) {
+				$full_name = (string) ($mailbox_info['name'] ?? '');
+				$short_name = (string) ($mailbox_info['short'] ?? '');
+				$delimiter = (string) ($mailbox_info['delimiter'] ?? '.');
+				if ($full_name === '' || $short_name === '' || $delimiter === '') {
+					continue;
+				}
+
+				foreach ($archive_candidates as $candidate) {
+					$candidate = (string) $candidate;
+					if ($candidate === '') {
+						continue;
+					}
+
+					$pattern = '/(?:^|'.\preg_quote($delimiter, '/').')' . \preg_quote($candidate, '/') . \preg_quote($delimiter, '/') . '([0-9]{4})' . \preg_quote($delimiter, '/') . '([0-9]{2})$/i';
+					if (!\preg_match($pattern, $short_name, $matches)) {
+						continue;
+					}
+
+					$year = \preg_replace('/[^0-9]/', '', (string) ($matches[1] ?? ''));
+					$month = cmx_emails_normalize_archive_month((string) ($matches[2] ?? ''));
+					if (\strlen($year) !== 4 || $month === '') {
+						continue;
+					}
+
+					$key = \strtolower($full_name);
+					$archive_mailboxes[$key] = [
+						'mailbox' => $full_name,
+						'short' => $short_name,
+						'year' => $year,
+						'month' => $month,
+					];
+					break;
+				}
+			}
+
+			if ($archive_mailboxes !== []) {
+				\usort($archive_mailboxes, static function (array $left, array $right): int {
+					return \strcmp((string) ($right['short'] ?? ''), (string) ($left['short'] ?? ''));
+				});
+				return \array_values($archive_mailboxes);
+			}
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_for_spam')) {
+	function cmx_emails_recheck_archive_mailboxes_for_spam(array $client, int $limit = 0): array {
+		$account_id = \sanitize_key((string) ($client['id'] ?? ''));
+		if ($account_id === '') {
+			return ['processed' => 0, 'spam_moved' => 0];
+		}
+
+		$limit = cmx_emails_message_limit($limit);
+		if ($limit <= 0) {
+			return ['processed' => 0, 'spam_moved' => 0];
+		}
+
+		$processed = 0;
+		$spam_moved = 0;
+
+		foreach (cmx_emails_list_client_archive_mailboxes($client) as $archive_mailbox) {
+			if ($processed >= $limit) {
+				break;
+			}
+
+			$mailbox = (string) ($archive_mailbox['mailbox'] ?? '');
+			if ($mailbox === '') {
+				continue;
+			}
+
+			$resolved_mailbox = '';
+			$imap = cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox);
+			if ($imap === false) {
+				continue;
+			}
+
+			$total = \function_exists('imap_num_msg') ? (int) @\imap_num_msg($imap) : 0;
+			$mailbox_changed = false;
+			for ($msg_no = $total; $msg_no >= 1 && $processed < $limit; $msg_no--) {
+				$processed++;
+
+				$overview_rows = @\imap_fetch_overview($imap, (string) $msg_no, 0);
+				$overview = (\is_array($overview_rows) && isset($overview_rows[0]) && \is_object($overview_rows[0])) ? $overview_rows[0] : null;
+				if (!$overview instanceof \stdClass) {
+					continue;
+				}
+
+				$uid = \function_exists('imap_uid') ? (int) @\imap_uid($imap, $msg_no) : 0;
+				$raw_header = (string) @\imap_fetchheader($imap, $msg_no, \FT_PREFETCHTEXT);
+				if ($uid <= 0 || $raw_header === '') {
+					continue;
+				}
+
+				$header = @\imap_rfc822_parse_headers($raw_header);
+				if (!$header || !\is_object($header)) {
+					continue;
+				}
+
+				$payload = cmx_emails_fetch_message_payload($imap, $msg_no);
+				$sender = cmx_emails_sender_from_header($header);
+				$subject = isset($header->subject) ? \sanitize_text_field(cmx_emails_decode_mime_text((string) $header->subject)) : '';
+				$message_id = \sanitize_text_field((string) ($header->message_id ?? ''));
+				$spam = cmx_emails_analyze_message_spam([
+					'subject' => $subject,
+					'from' => (string) ($sender['label'] ?? ''),
+					'headers_raw' => $raw_header,
+					'body_text' => \trim((string) ($payload['plain'] ?? '')),
+					'body_html' => (string) ($payload['html'] ?? ''),
+				]);
+				$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
+				if (!\in_array($spam_status, ['spam', 'suspicious'], true)) {
+					continue;
+				}
+
+				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
+				if (empty($spam_move['moved'])) {
+					continue;
+				}
+
+				cmx_emails_mark_existing_message_as_spam(
+					$account_id,
+					$uid,
+					$message_id,
+					(string) ($spam_move['full_mailbox'] ?? '')
+				);
+				$spam_moved++;
+				$mailbox_changed = true;
+			}
+
+			if ($mailbox_changed && \function_exists('imap_expunge')) {
+				@\imap_expunge($imap);
+			}
+			@\imap_close($imap);
+		}
+
+		return [
+			'processed' => $processed,
+			'spam_moved' => $spam_moved,
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_uid_by_message_id')) {
 	function cmx_emails_find_uid_by_message_id($imap, string $message_id): int {
 		$message_id = \trim(\sanitize_text_field($message_id));
@@ -1932,18 +2169,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')
 
 		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
 		$message_id = \sanitize_text_field((string) \get_post_meta($post_id, cmx_emails_meta_key('message_id'), true));
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 		$mailbox = (string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true);
-		if ($mailbox === '') {
-			return false;
-		}
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
 
 		$resolved_mailbox = '';
-		$imap = cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox);
+		$imap = $mailbox !== '' ? cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox) : false;
+		if ($imap === false && $folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '') {
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+		}
 		if ($imap === false) {
 			return false;
 		}
 
 		$resolved_uid = cmx_emails_resolve_uid_in_mailbox($imap, $uid, $message_id);
+		if ($resolved_uid <= 0 && $folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '') {
+			@\imap_close($imap);
+			$resolved_mailbox = '';
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+			if ($imap !== false) {
+				$resolved_uid = cmx_emails_resolve_uid_in_mailbox($imap, $uid, $message_id);
+			}
+		}
 		if ($resolved_uid <= 0) {
 			@\imap_close($imap);
 			return false;
@@ -2076,6 +2324,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 
 		if ($folder === 'inbox') {
 			$spam_moved += cmx_emails_recheck_existing_posts_for_spam($client, $limit);
+			$archive_spam_scan = cmx_emails_recheck_archive_mailboxes_for_spam($client, $limit);
+			$spam_moved += (int) ($archive_spam_scan['spam_moved'] ?? 0);
 		}
 
 		$message = $synced > 0 ? ($synced . ' E-Mails synchronisiert.') : 'Keine E-Mails gefunden.';
