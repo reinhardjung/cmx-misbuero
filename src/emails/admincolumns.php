@@ -36,6 +36,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			'archive_month' => isset($_GET['cmx_email_archive_month']) ? cmx_emails_normalize_archive_month((string) \wp_unslash($_GET['cmx_email_archive_month'])) : '',
 		];
 
+		if ((string) $filters['archive_year'] !== '' || (string) $filters['archive_month'] !== '') {
+			$filters['folder'] = 'archive';
+		}
+
 		return $filters;
 	}
 }
@@ -361,46 +365,70 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		? cmx_emails_normalize_archive_month((string) ($filters['archive_month'] ?? ''))
 		: \preg_replace('/[^0-9]/', '', (string) ($filters['archive_month'] ?? ''));
 	$view = cmx_emails_current_view();
+	$archive_filter_map = [];
 
 	if ($view === 'trash') {
 		echo '<input type="hidden" name="post_status" value="trash">';
 	}
 
-	echo '<select name="cmx_email_account">';
+	echo '<select name="cmx_email_account" id="cmx-email-account-filter">';
 	echo '<option value="">Alle Konten</option>';
-	foreach (cmx_emails_client_list() as $client) {
+	$client_rows = (array) cmx_emails_client_list();
+	foreach ($client_rows as $client) {
 		$client = (array) $client;
 		$id = \sanitize_key((string) ($client['id'] ?? ''));
 		echo '<option value="' . \esc_attr($id) . '"' . \selected($account, $id, false) . '>' . \esc_html(cmx_emails_client_label($client)) . '</option>';
 	}
 	echo '</select>';
 
-	echo '<select name="cmx_email_folder">';
+	echo '<select name="cmx_email_folder" id="cmx-email-folder-filter">';
 	echo '<option value="">Alle Ordner</option>';
 	foreach (cmx_emails_folder_map() as $folder_key => $data) {
 		echo '<option value="' . \esc_attr($folder_key) . '"' . \selected($folder, $folder_key, false) . '>' . \esc_html((string) ($data['label'] ?? $folder_key)) . '</option>';
 	}
 	echo '</select>';
 
-	$archive_year_options = \function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year_options')
-		? (array) cmx_emails_archive_year_options($account)
-		: [];
-	echo '<select name="cmx_email_archive_year">';
+	$archive_accounts = [''];
+	foreach ($client_rows as $client) {
+		$client = (array) $client;
+		$client_id = \sanitize_key((string) ($client['id'] ?? ''));
+		if ($client_id !== '') {
+			$archive_accounts[] = $client_id;
+		}
+	}
+	$archive_accounts = \array_values(\array_unique($archive_accounts));
+	foreach ($archive_accounts as $archive_account_id) {
+		$year_options = \function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year_options')
+			? (array) cmx_emails_archive_year_options((string) $archive_account_id)
+			: [];
+		$month_map = [];
+		foreach ($year_options as $year_value => $year_label) {
+			$month_map[(string) $year_value] = \function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_options')
+				? (array) cmx_emails_archive_month_options((string) $year_value, (string) $archive_account_id)
+				: [];
+		}
+		$archive_filter_map[(string) $archive_account_id] = [
+			'years' => $year_options,
+			'months' => $month_map,
+		];
+	}
+
+	$archive_year_options = (array) (($archive_filter_map[$account]['years'] ?? null) ?: ($archive_filter_map['']['years'] ?? []));
+	echo '<select name="cmx_email_archive_year" id="cmx-email-archive-year-filter">';
 	echo '<option value="">' . \esc_html__('Jahr wählen', 'cmx') . '</option>';
 	foreach ($archive_year_options as $year_value => $year_label) {
 		echo '<option value="' . \esc_attr((string) $year_value) . '"' . \selected($archive_year, (string) $year_value, false) . '>' . \esc_html((string) $year_label) . '</option>';
 	}
 	echo '</select>';
 
-	$archive_month_options = \function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_options')
-		? (array) cmx_emails_archive_month_options($archive_year, $account)
-		: [];
-	echo '<select name="cmx_email_archive_month">';
+	$archive_month_options = (array) (($archive_filter_map[$account]['months'][$archive_year] ?? null) ?: ($archive_filter_map['']['months'][$archive_year] ?? []));
+	echo '<select name="cmx_email_archive_month" id="cmx-email-archive-month-filter">';
 	echo '<option value="">' . \esc_html__('Monat wählen', 'cmx') . '</option>';
 	foreach ($archive_month_options as $month_value => $month_label) {
 		echo '<option value="' . \esc_attr((string) $month_value) . '"' . \selected($archive_month, (string) $month_value, false) . '>' . \esc_html((string) $month_label) . '</option>';
 	}
 	echo '</select>';
+	echo '<script type="application/json" id="cmx-email-archive-filter-map">' . \wp_json_encode($archive_filter_map) . '</script>';
 
 	echo '<select name="cmx_email_status">';
 	echo '<option value="">Alle Status</option>';
@@ -674,5 +702,98 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			margin-bottom: 0;
 		}
 	</style>
+	<script>
+		document.addEventListener('DOMContentLoaded', function () {
+			const mapNode = document.getElementById('cmx-email-archive-filter-map');
+			const accountSelect = document.getElementById('cmx-email-account-filter');
+			const folderSelect = document.getElementById('cmx-email-folder-filter');
+			const yearSelect = document.getElementById('cmx-email-archive-year-filter');
+			const monthSelect = document.getElementById('cmx-email-archive-month-filter');
+			if (!mapNode || !accountSelect || !yearSelect || !monthSelect || !folderSelect) {
+				return;
+			}
+
+			let filterMap = {};
+			try {
+				filterMap = JSON.parse(mapNode.textContent || '{}');
+			} catch (error) {
+				filterMap = {};
+			}
+
+			const placeholders = {
+				year: 'Jahr wählen',
+				month: 'Monat wählen',
+			};
+
+			function replaceOptions(select, options, placeholder, selectedValue) {
+				const wanted = String(selectedValue || '');
+				select.innerHTML = '';
+
+				const placeholderOption = document.createElement('option');
+				placeholderOption.value = '';
+				placeholderOption.textContent = placeholder;
+				select.appendChild(placeholderOption);
+
+				Object.entries(options || {}).forEach(([value, label]) => {
+					const option = document.createElement('option');
+					option.value = String(value);
+					option.textContent = String(label);
+					if (String(value) === wanted) {
+						option.selected = true;
+					}
+					select.appendChild(option);
+				});
+
+				if (wanted === '') {
+					select.value = '';
+				} else if (!Array.from(select.options).some((option) => option.value === wanted)) {
+					select.value = '';
+				}
+			}
+
+			function currentAccountMap() {
+				const accountId = String(accountSelect.value || '');
+				return filterMap[accountId] || filterMap[''] || { years: {}, months: {} };
+			}
+
+			function refreshYearOptions(preserveSelection) {
+				const selectedYear = preserveSelection ? String(yearSelect.value || '') : '';
+				const accountMap = currentAccountMap();
+				replaceOptions(yearSelect, accountMap.years || {}, placeholders.year, selectedYear);
+			}
+
+			function refreshMonthOptions(preserveSelection) {
+				const selectedMonth = preserveSelection ? String(monthSelect.value || '') : '';
+				const accountMap = currentAccountMap();
+				const selectedYear = String(yearSelect.value || '');
+				const monthOptions = (accountMap.months && accountMap.months[selectedYear]) ? accountMap.months[selectedYear] : {};
+				replaceOptions(monthSelect, monthOptions, placeholders.month, selectedMonth);
+			}
+
+			function syncFolderWithArchiveSelection() {
+				const hasArchiveSelection = String(yearSelect.value || '') !== '' || String(monthSelect.value || '') !== '';
+				if (hasArchiveSelection) {
+					folderSelect.value = 'archive';
+				}
+			}
+
+			accountSelect.addEventListener('change', function () {
+				refreshYearOptions(true);
+				refreshMonthOptions(true);
+				syncFolderWithArchiveSelection();
+			});
+
+			yearSelect.addEventListener('change', function () {
+				refreshMonthOptions(false);
+				syncFolderWithArchiveSelection();
+			});
+
+			monthSelect.addEventListener('change', function () {
+				syncFolderWithArchiveSelection();
+			});
+
+			syncFolderWithArchiveSelection();
+		});
+	</script>
 	<?php
 });

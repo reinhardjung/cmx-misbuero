@@ -10,7 +10,7 @@ if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES')) {
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS')) {
 	// Testwert fuer die automatische Archivierung alter Inbox-Mails.
-	\define(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS', 3);
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS', 30);
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')) {
@@ -2307,6 +2307,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_direction_meta_query')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 	function cmx_emails_build_meta_query(array $filters = []): array {
 		$meta_query = [];
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) ($filters['archive_year'] ?? ''));
+		$archive_month = cmx_emails_normalize_archive_month((string) ($filters['archive_month'] ?? ''));
+		$archive_filter_active = $archive_year !== '' || $archive_month !== '';
 
 		$account_id = \sanitize_key((string) ($filters['account_id'] ?? ''));
 		if ($account_id !== '') {
@@ -2314,11 +2317,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 		}
 
 		$folder = \sanitize_key((string) ($filters['folder'] ?? ''));
+		if ($archive_filter_active) {
+			$folder = 'archive';
+		}
 		if ($folder !== '') {
 			$meta_query[] = ['key' => cmx_emails_meta_key('folder'), 'value' => $folder];
 			if ($folder === 'archive') {
-				$archive_year = \preg_replace('/[^0-9]/', '', (string) ($filters['archive_year'] ?? ''));
-				$archive_month = cmx_emails_normalize_archive_month((string) ($filters['archive_month'] ?? ''));
 				if ($archive_year === '' || $archive_month === '' || \strlen($archive_year) !== 4) {
 					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => '__archive_selection_required__'];
 				} else {
@@ -2366,7 +2370,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year_options')) {
 		$account_key = cmx_emails_meta_key('account_id');
 
 		$sql = "
-			SELECT DISTINCT year_meta.meta_value
+			SELECT year_meta.meta_value AS archive_year, COUNT(DISTINCT posts.ID) AS mail_count
 			FROM {$posts_table} posts
 			INNER JOIN {$postmeta_table} folder_meta
 				ON folder_meta.post_id = posts.ID
@@ -2393,22 +2397,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year_options')) {
 		$sql .= "
 			WHERE posts.post_type = %s
 				AND posts.post_status = 'publish'
+			GROUP BY year_meta.meta_value
 			ORDER BY year_meta.meta_value DESC
 		";
 		$params[] = CMX_EMAILS_CPT;
 
-		$rows = $wpdb->get_col($wpdb->prepare($sql, $params));
+		$rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
 		if (!\is_array($rows)) {
 			return [];
 		}
 
 		$options = [];
 		foreach ($rows as $row) {
-			$year = \preg_replace('/[^0-9]/', '', (string) $row);
+			$year = \preg_replace('/[^0-9]/', '', (string) ($row['archive_year'] ?? ''));
+			$mail_count = (int) ($row['mail_count'] ?? 0);
 			if (\strlen($year) !== 4) {
 				continue;
 			}
-			$options[$year] = $year;
+			$options[$year] = $year . ' (' . $mail_count . ')';
 		}
 
 		return $options;
@@ -2433,7 +2439,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_options')) {
 		$account_key = cmx_emails_meta_key('account_id');
 
 		$sql = "
-			SELECT DISTINCT month_meta.meta_value
+			SELECT month_meta.meta_value AS archive_month, COUNT(DISTINCT posts.ID) AS mail_count
 			FROM {$posts_table} posts
 			INNER JOIN {$postmeta_table} folder_meta
 				ON folder_meta.post_id = posts.ID
@@ -2464,22 +2470,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_options')) {
 		$sql .= "
 			WHERE posts.post_type = %s
 				AND posts.post_status = 'publish'
+			GROUP BY month_meta.meta_value
 			ORDER BY month_meta.meta_value DESC
 		";
 		$params[] = CMX_EMAILS_CPT;
 
-		$rows = $wpdb->get_col($wpdb->prepare($sql, $params));
+		$rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
 		if (!\is_array($rows)) {
 			return [];
 		}
 
 		$options = [];
 		foreach ($rows as $row) {
-			$month = cmx_emails_normalize_archive_month((string) $row);
+			$month = cmx_emails_normalize_archive_month((string) ($row['archive_month'] ?? ''));
+			$mail_count = (int) ($row['mail_count'] ?? 0);
 			if ($month === '') {
 				continue;
 			}
-			$options[$month] = cmx_emails_archive_month_label($month);
+			$options[$month] = cmx_emails_archive_month_label($month) . ' (' . $mail_count . ')';
 		}
 
 		return $options;

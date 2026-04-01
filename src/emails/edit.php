@@ -55,6 +55,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_missing_subject_label')) {
 	if ($status === 'auto-draft') {
 		return $data;
 	}
+	if ($status !== 'trash') {
+		$data['post_status'] = 'publish';
+	}
 
 	$title = \trim((string) ($data['post_title'] ?? ''));
 	if (!cmx_emails_is_auto_draft_title($title)) {
@@ -796,6 +799,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_ensure_publish_status')) {
 		unset($running[$post_id]);
 	}
 }
+
+\add_action('save_post_' . CMX_EMAILS_CPT, function (int $post_id, \WP_Post $post): void {
+	if ((\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || \wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) {
+		return;
+	}
+	if ($post->post_type !== CMX_EMAILS_CPT) {
+		return;
+	}
+
+	cmx_emails_ensure_publish_status($post_id);
+}, 5, 2);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_admin_url')) {
 	function cmx_emails_compose_admin_url(string $mode, int $source_id): string {
