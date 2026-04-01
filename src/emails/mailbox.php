@@ -1,18 +1,23 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT')) {
-	\define(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT', 100);
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT', 500);
 }
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES')) {
-	\define(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES', 100);
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES', 500);
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS')) {
+	// Testwert fuer die automatische Archivierung alter Inbox-Mails.
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS', 3);
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')) {
 	function cmx_emails_message_limit(int $requested = 0): int {
 		$max = (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES');
 		if ($max <= 0) {
-			$max = 100;
+			$max = 500;
 		}
 
 		if ($requested <= 0) {
@@ -24,6 +29,101 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')) {
 		}
 
 		return \max(1, \min($requested, $max));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_retention_days')) {
+	function cmx_emails_archive_retention_days(): int {
+		$days = (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_ARCHIVE_RETENTION_DAYS');
+		return $days > 0 ? $days : 30;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_cutoff_timestamp')) {
+	function cmx_emails_archive_cutoff_timestamp(): int {
+		return (int) \time() - (cmx_emails_archive_retention_days() * \DAY_IN_SECONDS);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_period_from_timestamp')) {
+	function cmx_emails_archive_period_from_timestamp(int $timestamp): array {
+		$timestamp = (int) $timestamp;
+		if ($timestamp <= 0) {
+			return ['year' => '', 'month' => ''];
+		}
+
+		return [
+			'year'  => \gmdate('Y', $timestamp),
+			'month' => \gmdate('m', $timestamp),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_label')) {
+	function cmx_emails_archive_month_label(string $month): string {
+		$month = \str_pad((string) \preg_replace('/[^0-9]/', '', $month), 2, '0', \STR_PAD_LEFT);
+		$labels = [
+			'01' => '01 Januar',
+			'02' => '02 Februar',
+			'03' => '03 Maerz',
+			'04' => '04 April',
+			'05' => '05 Mai',
+			'06' => '06 Juni',
+			'07' => '07 Juli',
+			'08' => '08 August',
+			'09' => '09 September',
+			'10' => '10 Oktober',
+			'11' => '11 November',
+			'12' => '12 Dezember',
+		];
+
+		return $labels[$month] ?? $month;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_selection_label')) {
+	function cmx_emails_archive_selection_label(string $year, string $month): string {
+		$year = \preg_replace('/[^0-9]/', '', $year);
+		$month = cmx_emails_normalize_archive_month($month);
+		if ($year === '' || $month === '') {
+			return 'Archiv';
+		}
+
+		return 'Archiv ' . $year . '/' . $month;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year')) {
+	function cmx_emails_archive_year(int $post_id): string {
+		return \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month')) {
+	function cmx_emails_archive_month(int $post_id): string {
+		return cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')) {
+	function cmx_emails_normalize_archive_month(string $month): string {
+		$month = (string) \preg_replace('/[^0-9]/', '', $month);
+		if ($month === '') {
+			return '';
+		}
+
+		$month = \str_pad($month, 2, '0', \STR_PAD_LEFT);
+		if ($month < '01' || $month > '12') {
+			return '';
+		}
+
+		return $month;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_folder_label_for_post')) {
+	function cmx_emails_archive_folder_label_for_post(int $post_id): string {
+		return cmx_emails_archive_selection_label(cmx_emails_archive_year($post_id), cmx_emails_archive_month($post_id));
 	}
 }
 
@@ -375,6 +475,246 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id')) {
 		]);
 
 		return isset($ids[0]) ? (int) $ids[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_message_id')) {
+	function cmx_emails_find_post_id_by_message_id(string $client_id, string $message_id): int {
+		$message_id = \sanitize_text_field($message_id);
+		if ($message_id === '') {
+			return 0;
+		}
+
+		$ids = \get_posts([
+			'post_type'        => CMX_EMAILS_CPT,
+			'post_status'      => ['publish', 'draft', 'private', 'pending', 'trash'],
+			'posts_per_page'   => 1,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+			'meta_query'       => [
+				['key' => cmx_emails_meta_key('account_id'), 'value' => \sanitize_key($client_id)],
+				['key' => cmx_emails_meta_key('message_id'), 'value' => $message_id],
+			],
+		]);
+
+		return isset($ids[0]) ? (int) $ids[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_root_from_mailbox')) {
+	function cmx_emails_imap_root_from_mailbox(string $mailbox): string {
+		if (\preg_match('/^\{[^}]+\}/', $mailbox, $match)) {
+			return (string) ($match[0] ?? '');
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_short_mailbox_name')) {
+	function cmx_emails_imap_short_mailbox_name(string $mailbox): string {
+		$root = cmx_emails_imap_root_from_mailbox($mailbox);
+		if ($root === '' || !\str_starts_with($mailbox, $root)) {
+			return $mailbox;
+		}
+
+		return (string) \substr($mailbox, \strlen($root));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_delimiter')) {
+	function cmx_emails_imap_delimiter($mailbox_info): string {
+		$delimiter = '';
+		if (\is_object($mailbox_info) && isset($mailbox_info->delimiter)) {
+			$delimiter = (string) $mailbox_info->delimiter;
+		}
+		if ($delimiter === '' || $delimiter === 'NIL') {
+			$delimiter = '.';
+		}
+
+		return $delimiter;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_mailboxes')) {
+	function cmx_emails_imap_mailboxes($imap, string $root): array {
+		$list = [];
+		$mailboxes = @\imap_getmailboxes($imap, $root, '*');
+		if (!\is_array($mailboxes)) {
+			return [];
+		}
+
+		foreach ($mailboxes as $mailbox_info) {
+			if (!\is_object($mailbox_info) || !isset($mailbox_info->name)) {
+				continue;
+			}
+
+			$full_name = (string) $mailbox_info->name;
+			$list[] = [
+				'name'      => $full_name,
+				'short'     => cmx_emails_imap_short_mailbox_name($full_name),
+				'delimiter' => cmx_emails_imap_delimiter($mailbox_info),
+			];
+		}
+
+		return $list;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_ensure_mailbox')) {
+	function cmx_emails_imap_ensure_mailbox($imap, string $full_mailbox): bool {
+		$full_mailbox = \trim($full_mailbox);
+		if ($full_mailbox === '') {
+			return false;
+		}
+
+		if (!\function_exists('imap_createmailbox') || !\function_exists('imap_utf7_encode')) {
+			return false;
+		}
+
+		$encoded = \imap_utf7_encode($full_mailbox);
+		if (!\is_string($encoded) || $encoded === '') {
+			return false;
+		}
+
+		return @\imap_createmailbox($imap, $encoded);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_archive_target')) {
+	function cmx_emails_imap_archive_target($imap, string $current_mailbox, int $timestamp): array {
+		$root = cmx_emails_imap_root_from_mailbox($current_mailbox);
+		$period = cmx_emails_archive_period_from_timestamp($timestamp);
+		$year = (string) ($period['year'] ?? '');
+		$month = (string) ($period['month'] ?? '');
+		if ($root === '' || $year === '' || $month === '') {
+			return ['ok' => false];
+		}
+
+		$mailboxes = cmx_emails_imap_mailboxes($imap, $root);
+		$archive_root_short = '';
+		$delimiter = '.';
+		$archive_candidates = (array) (cmx_emails_folder_map()['archive']['candidates'] ?? ['Archive']);
+
+		foreach ($mailboxes as $mailbox_info) {
+			$short_name = (string) ($mailbox_info['short'] ?? '');
+			$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '.');
+			foreach ($archive_candidates as $candidate) {
+				$candidate = (string) $candidate;
+				if ($candidate === '') {
+					continue;
+				}
+				if (\strcasecmp($short_name, $candidate) === 0 || \str_ends_with(\strtolower($short_name), \strtolower($candidate))) {
+					$archive_root_short = $short_name;
+					$delimiter = $current_delimiter !== '' ? $current_delimiter : '.';
+					break 2;
+				}
+			}
+		}
+
+		if ($archive_root_short === '') {
+			$archive_root_short = 'Archive';
+			foreach ($mailboxes as $mailbox_info) {
+				$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '');
+				if ($current_delimiter !== '') {
+					$delimiter = $current_delimiter;
+					break;
+				}
+			}
+			$archive_root_full = $root . $archive_root_short;
+			if (!cmx_emails_imap_ensure_mailbox($imap, $archive_root_full)) {
+				return ['ok' => false];
+			}
+		}
+
+		$year_short = $archive_root_short . $delimiter . $year;
+		$month_short = $year_short . $delimiter . $month;
+		$year_full = $root . $year_short;
+		$month_full = $root . $month_short;
+
+		if (!cmx_emails_imap_ensure_mailbox($imap, $year_full) && !\in_array($year_full, \array_column($mailboxes, 'name'), true)) {
+			return ['ok' => false];
+		}
+		if (!cmx_emails_imap_ensure_mailbox($imap, $month_full) && !\in_array($month_full, \array_column($mailboxes, 'name'), true)) {
+			return ['ok' => false];
+		}
+
+		return [
+			'ok'          => true,
+			'year'        => $year,
+			'month'       => $month,
+			'target'      => $month_short,
+			'full_mailbox'=> $month_full,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_inbox_message')) {
+	function cmx_emails_archive_inbox_message($imap, int $uid, string $current_mailbox, int $timestamp): array {
+		if ($uid <= 0 || $timestamp <= 0 || !\function_exists('imap_mail_move')) {
+			return ['moved' => false];
+		}
+
+		$target = cmx_emails_imap_archive_target($imap, $current_mailbox, $timestamp);
+		if (empty($target['ok']) || (string) ($target['target'] ?? '') === '') {
+			return ['moved' => false];
+		}
+
+		$flags = \defined('CP_UID') ? (int) \constant('CP_UID') : 0;
+		$moved = @\imap_mail_move($imap, (string) $uid, (string) $target['target'], $flags);
+		if (!$moved) {
+			return ['moved' => false];
+		}
+
+		return [
+			'moved'        => true,
+			'year'         => (string) ($target['year'] ?? ''),
+			'month'        => (string) ($target['month'] ?? ''),
+			'full_mailbox' => (string) ($target['full_mailbox'] ?? ''),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_stale_inbox_message_numbers')) {
+	function cmx_emails_stale_inbox_message_numbers($imap): array {
+		$cutoff = cmx_emails_archive_cutoff_timestamp();
+		if ($cutoff <= 0) {
+			return [];
+		}
+
+		$messages = [];
+		if (\function_exists('imap_search')) {
+			$criteria = 'BEFORE "' . \gmdate('d-M-Y', $cutoff) . '"';
+			$results = @\imap_search($imap, $criteria);
+			if (\is_array($results)) {
+				foreach ($results as $msg_no) {
+					$msg_no = (int) $msg_no;
+					if ($msg_no > 0) {
+						$messages[$msg_no] = $msg_no;
+					}
+				}
+			}
+		}
+
+		if ($messages === []) {
+			$total = (int) \imap_num_msg($imap);
+			for ($msg_no = 1; $msg_no <= $total; $msg_no++) {
+				$overview_list = @\imap_fetch_overview($imap, (string) $msg_no, 0);
+				$overview = (\is_array($overview_list) && isset($overview_list[0]) && \is_object($overview_list[0])) ? $overview_list[0] : null;
+				$timestamp = cmx_emails_parse_message_timestamp($overview, null);
+				if ($timestamp > 0 && $timestamp < $cutoff) {
+					$messages[$msg_no] = $msg_no;
+				}
+			}
+		}
+
+		if ($messages === []) {
+			return [];
+		}
+
+		\krsort($messages, \SORT_NUMERIC);
+		return \array_values($messages);
 	}
 }
 
@@ -879,9 +1219,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$snippet = cmx_emails_text_excerpt($content !== '' ? $content : $subject);
 		$message_id = \sanitize_text_field((string) ($header->message_id ?? ''));
 		$account_id = \sanitize_key((string) ($client['id'] ?? ''));
+		$logical_folder = \sanitize_key($folder);
+		$logical_mailbox = $mailbox;
+		$archive_year = '';
+		$archive_month = '';
+		$archived_message = false;
+		if ($logical_folder === 'inbox' && $ts > 0 && $ts < cmx_emails_archive_cutoff_timestamp()) {
+			$archive_move = cmx_emails_archive_inbox_message($imap, $uid, $mailbox, $ts);
+			if (!empty($archive_move['moved'])) {
+				$logical_folder = 'archive';
+				$logical_mailbox = (string) ($archive_move['full_mailbox'] ?? $mailbox);
+				$archive_year = (string) ($archive_move['year'] ?? '');
+				$archive_month = (string) ($archive_move['month'] ?? '');
+				$archived_message = true;
+			}
+		}
+
 		$existing_id = cmx_emails_find_post_id($account_id, $folder, $uid);
+		if ($existing_id <= 0 && $message_id !== '') {
+			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id);
+		}
 		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
-			return ['post_id' => $existing_id, 'uid' => $uid];
+			return ['post_id' => $existing_id, 'uid' => $uid, 'archived' => false];
 		}
 		$existing_attachments = $existing_id > 0 ? cmx_emails_normalize_attachment_list(\get_post_meta($existing_id, cmx_emails_meta_key('attachments'), true)) : [];
 		$stored_attachments = $existing_attachments;
@@ -937,7 +1296,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('account_id'), $account_id);
 		\update_post_meta($post_id, cmx_emails_meta_key('account_label'), cmx_emails_client_label($client));
 		\update_post_meta($post_id, cmx_emails_meta_key('account_email'), \sanitize_email((string) ($client['email'] ?? '')));
-		\update_post_meta($post_id, cmx_emails_meta_key('folder'), \sanitize_key($folder));
+		\update_post_meta($post_id, cmx_emails_meta_key('folder'), $logical_folder);
 		\update_post_meta($post_id, cmx_emails_meta_key('uid'), (string) $uid);
 		\update_post_meta($post_id, cmx_emails_meta_key('message_id'), $message_id);
 		\update_post_meta($post_id, cmx_emails_meta_key('subject'), $subject);
@@ -954,19 +1313,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('has_attachment'), $stored_attachments !== [] ? '1' : '0');
 		\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $plain);
 		\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $html);
-		\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
+		\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $logical_mailbox);
 		\update_post_meta($post_id, cmx_emails_meta_key('contact_id_auto'), (string) \max(0, $auto_contact_id));
 		\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) \max(0, $contact_id));
-			\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
-			\update_post_meta($post_id, cmx_emails_meta_key('status'), $status);
-			cmx_emails_update_assignment_cache($post_id);
-			if ($existing_id <= 0 && $sender['email'] !== '') {
-				cmx_emails_append_received_sender_notes($post_id, (string) $sender['email']);
-			}
-
-			return ['post_id' => $post_id, 'uid' => $uid];
+		\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
+		\update_post_meta($post_id, cmx_emails_meta_key('status'), $status);
+		if ($logical_folder === 'archive' && $archive_year !== '' && $archive_month !== '') {
+			\update_post_meta($post_id, cmx_emails_meta_key('archive_year'), $archive_year);
+			\update_post_meta($post_id, cmx_emails_meta_key('archive_month'), $archive_month);
+		} else {
+			\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
+			\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
 		}
+		cmx_emails_update_assignment_cache($post_id);
+		if ($existing_id <= 0 && $sender['email'] !== '') {
+			cmx_emails_append_received_sender_notes($post_id, (string) $sender['email']);
+		}
+
+		return ['post_id' => $post_id, 'uid' => $uid, 'archived' => $archived_message];
 	}
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder')) {
 	function cmx_emails_open_client_folder(array $client, string $folder, ?string &$resolved_mailbox = null) {
@@ -1063,21 +1429,92 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 		}
 
 		$total = (int) \imap_num_msg($imap);
-		$start = \max(1, $total - $limit + 1);
 		$synced = 0;
-		for ($msg_no = $total; $msg_no >= $start; $msg_no--) {
+		$archived = 0;
+		$archived_numbers = [];
+		$manual_cleanup_required = false;
+		$archive_backlog_remaining = false;
+		$archive_candidates = [];
+		$archive_processed = 0;
+
+		if ($folder === 'inbox' && $total > 0) {
+			$archive_candidates = cmx_emails_stale_inbox_message_numbers($imap);
+			if (\count($archive_candidates) > $limit) {
+				$archive_candidates = \array_slice($archive_candidates, 0, $limit);
+				$archive_backlog_remaining = true;
+			}
+		}
+
+		if ($archive_candidates !== []) {
+			foreach ($archive_candidates as $msg_no) {
+				$msg_no = (int) $msg_no;
+				if ($msg_no <= 0) {
+					continue;
+				}
+
+				$archive_processed++;
+				$archived_numbers[$msg_no] = true;
+				$result = cmx_emails_sync_single_message($imap, $client, $folder, $msg_no, $mailbox);
+				if ((int) ($result['post_id'] ?? 0) > 0) {
+					$synced++;
+				}
+				if (!empty($result['archived'])) {
+					$archived++;
+				}
+			}
+		}
+
+		$remaining_limit = \max(0, $limit - $archive_processed);
+		$current_count = 0;
+		for ($msg_no = $total; $msg_no >= 1 && $current_count < $remaining_limit; $msg_no--) {
+			if (isset($archived_numbers[$msg_no])) {
+				continue;
+			}
+
 			$result = cmx_emails_sync_single_message($imap, $client, $folder, $msg_no, $mailbox);
 			if ((int) ($result['post_id'] ?? 0) > 0) {
 				$synced++;
 			}
+			if (!empty($result['archived'])) {
+				$archived++;
+				$archived_numbers[$msg_no] = true;
+				continue;
+			}
+
+			$current_count++;
+			if ($current_count >= $remaining_limit) {
+				for ($probe = $msg_no - 1; $probe >= 1; $probe--) {
+					if (!isset($archived_numbers[$probe])) {
+						$manual_cleanup_required = true;
+						break;
+					}
+				}
+				break;
+			}
+		}
+
+		if ($archived > 0 && \function_exists('imap_expunge')) {
+			@\imap_expunge($imap);
 		}
 
 		@\imap_close($imap);
 
+		$message = $synced > 0 ? ($synced . ' E-Mails synchronisiert.') : 'Keine E-Mails gefunden.';
+		if ($archived > 0) {
+			$message .= ' ' . $archived . ' E-Mails wurden in Monatsarchive verschoben.';
+		}
+		if ($archive_backlog_remaining) {
+			$message .= ' Weitere alte E-Mails folgen beim nächsten Sync.';
+		}
+		if ($manual_cleanup_required) {
+			$message .= ' Mehr als ' . $limit . ' aktuelle E-Mails liegen noch im Posteingang. Bitte manuell löschen.';
+		}
+
 		return [
 			'ok' => true,
-			'message' => $synced > 0 ? ($synced . ' E-Mails synchronisiert.') : 'Keine E-Mails gefunden.',
+			'message' => $message,
 			'synced' => $synced,
+			'archived' => $archived,
 		];
 	}
 }
@@ -1102,6 +1539,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_messages')) {
 		$total_synced = 0;
 		$success_count = 0;
 		$error_count = 0;
+		$error_messages = [];
 
 		foreach ($clients as $client) {
 			$client = (array) $client;
@@ -1118,10 +1556,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_messages')) {
 			}
 
 			$error_count++;
+			$client_label = cmx_emails_client_label($client);
+			$client_message = \trim((string) ($result['message'] ?? ''));
+			if ($client_message === '') {
+				$client_message = 'Unbekannter Fehler.';
+			}
+			$error_messages[] = ($client_label !== '' ? $client_label . ': ' : '') . $client_message;
 		}
 
 		if ($success_count <= 0) {
-			return ['ok' => false, 'message' => 'Synchronisierung fuer alle Konten fehlgeschlagen.', 'synced' => 0];
+			$first_error = (string) ($error_messages[0] ?? '');
+			$message = 'Synchronisierung fuer alle Konten fehlgeschlagen.';
+			if ($first_error !== '') {
+				$message .= ' ' . $first_error;
+			}
+
+			return ['ok' => false, 'message' => $message, 'synced' => 0];
 		}
 
 		$message = $total_synced > 0
@@ -1129,6 +1579,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_messages')) {
 			: 'Keine E-Mails gefunden.';
 		if ($error_count > 0) {
 			$message .= ' ' . $error_count . ' Konto/Konten konnten nicht geladen werden.';
+			$first_error = (string) ($error_messages[0] ?? '');
+			if ($first_error !== '') {
+				$message .= ' ' . $first_error;
+			}
 		}
 
 		return [
@@ -1862,6 +2316,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 		$folder = \sanitize_key((string) ($filters['folder'] ?? ''));
 		if ($folder !== '') {
 			$meta_query[] = ['key' => cmx_emails_meta_key('folder'), 'value' => $folder];
+			if ($folder === 'archive') {
+				$archive_year = \preg_replace('/[^0-9]/', '', (string) ($filters['archive_year'] ?? ''));
+				$archive_month = cmx_emails_normalize_archive_month((string) ($filters['archive_month'] ?? ''));
+				if ($archive_year === '' || $archive_month === '' || \strlen($archive_year) !== 4) {
+					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => '__archive_selection_required__'];
+				} else {
+					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => $archive_year];
+					$meta_query[] = ['key' => cmx_emails_meta_key('archive_month'), 'value' => $archive_month];
+				}
+			}
 		}
 
 		$status = \sanitize_key((string) ($filters['status'] ?? ''));
@@ -1887,6 +2351,138 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 		}
 
 		return $meta_query;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_year_options')) {
+	function cmx_emails_archive_year_options(string $account_id = ''): array {
+		global $wpdb;
+
+		$account_id = \sanitize_key($account_id);
+		$posts_table = (string) $wpdb->posts;
+		$postmeta_table = (string) $wpdb->postmeta;
+		$folder_key = cmx_emails_meta_key('folder');
+		$year_key = cmx_emails_meta_key('archive_year');
+		$account_key = cmx_emails_meta_key('account_id');
+
+		$sql = "
+			SELECT DISTINCT year_meta.meta_value
+			FROM {$posts_table} posts
+			INNER JOIN {$postmeta_table} folder_meta
+				ON folder_meta.post_id = posts.ID
+				AND folder_meta.meta_key = %s
+				AND folder_meta.meta_value = 'archive'
+			INNER JOIN {$postmeta_table} year_meta
+				ON year_meta.post_id = posts.ID
+				AND year_meta.meta_key = %s
+				AND year_meta.meta_value <> ''
+		";
+		$params = [$folder_key, $year_key];
+
+		if ($account_id !== '') {
+			$sql .= "
+				INNER JOIN {$postmeta_table} account_meta
+					ON account_meta.post_id = posts.ID
+					AND account_meta.meta_key = %s
+					AND account_meta.meta_value = %s
+			";
+			$params[] = $account_key;
+			$params[] = $account_id;
+		}
+
+		$sql .= "
+			WHERE posts.post_type = %s
+				AND posts.post_status = 'publish'
+			ORDER BY year_meta.meta_value DESC
+		";
+		$params[] = CMX_EMAILS_CPT;
+
+		$rows = $wpdb->get_col($wpdb->prepare($sql, $params));
+		if (!\is_array($rows)) {
+			return [];
+		}
+
+		$options = [];
+		foreach ($rows as $row) {
+			$year = \preg_replace('/[^0-9]/', '', (string) $row);
+			if (\strlen($year) !== 4) {
+				continue;
+			}
+			$options[$year] = $year;
+		}
+
+		return $options;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_month_options')) {
+	function cmx_emails_archive_month_options(string $year = '', string $account_id = ''): array {
+		global $wpdb;
+
+		$year = \preg_replace('/[^0-9]/', '', $year);
+		$account_id = \sanitize_key($account_id);
+		if (\strlen($year) !== 4) {
+			return [];
+		}
+
+		$posts_table = (string) $wpdb->posts;
+		$postmeta_table = (string) $wpdb->postmeta;
+		$folder_key = cmx_emails_meta_key('folder');
+		$year_key = cmx_emails_meta_key('archive_year');
+		$month_key = cmx_emails_meta_key('archive_month');
+		$account_key = cmx_emails_meta_key('account_id');
+
+		$sql = "
+			SELECT DISTINCT month_meta.meta_value
+			FROM {$posts_table} posts
+			INNER JOIN {$postmeta_table} folder_meta
+				ON folder_meta.post_id = posts.ID
+				AND folder_meta.meta_key = %s
+				AND folder_meta.meta_value = 'archive'
+			INNER JOIN {$postmeta_table} year_meta
+				ON year_meta.post_id = posts.ID
+				AND year_meta.meta_key = %s
+				AND year_meta.meta_value = %s
+			INNER JOIN {$postmeta_table} month_meta
+				ON month_meta.post_id = posts.ID
+				AND month_meta.meta_key = %s
+				AND month_meta.meta_value <> ''
+		";
+		$params = [$folder_key, $year_key, $year, $month_key];
+
+		if ($account_id !== '') {
+			$sql .= "
+				INNER JOIN {$postmeta_table} account_meta
+					ON account_meta.post_id = posts.ID
+					AND account_meta.meta_key = %s
+					AND account_meta.meta_value = %s
+			";
+			$params[] = $account_key;
+			$params[] = $account_id;
+		}
+
+		$sql .= "
+			WHERE posts.post_type = %s
+				AND posts.post_status = 'publish'
+			ORDER BY month_meta.meta_value DESC
+		";
+		$params[] = CMX_EMAILS_CPT;
+
+		$rows = $wpdb->get_col($wpdb->prepare($sql, $params));
+		if (!\is_array($rows)) {
+			return [];
+		}
+
+		$options = [];
+		foreach ($rows as $row) {
+			$month = cmx_emails_normalize_archive_month((string) $row);
+			if ($month === '') {
+				continue;
+			}
+			$options[$month] = cmx_emails_archive_month_label($month);
+		}
+
+		return $options;
 	}
 }
 

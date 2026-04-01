@@ -33,12 +33,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_page_is_active')) {
 	if (isset($_GET['account_id']) && !\is_array($_GET['account_id'])) {
 		$args['cmx_email_account'] = \sanitize_key((string) \wp_unslash($_GET['account_id']));
 	}
-	if (isset($_GET['folder']) && !\is_array($_GET['folder'])) {
-		$args['cmx_email_folder'] = \sanitize_key((string) \wp_unslash($_GET['folder']));
-	}
-	if (isset($_GET['s']) && !\is_array($_GET['s'])) {
-		$args['s'] = \sanitize_text_field((string) \wp_unslash($_GET['s']));
-	}
+		if (isset($_GET['folder']) && !\is_array($_GET['folder'])) {
+			$args['cmx_email_folder'] = \sanitize_key((string) \wp_unslash($_GET['folder']));
+		}
+		if (isset($_GET['archive_year']) && !\is_array($_GET['archive_year'])) {
+			$args['cmx_email_archive_year'] = \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_GET['archive_year']));
+		}
+		if (isset($_GET['archive_month']) && !\is_array($_GET['archive_month'])) {
+			$args['cmx_email_archive_month'] = \function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+				? cmx_emails_normalize_archive_month((string) \wp_unslash($_GET['archive_month']))
+				: \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_GET['archive_month']));
+		}
+		if (isset($_GET['s']) && !\is_array($_GET['s'])) {
+			$args['s'] = \sanitize_text_field((string) \wp_unslash($_GET['s']));
+		}
 	if (isset($_GET['cmx_email_notice']) && !\is_array($_GET['cmx_email_notice'])) {
 		$args['cmx_email_notice'] = \sanitize_text_field((string) \wp_unslash($_GET['cmx_email_notice']));
 	}
@@ -65,6 +73,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
 	function cmx_emails_action_context(int $post_id = 0): array {
 		$account_id = isset($_REQUEST['account_id']) ? \sanitize_key((string) \wp_unslash($_REQUEST['account_id'])) : '';
 		$folder = isset($_REQUEST['folder']) ? \sanitize_key((string) \wp_unslash($_REQUEST['folder'])) : '';
+		$archive_year = isset($_REQUEST['archive_year']) ? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_year'])) : '';
+		$archive_month = isset($_REQUEST['archive_month'])
+			? (\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+				? cmx_emails_normalize_archive_month((string) \wp_unslash($_REQUEST['archive_month']))
+				: \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_month'])))
+			: '';
 		$email_id = isset($_REQUEST['email_id']) ? (int) \wp_unslash($_REQUEST['email_id']) : 0;
 
 		if ($post_id > 0) {
@@ -74,6 +88,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
 			if ($folder === '') {
 				$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 			}
+			if ($archive_year === '') {
+				$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+			}
+			if ($archive_month === '') {
+				$archive_month = \function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+					? cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true))
+					: \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+			}
 			if ($email_id <= 0) {
 				$email_id = $post_id;
 			}
@@ -82,6 +104,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
 		return [
 			'account_id' => $account_id !== '' ? $account_id : cmx_emails_default_client_id(),
 			'folder' => $folder !== '' ? $folder : 'inbox',
+			'archive_year' => $archive_year,
+			'archive_month' => $archive_month,
 			'email_id' => $email_id,
 		];
 	}
@@ -90,20 +114,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_redirect_with_notice')) {
 	function cmx_emails_redirect_with_notice(array $context, string $message, string $type = 'info', array $extra = []): void {
 		$email_id = (int) ($context['email_id'] ?? 0);
-		$args = \array_merge([
-			'cmx_email_account' => \sanitize_key((string) ($context['account_id'] ?? '')),
-			'cmx_email_folder' => \sanitize_key((string) ($context['folder'] ?? 'inbox')),
-			'cmx_email_notice' => $message,
-			'cmx_email_notice_type' => $type,
-		], $extra);
+			$args = \array_merge([
+				'cmx_email_account' => \sanitize_key((string) ($context['account_id'] ?? '')),
+				'cmx_email_folder' => \sanitize_key((string) ($context['folder'] ?? 'inbox')),
+				'cmx_email_archive_year' => \preg_replace('/[^0-9]/', '', (string) ($context['archive_year'] ?? '')),
+				'cmx_email_archive_month' => \function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+					? cmx_emails_normalize_archive_month((string) ($context['archive_month'] ?? ''))
+					: \preg_replace('/[^0-9]/', '', (string) ($context['archive_month'] ?? '')),
+				'cmx_email_notice' => $message,
+				'cmx_email_notice_type' => $type,
+			], $extra);
 
 		if ((string) ($args['cmx_email_account'] ?? '') === '') {
 			unset($args['cmx_email_account']);
 		}
-		if ((string) ($args['cmx_email_folder'] ?? '') === '') {
-			unset($args['cmx_email_folder']);
-		}
-		unset($args['account_id'], $args['folder'], $args['email_id']);
+			if ((string) ($args['cmx_email_folder'] ?? '') === '') {
+				unset($args['cmx_email_folder']);
+			}
+			if ((string) ($args['cmx_email_archive_year'] ?? '') === '') {
+				unset($args['cmx_email_archive_year']);
+			}
+			if ((string) ($args['cmx_email_archive_month'] ?? '') === '') {
+				unset($args['cmx_email_archive_month']);
+			}
+			unset($args['account_id'], $args['folder'], $args['email_id']);
 
 		if ($email_id > 0 && (string) \get_post_type($email_id) === CMX_EMAILS_CPT) {
 			$edit_url = \get_edit_post_link($email_id, '');
@@ -172,15 +206,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	$account_id = isset($_REQUEST['account_id']) && !\is_array($_REQUEST['account_id'])
 		? \sanitize_key((string) \wp_unslash($_REQUEST['account_id']))
 		: '';
-	$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
-		? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
-		: 'inbox';
-	$context = [
-		'account_id' => $account_id,
-		'folder' => $folder !== '' ? $folder : 'inbox',
-		'email_id' => 0,
-	];
-	$result = cmx_emails_sync_messages($account_id, (string) $context['folder']);
+		$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
+			? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
+			: '';
+	$sync_folder = isset($_REQUEST['sync_folder']) && !\is_array($_REQUEST['sync_folder'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['sync_folder']))
+		: ($folder !== '' ? $folder : 'inbox');
+		$archive_year = isset($_REQUEST['archive_year']) && !\is_array($_REQUEST['archive_year'])
+			? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_year']))
+			: '';
+		$archive_month = isset($_REQUEST['archive_month']) && !\is_array($_REQUEST['archive_month'])
+			? (\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+				? cmx_emails_normalize_archive_month((string) \wp_unslash($_REQUEST['archive_month']))
+				: \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_month'])))
+			: '';
+		$context = [
+			'account_id' => $account_id,
+			'folder' => $folder,
+			'archive_year' => $archive_year,
+			'archive_month' => $archive_month,
+			'email_id' => 0,
+		];
+	$result = cmx_emails_sync_messages($account_id, $sync_folder !== '' ? $sync_folder : (string) $context['folder']);
 	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Synchronisierung beendet.'), !empty($result['ok']) ? 'success' : 'error');
 });
 
@@ -595,7 +642,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			's' => $search,
 			'posts_per_page' => \function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')
 				? cmx_emails_message_limit()
-				: 100,
+				: 500,
 			'paged' => 1,
 		]));
 		$messages = $query->posts;
