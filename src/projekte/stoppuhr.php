@@ -493,7 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					.mode-row{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:12px;align-items:end}
 					.mode-field{display:flex;flex-direction:column;gap:5px;min-width:0}
 					.field-caption{font-weight:600}
-					.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:160px;align-items:flex-end}
+					.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:160px;align-items:flex-end;margin-top:25px}
 					.note-subject select{min-width:160px;width:auto;max-width:160px}
 					.note-subject.is-hidden{visibility:hidden;pointer-events:none}
 					.inline{display:flex;align-items:center;gap:8px}
@@ -840,23 +840,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 								body{padding:16px 12px}
 								.page{padding:20px 16px}
 								.hero{
-									grid-template-columns:1fr;
-									justify-items:center;
+									grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+									gap:10px;
+									justify-items:stretch;
 								}
 								.hero-meta{
-									align-items:center;
-									text-align:center;
+									align-items:flex-start;
+									text-align:left;
 								}
 								.hero-user{
-									width:100%;
-									text-align:center;
-									justify-self:center;
+									width:auto;
+									text-align:right;
+									justify-self:end;
 								}
 								.footer-actions{
 									width:100%;
 								}
-								.mode-row,
+								.mode-row{grid-template-columns:minmax(0,1fr) 126px;gap:8px;align-items:end}
 								.cmx-stopwatch-settings-grid{grid-template-columns:1fr}
+								.note-subject{
+									min-width:126px;
+									align-items:flex-end;
+									margin-top:0;
+								}
+								.note-subject select{
+									min-width:126px;
+									width:126px;
+									max-width:126px;
+								}
 							}
 					</style>
 		</head>
@@ -888,7 +899,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 									<div class="field-caption">Speichern als</div>
 									<div class="inline mode-options" id="mode-select">
 										<label><input type="radio" name="cmx-ext-time-mode" value="note" checked> Notiz</label>
-										<label><input type="radio" name="cmx-ext-time-mode" value="task"> Taetigkeit</label>
+										<label><input type="radio" name="cmx-ext-time-mode" value="task"> Tätigkeit</label>
 										<label class="task-inline task-only" id="task-inline"><input type="checkbox" id="verrechenbar" checked> verrechenbar</label>
 									</div>
 								</div>

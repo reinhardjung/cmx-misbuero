@@ -42,4 +42,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_DOKUMEN
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'clients,mailbox,page,admincolumns,edit');
+cmx_require_files(__DIR__,'clients,mailbox,page,admincolumns,edit,spams');

@@ -107,7 +107,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_assignment_html')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_folder_badge_class')) {
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_folder_badge_class')) {
 	function cmx_emails_admin_folder_badge_class(string $folder): string {
 		$folder = \sanitize_key($folder);
 
@@ -116,6 +116,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_folder_badge_class')) 
 		}
 		if ($folder === 'drafts') {
 			return 'is-folder-drafts';
+		}
+		if ($folder === 'spam') {
+			return 'is-folder-spam';
 		}
 		if ($folder === 'archive') {
 			return 'is-folder-archive';
@@ -638,6 +641,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			border-color: #ead9b7;
 			background: #fffaf2;
 			color: #9a6700;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-spam {
+			border-color: #f0c9c9;
+			background: #fff5f5;
+			color: #b42318;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-badge.is-folder-archive {
 			border-color: #e6ebf0;

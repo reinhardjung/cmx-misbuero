@@ -36,6 +36,14 @@ if (!\defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_MAX_LINES')) {
 	\define(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_LOG_MAX_LINES', 500);
 }
 
+if (!\class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
+	$cmx_mail_import_spam_file = __DIR__ . '/../emails/spams.php';
+	if (\is_file($cmx_mail_import_spam_file)) {
+		require_once $cmx_mail_import_spam_file;
+	}
+	unset($cmx_mail_import_spam_file);
+}
+
 function cmx_mail_import_log_file_path(): string {
 	$upload_data = \wp_get_upload_dir();
 	$base_dir = \wp_normalize_path((string) ($upload_data['basedir'] ?? ''));
@@ -312,6 +320,8 @@ function cmx_mail_import_should_mark_seen_for_reason(string $reason): bool {
 		'no_pdf',
 		'missing_sender',
 		'missing_header',
+		'spam_detected',
+		'suspicious_detected',
 	], true);
 }
 
@@ -894,6 +904,110 @@ function cmx_mail_import_decode_part_body(string $body, int $encoding): string {
 	return $body;
 }
 
+function cmx_mail_import_collect_text_parts_walk($part, string $part_no, array &$parts): void {
+	if (!\is_object($part)) {
+		return;
+	}
+
+	$mime = cmx_mail_import_get_mime_type($part);
+	$filename = cmx_mail_import_part_filename($part);
+
+	if (($mime === 'text/plain' || $mime === 'text/html') && $filename === '') {
+		$parts[] = [
+			'part_no' => $part_no !== '' ? $part_no : '1',
+			'encoding' => isset($part->encoding) ? (int) $part->encoding : 0,
+			'mime' => $mime,
+		];
+	}
+
+	if (isset($part->parts) && \is_array($part->parts) && !empty($part->parts)) {
+		foreach ($part->parts as $idx => $sub_part) {
+			$sub_no = $part_no === '' ? (string) ($idx + 1) : ($part_no . '.' . ($idx + 1));
+			cmx_mail_import_collect_text_parts_walk($sub_part, $sub_no, $parts);
+		}
+	}
+}
+
+function cmx_mail_import_collect_text_bodies($imap, int $msg_no): array {
+	$out = [
+		'body_text' => '',
+		'body_html' => '',
+	];
+
+	$structure = \imap_fetchstructure($imap, $msg_no);
+	if (!$structure || !\is_object($structure)) {
+		$out['body_text'] = (string) \imap_body($imap, $msg_no, \FT_PEEK);
+		return $out;
+	}
+
+	$parts = [];
+	cmx_mail_import_collect_text_parts_walk($structure, '', $parts);
+	if (empty($parts)) {
+		$out['body_text'] = (string) \imap_body($imap, $msg_no, \FT_PEEK);
+		return $out;
+	}
+
+	foreach ($parts as $part_info) {
+		$part_no = (string) ($part_info['part_no'] ?? '1');
+		$raw = (string) \imap_fetchbody($imap, $msg_no, $part_no, \FT_PEEK);
+		if ($raw === '') {
+			continue;
+		}
+
+		$content = cmx_mail_import_decode_part_body($raw, (int) ($part_info['encoding'] ?? 0));
+		if ($content === '') {
+			continue;
+		}
+
+		$key = ((string) ($part_info['mime'] ?? '') === 'text/html') ? 'body_html' : 'body_text';
+		$out[$key] = \trim($out[$key] . ($out[$key] !== '' ? "\n\n" : '') . $content);
+	}
+
+	return $out;
+}
+
+function cmx_mail_import_analyze_message_spam($imap, int $msg_no, $header, string $raw_header, string $subject = ''): array {
+	if (!\class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
+		return [];
+	}
+
+	$from = '';
+	if (\is_object($header) && isset($header->fromaddress)) {
+		$from = cmx_mail_import_decode_mime_header((string) $header->fromaddress);
+	}
+	if ($from === '') {
+		$from = cmx_mail_import_header_sender_email($header);
+	}
+
+	$bodies = cmx_mail_import_collect_text_bodies($imap, $msg_no);
+
+	try {
+		$result = CMX_Spams::analyze([
+			'subject' => $subject,
+			'from' => $from,
+			'headers_raw' => $raw_header,
+			'body_text' => (string) ($bodies['body_text'] ?? ''),
+			'body_html' => (string) ($bodies['body_html'] ?? ''),
+		]);
+	} catch (\Throwable $e) {
+		cmx_mail_import_log('spam analyze failed', [
+			'msg_no' => $msg_no,
+			'error' => $e->getMessage(),
+		]);
+		return [];
+	}
+
+	if (!\is_array($result) || empty($result)) {
+		return [];
+	}
+
+	return [
+		'status' => \sanitize_key((string) ($result['status'] ?? '')),
+		'score' => \max(0, (int) ($result['score'] ?? 0)),
+		'reasons' => \array_values(\array_filter(\array_map('sanitize_text_field', (array) ($result['reasons'] ?? [])))),
+	];
+}
+
 function cmx_mail_import_collect_pdf_attachments($imap, int $msg_no): array {
 	$structure = \imap_fetchstructure($imap, $msg_no);
 	if (!$structure || !\is_object($structure)) {
@@ -1247,6 +1361,21 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 		return ['imported' => 0, 'reason' => 'missing_sender'];
 	}
 
+	$subject = '';
+	if (\is_object($header) && isset($header->subject)) {
+		$subject = cmx_mail_import_decode_mime_header((string) $header->subject);
+	}
+	$subject = \sanitize_text_field($subject);
+
+	$spam = cmx_mail_import_analyze_message_spam($imap, $msg_no, $header, $raw_header, $subject);
+	$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
+	if ($spam_status === 'spam') {
+		return ['imported' => 0, 'reason' => 'spam_detected', 'sender' => $sender_email, 'spam' => $spam];
+	}
+	if ($spam_status === 'suspicious') {
+		return ['imported' => 0, 'reason' => 'suspicious_detected', 'sender' => $sender_email, 'spam' => $spam];
+	}
+
 	$kontakt_id = cmx_mail_import_find_contact_by_sender($sender_email);
 	if ($kontakt_id <= 0) {
 		return ['imported' => 0, 'reason' => 'kontakt_not_found', 'sender' => $sender_email];
@@ -1260,12 +1389,6 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 	$recipients = cmx_mail_import_header_recipient_emails($imap, $msg_no, $header);
 	$supplier_target = cmx_mail_import_normalize_email((string) ($settings['supplier_email'] ?? ''));
 	$is_supplier_mail = ($supplier_target !== '' && \in_array($supplier_target, $recipients, true));
-
-	$subject = '';
-	if (\is_object($header) && isset($header->subject)) {
-		$subject = cmx_mail_import_decode_mime_header((string) $header->subject);
-	}
-	$subject = \sanitize_text_field($subject);
 	$run_id = \sanitize_text_field((string) ($run_context['run_id'] ?? ''));
 
 	$imported = 0;
@@ -1380,11 +1503,174 @@ function cmx_mail_import_process_message($imap, int $msg_no, array $settings, ar
 	return ['imported' => $imported, 'reason' => $imported > 0 ? 'ok_document' : 'document_create_failed', 'kontakt_id' => $kontakt_id, 'sender' => $sender_email];
 }
 
-function cmx_mail_import_open_mailbox(array $settings) {
+function cmx_mail_import_imap_root_from_mailbox(string $mailbox): string {
+	if (\preg_match('/^\{[^}]+\}/', $mailbox, $match)) {
+		return (string) ($match[0] ?? '');
+	}
+
+	return '';
+}
+
+function cmx_mail_import_imap_short_mailbox_name(string $mailbox): string {
+	$root = cmx_mail_import_imap_root_from_mailbox($mailbox);
+	if ($root === '' || !\str_starts_with($mailbox, $root)) {
+		return $mailbox;
+	}
+
+	return (string) \substr($mailbox, \strlen($root));
+}
+
+function cmx_mail_import_imap_delimiter($mailbox_info): string {
+	$delimiter = '';
+	if (\is_object($mailbox_info) && isset($mailbox_info->delimiter)) {
+		$delimiter = (string) $mailbox_info->delimiter;
+	}
+	if ($delimiter === '' || $delimiter === 'NIL') {
+		$delimiter = '.';
+	}
+
+	return $delimiter;
+}
+
+function cmx_mail_import_imap_mailboxes($imap, string $root): array {
+	$list = [];
+	$mailboxes = @\imap_getmailboxes($imap, $root, '*');
+	if (!\is_array($mailboxes)) {
+		return [];
+	}
+
+	foreach ($mailboxes as $mailbox_info) {
+		if (!\is_object($mailbox_info) || !isset($mailbox_info->name)) {
+			continue;
+		}
+
+		$full_name = (string) $mailbox_info->name;
+		$list[] = [
+			'name' => $full_name,
+			'short' => cmx_mail_import_imap_short_mailbox_name($full_name),
+			'delimiter' => cmx_mail_import_imap_delimiter($mailbox_info),
+		];
+	}
+
+	return $list;
+}
+
+function cmx_mail_import_imap_ensure_mailbox($imap, string $full_mailbox): bool {
+	$full_mailbox = \trim($full_mailbox);
+	if ($full_mailbox === '') {
+		return false;
+	}
+
+	if (!\function_exists('imap_createmailbox') || !\function_exists('imap_utf7_encode')) {
+		return false;
+	}
+
+	$encoded = \imap_utf7_encode($full_mailbox);
+	if (!\is_string($encoded) || $encoded === '') {
+		return false;
+	}
+
+	return @\imap_createmailbox($imap, $encoded);
+}
+
+function cmx_mail_import_spam_folder_candidates(): array {
+	return [
+		'Spam',
+		'Junk',
+		'Junk E-Mail',
+		'Bulk Mail',
+		'INBOX.Spam',
+		'INBOX.Junk',
+		'INBOX.Junk E-Mail',
+		'INBOX.Bulk',
+		'INBOX/Spam',
+		'INBOX/Junk',
+		'INBOX/Junk E-Mail',
+		'INBOX/Bulk',
+	];
+}
+
+function cmx_mail_import_imap_spam_target($imap, string $current_mailbox): array {
+	$root = cmx_mail_import_imap_root_from_mailbox($current_mailbox);
+	if ($root === '') {
+		return ['ok' => false];
+	}
+
+	$mailboxes = cmx_mail_import_imap_mailboxes($imap, $root);
+	$target_short = '';
+	$delimiter = '.';
+
+	foreach ($mailboxes as $mailbox_info) {
+		$short_name = (string) ($mailbox_info['short'] ?? '');
+		$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '.');
+		foreach (cmx_mail_import_spam_folder_candidates() as $candidate) {
+			$candidate = (string) $candidate;
+			if ($candidate === '') {
+				continue;
+			}
+			if (\strcasecmp($short_name, $candidate) === 0 || \str_ends_with(\strtolower($short_name), \strtolower($candidate))) {
+				$target_short = $short_name;
+				$delimiter = $current_delimiter !== '' ? $current_delimiter : '.';
+				break 2;
+			}
+		}
+	}
+
+	if ($target_short === '') {
+		foreach ($mailboxes as $mailbox_info) {
+			$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '');
+			if ($current_delimiter !== '') {
+				$delimiter = $current_delimiter;
+				break;
+			}
+		}
+
+		$target_short = 'Spam';
+		$target_full = $root . $target_short;
+		if (!cmx_mail_import_imap_ensure_mailbox($imap, $target_full) && !\in_array($target_full, \array_column($mailboxes, 'name'), true)) {
+			return ['ok' => false];
+		}
+	}
+
+	return [
+		'ok' => true,
+		'target' => $target_short,
+		'full_mailbox' => $root . $target_short,
+		'delimiter' => $delimiter,
+	];
+}
+
+function cmx_mail_import_move_message_to_spam($imap, int $msg_no, string $current_mailbox): array {
+	if ($msg_no <= 0 || $current_mailbox === '' || !\function_exists('imap_mail_move')) {
+		return ['moved' => false];
+	}
+
+	$target = cmx_mail_import_imap_spam_target($imap, $current_mailbox);
+	if (empty($target['ok']) || (string) ($target['target'] ?? '') === '') {
+		return ['moved' => false];
+	}
+
+	$uid = \function_exists('imap_uid') ? (int) \imap_uid($imap, $msg_no) : 0;
+	$sequence = $uid > 0 ? (string) $uid : (string) $msg_no;
+	$flags = $uid > 0 && \defined('CP_UID') ? (int) \constant('CP_UID') : 0;
+	$moved = @\imap_mail_move($imap, $sequence, (string) $target['target'], $flags);
+	if (!$moved) {
+		return ['moved' => false];
+	}
+
+	return [
+		'moved' => true,
+		'target' => (string) ($target['target'] ?? ''),
+		'full_mailbox' => (string) ($target['full_mailbox'] ?? ''),
+	];
+}
+
+function cmx_mail_import_open_mailbox(array $settings, ?string &$resolved_mailbox = null) {
 	$host = (string) ($settings['imap_host'] ?? '');
 	$port = (int) ($settings['imap_port'] ?? 993);
 	$user = (string) ($settings['email_address'] ?? '');
 	$pass = (string) ($settings['email_password'] ?? '');
+	$resolved_mailbox = null;
 
 	if ($host === '' || $user === '' || $pass === '') {
 		return false;
@@ -1413,6 +1699,7 @@ function cmx_mail_import_open_mailbox(array $settings) {
 	foreach ($mailboxes as $mailbox) {
 		$imap = @\imap_open($mailbox, $user, $pass);
 		if ($imap !== false) {
+			$resolved_mailbox = $mailbox;
 			return $imap;
 		}
 	}
@@ -1474,7 +1761,8 @@ function cmx_mail_import_run(array $run_context = []): array {
 	}
 
 	$keywords = cmx_mail_import_beleg_filter_keywords();
-	$imap = cmx_mail_import_open_mailbox($settings);
+	$current_mailbox = '';
+	$imap = cmx_mail_import_open_mailbox($settings, $current_mailbox);
 	if ($imap === false) {
 		$result['status'] = 'imap_connect_failed';
 		cmx_mail_import_register_run($result);
@@ -1542,11 +1830,13 @@ function cmx_mail_import_run(array $run_context = []): array {
 			$info = cmx_mail_import_process_message($imap, $msg_no, $settings, $keywords, [
 				'run_id' => $run_id,
 				'source' => $source,
+				'current_mailbox' => $current_mailbox,
 			]);
 			$imported = (int) ($info['imported'] ?? 0);
 			$reason = \sanitize_key((string) ($info['reason'] ?? 'unknown'));
 			$sender = cmx_mail_import_normalize_email((string) ($info['sender'] ?? ''));
 			$kontakt_id = (int) ($info['kontakt_id'] ?? 0);
+			$spam = \is_array($info['spam'] ?? null) ? (array) $info['spam'] : [];
 
 			if ($imported > 0) {
 				@\imap_setflag_full($imap, (string) $msg_no, '\\Seen');
@@ -1561,11 +1851,18 @@ function cmx_mail_import_run(array $run_context = []): array {
 					'kontakt_id' => $kontakt_id,
 				]);
 			} else {
+				$spam_move = [];
+				if (\in_array($reason, ['spam_detected', 'suspicious_detected'], true)) {
+					$spam_move = cmx_mail_import_move_message_to_spam($imap, $msg_no, $current_mailbox);
+				}
 				$mark_seen_on_skip = cmx_mail_import_should_mark_seen_for_reason($reason);
 				$result['skipped_messages'] = (int) ($result['skipped_messages'] ?? 0) + 1;
 				$skip_reasons = (array) ($result['skip_reasons'] ?? []);
 				$skip_reasons[$reason] = ((int) ($skip_reasons[$reason] ?? 0)) + 1;
 				$result['skip_reasons'] = $skip_reasons;
+				if (!empty($spam_move['moved'])) {
+					$result['spam_moved_messages'] = (int) ($result['spam_moved_messages'] ?? 0) + 1;
+				}
 				if ($mark_seen_on_skip) {
 					@\imap_setflag_full($imap, (string) $msg_no, '\\Seen');
 				} else {
@@ -1580,8 +1877,17 @@ function cmx_mail_import_run(array $run_context = []): array {
 					'sender' => $sender,
 					'kontakt_id' => $kontakt_id,
 					'mark_seen' => $mark_seen_on_skip,
+					'spam_status' => \sanitize_key((string) ($spam['status'] ?? '')),
+					'spam_score' => \max(0, (int) ($spam['score'] ?? 0)),
+					'spam_reasons' => \array_values(\array_filter(\array_map('sanitize_text_field', (array) ($spam['reasons'] ?? [])))),
+					'spam_moved' => !empty($spam_move['moved']),
+					'spam_target' => \sanitize_text_field((string) ($spam_move['target'] ?? '')),
 				]);
 			}
+		}
+
+		if ((int) ($result['spam_moved_messages'] ?? 0) > 0 && \function_exists('imap_expunge')) {
+			@\imap_expunge($imap);
 		}
 
 		$result['status'] = 'done';

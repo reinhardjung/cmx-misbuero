@@ -458,6 +458,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_fetch_message_payload')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_analyze_message_spam')) {
+	function cmx_emails_analyze_message_spam(array $message): array {
+		if (!\class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
+			$spam_file = __DIR__ . '/spams.php';
+			if (\is_file($spam_file)) {
+				require_once $spam_file;
+			}
+		}
+
+		if (!\class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
+			return [];
+		}
+
+		try {
+			$result = CMX_Spams::analyze([
+				'subject' => (string) ($message['subject'] ?? ''),
+				'from' => (string) ($message['from'] ?? ''),
+				'headers_raw' => (string) ($message['headers_raw'] ?? ''),
+				'body_text' => (string) ($message['body_text'] ?? ''),
+				'body_html' => (string) ($message['body_html'] ?? ''),
+			]);
+		} catch (\Throwable $e) {
+			return [];
+		}
+
+		if (!\is_array($result) || $result === []) {
+			return [];
+		}
+
+		return [
+			'status' => \sanitize_key((string) ($result['status'] ?? '')),
+			'score' => \max(0, (int) ($result['score'] ?? 0)),
+			'reasons' => \array_values(\array_filter(\array_map('sanitize_text_field', (array) ($result['reasons'] ?? [])))),
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id')) {
 	function cmx_emails_find_post_id(string $client_id, string $folder, int $uid): int {
 		$ids = \get_posts([
@@ -671,6 +708,84 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_archive_inbox_message')) {
 			'moved'        => true,
 			'year'         => (string) ($target['year'] ?? ''),
 			'month'        => (string) ($target['month'] ?? ''),
+			'full_mailbox' => (string) ($target['full_mailbox'] ?? ''),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_spam_target')) {
+	function cmx_emails_imap_spam_target($imap, string $current_mailbox): array {
+		$root = cmx_emails_imap_root_from_mailbox($current_mailbox);
+		if ($root === '') {
+			return ['ok' => false];
+		}
+
+		$mailboxes = cmx_emails_imap_mailboxes($imap, $root);
+		$target_short = '';
+		$delimiter = '.';
+		$spam_candidates = (array) (cmx_emails_folder_map()['spam']['candidates'] ?? ['Spam', 'Junk']);
+
+		foreach ($mailboxes as $mailbox_info) {
+			$short_name = (string) ($mailbox_info['short'] ?? '');
+			$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '.');
+			foreach ($spam_candidates as $candidate) {
+				$candidate = (string) $candidate;
+				if ($candidate === '') {
+					continue;
+				}
+				if (\strcasecmp($short_name, $candidate) === 0 || \str_ends_with(\strtolower($short_name), \strtolower($candidate))) {
+					$target_short = $short_name;
+					$delimiter = $current_delimiter !== '' ? $current_delimiter : '.';
+					break 2;
+				}
+			}
+		}
+
+		if ($target_short === '') {
+			foreach ($mailboxes as $mailbox_info) {
+				$current_delimiter = (string) ($mailbox_info['delimiter'] ?? '');
+				if ($current_delimiter !== '') {
+					$delimiter = $current_delimiter;
+					break;
+				}
+			}
+
+			$target_short = 'Spam';
+			$target_full = $root . $target_short;
+			if (!cmx_emails_imap_ensure_mailbox($imap, $target_full) && !\in_array($target_full, \array_column($mailboxes, 'name'), true)) {
+				return ['ok' => false];
+			}
+		}
+
+		return [
+			'ok' => true,
+			'target' => $target_short,
+			'full_mailbox' => $root . $target_short,
+			'delimiter' => $delimiter,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_inbox_message_to_spam')) {
+	function cmx_emails_move_inbox_message_to_spam($imap, int $uid, string $current_mailbox): array {
+		if ($uid <= 0 || $current_mailbox === '' || !\function_exists('imap_mail_move')) {
+			return ['moved' => false];
+		}
+
+		$target = cmx_emails_imap_spam_target($imap, $current_mailbox);
+		if (empty($target['ok']) || (string) ($target['target'] ?? '') === '') {
+			return ['moved' => false];
+		}
+
+		$flags = \defined('CP_UID') ? (int) \constant('CP_UID') : 0;
+		$moved = @\imap_mail_move($imap, (string) $uid, (string) $target['target'], $flags);
+		if (!$moved) {
+			return ['moved' => false];
+		}
+
+		return [
+			'moved' => true,
+			'target' => (string) ($target['target'] ?? ''),
 			'full_mailbox' => (string) ($target['full_mailbox'] ?? ''),
 		];
 	}
@@ -1257,6 +1372,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$archive_year = '';
 		$archive_month = '';
 		$archived_message = false;
+		if ($logical_folder === 'inbox') {
+			$spam = cmx_emails_analyze_message_spam([
+				'subject' => $subject,
+				'from' => (string) ($sender['label'] ?? ''),
+				'headers_raw' => $raw_header,
+				'body_text' => $plain,
+				'body_html' => $html,
+			]);
+			$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
+			if (\in_array($spam_status, ['spam', 'suspicious'], true)) {
+				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $mailbox);
+				if (!empty($spam_move['moved'])) {
+					return [
+						'post_id' => 0,
+						'uid' => $uid,
+						'archived' => false,
+						'spam_moved' => true,
+						'spam_status' => $spam_status,
+						'spam_target' => (string) ($spam_move['target'] ?? ''),
+					];
+				}
+			}
+		}
 		if ($logical_folder === 'inbox' && $ts > 0 && $ts < cmx_emails_archive_cutoff_timestamp()) {
 			$archive_move = cmx_emails_archive_inbox_message($imap, $uid, $mailbox, $ts);
 			if (!empty($archive_move['moved'])) {
@@ -1357,7 +1495,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 			cmx_emails_append_received_sender_notes($post_id, (string) $sender['email']);
 		}
 
-		return ['post_id' => $post_id, 'uid' => $uid, 'archived' => $archived_message];
+		return ['post_id' => $post_id, 'uid' => $uid, 'archived' => $archived_message, 'spam_moved' => false];
 	}
 }
 
@@ -1458,6 +1596,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 		$total = (int) \imap_num_msg($imap);
 		$synced = 0;
 		$archived = 0;
+		$spam_moved = 0;
 		$archived_numbers = [];
 		$manual_cleanup_required = false;
 		$archive_backlog_remaining = false;
@@ -1485,6 +1624,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 				if ((int) ($result['post_id'] ?? 0) > 0) {
 					$synced++;
 				}
+				if (!empty($result['spam_moved'])) {
+					$spam_moved++;
+					$archived_numbers[$msg_no] = true;
+					continue;
+				}
 				if (!empty($result['archived'])) {
 					$archived++;
 				}
@@ -1501,6 +1645,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			$result = cmx_emails_sync_single_message($imap, $client, $folder, $msg_no, $mailbox);
 			if ((int) ($result['post_id'] ?? 0) > 0) {
 				$synced++;
+			}
+			if (!empty($result['spam_moved'])) {
+				$spam_moved++;
+				$archived_numbers[$msg_no] = true;
+				continue;
 			}
 			if (!empty($result['archived'])) {
 				$archived++;
@@ -1520,7 +1669,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			}
 		}
 
-		if ($archived > 0 && \function_exists('imap_expunge')) {
+		if (($archived > 0 || $spam_moved > 0) && \function_exists('imap_expunge')) {
 			@\imap_expunge($imap);
 		}
 
@@ -1529,6 +1678,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 		$message = $synced > 0 ? ($synced . ' E-Mails synchronisiert.') : 'Keine E-Mails gefunden.';
 		if ($archived > 0) {
 			$message .= ' ' . $archived . ' E-Mails wurden in Monatsarchive verschoben.';
+		}
+		if ($spam_moved > 0) {
+			$message .= ' ' . $spam_moved . ' E-Mails wurden in Spam verschoben.';
 		}
 		if ($archive_backlog_remaining) {
 			$message .= ' Weitere alte E-Mails folgen beim nächsten Sync.';
@@ -1542,6 +1694,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			'message' => $message,
 			'synced' => $synced,
 			'archived' => $archived,
+			'spam_moved' => $spam_moved,
 		];
 	}
 }

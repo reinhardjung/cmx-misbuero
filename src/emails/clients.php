@@ -216,6 +216,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_folder_map')) {
 				'label' => 'Entwürfe',
 				'candidates' => ['Drafts', 'INBOX.Drafts', 'INBOX/Drafts', 'Entwuerfe', 'Draft'],
 			],
+			'spam' => [
+				'label' => 'Spam',
+				'candidates' => ['Spam', 'Junk', 'Junk E-Mail', 'Bulk Mail', 'INBOX.Spam', 'INBOX.Junk', 'INBOX/Junk', 'INBOX/Bulk'],
+			],
 			'archive' => [
 				'label' => 'Archiv',
 				'candidates' => ['Archive', 'INBOX.Archive', 'INBOX/Archive', 'Archives', 'Archiv'],
