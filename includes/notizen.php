@@ -130,7 +130,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_extract_links')) {
 		$links = [];
 		foreach ($matches as $match) {
 			$href = \esc_url_raw((string) ($match[2] ?? ''), ['http', 'https', 'mailto']);
-			$label = \trim(\wp_strip_all_tags((string) ($match[3] ?? '')));
+			$label_raw = \html_entity_decode((string) ($match[3] ?? ''), \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+			$label = \trim(\wp_strip_all_tags($label_raw));
+			$label = (string) \preg_replace('/[\x{00A0}\x{200B}-\x{200D}\x{FEFF}]+/u', '', $label);
+			if ($label === '' && \preg_match('/\btitle=(["\'])(.*?)\1/is', (string) ($match[0] ?? ''), $title_match)) {
+				$title_raw = \html_entity_decode((string) ($title_match[2] ?? ''), \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+				$label = \trim(\wp_strip_all_tags($title_raw));
+			}
 			if ($href === '') {
 				continue;
 			}

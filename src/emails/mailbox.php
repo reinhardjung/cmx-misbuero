@@ -503,14 +503,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_link_html')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_link_html')) {
-	function cmx_emails_sent_link_html(int $post_id): string {
-		$edit_url = \get_edit_post_link($post_id, '');
-		if (!\is_string($edit_url) || $edit_url === '') {
-			return 'versendet';
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_note_link_html')) {
+	function cmx_emails_note_link_html(int $post_id, string $label): string {
+		$label = \trim($label);
+		if ($label === '') {
+			$label = 'E-Mail';
 		}
 
-		return '<a href="' . \esc_url($edit_url) . '">versendet</a>';
+		$edit_url = \get_edit_post_link($post_id, '');
+		if (!\is_string($edit_url) || $edit_url === '') {
+			return $label;
+		}
+
+		return '<a href="' . \esc_url($edit_url) . '" title="' . \esc_attr($label) . '" target="_blank" rel="noopener noreferrer">&#8203;</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_link_html')) {
+	function cmx_emails_sent_link_html(int $post_id): string {
+		return cmx_emails_note_link_html($post_id, 'versendet');
 	}
 }
 
@@ -530,7 +541,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
 		}
 
 		$body_plain = \trim($body_plain);
-		return $body_plain !== '' ? \wpautop(\esc_html($body_plain)) : '';
+		return $body_plain !== '' ? \nl2br(\esc_html($body_plain)) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_note_subject_html')) {
+	function cmx_emails_note_subject_html(int $post_id): string {
+		$subject = (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
+		if ($subject === '') {
+			$subject = (string) \get_the_title($post_id);
+		}
+
+		$subject = \trim(\sanitize_text_field($subject));
+		if ($subject === '') {
+			return '';
+		}
+
+		return '<strong>' . \esc_html($subject) . '</strong>';
 	}
 }
 
@@ -644,9 +671,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_sent_recipient_notes'
 		}
 
 		$text = cmx_emails_sent_link_html($post_id);
+		$subject = cmx_emails_note_subject_html($post_id);
+		if ($subject !== '') {
+			$text .= $subject;
+		}
 		$body = cmx_emails_sent_body_note_html($post_id);
 		if ($body !== '') {
-			$text .= '<br><br>' . $body;
+			$text .= ($subject !== '' ? '<br>' : '') . $body;
+		}
+
+		foreach ($contact_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0) {
+				continue;
+			}
+			cmx_emails_append_internal_note($contact_id, cmx_emails_assignment_note_post_type($contact_id, 'contact'), $text);
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_received_sender_notes')) {
+	function cmx_emails_append_received_sender_notes(int $post_id, string $sender_email): void {
+		$contact_ids = cmx_emails_find_contact_ids_by_emails([$sender_email]);
+		if ($contact_ids === []) {
+			return;
+		}
+
+		$text = cmx_emails_note_link_html($post_id, 'eingegangen');
+		$subject = cmx_emails_note_subject_html($post_id);
+		if ($subject !== '') {
+			$text .= $subject;
+		}
+		$body = cmx_emails_sent_body_note_html($post_id);
+		if ($body !== '') {
+			$text .= ($subject !== '' ? '<br>' : '') . $body;
 		}
 
 		foreach ($contact_ids as $contact_id) {
@@ -899,13 +957,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
 		\update_post_meta($post_id, cmx_emails_meta_key('contact_id_auto'), (string) \max(0, $auto_contact_id));
 		\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) \max(0, $contact_id));
-		\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
-		\update_post_meta($post_id, cmx_emails_meta_key('status'), $status);
-		cmx_emails_update_assignment_cache($post_id);
+			\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
+			\update_post_meta($post_id, cmx_emails_meta_key('status'), $status);
+			cmx_emails_update_assignment_cache($post_id);
+			if ($existing_id <= 0 && $sender['email'] !== '') {
+				cmx_emails_append_received_sender_notes($post_id, (string) $sender['email']);
+			}
 
-		return ['post_id' => $post_id, 'uid' => $uid];
+			return ['post_id' => $post_id, 'uid' => $uid];
+		}
 	}
-}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder')) {
 	function cmx_emails_open_client_folder(array $client, string $folder, ?string &$resolved_mailbox = null) {

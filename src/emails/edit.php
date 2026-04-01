@@ -410,33 +410,191 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_queue_redirect_notice')) {
 	echo '<div class="notice notice-' . \esc_attr((string) ($notice['type'] ?? 'info')) . ' is-dismissible"><p>' . \esc_html((string) $notice['message']) . '</p></div>';
 });
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_attachment_row_from_path')) {
+	function cmx_emails_compose_attachment_row_from_path(string $path, string $filename = '', string $mime = '', string $url = '', string $rel = ''): array {
+		$path = \wp_normalize_path($path);
+		if ($path === '' || !\is_file($path) || !\is_readable($path)) {
+			return [];
+		}
+
+		$filename = \sanitize_file_name($filename !== '' ? $filename : (string) \basename($path));
+		if ($filename === '') {
+			return [];
+		}
+
+		$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		if ($rel === '' && $basedir !== '' && \str_starts_with($path, $basedir)) {
+			$rel = \ltrim((string) \substr($path, \strlen($basedir)), '/');
+		}
+
+		if ($url === '' && $rel !== '') {
+			$baseurl = \trailingslashit((string) ($uploads['baseurl'] ?? ''));
+			if ($baseurl !== '') {
+				$url = $baseurl . $rel;
+			}
+		}
+
+		if ($mime === '') {
+			$filetype = (array) \wp_check_filetype($filename);
+			$mime = \sanitize_text_field((string) ($filetype['type'] ?? ''));
+		}
+
+		return [
+			'filename' => $filename,
+			'mime'     => $mime !== '' ? $mime : 'application/octet-stream',
+			'size'     => (int) \filesize($path),
+			'rel'      => $rel,
+			'path'     => $path,
+			'url'      => $url,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_related_post_attachment_list')) {
+	function cmx_emails_compose_related_post_attachment_list(int $related_post_id): array {
+		$related_post_id = (int) $related_post_id;
+		if ($related_post_id <= 0) {
+			return [];
+		}
+
+		$post_type = (string) \get_post_type($related_post_id);
+		$list = [];
+		$seen = [];
+		$append = static function (string $path, string $filename = '', string $mime = '', string $url = '', string $rel = '') use (&$list, &$seen): void {
+			$row = cmx_emails_compose_attachment_row_from_path($path, $filename, $mime, $url, $rel);
+			if ($row === []) {
+				return;
+			}
+
+			$normalized_path = \wp_normalize_path((string) ($row['path'] ?? ''));
+			if ($normalized_path === '' || isset($seen[$normalized_path])) {
+				return;
+			}
+
+			$seen[$normalized_path] = true;
+			$list[] = $row;
+		};
+
+		if ($post_type === 'dokumente') {
+			$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+				: '_cmx_dokumente_files';
+			foreach ((array) \get_post_meta($related_post_id, $self_meta_key, true) as $entry) {
+				if (\is_numeric($entry)) {
+					$attachment_id = (int) $entry;
+					if ($attachment_id <= 0) {
+						continue;
+					}
+					$append(
+						(string) \get_attached_file($attachment_id),
+						'',
+						(string) \get_post_mime_type($attachment_id),
+						(string) \wp_get_attachment_url($attachment_id)
+					);
+					continue;
+				}
+
+				$file_rel = \ltrim(\str_replace('\\', '/', (string) $entry), '/');
+				if ($file_rel === '') {
+					continue;
+				}
+				$append((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel), '', '', '', $file_rel);
+			}
+
+			$primary_rel = \ltrim(\str_replace('\\', '/', (string) \get_post_meta($related_post_id, '_cmx_dokumente_file_path', true)), '/');
+			if ($primary_rel !== '') {
+				$append((string) (\WP_CONTENT_DIR . '/uploads/' . $primary_rel), '', '', '', $primary_rel);
+			}
+		} elseif ($post_type === 'belege') {
+			$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+				: '_cmx_belege_uploads';
+			foreach ((array) \get_post_meta($related_post_id, $uploads_meta_key, true) as $entry) {
+				$file_rel = \ltrim(\str_replace('\\', '/', (string) $entry), '/');
+				if ($file_rel === '') {
+					continue;
+				}
+				$append((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel), '', '', '', $file_rel);
+			}
+
+			if ($list === [] && \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_primary_upload_abs_path')) {
+				$append((string) cmxbu_get_beleg_primary_upload_abs_path($related_post_id));
+			}
+		}
+
+		return $list;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_document_attachment_list')) {
+	function cmx_emails_compose_document_attachment_list(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return [];
+		}
+
+		$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			: '_cmx_dokumente_uploads';
+		$related_ids = \array_merge(
+			(array) \get_post_meta($post_id, $uploads_meta_key, true),
+			(array) \get_post_meta($post_id, cmx_emails_meta_key('imported_post_ids'), true)
+		);
+		$related_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $related_ids))));
+		if ($related_ids === []) {
+			return [];
+		}
+
+		$list = [];
+		$seen = [];
+		foreach ($related_ids as $related_post_id) {
+			foreach (cmx_emails_compose_related_post_attachment_list((int) $related_post_id) as $row) {
+				$normalized_path = \wp_normalize_path((string) ($row['path'] ?? ''));
+				if ($normalized_path === '' || isset($seen[$normalized_path])) {
+					continue;
+				}
+				$seen[$normalized_path] = true;
+				$list[] = $row;
+			}
+		}
+
+		return $list;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_attachment_list')) {
 	function cmx_emails_compose_attachment_list(int $post_id): array {
 		$list = [];
+		$seen = [];
+		$append = static function (array $row) use (&$list, &$seen): void {
+			$path = \wp_normalize_path((string) ($row['path'] ?? ''));
+			if ($path === '' || isset($seen[$path])) {
+				return;
+			}
+			$seen[$path] = true;
+			$list[] = $row;
+		};
+
 		foreach (\get_attached_media('', $post_id) as $attachment) {
 			if (!$attachment instanceof \WP_Post) {
 				continue;
 			}
 
-			$path = \wp_normalize_path((string) \get_attached_file($attachment->ID));
-			if ($path === '' || !\is_file($path) || !\is_readable($path)) {
-				continue;
+			$row = cmx_emails_compose_attachment_row_from_path(
+				(string) \get_attached_file($attachment->ID),
+				'',
+				(string) \get_post_mime_type($attachment->ID),
+				(string) \wp_get_attachment_url($attachment->ID)
+			);
+			if ($row !== []) {
+				$append($row);
 			}
+		}
 
-			$filename = \sanitize_file_name((string) \basename($path));
-			if ($filename === '') {
-				continue;
-			}
-
-			$mime = \sanitize_text_field((string) \get_post_mime_type($attachment->ID));
-			$list[] = [
-				'filename' => $filename,
-				'mime' => $mime !== '' ? $mime : 'application/octet-stream',
-				'size' => (int) \filesize($path),
-				'rel' => '',
-				'path' => $path,
-				'url' => (string) \wp_get_attachment_url($attachment->ID),
-			];
+		foreach (cmx_emails_compose_document_attachment_list($post_id) as $row) {
+			$append((array) $row);
 		}
 
 		return $list;
