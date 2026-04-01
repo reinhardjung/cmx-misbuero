@@ -1,7 +1,30 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
 if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT')) {
-	\define(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT', 60);
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT', 100);
+}
+
+if (!\defined(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES')) {
+	\define(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES', 100);
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')) {
+	function cmx_emails_message_limit(int $requested = 0): int {
+		$max = (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_MAX_MESSAGES');
+		if ($max <= 0) {
+			$max = 100;
+		}
+
+		if ($requested <= 0) {
+			$requested = (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT');
+		}
+
+		if ($requested <= 0) {
+			$requested = $max;
+		}
+
+		return \max(1, \min($requested, $max));
+	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_meta_key')) {
@@ -852,7 +875,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_client_messages')) {
 			return ['ok' => false, 'message' => 'PHP-IMAP ist auf diesem Server nicht verfuegbar. Bitte die PHP-Erweiterung imap aktivieren.', 'synced' => 0];
 		}
 
-		$limit = $limit > 0 ? $limit : (int) \constant(__NAMESPACE__ . '\\CMX_EMAILS_SYNC_LIMIT');
+		$limit = cmx_emails_message_limit($limit);
 		$mailbox = '';
 		$imap = cmx_emails_open_client_folder($client, $folder, $mailbox);
 		if ($imap === false) {
@@ -1717,10 +1740,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_query_args')) {
 			$post_status = 'publish';
 		}
 
+		$posts_per_page = cmx_emails_message_limit((int) ($filters['posts_per_page'] ?? 25));
+
 		$args = [
 			'post_type'        => CMX_EMAILS_CPT,
 			'post_status'      => [$post_status],
-			'posts_per_page'   => (int) ($filters['posts_per_page'] ?? 25),
+			'posts_per_page'   => $posts_per_page,
 			'paged'            => \max(1, (int) ($filters['paged'] ?? 1)),
 			'meta_key'         => cmx_emails_meta_key('received_ts'),
 			'orderby'          => 'meta_value_num',
@@ -1751,9 +1776,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_count')) {
 	function cmx_emails_count(array $filters = []): int {
 		$query = new \WP_Query(cmx_emails_query_args($filters, [
 			'fields' => 'ids',
-			'posts_per_page' => 1,
+			'posts_per_page' => cmx_emails_message_limit(),
 			'paged' => 1,
 		]));
-		return (int) $query->found_posts;
+		return \min((int) $query->found_posts, cmx_emails_message_limit());
 	}
 }

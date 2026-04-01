@@ -442,6 +442,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$query->set('orderby', 'meta_value_num');
 		$query->set('order', isset($_GET['order']) ? \sanitize_key((string) \wp_unslash($_GET['order'])) : 'DESC');
 	}
+
+	$max_messages = \function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')
+		? cmx_emails_message_limit()
+		: 100;
+	$query->set('posts_per_page', $max_messages);
+	$query->set('paged', 1);
 });
 
 \add_action('admin_head-edit.php', function (): void {

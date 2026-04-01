@@ -593,7 +593,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			'account_id' => $account_id,
 			'folder' => $folder,
 			's' => $search,
-			'posts_per_page' => 40,
+			'posts_per_page' => \function_exists(__NAMESPACE__ . '\\cmx_emails_message_limit')
+				? cmx_emails_message_limit()
+				: 100,
 			'paged' => 1,
 		]));
 		$messages = $query->posts;
