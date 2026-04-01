@@ -539,8 +539,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_message_id')
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint')) {
-	function cmx_emails_find_post_id_by_fingerprint(string $client_id, string $subject = '', string $sender_email = '', int $received_ts = 0, array $folders = ['archive', 'inbox']): int {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_ids_by_message_id')) {
+	function cmx_emails_find_post_ids_by_message_id(string $client_id, string $message_id, int $limit = 25): array {
+		$message_id = \sanitize_text_field($message_id);
+		if ($message_id === '') {
+			return [];
+		}
+
+		$ids = \get_posts([
+			'post_type'        => CMX_EMAILS_CPT,
+			'post_status'      => ['publish', 'draft', 'private', 'pending', 'trash'],
+			'posts_per_page'   => $limit,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+			'meta_query'       => [
+				['key' => cmx_emails_meta_key('account_id'), 'value' => \sanitize_key($client_id)],
+				['key' => cmx_emails_meta_key('message_id'), 'value' => $message_id],
+			],
+		]);
+
+		return \array_values(\array_filter(\array_map('intval', (array) $ids)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_ids_by_fingerprint')) {
+	function cmx_emails_find_post_ids_by_fingerprint(string $client_id, string $subject = '', string $sender_email = '', int $received_ts = 0, array $folders = ['archive', 'inbox']): array {
 		$client_id = \sanitize_key($client_id);
 		$subject = \sanitize_text_field($subject);
 		$sender_email = \sanitize_email($sender_email);
@@ -550,7 +574,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint'
 		}));
 
 		if ($client_id === '' || ($subject === '' && $sender_email === '' && $received_ts <= 0)) {
-			return 0;
+			return [];
 		}
 
 		$meta_query = [
@@ -566,15 +590,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint'
 		$ids = \get_posts([
 			'post_type'        => CMX_EMAILS_CPT,
 			'post_status'      => ['publish', 'draft', 'private', 'pending', 'trash'],
-			'posts_per_page'   => 25,
+			'posts_per_page'   => 50,
 			'fields'           => 'ids',
 			'no_found_rows'    => true,
 			'suppress_filters' => true,
 			'meta_query'       => $meta_query,
 		]);
 
-		$best_id = 0;
-		$best_score = -1;
+		$matched = [];
 		foreach ((array) $ids as $candidate_id) {
 			$candidate_id = (int) $candidate_id;
 			if ($candidate_id <= 0 || (string) \get_post_status($candidate_id) === 'trash') {
@@ -613,46 +636,70 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint'
 				}
 			}
 
-			if ($score > $best_score) {
-				$best_score = $score;
-				$best_id = $candidate_id;
+			if ($score >= 5) {
+				$matched[$candidate_id] = $candidate_id;
 			}
 		}
 
-		return $best_score >= 5 ? $best_id : 0;
+		return \array_values($matched);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_collect_matching_post_ids_for_spam')) {
+	function cmx_emails_collect_matching_post_ids_for_spam(string $client_id, int $uid, string $message_id, array $fingerprint = []): array {
+		$matched = [];
+
+		foreach (['inbox', 'archive'] as $folder) {
+			$post_id = cmx_emails_find_post_id($client_id, $folder, $uid);
+			if ($post_id > 0) {
+				$matched[$post_id] = $post_id;
+			}
+		}
+
+		foreach (cmx_emails_find_post_ids_by_message_id($client_id, $message_id) as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id > 0) {
+				$matched[$post_id] = $post_id;
+			}
+		}
+
+		foreach (cmx_emails_find_post_ids_by_fingerprint(
+			$client_id,
+			(string) ($fingerprint['subject'] ?? ''),
+			(string) ($fingerprint['sender_email'] ?? ''),
+			(int) ($fingerprint['received_ts'] ?? 0),
+			(array) ($fingerprint['folders'] ?? ['archive', 'inbox'])
+		) as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id > 0) {
+				$matched[$post_id] = $post_id;
+			}
+		}
+
+		return \array_values($matched);
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
 	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = '', array $fingerprint = []): int {
-		$post_id = cmx_emails_find_post_id($client_id, 'inbox', $uid);
-		if ($post_id <= 0) {
-			$post_id = cmx_emails_find_post_id($client_id, 'archive', $uid);
-		}
-		if ($post_id <= 0 && $message_id !== '') {
-			$post_id = cmx_emails_find_post_id_by_message_id($client_id, $message_id);
-		}
-		if ($post_id <= 0) {
-			$post_id = cmx_emails_find_post_id_by_fingerprint(
-				$client_id,
-				(string) ($fingerprint['subject'] ?? ''),
-				(string) ($fingerprint['sender_email'] ?? ''),
-				(int) ($fingerprint['received_ts'] ?? 0),
-				(array) (($fingerprint['folders'] ?? ['archive', 'inbox']))
-			);
-		}
-		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+		$post_ids = cmx_emails_collect_matching_post_ids_for_spam($client_id, $uid, $message_id, $fingerprint);
+		if ($post_ids === []) {
 			return 0;
 		}
 
-		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'spam');
-		if ($mailbox !== '') {
-			\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
+		$first_post_id = 0;
+		foreach ($post_ids as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+				continue;
+			}
+			if ($first_post_id <= 0) {
+				$first_post_id = $post_id;
+			}
+			cmx_emails_mark_post_as_spam($post_id, $mailbox);
 		}
-		\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
-		\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
 
-		return $post_id;
+		return $first_post_id;
 	}
 }
 
