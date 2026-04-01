@@ -236,12 +236,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_handle_request')
 if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_page')) {
 	function cmx_ext_time_stopwatch_render_abort_page(string $redirect_url): void {
 		$redirect_url = $redirect_url !== '' ? $redirect_url : '/' . cmx_ext_time_stopwatch_route_slug() . '/';
+		$icon_url = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_icon_asset_url')
+			? (string) cmx_ext_time_stopwatch_icon_asset_url()
+			: '';
 		?>
 		<!doctype html>
 		<html lang="de">
 		<head>
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<?php if ($icon_url !== '') : ?>
+				<link rel="icon" href="<?php echo \esc_url($icon_url); ?>" type="image/png">
+				<link rel="shortcut icon" href="<?php echo \esc_url($icon_url); ?>" type="image/png">
+				<link rel="apple-touch-icon" href="<?php echo \esc_url($icon_url); ?>">
+			<?php endif; ?>
+			<meta name="apple-mobile-web-app-capable" content="yes">
+			<meta name="apple-mobile-web-app-title" content="Stoppuhr">
+			<meta name="theme-color" content="#2271b1">
 			<meta http-equiv="refresh" content="0;url=<?php echo \esc_attr($redirect_url); ?>">
 			<title>Stoppuhr wird zurückgesetzt</title>
 			<style>
@@ -360,6 +371,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 		<head>
 			<meta charset="utf-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<?php if ($logo_src !== '') : ?>
+				<link rel="icon" href="<?php echo \esc_url($logo_src); ?>" type="image/png">
+				<link rel="shortcut icon" href="<?php echo \esc_url($logo_src); ?>" type="image/png">
+				<link rel="apple-touch-icon" href="<?php echo \esc_url($logo_src); ?>">
+			<?php endif; ?>
+			<meta name="apple-mobile-web-app-capable" content="yes">
+			<meta name="apple-mobile-web-app-title" content="Stoppuhr">
+			<meta name="theme-color" content="#2271b1">
 			<title>Mis Büro - Stoppuhr</title>
 				<style>
 					:root{

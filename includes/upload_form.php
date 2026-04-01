@@ -74,6 +74,19 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		return (int) min( $size, $limit );
 	}
 
+	private static function icon_url() : string {
+		$relative = 'src/belege/icon_upload.png';
+		$url      = (string) plugins_url( $relative, dirname( __DIR__ ) . '/cmx-misbuero.php' );
+		$path     = dirname( __DIR__ ) . '/' . $relative;
+		$version  = @filemtime( $path );
+
+		if ( $version ) {
+			$url = (string) add_query_arg( 'ver', (string) $version, $url );
+		}
+
+		return $url;
+	}
+
 	/* ================================
 	 * FRONTEND
 	 * ================================ */
@@ -255,7 +268,7 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		$logo_link = $upload_token !== ''
 			? home_url( '/mis-upload/?token=' . rawurlencode( $upload_token ) )
 			: home_url( '/mis-upload/' );
-		$logo_src = (string) plugins_url( 'src/belege/icon_upload.png', dirname( __DIR__ ) . '/cmx-misbuero.php' );
+		$logo_src = self::icon_url();
 		$ini_kategorien = function_exists( __NAMESPACE__ . '\\cmx_ini_get_value' )
 			? (array) cmx_ini_get_value( 'Belege', 'Kategorien' )
 			: [];
@@ -343,9 +356,12 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		<html>
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<link rel="icon" href="https://misbuero.ch/wp-content/uploads/youtube.png" type="image/png">
-			<link rel="shortcut icon" href="https://misbuero.ch/wp-content/uploads/youtube.png" type="image/png">
-			<link rel="apple-touch-icon" href="https://misbuero.ch/wp-content/uploads/youtube.png">
+			<link rel="icon" href="<?php echo esc_url( $logo_src ); ?>" type="image/png">
+			<link rel="shortcut icon" href="<?php echo esc_url( $logo_src ); ?>" type="image/png">
+			<link rel="apple-touch-icon" href="<?php echo esc_url( $logo_src ); ?>">
+			<meta name="apple-mobile-web-app-capable" content="yes">
+			<meta name="apple-mobile-web-app-title" content="PDF Upload">
+			<meta name="theme-color" content="#2271b1">
 			<title>Beleg Upload</title>
 			<style>
 				:root {
@@ -986,12 +1002,18 @@ final class MIS_BUERO_BELEG_UPLOAD {
 		$token = get_option( self::OPTION_TOKEN );
 		$upload_url = $token ? home_url( '/mis-upload/?token=' . $token ) : home_url( '/mis-upload/' );
 		$logo_link = $upload_url;
-		$logo_src = (string) plugins_url( 'src/belege/icon_upload.png', dirname( __DIR__ ) . '/cmx-misbuero.php' );
+		$logo_src = self::icon_url();
 		?>
 		<!doctype html>
 		<html>
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<link rel="icon" href="<?php echo esc_url( $logo_src ); ?>" type="image/png">
+			<link rel="shortcut icon" href="<?php echo esc_url( $logo_src ); ?>" type="image/png">
+			<link rel="apple-touch-icon" href="<?php echo esc_url( $logo_src ); ?>">
+			<meta name="apple-mobile-web-app-capable" content="yes">
+			<meta name="apple-mobile-web-app-title" content="PDF Upload">
+			<meta name="theme-color" content="#2271b1">
 			<title>Beleg gespeichert</title>
 			<style>
 				:root {

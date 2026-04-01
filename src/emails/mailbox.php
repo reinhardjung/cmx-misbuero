@@ -539,6 +539,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_message_id')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
+	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = ''): int {
+		$post_id = cmx_emails_find_post_id($client_id, 'inbox', $uid);
+		if ($post_id <= 0 && $message_id !== '') {
+			$post_id = cmx_emails_find_post_id_by_message_id($client_id, $message_id);
+		}
+		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+			return 0;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'spam');
+		if ($mailbox !== '') {
+			\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
+		}
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
+
+		return $post_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_imap_root_from_mailbox')) {
 	function cmx_emails_imap_root_from_mailbox(string $mailbox): string {
 		if (\preg_match('/^\{[^}]+\}/', $mailbox, $match)) {
@@ -1384,8 +1405,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 			if (\in_array($spam_status, ['spam', 'suspicious'], true)) {
 				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $mailbox);
 				if (!empty($spam_move['moved'])) {
+					$spam_post_id = cmx_emails_mark_existing_message_as_spam(
+						$account_id,
+						$uid,
+						$message_id,
+						(string) ($spam_move['full_mailbox'] ?? '')
+					);
+
 					return [
-						'post_id' => 0,
+						'post_id' => $spam_post_id,
 						'uid' => $uid,
 						'archived' => false,
 						'spam_moved' => true,
