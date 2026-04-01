@@ -542,6 +542,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_message_id')
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
 	function cmx_emails_mark_existing_message_as_spam(string $client_id, int $uid, string $message_id, string $mailbox = ''): int {
 		$post_id = cmx_emails_find_post_id($client_id, 'inbox', $uid);
+		if ($post_id <= 0) {
+			$post_id = cmx_emails_find_post_id($client_id, 'archive', $uid);
+		}
 		if ($post_id <= 0 && $message_id !== '') {
 			$post_id = cmx_emails_find_post_id_by_message_id($client_id, $message_id);
 		}
