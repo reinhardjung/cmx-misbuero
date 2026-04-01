@@ -803,7 +803,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_existing_posts_for_s
 				continue;
 			}
 
+			cmx_emails_mark_post_as_spam($post_id);
 			if (cmx_emails_move_existing_post_to_spam($post_id, $client)) {
+				$moved++;
+			} else {
 				$moved++;
 			}
 		}
@@ -1646,6 +1649,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$archive_month = '';
 		$archived_message = false;
 		if ($logical_folder === 'inbox') {
+			$spam_fingerprint = [
+				'subject' => $subject,
+				'sender_email' => (string) ($sender['email'] ?? ''),
+				'received_ts' => $ts,
+				'folders' => ['archive', 'inbox', 'spam'],
+			];
 			$spam = cmx_emails_analyze_message_spam([
 				'subject' => $subject,
 				'from' => (string) ($sender['label'] ?? ''),
@@ -1655,13 +1664,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 			]);
 			$spam_status = \sanitize_key((string) ($spam['status'] ?? ''));
 			if (\in_array($spam_status, ['spam', 'suspicious'], true)) {
+				$local_spam_post_id = cmx_emails_mark_existing_message_as_spam(
+					$account_id,
+					$uid,
+					$message_id,
+					'',
+					$spam_fingerprint
+				);
 				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $mailbox);
 				if (!empty($spam_move['moved'])) {
 					$spam_post_id = cmx_emails_mark_existing_message_as_spam(
 						$account_id,
 						$uid,
 						$message_id,
-						(string) ($spam_move['full_mailbox'] ?? '')
+						(string) ($spam_move['full_mailbox'] ?? ''),
+						$spam_fingerprint
 					);
 
 					return [
@@ -1671,6 +1688,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 						'spam_moved' => true,
 						'spam_status' => $spam_status,
 						'spam_target' => (string) ($spam_move['target'] ?? ''),
+					];
+				}
+
+				$logical_folder = 'spam';
+				$logical_mailbox = $mailbox;
+				if ($local_spam_post_id > 0) {
+					return [
+						'post_id' => $local_spam_post_id,
+						'uid' => $uid,
+						'archived' => false,
+						'spam_moved' => true,
+						'spam_status' => $spam_status,
+						'spam_target' => '',
 					];
 				}
 			}
@@ -2135,25 +2165,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_archive_mailboxes_fo
 					continue;
 				}
 
-				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
-				if (empty($spam_move['moved'])) {
-					continue;
-				}
-
-				cmx_emails_mark_existing_message_as_spam(
+				$local_spam_post_id = cmx_emails_mark_existing_message_as_spam(
 					$account_id,
 					$uid,
 					$message_id,
-					(string) ($spam_move['full_mailbox'] ?? ''),
+					'',
 					[
 						'subject' => $subject,
 						'sender_email' => (string) ($sender['email'] ?? ''),
 						'received_ts' => $received_ts,
-						'folders' => ['archive', 'inbox'],
+						'folders' => ['archive', 'inbox', 'spam'],
 					]
 				);
-				$spam_moved++;
-				$mailbox_changed = true;
+				$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
+				if (!empty($spam_move['moved'])) {
+					cmx_emails_mark_existing_message_as_spam(
+						$account_id,
+						$uid,
+						$message_id,
+						(string) ($spam_move['full_mailbox'] ?? ''),
+						[
+							'subject' => $subject,
+							'sender_email' => (string) ($sender['email'] ?? ''),
+							'received_ts' => $received_ts,
+							'folders' => ['archive', 'inbox', 'spam'],
+						]
+					);
+					$spam_moved++;
+					$mailbox_changed = true;
+					continue;
+				}
+
+				if ($local_spam_post_id > 0) {
+					$spam_moved++;
+				}
 			}
 
 			if ($mailbox_changed && \function_exists('imap_expunge')) {
