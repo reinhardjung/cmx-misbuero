@@ -493,7 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 					.mode-row{display:grid;grid-template-columns:minmax(0,1fr) 160px;gap:12px;align-items:end}
 					.mode-field{display:flex;flex-direction:column;gap:5px;min-width:0}
 					.field-caption{font-weight:600}
-					.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:160px;align-items:flex-end;margin-top:25px}
+					.note-subject{display:flex;flex-direction:column;justify-content:flex-end;min-width:160px;align-items:flex-end;margin-top:30px}
 					.note-subject select{min-width:160px;width:auto;max-width:160px}
 					.note-subject.is-hidden{visibility:hidden;pointer-events:none}
 					.inline{display:flex;align-items:center;gap:8px}
@@ -861,7 +861,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_render_abort_pag
 								.note-subject{
 									min-width:126px;
 									align-items:flex-end;
-									margin-top:0;
+									margin-top:5px;
 								}
 								.note-subject select{
 									min-width:126px;
