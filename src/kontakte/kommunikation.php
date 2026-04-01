@@ -697,6 +697,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
 		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails';
 		$emails_enabled = \post_type_exists($email_post_type);
+		if (
+			$emails_enabled
+			&& \function_exists(__NAMESPACE__ . '\\cmx_system_should_hide_post_type_for_cloudmeister')
+			&& cmx_system_should_hide_post_type_for_cloudmeister($email_post_type)
+		) {
+			$emails_enabled = false;
+		}
 		$internal_email_url = $emails_enabled
 			? \admin_url('post-new.php?post_type=' . \rawurlencode($email_post_type))
 			: '';

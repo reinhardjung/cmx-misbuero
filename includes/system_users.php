@@ -41,10 +41,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_plugin_post_types')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_cloudmeister_hidden_post_types')) {
 	function cmx_system_cloudmeister_hidden_post_types(): array {
-		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte'];
-		if (!cmx_system_is_pro_version_enabled()) {
-			$hidden_post_types[] = 'emails';
-		}
+		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails'];
 
 		$post_types = [];
 		foreach ($hidden_post_types as $post_type) {
@@ -111,10 +108,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_max_workplaces')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_pro_version_enabled')) {
 	function cmx_system_is_pro_version_enabled(): bool {
-		if (cmx_system_is_cloudmeister_user()) {
-			return true;
-		}
-
 		$options = (array) \get_option(cmx_system_settings_option_name(), []);
 		return !empty($options[CMX_SYSTEM_PRO_VERSION_KEY]);
 	}
