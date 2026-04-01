@@ -26,10 +26,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 	function cmx_emails_current_filters(): array {
 		$category = isset($_GET['cmx_email_category']) ? (string) \wp_unslash($_GET['cmx_email_category']) : '';
 		$category = $category === '0' ? '' : \sanitize_title($category);
+		$folder_is_explicit = isset($_GET['cmx_email_folder']) && !\is_array($_GET['cmx_email_folder']);
 
 		$filters = [
 			'account_id' => isset($_GET['cmx_email_account']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_account'])) : '',
-			'folder' => isset($_GET['cmx_email_folder']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_folder'])) : '',
+			'folder' => $folder_is_explicit ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_folder'])) : 'inbox',
 			'status' => isset($_GET['cmx_email_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_status'])) : '',
 			'category' => $category,
 			'archive_year' => isset($_GET['cmx_email_archive_year']) ? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_GET['cmx_email_archive_year'])) : '',
@@ -37,7 +38,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 		];
 
 		$archive_selected = (string) $filters['archive_year'] !== '' || (string) $filters['archive_month'] !== '';
-		if ($archive_selected && \in_array((string) $filters['folder'], ['', 'archive'], true)) {
+		if ($archive_selected && (!$folder_is_explicit || \in_array((string) $filters['folder'], ['', 'archive'], true))) {
 			$filters['folder'] = 'archive';
 		}
 		if ((string) $filters['folder'] !== 'archive') {

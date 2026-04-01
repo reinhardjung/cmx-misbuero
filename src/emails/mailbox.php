@@ -560,6 +560,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spa
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_post_as_spam')) {
+	function cmx_emails_mark_post_as_spam(int $post_id, string $mailbox = ''): int {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_status($post_id) === 'trash') {
+			return 0;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'spam');
+		if ($mailbox !== '') {
+			\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $mailbox);
+		}
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
+		\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
+
+		return $post_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_existing_recheckable_post_ids')) {
 	function cmx_emails_existing_recheckable_post_ids(string $client_id, int $limit = 0): array {
 		$client_id = \sanitize_key($client_id);
@@ -1812,18 +1830,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_uid_by_message_id')) {
 			}
 		}
 
+		$total = \function_exists('imap_num_msg') ? (int) @\imap_num_msg($imap) : 0;
+		for ($msg_no = $total; $msg_no >= 1; $msg_no--) {
+			$header_raw = (string) @\imap_fetchheader($imap, $msg_no, \FT_PREFETCHTEXT);
+			if ($header_raw === '') {
+				continue;
+			}
+
+			if (\preg_match('/^Message-Id:\s*(.+)$/mi', $header_raw, $matches) || \preg_match('/^Message-ID:\s*(.+)$/mi', $header_raw, $matches)) {
+				$current_message_id = \trim(\sanitize_text_field((string) ($matches[1] ?? '')));
+				$current_message_id = \trim($current_message_id, "<> \t\n\r\0\x0B");
+				if ($current_message_id !== '' && $current_message_id === $trimmed_id) {
+					$uid = \function_exists('imap_uid') ? (int) @\imap_uid($imap, $msg_no) : 0;
+					if ($uid > 0) {
+						return $uid;
+					}
+				}
+			}
+		}
+
 		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_message_id_from_uid')) {
+	function cmx_emails_message_id_from_uid($imap, int $uid): string {
+		$uid = (int) $uid;
+		if ($uid <= 0 || !\function_exists('imap_msgno')) {
+			return '';
+		}
+
+		$msg_no = (int) @\imap_msgno($imap, $uid);
+		if ($msg_no <= 0) {
+			return '';
+		}
+
+		$header_raw = (string) @\imap_fetchheader($imap, $msg_no, \FT_PREFETCHTEXT);
+		if ($header_raw === '') {
+			return '';
+		}
+
+		if (\preg_match('/^Message-Id:\s*(.+)$/mi', $header_raw, $matches) || \preg_match('/^Message-ID:\s*(.+)$/mi', $header_raw, $matches)) {
+			return \trim(\sanitize_text_field((string) ($matches[1] ?? '')), "<> \t\n\r\0\x0B");
+		}
+
+		return '';
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_resolve_uid_in_mailbox')) {
 	function cmx_emails_resolve_uid_in_mailbox($imap, int $uid, string $message_id): int {
 		$uid = (int) $uid;
+		$message_id = \trim(\sanitize_text_field($message_id), "<> \t\n\r\0\x0B");
 		if ($uid > 0 && \function_exists('imap_msgno')) {
 			$msg_no = (int) @\imap_msgno($imap, $uid);
 			if ($msg_no > 0) {
-				return $uid;
+				if ($message_id === '') {
+					return $uid;
+				}
+
+				$current_message_id = cmx_emails_message_id_from_uid($imap, $uid);
+				if ($current_message_id !== '' && $current_message_id === $message_id) {
+					return $uid;
+				}
 			}
+		}
+
+		if ($message_id === '') {
+			if ($uid > 0 && \function_exists('imap_msgno')) {
+				$msg_no = (int) @\imap_msgno($imap, $uid);
+				if ($msg_no > 0) {
+					return $uid;
+				}
+			}
+
+			return 0;
 		}
 
 		return cmx_emails_find_uid_by_message_id($imap, $message_id);
@@ -1873,11 +1954,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')
 
 		$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $resolved_uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
 		if (!empty($spam_move['moved'])) {
+			$target_mailbox = (string) ($spam_move['full_mailbox'] ?? '');
+			cmx_emails_mark_post_as_spam($post_id, $target_mailbox);
 			cmx_emails_mark_existing_message_as_spam(
 				$account_id,
 				$resolved_uid,
 				$message_id,
-				(string) ($spam_move['full_mailbox'] ?? '')
+				$target_mailbox
 			);
 			if (\function_exists('imap_expunge')) {
 				@\imap_expunge($imap);
