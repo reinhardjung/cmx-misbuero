@@ -809,6 +809,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 				const hasArchiveSelection = String(yearSelect.value || '') !== '' || String(monthSelect.value || '') !== '';
 				if (hasArchiveSelection) {
 					folderSelect.value = 'archive';
+				} else if (String(folderSelect.value || '') === 'archive') {
+					folderSelect.value = '';
 				}
 			}
 

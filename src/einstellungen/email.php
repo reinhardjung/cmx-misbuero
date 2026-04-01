@@ -584,6 +584,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				flex-direction: column;
 				gap: 14px;
 			}
+			.cmx-email-client-list-wrap {
+				width: 100%;
+				max-width: none;
+				margin: 0;
+			}
+			.cmx-email-clients-row th {
+				display: none;
+			}
+			.cmx-email-clients-row td {
+				padding-left: 0;
+				padding-right: 0;
+			}
 			.cmx-email-client-item {
 				border: 1px solid #d7dce3;
 				border-radius: 12px;
@@ -850,6 +862,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 		var nonce = <?php echo \wp_json_encode($ajax_nonce); ?>;
 		var settingsKey = <?php echo \wp_json_encode((string) CMX_SETTINGS_MAIN); ?>;
 
+		function initClientSettingsRow(){
+			var list = document.getElementById('cmx-email-client-list');
+			if (!list) return;
+			var row = list.closest('tr');
+			if (row) {
+				row.classList.add('cmx-email-clients-row');
+			}
+		}
+
 		function byName(name){
 			return document.querySelector('[name="' + settingsKey + '[' + name + ']"]');
 		}
@@ -1084,6 +1105,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			});
 		}
 
+		initClientSettingsRow();
 		initPasswordToggles(document);
 		initClientList();
 		runTest('cmx_email_test_smtp', 'smtp_host', 'cmx-email-smtp-test', 'cmx-email-smtp-result');

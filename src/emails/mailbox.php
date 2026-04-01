@@ -916,15 +916,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_note_post_type'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_ignored_contact_match_emails')) {
+	function cmx_emails_ignored_contact_match_emails(): array {
+		$ignored = [];
+		foreach ((array) cmx_emails_client_list() as $client) {
+			$client = (array) $client;
+			$email = \sanitize_email((string) ($client['email'] ?? ''));
+			if (!\is_email($email)) {
+				continue;
+			}
+			$ignored[\strtolower($email)] = $email;
+		}
+
+		return $ignored;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')) {
 	function cmx_emails_find_contact_ids_by_emails(array $emails): array {
+		$ignored_emails = cmx_emails_ignored_contact_match_emails();
 		$normalized_emails = [];
 		foreach ($emails as $email) {
 			$email = \sanitize_email((string) $email);
 			if (!\is_email($email)) {
 				continue;
 			}
-			$normalized_emails[\strtolower($email)] = $email;
+			$key = \strtolower($email);
+			if (isset($ignored_emails[$key])) {
+				continue;
+			}
+			$normalized_emails[$key] = $email;
 		}
 		if ($normalized_emails === []) {
 			return [];
@@ -977,6 +998,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')
 		}
 
 		return \array_values($contact_ids);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_auto_contact_ids_for_message')) {
+	function cmx_emails_auto_contact_ids_for_message(string $sender_email = '', array $to = [], array $cc = [], array $bcc = []): array {
+		$emails = [];
+		if ($sender_email !== '') {
+			$emails[] = $sender_email;
+		}
+		$emails = \array_merge($emails, $to, $cc, $bcc);
+
+		return cmx_emails_find_contact_ids_by_emails($emails);
 	}
 }
 
@@ -1273,16 +1306,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		}
 		$post_id = (int) $post_id;
 
-		$current_contact_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('contact_id'), true);
-		$current_project_id = (int) \get_post_meta($post_id, cmx_emails_meta_key('project_id'), true);
+		$current_contact_ids = cmx_emails_assignment_contact_ids($post_id);
+		$current_project_ids = cmx_emails_assignment_project_ids($post_id);
 		$assignment_manual = \get_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), true) === '1';
-		$auto_contact_id = 0;
-		if ($sender['email'] !== '' && \function_exists(__NAMESPACE__ . '\\cmx_mail_import_find_contact_by_sender')) {
-			$auto_contact_id = (int) cmx_mail_import_find_contact_by_sender((string) $sender['email']);
-		}
-
-		$contact_id = $assignment_manual ? $current_contact_id : ($current_contact_id > 0 ? $current_contact_id : $auto_contact_id);
-		$project_id = $current_project_id > 0 ? $current_project_id : 0;
+		$auto_contact_ids = cmx_emails_auto_contact_ids_for_message((string) ($sender['email'] ?? ''), $to, $cc, $bcc);
+		$contact_ids = $assignment_manual ? $current_contact_ids : ($auto_contact_ids !== [] ? $auto_contact_ids : $current_contact_ids);
+		$project_ids = $current_project_ids;
 		$imported_post_ids = (array) \get_post_meta($post_id, cmx_emails_meta_key('imported_post_ids'), true);
 		$read_at = (int) \get_post_meta($post_id, cmx_emails_meta_key('read_at'), true);
 		$manual_status = (string) \get_post_meta($post_id, cmx_emails_meta_key('manual_status'), true);
@@ -1314,9 +1343,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $plain);
 		\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $html);
 		\update_post_meta($post_id, cmx_emails_meta_key('mailbox'), $logical_mailbox);
-		\update_post_meta($post_id, cmx_emails_meta_key('contact_id_auto'), (string) \max(0, $auto_contact_id));
-		\update_post_meta($post_id, cmx_emails_meta_key('contact_id'), (string) \max(0, $contact_id));
-		\update_post_meta($post_id, cmx_emails_meta_key('project_id'), (string) \max(0, $project_id));
+		\update_post_meta($post_id, cmx_emails_meta_key('contact_id_auto'), (string) \max(0, cmx_emails_primary_assignment_id($auto_contact_ids)));
 		\update_post_meta($post_id, cmx_emails_meta_key('status'), $status);
 		if ($logical_folder === 'archive' && $archive_year !== '' && $archive_month !== '') {
 			\update_post_meta($post_id, cmx_emails_meta_key('archive_year'), $archive_year);
@@ -1325,7 +1352,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 			\delete_post_meta($post_id, cmx_emails_meta_key('archive_year'));
 			\delete_post_meta($post_id, cmx_emails_meta_key('archive_month'));
 		}
-		cmx_emails_update_assignment_cache($post_id);
+		cmx_emails_save_assignments($post_id, $contact_ids, $project_ids, $assignment_manual, false);
 		if ($existing_id <= 0 && $sender['email'] !== '') {
 			cmx_emails_append_received_sender_notes($post_id, (string) $sender['email']);
 		}
@@ -2323,11 +2350,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_build_meta_query')) {
 		if ($folder !== '') {
 			$meta_query[] = ['key' => cmx_emails_meta_key('folder'), 'value' => $folder];
 			if ($folder === 'archive') {
-				if ($archive_year === '' || $archive_month === '' || \strlen($archive_year) !== 4) {
+				if ($archive_month !== '' && \strlen($archive_year) !== 4) {
 					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => '__archive_selection_required__'];
-				} else {
+				} elseif (\strlen($archive_year) === 4) {
 					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => $archive_year];
-					$meta_query[] = ['key' => cmx_emails_meta_key('archive_month'), 'value' => $archive_month];
+					if ($archive_month !== '') {
+						$meta_query[] = ['key' => cmx_emails_meta_key('archive_month'), 'value' => $archive_month];
+					}
+				} elseif ($archive_filter_active) {
+					$meta_query[] = ['key' => cmx_emails_meta_key('archive_year'), 'value' => '__archive_selection_required__'];
 				}
 			}
 		}

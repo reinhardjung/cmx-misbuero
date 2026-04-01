@@ -1097,6 +1097,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	];
 	$body_html = (string) $post->post_content;
 	$body_plain = \trim(\wp_strip_all_tags($body_html));
+	$assignment_manual = \get_post_meta($post_id, cmx_emails_meta_key('assignment_manual'), true) === '1';
+	$current_contact_ids = \function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_contact_ids')
+		? cmx_emails_assignment_contact_ids($post_id)
+		: [];
+	$current_project_ids = \function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_project_ids')
+		? cmx_emails_assignment_project_ids($post_id)
+		: [];
+	$auto_contact_ids = \function_exists(__NAMESPACE__ . '\\cmx_emails_auto_contact_ids_for_message')
+		? cmx_emails_auto_contact_ids_for_message($account_email, $to, $cc, $bcc)
+		: [];
 
 	\update_post_meta($post_id, cmx_emails_meta_key('direction'), 'outgoing');
 	\update_post_meta($post_id, cmx_emails_meta_key('compose_mode'), $compose_mode);
@@ -1113,9 +1123,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 	\update_post_meta($post_id, cmx_emails_meta_key('to'), $to);
 	\update_post_meta($post_id, cmx_emails_meta_key('cc'), $cc);
 	\update_post_meta($post_id, cmx_emails_meta_key('bcc'), $bcc);
+	\update_post_meta(
+		$post_id,
+		cmx_emails_meta_key('contact_id_auto'),
+		(string) \max(
+			0,
+			\function_exists(__NAMESPACE__ . '\\cmx_emails_primary_assignment_id')
+				? cmx_emails_primary_assignment_id($auto_contact_ids)
+				: (isset($auto_contact_ids[0]) ? (int) $auto_contact_ids[0] : 0)
+		)
+	);
 	\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $body_html);
 	\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $body_plain);
 	\update_post_meta($post_id, cmx_emails_meta_key('folder'), 'drafts');
+	if (\function_exists(__NAMESPACE__ . '\\cmx_emails_save_assignments')) {
+		$contact_ids = $assignment_manual ? $current_contact_ids : ($auto_contact_ids !== [] ? $auto_contact_ids : $current_contact_ids);
+		cmx_emails_save_assignments($post_id, $contact_ids, $current_project_ids, $assignment_manual, false);
+	}
 	$received_ts = (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true);
 	if ($received_ts <= 0) {
 		\update_post_meta($post_id, cmx_emails_meta_key('received_ts'), (string) \time());
