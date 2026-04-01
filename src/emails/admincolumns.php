@@ -36,8 +36,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_filters')) {
 			'archive_month' => isset($_GET['cmx_email_archive_month']) ? cmx_emails_normalize_archive_month((string) \wp_unslash($_GET['cmx_email_archive_month'])) : '',
 		];
 
-		if ((string) $filters['archive_year'] !== '' || (string) $filters['archive_month'] !== '') {
+		$archive_selected = (string) $filters['archive_year'] !== '' || (string) $filters['archive_month'] !== '';
+		if ($archive_selected && \in_array((string) $filters['folder'], ['', 'archive'], true)) {
 			$filters['folder'] = 'archive';
+		}
+		if ((string) $filters['folder'] !== 'archive') {
+			$filters['archive_year'] = '';
+			$filters['archive_month'] = '';
 		}
 
 		return $filters;
@@ -822,10 +827,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 				}
 			}
 
+			function clearArchiveSelection() {
+				if (String(yearSelect.value || '') !== '') {
+					yearSelect.value = '';
+				}
+				refreshMonthOptions(false);
+				monthSelect.value = '';
+			}
+
 			accountSelect.addEventListener('change', function () {
 				refreshYearOptions(true);
 				refreshMonthOptions(true);
 				syncFolderWithArchiveSelection();
+			});
+
+			folderSelect.addEventListener('change', function () {
+				if (String(folderSelect.value || '') !== 'archive') {
+					clearArchiveSelection();
+				}
 			});
 
 			yearSelect.addEventListener('change', function () {
