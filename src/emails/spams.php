@@ -56,6 +56,7 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 			$spf_result   = self::extract_auth_result($headers_raw, 'spf');
 			$dkim_result  = self::extract_auth_result($headers_raw, 'dkim');
 			$dmarc_result = self::extract_auth_result($headers_raw, 'dmarc');
+			$x_spam_score = self::extract_numeric_header_score($headers_raw, 'X-Spam-Score');
 
 			$link_domains = self::extract_domains_from_links($body_html . "\n" . $body_text);
 
@@ -106,6 +107,14 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 			} elseif ('none' === $dmarc_result) {
 				$score += 20;
 				$reasons[] = 'DMARC fehlt.';
+			}
+
+			if ($x_spam_score >= 8) {
+				$score += 45;
+				$reasons[] = 'X-Spam-Score ist hoch (' . $x_spam_score . ').';
+			} elseif ($x_spam_score >= 5) {
+				$score += 25;
+				$reasons[] = 'X-Spam-Score ist auffällig (' . $x_spam_score . ').';
 			}
 
 			/*
@@ -282,6 +291,26 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 			}
 
 			return 'unknown';
+		}
+
+		/**
+		 * Extrahiert einen numerischen Score aus Headern wie X-Spam-Score.
+		 *
+		 * @param string $headers_raw
+		 * @param string $header_name
+		 * @return float
+		 */
+		protected static function extract_numeric_header_score($headers_raw, $header_name) {
+			$value = self::extract_header_value($headers_raw, $header_name);
+			if ($value === '') {
+				return 0.0;
+			}
+
+			if (preg_match('/-?\d+(?:[.,]\d+)?/', $value, $matches)) {
+				return (float) str_replace(',', '.', (string) $matches[0]);
+			}
+
+			return 0.0;
 		}
 
 		/**
@@ -571,6 +600,14 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 				'zahlung fehlgeschlagen',
 				'zugang eingeschränkt',
 				'e-vignette',
+				'sendungsnummer',
+				'paket zurückgehalten',
+				'bearbeitungsgebühr',
+				'jetzt bezahlen',
+				'zustellgebühr',
+				'liefergebühr',
+				'parcel is held',
+				'your parcel',
 			);
 		}
 
