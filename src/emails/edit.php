@@ -57,7 +57,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_post_for_spam')) {
 
 		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 		$direction = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('direction'), true));
-		if ($direction === 'outgoing' || \in_array($folder, ['sent', 'drafts', 'archive', 'spam'], true)) {
+		if ($direction === 'outgoing' || \in_array($folder, ['sent', 'drafts', 'spam'], true)) {
 			return;
 		}
 
@@ -70,46 +70,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_post_for_spam')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('spam_score'), (string) $spam_score);
 		\update_post_meta($post_id, cmx_emails_meta_key('spam_reasons'), $spam_reasons);
 
-		if (!\in_array($spam_status, ['spam', 'suspicious'], true) || $folder !== 'inbox') {
+		if (!\in_array($spam_status, ['spam', 'suspicious'], true)) {
 			return;
 		}
-		if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_get_client') || !\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder') || !\function_exists(__NAMESPACE__ . '\\cmx_emails_move_inbox_message_to_spam')) {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')) {
 			return;
 		}
-
-		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
-		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
-		if ($account_id === '' || $uid <= 0) {
-			return;
-		}
-
-		$client = cmx_emails_get_client($account_id);
-		if ($client === []) {
-			return;
-		}
-
-		$current_mailbox = (string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true);
-		$resolved_mailbox = '';
-		$imap = cmx_emails_open_client_folder($client, 'inbox', $resolved_mailbox);
-		if ($imap === false) {
-			return;
-		}
-
-		$spam_move = cmx_emails_move_inbox_message_to_spam($imap, $uid, $current_mailbox !== '' ? $current_mailbox : $resolved_mailbox);
-		if (!empty($spam_move['moved']) && \function_exists(__NAMESPACE__ . '\\cmx_emails_mark_existing_message_as_spam')) {
-			$message_id = \sanitize_text_field((string) \get_post_meta($post_id, cmx_emails_meta_key('message_id'), true));
-			cmx_emails_mark_existing_message_as_spam(
-				$account_id,
-				$uid,
-				$message_id,
-				(string) ($spam_move['full_mailbox'] ?? '')
-			);
-			if (\function_exists('imap_expunge')) {
-				@\imap_expunge($imap);
-			}
-		}
-
-		@\imap_close($imap);
+		cmx_emails_move_existing_post_to_spam($post_id);
 	}
 }
 

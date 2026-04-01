@@ -212,6 +212,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	$sync_folder = isset($_REQUEST['sync_folder']) && !\is_array($_REQUEST['sync_folder'])
 		? \sanitize_key((string) \wp_unslash($_REQUEST['sync_folder']))
 		: ($folder !== '' ? $folder : 'inbox');
+	if (\in_array($sync_folder, ['archive', 'spam'], true)) {
+		$sync_folder = 'inbox';
+	}
 		$archive_year = isset($_REQUEST['archive_year']) && !\is_array($_REQUEST['archive_year'])
 			? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_year']))
 			: '';

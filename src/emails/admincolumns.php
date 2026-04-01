@@ -462,7 +462,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 
 		echo '<span class="cmx-email-filter-actions">';
 		$sync_folder = $folder !== '' ? $folder : 'inbox';
-		if ($sync_folder === 'archive') {
+		if (\in_array($sync_folder, ['archive', 'spam'], true)) {
 			$sync_folder = 'inbox';
 		}
 		$sync_args = [
