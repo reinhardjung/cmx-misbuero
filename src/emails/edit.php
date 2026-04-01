@@ -601,6 +601,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_send_compose_post')) {
 		\update_post_meta($post_id, cmx_emails_meta_key('attachments'), $attachments);
 		\update_post_meta($post_id, cmx_emails_meta_key('attachment_count'), (string) \count($attachments));
 		\update_post_meta($post_id, cmx_emails_meta_key('has_attachment'), $attachments !== [] ? '1' : '0');
+		if (\function_exists(__NAMESPACE__ . '\\cmx_emails_append_sent_recipient_notes')) {
+			cmx_emails_append_sent_recipient_notes($post_id, $to, $cc, $bcc);
+		}
 
 		return [
 			'ok' => true,

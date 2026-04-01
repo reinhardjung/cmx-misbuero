@@ -503,6 +503,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_link_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_link_html')) {
+	function cmx_emails_sent_link_html(int $post_id): string {
+		$edit_url = \get_edit_post_link($post_id, '');
+		if (!\is_string($edit_url) || $edit_url === '') {
+			return 'versendet';
+		}
+
+		return '<a href="' . \esc_url($edit_url) . '">versendet</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
+	function cmx_emails_sent_body_note_html(int $post_id): string {
+		$body_html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
+		if ($body_html !== '') {
+			return \trim((string) \wp_kses_post($body_html));
+		}
+
+		$body_plain = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_plain'), true);
+		if ($body_plain === '') {
+			$post = \get_post($post_id);
+			if ($post instanceof \WP_Post) {
+				$body_plain = (string) $post->post_content;
+			}
+		}
+
+		$body_plain = \trim($body_plain);
+		return $body_plain !== '' ? \wpautop(\esc_html($body_plain)) : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_note_post_type')) {
 	function cmx_emails_assignment_note_post_type(int $post_id, string $kind): string {
 		$post_type = (string) \get_post_type($post_id);
@@ -515,6 +546,70 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_assignment_note_post_type'))
 		}
 
 		return $kind === 'project' ? 'projekte' : 'kontakte';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')) {
+	function cmx_emails_find_contact_ids_by_emails(array $emails): array {
+		$normalized_emails = [];
+		foreach ($emails as $email) {
+			$email = \sanitize_email((string) $email);
+			if (!\is_email($email)) {
+				continue;
+			}
+			$normalized_emails[\strtolower($email)] = $email;
+		}
+		if ($normalized_emails === []) {
+			return [];
+		}
+
+		$post_types = cmx_emails_contact_post_types();
+		if ($post_types === []) {
+			return [];
+		}
+
+		$scan_limit = \defined(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_MAX_CONTACTS_SCAN')
+			? (int) \constant(__NAMESPACE__ . '\\CMX_MAIL_IMPORT_MAX_CONTACTS_SCAN')
+			: 5000;
+		if ($scan_limit <= 0) {
+			$scan_limit = 5000;
+		}
+
+		$contact_ids = [];
+		$contacts = \get_posts([
+			'post_type'        => $post_types,
+			'post_status'      => ['publish', 'private'],
+			'posts_per_page'   => $scan_limit,
+			'fields'           => 'ids',
+			'orderby'          => 'modified',
+			'order'            => 'DESC',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+		]);
+
+		foreach ((array) $contacts as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0) {
+				continue;
+			}
+
+			$contact_emails = \function_exists(__NAMESPACE__ . '\\cmx_mail_import_collect_contact_emails')
+				? (array) cmx_mail_import_collect_contact_emails($contact_id)
+				: [];
+			if ($contact_emails === []) {
+				continue;
+			}
+
+			foreach ($contact_emails as $contact_email) {
+				$key = \strtolower(\sanitize_email((string) $contact_email));
+				if ($key !== '' && isset($normalized_emails[$key])) {
+					$contact_ids[$contact_id] = $contact_id;
+					break;
+				}
+			}
+		}
+
+		return \array_values($contact_ids);
 	}
 }
 
@@ -538,6 +633,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_internal_note')) {
 			'text'    => $text,
 		];
 		\update_post_meta($target_id, $meta_key, $rows);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_append_sent_recipient_notes')) {
+	function cmx_emails_append_sent_recipient_notes(int $post_id, array $to, array $cc = [], array $bcc = []): void {
+		$contact_ids = cmx_emails_find_contact_ids_by_emails(\array_merge($to, $cc, $bcc));
+		if ($contact_ids === []) {
+			return;
+		}
+
+		$text = cmx_emails_sent_link_html($post_id);
+		$body = cmx_emails_sent_body_note_html($post_id);
+		if ($body !== '') {
+			$text .= '<br><br>' . $body;
+		}
+
+		foreach ($contact_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			if ($contact_id <= 0) {
+				continue;
+			}
+			cmx_emails_append_internal_note($contact_id, cmx_emails_assignment_note_post_type($contact_id, 'contact'), $text);
+		}
 	}
 }
 
