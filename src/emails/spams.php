@@ -184,6 +184,22 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 			}
 
 			/*
+			 * 6) Missbrauch von Website-Formularen für SEO-/Indexierungs-Spam
+			 */
+			$form_spam_keywords = self::get_form_spam_keywords();
+			$form_spam_hits = self::count_keyword_hits($subject . "\n" . $body_all, $form_spam_keywords);
+			$form_submission_mail = self::looks_like_site_form_submission($headers_raw, $body_all, $body_html);
+			$external_link_domains = self::external_link_domains($from_domain, $link_domains);
+
+			if ($form_submission_mail && $form_spam_hits >= 2 && !empty($external_link_domains)) {
+				$score += 80;
+				$reasons[] = 'Formular-Mail enthält SEO-/Indexierungswerbung mit externer Ziel-Domain.';
+			} elseif ($form_submission_mail && $form_spam_hits >= 1 && !empty($external_link_domains)) {
+				$score += 45;
+				$reasons[] = 'Formular-Mail wirkt wie Werbe-/SEO-Spam.';
+			}
+
+			/*
 			 * Score begrenzen
 			 */
 			$score = max(0, min(100, (int) $score));
@@ -701,6 +717,86 @@ if (!class_exists(__NAMESPACE__ . '\\CMX_Spams')) {
 				'ag.ch',
 				'stadt-zuerich.ch',
 			);
+		}
+
+		/**
+		 * Typische SEO-/Indexierungs-Spam-Formulierungen in Formular-Mails.
+		 *
+		 * @return array
+		 */
+		protected static function get_form_spam_keywords() {
+			return array(
+				'google search index',
+				'google search results',
+				'show up in google search results',
+				'searchregister.net',
+				'search register',
+				'search index',
+				'index your website',
+				'submit your website',
+			);
+		}
+
+		/**
+		 * Erkennt typische Website-Formular-Mails.
+		 *
+		 * @param string $headers_raw
+		 * @param string $body_text
+		 * @param string $body_html
+		 * @return bool
+		 */
+		protected static function looks_like_site_form_submission($headers_raw, $body_text, $body_html) {
+			$headers_raw = (string) $headers_raw;
+			$body_text   = self::normalize_text($body_text);
+			$body_html   = (string) $body_html;
+			$body_all    = $body_text . "\n" . self::normalize_text($body_html);
+
+			if (preg_match('/^X-Mailer:\s*PHPMailer/i', $headers_raw)) {
+				return true;
+			}
+
+			$markers = array(
+				'this form submitted at:',
+				'ff_all_data',
+				'field-label',
+				'field-value',
+				'fluent_credit',
+			);
+
+			foreach ($markers as $marker) {
+				if (false !== mb_stripos($body_all, $marker) || false !== mb_stripos($body_html, $marker)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Externe Link-Domains relativ zur Absender-Domain.
+		 *
+		 * @param string $from_domain
+		 * @param array  $link_domains
+		 * @return array
+		 */
+		protected static function external_link_domains($from_domain, $link_domains) {
+			$from_domain = strtolower(trim((string) $from_domain));
+			$external = array();
+
+			foreach ((array) $link_domains as $link_domain) {
+				$link_domain = strtolower(trim((string) $link_domain));
+				if ($link_domain === '') {
+					continue;
+				}
+
+				if ($from_domain !== '' && self::domains_match($from_domain, $link_domain)) {
+					continue;
+				}
+
+				$external[] = $link_domain;
+			}
+
+			return array_values(array_unique($external));
 		}
 
 		/**
