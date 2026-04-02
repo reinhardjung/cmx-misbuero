@@ -752,6 +752,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_has_paid
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_side')) {
+	function cmx_cockpit_view_monitor_beleg_side(\WP_Post $post, string $type_slug = ''): string {
+		$richtung_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			: '_cmx_beleg_richtung';
+		$richtung_raw = \sanitize_key((string) \get_post_meta((int) $post->ID, $richtung_key, true));
+
+		if (\in_array($richtung_raw, ['einnahme', 'einnahmen', 'income', 'revenues'], true)) {
+			return 'income';
+		}
+		if (\in_array($richtung_raw, ['ausgabe', 'ausgaben', 'expense', 'expenses'], true)) {
+			return 'expense';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_richtung')) {
+			$richtung = (string) cmxbu_beleg_export_normalize_richtung($richtung_raw);
+		} elseif (\in_array($richtung_raw, ['ausgabe', 'ausgaben', 'expense', 'expenses', 'eingang'], true)) {
+			$richtung = 'eingang';
+		} elseif (\in_array($richtung_raw, ['einnahme', 'einnahmen', 'income', 'revenues', 'ausgang'], true)) {
+			$richtung = 'ausgang';
+		} else {
+			$richtung = $richtung_raw;
+		}
+
+		$normalized_type = \sanitize_key($type_slug);
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_type')) {
+			$normalized_type = (string) cmxbu_beleg_export_normalize_type($normalized_type);
+		} else {
+			$normalized_type = (string) ([
+				'rechnungen' => 'rechnung',
+				'quittungen' => 'quittung',
+				'gutschriften' => 'gutschrift',
+			][$normalized_type] ?? $normalized_type);
+		}
+
+		$side_map = [];
+		if ($normalized_type !== '' && \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_direction_side_map')) {
+			$side_map = (array) cmxbu_beleg_export_direction_side_map($normalized_type);
+		}
+		if ($side_map === []) {
+			if (\in_array($normalized_type, ['rechnung', 'quittung', 'lieferantenrechnung', 'lieferantenquittung'], true)) {
+				$side_map = ['ausgang' => 'income', 'eingang' => 'expense'];
+			} elseif ($normalized_type === 'gutschrift') {
+				$side_map = ['ausgang' => 'expense', 'eingang' => 'income'];
+			}
+		}
+
+		$side = (string) ($side_map[$richtung] ?? '');
+		if ($side === 'income' || $side === 'expense') {
+			return $side;
+		}
+
+		if ($richtung === 'ausgang') {
+			return 'income';
+		}
+		if ($richtung === 'eingang') {
+			return 'expense';
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_parse_number')) {
 	function cmx_cockpit_view_monitor_parse_number($value): float {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
@@ -1137,18 +1200,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$types = [];
 		$series = [];
 		$daily_series = [];
+		$income_series = [];
+		$daily_income_series = [];
+		$expense_series = [];
+		$daily_expense_series = [];
 		$cost_series = [];
 		$daily_cost_series = [];
 		$counts = [];
 		$counts_monthly = [];
 		$counts_daily = [];
+		$paid_series = [];
+		$paid_daily_series = [];
+		$paid_income_series = [];
+		$paid_daily_income_series = [];
+		$paid_expense_series = [];
+		$paid_daily_expense_series = [];
+		$paid_cost_series = [];
+		$paid_daily_cost_series = [];
+		$paid_counts = [];
+		$paid_counts_monthly = [];
+		$paid_counts_daily = [];
 		$series_by_type = [];
 		$daily_series_by_type = [];
+		$income_series_by_type = [];
+		$daily_income_series_by_type = [];
+		$expense_series_by_type = [];
+		$daily_expense_series_by_type = [];
 		$cost_series_by_type = [];
 		$daily_cost_series_by_type = [];
 		$counts_by_type = [];
 		$counts_monthly_by_type = [];
 		$counts_daily_by_type = [];
+		$paid_series_by_type = [];
+		$paid_daily_series_by_type = [];
+		$paid_income_series_by_type = [];
+		$paid_daily_income_series_by_type = [];
+		$paid_expense_series_by_type = [];
+		$paid_daily_expense_series_by_type = [];
+		$paid_cost_series_by_type = [];
+		$paid_daily_cost_series_by_type = [];
+		$paid_counts_by_type = [];
+		$paid_counts_monthly_by_type = [];
+		$paid_counts_daily_by_type = [];
 		$beleg_rows = [];
 		$article_rows = [];
 		$contact_rows = [];
@@ -1176,9 +1269,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (\in_array((string) $post->post_status, ['trash', 'auto-draft'], true)) {
 				continue;
 			}
-			if (!cmx_cockpit_view_monitor_beleg_has_paid_date((int) $post->ID)) {
-				continue;
-			}
+			$is_paid = cmx_cockpit_view_monitor_beleg_has_paid_date((int) $post->ID);
 
 			$timestamp = cmx_cockpit_view_monitor_beleg_timestamp((int) $post->ID);
 			if ($timestamp <= 0) {
@@ -1199,12 +1290,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 
 			if (!isset($series[$year])) {
 				$series[$year] = \array_fill(0, 12, 0.0);
+				$income_series[$year] = \array_fill(0, 12, 0.0);
+				$expense_series[$year] = \array_fill(0, 12, 0.0);
 				$cost_series[$year] = \array_fill(0, 12, 0.0);
 				$counts[$year] = 0;
 				$counts_monthly[$year] = \array_fill(1, 12, 0);
 			}
 			if (!isset($daily_series[$year])) {
 				$daily_series[$year] = [];
+			}
+			if (!isset($daily_income_series[$year])) {
+				$daily_income_series[$year] = [];
+			}
+			if (!isset($daily_expense_series[$year])) {
+				$daily_expense_series[$year] = [];
 			}
 			if (!isset($daily_cost_series[$year])) {
 				$daily_cost_series[$year] = [];
@@ -1215,11 +1314,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($daily_series[$year][$month_number])) {
 				$daily_series[$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
+			if (!isset($daily_income_series[$year][$month_number])) {
+				$daily_income_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
+			if (!isset($daily_expense_series[$year][$month_number])) {
+				$daily_expense_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
 			if (!isset($daily_cost_series[$year][$month_number])) {
 				$daily_cost_series[$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 			if (!isset($counts_daily[$year][$month_number])) {
 				$counts_daily[$year][$month_number] = \array_fill(0, 31, 0);
+			}
+			if ($is_paid) {
+				if (!isset($paid_series[$year])) {
+					$paid_series[$year] = \array_fill(0, 12, 0.0);
+					$paid_income_series[$year] = \array_fill(0, 12, 0.0);
+					$paid_expense_series[$year] = \array_fill(0, 12, 0.0);
+					$paid_cost_series[$year] = \array_fill(0, 12, 0.0);
+					$paid_counts[$year] = 0;
+					$paid_counts_monthly[$year] = \array_fill(1, 12, 0);
+				}
+				if (!isset($paid_daily_series[$year])) {
+					$paid_daily_series[$year] = [];
+				}
+				if (!isset($paid_daily_income_series[$year])) {
+					$paid_daily_income_series[$year] = [];
+				}
+				if (!isset($paid_daily_expense_series[$year])) {
+					$paid_daily_expense_series[$year] = [];
+				}
+				if (!isset($paid_daily_cost_series[$year])) {
+					$paid_daily_cost_series[$year] = [];
+				}
+				if (!isset($paid_counts_daily[$year])) {
+					$paid_counts_daily[$year] = [];
+				}
+				if (!isset($paid_daily_series[$year][$month_number])) {
+					$paid_daily_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_income_series[$year][$month_number])) {
+					$paid_daily_income_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_expense_series[$year][$month_number])) {
+					$paid_daily_expense_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_cost_series[$year][$month_number])) {
+					$paid_daily_cost_series[$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_counts_daily[$year][$month_number])) {
+					$paid_counts_daily[$year][$month_number] = \array_fill(0, 31, 0);
+				}
 			}
 
 			$total = cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
@@ -1227,6 +1372,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$type_info = cmx_cockpit_view_monitor_beleg_type_info($post);
 			$type_slug = (string) ($type_info['slug'] ?? '__without_type__');
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
+			$direction_side = cmx_cockpit_view_monitor_beleg_side($post, $type_slug);
 			$contact_meta = cmx_cockpit_view_monitor_contact_meta((int) $post->ID);
 			$project_meta = cmx_cockpit_view_monitor_project_meta((int) $post->ID);
 			$beleg_title = \trim((string) (\get_the_title((int) $post->ID) ?: ''));
@@ -1238,11 +1384,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			}
 			$series[$year][$month_index] += $total;
 			$daily_series[$year][$month_number][$day_index] += $total;
+			if ($direction_side === 'income') {
+				$income_series[$year][$month_index] += $total;
+				$daily_income_series[$year][$month_number][$day_index] += $total;
+			} elseif ($direction_side === 'expense') {
+				$expense_series[$year][$month_index] += $total;
+				$daily_expense_series[$year][$month_number][$day_index] += $total;
+			}
 			$cost_series[$year][$month_index] += $cost_total;
 			$daily_cost_series[$year][$month_number][$day_index] += $cost_total;
 			$counts[$year] = (int) ($counts[$year] ?? 0) + 1;
 			$counts_monthly[$year][$month_number] = (int) (($counts_monthly[$year][$month_number] ?? 0) + 1);
 			$counts_daily[$year][$month_number][$day_index] = (int) (($counts_daily[$year][$month_number][$day_index] ?? 0) + 1);
+			if ($is_paid) {
+				$paid_series[$year][$month_index] += $total;
+				$paid_daily_series[$year][$month_number][$day_index] += $total;
+				if ($direction_side === 'income') {
+					$paid_income_series[$year][$month_index] += $total;
+					$paid_daily_income_series[$year][$month_number][$day_index] += $total;
+				} elseif ($direction_side === 'expense') {
+					$paid_expense_series[$year][$month_index] += $total;
+					$paid_daily_expense_series[$year][$month_number][$day_index] += $total;
+				}
+				$paid_cost_series[$year][$month_index] += $cost_total;
+				$paid_daily_cost_series[$year][$month_number][$day_index] += $cost_total;
+				$paid_counts[$year] = (int) ($paid_counts[$year] ?? 0) + 1;
+				$paid_counts_monthly[$year][$month_number] = (int) (($paid_counts_monthly[$year][$month_number] ?? 0) + 1);
+				$paid_counts_daily[$year][$month_number][$day_index] = (int) (($paid_counts_daily[$year][$month_number][$day_index] ?? 0) + 1);
+			}
 
 			if (!isset($types[$type_slug])) {
 				$types[$type_slug] = $type_label;
@@ -1250,6 +1419,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($series_by_type[$type_slug])) {
 				$series_by_type[$type_slug] = [];
 				$daily_series_by_type[$type_slug] = [];
+				$income_series_by_type[$type_slug] = [];
+				$daily_income_series_by_type[$type_slug] = [];
+				$expense_series_by_type[$type_slug] = [];
+				$daily_expense_series_by_type[$type_slug] = [];
 				$cost_series_by_type[$type_slug] = [];
 				$daily_cost_series_by_type[$type_slug] = [];
 				$counts_by_type[$type_slug] = [];
@@ -1258,12 +1431,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			}
 			if (!isset($series_by_type[$type_slug][$year])) {
 				$series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+				$income_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+				$expense_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
 				$cost_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
 				$counts_by_type[$type_slug][$year] = 0;
 				$counts_monthly_by_type[$type_slug][$year] = \array_fill(1, 12, 0);
 			}
 			if (!isset($daily_series_by_type[$type_slug][$year])) {
 				$daily_series_by_type[$type_slug][$year] = [];
+			}
+			if (!isset($daily_income_series_by_type[$type_slug][$year])) {
+				$daily_income_series_by_type[$type_slug][$year] = [];
+			}
+			if (!isset($daily_expense_series_by_type[$type_slug][$year])) {
+				$daily_expense_series_by_type[$type_slug][$year] = [];
 			}
 			if (!isset($daily_cost_series_by_type[$type_slug][$year])) {
 				$daily_cost_series_by_type[$type_slug][$year] = [];
@@ -1274,20 +1455,102 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			if (!isset($daily_series_by_type[$type_slug][$year][$month_number])) {
 				$daily_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
+			if (!isset($daily_income_series_by_type[$type_slug][$year][$month_number])) {
+				$daily_income_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
+			if (!isset($daily_expense_series_by_type[$type_slug][$year][$month_number])) {
+				$daily_expense_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+			}
 			if (!isset($daily_cost_series_by_type[$type_slug][$year][$month_number])) {
 				$daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
 			}
 			if (!isset($counts_daily_by_type[$type_slug][$year][$month_number])) {
 				$counts_daily_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0);
 			}
+			if ($is_paid) {
+				if (!isset($paid_series_by_type[$type_slug])) {
+					$paid_series_by_type[$type_slug] = [];
+					$paid_daily_series_by_type[$type_slug] = [];
+					$paid_income_series_by_type[$type_slug] = [];
+					$paid_daily_income_series_by_type[$type_slug] = [];
+					$paid_expense_series_by_type[$type_slug] = [];
+					$paid_daily_expense_series_by_type[$type_slug] = [];
+					$paid_cost_series_by_type[$type_slug] = [];
+					$paid_daily_cost_series_by_type[$type_slug] = [];
+					$paid_counts_by_type[$type_slug] = [];
+					$paid_counts_monthly_by_type[$type_slug] = [];
+					$paid_counts_daily_by_type[$type_slug] = [];
+				}
+				if (!isset($paid_series_by_type[$type_slug][$year])) {
+					$paid_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+					$paid_income_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+					$paid_expense_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+					$paid_cost_series_by_type[$type_slug][$year] = \array_fill(0, 12, 0.0);
+					$paid_counts_by_type[$type_slug][$year] = 0;
+					$paid_counts_monthly_by_type[$type_slug][$year] = \array_fill(1, 12, 0);
+				}
+				if (!isset($paid_daily_series_by_type[$type_slug][$year])) {
+					$paid_daily_series_by_type[$type_slug][$year] = [];
+				}
+				if (!isset($paid_daily_income_series_by_type[$type_slug][$year])) {
+					$paid_daily_income_series_by_type[$type_slug][$year] = [];
+				}
+				if (!isset($paid_daily_expense_series_by_type[$type_slug][$year])) {
+					$paid_daily_expense_series_by_type[$type_slug][$year] = [];
+				}
+				if (!isset($paid_daily_cost_series_by_type[$type_slug][$year])) {
+					$paid_daily_cost_series_by_type[$type_slug][$year] = [];
+				}
+				if (!isset($paid_counts_daily_by_type[$type_slug][$year])) {
+					$paid_counts_daily_by_type[$type_slug][$year] = [];
+				}
+				if (!isset($paid_daily_series_by_type[$type_slug][$year][$month_number])) {
+					$paid_daily_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_income_series_by_type[$type_slug][$year][$month_number])) {
+					$paid_daily_income_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_expense_series_by_type[$type_slug][$year][$month_number])) {
+					$paid_daily_expense_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_daily_cost_series_by_type[$type_slug][$year][$month_number])) {
+					$paid_daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0.0);
+				}
+				if (!isset($paid_counts_daily_by_type[$type_slug][$year][$month_number])) {
+					$paid_counts_daily_by_type[$type_slug][$year][$month_number] = \array_fill(0, 31, 0);
+				}
+			}
 
 			$series_by_type[$type_slug][$year][$month_index] += $total;
 			$daily_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+			if ($direction_side === 'income') {
+				$income_series_by_type[$type_slug][$year][$month_index] += $total;
+				$daily_income_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+			} elseif ($direction_side === 'expense') {
+				$expense_series_by_type[$type_slug][$year][$month_index] += $total;
+				$daily_expense_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+			}
 			$cost_series_by_type[$type_slug][$year][$month_index] += $cost_total;
 			$daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
 			$counts_by_type[$type_slug][$year] = (int) ($counts_by_type[$type_slug][$year] ?? 0) + 1;
 			$counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
 			$counts_daily_by_type[$type_slug][$year][$month_number][$day_index] = (int) (($counts_daily_by_type[$type_slug][$year][$month_number][$day_index] ?? 0) + 1);
+			if ($is_paid) {
+				$paid_series_by_type[$type_slug][$year][$month_index] += $total;
+				$paid_daily_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+				if ($direction_side === 'income') {
+					$paid_income_series_by_type[$type_slug][$year][$month_index] += $total;
+					$paid_daily_income_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+				} elseif ($direction_side === 'expense') {
+					$paid_expense_series_by_type[$type_slug][$year][$month_index] += $total;
+					$paid_daily_expense_series_by_type[$type_slug][$year][$month_number][$day_index] += $total;
+				}
+				$paid_cost_series_by_type[$type_slug][$year][$month_index] += $cost_total;
+				$paid_daily_cost_series_by_type[$type_slug][$year][$month_number][$day_index] += $cost_total;
+				$paid_counts_by_type[$type_slug][$year] = (int) ($paid_counts_by_type[$type_slug][$year] ?? 0) + 1;
+				$paid_counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($paid_counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
+				$paid_counts_daily_by_type[$type_slug][$year][$month_number][$day_index] = (int) (($paid_counts_daily_by_type[$type_slug][$year][$month_number][$day_index] ?? 0) + 1);
+			}
 			$beleg_rows[] = [
 				'year' => $year,
 				'month' => $month_number,
@@ -1296,6 +1559,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				'beleg_id' => (int) $post->ID,
 				'beleg_title' => $beleg_title,
 				'edit_link' => (string) (\get_edit_post_link((int) $post->ID, '') ?: ''),
+				'side' => $direction_side,
+				'is_paid' => $is_paid,
 				'revenue' => (float) $total,
 				'cost' => (float) $cost_total,
 			];
@@ -1309,6 +1574,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'contact_id' => (int) ($contact_meta['contact_id'] ?? 0),
 					'contact_title' => (string) ($contact_meta['contact_title'] ?? ''),
 					'edit_link' => (string) ($contact_meta['edit_link'] ?? ''),
+					'is_paid' => $is_paid,
 					'revenue' => (float) $total,
 					'cost' => (float) $cost_total,
 				];
@@ -1322,6 +1588,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'project_id' => (int) ($project_meta['project_id'] ?? 0),
 					'project_title' => (string) ($project_meta['project_title'] ?? ''),
 					'edit_link' => (string) ($project_meta['edit_link'] ?? ''),
+					'is_paid' => $is_paid,
 					'revenue' => (float) $total,
 					'cost' => (float) $cost_total,
 				];
@@ -1362,6 +1629,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'article_title' => (string) ($article_meta['title'] ?? ''),
 					'article_number' => (string) ($article_meta['number'] ?? ''),
 					'edit_link' => (string) ($article_meta['edit_link'] ?? ''),
+					'is_paid' => $is_paid,
 					'revenue' => (float) $line_revenue,
 					'cost' => (float) $line_cost,
 				];
@@ -1473,13 +1741,77 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				static fn($value): float => \round((float) $value, 2),
 				(array) $values
 			);
+			$income_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($income_series[$year] ?? [])
+			);
+			$expense_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($expense_series[$year] ?? [])
+			);
+			$paid_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($paid_series[$year] ?? [])
+			);
+			$paid_income_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($paid_income_series[$year] ?? [])
+			);
+			$paid_expense_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($paid_expense_series[$year] ?? [])
+			);
 			$cost_series[$year] = \array_map(
 				static fn($value): float => \round((float) $value, 2),
 				(array) ($cost_series[$year] ?? [])
 			);
+			$paid_cost_series[$year] = \array_map(
+				static fn($value): float => \round((float) $value, 2),
+				(array) ($paid_cost_series[$year] ?? [])
+			);
 			if (isset($daily_series[$year]) && \is_array($daily_series[$year])) {
 				foreach ($daily_series[$year] as $month_number => $day_values) {
 					$daily_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($daily_income_series[$year]) && \is_array($daily_income_series[$year])) {
+				foreach ($daily_income_series[$year] as $month_number => $day_values) {
+					$daily_income_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($daily_expense_series[$year]) && \is_array($daily_expense_series[$year])) {
+				foreach ($daily_expense_series[$year] as $month_number => $day_values) {
+					$daily_expense_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($paid_daily_series[$year]) && \is_array($paid_daily_series[$year])) {
+				foreach ($paid_daily_series[$year] as $month_number => $day_values) {
+					$paid_daily_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($paid_daily_income_series[$year]) && \is_array($paid_daily_income_series[$year])) {
+				foreach ($paid_daily_income_series[$year] as $month_number => $day_values) {
+					$paid_daily_income_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
+			if (isset($paid_daily_expense_series[$year]) && \is_array($paid_daily_expense_series[$year])) {
+				foreach ($paid_daily_expense_series[$year] as $month_number => $day_values) {
+					$paid_daily_expense_series[$year][$month_number] = \array_map(
 						static fn($value): float => \round((float) $value, 2),
 						(array) $day_values
 					);
@@ -1493,6 +1825,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					);
 				}
 			}
+			if (isset($paid_daily_cost_series[$year]) && \is_array($paid_daily_cost_series[$year])) {
+				foreach ($paid_daily_cost_series[$year] as $month_number => $day_values) {
+					$paid_daily_cost_series[$year][$month_number] = \array_map(
+						static fn($value): float => \round((float) $value, 2),
+						(array) $day_values
+					);
+				}
+			}
 		}
 
 		foreach ($series_by_type as $type_slug => $type_years) {
@@ -1501,15 +1841,89 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					static fn($value): float => \round((float) $value, 2),
 					(array) $values
 				);
+				$income_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($income_series_by_type[$type_slug][$year] ?? [])
+				);
+				$expense_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($expense_series_by_type[$type_slug][$year] ?? [])
+				);
+				$paid_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($paid_series_by_type[$type_slug][$year] ?? [])
+				);
+				$paid_income_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($paid_income_series_by_type[$type_slug][$year] ?? [])
+				);
+				$paid_expense_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($paid_expense_series_by_type[$type_slug][$year] ?? [])
+				);
 				$cost_series_by_type[$type_slug][$year] = \array_map(
 					static fn($value): float => \round((float) $value, 2),
 					(array) ($cost_series_by_type[$type_slug][$year] ?? [])
+				);
+				$paid_cost_series_by_type[$type_slug][$year] = \array_map(
+					static fn($value): float => \round((float) $value, 2),
+					(array) ($paid_cost_series_by_type[$type_slug][$year] ?? [])
 				);
 			}
 			if (isset($daily_series_by_type[$type_slug]) && \is_array($daily_series_by_type[$type_slug])) {
 				foreach ($daily_series_by_type[$type_slug] as $year => $months) {
 					foreach ((array) $months as $month_number => $day_values) {
 						$daily_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($daily_income_series_by_type[$type_slug]) && \is_array($daily_income_series_by_type[$type_slug])) {
+				foreach ($daily_income_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$daily_income_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($daily_expense_series_by_type[$type_slug]) && \is_array($daily_expense_series_by_type[$type_slug])) {
+				foreach ($daily_expense_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$daily_expense_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($paid_daily_series_by_type[$type_slug]) && \is_array($paid_daily_series_by_type[$type_slug])) {
+				foreach ($paid_daily_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$paid_daily_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($paid_daily_income_series_by_type[$type_slug]) && \is_array($paid_daily_income_series_by_type[$type_slug])) {
+				foreach ($paid_daily_income_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$paid_daily_income_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
+			if (isset($paid_daily_expense_series_by_type[$type_slug]) && \is_array($paid_daily_expense_series_by_type[$type_slug])) {
+				foreach ($paid_daily_expense_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$paid_daily_expense_series_by_type[$type_slug][$year][$month_number] = \array_map(
 							static fn($value): float => \round((float) $value, 2),
 							(array) $day_values
 						);
@@ -1526,6 +1940,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					}
 				}
 			}
+			if (isset($paid_daily_cost_series_by_type[$type_slug]) && \is_array($paid_daily_cost_series_by_type[$type_slug])) {
+				foreach ($paid_daily_cost_series_by_type[$type_slug] as $year => $months) {
+					foreach ((array) $months as $month_number => $day_values) {
+						$paid_daily_cost_series_by_type[$type_slug][$year][$month_number] = \array_map(
+							static fn($value): float => \round((float) $value, 2),
+							(array) $day_values
+						);
+					}
+				}
+			}
 		}
 
 		if ($years === []) {
@@ -1533,10 +1957,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			$years = [$current_year];
 			$series[$current_year] = \array_fill(0, 12, 0.0);
 			$daily_series[$current_year] = [];
+			$income_series[$current_year] = \array_fill(0, 12, 0.0);
+			$daily_income_series[$current_year] = [];
+			$expense_series[$current_year] = \array_fill(0, 12, 0.0);
+			$daily_expense_series[$current_year] = [];
 			$cost_series[$current_year] = \array_fill(0, 12, 0.0);
 			$daily_cost_series[$current_year] = [];
 			$counts[$current_year] = 0;
 			$counts_monthly[$current_year] = \array_fill(1, 12, 0);
+			$paid_series[$current_year] = \array_fill(0, 12, 0.0);
+			$paid_daily_series[$current_year] = [];
+			$paid_income_series[$current_year] = \array_fill(0, 12, 0.0);
+			$paid_daily_income_series[$current_year] = [];
+			$paid_expense_series[$current_year] = \array_fill(0, 12, 0.0);
+			$paid_daily_expense_series[$current_year] = [];
+			$paid_cost_series[$current_year] = \array_fill(0, 12, 0.0);
+			$paid_daily_cost_series[$current_year] = [];
+			$paid_counts[$current_year] = 0;
+			$paid_counts_monthly[$current_year] = \array_fill(1, 12, 0);
 		}
 
 		$type_priority = [
@@ -1573,18 +2011,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			'types' => $type_options,
 			'series' => $series,
 			'daily_series' => $daily_series,
+			'income_series' => $income_series,
+			'daily_income_series' => $daily_income_series,
+			'expense_series' => $expense_series,
+			'daily_expense_series' => $daily_expense_series,
 			'cost_series' => $cost_series,
 			'daily_cost_series' => $daily_cost_series,
 			'counts' => $counts,
 			'counts_monthly' => $counts_monthly,
 			'counts_daily' => $counts_daily,
+			'paid_series' => $paid_series,
+			'paid_daily_series' => $paid_daily_series,
+			'paid_income_series' => $paid_income_series,
+			'paid_daily_income_series' => $paid_daily_income_series,
+			'paid_expense_series' => $paid_expense_series,
+			'paid_daily_expense_series' => $paid_daily_expense_series,
+			'paid_cost_series' => $paid_cost_series,
+			'paid_daily_cost_series' => $paid_daily_cost_series,
+			'paid_counts' => $paid_counts,
+			'paid_counts_monthly' => $paid_counts_monthly,
+			'paid_counts_daily' => $paid_counts_daily,
 			'series_by_type' => $series_by_type,
 			'daily_series_by_type' => $daily_series_by_type,
+			'income_series_by_type' => $income_series_by_type,
+			'daily_income_series_by_type' => $daily_income_series_by_type,
+			'expense_series_by_type' => $expense_series_by_type,
+			'daily_expense_series_by_type' => $daily_expense_series_by_type,
 			'cost_series_by_type' => $cost_series_by_type,
 			'daily_cost_series_by_type' => $daily_cost_series_by_type,
 			'counts_by_type' => $counts_by_type,
 			'counts_monthly_by_type' => $counts_monthly_by_type,
 			'counts_daily_by_type' => $counts_daily_by_type,
+			'paid_series_by_type' => $paid_series_by_type,
+			'paid_daily_series_by_type' => $paid_daily_series_by_type,
+			'paid_income_series_by_type' => $paid_income_series_by_type,
+			'paid_daily_income_series_by_type' => $paid_daily_income_series_by_type,
+			'paid_expense_series_by_type' => $paid_expense_series_by_type,
+			'paid_daily_expense_series_by_type' => $paid_daily_expense_series_by_type,
+			'paid_cost_series_by_type' => $paid_cost_series_by_type,
+			'paid_daily_cost_series_by_type' => $paid_daily_cost_series_by_type,
+			'paid_counts_by_type' => $paid_counts_by_type,
+			'paid_counts_monthly_by_type' => $paid_counts_monthly_by_type,
+			'paid_counts_daily_by_type' => $paid_counts_daily_by_type,
 			'beleg_rows' => $beleg_rows,
 			'article_rows' => $article_rows,
 			'contact_rows' => $contact_rows,
@@ -1607,14 +2075,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		$selected_quarter = 'all';
 		$selected_month = 'all';
 		$selected_year = (int) ($years[0] ?? \wp_date('Y'));
-		$selected_series = (array) (($chart_payload['series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
-		$selected_cost_series = (array) (($chart_payload['cost_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
+		$selected_series = (array) (($chart_payload['paid_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
+		$selected_cost_series = (array) (($chart_payload['paid_cost_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
 		$selected_total = \array_sum($selected_series);
 		$selected_cost_total = \array_sum($selected_cost_series);
 		$selected_profit_total = $selected_total - $selected_cost_total;
 		$selected_margin_total = $selected_total != 0.0 ? (($selected_profit_total / $selected_total) * 100) : 0.0;
-		$selected_count = (int) (($chart_payload['counts'] ?? [])[$selected_year] ?? 0);
-		$compare_year = isset($chart_payload['series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
+		$selected_count = (int) (($chart_payload['paid_counts'] ?? [])[$selected_year] ?? 0);
+		$compare_year = isset($chart_payload['paid_series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
 		$compare_total = 0.0;
 		?>
 		<div class="wrap mb-dashboard-wrap">
@@ -1672,6 +2140,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							<label class="mb-demo-linechart-control">
 								<input type="checkbox" id="cmx-monitor-chart-compare">
 								<span>vorheriger Zeitraum</span>
+							</label>
+							<label class="mb-demo-linechart-control">
+								<input type="checkbox" id="cmx-monitor-chart-paid-only" checked>
+								<span>nur bezahlte</span>
 							</label>
 						</div>
 						<div class="mb-monitor-shared-filters-bottom">
@@ -1742,7 +2214,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 					</div>
 				</section>
-				<section class="mb-card mb-card--soft mb-span-4">
+				<section class="mb-card mb-card--soft mb-span-8">
+					<h3>Einnahmen vs. Ausgaben</h3>
+					<p class="mb-monitor-chart-intro">Vergleich der Belegsummen nach Einnahmen und Ausgaben auf Basis derselben Filter oben.</p>
+					<div class="mb-demo-linechart">
+						<div class="mb-demo-linechart-canvas">
+							<canvas id="cmx-monitor-direction-chart" aria-label="Einnahmen und Ausgaben"></canvas>
+						</div>
+					</div>
+				</section>
+				<section class="mb-card mb-card--soft mb-span-8">
 					<h3>Aufwand vs. Umsatz</h3>
 					<p class="mb-monitor-chart-intro">Vergleich von Umsatz und Aufwand auf Basis derselben Filter oben.</p>
 					<div class="mb-demo-linechart">
@@ -1751,7 +2232,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						</div>
 					</div>
 				</section>
-				<section class="mb-card mb-card--soft mb-span-4">
+				<section class="mb-card mb-card--soft mb-span-8">
 					<h3>Deckungsbeitrag und Marge</h3>
 					<p class="mb-monitor-chart-intro">Deckungsbeitrag in Währung und Marge in Prozent als eigene Auswertung.</p>
 					<div class="mb-demo-linechart">
@@ -1957,6 +2438,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 	$chart_script = '(function(){
 		var init = function(){
 			var canvas = document.getElementById("cmx-monitor-multi-axis-chart");
+			var directionCanvas = document.getElementById("cmx-monitor-direction-chart");
 			var costCanvas = document.getElementById("cmx-monitor-cost-chart");
 			var profitCanvas = document.getElementById("cmx-monitor-profit-chart");
 			var yearSelect = document.getElementById("cmx-monitor-chart-year");
@@ -1965,12 +2447,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var daySelect = document.getElementById("cmx-monitor-chart-day");
 			var typeSelect = document.getElementById("cmx-monitor-chart-type");
 			var compareCheckbox = document.getElementById("cmx-monitor-chart-compare");
+			var paidOnlyCheckbox = document.getElementById("cmx-monitor-chart-paid-only");
 			var resetLink = document.getElementById("cmx-monitor-reset-filters");
-			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !daySelect || !typeSelect || !compareCheckbox || !resetLink || typeof Chart === "undefined") return;
+			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !daySelect || !typeSelect || !compareCheckbox || !paidOnlyCheckbox || !resetLink || typeof Chart === "undefined") return;
 
 			var ctx = canvas.getContext("2d");
 			if (!ctx) return;
 
+			var directionCtx = directionCanvas ? directionCanvas.getContext("2d") : null;
 			var costCtx = costCanvas ? costCanvas.getContext("2d") : null;
 			var profitCtx = profitCanvas ? profitCanvas.getContext("2d") : null;
 			var payload = ' . \wp_json_encode($chart_payload) . ';
@@ -2023,6 +2507,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var overviewMarginCompareEl = document.getElementById("cmx-monitor-overview-margin-compare");
 			var overviewMarginDeltaEl = document.getElementById("cmx-monitor-overview-margin-delta");
 			var typeMeta = Array.isArray(payload.types) ? payload.types : [];
+			var isPaidOnlyActive = function(){
+				return !!(paidOnlyCheckbox && paidOnlyCheckbox.checked);
+			};
+			var activeCollection = function(allKey, paidKey){
+				return isPaidOnlyActive() ? (payload[paidKey] || {}) : (payload[allKey] || {});
+			};
 			var formatNumber = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0));
 			};
@@ -2090,70 +2580,136 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var getSeriesForYear = function(year, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
+				var byTypeCollection = activeCollection("series_by_type", "paid_series_by_type");
+				var collection = activeCollection("series", "paid_series");
 				if (selectedType !== "all") {
-					return payload.series_by_type && payload.series_by_type[selectedType] && payload.series_by_type[selectedType][selectedYear]
-						? payload.series_by_type[selectedType][selectedYear]
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
+						? byTypeCollection[selectedType][selectedYear]
 						: [];
 				}
-				return payload.series && payload.series[selectedYear] ? payload.series[selectedYear] : [];
+				return collection && collection[selectedYear] ? collection[selectedYear] : [];
 			};
 			var getCostSeriesForYear = function(year, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
+				var byTypeCollection = activeCollection("cost_series_by_type", "paid_cost_series_by_type");
+				var collection = activeCollection("cost_series", "paid_cost_series");
 				if (selectedType !== "all") {
-					return payload.cost_series_by_type && payload.cost_series_by_type[selectedType] && payload.cost_series_by_type[selectedType][selectedYear]
-						? payload.cost_series_by_type[selectedType][selectedYear]
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
+						? byTypeCollection[selectedType][selectedYear]
 						: [];
 				}
-				return payload.cost_series && payload.cost_series[selectedYear] ? payload.cost_series[selectedYear] : [];
+				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+			};
+			var getIncomeSeriesForYear = function(year, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var byTypeCollection = activeCollection("income_series_by_type", "paid_income_series_by_type");
+				var collection = activeCollection("income_series", "paid_income_series");
+				if (selectedType !== "all") {
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
+						? byTypeCollection[selectedType][selectedYear]
+						: [];
+				}
+				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+			};
+			var getExpenseSeriesForYear = function(year, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var byTypeCollection = activeCollection("expense_series_by_type", "paid_expense_series_by_type");
+				var collection = activeCollection("expense_series", "paid_expense_series");
+				if (selectedType !== "all") {
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
+						? byTypeCollection[selectedType][selectedYear]
+						: [];
+				}
+				return collection && collection[selectedYear] ? collection[selectedYear] : [];
 			};
 			var getDailySeriesForMonth = function(year, monthNumber, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
 				var normalizedMonth = Number(monthNumber || 0);
+				var byTypeCollection = activeCollection("daily_series_by_type", "paid_daily_series_by_type");
+				var collection = activeCollection("daily_series", "paid_daily_series");
 				if (selectedType !== "all") {
-					return payload.daily_series_by_type && payload.daily_series_by_type[selectedType] && payload.daily_series_by_type[selectedType][selectedYear] && payload.daily_series_by_type[selectedType][selectedYear][normalizedMonth]
-						? payload.daily_series_by_type[selectedType][selectedYear][normalizedMonth]
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
 						: [];
 				}
-				return payload.daily_series && payload.daily_series[selectedYear] && payload.daily_series[selectedYear][normalizedMonth]
-					? payload.daily_series[selectedYear][normalizedMonth]
+				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
+					? collection[selectedYear][normalizedMonth]
 					: [];
 			};
 			var getDailyCostSeriesForMonth = function(year, monthNumber, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
 				var normalizedMonth = Number(monthNumber || 0);
+				var byTypeCollection = activeCollection("daily_cost_series_by_type", "paid_daily_cost_series_by_type");
+				var collection = activeCollection("daily_cost_series", "paid_daily_cost_series");
 				if (selectedType !== "all") {
-					return payload.daily_cost_series_by_type && payload.daily_cost_series_by_type[selectedType] && payload.daily_cost_series_by_type[selectedType][selectedYear] && payload.daily_cost_series_by_type[selectedType][selectedYear][normalizedMonth]
-						? payload.daily_cost_series_by_type[selectedType][selectedYear][normalizedMonth]
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
 						: [];
 				}
-				return payload.daily_cost_series && payload.daily_cost_series[selectedYear] && payload.daily_cost_series[selectedYear][normalizedMonth]
-					? payload.daily_cost_series[selectedYear][normalizedMonth]
+				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
+					? collection[selectedYear][normalizedMonth]
+					: [];
+			};
+			var getDailyIncomeSeriesForMonth = function(year, monthNumber, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = Number(monthNumber || 0);
+				var byTypeCollection = activeCollection("daily_income_series_by_type", "paid_daily_income_series_by_type");
+				var collection = activeCollection("daily_income_series", "paid_daily_income_series");
+				if (selectedType !== "all") {
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						: [];
+				}
+				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
+					? collection[selectedYear][normalizedMonth]
+					: [];
+			};
+			var getDailyExpenseSeriesForMonth = function(year, monthNumber, type){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = Number(monthNumber || 0);
+				var byTypeCollection = activeCollection("daily_expense_series_by_type", "paid_daily_expense_series_by_type");
+				var collection = activeCollection("daily_expense_series", "paid_daily_expense_series");
+				if (selectedType !== "all") {
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						: [];
+				}
+				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
+					? collection[selectedYear][normalizedMonth]
 					: [];
 			};
 			var getCountForYear = function(year, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
+				var byTypeCollection = activeCollection("counts_by_type", "paid_counts_by_type");
+				var collection = activeCollection("counts", "paid_counts");
 				if (selectedType !== "all") {
-					return payload.counts_by_type && payload.counts_by_type[selectedType] && payload.counts_by_type[selectedType][selectedYear]
-						? Number(payload.counts_by_type[selectedType][selectedYear])
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
+						? Number(byTypeCollection[selectedType][selectedYear])
 						: 0;
 				}
-				return payload.counts && payload.counts[selectedYear] ? Number(payload.counts[selectedYear]) : 0;
+				return collection && collection[selectedYear] ? Number(collection[selectedYear]) : 0;
 			};
 			var getCountForMonth = function(year, monthNumber, type){
 				var selectedYear = String(year || "");
 				var selectedType = String(type || "all");
 				var normalizedMonth = Number(monthNumber || 0);
+				var byTypeCollection = activeCollection("counts_monthly_by_type", "paid_counts_monthly_by_type");
+				var collection = activeCollection("counts_monthly", "paid_counts_monthly");
 				if (selectedType !== "all") {
-					return payload.counts_monthly_by_type && payload.counts_monthly_by_type[selectedType] && payload.counts_monthly_by_type[selectedType][selectedYear] && payload.counts_monthly_by_type[selectedType][selectedYear][normalizedMonth]
-						? Number(payload.counts_monthly_by_type[selectedType][selectedYear][normalizedMonth])
+					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						? Number(byTypeCollection[selectedType][selectedYear][normalizedMonth])
 						: 0;
 				}
-				return payload.counts_monthly && payload.counts_monthly[selectedYear] && payload.counts_monthly[selectedYear][normalizedMonth]
-					? Number(payload.counts_monthly[selectedYear][normalizedMonth])
+				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
+					? Number(collection[selectedYear][normalizedMonth])
 					: 0;
 			};
 			var getCountForDay = function(year, monthNumber, dayNumber, type){
@@ -2161,23 +2717,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedType = String(type || "all");
 				var normalizedMonth = Number(monthNumber || 0);
 				var normalizedDayIndex = Number(dayNumber || 0) - 1;
+				var byTypeCollection = activeCollection("counts_daily_by_type", "paid_counts_daily_by_type");
+				var collection = activeCollection("counts_daily", "paid_counts_daily");
 				if (normalizedDayIndex < 0 || normalizedDayIndex > 30) {
 					return 0;
 				}
 				if (selectedType !== "all") {
-					return payload.counts_daily_by_type
-						&& payload.counts_daily_by_type[selectedType]
-						&& payload.counts_daily_by_type[selectedType][selectedYear]
-						&& payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth]
-						&& typeof payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
-						? Number(payload.counts_daily_by_type[selectedType][selectedYear][normalizedMonth][normalizedDayIndex])
+					return byTypeCollection
+						&& byTypeCollection[selectedType]
+						&& byTypeCollection[selectedType][selectedYear]
+						&& byTypeCollection[selectedType][selectedYear][normalizedMonth]
+						&& typeof byTypeCollection[selectedType][selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
+						? Number(byTypeCollection[selectedType][selectedYear][normalizedMonth][normalizedDayIndex])
 						: 0;
 				}
-				return payload.counts_daily
-					&& payload.counts_daily[selectedYear]
-					&& payload.counts_daily[selectedYear][normalizedMonth]
-					&& typeof payload.counts_daily[selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
-					? Number(payload.counts_daily[selectedYear][normalizedMonth][normalizedDayIndex])
+				return collection
+					&& collection[selectedYear]
+					&& collection[selectedYear][normalizedMonth]
+					&& typeof collection[selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
+					? Number(collection[selectedYear][normalizedMonth][normalizedDayIndex])
 					: 0;
 			};
 			var getQuarterMonths = function(quarter){
@@ -2448,7 +3006,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					quarter: String(quarterSelect.value || "all"),
 					month: String(monthSelect.value || "all"),
 					type: String(typeSelect.value || "all"),
-					compare: !!compareCheckbox.checked
+					compare: !!compareCheckbox.checked,
+					paidOnly: isPaidOnlyActive()
 				};
 			};
 			window.cmxMonitorGetFilters = getFilters;
@@ -2460,12 +3019,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var compareYearFor = function(selectedYear, selectedType){
 				var previousYear = String(Number(selectedYear || 0) - 1);
 				if (!previousYear || previousYear === "0") return "";
+				var seriesByType = activeCollection("series_by_type", "paid_series_by_type");
+				var series = activeCollection("series", "paid_series");
 				if (String(selectedType || "all") !== "all") {
-					return payload.series_by_type && payload.series_by_type[String(selectedType || "")] && payload.series_by_type[String(selectedType || "")][previousYear]
+					return seriesByType && seriesByType[String(selectedType || "")] && seriesByType[String(selectedType || "")][previousYear]
 						? previousYear
 						: "";
 				}
-				return payload.series && payload.series[previousYear] ? previousYear : "";
+				return series && series[previousYear] ? previousYear : "";
 			};
 			var daysInMonth = function(year, month){
 				var y = Number(year || 0);
@@ -2489,11 +3050,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedType = filters.type;
 				var selectedTypeLabel = typeLabelFor(selectedType);
 				var revenueSeries = Array.isArray(getSeriesForYear(selectedYear, selectedType)) ? getSeriesForYear(selectedYear, selectedType).slice() : [];
+				var incomeSeries = Array.isArray(getIncomeSeriesForYear(selectedYear, selectedType)) ? getIncomeSeriesForYear(selectedYear, selectedType).slice() : [];
+				var expenseSeries = Array.isArray(getExpenseSeriesForYear(selectedYear, selectedType)) ? getExpenseSeriesForYear(selectedYear, selectedType).slice() : [];
 				var costSeries = Array.isArray(getCostSeriesForYear(selectedYear, selectedType)) ? getCostSeriesForYear(selectedYear, selectedType).slice() : [];
 				var indicatorCompareYear = compareYearFor(selectedYear, selectedType);
 				var indicatorRevenueSeries = indicatorCompareYear ? (Array.isArray(getSeriesForYear(indicatorCompareYear, selectedType)) ? getSeriesForYear(indicatorCompareYear, selectedType).slice() : []) : [];
 				var indicatorCostSeries = indicatorCompareYear ? (Array.isArray(getCostSeriesForYear(indicatorCompareYear, selectedType)) ? getCostSeriesForYear(indicatorCompareYear, selectedType).slice() : []) : [];
 				var compareYear = filters.compare ? compareYearFor(selectedYear, selectedType) : "";
+				var compareIncomeSeries = compareYear ? (Array.isArray(getIncomeSeriesForYear(compareYear, selectedType)) ? getIncomeSeriesForYear(compareYear, selectedType).slice() : []) : [];
+				var compareExpenseSeries = compareYear ? (Array.isArray(getExpenseSeriesForYear(compareYear, selectedType)) ? getExpenseSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var compareRevenueSeries = compareYear ? (Array.isArray(getSeriesForYear(compareYear, selectedType)) ? getSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var compareCostSeries = compareYear ? (Array.isArray(getCostSeriesForYear(compareYear, selectedType)) ? getCostSeriesForYear(compareYear, selectedType).slice() : []) : [];
 				var labels = Array.isArray(payload.labels) ? payload.labels.slice() : [];
@@ -2514,12 +3079,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 					if (selectedDay !== "all") {
 						var dayRevenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType);
+						var dayIncomeSeries = getDailyIncomeSeriesForMonth(selectedYear, monthNumber, selectedType);
+						var dayExpenseSeries = getDailyExpenseSeriesForMonth(selectedYear, monthNumber, selectedType);
 						var dayCostSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType);
 						labels = [String(dayNumber)];
 						revenueSeries = [Number(dayRevenueSeries[dayNumber - 1] || 0)];
+						incomeSeries = [Number(dayIncomeSeries[dayNumber - 1] || 0)];
+						expenseSeries = [Number(dayExpenseSeries[dayNumber - 1] || 0)];
 						costSeries = [Number(dayCostSeries[dayNumber - 1] || 0)];
 						indicatorRevenueSeries = indicatorCompareYear ? [Number((getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
 						indicatorCostSeries = indicatorCompareYear ? [Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						compareIncomeSeries = compareYear ? [Number((getDailyIncomeSeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
+						compareExpenseSeries = compareYear ? [Number((getDailyExpenseSeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
 						compareRevenueSeries = compareYear ? [Number((getDailySeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
 						compareCostSeries = compareYear ? [Number((getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType)[dayNumber - 1]) || 0)] : [];
 						totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + dayNumber + ". " + monthLabel + " " + selectedYear;
@@ -2527,9 +3098,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					} else {
 						labels = rangeLabelsForMonth(totalDays);
 						revenueSeries = getDailySeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+						incomeSeries = getDailyIncomeSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
+						expenseSeries = getDailyExpenseSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
 						costSeries = getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType).slice(0, totalDays);
 						indicatorRevenueSeries = indicatorCompareYear ? getDailySeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 						indicatorCostSeries = indicatorCompareYear ? getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						compareIncomeSeries = compareYear ? getDailyIncomeSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
+						compareExpenseSeries = compareYear ? getDailyExpenseSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 						compareRevenueSeries = compareYear ? getDailySeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 						compareCostSeries = compareYear ? getDailyCostSeriesForMonth(compareYear, monthNumber, selectedType).slice(0, totalDays) : [];
 						totalLabelText = "Umsatz " + (selectedTypeLabel ? selectedTypeLabel + " " : "") + monthLabel + " " + selectedYear;
@@ -2549,6 +3124,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 						}
 						return Number(revenueSeries[monthNumber - 1] || 0);
 					});
+					incomeSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyIncomeSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
+						return Number(incomeSeries[monthNumber - 1] || 0);
+					});
+					expenseSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyExpenseSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
+						return Number(expenseSeries[monthNumber - 1] || 0);
+					});
 					costSeries = quarterMonths.map(function(monthNumber){
 						if (selectedDay !== "all") {
 							return Number((getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
@@ -2566,6 +3153,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 							return Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
 						}
 						return Number(indicatorCostSeries[monthNumber - 1] || 0);
+					});
+					compareIncomeSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyIncomeSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
+						return Number(compareIncomeSeries[monthNumber - 1] || 0);
+					});
+					compareExpenseSeries = quarterMonths.map(function(monthNumber){
+						if (selectedDay !== "all") {
+							return Number((getDailyExpenseSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+						}
+						return Number(compareExpenseSeries[monthNumber - 1] || 0);
 					});
 					compareRevenueSeries = quarterMonths.map(function(monthNumber){
 						if (selectedDay !== "all") {
@@ -2590,6 +3189,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					revenueSeries = allMonths.map(function(monthNumber){
 						return Number((getDailySeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
 					});
+					incomeSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyIncomeSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					expenseSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyExpenseSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
 					costSeries = allMonths.map(function(monthNumber){
 						return Number((getDailyCostSeriesForMonth(selectedYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
 					});
@@ -2598,6 +3203,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					});
 					indicatorCostSeries = allMonths.map(function(monthNumber){
 						return Number((getDailyCostSeriesForMonth(indicatorCompareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					compareIncomeSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyIncomeSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
+					});
+					compareExpenseSeries = allMonths.map(function(monthNumber){
+						return Number((getDailyExpenseSeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
 					});
 					compareRevenueSeries = allMonths.map(function(monthNumber){
 						return Number((getDailySeriesForMonth(compareYear, monthNumber, selectedType)[Number(selectedDay || 0) - 1]) || 0);
@@ -2611,6 +3222,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 				return {
 					labels: labels,
+					paidOnly: !!filters.paidOnly,
 					selectedYear: selectedYear,
 					selectedQuarter: selectedQuarter,
 					selectedMonth: selectedMonth,
@@ -2620,9 +3232,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					indicatorCompareYear: indicatorCompareYear,
 					selectedTypeLabel: selectedTypeLabel,
 					revenueSeries: revenueSeries,
+					incomeSeries: incomeSeries,
+					expenseSeries: expenseSeries,
 					costSeries: costSeries,
 					indicatorRevenueSeries: indicatorRevenueSeries,
 					indicatorCostSeries: indicatorCostSeries,
+					compareIncomeSeries: compareIncomeSeries,
+					compareExpenseSeries: compareExpenseSeries,
 					compareRevenueSeries: compareRevenueSeries,
 					compareCostSeries: compareCostSeries,
 					selectedCount: selectedCount,
@@ -2692,6 +3308,68 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					}
 				}
 			});
+			var directionChart = directionCtx ? new Chart(directionCtx, {
+				type: "bar",
+				data: {
+					labels: payload.labels,
+					datasets: []
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					interaction: {
+						mode: "index",
+						intersect: false
+					},
+					plugins: {
+						legend: {
+							position: "top",
+							labels: {
+								usePointStyle: true,
+								boxWidth: 10,
+								color: "#344054"
+							}
+						},
+						tooltip: {
+							backgroundColor: "rgba(22,32,51,0.92)",
+							padding: 10,
+							callbacks: {
+								label: function(context){
+									var label = context.dataset && context.dataset.label ? String(context.dataset.label) : "";
+									return label + ": " + formatNumber(context.parsed && typeof context.parsed.y !== "undefined" ? context.parsed.y : 0);
+								}
+							}
+						}
+					},
+					scales: {
+						x: {
+							grid: {
+								color: "#eef3f8"
+							},
+							ticks: {
+								color: "#667085"
+							}
+						},
+						y: {
+							type: "linear",
+							position: "left",
+							grid: {
+								color: "#e7eef7"
+							},
+							ticks: {
+								color: "#4f86c6",
+								callback: function(value){
+									return formatAxisNumber(value);
+								}
+							},
+							title: {
+								display: true,
+								text: "Betrag"
+							}
+						}
+					}
+				}
+			}) : null;
 			var costChart = costCtx ? new Chart(costCtx, {
 				type: "line",
 				data: {
@@ -2977,6 +3655,67 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				if (countEl) countEl.textContent = String(context.selectedCount);
 				if (modeEl) modeEl.textContent = context.compareYear ? "aktiv" : "aus";
 			};
+			var updateDirectionChart = function(context){
+				if (!directionChart) return;
+
+				var datasets = [
+					{
+						label: "Einnahmen " + context.selectedYear,
+						data: context.incomeSeries,
+						backgroundColor: "rgba(22,163,74,0.74)",
+						borderColor: "#15803d",
+						borderWidth: 1,
+						borderRadius: 8,
+						borderSkipped: false,
+						barPercentage: 0.82,
+						categoryPercentage: 0.72,
+						maxBarThickness: 24
+					},
+					{
+						label: "Ausgaben " + context.selectedYear,
+						data: context.expenseSeries,
+						backgroundColor: "rgba(217,45,32,0.72)",
+						borderColor: "#b42318",
+						borderWidth: 1,
+						borderRadius: 8,
+						borderSkipped: false,
+						barPercentage: 0.82,
+						categoryPercentage: 0.72,
+						maxBarThickness: 24
+					}
+				];
+
+				if (context.compareYear) {
+					datasets.push({
+						label: "Einnahmen " + context.compareYear,
+						data: context.compareIncomeSeries,
+						backgroundColor: "rgba(134,239,172,0.56)",
+						borderColor: "#4ade80",
+						borderWidth: 1,
+						borderRadius: 8,
+						borderSkipped: false,
+						barPercentage: 0.82,
+						categoryPercentage: 0.72,
+						maxBarThickness: 22
+					});
+					datasets.push({
+						label: "Ausgaben " + context.compareYear,
+						data: context.compareExpenseSeries,
+						backgroundColor: "rgba(252,165,165,0.56)",
+						borderColor: "#f87171",
+						borderWidth: 1,
+						borderRadius: 8,
+						borderSkipped: false,
+						barPercentage: 0.82,
+						categoryPercentage: 0.72,
+						maxBarThickness: 22
+					});
+				}
+
+				directionChart.data.labels = context.labels;
+				directionChart.data.datasets = datasets;
+				directionChart.update();
+			};
 			var updateCostChart = function(context){
 				if (!costChart) return;
 
@@ -3104,6 +3843,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderBelegTable = function(context){
 				if (!belegRowsEl || !belegEmptyEl) return;
 
+				var paidOnly = !!context.paidOnly;
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3117,6 +3857,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowMonth = Number(row.month || 0);
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
+					var isPaid = !!row.is_paid;
+					if (paidOnly && !isPaid) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -3183,6 +3925,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderArticleTable = function(context){
 				if (!articleRowsEl || !articleEmptyEl) return;
 
+				var paidOnly = !!context.paidOnly;
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3196,6 +3939,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowMonth = Number(row.month || 0);
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
+					var isPaid = !!row.is_paid;
+					if (paidOnly && !isPaid) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -3257,6 +4002,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderCustomerTable = function(context){
 				if (!customerRowsEl || !customerEmptyEl) return;
 
+				var paidOnly = !!context.paidOnly;
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3270,6 +4016,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowMonth = Number(row.month || 0);
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
+					var isPaid = !!row.is_paid;
+					if (paidOnly && !isPaid) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -3336,6 +4084,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderProjectTable = function(context){
 				if (!projectRowsEl || !projectEmptyEl) return;
 
+				var paidOnly = !!context.paidOnly;
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3349,6 +4098,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowMonth = Number(row.month || 0);
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
+					var isPaid = !!row.is_paid;
+					if (paidOnly && !isPaid) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -3537,6 +4288,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var context = buildContextData();
 				updateOverview(context);
 				updateMainChart(context);
+				updateDirectionChart(context);
 				updateCostChart(context);
 				updateProfitChart(context);
 				renderBelegTable(context);
@@ -3582,6 +4334,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateDashboard();
 				emitFiltersChanged();
 			});
+			paidOnlyCheckbox.addEventListener("change", function(){
+				refreshFilterOptions();
+				updateDashboard();
+				emitFiltersChanged();
+			});
 			compareCheckbox.addEventListener("change", function(){
 				updateDashboard();
 				emitFiltersChanged();
@@ -3596,6 +4353,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				monthSelect.value = "all";
 				typeSelect.value = "all";
 				compareCheckbox.checked = false;
+				paidOnlyCheckbox.checked = true;
 				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
