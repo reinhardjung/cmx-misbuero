@@ -31,6 +31,126 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_das_bin_ich_company_name')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_types_taxonomy')) {
+	function cmx_bank_types_taxonomy(): string {
+		return \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('einstellungen', 'banktypen')
+			: 'einstellungen_banktypen';
+	}
+}
+
+\add_action('init', function (): void {
+	$taxonomy = cmx_bank_types_taxonomy();
+	if (\taxonomy_exists($taxonomy)) {
+		return;
+	}
+
+	\register_taxonomy($taxonomy, ['dokumente'], [
+		'labels' => [
+			'name'          => 'Banktypen',
+			'singular_name' => 'Banktyp',
+			'menu_name'     => 'Banktypen',
+			'all_items'     => 'Alle Banktypen',
+			'edit_item'     => 'Banktyp bearbeiten',
+			'view_item'     => 'Banktyp anzeigen',
+			'update_item'   => 'Banktyp aktualisieren',
+			'add_new_item'  => 'Banktyp hinzufügen',
+			'new_item_name' => 'Neuer Banktyp',
+			'search_items'  => 'Banktypen suchen',
+			'not_found'     => 'Keine Banktypen gefunden',
+		],
+		'public'             => false,
+		'show_ui'            => true,
+		'show_in_rest'       => false,
+		'show_admin_column'  => false,
+		'hierarchical'       => false,
+		'meta_box_cb'        => false,
+		'rewrite'            => false,
+		'query_var'          => false,
+		'capabilities'       => [
+			'manage_terms' => 'manage_options',
+			'edit_terms'   => 'manage_options',
+			'delete_terms' => 'manage_options',
+			'assign_terms' => 'manage_options',
+		],
+	]);
+}, 15);
+
+\add_action('admin_init', function (): void {
+	$taxonomy = cmx_bank_types_taxonomy();
+	if (!\taxonomy_exists($taxonomy)) {
+		return;
+	}
+
+	$existing = \get_terms([
+		'taxonomy'   => $taxonomy,
+		'hide_empty' => false,
+		'fields'     => 'ids',
+		'number'     => 1,
+	]);
+	if (\is_wp_error($existing) || !empty($existing)) {
+		return;
+	}
+
+	$defaults = [];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
+		$defaults = (array) cmx_ini_get_value('Diverses', 'Kontotypen');
+	}
+
+	$defaults = \array_values(\array_filter(\array_map(static function ($value): string {
+		return \trim((string) $value);
+	}, $defaults), static function (string $value): bool {
+		return $value !== '';
+	}));
+
+	if ($defaults === []) {
+		$defaults = ['Auto', 'Geschäftskonto', 'Lohn', 'Miete Privat', 'Kapital', 'Liegenschaft', 'Hobby', 'Rente', 'Sparen', 'Spesen Steuern', 'Taschengeld'];
+	}
+
+	foreach ($defaults as $label) {
+		if (!\term_exists($label, $taxonomy)) {
+			\wp_insert_term($label, $taxonomy);
+		}
+	}
+});
+
+\add_action('admin_menu', function (): void {
+	$taxonomy = cmx_bank_types_taxonomy();
+	$slug = 'edit-tags.php?taxonomy=' . $taxonomy . '&post_type=dokumente';
+
+	\add_submenu_page(
+		CMX_SETTINGS_SLUG,
+		'Banktypen',
+		'Banktypen',
+		'manage_options',
+		$slug
+	);
+}, 20);
+
+\add_action('admin_menu', function (): void {
+	$taxonomy = cmx_bank_types_taxonomy();
+	\remove_submenu_page('edit.php?post_type=dokumente', 'edit-tags.php?taxonomy=' . $taxonomy . '&post_type=dokumente');
+	\remove_submenu_page('edit.php?post_type=dokumente', 'edit-tags.php?taxonomy=' . $taxonomy);
+}, 99);
+
+\add_filter('parent_file', function (string $parent_file): string {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->taxonomy ?? '') !== cmx_bank_types_taxonomy()) {
+		return $parent_file;
+	}
+
+	return CMX_SETTINGS_SLUG;
+});
+
+\add_filter('submenu_file', function (?string $submenu_file): ?string {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->taxonomy ?? '') !== cmx_bank_types_taxonomy()) {
+		return $submenu_file;
+	}
+
+	return 'edit-tags.php?taxonomy=' . cmx_bank_types_taxonomy() . '&post_type=dokumente';
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_legacy_definitions')) {
 	function cmx_bank_legacy_definitions(): array {
 		return [
@@ -142,7 +262,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_account_type_options')) {
 	function cmx_bank_account_type_options(): array {
 		$types = [];
-		if (\function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
+		$taxonomy = cmx_bank_types_taxonomy();
+
+		if (\taxonomy_exists($taxonomy)) {
+			$terms = \get_terms([
+				'taxonomy'   => $taxonomy,
+				'hide_empty' => false,
+				'orderby'    => 'term_id',
+				'order'      => 'ASC',
+			]);
+			if (!\is_wp_error($terms) && \is_array($terms)) {
+				$types = \array_map(static function ($term): string {
+					return \is_object($term) ? \trim((string) ($term->name ?? '')) : '';
+				}, $terms);
+			}
+		}
+
+		if ($types === [] && \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
 			$types = (array) cmx_ini_get_value('Diverses', 'Kontotypen');
 		}
 
