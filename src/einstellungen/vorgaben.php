@@ -317,3 +317,35 @@ function cmx_register_vorgaben_belege_trustee_field(): void {
 		'cmx_sec_vorgaben_belege'
 	);
 }
+
+\add_action('admin_init', __NAMESPACE__ . '\\cmx_register_vorgaben_belege_geplante_saetze_field', 100);
+function cmx_register_vorgaben_belege_geplante_saetze_field(): void {
+	\add_settings_field(
+		'belege_geplante_saetze',
+		'geplante Steuersätze',
+		function () {
+			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+			$steuer = isset($opts['belege_geplante_steuer']) ? (string) $opts['belege_geplante_steuer'] : '';
+			$ahv = isset($opts['belege_geplante_ahv']) ? (string) $opts['belege_geplante_ahv'] : '';
+
+			echo '<div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
+			echo '<span>Steuern</span>';
+			echo '<span style="display:flex;align-items:center;gap:8px;">';
+			echo '<input type="number" step="0.01" min="0" inputmode="decimal" style="width:90px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_geplante_steuer]" value="'.\esc_attr($steuer).'" placeholder="20" autocomplete="off">';
+			echo '<span style="padding-right:50px;">15-25%</span>';
+			echo '</span>';
+			echo '</label>';
+			echo '<label style="display:flex;flex-direction:column;gap:4px;">';
+			echo '<span>AHV</span>';
+			echo '<span style="display:flex;align-items:center;gap:8px;">';
+			echo '<input type="number" step="0.01" min="0" inputmode="decimal" style="width:90px;" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_geplante_ahv]" value="'.\esc_attr($ahv).'" placeholder="10" autocomplete="off">';
+			echo '<span>10-12%</span>';
+			echo '</span>';
+			echo '</label>';
+			echo '</div>';
+		},
+		'cmx_tab_vorgaben__belege',
+		'cmx_sec_vorgaben_belege'
+	);
+}
