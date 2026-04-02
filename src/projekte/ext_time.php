@@ -1496,6 +1496,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_note')) {
 			'datum'   => (string) ($payload['start_date'] ?? ''),
 			'zeit'    => (string) ($payload['start_time'] ?? ''),
 			'text'    => $note_text,
+			'quelle'  => 'stoppuhr',
 		];
 
 		\update_post_meta($post_id, $meta_key, $existing);

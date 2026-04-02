@@ -56,6 +56,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_betreff')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_allowed_quellen')) {
+	function cmx_notizen_allowed_quellen(): array {
+		return ['stoppuhr'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_quelle')) {
+	function cmx_notizen_normalize_quelle($quelle): string {
+		$quelle = \sanitize_key((string) $quelle);
+		return \in_array($quelle, cmx_notizen_allowed_quellen(), true) ? $quelle : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_is_valid_date')) {
 	function cmx_notizen_is_valid_date(string $date): bool {
 		return (bool) \preg_match('/^\d{4}-\d{2}-\d{2}$/', $date);
@@ -157,19 +170,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_extract_links')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 	/**
 	 * @param mixed $row
-	 * @return array{betreff:string,datum:string,zeit:string,text:string}|null
+	 * @return array{betreff:string,datum:string,zeit:string,text:string,quelle:string}|null
 	 */
 	function cmx_notizen_normalize_row($row): ?array {
 		$betreff = '';
 		$datum = '';
 		$zeit  = '';
 		$text  = '';
+		$quelle = '';
 
 		if (\is_array($row)) {
 			$betreff = cmx_notizen_normalize_betreff($row['betreff'] ?? ($row['subject'] ?? ($row['thema'] ?? '')));
 			$datum = \sanitize_text_field((string) ($row['datum'] ?? ($row['date'] ?? '')));
 			$zeit  = \sanitize_text_field((string) ($row['zeit'] ?? ($row['time'] ?? ($row['uhrzeit'] ?? ''))));
 			$text  = cmx_notizen_sanitize_text((string) ($row['text'] ?? ($row['notiz'] ?? ($row['note'] ?? ($row['info'] ?? '')))));
+			$quelle = cmx_notizen_normalize_quelle($row['quelle'] ?? ($row['source'] ?? ($row['herkunft'] ?? '')));
 		} elseif (\is_string($row)) {
 			$text = cmx_notizen_sanitize_text($row);
 		}
@@ -178,6 +193,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 		$datum = \trim($datum);
 		$zeit  = \trim($zeit);
 		$text  = \trim($text);
+		$quelle = \trim($quelle);
 
 		if ($datum !== '' && !cmx_notizen_is_valid_date($datum)) {
 			$datum = '';
@@ -190,15 +206,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')) {
 			return null;
 		}
 
-		return ['betreff' => $betreff, 'datum' => $datum, 'zeit' => $zeit, 'text' => $text];
+		return ['betreff' => $betreff, 'datum' => $datum, 'zeit' => $zeit, 'text' => $text, 'quelle' => $quelle];
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 	if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_sort_rows')) {
 		/**
-		 * @param array<int, array{betreff:string,datum:string,zeit:string,text:string}> $rows
-		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string}>
+		 * @param array<int, array{betreff:string,datum:string,zeit:string,text:string,quelle:string}> $rows
+		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string,quelle:string}>
 		 */
 		function cmx_notizen_sort_rows(array $rows): array {
 			$decorated = [];
@@ -265,7 +281,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 	}
 
 		/**
-		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string}>
+		 * @return array<int, array{betreff:string,datum:string,zeit:string,text:string,quelle:string}>
 		 */
 		function cmx_notizen_load_rows(int $post_id, string $post_type): array {
 		$meta_key = cmx_notizen_meta_key_for_post_type($post_type);
@@ -285,7 +301,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')) {
 
 		$rows = [];
 		if (\is_array($raw)) {
-				$is_single_row = isset($raw['betreff']) || isset($raw['subject']) || isset($raw['thema']) || isset($raw['datum']) || isset($raw['date']) || isset($raw['zeit']) || isset($raw['time']) || isset($raw['text']) || isset($raw['notiz']) || isset($raw['note']) || isset($raw['info']);
+				$is_single_row = isset($raw['betreff']) || isset($raw['subject']) || isset($raw['thema']) || isset($raw['datum']) || isset($raw['date']) || isset($raw['zeit']) || isset($raw['time']) || isset($raw['text']) || isset($raw['notiz']) || isset($raw['note']) || isset($raw['info']) || isset($raw['quelle']) || isset($raw['source']) || isset($raw['herkunft']);
 			if ($is_single_row) {
 				$raw = [$raw];
 			}
@@ -315,12 +331,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		$betreff = (string) ($row['betreff'] ?? '');
 		$datum = \esc_attr((string) ($row['datum'] ?? ''));
 		$zeit  = \esc_attr((string) ($row['zeit'] ?? ''));
+		$quelle = \esc_attr((string) ($row['quelle'] ?? ''));
 		$text_value = (string) ($row['text'] ?? '');
 		$text  = \esc_textarea($text_value);
 		$textarea_id = 'cmx_intern_notiz_text_' . \preg_replace('/[^A-Za-z0-9_-]+/', '_', $name_index);
 		$links = cmx_notizen_extract_links($text_value);
 
 		echo '<div class="cmx-intern-notiz-row">';
+		echo '<input type="hidden" name="cmx_intern_notizen_rows[' . $name_index . '][quelle]" value="' . $quelle . '" />';
 		echo '<div class="cmx-intern-notiz-main">';
 			echo '<textarea rows="6" class="cmx-intern-notiz-text" data-cmx-notiz-editor="1" spellcheck="false" aria-label="' . \esc_attr__('Notiz', 'cmx') . '" id="' . \esc_attr($textarea_id) . '" name="cmx_intern_notizen_rows[' . $name_index . '][text]">' . $text . '</textarea>';
 		if ($links !== []) {
@@ -374,6 +392,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 				'datum' => cmx_notizen_now_date(),
 				'zeit'  => cmx_notizen_now_time(),
 				'text'  => '',
+				'quelle'=> '',
 			];
 		}
 
@@ -405,7 +424,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 			echo '</div>';
 			?>
 			<script type="text/template" id="cmx-intern-notizen-template">
-				<?php cmx_notizen_render_row('__INDEX__', ['betreff' => '', 'datum' => '', 'zeit' => '', 'text' => ''], true); ?>
+				<?php cmx_notizen_render_row('__INDEX__', ['betreff' => '', 'datum' => '', 'zeit' => '', 'text' => '', 'quelle' => ''], true); ?>
 			</script>
 		<script>
 		(function(){
