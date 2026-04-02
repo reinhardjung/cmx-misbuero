@@ -435,14 +435,16 @@ function cmx_dokumente_upload_file(): void {
 		$current_title = $post_obj ? \trim((string) $post_obj->post_title) : '';
 		$current_slug = $post_obj ? (string) $post_obj->post_name : '';
 		$new_slug = \sanitize_title($doc_title);
-		if ($current_title !== $doc_title || $current_slug !== $new_slug) {
+		if ($current_title === '' && ($doc_title !== '' || $current_slug !== $new_slug)) {
 			\wp_update_post([
 				'ID' => $post_id,
 				'post_title' => $doc_title,
 				'post_name' => $new_slug,
 			]);
+			$response_title = $doc_title;
+		} else {
+			$response_title = $current_title;
 		}
-		$response_title = $doc_title;
 	}
 
 	if ($is_scanner) {
@@ -520,11 +522,18 @@ function cmx_dokumente_upload_file(): void {
 
 	// Datei umbenennen: {Dokument-Titel}.ext (Scanner bleibt Sonderfall mit Suffix).
 	$base_dir = dirname($uploaded['file']);
-	$new_base = \sanitize_file_name($doc_title . '.' . $ext);
+	$desired_base = \sanitize_file_name($doc_title . '.' . $ext);
 	if ($post_type === 'scanner') {
-		$new_base = \sanitize_file_name($doc_title . '_' . $source_title . '.' . $ext);
+		$desired_base = \sanitize_file_name($doc_title . '_' . $source_title . '.' . $ext);
 	}
-	$new_base = \wp_unique_filename($base_dir, $new_base);
+	$current_base = (string) \basename((string) $uploaded['file']);
+	$desired_name = (string) \pathinfo($desired_base, \PATHINFO_FILENAME);
+	$desired_ext = (string) \pathinfo($desired_base, \PATHINFO_EXTENSION);
+	$current_matches_desired = ($current_base === $desired_base);
+	if (!$current_matches_desired && $desired_name !== '' && $desired_ext !== '') {
+		$current_matches_desired = (\preg_match('/^' . \preg_quote($desired_name, '/') . '-\d+\.' . \preg_quote($desired_ext, '/') . '$/i', $current_base) === 1);
+	}
+	$new_base = $current_matches_desired ? $current_base : \wp_unique_filename($base_dir, $desired_base);
 	$new_path = $base_dir . '/' . $new_base;
 	if ($new_path !== $uploaded['file']) {
 		$renamed = @rename($uploaded['file'], $new_path);
@@ -697,6 +706,19 @@ function cmx_dokumente_remove_file(): void {
 				\delete_post_meta($post_id, '_cmx_dokumente_file_path');
 			}
 		}
+
+		$attachment_id = (int) \get_post_meta($post_id, '_cmx_dokumente_attachment_id', true);
+		$attachment_rel = $attachment_id > 0 ? (string) \get_post_meta($attachment_id, '_wp_attached_file', true) : '';
+		$attachment_rel_norm = \ltrim(\str_replace('\\', '/', $attachment_rel), '/');
+		if ($attachment_id > 0 && $attachment_rel_norm === $path_norm && (string) \get_post_type($attachment_id) === 'attachment') {
+			\wp_delete_attachment($attachment_id, true);
+			\delete_post_meta($post_id, '_cmx_dokumente_attachment_id');
+		} else {
+			$abs = WP_CONTENT_DIR . '/uploads/' . $path_norm;
+			if (\is_file($abs)) {
+				@unlink($abs);
+			}
+		}
 	} elseif ($is_scanner) {
 		$source_rel = (string) \get_post_meta($post_id, '_cmx_scanner_source_rel', true);
 		$path = $path !== '' ? $path : $source_rel;
@@ -743,8 +765,15 @@ function cmx_dokumente_delete_files(int $post_id): void {
 	$file_rel = (string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true);
 	$files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
 	$files = array_values(array_filter($files, function($v){ return $v !== '' && $v !== null; }));
+	$attachment_id = (int) \get_post_meta($post_id, '_cmx_dokumente_attachment_id', true);
 	if ($file_rel !== '') {
 		$files[] = $file_rel;
+	}
+	if ($attachment_id > 0) {
+		$attachment_rel = (string) \get_post_meta($attachment_id, '_wp_attached_file', true);
+		if ($attachment_rel !== '') {
+			$files[] = $attachment_rel;
+		}
 	}
 	$files = array_values(array_unique($files));
 	foreach ($files as $rel) {
@@ -752,6 +781,9 @@ function cmx_dokumente_delete_files(int $post_id): void {
 		if (is_file($abs)) {
 			@unlink($abs);
 		}
+	}
+	if ($attachment_id > 0 && (string) \get_post_type($attachment_id) === 'attachment') {
+		\wp_delete_attachment($attachment_id, true);
 	}
 }
 

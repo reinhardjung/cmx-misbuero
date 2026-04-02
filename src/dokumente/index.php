@@ -191,7 +191,7 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	return \trim(\sanitize_text_field($fallback));
 }
 
-// Dokumente-Titel immer aus dem Dateinamen ableiten (sanitized).
+// Dokumente-Titel nur aus dem Dateinamen ableiten, wenn noch kein Titel gesetzt ist.
 \add_action('save_post_dokumente', function (int $post_id, \WP_Post $post): void {
 	if ($post->post_type !== 'dokumente') return;
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -200,16 +200,13 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	static $in_progress = [];
 	if (!empty($in_progress[$post_id])) return;
 
-	$new_title = cmx_dokumente_sanitized_title_from_file($post_id);
-	if ($new_title === '') {
-		$new_title = \trim((string) $post->post_title);
-		if ($new_title === '') {
-			$new_title = \wp_date('ymd-His');
-		}
+	$current_title = \trim((string) $post->post_title);
+	if ($current_title !== '') {
+		return;
 	}
 
-	$current_title = \trim((string) $post->post_title);
-	if ($current_title === $new_title) {
+	$new_title = cmx_dokumente_sanitized_title_from_file($post_id);
+	if ($new_title === '') {
 		return;
 	}
 
