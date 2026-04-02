@@ -321,7 +321,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	</p>';
 
 	echo '<p class="field field--form">
-		<label for="cmx_geschaeftsform_term_id"><strong>' . cmx_kontakte_business_form_label_html('Form') . '</strong></label><br>
+		<label for="cmx_geschaeftsform_term_id"><strong>' . cmx_kontakte_business_form_label_html('Rechtsform') . '</strong></label><br>
 		<select id="cmx_geschaeftsform_term_id" name="cmx_geschaeftsform_term_id">
 			<option value="">auswählen</option>';
 	foreach ($business_form_terms as $term) {
