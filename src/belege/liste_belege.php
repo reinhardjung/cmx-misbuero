@@ -597,7 +597,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 		echo '<th><button type="button" data-sort-key="title" data-sort-type="string">Beleg<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="type" data-sort-type="string">Typ<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="due" data-sort-type="number">Fällig am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
-		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Bezahlt am<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
+		echo '<th><button type="button" data-sort-key="status" data-sort-type="string">Status<span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><button type="button" data-sort-key="amount" data-sort-type="number"><span class="cmx-kontakt-head-amount">Betrag</span><span class="cmx-kontakt-sort-indicator"> </span></button></th>';
 		echo '<th><span class="cmx-kontakt-head-pdf">PDF</span></th>';
 		if ($show_online_column) {
@@ -626,9 +626,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_share_page'))
 			$state_label = (string) ($state['label'] ?? 'Offen');
 			$default_sort = ($state_slug === 'bezahlt' ? 0 : 10000000000000) + $due_sort;
 			$is_overdue = cmx_kontakt_beleg_due_is_overdue($due_label);
-			$display_status = $state_slug === 'bezahlt'
-				? $state_label
-				: ($due_label !== '' ? $due_label : $state_label);
+			$display_status = $state_label;
 			$status_class = $state_slug === 'bezahlt' ? 'is-paid' : ($is_overdue ? 'is-overdue' : '');
 			$search_blob = \implode(' ', \array_filter([
 				$date,
