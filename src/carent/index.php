@@ -33,4 +33,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_CARENT)
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt');
+cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt,ausweis_fahrer,ausweis_id');

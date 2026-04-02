@@ -1586,13 +1586,61 @@ function cmx_camt_row_status_html(array $entry): string {
 	$assignment = cmx_camt_assignment_get($signature);
 	$beleg_id = (int) ($assignment['beleg_id'] ?? 0);
 	if ($beleg_id <= 0) {
-		return '<span class="cmx-camt-status cmx-camt-status--open">offen</span>';
+		$entry_state = cmx_camt_entry_state_get($entry);
+		$state_label = $entry_state === 'geschlossen' ? 'gebucht' : 'offen';
+		$state_class = $entry_state === 'geschlossen' ? 'cmx-camt-status--closed' : 'cmx-camt-status--open';
+		return '<button type="button" class="cmx-camt-status ' . \esc_attr($state_class) . ' cmx-camt-status-toggle" data-signature="' . \esc_attr($signature) . '">' . \esc_html($state_label) . '</button>';
 	}
 
 	$url = (string) \get_edit_post_link($beleg_id, 'raw');
 	$title = \trim((string) \get_the_title($beleg_id));
 	$title = $title !== '' ? $title : ('Beleg #' . $beleg_id);
 	return '<a class="cmx-camt-status cmx-camt-status--assigned" href="' . \esc_url($url) . '">' . \esc_html($title) . '</a>';
+}
+
+function cmx_camt_entry_state_get(array $entry): string {
+	$entry_state = \sanitize_key((string) ($entry['entry_state'] ?? ''));
+	return $entry_state === 'geschlossen' ? 'geschlossen' : 'offen';
+}
+
+function cmx_camt_row_status_mode(array $entry): string {
+	$signature = (string) ($entry['signature'] ?? '');
+	$assignment = cmx_camt_assignment_get($signature);
+	$beleg_id = (int) ($assignment['beleg_id'] ?? 0);
+	if ($beleg_id > 0) {
+		return 'assigned';
+	}
+
+	return cmx_camt_entry_state_get($entry);
+}
+
+function cmx_camt_row_status_payload(array $entry): array {
+	$status_mode = cmx_camt_row_status_mode($entry);
+	return [
+		'status_html' => cmx_camt_row_status_html($entry),
+		'status_mode' => $status_mode,
+		'entry_state' => cmx_camt_entry_state_get($entry),
+		'is_assigned' => $status_mode === 'assigned',
+	];
+}
+
+function cmx_camt_entry_state_set(string $signature, string $entry_state): array {
+	$signature = \sanitize_key($signature);
+	if ($signature === '') {
+		return [];
+	}
+
+	$state = cmx_camt_state_get();
+	$entry = \is_array($state['entries'][$signature] ?? null) ? (array) $state['entries'][$signature] : [];
+	if (empty($entry)) {
+		return [];
+	}
+
+	$entry['entry_state'] = $entry_state === 'geschlossen' ? 'geschlossen' : 'offen';
+	$state['entries'][$signature] = $entry;
+	cmx_camt_state_set($state);
+
+	return $entry;
 }
 
 function cmx_camt_render_candidates_panel(array $entry, float $amount_window = 0.0): string {
@@ -1725,9 +1773,9 @@ function cmx_camt_render_candidates_panel(array $entry, float $amount_window = 0
 
 function cmx_camt_render_left_rows(array $entries): void {
 	echo '<table class="widefat striped cmx-camt-table">';
-	echo '<thead><tr><th>Datum</th><th>Betrag</th><th>Richtung</th><th>Gegenpartei</th><th>Referenz</th><th>Quelle</th><th>Status</th></tr></thead>';
+	echo '<thead><tr><th><button type="button" class="cmx-camt-th-button cmx-camt-date-reset">Datum</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-amount-sort" data-sort-direction="">Betrag</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-direction-filter" data-filter-direction="">Richtung</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-counterparty-filter" data-filter-counterparty="">Gegenpartei</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-reference-filter" data-filter-reference="">Referenz</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-source-filter" data-filter-source="">Quelle</button></th><th><button type="button" class="cmx-camt-th-button cmx-camt-status-filter" data-filter-state="">Status</button></th></tr></thead>';
 	echo '<tbody>';
-	foreach ($entries as $entry) {
+	foreach (\array_values($entries) as $index => $entry) {
 		$signature = (string) ($entry['signature'] ?? '');
 		if ($signature === '') {
 			continue;
@@ -1740,8 +1788,14 @@ function cmx_camt_render_left_rows(array $entries): void {
 		$counterparty = \trim((string) ($entry['counterparty_name'] ?? ''));
 		$assignment = cmx_camt_assignment_get($signature);
 		$row_class = (int) ($assignment['beleg_id'] ?? 0) > 0 ? ' is-assigned' : '';
+		$amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? '0'));
+		$entry_state = cmx_camt_entry_state_get($entry);
+		$status_mode = cmx_camt_row_status_mode($entry);
+		$direction_mode = (string) ($entry['direction'] ?? '') === 'debit' ? 'ausgabe' : 'einnahme';
+		$has_camt053 = \in_array('053', $source_versions, true) ? '1' : '0';
+		$has_camt054 = \in_array('054', $source_versions, true) ? '1' : '0';
 
-		echo '<tr class="cmx-camt-entry-row' . \esc_attr($row_class) . '" data-signature="' . \esc_attr($signature) . '">';
+		echo '<tr class="cmx-camt-entry-row' . \esc_attr($row_class) . '" data-signature="' . \esc_attr($signature) . '" data-initial-index="' . \esc_attr((string) $index) . '" data-amount="' . \esc_attr((string) $amount) . '" data-entry-state="' . \esc_attr($entry_state) . '" data-status-mode="' . \esc_attr($status_mode) . '" data-direction-mode="' . \esc_attr($direction_mode) . '" data-has-counterparty="' . \esc_attr($counterparty !== '' ? '1' : '0') . '" data-has-reference="' . \esc_attr($reference !== '' ? '1' : '0') . '" data-has-camt053="' . \esc_attr($has_camt053) . '" data-has-camt054="' . \esc_attr($has_camt054) . '">';
 		echo '<td>' . \esc_html(cmx_camt_format_date((string) ($entry['booking_date'] ?? ''))) . '</td>';
 		echo '<td><strong>' . \esc_html(cmx_camt_format_amount((string) ($entry['amount'] ?? ''))) . '</strong> ' . \esc_html((string) ($entry['currency'] ?? 'CHF')) . '</td>';
 		echo '<td>' . \esc_html(cmx_camt_direction_label((string) ($entry['direction'] ?? ''))) . '</td>';
@@ -1929,9 +1983,24 @@ function cmx_bank_import_render_log_page(): void {
 		font-size:12px;
 		font-weight:600;
 		text-decoration:none;
+		border:0;
+		cursor:pointer;
+		box-shadow:none;
 	}
 	.cmx-camt-status--open{background:#fff4df;color:#936400}
+	.cmx-camt-status--closed{background:#eef9ef;color:#1a7a34}
 	.cmx-camt-status--assigned{background:#eef9ef;color:#1a7a34}
+	.cmx-camt-th-button{
+		appearance:none;
+		border:0;
+		background:none;
+		padding:0;
+		font:inherit;
+		font-weight:600;
+		color:inherit;
+		cursor:pointer;
+	}
+	.cmx-camt-th-button.is-active{color:#135e96}
 	.cmx-camt-files{
 		display:grid;
 		grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
@@ -2096,7 +2165,21 @@ function cmx_bank_import_render_log_page(): void {
 	var messages = document.getElementById("cmx-camt-messages");
 	var detail = document.getElementById("cmx-camt-detail");
 	var rows = Array.prototype.slice.call(document.querySelectorAll(".cmx-camt-entry-row"));
+	var tableBody = document.querySelector(".cmx-camt-table tbody");
+	var dateResetButton = document.querySelector(".cmx-camt-date-reset");
+	var amountSortButton = document.querySelector(".cmx-camt-amount-sort");
+	var directionFilterButton = document.querySelector(".cmx-camt-direction-filter");
+	var counterpartyFilterButton = document.querySelector(".cmx-camt-counterparty-filter");
+	var referenceFilterButton = document.querySelector(".cmx-camt-reference-filter");
+	var sourceFilterButton = document.querySelector(".cmx-camt-source-filter");
+	var statusFilterButton = document.querySelector(".cmx-camt-status-filter");
 	var currentSignature = "";
+	var amountSortDirection = "";
+	var directionFilterMode = "";
+	var counterpartyFilterMode = "";
+	var referenceFilterMode = "";
+	var sourceFilterMode = "";
+	var statusFilterMode = "";
 
 	function escapeHtml(text){
 		return String(text || "").replace(/[&<>"']/g, function(c){
@@ -2114,6 +2197,80 @@ function cmx_bank_import_render_log_page(): void {
 		rows.forEach(function(row){
 			row.classList.toggle("is-selected", row.getAttribute("data-signature") === currentSignature);
 		});
+	}
+
+	function updateHeaderButtons(){
+		if (dateResetButton) {
+			dateResetButton.classList.toggle("is-active", amountSortDirection !== "" || directionFilterMode !== "" || counterpartyFilterMode !== "" || referenceFilterMode !== "" || sourceFilterMode !== "" || statusFilterMode !== "");
+		}
+		if (amountSortButton) {
+			amountSortButton.classList.toggle("is-active", amountSortDirection === "asc" || amountSortDirection === "desc");
+			amountSortButton.textContent = amountSortDirection === "asc" ? "Betrag ↑" : (amountSortDirection === "desc" ? "Betrag ↓" : "Betrag");
+		}
+		if (directionFilterButton) {
+			directionFilterButton.classList.toggle("is-active", directionFilterMode === "ausgabe" || directionFilterMode === "einnahme");
+		}
+		if (counterpartyFilterButton) {
+			counterpartyFilterButton.classList.toggle("is-active", counterpartyFilterMode === "without-counterparty" || counterpartyFilterMode === "with-counterparty");
+		}
+		if (referenceFilterButton) {
+			referenceFilterButton.classList.toggle("is-active", referenceFilterMode === "with-reference" || referenceFilterMode === "without-reference");
+		}
+		if (sourceFilterButton) {
+			sourceFilterButton.classList.toggle("is-active", sourceFilterMode === "053" || sourceFilterMode === "054");
+		}
+		if (statusFilterButton) {
+			statusFilterButton.classList.toggle("is-active", statusFilterMode === "offen" || statusFilterMode === "not-open");
+			statusFilterButton.textContent = "Status";
+		}
+	}
+
+	function applyRowsView(){
+		if (!tableBody) return;
+		var orderedRows = rows.slice();
+		orderedRows.sort(function(a, b){
+			if (amountSortDirection === "asc" || amountSortDirection === "desc") {
+				var amountA = parseFloat(a.getAttribute("data-amount") || "0");
+				var amountB = parseFloat(b.getAttribute("data-amount") || "0");
+				if (amountA !== amountB) {
+					return amountSortDirection === "asc" ? amountA - amountB : amountB - amountA;
+				}
+			}
+			var indexA = parseInt(a.getAttribute("data-initial-index") || "0", 10);
+			var indexB = parseInt(b.getAttribute("data-initial-index") || "0", 10);
+			return indexA - indexB;
+		});
+
+		orderedRows.forEach(function(row){
+			var statusMode = row.getAttribute("data-status-mode") || "offen";
+			var directionMode = row.getAttribute("data-direction-mode") || "";
+			var hasCounterparty = row.getAttribute("data-has-counterparty") === "1";
+			var hasReference = row.getAttribute("data-has-reference") === "1";
+			var hasCamt053 = row.getAttribute("data-has-camt053") === "1";
+			var hasCamt054 = row.getAttribute("data-has-camt054") === "1";
+			var isVisible = true;
+			if (statusFilterMode === "offen") {
+				isVisible = statusMode === "offen";
+			} else if (statusFilterMode === "not-open") {
+				isVisible = statusMode !== "offen";
+			}
+			if (isVisible && (directionFilterMode === "ausgabe" || directionFilterMode === "einnahme")) {
+				isVisible = directionMode === directionFilterMode;
+			}
+			if (isVisible && (counterpartyFilterMode === "without-counterparty" || counterpartyFilterMode === "with-counterparty")) {
+				isVisible = counterpartyFilterMode === "with-counterparty" ? hasCounterparty : !hasCounterparty;
+			}
+			if (isVisible && (referenceFilterMode === "with-reference" || referenceFilterMode === "without-reference")) {
+				isVisible = referenceFilterMode === "with-reference" ? hasReference : !hasReference;
+			}
+			if (isVisible && (sourceFilterMode === "053" || sourceFilterMode === "054")) {
+				isVisible = sourceFilterMode === "053" ? hasCamt053 : hasCamt054;
+			}
+			row.style.display = isVisible ? "" : "none";
+			tableBody.appendChild(row);
+		});
+
+		updateHeaderButtons();
 	}
 
 	function uploadFiles(files){
@@ -2178,17 +2335,25 @@ function cmx_bank_import_render_log_page(): void {
 			});
 	}
 
-	function refreshStatusCell(signature, html){
+	function refreshStatusCell(signature, html, meta){
 		rows.forEach(function(row){
 			if (row.getAttribute("data-signature") !== signature) return;
 			var cell = row.querySelector("td:last-child");
 			if (cell) cell.innerHTML = html;
-			if (String(html).indexOf("cmx-camt-status--open") !== -1) {
-				row.classList.remove("is-assigned");
-			} else {
+
+			var isAssigned = !!(meta && meta.is_assigned);
+			var entryState = meta && meta.entry_state ? String(meta.entry_state) : "offen";
+			var statusMode = meta && meta.status_mode ? String(meta.status_mode) : (String(html).indexOf("cmx-camt-status--open") !== -1 ? "offen" : "assigned");
+
+			row.setAttribute("data-entry-state", entryState);
+			row.setAttribute("data-status-mode", statusMode);
+			if (isAssigned) {
 				row.classList.add("is-assigned");
+			} else {
+				row.classList.remove("is-assigned");
 			}
 		});
+		applyRowsView();
 	}
 
 	if (upload && input) {
@@ -2224,12 +2389,102 @@ function cmx_bank_import_render_log_page(): void {
 	}
 
 	rows.forEach(function(row){
-		row.addEventListener("click", function(){
+		row.addEventListener("click", function(e){
+			if (e.target && e.target.closest(".cmx-camt-status-toggle")) {
+				return;
+			}
 			loadDetail(row.getAttribute("data-signature") || "");
 		});
 	});
 
 	document.addEventListener("click", function(e){
+		var dateResetBtn = e.target.closest(".cmx-camt-date-reset");
+		if (dateResetBtn) {
+			e.preventDefault();
+			amountSortDirection = "";
+			directionFilterMode = "";
+			counterpartyFilterMode = "";
+			referenceFilterMode = "";
+			sourceFilterMode = "";
+			statusFilterMode = "";
+			applyRowsView();
+			return;
+		}
+
+		var amountSortBtn = e.target.closest(".cmx-camt-amount-sort");
+		if (amountSortBtn) {
+			e.preventDefault();
+			amountSortDirection = amountSortDirection === "asc" ? "desc" : "asc";
+			applyRowsView();
+			return;
+		}
+
+		var directionFilterBtn = e.target.closest(".cmx-camt-direction-filter");
+		if (directionFilterBtn) {
+			e.preventDefault();
+			directionFilterMode = directionFilterMode === "ausgabe" ? "einnahme" : "ausgabe";
+			applyRowsView();
+			return;
+		}
+
+		var counterpartyFilterBtn = e.target.closest(".cmx-camt-counterparty-filter");
+		if (counterpartyFilterBtn) {
+			e.preventDefault();
+			counterpartyFilterMode = counterpartyFilterMode === "without-counterparty" ? "with-counterparty" : "without-counterparty";
+			applyRowsView();
+			return;
+		}
+
+		var referenceFilterBtn = e.target.closest(".cmx-camt-reference-filter");
+		if (referenceFilterBtn) {
+			e.preventDefault();
+			referenceFilterMode = referenceFilterMode === "with-reference" ? "without-reference" : "with-reference";
+			applyRowsView();
+			return;
+		}
+
+		var sourceFilterBtn = e.target.closest(".cmx-camt-source-filter");
+		if (sourceFilterBtn) {
+			e.preventDefault();
+			sourceFilterMode = sourceFilterMode === "053" ? "054" : "053";
+			applyRowsView();
+			return;
+		}
+
+		var statusFilterBtn = e.target.closest(".cmx-camt-status-filter");
+		if (statusFilterBtn) {
+			e.preventDefault();
+			statusFilterMode = statusFilterMode === "offen" ? "not-open" : "offen";
+			applyRowsView();
+			return;
+		}
+
+		var statusToggle = e.target.closest(".cmx-camt-status-toggle");
+		if (statusToggle) {
+			e.preventDefault();
+			e.stopPropagation();
+			var toggleSignature = statusToggle.getAttribute("data-signature") || "";
+			if (!toggleSignature) return;
+			statusToggle.disabled = true;
+			var toggleFd = new FormData();
+			toggleFd.append("action", "cmx_camt_toggle_entry_state");
+			toggleFd.append("nonce", nonce);
+			toggleFd.append("signature", toggleSignature);
+			fetch(ajaxUrl, {method:"POST", body:toggleFd, credentials:"same-origin"})
+				.then(function(r){ return r.json(); })
+				.then(function(res){
+					if (!res || !res.success) {
+						throw new Error((res && res.data && res.data.message) ? res.data.message : "Status konnte nicht geändert werden.");
+					}
+					refreshStatusCell(toggleSignature, String((res.data && res.data.status_html) || ""), res.data || {});
+				})
+				.catch(function(err){
+					setMessage("error", err && err.message ? err.message : "Status konnte nicht geändert werden.");
+					statusToggle.disabled = false;
+				});
+			return;
+		}
+
 		var assignBtn = e.target.closest(".cmx-camt-assign-beleg");
 		if (assignBtn) {
 			e.preventDefault();
@@ -2251,7 +2506,7 @@ function cmx_bank_import_render_log_page(): void {
 						throw new Error((res && res.data && res.data.message) ? res.data.message : "Zuordnung fehlgeschlagen.");
 					}
 					if (res.data && res.data.status_html) {
-						refreshStatusCell(signature, String(res.data.status_html));
+						refreshStatusCell(signature, String(res.data.status_html), res.data);
 					}
 					if (res.data && res.data.html && detail) {
 						detail.innerHTML = String(res.data.html);
@@ -2283,7 +2538,7 @@ function cmx_bank_import_render_log_page(): void {
 						throw new Error((res && res.data && res.data.message) ? res.data.message : "Beleg konnte nicht angelegt werden.");
 					}
 					if (res.data && res.data.status_html) {
-						refreshStatusCell(signature, String(res.data.status_html));
+						refreshStatusCell(signature, String(res.data.status_html), res.data);
 					}
 					if (res.data && res.data.html && detail) {
 						detail.innerHTML = String(res.data.html);
@@ -2318,7 +2573,7 @@ function cmx_bank_import_render_log_page(): void {
 						throw new Error((res && res.data && res.data.message) ? res.data.message : "Zuordnung konnte nicht aufgehoben werden.");
 					}
 					if (res.data && res.data.status_html) {
-						refreshStatusCell(signature, String(res.data.status_html));
+						refreshStatusCell(signature, String(res.data.status_html), res.data);
 					}
 					if (res.data && res.data.html && detail) {
 						detail.innerHTML = String(res.data.html);
@@ -2350,6 +2605,7 @@ function cmx_bank_import_render_log_page(): void {
 	});
 
 	if (rows.length) {
+		updateHeaderButtons();
 		loadDetail(rows[0].getAttribute("data-signature") || "");
 	}
 })();
@@ -2518,10 +2774,12 @@ HTML;
 		'beleg_id' => $beleg_id,
 		'payment_mode' => (string) ($assignment_effect['payment_mode'] ?? 'paid'),
 	]);
-	\wp_send_json_success([
-		'status_html' => cmx_camt_row_status_html($entry),
-		'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
-	]);
+	\wp_send_json_success(\array_merge(
+		cmx_camt_row_status_payload($entry),
+		[
+			'html' => cmx_camt_render_candidates_panel($entry, $amount_window),
+		]
+	));
 });
 
 \add_action('wp_ajax_cmx_camt_unassign_beleg', function (): void {
@@ -2551,10 +2809,12 @@ HTML;
 		'signature' => $signature,
 		'beleg_id' => (int) ($current_assignment['beleg_id'] ?? 0),
 	]);
-	\wp_send_json_success([
-		'status_html' => cmx_camt_row_status_html($entry),
-		'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
-	]);
+	\wp_send_json_success(\array_merge(
+		cmx_camt_row_status_payload($entry),
+		[
+			'html' => cmx_camt_render_candidates_panel($entry, $amount_window),
+		]
+	));
 });
 
 \add_action('wp_ajax_cmx_camt_create_beleg', function (): void {
@@ -2574,11 +2834,13 @@ HTML;
 	$current_assignment = cmx_camt_assignment_get($signature);
 	$current_beleg_id = (int) ($current_assignment['beleg_id'] ?? 0);
 	if ($current_beleg_id > 0) {
-		\wp_send_json_success([
-			'status_html' => cmx_camt_row_status_html($entry),
-			'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
-			'edit_url'    => (string) \get_edit_post_link($current_beleg_id, 'raw'),
-		]);
+		\wp_send_json_success(\array_merge(
+			cmx_camt_row_status_payload($entry),
+			[
+				'html'     => cmx_camt_render_candidates_panel($entry, $amount_window),
+				'edit_url' => (string) \get_edit_post_link($current_beleg_id, 'raw'),
+			]
+		));
 	}
 
 	$created = cmx_camt_create_new_beleg_from_entry($entry);
@@ -2597,9 +2859,41 @@ HTML;
 	]);
 
 	cmx_bank_import_log('CAMT Beleg neu angelegt', ['signature' => $signature, 'beleg_id' => $beleg_id]);
-	\wp_send_json_success([
-		'status_html' => cmx_camt_row_status_html($entry),
-		'html'        => cmx_camt_render_candidates_panel($entry, $amount_window),
-		'edit_url'    => (string) ($created['edit_url'] ?? ''),
+	\wp_send_json_success(\array_merge(
+		cmx_camt_row_status_payload($entry),
+		[
+			'html'     => cmx_camt_render_candidates_panel($entry, $amount_window),
+			'edit_url' => (string) ($created['edit_url'] ?? ''),
+		]
+	));
+});
+
+\add_action('wp_ajax_cmx_camt_toggle_entry_state', function (): void {
+	if (!cmx_camt_current_user_can()) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	\check_ajax_referer('cmx_camt_ajax', 'nonce');
+
+	$signature = \sanitize_key((string) ($_POST['signature'] ?? ''));
+	$state = cmx_camt_state_get();
+	$entry = \is_array($state['entries'][$signature] ?? null) ? (array) $state['entries'][$signature] : [];
+	if ($signature === '' || empty($entry)) {
+		\wp_send_json_error(['message' => 'Buchung nicht gefunden.'], 404);
+	}
+	if ((int) (cmx_camt_assignment_get($signature)['beleg_id'] ?? 0) > 0) {
+		\wp_send_json_error(['message' => 'Zugeordnete Buchungen können hier nicht umgestellt werden.'], 409);
+	}
+
+	$next_state = cmx_camt_entry_state_get($entry) === 'offen' ? 'geschlossen' : 'offen';
+	$entry = cmx_camt_entry_state_set($signature, $next_state);
+	if (empty($entry)) {
+		\wp_send_json_error(['message' => 'Status konnte nicht gespeichert werden.'], 500);
+	}
+
+	cmx_bank_import_log('CAMT Status geändert', [
+		'signature'   => $signature,
+		'entry_state' => $next_state,
 	]);
+
+	\wp_send_json_success(cmx_camt_row_status_payload($entry));
 });
