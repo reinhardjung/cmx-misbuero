@@ -272,6 +272,7 @@ add_action('wp_dashboard_setup', function () {
 		$allow = [
 			'cmx_dashboard_widget',
 			'cmx_stoppuhr_notizen_widget',
+			'cmx_stoppuhr_taetigkeiten_widget',
 		];
 
 		// Bereiche im Dashboard

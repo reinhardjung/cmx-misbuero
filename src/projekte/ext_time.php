@@ -1460,6 +1460,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_time_append_task')) {
 			'verrechenbar'  => !empty($payload['verrechenbar']) ? 1 : 0,
 			'abgerechnet'   => 0,
 			'info'          => (string) ($payload['info'] ?? ''),
+			'quelle'        => 'stoppuhr',
 		];
 
 		\update_post_meta($post_id, CMX_PROJEKT_TASK_META, $existing);

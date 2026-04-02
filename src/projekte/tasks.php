@@ -8,6 +8,19 @@
 const CMX_PROJEKT_TASK_META = '_cmx_projekt_tasks';
 const CMX_TASK_POST_TYPES   = ['projekte', 'kontakte'];
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_allowed_quellen')) {
+	function cmx_projekt_task_allowed_quellen(): array {
+		return ['stoppuhr'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_normalize_quelle')) {
+	function cmx_projekt_task_normalize_quelle($quelle): string {
+		$quelle = \sanitize_key((string) $quelle);
+		return \in_array($quelle, cmx_projekt_task_allowed_quellen(), true) ? $quelle : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_projekt_task_uid')) {
 	function cmx_projekt_task_uid($raw = ''): string {
 		$uid = (string) $raw;
@@ -544,11 +557,15 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 			? cmx_projekt_task_uid($task_uid_raw)
 			: $task_uid_raw;
 	}
+	$quelle = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_normalize_quelle')
+		? cmx_projekt_task_normalize_quelle($row['quelle'] ?? '')
+		: \sanitize_key((string) ($row['quelle'] ?? ''));
 
 	$name_base = $is_template ? '__INDEX__' : (string)$idx;
 
 	echo '<div class="cmx-task-row">';
 	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][uid]" value="'.\esc_attr($task_uid).'">';
+	echo '<input type="hidden" name="cmx_tasks['.$name_base.'][quelle]" value="'.\esc_attr($quelle).'">';
 	echo '<div class="cmx-task-main">';
 	echo '<div class="cmx-task-article-grid">';
 		$dienstleistung_list_url = \add_query_arg(['post_type' => 'artikel', 'cmx_artikel_art_filter' => 'dienstleistung'], \admin_url('edit.php'));
@@ -615,6 +632,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
 				$art_id = (int) ($row['artikel_id'] ?? 0);
 				$produkt_id = (int) ($row['produkt_id'] ?? 0);
 				$info   = sanitize_textarea_field($row['info'] ?? '');
+				$quelle = \function_exists(__NAMESPACE__ . '\\cmx_projekt_task_normalize_quelle')
+					? cmx_projekt_task_normalize_quelle($row['quelle'] ?? '')
+					: \sanitize_key((string) ($row['quelle'] ?? ''));
 
 				// ignorieren, wenn alles leer
 				if ($datum === '' && $zeit === '' && $dauer === '' && $art_id === 0 && $produkt_id === 0 && $info === '') continue;
@@ -634,6 +654,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_save_tasks_metabox')) {
 					'verrechenbar' => \array_key_exists('verrechenbar', $row) ? (!empty($row['verrechenbar']) ? 1 : 0) : 1,
 					'abgerechnet'=> !empty($row['abgerechnet']) ? 1 : 0,
 					'info'       => $info,
+					'quelle'     => $quelle,
 			];
 		}
 

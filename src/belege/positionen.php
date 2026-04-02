@@ -419,7 +419,7 @@ if (!function_exists(__NAMESPACE__ . '\cmx_beleg_textbaustein_items')) {
 				'value' => $id,
 				'nr'    => $name,
 				'title' => $desc,
-				'text'  => ($desc !== '' ? $desc : $name),
+				'text'  => $desc,
 			];
 		};
 
@@ -2349,15 +2349,13 @@ function cmx_beleg_positionen_js() {
 								}
 								const $row = $input.closest('tr');
 								const $abschnittText = $row.find('textarea[name*="[abschnitt_text]"]').first();
-								if ($abschnittText.length && beschreibung !== '') {
+								if ($abschnittText.length) {
 									$abschnittText.val(beschreibung).trigger('change');
 								}
 								$input.data('cmx-text-selected', 1);
 							} else {
-								const txt = (it.text || it.title || it.nr || '').toString().trim();
-								if (txt !== '') {
-									$input.val(txt).trigger('change');
-								}
+								const txt = (it.text || it.title || '').toString().trim();
+								$input.val(txt).trigger('change');
 							}
 							$input.data('cmx-text-suppress-open', 1);
 							closeList();
