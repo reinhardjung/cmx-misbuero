@@ -22,6 +22,14 @@ function cmx_render_cpt_count_widget() {
 	}
 
 	echo '<style>
+		#cmx_cpt_counts_widget,
+		#cmx_cpt_counts_widget .inside,
+		#cmx_cpt_counts_widget .cmx-cpt-table,
+		#cmx_cpt_counts_widget .cmx-cpt-table tbody,
+		#cmx_cpt_counts_widget .cmx-cpt-table tr,
+		#cmx_cpt_counts_widget .cmx-cpt-table td{
+			overflow:visible;
+		}
 		.cmx-cpt-table{width:100%;border-collapse:collapse;table-layout:fixed}
 		.cmx-cpt-table td{padding:6px 10px;text-align:left;vertical-align:middle;font-size:14px;border:0}
 		.cmx-cpt-table td.summe{text-align:right;width:68px}
@@ -73,6 +81,7 @@ function cmx_render_cpt_count_widget() {
 			background:#eef6ff;
 			border-color:#9fbddd;
 			color:#135eaf;
+			z-index:1000;
 		}
 		.cmx-add-link:active{transform:translateY(1px)}
 		.cmx-add-link svg{width:16px;height:16px;display:block;fill:currentColor}
@@ -90,7 +99,7 @@ function cmx_render_cpt_count_widget() {
 			font-size:11px;
 			border-radius:4px;
 			box-shadow:0 2px 6px rgba(0,0,0,.15);
-			z-index:10;
+			z-index:1001;
 		}
 		.cmx-add-link[data-tip]:hover::before{
 			content:"";
@@ -100,6 +109,7 @@ function cmx_render_cpt_count_widget() {
 			transform:translateX(-50%);
 			border:6px solid transparent;
 			border-top-color:#1d2327;
+			z-index:1001;
 		}
 	</style>';
 
@@ -132,14 +142,12 @@ function cmx_render_cpt_count_widget() {
 		if ($can_create) {
 			echo '<a class="cmx-add-link" href="' . esc_url($add_new_url) . '"
 						data-tip="' . esc_attr($tip) . '"
-						aria-label="' . esc_attr($tip) . '"
-						title="' . esc_attr($tip) . '">'
+						aria-label="' . esc_attr($tip) . '">'
 						. $svg_plus .
 				  '</a>';
 		} else {
 			echo '<span class="cmx-add-link is-disabled"
-						data-tip="' . esc_attr__('Keine Berechtigung zum Erstellen', 'default') . '"
-						title="' . esc_attr__('Keine Berechtigung zum Erstellen', 'default') . '">'
+						data-tip="' . esc_attr__('Keine Berechtigung zum Erstellen', 'default') . '">'
 						. $svg_plus .
 				  '</span>';
 		}
