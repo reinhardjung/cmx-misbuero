@@ -12,6 +12,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY')) {
 	\define(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY', 'pro_version');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')) {
+	\define(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY', 'carent');
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_settings_option_name')) {
 	function cmx_system_settings_option_name(): string {
 		return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
@@ -110,6 +114,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_pro_version_enabled')) {
 	function cmx_system_is_pro_version_enabled(): bool {
 		$options = (array) \get_option(cmx_system_settings_option_name(), []);
 		return !empty($options[CMX_SYSTEM_PRO_VERSION_KEY]);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_carent_enabled')) {
+	function cmx_system_is_carent_enabled(): bool {
+		$options = (array) \get_option(cmx_system_settings_option_name(), []);
+		return !empty($options[CMX_SYSTEM_CARENT_KEY]);
 	}
 }
 

@@ -520,6 +520,29 @@ function cmx_register_system_tab(): void {
 		);
 
 		\add_settings_field(
+			'cmx_system_carent',
+			'Carent',
+			function (): void {
+				$option_name = \function_exists(__NAMESPACE__ . '\\cmx_system_settings_option_name')
+					? (string) cmx_system_settings_option_name()
+					: 'cmx_einstellungen';
+				$key = \defined(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
+					: 'carent';
+				$options = (array) \get_option($option_name, []);
+				$checked = !empty($options[$key]);
+
+				echo '<label>';
+				echo '<input type="hidden" name="' . \esc_attr($option_name) . '[' . \esc_attr($key) . ']" value="0">';
+				echo '<input type="checkbox" name="' . \esc_attr($option_name) . '[' . \esc_attr($key) . ']" value="1"' . \checked($checked, true, false) . '> ';
+				echo \esc_html__('CaRent aktivieren', 'cmx-misbuero');
+				echo '</label>';
+			},
+			'cmx_tab_system',
+			'cmx_sec_system'
+		);
+
+		\add_settings_field(
 			'cmx_system_max_workplaces',
 			'Max. Arbeitsplätze',
 			function (): void {
@@ -551,15 +574,20 @@ function cmx_register_system_tab(): void {
 	$pro_key = \defined(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY')
 		? (string) \constant(__NAMESPACE__ . '\\CMX_SYSTEM_PRO_VERSION_KEY')
 		: 'pro_version';
+	$carent_key = \defined(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
+		: 'carent';
 
 	if (\function_exists(__NAMESPACE__ . '\\cmx_system_is_cloudmeister_user') && !cmx_system_is_cloudmeister_user()) {
 		$value[$key] = isset($old_value[$key]) ? (int) $old_value[$key] : 1;
 		$value[$pro_key] = !empty($old_value[$pro_key]) ? '1' : '0';
+		$value[$carent_key] = !empty($old_value[$carent_key]) ? '1' : '0';
 		return $value;
 	}
 
 	$max = isset($value[$key]) ? (int) $value[$key] : (isset($old_value[$key]) ? (int) $old_value[$key] : 1);
 	$value[$key] = $max > 0 ? $max : 1;
 	$value[$pro_key] = !empty($value[$pro_key]) ? '1' : '0';
+	$value[$carent_key] = !empty($value[$carent_key]) ? '1' : '0';
 	return $value;
 }, 10, 2);
