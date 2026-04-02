@@ -126,7 +126,7 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 		$header_style .= 'border-bottom:1px solid ' . \esc_attr($header_border) . ';';
 	}
 	$header_logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')
-		? (string) cmx_email_header_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;')
+		? (string) cmx_email_header_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;', true)
 		: '';
 	$header_content_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')
 		? (string) cmx_email_header_content_html($header_kicker_esc, $title_esc, $beleg_date_esc, $preheader_esc, $header_logo_html)

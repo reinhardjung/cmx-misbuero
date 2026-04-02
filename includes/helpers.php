@@ -408,7 +408,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_block_style')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_button_outlook_gap_html')) {
 	function cmx_email_button_outlook_gap_html(string $height = '16px'): string {
-		return '';
+		$height = \trim($height);
+		if ($height === '') {
+			$height = '16px';
+		}
+		return '<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td height="' . \esc_attr($height) . '" style="height:' . \esc_attr($height) . ';line-height:' . \esc_attr($height) . ';font-size:0;">&nbsp;</td></tr></table><![endif]-->';
 	}
 }
 
@@ -424,7 +428,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_enabled')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')) {
-	function cmx_email_header_logo_html(string $img_style = ''): string {
+	function cmx_email_header_logo_html(string $img_style = '', bool $prefer_outlook_embed = false): string {
 		$enabled = \function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_enabled')
 			? cmx_email_header_logo_enabled()
 			: true;
@@ -433,7 +437,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')) {
 		}
 
 		return \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
-			? (string) cmx_email_self_logo_html($img_style)
+			? (string) cmx_email_self_logo_html($img_style, $prefer_outlook_embed)
 			: '';
 	}
 }
@@ -554,6 +558,115 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')) {
+	function cmx_email_self_logo_path(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kl_active_gallery_item')) {
+			$meta_base = \function_exists(__NAMESPACE__ . '\\cmx_kl_meta_base')
+				? (string) cmx_kl_meta_base()
+				: '_cmx_local_image_kontakte';
+			$active_item = cmx_kl_active_gallery_item($post_id, $meta_base);
+			if (\is_array($active_item)) {
+				$active_path = \trim((string) ($active_item['path'] ?? ''));
+				if ($active_path !== '' && \is_readable($active_path)) {
+					return $active_path;
+				}
+			}
+		}
+
+		$local_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_path', true));
+		if ($local_path !== '' && \is_readable($local_path)) {
+			return $local_path;
+		}
+
+		$thumb_id = (int) \get_post_thumbnail_id($post_id);
+		if ($thumb_id > 0) {
+			$thumb_path = (string) \get_attached_file($thumb_id);
+			if ($thumb_path !== '' && \is_readable($thumb_path)) {
+				return $thumb_path;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_cid')) {
+	function cmx_email_self_logo_outlook_cid(): string {
+		return 'cmx-self-logo';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_inline_img_dimension_attributes')) {
+	function cmx_email_inline_img_dimension_attributes(string $img_style = ''): string {
+		$attrs = '';
+		if (\preg_match('/(?:max-width|width)\s*:\s*(\d+)px/i', $img_style, $width_match)) {
+			$attrs .= ' width="' . (int) $width_match[1] . '"';
+		}
+		if (\preg_match('/(?:max-height|height)\s*:\s*(\d+)px/i', $img_style, $height_match)) {
+			$attrs .= ' height="' . (int) $height_match[1] . '"';
+		}
+		return $attrs;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_can_embed_for_outlook')) {
+	function cmx_email_self_logo_can_embed_for_outlook(): bool {
+		$path = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')
+			? (string) cmx_email_self_logo_path()
+			: '';
+		if ($path === '') {
+			return false;
+		}
+
+		$extension = \strtolower((string) \pathinfo($path, PATHINFO_EXTENSION));
+		return \in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'bmp'], true);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_embed_self_logo_for_phpmailer')) {
+	function cmx_email_embed_self_logo_for_phpmailer($phpmailer): void {
+		if (!$phpmailer instanceof \PHPMailer\PHPMailer\PHPMailer) {
+			return;
+		}
+		if (
+			!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_can_embed_for_outlook')
+			|| !cmx_email_self_logo_can_embed_for_outlook()
+		) {
+			return;
+		}
+
+		$logo_path = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')
+			? (string) cmx_email_self_logo_path()
+			: '';
+		if ($logo_path === '' || !\is_readable($logo_path)) {
+			return;
+		}
+
+		$filetype = \wp_check_filetype($logo_path);
+		$mime = \trim((string) ($filetype['type'] ?? ''));
+		if ($mime === '') {
+			$mime = 'image/' . \strtolower((string) \pathinfo($logo_path, PATHINFO_EXTENSION));
+		}
+
+		$cid = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_cid')
+			? (string) cmx_email_self_logo_outlook_cid()
+			: 'cmx-self-logo';
+
+		try {
+			$phpmailer->addEmbeddedImage($logo_path, $cid, \basename($logo_path), 'base64', $mime);
+		} catch (\Throwable $e) {
+			return;
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')) {
 	function cmx_email_self_contact_url(): string {
 		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
@@ -601,7 +714,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
-	function cmx_email_self_logo_html(string $img_style = ''): string {
+	function cmx_email_self_logo_html(string $img_style = '', bool $prefer_outlook_embed = false): string {
 		$logo_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_url')
 			? (string) cmx_email_self_logo_url()
 			: '';
@@ -613,7 +726,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 			$img_style = 'display:block;max-width:180px;width:100%;height:auto;border:0;outline:none;text-decoration:none;';
 		}
 
-		$img_html = '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo" style="' . \esc_attr($img_style) . '">';
+		$dimension_attrs = \function_exists(__NAMESPACE__ . '\\cmx_email_inline_img_dimension_attributes')
+			? (string) cmx_email_inline_img_dimension_attributes($img_style)
+			: '';
+		$default_img_html = '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo"' . $dimension_attrs . ' style="' . \esc_attr($img_style) . '" border="0">';
+		$img_html = $default_img_html;
+		if (
+			$prefer_outlook_embed
+			&& \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_can_embed_for_outlook')
+			&& cmx_email_self_logo_can_embed_for_outlook()
+		) {
+			$outlook_cid = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_cid')
+				? (string) cmx_email_self_logo_outlook_cid()
+				: 'cmx-self-logo';
+			$outlook_img_html = '<!--[if mso]><img src="cid:' . \esc_attr($outlook_cid) . '" alt="Das bin ich Logo"' . $dimension_attrs . ' style="' . \esc_attr($img_style) . '" border="0"><![endif]-->';
+			$img_html = $outlook_img_html . '<!--[if !mso]><!-->' . $default_img_html . '<!--<![endif]-->';
+		}
+
 		$link_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')
 			? (string) cmx_email_self_contact_url()
 			: '';
@@ -626,9 +755,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_block_html')) {
-	function cmx_email_self_logo_block_html(string $table_style = 'margin:0 0 16px 0;', string $img_style = ''): string {
+	function cmx_email_self_logo_block_html(string $table_style = 'margin:0 0 16px 0;', string $img_style = '', bool $prefer_outlook_embed = false): string {
 		$logo_img = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
-			? (string) cmx_email_self_logo_html($img_style)
+			? (string) cmx_email_self_logo_html($img_style, $prefer_outlook_embed)
 			: '';
 		if ($logo_img === '') {
 			return '';
