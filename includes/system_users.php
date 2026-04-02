@@ -159,6 +159,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_assigned_user_label')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_assignable_user_option_label')) {
+	function cmx_system_assignable_user_option_label(\WP_User $user): string {
+		$first_name = \trim((string) \get_user_meta((int) $user->ID, 'first_name', true));
+		$last_name = \trim((string) \get_user_meta((int) $user->ID, 'last_name', true));
+		$label = \trim(\preg_replace('/\s+/', ' ', $first_name . ' ' . $last_name));
+		if ($label === '') {
+			$label = \trim((string) $user->display_name);
+		}
+		if ($label === '') {
+			$label = \trim((string) $user->user_login);
+		}
+		return $label;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_current_admin_post_type')) {
+	function cmx_system_current_admin_post_type(): string {
+		$post_type = isset($_GET['post_type']) ? \sanitize_key((string) \wp_unslash($_GET['post_type'])) : '';
+		if ($post_type !== '') {
+			return $post_type;
+		}
+
+		if (\function_exists('get_current_screen')) {
+			$screen = \get_current_screen();
+			if ($screen && !empty($screen->post_type)) {
+				return \sanitize_key((string) $screen->post_type);
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox')) {
 	function cmx_system_render_assigned_user_metabox(\WP_Post $post): void {
 		\wp_nonce_field('cmx_system_assigned_user_save', 'cmx_system_assigned_user_nonce');
@@ -266,6 +299,95 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 		.wp-list-table td.column-cmx_system_assigned_user{white-space:nowrap}
 	</style>';
 });
+
+\add_action('restrict_manage_posts', function ($post_type = '', $which = 'top'): void {
+	if ((string) $which !== 'top') {
+		return;
+	}
+	if (!cmx_system_should_show_user_assignment()) {
+		return;
+	}
+
+	$post_type = $post_type !== '' ? \sanitize_key((string) $post_type) : cmx_system_current_admin_post_type();
+	if ($post_type === '' || !\in_array($post_type, cmx_system_plugin_post_types(), true)) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_admin_post_type_column_is_visible') && !cmx_admin_post_type_column_is_visible($post_type, 'cmx_system_assigned_user')) {
+		return;
+	}
+
+	$selected = isset($_GET['cmx_system_assigned_user_filter'])
+		? (string) \sanitize_text_field((string) \wp_unslash($_GET['cmx_system_assigned_user_filter']))
+		: '';
+
+	echo '<select name="cmx_system_assigned_user_filter" id="cmx-system-assigned-user-filter">';
+	echo '<option value="">' . \esc_html__('Alle WP-User', 'cmx') . '</option>';
+	echo '<option value="-1"' . \selected($selected, '-1', false) . '>' . \esc_html__('Alle ohne WP-User', 'cmx') . '</option>';
+	foreach (cmx_system_assignable_users() as $user) {
+		if (!$user instanceof \WP_User || !$user->exists()) {
+			continue;
+		}
+		echo '<option value="' . \esc_attr((string) $user->ID) . '"' . \selected($selected, (string) $user->ID, false) . '>' . \esc_html(cmx_system_assignable_user_option_label($user)) . '</option>';
+	}
+	echo '</select>';
+}, 50, 2);
+
+\add_action('pre_get_posts', function (\WP_Query $query): void {
+	if (!\is_admin() || !$query->is_main_query()) {
+		return;
+	}
+	if (!cmx_system_should_show_user_assignment()) {
+		return;
+	}
+
+	$post_type = $query->get('post_type');
+	if (\is_array($post_type)) {
+		$post_type = (string) \reset($post_type);
+	}
+	$post_type = \sanitize_key((string) $post_type);
+	if ($post_type === '') {
+		$post_type = cmx_system_current_admin_post_type();
+	}
+	if ($post_type === '' || !\in_array($post_type, cmx_system_plugin_post_types(), true)) {
+		return;
+	}
+
+	$selected = isset($_GET['cmx_system_assigned_user_filter'])
+		? (string) \sanitize_text_field((string) \wp_unslash($_GET['cmx_system_assigned_user_filter']))
+		: '';
+	if ($selected === '') {
+		return;
+	}
+
+	$meta_query = (array) $query->get('meta_query');
+	if ($selected === '-1') {
+		$meta_query[] = [
+			'relation' => 'OR',
+			[
+				'key'     => CMX_SYSTEM_ASSIGNED_USER_META,
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'key'     => CMX_SYSTEM_ASSIGNED_USER_META,
+				'value'   => '',
+				'compare' => '=',
+			],
+		];
+	} else {
+		$user_id = (int) $selected;
+		if ($user_id <= 0) {
+			return;
+		}
+		$meta_query[] = [
+			'key'     => CMX_SYSTEM_ASSIGNED_USER_META,
+			'value'   => $user_id,
+			'compare' => '=',
+			'type'    => 'NUMERIC',
+		];
+	}
+
+	$query->set('meta_query', $meta_query);
+}, 50);
 
 \add_action('all_admin_notices', function (): void {
 	if (!\is_admin()) {
