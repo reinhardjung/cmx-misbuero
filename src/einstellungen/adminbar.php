@@ -289,6 +289,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup
 		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-id" name="artikel_id" value="">';
 		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-name" name="artikel_name" value="">';
 		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-variant-index" name="artikel_variant_index" value="">';
+		$html .= '<button type="button" class="cmx-adminbar-reset-btn" disabled aria-label="Auswahl zurücksetzen" title="Auswahl zurücksetzen"><span aria-hidden="true">&times;</span></button>';
 		$html .= '<label class="screen-reader-text" for="cmx65-adminbar-kontakt-search">Kontakt</label>';
 		$html .= '<div class="cmx-adminbar-pick">';
 		$html .= '<input type="text" id="cmx65-adminbar-kontakt-search" class="cmx-adminbar-search-input" autocomplete="off" spellcheck="false" placeholder="Kontakt suchen...">';
@@ -429,6 +430,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_styles
 			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id.hover>.ab-item{background:transparent !important;color:inherit !important;}'
 			. '#wpadminbar .cmx-adminbar-beleg-create-form{display:flex;align-items:center;gap:8px;height:32px;margin:0;}'
 			. '#wpadminbar .cmx-adminbar-pick{position:relative;display:flex;align-items:center;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;min-height:26px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.45);font-size:18px;line-height:1;cursor:default;box-shadow:none;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn span{display:block;line-height:1;transform:translateY(-1px);}'
+			. '#wpadminbar .cmx-adminbar-reset-btn:not([disabled]){border-color:#7e1c16;background:#8f211b;color:#fff;cursor:pointer;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn:not([disabled]):hover,#wpadminbar .cmx-adminbar-reset-btn:not([disabled]):focus{background:#771813;color:#ffeb3b;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn[disabled]{opacity:.7;pointer-events:none;}'
 			. '#wpadminbar .cmx-adminbar-search-input{width:180px;height:26px;min-height:26px;margin:0;padding:3px 8px;border:1px solid rgba(255,255,255,.24);border-radius:4px;background:#fff;color:#1d2327;font-size:12px;line-height:1.2;box-shadow:none;outline:none;}'
 			. '#wpadminbar .cmx-adminbar-search-input::placeholder{color:#646970;opacity:1;}'
 			. '#wpadminbar .cmx-adminbar-search-input:focus{border-color:#ffeb3b;box-shadow:0 0 0 1px #ffeb3b;}'
@@ -467,11 +473,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 			var artikelNameInput = document.getElementById('cmx65-adminbar-artikel-name');
 			var artikelVariantIndexInput = document.getElementById('cmx65-adminbar-artikel-variant-index');
 			var artikelList = document.getElementById('cmx65-adminbar-artikel-suggest');
+			var resetBtn = form.querySelector('.cmx-adminbar-reset-btn');
 			var submitBtn = form.querySelector('.cmx-adminbar-create-btn');
 			var kontaktTimer = null;
 			var artikelTimer = null;
 
-			if (!kontaktInput || !kontaktIdInput || !kontaktList || !artikelInput || !artikelIdInput || !artikelNameInput || !artikelVariantIndexInput || !artikelList || !submitBtn) {
+			if (!kontaktInput || !kontaktIdInput || !kontaktList || !artikelInput || !artikelIdInput || !artikelNameInput || !artikelVariantIndexInput || !artikelList || !resetBtn || !submitBtn) {
 				return;
 			}
 
@@ -499,7 +506,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 			}
 
 			function updateSubmit() {
-				submitBtn.disabled = !(toInt(kontaktIdInput.value) > 0 && toInt(artikelIdInput.value) > 0);
+				var hasKontakt = toInt(kontaktIdInput.value) > 0;
+				var hasArtikel = toInt(artikelIdInput.value) > 0;
+				submitBtn.disabled = !(hasKontakt && hasArtikel);
+				resetBtn.disabled = !(hasKontakt || hasArtikel);
 			}
 
 			function focusArtikelPicker(openList) {
@@ -681,6 +691,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 				return '<span class="cmx-adminbar-suggest-title">' + esc(item.label || '') + '</span>';
 			});
 
+			function resetSelections() {
+				kontaktInput.value = '';
+				kontaktIdInput.value = '';
+				artikelInput.value = '';
+				artikelIdInput.value = '';
+				artikelNameInput.value = '';
+				artikelVariantIndexInput.value = '';
+				kontaktNav.reset();
+				artikelNav.reset();
+				updateSubmit();
+			}
+
 			kontaktInput.addEventListener('input', function () {
 				kontaktIdInput.value = '';
 				updateSubmit();
@@ -738,6 +760,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 					if (artikelTimer) window.clearTimeout(artikelTimer);
 					fetchArtikel(artikelInput.value.trim().length >= 2 ? artikelInput.value.trim() : '', artikelNav.render);
 				});
+			});
+
+			resetBtn.addEventListener('click', function (event) {
+				event.preventDefault();
+				if (resetBtn.disabled) {
+					return;
+				}
+				if (kontaktTimer) window.clearTimeout(kontaktTimer);
+				if (artikelTimer) window.clearTimeout(artikelTimer);
+				resetSelections();
+				kontaktInput.focus();
 			});
 
 			form.addEventListener('submit', function (event) {
