@@ -2081,7 +2081,7 @@ function cmx_bank_import_render_log_page(): void {
 		echo '</div>';
 	}
 
-	$page_url = \admin_url('edit.php?post_type=scanner&page=cmx-camt-import-log');
+	$page_url = \admin_url('admin.php?page=cmx-camt-import-log');
 	$ajax_json = (string) \wp_json_encode($ajax_url);
 	$nonce_json = (string) \wp_json_encode($nonce);
 	$page_json = (string) \wp_json_encode($page_url);
@@ -2361,13 +2361,14 @@ HTML;
 }
 
 \add_action('admin_menu', function (): void {
-	\add_submenu_page(
-		'edit.php?post_type=scanner',
+	\add_menu_page(
 		'Banken Import',
 		'Banken',
 		'manage_options',
 		'cmx-camt-import-log',
-		__NAMESPACE__ . '\\cmx_bank_import_render_log_page'
+		__NAMESPACE__ . '\\cmx_bank_import_render_log_page',
+		'dashicons-money-alt',
+		91
 	);
 });
 
@@ -2395,7 +2396,7 @@ HTML;
 	}
 	\check_admin_referer('cmx_camt_clear_state');
 	cmx_camt_state_clear();
-	\wp_safe_redirect(\admin_url('edit.php?post_type=scanner&page=cmx-camt-import-log'));
+	\wp_safe_redirect(\admin_url('admin.php?page=cmx-camt-import-log'));
 	exit;
 });
 
