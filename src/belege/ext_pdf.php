@@ -1114,7 +1114,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_zip')) {
 
 		$zip->close();
 
-		$filename = 'misbuero-chrome-erweiterung.zip';
+		$filename = 'misbuero-pdf-upload-chrome.zip';
 		\header('Content-Type: application/zip');
 		\header('Content-Disposition: attachment; filename="' . $filename . '"');
 		\header('Content-Length: ' . (string) \filesize($tmp));
@@ -1206,7 +1206,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ext_chrome_render_crx')) {
 				throw new \RuntimeException($details !== '' ? $details : 'CRX-Datei konnte nicht erzeugt werden.');
 			}
 
-			$filename = 'misbuero-chrome-erweiterung.crx';
+			$filename = 'misbuero-pdf-upload-chrome.crx';
 			\header('Content-Type: application/x-chrome-extension');
 			\header('Content-Disposition: attachment; filename="' . $filename . '"');
 			\header('Content-Length: ' . (string) \filesize($crx_file));
