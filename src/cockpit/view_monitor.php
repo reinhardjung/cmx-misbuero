@@ -143,6 +143,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				font-size:13px;
 				color:#344054;
 			}
+			.mb-demo-linechart-control--radios{
+				gap:10px;
+				flex-wrap:wrap;
+			}
+			.mb-demo-linechart-radio-group{
+				display:flex;
+				align-items:center;
+				gap:10px;
+				flex-wrap:wrap;
+			}
+			.mb-demo-linechart-radio{
+				display:flex;
+				align-items:center;
+				gap:4px;
+			}
 			.mb-demo-linechart-control select{
 				min-width:112px;
 				padding:6px 28px 6px 10px;
@@ -151,7 +166,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_main_css')) {
 				background:#fff;
 				color:#162033;
 			}
-			.mb-demo-linechart-control input[type="checkbox"]{
+			.mb-demo-linechart-control input[type="checkbox"],
+			.mb-demo-linechart-control input[type="radio"]{
 				margin:0;
 			}
 			.mb-demo-linechart-canvas{
@@ -2075,14 +2091,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 		$selected_quarter = 'all';
 		$selected_month = 'all';
 		$selected_year = (int) ($years[0] ?? \wp_date('Y'));
-		$selected_series = (array) (($chart_payload['paid_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
-		$selected_cost_series = (array) (($chart_payload['paid_cost_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
+		$selected_series = (array) (($chart_payload['series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
+		$selected_cost_series = (array) (($chart_payload['cost_series'] ?? [])[$selected_year] ?? \array_fill(0, 12, 0.0));
 		$selected_total = \array_sum($selected_series);
 		$selected_cost_total = \array_sum($selected_cost_series);
 		$selected_profit_total = $selected_total - $selected_cost_total;
 		$selected_margin_total = $selected_total != 0.0 ? (($selected_profit_total / $selected_total) * 100) : 0.0;
-		$selected_count = (int) (($chart_payload['paid_counts'] ?? [])[$selected_year] ?? 0);
-		$compare_year = isset($chart_payload['paid_series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
+		$selected_count = (int) (($chart_payload['counts'] ?? [])[$selected_year] ?? 0);
+		$compare_year = isset($chart_payload['series'][$selected_year - 1]) ? ($selected_year - 1) : 0;
 		$compare_total = 0.0;
 		?>
 		<div class="wrap mb-dashboard-wrap">
@@ -2141,10 +2157,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 								<input type="checkbox" id="cmx-monitor-chart-compare">
 								<span>vorheriger Zeitraum</span>
 							</label>
-							<label class="mb-demo-linechart-control">
-								<input type="checkbox" id="cmx-monitor-chart-paid-only" checked>
-								<span>nur bezahlte</span>
-							</label>
+							<div class="mb-demo-linechart-control mb-demo-linechart-control--radios" role="radiogroup" aria-label="Belegstatus">
+								<span style="width:50px;"></span>
+								<div class="mb-demo-linechart-radio-group">
+									<label class="mb-demo-linechart-radio">
+										<input type="radio" name="cmx-monitor-chart-payment-status" value="all" checked>
+										<span>alle</span>
+									</label>
+									<label class="mb-demo-linechart-radio">
+										<input type="radio" name="cmx-monitor-chart-payment-status" value="open">
+										<span>offene</span>
+									</label>
+									<label class="mb-demo-linechart-radio">
+										<input type="radio" name="cmx-monitor-chart-payment-status" value="paid">
+										<span>bezahlte</span>
+									</label>
+								</div>
+							</div>
 						</div>
 						<div class="mb-monitor-shared-filters-bottom">
 							<a href="#" id="cmx-monitor-reset-filters" class="mb-monitor-reset-link">Filter zurück setzen</a>
@@ -2447,9 +2476,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var daySelect = document.getElementById("cmx-monitor-chart-day");
 			var typeSelect = document.getElementById("cmx-monitor-chart-type");
 			var compareCheckbox = document.getElementById("cmx-monitor-chart-compare");
-			var paidOnlyCheckbox = document.getElementById("cmx-monitor-chart-paid-only");
+			var paymentStatusInputs = Array.prototype.slice.call(document.querySelectorAll(\'input[name="cmx-monitor-chart-payment-status"]\'));
 			var resetLink = document.getElementById("cmx-monitor-reset-filters");
-			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !daySelect || !typeSelect || !compareCheckbox || !paidOnlyCheckbox || !resetLink || typeof Chart === "undefined") return;
+			if (!canvas || !yearSelect || !quarterSelect || !monthSelect || !daySelect || !typeSelect || !compareCheckbox || !paymentStatusInputs.length || !resetLink || typeof Chart === "undefined") return;
 
 			var ctx = canvas.getContext("2d");
 			if (!ctx) return;
@@ -2507,11 +2536,114 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var overviewMarginCompareEl = document.getElementById("cmx-monitor-overview-margin-compare");
 			var overviewMarginDeltaEl = document.getElementById("cmx-monitor-overview-margin-delta");
 			var typeMeta = Array.isArray(payload.types) ? payload.types : [];
-			var isPaidOnlyActive = function(){
-				return !!(paidOnlyCheckbox && paidOnlyCheckbox.checked);
+			var normalizePaymentStatus = function(value){
+				var normalizedValue = String(value || "all");
+				if (normalizedValue === "open" || normalizedValue === "paid") {
+					return normalizedValue;
+				}
+				return "all";
 			};
-			var activeCollection = function(allKey, paidKey){
-				return isPaidOnlyActive() ? (payload[paidKey] || {}) : (payload[allKey] || {});
+			var getPaymentStatus = function(){
+				for (var i = 0; i < paymentStatusInputs.length; i += 1) {
+					if (paymentStatusInputs[i].checked) {
+						return normalizePaymentStatus(paymentStatusInputs[i].value);
+					}
+				}
+				return "all";
+			};
+			var setPaymentStatus = function(value){
+				var normalizedValue = normalizePaymentStatus(value);
+				paymentStatusInputs.forEach(function(input){
+					input.checked = String(input.value || "") === normalizedValue;
+				});
+			};
+			var matchesPaymentStatus = function(status, isPaid){
+				var normalizedStatus = normalizePaymentStatus(status);
+				if (normalizedStatus === "paid") return !!isPaid;
+				if (normalizedStatus === "open") return !isPaid;
+				return true;
+			};
+			var getSeriesForStatus = function(allSeries, paidSeries){
+				var normalizedStatus = getPaymentStatus();
+				var normalizedAllSeries = Array.isArray(allSeries) ? allSeries : [];
+				var normalizedPaidSeries = Array.isArray(paidSeries) ? paidSeries : [];
+				if (normalizedStatus === "paid") {
+					return normalizedPaidSeries;
+				}
+				if (normalizedStatus === "open") {
+					return differenceSeries(normalizedAllSeries, normalizedPaidSeries, true);
+				}
+				return normalizedAllSeries;
+			};
+			var getCountForStatus = function(allCount, paidCount){
+				var normalizedStatus = getPaymentStatus();
+				var normalizedAllCount = Number(allCount || 0);
+				var normalizedPaidCount = Number(paidCount || 0);
+				if (normalizedStatus === "paid") {
+					return normalizedPaidCount;
+				}
+				if (normalizedStatus === "open") {
+					return Math.max(0, normalizedAllCount - normalizedPaidCount);
+				}
+				return normalizedAllCount;
+			};
+			var getSeriesSource = function(allCollection, paidCollection, allByTypeCollection, paidByTypeCollection, type, year, monthNumber){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = typeof monthNumber === "number" ? Number(monthNumber || 0) : null;
+				var allValue;
+				var paidValue;
+
+				if (selectedType !== "all") {
+					allValue = allByTypeCollection && allByTypeCollection[selectedType] && allByTypeCollection[selectedType][selectedYear]
+						? allByTypeCollection[selectedType][selectedYear]
+						: null;
+					paidValue = paidByTypeCollection && paidByTypeCollection[selectedType] && paidByTypeCollection[selectedType][selectedYear]
+						? paidByTypeCollection[selectedType][selectedYear]
+						: null;
+				} else {
+					allValue = allCollection && allCollection[selectedYear] ? allCollection[selectedYear] : null;
+					paidValue = paidCollection && paidCollection[selectedYear] ? paidCollection[selectedYear] : null;
+				}
+
+				if (normalizedMonth !== null) {
+					allValue = allValue && allValue[normalizedMonth] ? allValue[normalizedMonth] : [];
+					paidValue = paidValue && paidValue[normalizedMonth] ? paidValue[normalizedMonth] : [];
+				}
+
+				return getSeriesForStatus(allValue, paidValue);
+			};
+			var getCountSource = function(allCollection, paidCollection, allByTypeCollection, paidByTypeCollection, type, year, monthNumber, dayIndex){
+				var selectedYear = String(year || "");
+				var selectedType = String(type || "all");
+				var normalizedMonth = typeof monthNumber === "number" ? Number(monthNumber || 0) : null;
+				var normalizedDayIndex = typeof dayIndex === "number" ? Number(dayIndex || 0) : null;
+				var allValue;
+				var paidValue;
+
+				if (selectedType !== "all") {
+					allValue = allByTypeCollection && allByTypeCollection[selectedType] && allByTypeCollection[selectedType][selectedYear]
+						? allByTypeCollection[selectedType][selectedYear]
+						: null;
+					paidValue = paidByTypeCollection && paidByTypeCollection[selectedType] && paidByTypeCollection[selectedType][selectedYear]
+						? paidByTypeCollection[selectedType][selectedYear]
+						: null;
+				} else {
+					allValue = allCollection && allCollection[selectedYear] ? allCollection[selectedYear] : null;
+					paidValue = paidCollection && paidCollection[selectedYear] ? paidCollection[selectedYear] : null;
+				}
+
+				if (normalizedMonth !== null) {
+					allValue = allValue && typeof allValue[normalizedMonth] !== "undefined" ? allValue[normalizedMonth] : 0;
+					paidValue = paidValue && typeof paidValue[normalizedMonth] !== "undefined" ? paidValue[normalizedMonth] : 0;
+				}
+
+				if (normalizedDayIndex !== null) {
+					allValue = allValue && typeof allValue[normalizedDayIndex] !== "undefined" ? allValue[normalizedDayIndex] : 0;
+					paidValue = paidValue && typeof paidValue[normalizedDayIndex] !== "undefined" ? paidValue[normalizedDayIndex] : 0;
+				}
+
+				return getCountForStatus(allValue, paidValue);
 			};
 			var formatNumber = function(value){
 				return new Intl.NumberFormat("de-CH", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value || 0));
@@ -2548,11 +2680,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					return sum + (Number(value || 0) !== 0 ? 1 : 0);
 				}, 0);
 			};
-			var differenceSeries = function(primary, secondary){
+			var differenceSeries = function(primary, secondary, clampToZero){
 				var length = Math.max(Array.isArray(primary) ? primary.length : 0, Array.isArray(secondary) ? secondary.length : 0);
 				var out = [];
 				for (var i = 0; i < length; i += 1) {
-					out.push(Number((primary && primary[i]) || 0) - Number((secondary && secondary[i]) || 0));
+					var value = Number((primary && primary[i]) || 0) - Number((secondary && secondary[i]) || 0);
+					out.push(clampToZero ? Math.max(0, value) : value);
 				}
 				return out;
 			};
@@ -2578,165 +2711,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				return "";
 			};
 			var getSeriesForYear = function(year, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var byTypeCollection = activeCollection("series_by_type", "paid_series_by_type");
-				var collection = activeCollection("series", "paid_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
-						? byTypeCollection[selectedType][selectedYear]
-						: [];
-				}
-				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+				return getSeriesSource(payload.series, payload.paid_series, payload.series_by_type, payload.paid_series_by_type, type, year);
 			};
 			var getCostSeriesForYear = function(year, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var byTypeCollection = activeCollection("cost_series_by_type", "paid_cost_series_by_type");
-				var collection = activeCollection("cost_series", "paid_cost_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
-						? byTypeCollection[selectedType][selectedYear]
-						: [];
-				}
-				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+				return getSeriesSource(payload.cost_series, payload.paid_cost_series, payload.cost_series_by_type, payload.paid_cost_series_by_type, type, year);
 			};
 			var getIncomeSeriesForYear = function(year, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var byTypeCollection = activeCollection("income_series_by_type", "paid_income_series_by_type");
-				var collection = activeCollection("income_series", "paid_income_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
-						? byTypeCollection[selectedType][selectedYear]
-						: [];
-				}
-				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+				return getSeriesSource(payload.income_series, payload.paid_income_series, payload.income_series_by_type, payload.paid_income_series_by_type, type, year);
 			};
 			var getExpenseSeriesForYear = function(year, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var byTypeCollection = activeCollection("expense_series_by_type", "paid_expense_series_by_type");
-				var collection = activeCollection("expense_series", "paid_expense_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
-						? byTypeCollection[selectedType][selectedYear]
-						: [];
-				}
-				return collection && collection[selectedYear] ? collection[selectedYear] : [];
+				return getSeriesSource(payload.expense_series, payload.paid_expense_series, payload.expense_series_by_type, payload.paid_expense_series_by_type, type, year);
 			};
 			var getDailySeriesForMonth = function(year, monthNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
-				var byTypeCollection = activeCollection("daily_series_by_type", "paid_daily_series_by_type");
-				var collection = activeCollection("daily_series", "paid_daily_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						: [];
-				}
-				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
-					? collection[selectedYear][normalizedMonth]
-					: [];
+				return getSeriesSource(payload.daily_series, payload.paid_daily_series, payload.daily_series_by_type, payload.paid_daily_series_by_type, type, year, monthNumber);
 			};
 			var getDailyCostSeriesForMonth = function(year, monthNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
-				var byTypeCollection = activeCollection("daily_cost_series_by_type", "paid_daily_cost_series_by_type");
-				var collection = activeCollection("daily_cost_series", "paid_daily_cost_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						: [];
-				}
-				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
-					? collection[selectedYear][normalizedMonth]
-					: [];
+				return getSeriesSource(payload.daily_cost_series, payload.paid_daily_cost_series, payload.daily_cost_series_by_type, payload.paid_daily_cost_series_by_type, type, year, monthNumber);
 			};
 			var getDailyIncomeSeriesForMonth = function(year, monthNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
-				var byTypeCollection = activeCollection("daily_income_series_by_type", "paid_daily_income_series_by_type");
-				var collection = activeCollection("daily_income_series", "paid_daily_income_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						: [];
-				}
-				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
-					? collection[selectedYear][normalizedMonth]
-					: [];
+				return getSeriesSource(payload.daily_income_series, payload.paid_daily_income_series, payload.daily_income_series_by_type, payload.paid_daily_income_series_by_type, type, year, monthNumber);
 			};
 			var getDailyExpenseSeriesForMonth = function(year, monthNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
-				var byTypeCollection = activeCollection("daily_expense_series_by_type", "paid_daily_expense_series_by_type");
-				var collection = activeCollection("daily_expense_series", "paid_daily_expense_series");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						? byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						: [];
-				}
-				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
-					? collection[selectedYear][normalizedMonth]
-					: [];
+				return getSeriesSource(payload.daily_expense_series, payload.paid_daily_expense_series, payload.daily_expense_series_by_type, payload.paid_daily_expense_series_by_type, type, year, monthNumber);
 			};
 			var getCountForYear = function(year, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var byTypeCollection = activeCollection("counts_by_type", "paid_counts_by_type");
-				var collection = activeCollection("counts", "paid_counts");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear]
-						? Number(byTypeCollection[selectedType][selectedYear])
-						: 0;
-				}
-				return collection && collection[selectedYear] ? Number(collection[selectedYear]) : 0;
+				return getCountSource(payload.counts, payload.paid_counts, payload.counts_by_type, payload.paid_counts_by_type, type, year);
 			};
 			var getCountForMonth = function(year, monthNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
-				var byTypeCollection = activeCollection("counts_monthly_by_type", "paid_counts_monthly_by_type");
-				var collection = activeCollection("counts_monthly", "paid_counts_monthly");
-				if (selectedType !== "all") {
-					return byTypeCollection && byTypeCollection[selectedType] && byTypeCollection[selectedType][selectedYear] && byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						? Number(byTypeCollection[selectedType][selectedYear][normalizedMonth])
-						: 0;
-				}
-				return collection && collection[selectedYear] && collection[selectedYear][normalizedMonth]
-					? Number(collection[selectedYear][normalizedMonth])
-					: 0;
+				return getCountSource(payload.counts_monthly, payload.paid_counts_monthly, payload.counts_monthly_by_type, payload.paid_counts_monthly_by_type, type, year, monthNumber);
 			};
 			var getCountForDay = function(year, monthNumber, dayNumber, type){
-				var selectedYear = String(year || "");
-				var selectedType = String(type || "all");
-				var normalizedMonth = Number(monthNumber || 0);
 				var normalizedDayIndex = Number(dayNumber || 0) - 1;
-				var byTypeCollection = activeCollection("counts_daily_by_type", "paid_counts_daily_by_type");
-				var collection = activeCollection("counts_daily", "paid_counts_daily");
 				if (normalizedDayIndex < 0 || normalizedDayIndex > 30) {
 					return 0;
 				}
-				if (selectedType !== "all") {
-					return byTypeCollection
-						&& byTypeCollection[selectedType]
-						&& byTypeCollection[selectedType][selectedYear]
-						&& byTypeCollection[selectedType][selectedYear][normalizedMonth]
-						&& typeof byTypeCollection[selectedType][selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
-						? Number(byTypeCollection[selectedType][selectedYear][normalizedMonth][normalizedDayIndex])
-						: 0;
-				}
-				return collection
-					&& collection[selectedYear]
-					&& collection[selectedYear][normalizedMonth]
-					&& typeof collection[selectedYear][normalizedMonth][normalizedDayIndex] !== "undefined"
-					? Number(collection[selectedYear][normalizedMonth][normalizedDayIndex])
-					: 0;
+				return getCountSource(payload.counts_daily, payload.paid_counts_daily, payload.counts_daily_by_type, payload.paid_counts_daily_by_type, type, year, monthNumber, normalizedDayIndex);
 			};
 			var getQuarterMonths = function(quarter){
 				switch (String(quarter || "all")) {
@@ -3000,6 +3009,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				daySelect.value = hasValue ? normalizedValue : "all";
 			};
 			var getFilters = function(){
+				var paymentStatus = getPaymentStatus();
 				return {
 					day: String(daySelect.value || "all"),
 					year: String(yearSelect.value || ""),
@@ -3007,7 +3017,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					month: String(monthSelect.value || "all"),
 					type: String(typeSelect.value || "all"),
 					compare: !!compareCheckbox.checked,
-					paidOnly: isPaidOnlyActive()
+					paymentStatus: paymentStatus,
+					paidOnly: paymentStatus === "paid"
 				};
 			};
 			window.cmxMonitorGetFilters = getFilters;
@@ -3019,14 +3030,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var compareYearFor = function(selectedYear, selectedType){
 				var previousYear = String(Number(selectedYear || 0) - 1);
 				if (!previousYear || previousYear === "0") return "";
-				var seriesByType = activeCollection("series_by_type", "paid_series_by_type");
-				var series = activeCollection("series", "paid_series");
-				if (String(selectedType || "all") !== "all") {
-					return seriesByType && seriesByType[String(selectedType || "")] && seriesByType[String(selectedType || "")][previousYear]
-						? previousYear
-						: "";
-				}
-				return series && series[previousYear] ? previousYear : "";
+				var previousCount = getCountForYear(previousYear, selectedType);
+				return previousCount > 0 ? previousYear : "";
 			};
 			var daysInMonth = function(year, month){
 				var y = Number(year || 0);
@@ -3048,6 +3053,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				var selectedMonth = filters.month;
 				var selectedDay = filters.day;
 				var selectedType = filters.type;
+				var paymentStatus = normalizePaymentStatus(filters.paymentStatus);
 				var selectedTypeLabel = typeLabelFor(selectedType);
 				var revenueSeries = Array.isArray(getSeriesForYear(selectedYear, selectedType)) ? getSeriesForYear(selectedYear, selectedType).slice() : [];
 				var incomeSeries = Array.isArray(getIncomeSeriesForYear(selectedYear, selectedType)) ? getIncomeSeriesForYear(selectedYear, selectedType).slice() : [];
@@ -3222,7 +3228,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 
 				return {
 					labels: labels,
-					paidOnly: !!filters.paidOnly,
+					paymentStatus: paymentStatus,
+					paidOnly: paymentStatus === "paid",
 					selectedYear: selectedYear,
 					selectedQuarter: selectedQuarter,
 					selectedMonth: selectedMonth,
@@ -3843,7 +3850,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderBelegTable = function(context){
 				if (!belegRowsEl || !belegEmptyEl) return;
 
-				var paidOnly = !!context.paidOnly;
+				var paymentStatus = normalizePaymentStatus(context.paymentStatus);
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3858,7 +3865,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					var isPaid = !!row.is_paid;
-					if (paidOnly && !isPaid) return;
+					if (!matchesPaymentStatus(paymentStatus, isPaid)) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -3925,7 +3932,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderArticleTable = function(context){
 				if (!articleRowsEl || !articleEmptyEl) return;
 
-				var paidOnly = !!context.paidOnly;
+				var paymentStatus = normalizePaymentStatus(context.paymentStatus);
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -3940,7 +3947,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					var isPaid = !!row.is_paid;
-					if (paidOnly && !isPaid) return;
+					if (!matchesPaymentStatus(paymentStatus, isPaid)) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -4002,7 +4009,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderCustomerTable = function(context){
 				if (!customerRowsEl || !customerEmptyEl) return;
 
-				var paidOnly = !!context.paidOnly;
+				var paymentStatus = normalizePaymentStatus(context.paymentStatus);
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -4017,7 +4024,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					var isPaid = !!row.is_paid;
-					if (paidOnly && !isPaid) return;
+					if (!matchesPaymentStatus(paymentStatus, isPaid)) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -4084,7 +4091,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 			var renderProjectTable = function(context){
 				if (!projectRowsEl || !projectEmptyEl) return;
 
-				var paidOnly = !!context.paidOnly;
+				var paymentStatus = normalizePaymentStatus(context.paymentStatus);
 				var selectedYear = String(context.selectedYear || "");
 				var selectedQuarter = String(context.selectedQuarter || "all");
 				var selectedMonth = String(context.selectedMonth || "all");
@@ -4099,7 +4106,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 					var rowDay = Number(row.day || 0);
 					var rowType = String(row.type || "");
 					var isPaid = !!row.is_paid;
-					if (paidOnly && !isPaid) return;
+					if (!matchesPaymentStatus(paymentStatus, isPaid)) return;
 					if (rowYear !== selectedYear) return;
 					if (selectedType !== "all" && rowType !== selectedType) return;
 					if (selectedMonth !== "all") {
@@ -4334,10 +4341,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				updateDashboard();
 				emitFiltersChanged();
 			});
-			paidOnlyCheckbox.addEventListener("change", function(){
-				refreshFilterOptions();
-				updateDashboard();
-				emitFiltersChanged();
+			paymentStatusInputs.forEach(function(input){
+				input.addEventListener("change", function(){
+					refreshFilterOptions();
+					updateDashboard();
+					emitFiltersChanged();
+				});
 			});
 			compareCheckbox.addEventListener("change", function(){
 				updateDashboard();
@@ -4353,7 +4362,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_main_page')) {
 				monthSelect.value = "all";
 				typeSelect.value = "all";
 				compareCheckbox.checked = false;
-				paidOnlyCheckbox.checked = true;
+				setPaymentStatus("all");
 				refreshFilterOptions();
 				updateDashboard();
 				emitFiltersChanged();
