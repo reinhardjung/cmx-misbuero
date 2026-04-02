@@ -93,6 +93,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 		return [
 			[
 				'id'        => 'legacy_zkb',
+				'name'      => '',
+				'type'      => '',
 				'bank_name' => 'ZKB',
 				'recipient' => '',
 				'iban'      => '',
@@ -102,6 +104,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 			],
 			[
 				'id'        => 'legacy_ubs',
+				'name'      => '',
+				'type'      => '',
 				'bank_name' => 'UBS',
 				'recipient' => '',
 				'iban'      => '',
@@ -111,6 +115,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 			],
 			[
 				'id'        => 'legacy_migros',
+				'name'      => '',
+				'type'      => '',
 				'bank_name' => 'Migros Bank',
 				'recipient' => '',
 				'iban'      => '',
@@ -120,6 +126,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 			],
 			[
 				'id'        => 'legacy_eisen',
+				'name'      => '',
+				'type'      => '',
 				'bank_name' => 'Raiffeisen',
 				'recipient' => '',
 				'iban'      => '',
@@ -131,10 +139,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_default_presets')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_account_type_options')) {
+	function cmx_bank_account_type_options(): array {
+		$types = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
+			$types = (array) cmx_ini_get_value('Diverses', 'Kontotypen');
+		}
+
+		$types = \array_values(\array_filter(\array_map(static function ($value): string {
+			return \trim((string) $value);
+		}, $types), static function (string $value): bool {
+			return $value !== '';
+		}));
+
+		if ($types !== []) {
+			return $types;
+		}
+
+		return ['Auto', 'Geschäftskonto', 'Lohn', 'Miete Privat', 'Kapital', 'Liegenschaft', 'Hobby', 'Rente', 'Sparen', 'Spesen Steuern', 'Taschengeld'];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 	function cmx_normalize_bank_list($raw): array {
 		$rows = \is_array($raw) ? $raw : [];
 		$normalized = [];
+		$account_types = cmx_bank_account_type_options();
 		$index = 1;
 
 		foreach ($rows as $row) {
@@ -142,14 +172,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 				continue;
 			}
 
+			$name = \trim((string) ($row['name'] ?? ''));
+			$type = \trim((string) ($row['type'] ?? ''));
 			$bank_name = \trim((string) ($row['bank_name'] ?? ''));
 			$recipient = \trim((string) ($row['recipient'] ?? ''));
 			$iban = \trim((string) ($row['iban'] ?? ''));
 			$qr_iban = \trim((string) ($row['qr_iban'] ?? ''));
 			$bic = \trim((string) ($row['bic'] ?? ''));
 			$api = \trim((string) ($row['api'] ?? ''));
+			if ($type !== '' && !\in_array($type, $account_types, true)) {
+				$type = '';
+			}
 
-			if ($bank_name === '' && $recipient === '' && $iban === '' && $qr_iban === '' && $bic === '' && $api === '') {
+			if ($name === '' && $type === '' && $bank_name === '' && $recipient === '' && $iban === '' && $qr_iban === '' && $bic === '' && $api === '') {
 				continue;
 			}
 
@@ -160,6 +195,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 
 			$normalized[] = [
 				'id'        => $id,
+				'name'      => $name,
+				'type'      => $type,
 				'bank_name' => $bank_name,
 				'recipient' => $recipient,
 				'iban'      => $iban,
@@ -199,6 +236,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_legacy_bank_list')) {
 
 			$entry = [
 				'id'        => 'legacy_' . $legacy_key,
+				'name'      => '',
+				'type'      => '',
 				'bank_name' => $bank_name,
 				'recipient' => $recipient,
 				'iban'      => $iban,
@@ -299,6 +338,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 	function cmx_render_bank_row_markup(string $index, array $bank, string $recipient_placeholder): string {
 		$defaults = [
 			'id'        => '',
+			'name'      => '',
+			'type'      => '',
 			'bank_name' => '',
 			'recipient' => '',
 			'iban'      => '',
@@ -307,11 +348,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 			'api'       => '',
 		];
 		$bank = \array_merge($defaults, $bank);
-		$row_title = \trim((string) $bank['bank_name']);
+		$row_title = \trim((string) $bank['name']);
+		if ($row_title === '') {
+			$row_title = \trim((string) $bank['bank_name']);
+		}
 		if ($row_title === '') {
 			$row_title = 'Neue Bank';
 		}
 		$name_base = \esc_attr(CMX_SETTINGS_MAIN . '[banken_liste][' . $index . ']');
+		$account_types = cmx_bank_account_type_options();
 
 		ob_start();
 		?>
@@ -326,6 +371,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 			<input type="hidden" data-field="api" name="<?php echo $name_base; ?>[api]" value="<?php echo \esc_attr((string) $bank['api']); ?>">
 			<div class="cmx-bank-grid">
 				<p>
+					<label>Name</label>
+					<input type="text" class="regular-text cmx-bank-title-input" data-field="name" name="<?php echo $name_base; ?>[name]" value="<?php echo \esc_attr((string) $bank['name']); ?>" placeholder="Name">
+				</p>
+				<p>
+					<label>Typ</label>
+					<select class="regular-text" data-field="type" name="<?php echo $name_base; ?>[type]">
+						<option value="">Bitte wählen</option>
+						<?php foreach ($account_types as $account_type): ?>
+							<option value="<?php echo \esc_attr($account_type); ?>" <?php selected((string) $bank['type'], $account_type); ?>><?php echo \esc_html($account_type); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</p>
+				<p class="cmx-bank-grid-bankname">
 					<label>Bankname</label>
 					<input type="text" class="regular-text cmx-bank-title-input" data-field="bank_name" name="<?php echo $name_base; ?>[bank_name]" value="<?php echo \esc_attr((string) $bank['bank_name']); ?>" placeholder="Bankname">
 				</p>
@@ -341,7 +399,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 					<label>QR-IBAN</label>
 					<input type="text" class="regular-text" data-field="qr_iban" name="<?php echo $name_base; ?>[qr_iban]" value="<?php echo \esc_attr((string) $bank['qr_iban']); ?>" placeholder="CHxx xxxx xxxx xxxx xxxx x">
 				</p>
-				<p class="cmx-bank-grid-wide">
+				<p class="cmx-bank-grid-bic">
 					<label>BIC / SWIFT</label>
 					<input type="text" class="regular-text" data-field="bic" name="<?php echo $name_base; ?>[bic]" value="<?php echo \esc_attr((string) $bank['bic']); ?>" placeholder="BIC / SWIFT">
 				</p>
@@ -428,6 +486,8 @@ function cmx_render_banken_list_field(): void {
 	if (empty($bank_list)) {
 		$bank_list = [[
 			'id'        => 'bank_1',
+			'name'      => '',
+			'type'      => '',
 			'bank_name' => '',
 			'recipient' => $recipient_placeholder,
 			'iban'      => '',
@@ -451,6 +511,8 @@ function cmx_render_banken_list_field(): void {
 	echo '<p><button type="button" class="button button-secondary" id="cmx-bank-add">Bank hinzufügen</button></p>';
 	echo '<template id="cmx-bank-row-template">' . cmx_render_bank_row_markup('__INDEX__', [
 		'id'        => '',
+		'name'      => '',
+		'type'      => '',
 		'bank_name' => '',
 		'recipient' => $recipient_placeholder,
 		'iban'      => '',
@@ -459,19 +521,20 @@ function cmx_render_banken_list_field(): void {
 		'api'       => '',
 	], $recipient_placeholder) . '</template>';
 
-	echo '<style>
-		.cmx-bank-list-root{max-width:1400px}
-		.cmx-bank-list{display:block;margin-top:12px}
-		.cmx-bank-item{border:1px solid #dcdcde;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.03);margin:0 0 12px}
-		.cmx-bank-item:last-child{margin-bottom:0}
-		.cmx-bank-item-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #eef0f2}
-		.cmx-bank-handle{cursor:move;color:#667085}
-		.cmx-bank-item-title{flex:1 1 auto}
-		.cmx-bank-active-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#e8f3ff;color:#1858a8;font-size:11px;font-weight:600}
-		.cmx-bank-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:14px}
+		echo '<style>
+			.cmx-bank-list-root{max-width:1560px}
+			.cmx-bank-list{display:block;margin-top:12px}
+			.cmx-bank-item{border:1px solid #dcdcde;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.03);margin:0 0 12px}
+			.cmx-bank-item:last-child{margin-bottom:0}
+			.cmx-bank-item-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #eef0f2}
+			.cmx-bank-handle{cursor:move;color:#667085}
+			.cmx-bank-item-title{flex:1 1 auto}
+			.cmx-bank-active-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#e8f3ff;color:#1858a8;font-size:11px;font-weight:600}
+			.cmx-bank-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.05fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.85fr);gap:14px;padding:14px}
 		.cmx-bank-grid p{margin:0}
 		.cmx-bank-grid label{display:block;margin-bottom:4px;font-weight:600}
 		.cmx-bank-grid .regular-text{width:100%;max-width:none}
+		.cmx-bank-grid select.regular-text{min-height:30px}
 		.cmx-bank-sort-placeholder{border:1px dashed #9aa4b2;border-radius:10px;background:#f8fafc;height:112px;margin-bottom:12px}
 		.cmx-bank-item.ui-sortable-helper{box-shadow:0 8px 18px rgba(15,23,42,.12)}
 		@media (max-width: 1200px){
@@ -501,8 +564,11 @@ function cmx_render_banken_list_field(): void {
 				item.querySelectorAll("[data-field]").forEach(function(input){
 					input.name = fieldName(index, input.dataset.field || "");
 				});
-				const titleInput = item.querySelector(".cmx-bank-title-input");
-				const title = titleInput && titleInput.value.trim() !== "" ? titleInput.value.trim() : "Bank " + (index + 1);
+				const nameInput = item.querySelector("[data-field=\"name\"]");
+				const bankNameInput = item.querySelector("[data-field=\"bank_name\"]");
+				const title = nameInput && nameInput.value.trim() !== ""
+					? nameInput.value.trim()
+					: (bankNameInput && bankNameInput.value.trim() !== "" ? bankNameInput.value.trim() : "Bank " + (index + 1));
 				const titleEl = item.querySelector(".cmx-bank-item-title");
 				if (titleEl) titleEl.textContent = title;
 				const badge = item.querySelector(".cmx-bank-active-badge");
@@ -526,13 +592,12 @@ function cmx_render_banken_list_field(): void {
 						renumber();
 					});
 				}
-				const titleInput = item.querySelector(".cmx-bank-title-input");
-				if (titleInput) {
+				item.querySelectorAll(".cmx-bank-title-input").forEach(function(titleInput){
 					titleInput.addEventListener("input", function(){
 						const rowIndex = Number(item.dataset.index || 0);
 						updateRowState(item, rowIndex);
 					});
-				}
+				});
 			}
 
 			function addRow() {
@@ -588,9 +653,12 @@ function cmx_get_active_bank(): ?array {
 	}
 
 	$active = (array) $banks[0];
-	$name = \trim((string) ($active['bank_name'] ?? ''));
-	if ($name === '') {
-		$name = 'Bank';
+	$display_name = \trim((string) ($active['name'] ?? ''));
+	if ($display_name === '') {
+		$display_name = \trim((string) ($active['bank_name'] ?? ''));
+	}
+	if ($display_name === '') {
+		$display_name = 'Bank';
 	}
 
 	$iban = \trim((string) ($active['iban'] ?? ''));
@@ -598,13 +666,16 @@ function cmx_get_active_bank(): ?array {
 
 	return [
 		'key'          => (string) ($active['id'] ?? 'bank_1'),
-		'name'         => $name,
+		'account_name' => (string) ($active['name'] ?? ''),
+		'type'         => (string) ($active['type'] ?? ''),
+		'name'         => $display_name,
+		'bank_name'    => (string) ($active['bank_name'] ?? ''),
 		'recipient'    => (string) ($active['recipient'] ?? ''),
 		'iban'         => $iban,
 		'qr_iban'      => $qr_iban,
 		'bic'          => (string) ($active['bic'] ?? ''),
 		'api'          => (string) ($active['api'] ?? ''),
-		'label'        => $name,
+		'label'        => $display_name,
 		'qr_supported' => ($qr_iban !== '' || (\preg_match('/^CH/i', $iban) === 1)),
 	];
 }
