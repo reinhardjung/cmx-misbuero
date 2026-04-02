@@ -322,7 +322,7 @@ function cmx_register_vorgaben_belege_trustee_field(): void {
 function cmx_register_vorgaben_belege_geplante_saetze_field(): void {
 	\add_settings_field(
 		'belege_geplante_saetze',
-		'geplante Steuersätze',
+		'<span>geplante Steuersätze</span><span style="display:block;margin-top:4px;font-size:12px;font-weight:400;color:#646970;">Vermögenssteuer?</span>',
 		function () {
 			$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
 			$steuer = isset($opts['belege_geplante_steuer']) ? (string) $opts['belege_geplante_steuer'] : '';
