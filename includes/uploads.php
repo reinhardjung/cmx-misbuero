@@ -507,11 +507,18 @@ function cmx_belege_upload_file(): void {
 	]);
 
 	if (!isset($uploaded['file'])) {
+		$error_message = '';
+		if (isset($uploaded['error'])) {
+			$error_message = \trim(\wp_strip_all_tags((string) $uploaded['error']));
+		}
+		if ($error_message === '') {
+			$error_message = 'Upload fehlgeschlagen.';
+		}
 		remove_filter('big_image_size_threshold', $no_big_image, 10);
 		remove_filter('intermediate_image_sizes_advanced', $no_sizes_filter);
 		remove_filter('intermediate_image_sizes', $no_sizes_filter);
 		remove_filter('upload_dir', $upload_filter);
-		wp_send_json_error(['message' => 'Upload fehlgeschlagen.'], 500);
+		wp_send_json_error(['message' => $error_message], 500);
 	}
 
 	add_filter('wp_generate_attachment_metadata', $no_meta_sizes_filter, 10, 2);
