@@ -160,6 +160,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_account_type_options')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_format_swiss_iban')) {
+	function cmx_format_swiss_iban(string $value): string {
+		$clean = \strtoupper(\preg_replace('/[^A-Z0-9]+/', '', \trim($value)) ?? '');
+		if ($clean === '') {
+			return '';
+		}
+
+		$clean = \substr($clean, 0, 21);
+
+		return \trim((string) \preg_replace('/(.{4})(?=.)/', '$1 ', $clean));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 	function cmx_normalize_bank_list($raw): array {
 		$rows = \is_array($raw) ? $raw : [];
@@ -176,8 +189,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_normalize_bank_list')) {
 			$type = \trim((string) ($row['type'] ?? ''));
 			$bank_name = \trim((string) ($row['bank_name'] ?? ''));
 			$recipient = \trim((string) ($row['recipient'] ?? ''));
-			$iban = \trim((string) ($row['iban'] ?? ''));
-			$qr_iban = \trim((string) ($row['qr_iban'] ?? ''));
+			$iban = cmx_format_swiss_iban((string) ($row['iban'] ?? ''));
+			$qr_iban = cmx_format_swiss_iban((string) ($row['qr_iban'] ?? ''));
 			$bic = \trim((string) ($row['bic'] ?? ''));
 			$api = \trim((string) ($row['api'] ?? ''));
 			if ($type !== '' && !\in_array($type, $account_types, true)) {
@@ -221,8 +234,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_get_legacy_bank_list')) {
 		foreach ($definitions as $legacy_key => $definition) {
 			$raw_bank_name = \trim((string) ($options[$definition['bank_name']] ?? ''));
 			$recipient = \trim((string) ($options[$definition['recipient']] ?? ''));
-			$iban = \trim((string) ($options[$definition['iban']] ?? ''));
-			$qr_iban = \trim((string) ($options[$definition['qr_iban']] ?? ''));
+			$iban = cmx_format_swiss_iban((string) ($options[$definition['iban']] ?? ''));
+			$qr_iban = cmx_format_swiss_iban((string) ($options[$definition['qr_iban']] ?? ''));
 			$bic = \trim((string) ($options[$definition['bic']] ?? ''));
 			$api = \trim((string) ($options[$definition['api']] ?? ''));
 			$is_enabled = !empty($options[$definition['enabled']]);
@@ -393,11 +406,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 				</p>
 				<p>
 					<label>IBAN</label>
-					<input type="text" class="regular-text" data-field="iban" name="<?php echo $name_base; ?>[iban]" value="<?php echo \esc_attr((string) $bank['iban']); ?>" placeholder="CHxx xxxx xxxx xxxx xxxx x">
+					<input type="text" class="regular-text cmx-bank-iban-input" data-field="iban" name="<?php echo $name_base; ?>[iban]" value="<?php echo \esc_attr(cmx_format_swiss_iban((string) $bank['iban'])); ?>" placeholder="CHxx xxxx xxxx xxxx xxxx x" maxlength="26" spellcheck="false" autocapitalize="characters" autocomplete="off">
 				</p>
 				<p>
 					<label>QR-IBAN</label>
-					<input type="text" class="regular-text" data-field="qr_iban" name="<?php echo $name_base; ?>[qr_iban]" value="<?php echo \esc_attr((string) $bank['qr_iban']); ?>" placeholder="CHxx xxxx xxxx xxxx xxxx x">
+					<input type="text" class="regular-text cmx-bank-iban-input" data-field="qr_iban" name="<?php echo $name_base; ?>[qr_iban]" value="<?php echo \esc_attr(cmx_format_swiss_iban((string) $bank['qr_iban'])); ?>" placeholder="CHxx xxxx xxxx xxxx xxxx x" maxlength="26" spellcheck="false" autocapitalize="characters" autocomplete="off">
 				</p>
 				<p class="cmx-bank-grid-bic">
 					<label>BIC / SWIFT</label>
@@ -464,6 +477,9 @@ function cmx_register_banken_tab(): void {
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, static function ($new, $old) {
 	if (!\is_array($new)) {
 		return $new;
+	}
+	if (\array_key_exists('banken_liste', $new) || !empty($new['banken_liste_present'])) {
+		$new['banken_liste'] = cmx_normalize_bank_list($new['banken_liste'] ?? []);
 	}
 	if (\array_key_exists('payrexx_instanz', $new)) {
 		$new['payrexx_instanz'] = \sanitize_text_field((string) $new['payrexx_instanz']);
@@ -559,6 +575,14 @@ function cmx_render_banken_list_field(): void {
 				return ' . \wp_json_encode(CMX_SETTINGS_MAIN) . ' + "[banken_liste][" + index + "][" + field + "]";
 			}
 
+			function formatSwissIban(value) {
+				const clean = String(value || "")
+					.toUpperCase()
+					.replace(/[^A-Z0-9]+/g, "")
+					.slice(0, 21);
+				return clean.replace(/(.{4})(?=.)/g, "$1 ").trim();
+			}
+
 			function updateRowState(item, index) {
 				item.dataset.index = String(index);
 				item.querySelectorAll("[data-field]").forEach(function(input){
@@ -597,6 +621,14 @@ function cmx_render_banken_list_field(): void {
 						const rowIndex = Number(item.dataset.index || 0);
 						updateRowState(item, rowIndex);
 					});
+				});
+				item.querySelectorAll(".cmx-bank-iban-input").forEach(function(ibanInput){
+					const syncIban = function(){
+						ibanInput.value = formatSwissIban(ibanInput.value);
+					};
+					syncIban();
+					ibanInput.addEventListener("input", syncIban);
+					ibanInput.addEventListener("blur", syncIban);
 				});
 			}
 
