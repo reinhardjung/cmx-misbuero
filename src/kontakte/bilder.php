@@ -202,14 +202,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_active_gallery_item')) {
 			return null;
 		}
 
+		$default_item = $gallery[0];
 		$today = \current_time('Y-m-d');
-		foreach ($gallery as $item) {
+		// The first logo is the default fallback. Later logos can override it via date range.
+		foreach (\array_slice($gallery, 1) as $item) {
 			if (cmx_kl_gallery_item_matches_date($item, $today)) {
 				return $item;
 			}
 		}
 
-		return $gallery[0];
+		return $default_item;
 	}
 }
 
