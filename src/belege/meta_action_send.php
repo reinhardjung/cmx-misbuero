@@ -287,10 +287,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
 		$GLOBALS['cmx_mail_context'] = 'beleg_send';
 		\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
+		$embedded_logo_listener = static function ($phpmailer): void {
+			if (!\function_exists(__NAMESPACE__ . '\\cmx_email_embed_self_logo_for_phpmailer')) {
+				return;
+			}
+			cmx_email_embed_self_logo_for_phpmailer($phpmailer);
+		};
+		\add_action('phpmailer_init', $embedded_logo_listener, 100, 1);
 		try {
 			$sent = \wp_mail($to, $subject, $message, $headers);
 		} finally {
 			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
+			\remove_action('phpmailer_init', $embedded_logo_listener, 100);
 			if ($had_sender_override) {
 				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
 			} else {
