@@ -640,6 +640,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_dimensions'
 			: ['width' => 0, 'height' => 0];
 		$target_width = (int) ($target_box['width'] ?? 0);
 		$target_height = (int) ($target_box['height'] ?? 0);
+		if ($target_width <= 0) {
+			$target_width = 158;
+		}
+		if ($target_height <= 0) {
+			$target_height = 66;
+		}
 
 		$logo_path = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')
 			? (string) cmx_email_self_logo_path()
@@ -686,7 +692,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_style')) {
 			: 'display:block;max-width:180px;width:100%;height:auto;border:0;outline:none;text-decoration:none;';
 		$style = (string) \preg_replace('/(?:^|;)\s*(?:display|max-width|max-height|width|height)\s*:[^;]*/i', '', $style);
 		$style = \trim((string) \preg_replace('/;{2,}/', ';', $style), " ;\t\n\r\0\x0B");
-		$style = 'display:inline-block;' . ($style !== '' ? $style . ';' : '');
+		$style = 'display:block;' . ($style !== '' ? $style . ';' : '');
 		if ($width > 0) {
 			$style .= 'width:' . $width . 'px;';
 		}
@@ -811,15 +817,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 			? (string) cmx_email_inline_img_dimension_attributes($img_style)
 			: '';
 		$default_img_html = '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo"' . $dimension_attrs . ' style="' . \esc_attr($img_style) . '" border="0">';
-		$img_html = $default_img_html;
-		if (
-			$prefer_outlook_embed
-			&& \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_can_embed_for_outlook')
-			&& cmx_email_self_logo_can_embed_for_outlook()
-		) {
-			$outlook_cid = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_cid')
-				? (string) cmx_email_self_logo_outlook_cid()
-				: 'cmx-self-logo';
+		$link_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')
+			? (string) cmx_email_self_contact_url()
+			: '';
+		$default_html = $link_url === ''
+			? $default_img_html
+			: '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0;outline:none;">' . $default_img_html . '</a>';
+
+		if ($prefer_outlook_embed) {
 			$outlook_dimensions = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_dimensions')
 				? (array) cmx_email_self_logo_outlook_dimensions($img_style)
 				: ['width' => 0, 'height' => 0];
@@ -835,18 +840,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 			$outlook_style = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_outlook_style')
 				? (string) cmx_email_self_logo_outlook_style($img_style, $outlook_width, $outlook_height)
 				: $img_style;
-			$outlook_img_html = '<!--[if mso]><img src="cid:' . \esc_attr($outlook_cid) . '" alt="Das bin ich Logo"' . $outlook_dimension_attrs . ' style="' . \esc_attr($outlook_style) . '" border="0"><![endif]-->';
-			$img_html = $outlook_img_html . '<!--[if !mso]><!-->' . $default_img_html . '<!--<![endif]-->';
+			$outlook_img_html = '<img src="' . \esc_url($logo_url) . '" alt="Das bin ich Logo"' . $outlook_dimension_attrs . ' style="' . \esc_attr($outlook_style) . '" border="0">';
+			$outlook_html = $link_url === ''
+				? $outlook_img_html
+				: '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0;outline:none;">' . $outlook_img_html . '</a>';
+
+			return '<!--[if mso]>' . $outlook_html . '<![endif]--><!--[if !mso]><!-->' . $default_html . '<!--<![endif]-->';
 		}
 
-		$link_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')
-			? (string) cmx_email_self_contact_url()
-			: '';
-		if ($link_url === '') {
-			return $img_html;
-		}
-
-		return '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0;outline:none;">' . $img_html . '</a>';
+		return $default_html;
 	}
 }
 
