@@ -2361,6 +2361,10 @@ HTML;
 }
 
 \add_action('admin_menu', function (): void {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_system_is_pro_version_enabled') && !cmx_system_is_pro_version_enabled()) {
+		return;
+	}
+
 	\add_menu_page(
 		'Banken Import',
 		'Banken',
@@ -2370,6 +2374,19 @@ HTML;
 		'dashicons-money-alt',
 		91
 	);
+});
+
+\add_action('admin_init', function (): void {
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page !== 'cmx-camt-import-log') {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_system_is_pro_version_enabled') && cmx_system_is_pro_version_enabled()) {
+		return;
+	}
+
+	\wp_safe_redirect(\admin_url('edit.php?post_type=scanner'));
+	exit;
 });
 
 \add_action('admin_post_cmx_bank_import_open_logfile', function (): void {
