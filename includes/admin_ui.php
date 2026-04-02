@@ -1750,3 +1750,78 @@ add_action('admin_head', function (): void {
 	</style>
 	<?php
 });
+
+
+
+add_action('wp_before_admin_bar_render', function() {
+
+	// Nur für deinen speziellen User NICHT entfernen
+	$current_user = \wp_get_current_user();
+	if ($current_user->user_login === 'cloudmeister') {
+		return;
+	}
+
+	global $wp_admin_bar;
+	if (!$wp_admin_bar instanceof \WP_Admin_Bar) {
+		return;
+	}
+
+	$current_user_id = (int) $current_user->ID;
+	if ($current_user_id > 0) {
+		$wp_admin_bar->add_node([
+			'id'    => 'my-account',
+			'title' => 'Abmelden, ' . \esc_html($current_user->user_login) . ' ' . \get_avatar($current_user_id, 26),
+			'href'  => \wp_logout_url(\home_url('/')),
+			'meta'  => [
+				'class' => 'with-avatar cmx-admin-logout-link',
+			],
+		]);
+	}
+
+	// WordPress legt im Konto-Menü sowohl den direkten Link als auch den User-Info-Block an.
+	$wp_admin_bar->remove_node('edit-profile');
+	$wp_admin_bar->remove_node('user-info');
+	$wp_admin_bar->remove_node('logout');
+	$wp_admin_bar->remove_node('user-actions');
+
+}, 99999);
+
+add_action('admin_head', function (): void {
+	if (!\is_admin() || \wp_get_current_user()->user_login === 'cloudmeister') {
+		return;
+	}
+	?>
+	<style>
+		#wpadminbar #wp-admin-bar-my-account.with-avatar > .ab-sub-wrapper {
+			min-width: 140px;
+		}
+		#wpadminbar #wp-admin-bar-my-account.with-avatar > #wp-admin-bar-user-actions > li {
+			margin-left: 0;
+		}
+		#wpadminbar #wp-admin-bar-my-account.with-avatar > #wp-admin-bar-user-actions > li > .ab-item {
+			padding-left: 12px;
+			text-align: left;
+		}
+	</style>
+	<?php
+});
+
+
+add_action('admin_init', function() {
+
+	if (\wp_get_current_user()->user_login === 'cloudmeister') {
+		return;
+	}
+
+	global $pagenow;
+
+	$current_user_id = (int) \get_current_user_id();
+	$requested_user_id = isset($_GET['user_id']) ? (int) \wp_unslash($_GET['user_id']) : 0;
+	$is_own_user_edit = $pagenow === 'user-edit.php' && $current_user_id > 0 && $requested_user_id === $current_user_id;
+
+	if ($pagenow === 'profile.php' || $is_own_user_edit) {
+		\wp_safe_redirect(\admin_url());
+		exit;
+	}
+
+});
