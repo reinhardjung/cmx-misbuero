@@ -491,6 +491,31 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-list .cmx-url-open .dashicons{font-size:16px;line-height:16px;width:16px;height:16px}
 	#cmx-artikel-lieferanten-list .cmx-supplier-open.is-disabled,
 	#cmx-artikel-lieferanten-list .cmx-url-open.is-disabled{opacity:.35;pointer-events:none}
+	#cmx-artikel-lieferanten-list .cmx-lief-lager-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-lager-wrap input{flex:1 1 auto;min-width:0}
+	#cmx-artikel-lieferanten-list .cmx-lief-drag{
+		display:inline-flex;
+		align-items:center;
+		justify-content:center;
+		width:36px;
+		height:36px;
+		border:1px solid #ccd0d4;
+		border-radius:6px;
+		background:#fff;
+		color:#8c8f94;
+		cursor:grab;
+		flex:0 0 36px;
+		padding:0;
+	}
+	#cmx-artikel-lieferanten-list .cmx-lief-drag:hover{color:#2271b1;border-color:#8c8f94;background:#f6fbff}
+	#cmx-artikel-lieferanten-list .cmx-lief-drag:active{cursor:grabbing}
+	#cmx-artikel-lieferanten-list .cmx-lief-drag .dashicons{font-size:18px;line-height:18px;width:18px;height:18px}
+	#cmx-artikel-lieferanten-list .cmx-lief-row.is-dragging{
+		opacity:.55;
+		border-color:#8bb6e8;
+		background:#f3f8fe;
+		box-shadow:0 8px 18px rgba(17, 84, 138, .12);
+	}
 	#cmx-artikel-lieferanten-list .cmx-lief-note-wrap{
 		display:grid;
 		grid-template-columns:minmax(0,1fr) auto;
@@ -561,7 +586,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			echo '<div class="cmx-lief-field cmx-lief-field--ek" data-label="Einkaufspreis"><input type="text" inputmode="decimal" name="cmx_artikel_lieferanten['.(int)$i.'][ek]" class="widefat cmx-lief-ek" value="'.\esc_attr($r_ek_display).'"></div>';
 			echo '<div class="cmx-lief-field cmx-lief-field--quelle" data-label="Bezugsquelle"><div class="cmx-url-wrap"><input type="text" inputmode="url" name="cmx_artikel_lieferanten['.(int)$i.'][bezugsquelle]" class="widefat cmx-lief-url" placeholder="https://…" value="'.\esc_attr($r_quelle).'"><a class="cmx-url-open cmx-lief-url-open'.($r_quelle_open === '' ? ' is-disabled' : '').'" href="'.\esc_url($r_quelle_open !== '' ? $r_quelle_open : '#').'" target="_blank" rel="noopener noreferrer" title="URL öffnen"><span class="dashicons dashicons-admin-site"></span></a></div></div>';
 			echo '<div class="cmx-lief-field cmx-lief-field--ltage" data-label="Lieferzeit"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lieferzeit_tage]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_ltage).'"></div>';
-			echo '<div class="cmx-lief-field cmx-lief-field--lager" data-label="Bestand"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"></div>';
+			echo '<div class="cmx-lief-field cmx-lief-field--lager" data-label="Bestand"><div class="cmx-lief-lager-wrap"><input type="number" min="0" step="1" name="cmx_artikel_lieferanten['.(int)$i.'][lagerbestand]" class="widefat cmx-lief-int" value="'.\esc_attr((string)$r_lager).'"><button type="button" class="cmx-lief-drag" draggable="true" title="Lieferanten-Reihenfolge verschieben" aria-label="Lieferanten-Reihenfolge verschieben"><span class="dashicons dashicons-move" aria-hidden="true"></span></button></div></div>';
 			echo '</div>';
 			echo '<div class="cmx-lief-note-wrap">';
 			echo '<div class="cmx-lief-note-panel">';
@@ -884,6 +909,27 @@ echo <<<HTML
 		});
 	}
 		var list=document.querySelector("#cmx-artikel-lieferanten-list");
+		var draggedRow=null;
+		function clearDragState(){
+			if(list){
+				list.querySelectorAll(".cmx-lief-row.is-dragging").forEach(function(row){
+					row.classList.remove("is-dragging");
+				});
+			}
+			draggedRow=null;
+		}
+		function moveDraggedRow(targetRow, clientY){
+			if(!list || !draggedRow || !targetRow || targetRow===draggedRow) return;
+			var rect=targetRow.getBoundingClientRect();
+			var insertAfter=clientY > rect.top + (rect.height / 2);
+			if(insertAfter){
+				if(targetRow.nextElementSibling !== draggedRow){
+					list.insertBefore(draggedRow, targetRow.nextElementSibling);
+				}
+			}else if(targetRow.previousElementSibling !== draggedRow){
+				list.insertBefore(draggedRow, targetRow);
+			}
+		}
 		function addRow(){
 				if(!list) return;
 				var row=list.querySelector(".cmx-lief-row");
@@ -911,6 +957,45 @@ echo <<<HTML
 				bindUrl(row);
 		}
 		if(list){
+			list.addEventListener("dragstart", function(e){
+				var handle=e.target&&e.target.closest?e.target.closest(".cmx-lief-drag"):null;
+				if(!handle){
+					e.preventDefault();
+					return;
+				}
+				draggedRow=handle.closest(".cmx-lief-row");
+				if(!draggedRow){
+					e.preventDefault();
+					return;
+				}
+				draggedRow.classList.add("is-dragging");
+				if(e.dataTransfer){
+					e.dataTransfer.effectAllowed="move";
+					try{ e.dataTransfer.setData("text/plain", "lieferant-row"); }catch(err){}
+				}
+			});
+			list.addEventListener("dragover", function(e){
+				if(!draggedRow) return;
+				var targetRow=e.target&&e.target.closest?e.target.closest(".cmx-lief-row"):null;
+				if(!targetRow || targetRow===draggedRow) return;
+				e.preventDefault();
+				moveDraggedRow(targetRow, e.clientY || 0);
+			});
+			list.addEventListener("drop", function(e){
+				if(!draggedRow) return;
+				e.preventDefault();
+				var targetRow=e.target&&e.target.closest?e.target.closest(".cmx-lief-row"):null;
+				if(targetRow && targetRow!==draggedRow){
+					moveDraggedRow(targetRow, e.clientY || 0);
+				}
+				reindex();
+				clearDragState();
+			});
+			list.addEventListener("dragend", function(){
+				if(!draggedRow) return;
+				reindex();
+				clearDragState();
+			});
 			list.addEventListener("click", function(e){
 				var addBtn=e.target.closest(".cmx-lief-add");
 				if(addBtn){

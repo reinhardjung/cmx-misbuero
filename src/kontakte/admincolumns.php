@@ -307,6 +307,8 @@ function cmx_kontakte_columns($columns) {
 
 		if ($key === 'title') {
 			$new['title']          = 'Name';
+			$new['cmx_vorname']    = 'Vorname';
+			$new['cmx_nachname']   = 'Nachname';
 			$new['cmx_kategorie']  = 'Kategorie'; // NEU
 			$new['cmx_stufen']     = 'Stufen';    // NEU
 			$new['cmx_tel_1']      = 'Telefon 1';
@@ -319,8 +321,8 @@ function cmx_kontakte_columns($columns) {
 		$new[$key] = $label;
 	}
 
-	// Aufräumen (wie gehabt)
-	unset($new['cmx_vorname'], $new['cmx_nachname'], $new['cmx_register_rechtsform_taxonomy'], $new['date']);
+	// Aufräumen (wie gehabt, aber Vorname/Nachname bleiben sichtbar)
+	unset($new['cmx_register_rechtsform_taxonomy'], $new['date']);
 
 	// Falls "Karte" durch das obige continue nicht gesetzt wurde, sicherstellen:
 	if (!isset($new['cmx_gmaps'])) $new['cmx_gmaps'] = 'Karte';
@@ -473,6 +475,13 @@ function cmx_billing_address_string(int $post_id): string {
 function cmx_kontakte_custom_column($column, $post_id) {
 	if ($column === 'title') {
 		echo esc_html(\get_the_title($post_id));
+		return;
+	}
+	if ($column === 'cmx_vorname' || $column === 'cmx_nachname') {
+		$meta_key = $column === 'cmx_vorname'
+			? (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME') : '_cmx_kontakte_vorname')
+			: (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME') : '_cmx_kontakte_nachname');
+		echo \esc_html(\trim((string) \get_post_meta($post_id, $meta_key, true)));
 		return;
 	}
 	if ($column === 'cmx_logo') {
