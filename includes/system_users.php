@@ -45,7 +45,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_plugin_post_types')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_cloudmeister_hidden_post_types')) {
 	function cmx_system_cloudmeister_hidden_post_types(): array {
-		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails'];
+		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails', 'scanner', 'budget'];
 
 		$post_types = [];
 		foreach ($hidden_post_types as $post_type) {
@@ -64,6 +64,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_should_hide_post_type_for_cl
 		}
 
 		return \in_array($post_type, cmx_system_cloudmeister_hidden_post_types(), true);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_cloudmeister_hidden_menu_pages')) {
+	function cmx_system_cloudmeister_hidden_menu_pages(): array {
+		return ['cmx-camt-import-log'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_should_hide_menu_page_for_cloudmeister')) {
+	function cmx_system_should_hide_menu_page_for_cloudmeister(string $page_slug): bool {
+		if (!cmx_system_is_cloudmeister_user()) {
+			return false;
+		}
+
+		return \in_array($page_slug, cmx_system_cloudmeister_hidden_menu_pages(), true);
 	}
 }
 
@@ -410,6 +426,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 			\remove_menu_page('edit.php?post_type=' . $post_type);
 		}
 	}
+
+	foreach (cmx_system_cloudmeister_hidden_menu_pages() as $page_slug) {
+		if (cmx_system_should_hide_menu_page_for_cloudmeister($page_slug)) {
+			\remove_menu_page($page_slug);
+		}
+	}
 }, 999);
 
 \add_action('admin_bar_menu', function (\WP_Admin_Bar $wp_admin_bar): void {
@@ -423,6 +445,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 		}
 	}
 }, 999);
+
+\add_action('current_screen', function ($screen): void {
+	if (!cmx_system_is_cloudmeister_user()) {
+		return;
+	}
+	if (!($screen instanceof \WP_Screen)) {
+		return;
+	}
+
+	$post_type = !empty($screen->post_type)
+		? \sanitize_key((string) $screen->post_type)
+		: cmx_system_current_admin_post_type();
+
+	if ($post_type === '' || !cmx_system_should_hide_post_type_for_cloudmeister($post_type)) {
+		return;
+	}
+
+	\wp_safe_redirect(\admin_url());
+	exit;
+}, 20);
+
+\add_action('admin_init', function (): void {
+	if (!cmx_system_is_cloudmeister_user()) {
+		return;
+	}
+
+	$page_slug = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	if ($page_slug === '' || !cmx_system_should_hide_menu_page_for_cloudmeister($page_slug)) {
+		return;
+	}
+
+	\wp_safe_redirect(\admin_url());
+	exit;
+}, 20);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_session_prepare')) {
 	function cmx_system_session_prepare($session): array {
