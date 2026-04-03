@@ -735,6 +735,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_hersteller_url,
 		.column-cmx_kontakt_belege { width:56px; text-align:center; padding-left:0 !important; padding-right:0 !important; }
 		th#cmx_kontakt_belege { text-indent:2ch; }
+		th#cmx_geburtsdatum { text-indent:1ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
 		.column-cmx_email_1 { width:220px; min-width:220px; }
 		.column-cmx_status { width:54px; overflow:visible; text-align:center; padding-left:0 !important; padding-right:0 !important; }
