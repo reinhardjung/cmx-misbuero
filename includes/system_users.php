@@ -461,6 +461,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_assigned_user_metabox
 	if ($post_type === '' || !cmx_system_should_hide_post_type_for_cloudmeister($post_type)) {
 		return;
 	}
+	if (\in_array((string) ($screen->base ?? ''), ['edit-tags', 'term'], true)) {
+		return;
+	}
 
 	\wp_safe_redirect(\admin_url());
 	exit;
