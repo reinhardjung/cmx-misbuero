@@ -1760,8 +1760,9 @@ add_action('admin_head', function (): void {
 		}
 
 		.wrap .subsubsub a.current {
-			background: #ffffff;
-			box-shadow: inset 0 0 0 1px #cfd8e3;
+			color: #1d2327;
+			background: transparent;
+			box-shadow: none;
 		}
 
 		.wrap .cmx-tabpanel .button,
