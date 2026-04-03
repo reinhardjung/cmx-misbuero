@@ -237,7 +237,7 @@ function cmx_render_settings_page(): void {
 			echo '<li><a href="?page='.CMX_SETTINGS_SLUG.'&tab='.$tab.'&sub='.$k.'"'
 			     .' class="'.($k === $sub ? 'current' : '').'">'.$label.'</a></li>';
 		}
-		echo '</ul><br><br>';
+		echo '</ul><br><br><br><br>';
 	}
 
 	echo '<div class="cmx-tabpanel">';

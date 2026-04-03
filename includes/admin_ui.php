@@ -1765,6 +1765,14 @@ add_action('admin_head', function (): void {
 			box-shadow: none;
 		}
 
+		.wrap .cmx-tabpanel h2 {
+			margin-top: 10px;
+		}
+
+		.wrap .cmx-tabpanel {
+			clear: both;
+		}
+
 		.wrap .cmx-tabpanel .button,
 		.wrap .cmx-tabpanel .button-secondary,
 		.wrap .cmx-tabpanel .button-primary,
