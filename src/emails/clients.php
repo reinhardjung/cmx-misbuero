@@ -34,6 +34,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_client_rows')) {
 			$smtp_host = \sanitize_text_field((string) ($row['smtp_host'] ?? ''));
 			$imap_host = \sanitize_text_field((string) ($row['imap_host'] ?? ''));
 			$client = \sanitize_text_field((string) ($row['client'] ?? ''));
+			$kontakt_kategorien_enabled = !empty($row['kontakt_kategorien_enabled']) ? '1' : '0';
+			$kontakt_kategorien = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_category_selected_slugs')
+				? cmx_email_contact_category_selected_slugs($row['kontakt_kategorien'] ?? [])
+				: [];
 
 			if ($id === '') {
 				$id = 'client_' . $index;
@@ -53,6 +57,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_client_rows')) {
 				'smtp_port' => '587',
 				'imap_host' => $imap_host,
 				'imap_port' => '993',
+				'kontakt_kategorien_enabled' => $kontakt_kategorien_enabled,
+				'kontakt_kategorien' => $kontakt_kategorien,
 			];
 			$index++;
 		}
@@ -83,6 +89,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_legacy_client_row')) {
 			'smtp_port' => '587',
 			'imap_host' => $imap_host,
 			'imap_port' => '993',
+			'kontakt_kategorien_enabled' => '0',
+			'kontakt_kategorien' => [],
 		];
 	}
 }
