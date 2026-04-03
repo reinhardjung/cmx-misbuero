@@ -270,6 +270,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 		'email_id' => 0,
 	];
 
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled') || !cmx_system_is_debug_mode_enabled()) {
+		cmx_emails_redirect_with_notice($context, 'Neu aus IMAP ist nur im Debug-Mode verfuegbar.', 'error');
+	}
+
 	$result = \function_exists(__NAMESPACE__ . '\\cmx_emails_rebuild_client_messages')
 		? cmx_emails_rebuild_client_messages($account_id, $rebuild_folder, 0, $archive_year, $archive_month)
 		: ['ok' => false, 'message' => 'Neuaufbau ist nicht verfuegbar.'];

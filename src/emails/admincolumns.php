@@ -468,6 +468,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	}
 
 	$archive_sync_selected = $folder === 'archive' || $archive_year !== '' || $archive_month !== '';
+	$show_rebuild_button = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+		&& cmx_system_is_debug_mode_enabled();
 	echo '<span class="cmx-email-filter-actions">';
 	$sync_folder = $folder !== '' ? $folder : 'inbox';
 	if ($sync_folder === 'spam') {
@@ -492,35 +494,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$sync_url = \wp_nonce_url(\add_query_arg($sync_args, \admin_url('admin-post.php')), 'cmx_emails_sync');
 	echo '<a class="button" href="' . \esc_url($sync_url) . '">' . \esc_html($archive_sync_selected ? 'Archiv synchronisieren' : 'Synchronisieren') . '</a>';
 
-	$rebuild_folder = $folder !== '' ? $folder : 'inbox';
-	$rebuild_disabled_reason = '';
-	if ($view === 'trash') {
-		$rebuild_disabled_reason = 'Im Papierkorb ist kein IMAP-Neuaufbau moeglich.';
-	} elseif ($account === '') {
-		$rebuild_disabled_reason = 'Bitte zuerst ein Konto waehlen.';
-	} elseif ($rebuild_folder === 'spam') {
-		$rebuild_disabled_reason = 'Spam kann nicht direkt neu aus IMAP aufgebaut werden.';
-	} elseif ($rebuild_folder === 'archive' && (\strlen($archive_year) !== 4 || $archive_month === '')) {
-		$rebuild_disabled_reason = 'Bitte zuerst Archivjahr und Archivmonat waehlen.';
-	}
+	if ($show_rebuild_button) {
+		$rebuild_folder = $folder !== '' ? $folder : 'inbox';
+		$rebuild_disabled_reason = '';
+		if ($view === 'trash') {
+			$rebuild_disabled_reason = 'Im Papierkorb ist kein IMAP-Neuaufbau moeglich.';
+		} elseif ($account === '') {
+			$rebuild_disabled_reason = 'Bitte zuerst ein Konto waehlen.';
+		} elseif ($rebuild_folder === 'spam') {
+			$rebuild_disabled_reason = 'Spam kann nicht direkt neu aus IMAP aufgebaut werden.';
+		} elseif ($rebuild_folder === 'archive' && (\strlen($archive_year) !== 4 || $archive_month === '')) {
+			$rebuild_disabled_reason = 'Bitte zuerst Archivjahr und Archivmonat waehlen.';
+		}
 
-	if ($rebuild_disabled_reason === '') {
-		$rebuild_args = [
-			'action' => 'cmx_emails_rebuild',
-			'account_id' => $account,
-			'folder' => $rebuild_folder,
-		];
-		if ($archive_year !== '') {
-			$rebuild_args['archive_year'] = $archive_year;
+		if ($rebuild_disabled_reason === '') {
+			$rebuild_args = [
+				'action' => 'cmx_emails_rebuild',
+				'account_id' => $account,
+				'folder' => $rebuild_folder,
+			];
+			if ($archive_year !== '') {
+				$rebuild_args['archive_year'] = $archive_year;
+			}
+			if ($archive_month !== '') {
+				$rebuild_args['archive_month'] = $archive_month;
+			}
+			$rebuild_url = \wp_nonce_url(\add_query_arg($rebuild_args, \admin_url('admin-post.php')), 'cmx_emails_rebuild');
+			$rebuild_confirm = 'Die lokal synchronisierten E-Mails dieses Bereichs werden dauerhaft geloescht und danach frisch aus IMAP eingelesen. Fortfahren?';
+			echo '<a class="button cmx-email-rebuild-button" href="' . \esc_url($rebuild_url) . '" onclick="return confirm(' . \wp_json_encode($rebuild_confirm) . ');">Neu aus IMAP</a>';
+		} else {
+			echo '<span class="button cmx-email-rebuild-button is-disabled" aria-disabled="true" title="' . \esc_attr($rebuild_disabled_reason) . '">Neu aus IMAP</span>';
 		}
-		if ($archive_month !== '') {
-			$rebuild_args['archive_month'] = $archive_month;
-		}
-		$rebuild_url = \wp_nonce_url(\add_query_arg($rebuild_args, \admin_url('admin-post.php')), 'cmx_emails_rebuild');
-		$rebuild_confirm = 'Die lokal synchronisierten E-Mails dieses Bereichs werden dauerhaft geloescht und danach frisch aus IMAP eingelesen. Fortfahren?';
-		echo '<a class="button cmx-email-rebuild-button" href="' . \esc_url($rebuild_url) . '" onclick="return confirm(' . \wp_json_encode($rebuild_confirm) . ');">Neu aus IMAP</a>';
-	} else {
-		echo '<span class="button cmx-email-rebuild-button is-disabled" aria-disabled="true" title="' . \esc_attr($rebuild_disabled_reason) . '">Neu aus IMAP</span>';
 	}
 
 	echo '<a class="button cmx-email-settings-button" href="' . \esc_url(cmx_emails_settings_url()) . '" aria-label="Einstellungen" title="Einstellungen"><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span></a>';
