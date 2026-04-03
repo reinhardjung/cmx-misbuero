@@ -7,11 +7,35 @@
  * Author:      CLOUD Meister
  */
 
+function cmx_admin_color_scheme_slug(): string {
+	return 'misbuero_admin_red';
+}
 
 add_action('admin_init', __NAMESPACE__ . '\\register_scheme');
 function register_scheme(): void {
-	$slug = 'misbuero_admin_red';
+	$slug = cmx_admin_color_scheme_slug();
 	wp_admin_css_color($slug,'Mis Büro',false,['#C9362C', '#A42C24', '#3D3D3D', '#F7F7F7']);
+}
+
+add_filter('get_user_option_admin_color', __NAMESPACE__ . '\\cmx_force_admin_color_scheme', 10, 3);
+function cmx_force_admin_color_scheme($color_scheme, string $option, $user): string {
+	return cmx_admin_color_scheme_slug();
+}
+
+add_action('admin_init', __NAMESPACE__ . '\\cmx_lock_admin_color_scheme');
+function cmx_lock_admin_color_scheme(): void {
+	\remove_action('admin_color_scheme_picker', 'admin_color_scheme_picker');
+}
+
+add_action('user_register', __NAMESPACE__ . '\\cmx_persist_admin_color_scheme');
+add_action('personal_options_update', __NAMESPACE__ . '\\cmx_persist_admin_color_scheme');
+add_action('edit_user_profile_update', __NAMESPACE__ . '\\cmx_persist_admin_color_scheme');
+function cmx_persist_admin_color_scheme(int $user_id): void {
+	if ($user_id <= 0) {
+		return;
+	}
+
+	\update_user_option($user_id, 'admin_color', cmx_admin_color_scheme_slug(), true);
 }
 
 add_filter('admin_footer_text', __NAMESPACE__ . '\\cmx_admin_footer_text');
@@ -1064,7 +1088,7 @@ add_action('admin_head', __NAMESPACE__ . '\\inject_styles');
 function inject_styles(): void {
 	$user_id = get_current_user_id();
 	if (!$user_id) return;
-	if (get_user_option('admin_color', $user_id) !== 'misbuero_admin_red') return;
+	if (get_user_option('admin_color', $user_id) !== cmx_admin_color_scheme_slug()) return;
 	?>
 	<style id="misbuero-admin-skin">
 	body.admin-color-misbuero_admin_red {
