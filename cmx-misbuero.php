@@ -14,6 +14,8 @@
  * Requires at least: 6.7.1
  */
 
+const CMX_ENABLE_HELP_ONCE = false;
+
 require_once __DIR__ . '/includes/cmx_version.php';
 
 
@@ -46,6 +48,10 @@ require_once __DIR__ . '/includes/login_ui.php';
 require_once __DIR__ . '/includes/help_screens.php';
 require_once __DIR__ . '/includes/layout_export.php';
 require_once __DIR__ . '/includes/layout_defaults.php';
+
+if (CMX_ENABLE_HELP_ONCE) {
+	require_once __DIR__ . '/includes/help/once.php';
+}
 
 if (\is_admin()) {
 	require_once __DIR__ . '/src/einstellungen/index.php';

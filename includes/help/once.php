@@ -1,11 +1,24 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-if (!\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')) {
-	\define(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG', '_cmx_kontakte_firmengruendung');
+if (!\defined(__NAMESPACE__ . '\\CMX_HELP_ONCE_RANDOM_KONTAKT_DATES_DONE')) {
+	\define(__NAMESPACE__ . '\\CMX_HELP_ONCE_RANDOM_KONTAKT_DATES_DONE', 'cmx_help_once_random_kontakt_dates_done');
 }
 
-if (!\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
-	\define(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM', '_cmx_kontakte_geburtsdatum');
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_meta_firmengruendung')) {
+	function cmx_help_once_meta_firmengruendung(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')
+			: '_cmx_kontakte_firmengruendung';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_meta_geburtsdatum')) {
+	function cmx_help_once_meta_geburtsdatum(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+			: '_cmx_kontakte_geburtsdatum';
+	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_random_date_between')) {
@@ -100,8 +113,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_fill_kontakte_random_date
 				continue;
 			}
 
-			$existing_founding = (string) \get_post_meta($kontakt_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
-			$existing_birth = (string) \get_post_meta($kontakt_id, CMX_KONTAKTE_META_GEBURTSDATUM, true);
+			$existing_founding = (string) \get_post_meta($kontakt_id, cmx_help_once_meta_firmengruendung(), true);
+			$existing_birth = (string) \get_post_meta($kontakt_id, cmx_help_once_meta_geburtsdatum(), true);
 
 			if (!$overwrite_existing && ($existing_founding !== '' || $existing_birth !== '')) {
 				$result['skipped']++;
@@ -109,11 +122,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_fill_kontakte_random_date
 			}
 
 			$dates = cmx_help_once_generate_kontakt_dates();
-			\update_post_meta($kontakt_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, (string) $dates['firmengruendung']);
-			\update_post_meta($kontakt_id, CMX_KONTAKTE_META_GEBURTSDATUM, (string) $dates['geburtsdatum']);
+			\update_post_meta($kontakt_id, cmx_help_once_meta_firmengruendung(), (string) $dates['firmengruendung']);
+			\update_post_meta($kontakt_id, cmx_help_once_meta_geburtsdatum(), (string) $dates['geburtsdatum']);
 			$result['updated']++;
 		}
 
 		return $result;
 	}
 }
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_help_once_run_random_kontakt_dates')) {
+	function cmx_help_once_run_random_kontakt_dates(): void {
+		if (!\is_admin()) {
+			return;
+		}
+		if (!\current_user_can('manage_options')) {
+			return;
+		}
+		if (\get_option(CMX_HELP_ONCE_RANDOM_KONTAKT_DATES_DONE) === '1') {
+			return;
+		}
+
+		$result = cmx_help_once_fill_kontakte_random_dates(true);
+		\update_option(CMX_HELP_ONCE_RANDOM_KONTAKT_DATES_DONE, '1', false);
+		\update_option('cmx_help_once_random_kontakt_dates_result', $result, false);
+
+		if (\function_exists('\\error_log')) {
+			\error_log('[CMX once] Kontakt-Datumswerte geschrieben: total=' . (int) ($result['total'] ?? 0) . ', updated=' . (int) ($result['updated'] ?? 0) . ', skipped=' . (int) ($result['skipped'] ?? 0));
+		}
+	}
+}
+
+\add_action('admin_init', __NAMESPACE__ . '\\cmx_help_once_run_random_kontakt_dates', 100);
