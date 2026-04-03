@@ -226,7 +226,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		$contact_category_slugs = cmx_email_contact_category_selected_slugs($client['kontakt_kategorien'] ?? []);
 		$contact_category_enabled = !empty($client['kontakt_kategorien_enabled']);
 		$contact_category_labels = cmx_email_contact_category_label_list($contact_category_slugs, $contact_category_options);
-		$contact_category_button_label = cmx_email_contact_category_button_label($contact_category_slugs, $contact_category_options);
 		$contact_category_summary = 'Keine Kontakt-Kategorien vorhanden.';
 		if ($contact_category_options !== []) {
 			if ($contact_category_enabled) {
@@ -238,9 +237,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 					? 'Filter aus'
 					: 'Filter aus: ' . \implode(', ', $contact_category_labels);
 			}
-		}
-		if (!$contact_category_enabled && $contact_category_labels === []) {
-			$contact_category_button_label = 'Kontakt-Kategorien';
 		}
 		$contact_category_toggle_title = $contact_category_enabled
 			? 'Kontakt-Kategorien aktiv'
@@ -262,8 +258,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '<button type="button" class="button button-secondary cmx-email-client-category-toggle' . ($contact_category_enabled ? ' is-active' : '') . '" aria-pressed="' . ($contact_category_enabled ? 'true' : 'false') . '" title="' . \esc_attr($contact_category_toggle_title) . '"><span class="dashicons dashicons-businessman" aria-hidden="true"></span></button>';
 		echo '<div class="cmx-email-client-category-picker' . ($contact_category_enabled ? '' : ' is-disabled') . '">';
 		echo '<button type="button" class="button button-secondary cmx-email-client-category-button" title="' . \esc_attr($contact_category_summary) . '"' . (($contact_category_options === [] || !$contact_category_enabled) ? ' disabled' : '') . '>';
-		echo '<span class="cmx-email-client-category-button-text">' . \esc_html($contact_category_button_label) . '</span>';
-		echo '<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>';
+		echo '<span class="cmx-email-client-category-button-text">Kategorien</span>';
 		echo '</button>';
 		echo '<div class="cmx-email-client-category-popover" hidden>';
 		if ($contact_category_options === []) {
@@ -827,8 +822,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				display: flex;
 				align-items: stretch;
 				gap: 8px;
-				flex: 1 1 300px;
-				min-width: 300px;
+				flex: 0 0 210px;
+				min-width: 210px;
 			}
 			.cmx-email-client-category-toggle {
 				display: inline-flex;
@@ -840,12 +835,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				padding: 0;
 				border-radius: 12px;
 				box-shadow: inset 0 0 0 1px rgba(34, 113, 177, .08);
+				position: relative;
+				top: -3px;
 			}
 			.cmx-email-client-category-toggle .dashicons {
 				width: 18px;
 				height: 18px;
 				font-size: 18px;
 				line-height: 18px;
+				position: relative;
+				top: 5px;
 			}
 			.cmx-email-client-category-toggle.is-active {
 				background: #2271b1;
@@ -857,7 +856,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			}
 			.cmx-email-client-category-picker {
 				position: relative;
-				flex: 1 1 0;
+				flex: 1 1 auto;
 				min-width: 0;
 			}
 			.cmx-email-client-category-picker.is-disabled {
@@ -875,6 +874,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				background: linear-gradient(180deg, #fff 0%, #f7f9fc 100%);
 				border-color: #c7d4e3;
 				box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+				position: relative;
+				top: 5px;
 			}
 			.cmx-email-client-category-button .dashicons {
 				flex: 0 0 auto;
@@ -903,9 +904,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				top: calc(100% + 6px);
 				left: 0;
 				z-index: 1000;
-				width: 100%;
-				min-width: 320px;
-				max-width: min(420px, calc(100vw - 80px));
+				width: 210px;
+				min-width: 210px;
+				max-width: calc(100vw - 80px);
 				padding: 12px;
 				border: 1px solid #d8e2ec;
 				border-radius: 16px;
@@ -1126,7 +1127,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_smtp_connection')) {
 			$mail->smtpClose();
 
 			if ($connected) {
-				return [true, 'SMTP-Verbindung erfolgreich. Du kannst nun E-Mails versenden!'];
+				return [true, 'SMTP: Du kannst nun E-Mails versenden!'];
 			}
 			return [false, $error !== '' ? 'SMTP-Test fehlgeschlagen: ' . $error : 'SMTP-Test fehlgeschlagen.'];
 		} catch (\Throwable $e) {
@@ -1150,7 +1151,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 				$imap = @\imap_open($mailbox, $username, $password, OP_HALFOPEN, 1, ['DISABLE_AUTHENTICATOR' => 'GSSAPI']);
 				if ($imap !== false) {
 					@\imap_close($imap);
-					return [true, 'IMAP-Verbindung erfolgreich. Du kannst nun E-Mails empfangen!'];
+					return [true, ' IMAP: Du kannst nun E-Mails empfangen!'];
 				}
 			}
 			$err = \trim((string) \imap_last_error());
@@ -1311,16 +1312,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 					}).filter(Boolean);
 				}
 
-				function compactLabel(labels, enabled){
-					if (!labels.length) {
-						return enabled ? 'Kontakt-Kategorien wählen' : 'Kontakt-Kategorien';
-					}
-					if (labels.length <= 2) {
-						return labels.join(', ');
-					}
-					return labels[0] + ', ' + labels[1] + ' +' + (labels.length - 2);
-				}
-
 				function fullSummary(labels, enabled){
 					if (!options.length) {
 						return 'Keine Kontakt-Kategorien vorhanden.';
@@ -1363,7 +1354,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 					toggle.setAttribute('title', enabled ? 'Kontakt-Kategorien aktiv' : 'Kontakt-Kategorien inaktiv');
 					picker.classList.toggle('is-disabled', !enabled);
 					button.disabled = !enabled || !options.length;
-					buttonText.textContent = compactLabel(labels, enabled);
+					buttonText.textContent = 'Kategorien';
 					button.setAttribute('title', fullSummary(labels, enabled));
 					if (!enabled) {
 						closePopover();
@@ -1488,7 +1479,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 						var smtpResult = results[0] || { ok: false, message: 'SMTP-Test fehlgeschlagen.' };
 						var imapResult = results[1] || { ok: false, message: 'IMAP-Test fehlgeschlagen.' };
 						var ok = !!(smtpResult.ok && imapResult.ok);
-						setResult(resultEl, ok, 'SMTP: ' + smtpResult.message + ' IMAP: ' + imapResult.message);
+						setResult(resultEl, ok, '' + smtpResult.message + '  ' + imapResult.message);
 					})
 					.catch(function(){
 						setResult(resultEl, false, 'Verbindungstest fehlgeschlagen.');
