@@ -459,7 +459,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 
 		$headers = [
 			'ID','Titel','Status','Erstellt_am',
-			'vorname','nachname','privat','url','url_domain_core','datum',
+			'vorname','nachname','privat','url','url_domain_core','datum','firmengruendung','kunde_seit','geburtsdatum',
 			'logo_url','logo_path','logo_zip_path',
 			'kontakt_laender_ids','kontakt_laender_slugs','kontakt_laender_names',
 			// NEU: Kategorien
@@ -492,6 +492,19 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 			$domain   = $url ? (string)(\parse_url($url, PHP_URL_HOST) ?? '') : '';
 			if ($domain) $domain = \preg_replace('~^www\.~i','',$domain);
 			$datum    = (string)\get_post_meta($pid, CMX_KONTAKTE_META_DATUM, true);
+			$firmengruendung = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')
+				? (string) \get_post_meta($pid, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true)
+				: '';
+			$kunde_seit = \function_exists(__NAMESPACE__ . '\\cmx_kontakt_kunde_seit_value')
+				? (string) cmx_kontakt_kunde_seit_value((int) $pid)
+				: (
+					\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_KUNDE_SEIT')
+						? (string) \get_post_meta($pid, CMX_KONTAKTE_META_KUNDE_SEIT, true)
+						: ''
+				);
+			$geburtsdatum = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+				? (string) \get_post_meta($pid, CMX_KONTAKTE_META_GEBURTSDATUM, true)
+				: '';
 			$logo_url = (string)\get_post_meta($pid, '_cmx_local_image_kontakte_url', true);
 			$logo_path= (string)\get_post_meta($pid, '_cmx_local_image_kontakte_path', true);
 			$image_entries = \function_exists(__NAMESPACE__ . '\\cmxkl_contact_image_entries')
@@ -583,6 +596,9 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 				$url,
 				$domain,
 				$datum,
+				$firmengruendung,
+				$kunde_seit,
+				$geburtsdatum,
 				$logo_url,
 				$logo_path,
 				$logo_zip_path,

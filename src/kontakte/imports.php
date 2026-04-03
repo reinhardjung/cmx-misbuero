@@ -10,6 +10,9 @@ if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_NACHNAME')) define(__NAMESPACE__
 if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_URL'))      define(__NAMESPACE__.'\\CMX_KONTAKTE_META_URL','_cmx_kontakte_url');
 if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_PRIVAT'))   define(__NAMESPACE__.'\\CMX_KONTAKTE_META_PRIVAT','_cmx_kontakte_privat');
 if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_DATUM'))    define(__NAMESPACE__.'\\CMX_KONTAKTE_META_DATUM','_cmx_kontakte_datum');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')) define(__NAMESPACE__.'\\CMX_KONTAKTE_META_FIRMENGRUENDUNG','_cmx_kontakte_firmengruendung');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_GEBURTSDATUM'))    define(__NAMESPACE__.'\\CMX_KONTAKTE_META_GEBURTSDATUM','_cmx_kontakte_geburtsdatum');
+if (!defined(__NAMESPACE__.'\\CMX_KONTAKTE_META_KUNDE_SEIT'))      define(__NAMESPACE__.'\\CMX_KONTAKTE_META_KUNDE_SEIT','_cmx_kontakte_kunde_seit');
 
 if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_STRASSE')) define(__NAMESPACE__.'\\CMX_RECHNUNG_META_STRASSE','_cmx_rechnung_strasse');
 if (!defined(__NAMESPACE__.'\\CMX_RECHNUNG_META_ZUSATZ'))  define(__NAMESPACE__.'\\CMX_RECHNUNG_META_ZUSATZ','_cmx_rechnung_zusatz');
@@ -116,6 +119,17 @@ function cmx_kontakte_import_row_value(array $row, array $row_l, string $key): s
 		return \trim((string) $row_l[$key_l]);
 	}
 	return '';
+}
+function cmx_kontakte_import_sanitize_date_ymd(string $value): string {
+	$value = \trim($value);
+	if ($value === '') {
+		return '';
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
+		return (string) cmx_sanitize_date_ymd($value);
+	}
+	$dt = \DateTime::createFromFormat('Y-m-d', $value);
+	return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
 }
 function cmx_kontakte_import_resolve_label_input(string $value, string $taxonomy): string {
 	$value = \trim($value);
@@ -610,6 +624,13 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		\update_post_meta($post_id, CMX_KONTAKTE_META_URL,      cmx_normalize_url($row['url'] ?? ($row_l['url'] ?? '')));
 		if (!empty($row['datum']) || !empty($row_l['datum'])) \update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, (string)($row['datum'] ?? ($row_l['datum'] ?? '')));
 
+		$firmengruendung = cmx_kontakte_import_sanitize_date_ymd(cmx_kontakte_import_row_value($row, $row_l, 'firmengruendung'));
+		$kunde_seit = cmx_kontakte_import_sanitize_date_ymd(cmx_kontakte_import_row_value($row, $row_l, 'kunde_seit'));
+		$geburtsdatum = cmx_kontakte_import_sanitize_date_ymd(cmx_kontakte_import_row_value($row, $row_l, 'geburtsdatum'));
+		if ($geburtsdatum === '') {
+			$geburtsdatum = cmx_kontakte_import_sanitize_date_ymd(cmx_kontakte_import_row_value($row, $row_l, 'cmx_geburtsdatum'));
+		}
+
 		$rechnung_land_raw = (string) ($row['rechnung_land_slug'] ?? ($row_l['rechnung_land_slug'] ?? ''));
 		if ($rechnung_land_raw === '') $rechnung_land_raw = (string) ($row['rechnung_land_label'] ?? ($row_l['rechnung_land_label'] ?? ''));
 		if ($rechnung_land_raw === '') $rechnung_land_raw = (string) ($row['_cmx_rechnung_land'] ?? ($row_l['_cmx_rechnung_land'] ?? ''));
@@ -651,8 +672,28 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 
 		// Kommunikation
 		$contacts = cmx_kontakte_import_collect_contacts($row, $row_l);
+		if ($geburtsdatum !== '' && \is_array($contacts[0] ?? null) && ((string) ($contacts[0]['geburtsdatum'] ?? '')) === '') {
+			$contacts[0]['geburtsdatum'] = $geburtsdatum;
+		}
 		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
 			cmx_kommunikation_persist_contacts($post_id, $contacts);
+		}
+		if ($firmengruendung !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
+		}
+		if ($kunde_seit !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT, $kunde_seit);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT);
+		}
+		if ($geburtsdatum !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $geburtsdatum);
+		} elseif (\is_array($contacts[0] ?? null) && ((string) ($contacts[0]['geburtsdatum'] ?? '')) !== '') {
+			\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, (string) $contacts[0]['geburtsdatum']);
+		} else {
+			\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
 		}
 
 		/* === KATEGORIEN (NEU – kompatibel zum Export) =======================
