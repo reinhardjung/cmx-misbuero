@@ -713,9 +713,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				position: relative;
 				display: inline-flex;
 				align-items: center;
+				width: 100%;
+				height: var(--cmx-email-client-control-height, 44px);
 			}
 			.cmx-email-password-wrap .cmx-email-password-input {
 				padding-right: 62px;
+				height: var(--cmx-email-client-control-height, 44px);
+				min-height: var(--cmx-email-client-control-height, 44px);
+				box-sizing: border-box;
 			}
 			.cmx-email-password-wrap .cmx-email-password-toggle {
 				position: absolute;
@@ -773,6 +778,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				padding-right: 0;
 			}
 			.cmx-email-client-item {
+				--cmx-email-client-control-height: 44px;
 				border: 1px solid #d7dce3;
 				border-radius: 12px;
 				background: #fff;
@@ -803,6 +809,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			.cmx-email-client-field .small-text {
 				width: 100%;
 				max-width: none;
+				height: var(--cmx-email-client-control-height);
+				min-height: var(--cmx-email-client-control-height);
+				box-sizing: border-box;
+				margin: 0;
 			}
 			.cmx-email-client-actions {
 				display: flex;
@@ -831,7 +841,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				justify-content: center;
 				width: 40px;
 				min-width: 40px;
-				height: 40px;
+				height: var(--cmx-email-client-control-height);
 				padding: 0;
 				border-radius: 12px;
 				box-shadow: inset 0 0 0 1px rgba(34, 113, 177, .08);
@@ -868,7 +878,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				justify-content: space-between;
 				gap: 8px;
 				width: 100%;
-				min-height: 40px;
+				height: var(--cmx-email-client-control-height);
+				min-height: var(--cmx-email-client-control-height);
 				padding-inline: 14px 12px;
 				border-radius: 12px;
 				background: linear-gradient(180deg, #fff 0%, #f7f9fc 100%);
@@ -959,8 +970,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				align-items: center;
 				justify-content: center;
 				width: 34px;
-				height: 34px;
+				height: var(--cmx-email-client-control-height);
+				min-height: var(--cmx-email-client-control-height);
 				padding: 0;
+			}
+			.cmx-email-client-test {
+				height: var(--cmx-email-client-control-height);
+				min-height: var(--cmx-email-client-control-height);
+				padding-top: 0;
+				padding-bottom: 0;
 			}
 			.cmx-email-client-remove .dashicons {
 				width: 18px;
