@@ -1525,13 +1525,59 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_ignored_contact_match_emails
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_matchable_email')) {
+	function cmx_emails_matchable_email($value): string {
+		$candidates = [];
+
+		if (\is_array($value)) {
+			foreach (['email', 'address', 'value', 'label'] as $key) {
+				if (isset($value[$key]) && !\is_array($value[$key]) && !\is_object($value[$key])) {
+					$candidates[] = (string) $value[$key];
+				}
+			}
+		} elseif (\is_object($value)) {
+			if (isset($value->mailbox, $value->host)) {
+				$candidates[] = (string) $value->mailbox . '@' . (string) $value->host;
+			}
+			foreach (['email', 'address', 'value', 'label'] as $key) {
+				if (isset($value->{$key}) && !\is_array($value->{$key}) && !\is_object($value->{$key})) {
+					$candidates[] = (string) $value->{$key};
+				}
+			}
+		} elseif (!\is_array($value) && !\is_object($value)) {
+			$candidates[] = (string) $value;
+		}
+
+		foreach ($candidates as $candidate) {
+			$candidate = \trim($candidate);
+			if ($candidate === '') {
+				continue;
+			}
+
+			$email = \sanitize_email($candidate);
+			if (\is_email($email)) {
+				return $email;
+			}
+
+			if (\preg_match('/([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})/i', $candidate, $match) === 1) {
+				$email = \sanitize_email((string) ($match[1] ?? ''));
+				if (\is_email($email)) {
+					return $email;
+				}
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')) {
 	function cmx_emails_find_contact_ids_by_emails(array $emails): array {
 		$ignored_emails = cmx_emails_ignored_contact_match_emails();
 		$normalized_emails = [];
 		foreach ($emails as $email) {
-			$email = \sanitize_email((string) $email);
-			if (!\is_email($email)) {
+			$email = cmx_emails_matchable_email($email);
+			if ($email === '') {
 				continue;
 			}
 			$key = \strtolower($email);
@@ -1582,7 +1628,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')
 			}
 
 			foreach ($contact_emails as $contact_email) {
-				$key = \strtolower(\sanitize_email((string) $contact_email));
+				$key = \strtolower(cmx_emails_matchable_email($contact_email));
 				if ($key !== '' && isset($normalized_emails[$key])) {
 					$contact_ids[$contact_id] = $contact_id;
 					break;
@@ -4150,7 +4196,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_query_args')) {
 			'meta_key'         => cmx_emails_meta_key('received_ts'),
 			'orderby'          => 'meta_value_num',
 			'order'            => 'DESC',
-			'suppress_filters' => false,
+			'suppress_filters' => true,
 		];
 
 		$search = \trim((string) ($filters['s'] ?? ''));

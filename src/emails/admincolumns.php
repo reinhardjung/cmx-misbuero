@@ -492,7 +492,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$sync_args['archive_month'] = $archive_month;
 	}
 	$sync_url = \wp_nonce_url(\add_query_arg($sync_args, \admin_url('admin-post.php')), 'cmx_emails_sync');
-	echo '<a class="button" href="' . \esc_url($sync_url) . '">' . \esc_html($archive_sync_selected ? 'Archiv synchronisieren' : 'Synchronisieren') . '</a>';
+	echo '<a class="button" href="' . \esc_url($sync_url) . '">' . \esc_html($archive_sync_selected ? 'Synchronisieren' : 'Synchronisieren') . '</a>';
 
 	if ($show_rebuild_button) {
 		$rebuild_folder = $folder !== '' ? $folder : 'inbox';
@@ -530,7 +530,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	echo '<a class="button cmx-email-settings-button" href="' . \esc_url(cmx_emails_settings_url()) . '" aria-label="Einstellungen" title="Einstellungen"><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span></a>';
 	echo '</span>';
 	if ($archive_sync_selected) {
-		echo '<div class="cmx-email-archive-hint">Die Jahres- und Monatszahlen stammen direkt aus IMAP. In der Liste erscheinen Archiv-Mails erst nach dem Synchronisieren.</div>';
+		// echo '<div class="cmx-email-archive-hint">Die Jahres- und Monatszahlen stammen direkt aus IMAP. In der Liste erscheinen Archiv-Mails erst nach dem Synchronisieren.</div>';
 	}
 }, 10, 2);
 
@@ -550,6 +550,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$filters = cmx_emails_current_filters();
 	$view = cmx_emails_current_view();
 	$query->set('post_status', 'publish');
+	$query->set('suppress_filters', true);
 
 	if ($view === 'new') {
 		$filters['status'] = 'new';
