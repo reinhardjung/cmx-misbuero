@@ -84,12 +84,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_seed_taxo_ini_terms')) {
 
 
 // cmx_seed_taxo('Artikel','Marken,Farben,Einheiten,Typen,Kategorien');
-function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = ''): void {
+function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = '', string $iniSection = ''): void {
 	$labels = array_filter(array_map('trim', explode(',', $myTaxos)));
 	if (empty($labels)) return;
 
 	$constBase = cmx_sani_key($base,'upper');
 	$slugBase  = cmx_sani_key($base,'lower');
+	$iniBase   = $iniSection !== '' ? cmx_sani_key($iniSection, 'lower') : $slugBase;
 	$iniAll = [];
 	$iniFile = __DIR__ . '/globales.ini';
 	if (\is_file($iniFile)) {
@@ -107,7 +108,7 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = ''): void
 		$have = get_terms(['taxonomy'=>$taxonomy,'hide_empty'=>false,'fields'=>'ids','number'=>1]);
 		if (is_wp_error($have)) continue;
 
-		$terms = cmx_seed_taxo_ini_terms($slugBase, $label);
+		$terms = cmx_seed_taxo_ini_terms($iniBase, $label);
 
 		// Erweiterung: Section [<TaxonomieLabel>] als Name=>Beschreibung lesen
 		// Beispiel:

@@ -29,6 +29,22 @@ function cmx_artikel_import_normalize_name(string $value): string {
 		: (string) \strtolower($value);
 }
 
+function cmx_artikel_import_row_value(array $row, array $row_l, string $key): string {
+	if (isset($row[$key]) && \is_scalar($row[$key])) {
+		return \trim((string) $row[$key]);
+	}
+	$key_l = \strtolower($key);
+	if (isset($row_l[$key_l]) && \is_scalar($row_l[$key_l])) {
+		return \trim((string) $row_l[$key_l]);
+	}
+	return '';
+}
+
+function cmx_artikel_import_bool_from_csv($value): bool {
+	$value = \is_string($value) ? \strtolower(\trim($value)) : $value;
+	return ($value === 1 || $value === '1' || $value === true || $value === 'true' || $value === 'ja' || $value === 'yes' || $value === 'y');
+}
+
 function cmx_artikel_import_find_lieferant_id_by_name(string $name): int {
 	static $map = null;
 
@@ -79,6 +95,82 @@ function cmx_artikel_import_find_lieferant_id_by_name(string $name): int {
 	return $normalized !== '' ? (int) ($map[$normalized] ?? 0) : 0;
 }
 
+function cmx_artikel_import_sync_lieferanten_legacy_fields(int $post_id, array $rows): void {
+	$first = \is_array($rows[0] ?? null) ? (array) $rows[0] : null;
+	if ($first) {
+		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID') ? CMX_ARTIKEL_META_LIEFERANT_ID : '_cmx_art_lieferant_id', (int) ($first['lieferant_id'] ?? 0));
+		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_NR') ? CMX_ARTIKEL_META_LIEFERANT_NR : '_cmx_art_lieferant_nr', (string) ($first['lieferant_nr'] ?? ''));
+		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE') ? CMX_ARTIKEL_META_BEZUGSQUELLE : '_cmx_artikel_bezugsquelle_url', (string) ($first['bezugsquelle'] ?? ''));
+		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERZEIT') ? CMX_ARTIKEL_META_LIEFERZEIT : '_cmx_art_lieferzeit_tage', \max(0, (int) ($first['lieferzeit_tage'] ?? 0)));
+		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LAGERBESTAND') ? CMX_ARTIKEL_META_LAGERBESTAND : '_cmx_artikel_lagerbestand', \max(0, (int) ($first['lagerbestand'] ?? 0)));
+		$ek_first = (string) ($first['ek'] ?? '');
+		if ($ek_first !== '' && \is_numeric($ek_first)) {
+			\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_EK') ? CMX_ARTIKEL_META_EK : '_cmx_artikel_ek', \number_format((float) $ek_first, 2, '.', ''));
+		}
+		return;
+	}
+
+	\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID') ? CMX_ARTIKEL_META_LIEFERANT_ID : '_cmx_art_lieferant_id', 0);
+	\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_NR') ? CMX_ARTIKEL_META_LIEFERANT_NR : '_cmx_art_lieferant_nr', '');
+	\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE') ? CMX_ARTIKEL_META_BEZUGSQUELLE : '_cmx_artikel_bezugsquelle_url', '');
+	\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERZEIT') ? CMX_ARTIKEL_META_LIEFERZEIT : '_cmx_art_lieferzeit_tage', 0);
+	\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LAGERBESTAND') ? CMX_ARTIKEL_META_LAGERBESTAND : '_cmx_artikel_lagerbestand', 0);
+}
+
+function cmx_artikel_import_collect_lieferanten_rows(int $post_id, array $row, array $row_l): array {
+	$existing_rows = \function_exists(__NAMESPACE__ . '\\cmx_artikel_load_lieferanten_rows_unified')
+		? (array) cmx_artikel_load_lieferanten_rows_unified($post_id)
+		: [];
+	$collected = [];
+	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
+	foreach ($all_keys as $raw_key) {
+		$key = \strtolower((string) $raw_key);
+		if (!\preg_match('/^lieferant_(\d+)_(name|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/', $key, $matches)) {
+			continue;
+		}
+		$slot = (int) ($matches[1] ?? 0);
+		if ($slot <= 0) {
+			continue;
+		}
+		$field = (string) ($matches[2] ?? '');
+		$collected[$slot][$field] = cmx_artikel_import_row_value($row, $row_l, (string) $raw_key);
+	}
+
+	$max_slot = \max(\count($existing_rows), $collected !== [] ? (int) \max(\array_keys($collected)) : 0);
+	$out = [];
+	for ($slot = 1; $slot <= $max_slot; $slot++) {
+		$base = \is_array($existing_rows[$slot - 1] ?? null) ? (array) $existing_rows[$slot - 1] : [];
+		$raw = \is_array($collected[$slot] ?? null) ? (array) $collected[$slot] : [];
+		$name = (string) ($raw['name'] ?? '');
+		$lieferant_id = $name !== ''
+			? (int) cmx_artikel_import_find_lieferant_id_by_name($name)
+			: (int) ($base['lieferant_id'] ?? 0);
+		$row_out = [
+			'lieferant_id' => \max(0, $lieferant_id),
+			'lieferant_nr' => isset($raw['nr']) ? \sanitize_text_field((string) $raw['nr']) : (string) ($base['lieferant_nr'] ?? ''),
+			'ek' => isset($raw['ek']) ? (string) $raw['ek'] : (string) ($base['ek'] ?? ''),
+			'bezugsquelle' => isset($raw['bezugsquelle']) ? (string) $raw['bezugsquelle'] : (string) ($base['bezugsquelle'] ?? ''),
+			'lieferzeit_tage' => isset($raw['lieferzeit_tage']) ? \max(0, (int) $raw['lieferzeit_tage']) : \max(0, (int) ($base['lieferzeit_tage'] ?? 0)),
+			'lagerbestand' => isset($raw['lagerbestand']) ? \max(0, (int) $raw['lagerbestand']) : \max(0, (int) ($base['lagerbestand'] ?? 0)),
+			'notiz' => isset($raw['notiz']) ? \sanitize_textarea_field((string) $raw['notiz']) : (string) ($base['notiz'] ?? ''),
+		];
+		if (
+			(int) $row_out['lieferant_id'] <= 0
+			&& (string) $row_out['lieferant_nr'] === ''
+			&& (string) $row_out['ek'] === ''
+			&& (string) $row_out['bezugsquelle'] === ''
+			&& (int) $row_out['lieferzeit_tage'] === 0
+			&& (int) $row_out['lagerbestand'] === 0
+			&& (string) $row_out['notiz'] === ''
+		) {
+			continue;
+		}
+		$out[] = $row_out;
+	}
+
+	return $out;
+}
+
 function cmx_artikel_import_apply_lieferanten_names(int $post_id, array $row): void {
 	$resolved_first_id = null;
 
@@ -114,12 +206,24 @@ function cmx_artikel_import_apply_lieferanten_names(int $post_id, array $row): v
 
 function cmx_import_clear_lieferanten_meta(int $post_id): void {
 	foreach (\array_keys((array)\get_post_meta($post_id)) as $meta_key) {
-		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)$/', (string)$meta_key)) {
+		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/', (string)$meta_key)) {
 			\delete_post_meta($post_id, $meta_key);
 		}
 	}
 	\delete_post_meta($post_id, '_cmx_art_lieferanten_count');
-	\delete_post_meta($post_id, '_cmx_art_lieferanten_liste');
+}
+
+function cmx_import_clear_variant_meta(int $post_id): void {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_clear_flat_rows')) {
+		cmx_artikel_variant_clear_flat_rows($post_id);
+	} else {
+		foreach (\array_keys((array) \get_post_meta($post_id)) as $meta_key) {
+			if (\preg_match('/^_cmx_artikel_variant_\d+_(sku|anzahl|left_taxonomy|left_term_id|right_taxonomy|right_term_id|einheit_term_id|ek|aufwand|vk|belegtext|verkaufbar|katalog|woo_product_id|woo_variation_id|woo_variation_sku)$/', (string) $meta_key)) {
+				\delete_post_meta($post_id, $meta_key);
+			}
+		}
+		\delete_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_COUNT') ? CMX_ARTIKEL_META_VARIANT_COUNT : '_cmx_artikel_variant_count');
+	}
 }
 
 function cmx_artikel_import_decode_meta_value(string $raw) {
@@ -141,6 +245,111 @@ function cmx_artikel_import_decode_meta_value(string $raw) {
 	}
 
 	return $value;
+}
+
+function cmx_artikel_import_resolve_term_id(string $taxonomy, string $slug = '', string $name = ''): int {
+	$taxonomy = \sanitize_key($taxonomy);
+	if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+		return 0;
+	}
+
+	$slug = \sanitize_title($slug);
+	$name = \trim($name);
+	if ($slug !== '') {
+		$term = \get_term_by('slug', $slug, $taxonomy);
+		if ($term && !\is_wp_error($term) && isset($term->term_id)) {
+			return (int) $term->term_id;
+		}
+	}
+	if ($name !== '') {
+		$term = \get_term_by('name', $name, $taxonomy);
+		if ($term && !\is_wp_error($term) && isset($term->term_id)) {
+			return (int) $term->term_id;
+		}
+		$created = \wp_insert_term($name, $taxonomy, $slug !== '' ? ['slug' => $slug] : []);
+		if (!\is_wp_error($created) && isset($created['term_id'])) {
+			return (int) $created['term_id'];
+		}
+	}
+	return 0;
+}
+
+function cmx_artikel_import_collect_variant_rows(array $row, array $row_l): array {
+	$collected = [];
+	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
+	foreach ($all_keys as $raw_key) {
+		$key = \strtolower((string) $raw_key);
+		if (!\preg_match('/^variant_(\d+)_(sku|anzahl|left_taxonomy|left_term_slug|left_term_name|right_taxonomy|right_term_slug|right_term_name|einheit_slug|einheit_name|ek|aufwand|vk|belegtext|verkaufbar|katalog|woo_product_id|woo_variation_id|woo_variation_sku)$/', $key, $matches)) {
+			continue;
+		}
+		$slot = (int) ($matches[1] ?? 0);
+		if ($slot <= 0) {
+			continue;
+		}
+		$field = (string) ($matches[2] ?? '');
+		$collected[$slot][$field] = cmx_artikel_import_row_value($row, $row_l, (string) $raw_key);
+	}
+
+	$left_choices = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')
+		? (array) cmx_artikel_variant_taxonomy_choices('Grössen')
+		: [];
+	$right_choices = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')
+		? (array) cmx_artikel_variant_taxonomy_choices('Farben')
+		: [];
+
+	if ($collected === []) {
+		$legacy_blob = cmx_artikel_import_row_value($row, $row_l, 'meta___cmx_artikel_variant_rows');
+		$decoded = $legacy_blob !== '' ? cmx_artikel_import_decode_meta_value($legacy_blob) : null;
+		if (\is_array($decoded)) {
+			$out = [];
+			foreach ($decoded as $variant_row) {
+				if (!\is_array($variant_row)) {
+					continue;
+				}
+				$out[] = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_row_normalize')
+					? (array) cmx_artikel_variant_row_normalize($variant_row, $left_choices, $right_choices)
+					: (array) $variant_row;
+			}
+			return $out;
+		}
+		return [];
+	}
+
+	\ksort($collected, \SORT_NUMERIC);
+	$out = [];
+	foreach ($collected as $variant_row) {
+		if (!\is_array($variant_row)) {
+			continue;
+		}
+		$left_taxonomy = \sanitize_key((string) ($variant_row['left_taxonomy'] ?? ''));
+		$right_taxonomy = \sanitize_key((string) ($variant_row['right_taxonomy'] ?? ''));
+		$einheit_taxonomy = \defined(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN') ? (string) TAX_ARTIKEL_EINHEITEN : '';
+
+		$row_out = [
+			'sku' => (string) ($variant_row['sku'] ?? ''),
+			'anzahl' => (string) ($variant_row['anzahl'] ?? ''),
+			'left_taxonomy' => $left_taxonomy,
+			'left_term_id' => cmx_artikel_import_resolve_term_id($left_taxonomy, (string) ($variant_row['left_term_slug'] ?? ''), (string) ($variant_row['left_term_name'] ?? '')),
+			'right_taxonomy' => $right_taxonomy,
+			'right_term_id' => cmx_artikel_import_resolve_term_id($right_taxonomy, (string) ($variant_row['right_term_slug'] ?? ''), (string) ($variant_row['right_term_name'] ?? '')),
+			'einheit_term_id' => cmx_artikel_import_resolve_term_id($einheit_taxonomy, (string) ($variant_row['einheit_slug'] ?? ''), (string) ($variant_row['einheit_name'] ?? '')),
+			'ek' => (string) ($variant_row['ek'] ?? ''),
+			'aufwand' => (string) ($variant_row['aufwand'] ?? ''),
+			'vk' => (string) ($variant_row['vk'] ?? ''),
+			'belegtext' => (string) ($variant_row['belegtext'] ?? ''),
+			'verkaufbar' => cmx_artikel_import_bool_from_csv($variant_row['verkaufbar'] ?? '') ? 1 : 0,
+			'katalog' => cmx_artikel_import_bool_from_csv($variant_row['katalog'] ?? '') ? 1 : 0,
+			'woo_product_id' => (int) ($variant_row['woo_product_id'] ?? 0),
+			'woo_variation_id' => (int) ($variant_row['woo_variation_id'] ?? 0),
+			'woo_variation_sku' => (string) ($variant_row['woo_variation_sku'] ?? ''),
+		];
+
+		$out[] = \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_row_normalize')
+			? (array) cmx_artikel_variant_row_normalize($row_out, $left_choices, $right_choices)
+			: $row_out;
+	}
+
+	return $out;
 }
 
 function cmx_artikel_import_cleanup_dir(string $dir): void {
@@ -626,14 +835,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 		]);
 	}
 
-	$has_lieferanten_meta_in_csv = false;
+	$has_lieferanten_data_in_csv = false;
+	$has_variant_data_in_csv = false;
 	foreach ($header as $column) {
 		if (
-			\preg_match('/^meta__(?:_cmx_art_lieferant_\d+_(?:id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand)|_cmx_art_lieferanten_count|_cmx_art_lieferanten_liste)$/', (string) $column)
-			|| \preg_match('/^lieferant_\d+_name$/i', (string) $column)
+			\preg_match('/^meta__(?:_cmx_art_lieferant_\d+_(?:id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)|_cmx_art_lieferanten_count|_cmx_art_lieferanten_liste)$/', (string) $column)
+			|| \preg_match('/^lieferant_\d+_(?:name|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/i', (string) $column)
 		) {
-			$has_lieferanten_meta_in_csv = true;
-			break;
+			$has_lieferanten_data_in_csv = true;
+		}
+		if ((string) $column === 'variant_count' || \preg_match('/^variant_\d+_/', (string) $column) || (string) $column === 'meta___cmx_artikel_variant_rows') {
+			$has_variant_data_in_csv = true;
 		}
 	}
 
@@ -690,8 +902,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 			continue;
 		}
 
-		if ($is_update && $has_lieferanten_meta_in_csv) {
+		if ($is_update && $has_lieferanten_data_in_csv) {
 			cmx_import_clear_lieferanten_meta((int) $post_id);
+		}
+		if ($is_update && $has_variant_data_in_csv) {
+			cmx_import_clear_variant_meta((int) $post_id);
 		}
 
 		foreach ($row as $key => $value) {
@@ -715,6 +930,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 					$meta_key === '_cmx_local_image_artikel_gallery'
 					|| $meta_key === '_cmx_local_image_artikel_path'
 					|| $meta_key === '_cmx_local_image_artikel_url'
+					|| $meta_key === '_cmx_art_lieferanten_liste'
+					|| $meta_key === '_cmx_artikel_variant_rows'
 					|| \in_array($meta_key, ['_thumbnail_id', '_edit_lock', '_edit_last'], true)
 				) {
 					continue;
@@ -731,7 +948,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_import_redirect_notice')) {
 			}
 		}
 
-		cmx_artikel_import_apply_lieferanten_names((int) $post_id, $row);
+		if ($has_lieferanten_data_in_csv && \function_exists(__NAMESPACE__ . '\\cmx_artikel_save_lieferanten_rows_unified')) {
+			$lieferanten_rows = cmx_artikel_import_collect_lieferanten_rows((int) $post_id, $row, $row_l);
+			cmx_artikel_save_lieferanten_rows_unified((int) $post_id, $lieferanten_rows);
+			cmx_artikel_import_sync_lieferanten_legacy_fields((int) $post_id, $lieferanten_rows);
+		} else {
+			cmx_artikel_import_apply_lieferanten_names((int) $post_id, $row);
+		}
+		if ($has_variant_data_in_csv && \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_persist')) {
+			$variant_rows = cmx_artikel_import_collect_variant_rows($row, $row_l);
+			cmx_artikel_variant_rows_persist((int) $post_id, $variant_rows);
+		}
 		cmx_artikel_import_apply_image((int) $post_id, $row, $row_l, $zip_image_map);
 
 		$stored_title = \trim((string) \get_the_title($post_id));

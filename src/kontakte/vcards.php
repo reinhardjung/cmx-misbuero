@@ -117,6 +117,96 @@ function cmx_kontakte_vcard_handle(): void {
 
 /** ---------- Helpers (Label-Slugs, Länder, Redirect, Parser) ---------- */
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts_fallback')) {
+	function cmx_kommunikation_persist_contacts_fallback(int $post_id, array $contacts): void {
+		$row_fields = ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'anrede', 'duzis'];
+		$all_meta = (array) \get_post_meta($post_id);
+		foreach (\array_keys($all_meta) as $meta_key) {
+			if (\preg_match('/^_cmx_kommunikation_\d+_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|anrede|duzis)$/', (string) $meta_key)) {
+				\delete_post_meta($post_id, (string) $meta_key);
+			}
+		}
+
+		\update_post_meta($post_id, '_cmx_kommunikation_count', (string) \count($contacts));
+
+		foreach (\array_values($contacts) as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$slot = $index + 1;
+			foreach ($row_fields as $field) {
+				$value = (string) ($row[$field] ?? '');
+				if ($field === 'email') {
+					$value = \sanitize_email($value);
+				} elseif ($field === 'telefon_label' || $field === 'email_label') {
+					$value = \sanitize_key($value);
+				} elseif ($field === 'duzis') {
+					$value = !empty($value) && $value !== '0' ? '1' : '0';
+				} else {
+					$value = \sanitize_text_field($value);
+				}
+
+				$meta_key = '_cmx_kommunikation_' . $slot . '_' . $field;
+				if ($field === 'duzis') {
+					\update_post_meta($post_id, $meta_key, $value);
+				} elseif ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		for ($slot = 1; $slot <= 3; $slot++) {
+			$row = \is_array($contacts[$slot - 1] ?? null) ? (array) $contacts[$slot - 1] : [];
+			$legacy_map = [
+				"_cmx_telefon_{$slot}" => (string) ($row['telefon'] ?? ''),
+				"_cmx_email_{$slot}" => (string) ($row['email'] ?? ''),
+				"_cmx_telefon_label_{$slot}" => (string) ($row['telefon_label'] ?? ''),
+				"_cmx_email_label_{$slot}" => (string) ($row['email_label'] ?? ''),
+			];
+			foreach ($legacy_map as $meta_key => $value) {
+				$value = $meta_key === "_cmx_email_{$slot}" ? \sanitize_email($value) : \sanitize_text_field($value);
+				if ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
+			$bundle = cmx_kommunikation_build_legacy_bundle($contacts);
+		} else {
+			$bundle = ['kontakte' => [], 'telefon' => [], 'email' => []];
+			foreach (\array_values($contacts) as $index => $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$slot = $index + 1;
+				$email = \sanitize_email((string) ($row['email'] ?? ''));
+				$telefon = \sanitize_text_field((string) ($row['telefon'] ?? ''));
+				$email_label = \sanitize_key((string) ($row['email_label'] ?? ''));
+				$telefon_label = \sanitize_key((string) ($row['telefon_label'] ?? ''));
+				$bundle['kontakte'][] = $row;
+				$bundle['telefon'][$slot] = ['label' => $telefon_label, 'value' => $telefon];
+				$bundle['email'][$slot] = ['label' => $email_label, 'value' => $email, 'valid' => \is_email($email) ? '1' : '0'];
+				$bundle['telefon_' . $slot] = $telefon;
+				$bundle['email_' . $slot] = $email;
+			}
+		}
+		if (
+			(array) ($bundle['kontakte'] ?? []) === []
+			&& (array) ($bundle['telefon'] ?? []) === []
+			&& (array) ($bundle['email'] ?? []) === []
+		) {
+			\delete_post_meta($post_id, '_cmx_kommunikation');
+		} else {
+			\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+		}
+	}
+}
+
 function cmx_kontakte_vcard_import_contact(array $d) {
 	$post_title = cmx_kontakte_vcard_prepare_title($d);
 	$post_id = cmx_kontakte_vcard_find_existing_contact_id($post_title);
@@ -256,27 +346,28 @@ function cmx_kontakte_vcard_apply_contact_data(int $post_id, array $d, bool $is_
 		$changed = cmx_kontakte_vcard_apply_phone_row($post_id, $i + 1, (array) $row, $bundle, $phone_label_map) || $changed;
 	}
 
+	$contacts = [];
+	$max_slots = max(count($emails), count($tels), ($first_name !== '' || $last_name !== '') ? 1 : 0);
+	for ($slot = 1; $slot <= $max_slots; $slot++) {
+		$contacts[] = [
+			'vorname' => $slot === 1 ? $first_name : '',
+			'nachname' => $slot === 1 ? $last_name : '',
+			'telefon_label' => (string) ($bundle['telefon'][$slot]['label'] ?? ''),
+			'telefon' => (string) \get_post_meta($post_id, "_cmx_telefon_{$slot}", true),
+			'email_label' => (string) ($bundle['email'][$slot]['label'] ?? ''),
+			'email' => (string) \get_post_meta($post_id, "_cmx_email_{$slot}", true),
+			'geburtsdatum' => '',
+			'duzis' => '0',
+		];
+	}
+
 	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
-		$contacts = [];
-		$max_slots = max(count($emails), count($tels), ($first_name !== '' || $last_name !== '') ? 1 : 0);
-		for ($slot = 1; $slot <= $max_slots; $slot++) {
-			$contacts[] = [
-				'vorname' => $slot === 1 ? $first_name : '',
-				'nachname' => $slot === 1 ? $last_name : '',
-				'telefon_label' => (string) ($bundle['telefon'][$slot]['label'] ?? ''),
-				'telefon' => (string) \get_post_meta($post_id, "_cmx_telefon_{$slot}", true),
-				'email_label' => (string) ($bundle['email'][$slot]['label'] ?? ''),
-				'email' => (string) \get_post_meta($post_id, "_cmx_email_{$slot}", true),
-				'geburtsdatum' => '',
-				'duzis' => '0',
-			];
-		}
 		if ($contacts !== []) {
 			cmx_kommunikation_persist_contacts($post_id, $contacts);
 			$changed = true;
 		}
 	} elseif ($bundle !== $original_bundle) {
-		\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+		cmx_kommunikation_persist_contacts_fallback($post_id, $contacts);
 		$changed = true;
 	}
 

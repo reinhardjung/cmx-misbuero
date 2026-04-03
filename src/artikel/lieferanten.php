@@ -351,9 +351,9 @@ function cmx_artikel_save_lieferanten_rows_unified(int $post_id, array $rows): v
 		}
 	}
 	\delete_post_meta($post_id, '_cmx_art_lieferanten_count');
-	\delete_post_meta($post_id, CMX_ARTIKEL_META_LIEFERANTEN_LISTE);
 
 	$i = 0;
+	$legacy_rows = [];
 	foreach ($rows as $row) {
 		if (!\is_array($row)) continue;
 		$rid = max(0, (int)($row['lieferant_id'] ?? 0));
@@ -372,9 +372,24 @@ function cmx_artikel_save_lieferanten_rows_unified(int $post_id, array $rows): v
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lieferzeit_tage'), $rltage);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'lagerbestand'), $rlager);
 		\update_post_meta($post_id, cmx_artikel_lieferanten_row_meta_key_unified($i, 'notiz'), $rnotiz);
+		$legacy_rows[] = [
+			'lieferant_id' => $rid,
+			'lieferant_nr' => $rnr,
+			'ek' => ($rek === null ? '' : \number_format($rek, 2, '.', '')),
+			'bezugsquelle' => $rurl,
+			'lieferzeit_tage' => $rltage,
+			'lieferzeit' => $rltage,
+			'lagerbestand' => $rlager,
+			'notiz' => $rnotiz,
+		];
 		$i++;
 	}
 	\update_post_meta($post_id, '_cmx_art_lieferanten_count', $i);
+	if ($legacy_rows === []) {
+		\delete_post_meta($post_id, CMX_ARTIKEL_META_LIEFERANTEN_LISTE);
+	} else {
+		\update_post_meta($post_id, CMX_ARTIKEL_META_LIEFERANTEN_LISTE, $legacy_rows);
+	}
 }
 function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	\wp_nonce_field('cmx_artikel_lieferanten_save_unified','cmx_artikel_lieferanten_nonce_unified');

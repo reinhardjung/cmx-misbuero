@@ -384,6 +384,47 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_label')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
+	function cmx_kommunikation_build_legacy_bundle(array $contacts): array {
+		$bundle = [
+			'kontakte' => [],
+			'telefon' => [],
+			'email' => [],
+		];
+
+		foreach (\array_values($contacts) as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (cmx_kommunikation_contact_row_is_empty($normalized)) {
+				continue;
+			}
+
+			$slot = $index + 1;
+			$phone = (string) ($normalized['telefon'] ?? '');
+			$email = (string) ($normalized['email'] ?? '');
+			$phone_label = (string) ($normalized['telefon_label'] ?? '');
+			$email_label = (string) ($normalized['email_label'] ?? '');
+
+			$bundle['kontakte'][] = $normalized;
+			$bundle['telefon'][$slot] = [
+				'label' => $phone_label,
+				'value' => $phone,
+			];
+			$bundle['email'][$slot] = [
+				'label' => $email_label,
+				'value' => $email,
+				'valid' => \is_email($email) ? '1' : '0',
+			];
+			$bundle['telefon_' . $slot] = $phone;
+			$bundle['email_' . $slot] = $email;
+		}
+
+		return $bundle;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
 	function cmx_kommunikation_persist_contacts(int $post_id, array $contacts): array {
 		$normalized_contacts = [];
@@ -487,7 +528,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
 			}
 		}
 
-		\delete_post_meta($post_id, '_cmx_kommunikation');
+		$legacy_bundle = cmx_kommunikation_build_legacy_bundle($normalized_contacts);
+		if (
+			(array) ($legacy_bundle['kontakte'] ?? []) === []
+			&& (array) ($legacy_bundle['telefon'] ?? []) === []
+			&& (array) ($legacy_bundle['email'] ?? []) === []
+		) {
+			\delete_post_meta($post_id, '_cmx_kommunikation');
+		} else {
+			\update_post_meta($post_id, '_cmx_kommunikation', $legacy_bundle);
+		}
 
 		return $normalized_contacts;
 	}

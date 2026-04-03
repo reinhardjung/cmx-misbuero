@@ -16,6 +16,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')) {
 	\define(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY', 'carent');
 }
 
+if (!\defined(__NAMESPACE__ . '\\CMX_SYSTEM_DEBUG_MODE_KEY')) {
+	\define(__NAMESPACE__ . '\\CMX_SYSTEM_DEBUG_MODE_KEY', 'debug_mode');
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_settings_option_name')) {
 	function cmx_system_settings_option_name(): string {
 		return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
@@ -137,6 +141,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_carent_enabled')) {
 	function cmx_system_is_carent_enabled(): bool {
 		$options = (array) \get_option(cmx_system_settings_option_name(), []);
 		return !empty($options[CMX_SYSTEM_CARENT_KEY]);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')) {
+	function cmx_system_is_debug_mode_enabled(): bool {
+		$options = (array) \get_option(cmx_system_settings_option_name(), []);
+		return !empty($options[CMX_SYSTEM_DEBUG_MODE_KEY]);
 	}
 }
 

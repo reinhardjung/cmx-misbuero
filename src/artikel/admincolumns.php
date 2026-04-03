@@ -52,7 +52,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
 		if (isset($cache[$post_id])) {
 			return $cache[$post_id];
 		}
-		$stored = \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, true);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_load') && \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')) {
+			$stored = (array) cmx_artikel_variant_rows_load(
+				$post_id,
+				(array) cmx_artikel_variant_taxonomy_choices('Grössen'),
+				(array) cmx_artikel_variant_taxonomy_choices('Farben')
+			);
+		} else {
+			$stored = \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, true);
+		}
 		if (!\is_array($stored) || empty($stored)) {
 			$cache[$post_id] = [];
 			return [];
@@ -164,8 +172,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_search_ids'))
 			'fields'         => 'ids',
 			'no_found_rows'  => true,
 			'meta_query'     => [[
-				'key'     => CMX_ARTIKEL_META_VARIANT_ROWS,
-				'compare' => 'EXISTS',
+				'relation' => 'OR',
+				[
+					'key'     => \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_COUNT') ? CMX_ARTIKEL_META_VARIANT_COUNT : '_cmx_artikel_variant_count',
+					'compare' => 'EXISTS',
+				],
+				[
+					'key'     => CMX_ARTIKEL_META_VARIANT_ROWS,
+					'compare' => 'EXISTS',
+				],
 			]],
 		]);
 

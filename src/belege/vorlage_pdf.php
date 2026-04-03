@@ -802,7 +802,15 @@ if (!function_exists(__NAMESPACE__.'\\cmxbu_get_article_variant_entries')) {
 			return [];
 		}
 
-		$stored = \get_post_meta($artikel_id, '_cmx_artikel_variant_rows', true);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_load') && \function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')) {
+			$stored = (array) cmx_artikel_variant_rows_load(
+				$artikel_id,
+				(array) cmx_artikel_variant_taxonomy_choices('Grössen'),
+				(array) cmx_artikel_variant_taxonomy_choices('Farben')
+			);
+		} else {
+			$stored = \get_post_meta($artikel_id, '_cmx_artikel_variant_rows', true);
+		}
 		if (!\is_array($stored) || empty($stored)) {
 			$cache[$artikel_id] = [];
 			return [];

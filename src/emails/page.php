@@ -212,7 +212,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	$sync_folder = isset($_REQUEST['sync_folder']) && !\is_array($_REQUEST['sync_folder'])
 		? \sanitize_key((string) \wp_unslash($_REQUEST['sync_folder']))
 		: ($folder !== '' ? $folder : 'inbox');
-	if (\in_array($sync_folder, ['archive', 'spam'], true)) {
+	if ($sync_folder === 'spam') {
 		$sync_folder = 'inbox';
 	}
 		$archive_year = isset($_REQUEST['archive_year']) && !\is_array($_REQUEST['archive_year'])
@@ -230,8 +230,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			'archive_month' => $archive_month,
 			'email_id' => 0,
 		];
-	$result = cmx_emails_sync_messages($account_id, $sync_folder !== '' ? $sync_folder : (string) $context['folder']);
+	$result = cmx_emails_sync_messages(
+		$account_id,
+		$sync_folder !== '' ? $sync_folder : (string) $context['folder'],
+		0,
+		$archive_year,
+		$archive_month
+	);
 	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Synchronisierung beendet.'), !empty($result['ok']) ? 'success' : 'error');
+});
+
+\add_action('admin_post_cmx_emails_rebuild', function (): void {
+	if (!\current_user_can('delete_posts')) {
+		\wp_die('Keine Berechtigung.');
+	}
+	\check_admin_referer('cmx_emails_rebuild');
+
+	$account_id = isset($_REQUEST['account_id']) && !\is_array($_REQUEST['account_id'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['account_id']))
+		: '';
+	$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
+		: '';
+	$archive_year = isset($_REQUEST['archive_year']) && !\is_array($_REQUEST['archive_year'])
+		? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_year']))
+		: '';
+	$archive_month = isset($_REQUEST['archive_month']) && !\is_array($_REQUEST['archive_month'])
+		? (\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
+			? cmx_emails_normalize_archive_month((string) \wp_unslash($_REQUEST['archive_month']))
+			: \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_month'])))
+		: '';
+	$rebuild_folder = $folder !== '' ? $folder : 'inbox';
+
+	$context = [
+		'account_id' => $account_id,
+		'folder' => $rebuild_folder,
+		'archive_year' => $archive_year,
+		'archive_month' => $archive_month,
+		'email_id' => 0,
+	];
+
+	$result = \function_exists(__NAMESPACE__ . '\\cmx_emails_rebuild_client_messages')
+		? cmx_emails_rebuild_client_messages($account_id, $rebuild_folder, 0, $archive_year, $archive_month)
+		: ['ok' => false, 'message' => 'Neuaufbau ist nicht verfuegbar.'];
+
+	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Neuaufbau beendet.'), !empty($result['ok']) ? 'success' : 'error');
 });
 
 \add_action('admin_post_cmx_emails_delete', function (): void {
@@ -780,7 +823,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 				echo \get_avatar($sender_email, 38);
 				echo '<div><strong>' . \esc_html($sender_label !== '' ? $sender_label : $sender_email) . '</strong><span>' . \esc_html($sender_email) . '</span></div>';
 				echo '</div>';
-				echo '<div class="cmx-email-subject"><strong>' . \esc_html((string) $message->post_title) . '</strong><span>' . \esc_html((string) $message->post_excerpt) . '</span></div>';
+				$list_subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+					? cmx_emails_subject_text((string) $message->post_title)
+					: (string) $message->post_title;
+				echo '<div class="cmx-email-subject"><strong>' . \esc_html($list_subject) . '</strong><span>' . \esc_html((string) $message->post_excerpt) . '</span></div>';
 				echo '<div class="cmx-email-date">' . \esc_html(cmx_emails_date_label($ts)) . '</div>';
 				echo '<div><span class="cmx-email-badge ' . \esc_attr(cmx_emails_status_class($status)) . '">' . \esc_html(cmx_emails_status_label($status)) . '</span></div>';
 				echo '<div class="cmx-email-message-clip">' . ($attachment_count > 0 ? '📎' : '') . '</div>';
@@ -812,7 +858,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 		if ($selected instanceof \WP_Post) {
 			$selected_id = (int) $selected->ID;
 			$sender_email = \sanitize_email((string) \get_post_meta($selected_id, cmx_emails_meta_key('sender_email'), true));
-			$subject = (string) \get_post_meta($selected_id, cmx_emails_meta_key('subject'), true);
+			$subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+				? cmx_emails_subject_text((string) \get_post_meta($selected_id, cmx_emails_meta_key('subject'), true))
+				: (string) \get_post_meta($selected_id, cmx_emails_meta_key('subject'), true);
 			$ts = (int) \get_post_meta($selected_id, cmx_emails_meta_key('received_ts'), true);
 			$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($selected_id, cmx_emails_meta_key('attachments'), true));
 			$contact_ids = cmx_emails_assignment_contact_ids($selected_id);
@@ -828,7 +876,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			echo '<dl class="cmx-email-meta-grid">';
 			echo '<dt>Von:</dt><dd>' . \esc_html((string) \get_post_meta($selected_id, cmx_emails_meta_key('sender_label'), true)) . '</dd>';
 			echo '<dt>An:</dt><dd>' . cmx_emails_render_address_html((array) \get_post_meta($selected_id, cmx_emails_meta_key('to'), true)) . '</dd>';
-			echo '<dt>Betreff:</dt><dd>' . \esc_html($subject !== '' ? $subject : (string) $selected->post_title) . '</dd>';
+			$subject_label = $subject !== ''
+				? $subject
+				: (\function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text') ? cmx_emails_subject_text((string) $selected->post_title) : (string) $selected->post_title);
+			echo '<dt>Betreff:</dt><dd>' . \esc_html($subject_label) . '</dd>';
 			echo '<dt>Datum:</dt><dd>' . \esc_html(cmx_emails_date_label_long($ts)) . '</dd>';
 			echo '<dt>Konto:</dt><dd>' . \esc_html((string) \get_post_meta($selected_id, cmx_emails_meta_key('account_label'), true)) . '</dd>';
 			echo '</dl>';

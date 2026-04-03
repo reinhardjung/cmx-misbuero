@@ -329,63 +329,6 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_country_label_from_slug')) {
 		return $map[$slug] ?? strtoupper($slug);
 	}
 }
-if (!function_exists(__NAMESPACE__.'\\cmxkl_read_comm')) {
-	function cmxkl_read_comm(int $post_id): array {
-		$out = [
-			'telefon' => [1=>['value'=>'','label_name'=>''], 2=>['value'=>'','label_name'=>''], 3=>['value'=>'','label_name'=>'']],
-			'email'   => [1=>['value'=>'','label_name'=>''], 2=>['value'=>'','label_name'=>''], 3=>['value'=>'','label_name'=>'']],
-		];
-
-		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
-			$contacts = [];
-			foreach ((array) cmx_kommunikation_read_contacts($post_id) as $row) {
-				if (!\is_array($row)) {
-					continue;
-				}
-				if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty') && cmx_kommunikation_contact_row_is_empty($row)) {
-					continue;
-				}
-				$contacts[] = $row;
-			}
-			for ($i = 1; $i <= 3; $i++) {
-				$row = $contacts[$i - 1] ?? null;
-				if (!\is_array($row)) {
-					continue;
-				}
-				$out['telefon'][$i]['value'] = (string) ($row['telefon'] ?? '');
-				$out['email'][$i]['value'] = (string) ($row['email'] ?? '');
-				$tel_slug = (string) ($row['telefon_label'] ?? '');
-				$mail_slug = (string) ($row['email_label'] ?? '');
-				$out['telefon'][$i]['label_name'] = $tel_slug !== '' ? cmxkl_term_name_by_slug(CMX_TAX_PHONE_LABELS, $tel_slug) : '';
-				$out['email'][$i]['label_name'] = $mail_slug !== '' ? cmxkl_term_name_by_slug(CMX_TAX_MAIL_LABELS, $mail_slug) : '';
-			}
-		}
-
-		$bundle = \get_post_meta($post_id,'_cmx_kommunikation',true);
-		if (!\is_array($bundle)) $bundle = [];
-		for ($i=1;$i<=3;$i++){
-			$tel  = \get_post_meta($post_id,"_cmx_telefon_{$i}",true);
-			if ($tel==='' || $tel===null)  $tel  = $bundle['telefon'][$i]['value'] ?? '';
-			$mail = \get_post_meta($post_id,"_cmx_email_{$i}",true);
-			if ($mail==='' || $mail===null) $mail = $bundle['email'][$i]['value']   ?? '';
-			if ($out['telefon'][$i]['value'] === '') $out['telefon'][$i]['value'] = (string)$tel;
-			if ($out['email'][$i]['value'] === '')   $out['email'][$i]['value']   = (string)$mail;
-
-			$tel_slug  = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_label_meta_key')
-				? (string) \get_post_meta($post_id, cmx_kommunikation_label_meta_key('telefon', $i), true)
-				: '';
-			$mail_slug = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_label_meta_key')
-				? (string) \get_post_meta($post_id, cmx_kommunikation_label_meta_key('email', $i), true)
-				: '';
-			if ($tel_slug === '')  $tel_slug  = (string)($bundle['telefon'][$i]['label'] ?? '');
-			if ($mail_slug === '') $mail_slug = (string)($bundle['email'][$i]['label']   ?? '');
-			if ($out['telefon'][$i]['label_name'] === '') $out['telefon'][$i]['label_name'] = $tel_slug  ? cmxkl_term_name_by_slug(CMX_TAX_PHONE_LABELS,$tel_slug) : '';
-			if ($out['email'][$i]['label_name'] === '')   $out['email'][$i]['label_name']   = $mail_slug ? cmxkl_term_name_by_slug(CMX_TAX_MAIL_LABELS,$mail_slug)  : '';
-		}
-		return $out;
-	}
-}
-
 if (!function_exists(__NAMESPACE__.'\\cmxkl_export_contact_rows')) {
 	function cmxkl_export_contact_rows(int $post_id): array {
 		if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
@@ -445,17 +388,52 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_contact_row_values')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__.'\\cmxkl_relation_headers')) {
+	function cmxkl_relation_headers(int $max_relations): array {
+		$headers = ['ansprechpartner_count'];
+		for ($slot = 1; $slot <= \max(1, $max_relations); $slot++) {
+			$headers[] = 'ansprechpartner_' . $slot . '_name';
+			$headers[] = 'ansprechpartner_' . $slot . '_beziehung';
+		}
+		return $headers;
+	}
+}
+
+if (!function_exists(__NAMESPACE__.'\\cmxkl_relation_row_values')) {
+	function cmxkl_relation_row_values(array $relations, int $max_relations): array {
+		$labels = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_beziehung_labels')
+			? (array) cmx_kontakte_zu_kontakt_beziehung_labels()
+			: [];
+		$values = [(string) \count($relations)];
+		for ($slot = 1; $slot <= \max(1, $max_relations); $slot++) {
+			$row = \is_array($relations[$slot - 1] ?? null) ? (array) $relations[$slot - 1] : [];
+			$kontakt_id = (int) ($row['id'] ?? 0);
+			$beziehung = (string) ($row['beziehung'] ?? '');
+			$values[] = $kontakt_id > 0 ? \trim((string) \get_the_title($kontakt_id)) : '';
+			$values[] = $beziehung !== '' ? (string) ($labels[$beziehung] ?? $beziehung) : '';
+		}
+		return $values;
+	}
+}
+
 /* ===== CSV-Streaming ===== */
 if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 	function cmxkl_write_kontakte_csv_to_handle($fh, array $ids): void {
 		$contacts_cache = [];
 		$max_contacts = 0;
+		$relations_cache = [];
+		$max_relations = 0;
 		foreach ($ids as $pid) {
 			$pid = (int) $pid;
 			$contacts_cache[$pid] = cmxkl_export_contact_rows($pid);
 			$max_contacts = \max($max_contacts, \count($contacts_cache[$pid]));
+			$relations_cache[$pid] = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_rows')
+				? (array) cmx_kontakte_zu_kontakt_rows($pid)
+				: [];
+			$max_relations = \max($max_relations, \count($relations_cache[$pid]));
 		}
 		$max_contacts = \max(1, $max_contacts);
+		$max_relations = \max(1, $max_relations);
 
 		$headers = [
 			'ID','Titel','Status','Erstellt_am',
@@ -470,10 +448,10 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 			'liefer_strasse','liefer_zusatz','liefer_plz','liefer_ort','liefer_land_slug','liefer_land_label',
 			// Stufe
 			'stufe_id','stufe_slug','stufe_name',
-			// Kommunikation
-			'telefon_1','telefon_label_1','telefon_2','telefon_label_2','telefon_3','telefon_label_3',
-			'email_1','email_label_1','email_2','email_label_2','email_3','email_label_3',
+			// Kommunikation (nur kontakt_n_* Schema)
 			...cmxkl_contact_headers($max_contacts),
+			// Ansprechpartner / Beziehungen
+			...cmxkl_relation_headers($max_relations),
 			// Roh-Metas exakt
 			'cmx_datum','_cmx_rechnung_land','_cmx_liefer_land',
 		];
@@ -576,8 +554,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 			}
 
 			// Kommunikation
-			$comm = cmxkl_read_comm($pid);
 			$contacts = $contacts_cache[(int) $pid] ?? [];
+			$relations = $relations_cache[(int) $pid] ?? [];
 
 			// Roh-Metas exakt (ungefiltert/roh)
 			$cmx_datum_raw     = (string)\get_post_meta($pid, 'cmx_datum', true);
@@ -629,21 +607,8 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 				$stufe_id,
 				$stufe_slug,
 				$stufe_name,
-
-				$comm['telefon'][1]['value'],
-				$comm['telefon_[1]']['label_name'] ?? $comm['telefon'][1]['label_name'],
-				$comm['telefon'][2]['value'],
-				$comm['telefon_[2]']['label_name'] ?? $comm['telefon'][2]['label_name'],
-				$comm['telefon'][3]['value'],
-				$comm['telefon_[3]']['label_name'] ?? $comm['telefon'][3]['label_name'],
-
-				$comm['email'][1]['value'],
-				$comm['email_[1]']['label_name'] ?? $comm['email'][1]['label_name'],
-				$comm['email'][2]['value'],
-				$comm['email_[2]']['label_name'] ?? $comm['email'][2]['label_name'],
-				$comm['email'][3]['value'],
-				$comm['email_[3]']['label_name'] ?? $comm['email'][3]['label_name'],
 				...cmxkl_contact_row_values($contacts, $max_contacts),
+				...cmxkl_relation_row_values($relations, $max_relations),
 
 				$cmx_datum_raw,
 				$rechnung_land_raw,

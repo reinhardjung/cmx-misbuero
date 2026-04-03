@@ -151,7 +151,6 @@ function cmx_kontakte_import_resolve_label_input(string $value, string $taxonomy
 }
 function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
 	$contacts = [];
-	$has_dynamic_contacts = false;
 	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
 	foreach ($all_keys as $raw_key) {
 		$key = \strtolower((string) $raw_key);
@@ -164,29 +163,6 @@ function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
 		}
 		$field = (string) ($matches[2] ?? '');
 		$contacts[$slot][$field] = cmx_kontakte_import_row_value($row, $row_l, (string) $raw_key);
-		$has_dynamic_contacts = true;
-	}
-
-	if (!$has_dynamic_contacts) {
-		$first_birthdate = cmx_kontakte_import_row_value($row, $row_l, 'geburtsdatum');
-		if ($first_birthdate === '') {
-			$first_birthdate = cmx_kontakte_import_row_value($row, $row_l, 'cmx_geburtsdatum');
-		}
-
-			for ($slot = 1; $slot <= 3; $slot++) {
-				$row_data = [
-					'vorname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'vorname') : '',
-					'nachname' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'nachname') : '',
-					'telefon_label' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_label_' . $slot),
-					'telefon' => cmx_kontakte_import_row_value($row, $row_l, 'telefon_' . $slot),
-					'email_label' => cmx_kontakte_import_row_value($row, $row_l, 'email_label_' . $slot),
-					'email' => cmx_kontakte_import_row_value($row, $row_l, 'email_' . $slot),
-					'geburtsdatum' => $slot === 1 ? $first_birthdate : '',
-					'anrede' => $slot === 1 ? cmx_kontakte_import_row_value($row, $row_l, 'anrede') : '',
-					'duzis' => '0',
-				];
-				$contacts[$slot] = $row_data;
-		}
 	}
 
 	\ksort($contacts, \SORT_NUMERIC);
@@ -199,6 +175,68 @@ function cmx_kontakte_import_collect_contacts(array $row, array $row_l): array {
 		$row_data['email_label'] = cmx_kontakte_import_resolve_label_input((string) ($row_data['email_label'] ?? ''), 'kontakte_emails');
 		$row_data['duzis'] = cmx_bool_from_csv($row_data['duzis'] ?? '') ? '1' : '0';
 		$out[] = $row_data;
+	}
+
+	return $out;
+}
+function cmx_kontakte_import_resolve_beziehung_input(string $value): string {
+	$value = \trim($value);
+	if ($value === '') {
+		return '';
+	}
+
+	$slug = \sanitize_title($value);
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_allowed_beziehungen')) {
+		$allowed = (array) cmx_kontakte_zu_kontakt_allowed_beziehungen();
+		if ($slug !== '' && \in_array($slug, $allowed, true)) {
+			return $slug;
+		}
+	}
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_beziehung_options')) {
+		foreach ((array) cmx_kontakte_zu_kontakt_beziehung_options() as $option) {
+			$option_value = \sanitize_title((string) ($option['value'] ?? ''));
+			$option_label = \trim((string) ($option['label'] ?? ''));
+			if ($option_value !== '' && ($slug === $option_value || \strcasecmp($value, $option_label) === 0)) {
+				return $option_value;
+			}
+		}
+	}
+
+	return $slug;
+}
+
+function cmx_kontakte_import_collect_ansprechpartner_rows(array $row, array $row_l): array {
+	$relations = [];
+	$all_keys = \array_values(\array_unique(\array_merge(\array_keys($row), \array_keys($row_l))));
+	foreach ($all_keys as $raw_key) {
+		$key = \strtolower((string) $raw_key);
+		if (!\preg_match('/^ansprechpartner_(\d+)_(name|beziehung)$/', $key, $matches)) {
+			continue;
+		}
+		$slot = (int) ($matches[1] ?? 0);
+		if ($slot <= 0) {
+			continue;
+		}
+		$field = (string) ($matches[2] ?? '');
+		$relations[$slot][$field] = cmx_kontakte_import_row_value($row, $row_l, (string) $raw_key);
+	}
+
+	\ksort($relations, \SORT_NUMERIC);
+	$out = [];
+	foreach ($relations as $relation) {
+		if (!\is_array($relation)) {
+			continue;
+		}
+		$name = \trim((string) ($relation['name'] ?? ''));
+		$beziehung = cmx_kontakte_import_resolve_beziehung_input((string) ($relation['beziehung'] ?? ''));
+		if ($name === '' && $beziehung === '') {
+			continue;
+		}
+		$out[] = [
+			'name' => $name,
+			'beziehung' => $beziehung,
+		];
 	}
 
 	return $out;
@@ -287,7 +325,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_import_header_is_valid')) 
 			}
 		}
 
-		foreach (['titel', 'vorname', 'nachname', 'rechnung_strasse', 'liefer_strasse', 'telefon_1', 'email_1'] as $required) {
+		foreach (['titel', 'vorname', 'nachname', 'rechnung_strasse', 'liefer_strasse', 'kontakt_count', 'kontakt_1_telefon', 'kontakt_1_email'] as $required) {
 			if (!isset($normalized[$required])) {
 				return false;
 			}
@@ -567,6 +605,14 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		'skipped' => [],
 		'failed' => [],
 	];
+	$has_ansprechpartner_columns = false;
+	foreach ($header as $column) {
+		if ((string) $column === 'ansprechpartner_count' || \preg_match('/^ansprechpartner_\d+_(name|beziehung)$/', (string) $column)) {
+			$has_ansprechpartner_columns = true;
+			break;
+		}
+	}
+	$pending_ansprechpartner = [];
 	$row_number = 1;
 
 	while (($line = \fgetcsv($h, 0, $sep, '"', '\\')) !== false) {
@@ -695,6 +741,9 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		} else {
 			\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
 		}
+		if ($has_ansprechpartner_columns && \function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_store_rows')) {
+			$pending_ansprechpartner[(int) $post_id] = cmx_kontakte_import_collect_ansprechpartner_rows($row, $row_l);
+		}
 
 		/* === KATEGORIEN (NEU – kompatibel zum Export) =======================
 		 * Unterstützte CSV-Spalten:
@@ -789,6 +838,29 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 	}
 
 	\fclose($h);
+	if ($has_ansprechpartner_columns && \function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_store_rows')) {
+		foreach ($pending_ansprechpartner as $kontakt_id => $relation_rows) {
+			$resolved_rows = [];
+			foreach ((array) $relation_rows as $relation_row) {
+				if (!\is_array($relation_row)) {
+					continue;
+				}
+				$related_name = \trim((string) ($relation_row['name'] ?? ''));
+				if ($related_name === '') {
+					continue;
+				}
+				$related_id = cmx_import_find_existing_kontakt_id_by_title($related_name);
+				if ($related_id <= 0) {
+					continue;
+				}
+				$resolved_rows[] = [
+					'id' => $related_id,
+					'beziehung' => cmx_kontakte_import_resolve_beziehung_input((string) ($relation_row['beziehung'] ?? '')),
+				];
+			}
+			cmx_kontakte_zu_kontakt_store_rows((int) $kontakt_id, $resolved_rows);
+		}
+	}
 	if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
 
 	cmx_kontakte_import_redirect_notice($notice);

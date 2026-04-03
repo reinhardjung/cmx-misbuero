@@ -369,6 +369,147 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 		return $title !== '' ? $title : '';
 	}
 
+	function cmxal_lieferanten_headers(int $max_rows): array {
+		$headers = ['lieferanten_count'];
+		for ($i = 1; $i <= \max(1, $max_rows); $i++) {
+			$headers[] = 'lieferant_' . $i . '_name';
+			$headers[] = 'lieferant_' . $i . '_nr';
+			$headers[] = 'lieferant_' . $i . '_ek';
+			$headers[] = 'lieferant_' . $i . '_bezugsquelle';
+			$headers[] = 'lieferant_' . $i . '_lieferzeit_tage';
+			$headers[] = 'lieferant_' . $i . '_lagerbestand';
+			$headers[] = 'lieferant_' . $i . '_notiz';
+		}
+		return $headers;
+	}
+
+	function cmxal_lieferanten_row_values(array $rows, int $max_rows): array {
+		$values = [(string) \count($rows)];
+		for ($i = 0; $i < \max(1, $max_rows); $i++) {
+			$row = \is_array($rows[$i] ?? null) ? (array) $rows[$i] : [];
+			$kontakt_id = (int) ($row['lieferant_id'] ?? 0);
+			$values[] = \function_exists(__NAMESPACE__ . '\\cmxal_export_lieferanten_name')
+				? (string) cmxal_export_lieferanten_name($kontakt_id)
+				: '';
+			$values[] = (string) ($row['lieferant_nr'] ?? '');
+			$values[] = (string) ($row['ek'] ?? '');
+			$values[] = (string) ($row['bezugsquelle'] ?? '');
+			$values[] = (string) ($row['lieferzeit_tage'] ?? '');
+			$values[] = (string) ($row['lagerbestand'] ?? '');
+			$values[] = (string) ($row['notiz'] ?? '');
+		}
+		return $values;
+	}
+
+	function cmxal_export_variant_rows(int $post_id): array {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_rows_load') || !\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_taxonomy_choices')) {
+			return [];
+		}
+
+		return (array) cmx_artikel_variant_rows_load(
+			$post_id,
+			(array) cmx_artikel_variant_taxonomy_choices('Grössen'),
+			(array) cmx_artikel_variant_taxonomy_choices('Farben')
+		);
+	}
+
+	function cmxal_variant_headers(int $max_rows): array {
+		$headers = ['variant_count'];
+		for ($i = 1; $i <= \max(1, $max_rows); $i++) {
+			$headers[] = 'variant_' . $i . '_sku';
+			$headers[] = 'variant_' . $i . '_anzahl';
+			$headers[] = 'variant_' . $i . '_left_taxonomy';
+			$headers[] = 'variant_' . $i . '_left_term_slug';
+			$headers[] = 'variant_' . $i . '_left_term_name';
+			$headers[] = 'variant_' . $i . '_right_taxonomy';
+			$headers[] = 'variant_' . $i . '_right_term_slug';
+			$headers[] = 'variant_' . $i . '_right_term_name';
+			$headers[] = 'variant_' . $i . '_einheit_slug';
+			$headers[] = 'variant_' . $i . '_einheit_name';
+			$headers[] = 'variant_' . $i . '_ek';
+			$headers[] = 'variant_' . $i . '_aufwand';
+			$headers[] = 'variant_' . $i . '_vk';
+			$headers[] = 'variant_' . $i . '_belegtext';
+			$headers[] = 'variant_' . $i . '_verkaufbar';
+			$headers[] = 'variant_' . $i . '_katalog';
+			$headers[] = 'variant_' . $i . '_woo_product_id';
+			$headers[] = 'variant_' . $i . '_woo_variation_id';
+			$headers[] = 'variant_' . $i . '_woo_variation_sku';
+		}
+		return $headers;
+	}
+
+	function cmxal_variant_term_data(string $taxonomy, int $term_id): array {
+		$taxonomy = \sanitize_key($taxonomy);
+		if ($taxonomy === '' || $term_id <= 0 || !\taxonomy_exists($taxonomy)) {
+			return ['slug' => '', 'name' => ''];
+		}
+		$term = \get_term($term_id, $taxonomy);
+		if (!$term || \is_wp_error($term)) {
+			return ['slug' => '', 'name' => ''];
+		}
+		return [
+			'slug' => (string) ($term->slug ?? ''),
+			'name' => (string) ($term->name ?? ''),
+		];
+	}
+
+	function cmxal_variant_row_values(array $rows, int $max_rows): array {
+		$values = [(string) \count($rows)];
+		for ($i = 0; $i < \max(1, $max_rows); $i++) {
+			$row = \is_array($rows[$i] ?? null) ? (array) $rows[$i] : [];
+			$left_taxonomy = \sanitize_key((string) ($row['left_taxonomy'] ?? ''));
+			$right_taxonomy = \sanitize_key((string) ($row['right_taxonomy'] ?? ''));
+			$left_term = cmxal_variant_term_data($left_taxonomy, (int) ($row['left_term_id'] ?? 0));
+			$right_term = cmxal_variant_term_data($right_taxonomy, (int) ($row['right_term_id'] ?? 0));
+			$einheit_term = cmxal_variant_term_data(\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_EINHEITEN') ? (string) TAX_ARTIKEL_EINHEITEN : '', (int) ($row['einheit_term_id'] ?? 0));
+
+			$values[] = (string) ($row['sku'] ?? '');
+			$values[] = (string) ($row['anzahl'] ?? '');
+			$values[] = $left_taxonomy;
+			$values[] = (string) ($left_term['slug'] ?? '');
+			$values[] = (string) ($left_term['name'] ?? '');
+			$values[] = $right_taxonomy;
+			$values[] = (string) ($right_term['slug'] ?? '');
+			$values[] = (string) ($right_term['name'] ?? '');
+			$values[] = (string) ($einheit_term['slug'] ?? '');
+			$values[] = (string) ($einheit_term['name'] ?? '');
+			$values[] = (string) ($row['ek'] ?? '');
+			$values[] = (string) ($row['aufwand'] ?? '');
+			$values[] = (string) ($row['vk'] ?? '');
+			$values[] = (string) ($row['belegtext'] ?? '');
+			$values[] = !empty($row['verkaufbar']) ? '1' : '0';
+			$values[] = !empty($row['katalog']) ? '1' : '0';
+			$values[] = (string) ($row['woo_product_id'] ?? '');
+			$values[] = (string) ($row['woo_variation_id'] ?? '');
+			$values[] = (string) ($row['woo_variation_sku'] ?? '');
+		}
+		return $values;
+	}
+
+	function cmxal_should_export_meta_key(string $meta_key): bool {
+		$meta_key = (string) $meta_key;
+		if (\in_array($meta_key, [
+			'_cmx_local_image_artikel_gallery',
+			'_cmx_local_image_artikel_path',
+			'_cmx_local_image_artikel_url',
+			'_thumbnail_id',
+			'_cmx_artikel_variant_rows',
+			'_cmx_artikel_variant_count',
+			'_cmx_art_lieferanten_liste',
+			'_cmx_art_lieferanten_count',
+		], true)) {
+			return false;
+		}
+		if (\preg_match('/^_cmx_artikel_variant_\d+_(sku|anzahl|left_taxonomy|left_term_id|right_taxonomy|right_term_id|einheit_term_id|ek|aufwand|vk|belegtext|verkaufbar|katalog|woo_product_id|woo_variation_id|woo_variation_sku)$/', $meta_key)) {
+			return false;
+		}
+		if (\preg_match('/^_cmx_art_lieferant_\d+_(id|nr|ek|bezugsquelle|lieferzeit_tage|lagerbestand|notiz)$/', $meta_key)) {
+			return false;
+		}
+		return true;
+	}
+
 	function cmxal_write_artikel_csv_to_handle($fh, array $ids): void {
 		$base_headers = [
 			'post_id',
@@ -386,26 +527,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 			'featured_image_zip_path',
 		];
 
-		$meta_blacklist = [
-			'_cmx_local_image_artikel_gallery',
-			'_cmx_local_image_artikel_path',
-			'_cmx_local_image_artikel_url',
-			'_thumbnail_id',
-		];
-
 		$meta_keys = [];
 		$tax_headers = [];
 		$lieferanten_rows_map = [];
 		$max_lieferanten_rows = 0;
+		$variant_rows_map = [];
+		$max_variant_rows = 0;
 		foreach ($ids as $post_id) {
 			$lieferanten_rows = \function_exists(__NAMESPACE__ . '\\cmxal_export_lieferanten_rows')
 				? (array) cmxal_export_lieferanten_rows((int) $post_id)
 				: [];
 			$lieferanten_rows_map[(int) $post_id] = $lieferanten_rows;
 			$max_lieferanten_rows = \max($max_lieferanten_rows, \count($lieferanten_rows));
+			$variant_rows = \function_exists(__NAMESPACE__ . '\\cmxal_export_variant_rows')
+				? (array) cmxal_export_variant_rows((int) $post_id)
+				: [];
+			$variant_rows_map[(int) $post_id] = $variant_rows;
+			$max_variant_rows = \max($max_variant_rows, \count($variant_rows));
 
 			foreach (\get_post_meta($post_id) as $meta_key => $values) {
-				if (\in_array((string) $meta_key, $meta_blacklist, true)) {
+				if (!cmxal_should_export_meta_key((string) $meta_key)) {
 					continue;
 				}
 				$meta_keys[(string) $meta_key] = true;
@@ -417,13 +558,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 			$tax_headers[] = 'tax__' . $taxonomy->name;
 		}
 
-		$lieferanten_headers = [];
-		for ($i = 1; $i <= $max_lieferanten_rows; $i++) {
-			$lieferanten_headers[] = 'lieferant_' . $i . '_name';
-		}
+		$lieferanten_headers = cmxal_lieferanten_headers($max_lieferanten_rows);
+		$variant_headers = cmxal_variant_headers($max_variant_rows);
 
 		$meta_headers = \array_map(static fn(string $key): string => 'meta__' . $key, \array_keys($meta_keys));
-		$headers = \array_merge($base_headers, $lieferanten_headers, $meta_headers, $tax_headers);
+		$headers = \array_merge($base_headers, $lieferanten_headers, $variant_headers, $meta_headers, $tax_headers);
 		\fputcsv($fh, $headers, ';', '"', '\\');
 
 		foreach ($ids as $post_id) {
@@ -486,12 +625,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 			];
 
 			$lieferanten_rows = $lieferanten_rows_map[(int) $post_id] ?? [];
-			for ($i = 0; $i < $max_lieferanten_rows; $i++) {
-				$header = 'lieferant_' . ($i + 1) . '_name';
-				$kontakt_id = isset($lieferanten_rows[$i]['lieferant_id']) ? (int) $lieferanten_rows[$i]['lieferant_id'] : 0;
-				$row[$header] = \function_exists(__NAMESPACE__ . '\\cmxal_export_lieferanten_name')
-					? (string) cmxal_export_lieferanten_name($kontakt_id)
-					: '';
+			$variant_rows = $variant_rows_map[(int) $post_id] ?? [];
+			$structured_values = \array_merge(
+				cmxal_lieferanten_row_values($lieferanten_rows, $max_lieferanten_rows),
+				cmxal_variant_row_values($variant_rows, $max_variant_rows)
+			);
+			$structured_headers = \array_merge($lieferanten_headers, $variant_headers);
+			foreach ($structured_headers as $index => $header) {
+				$row[$header] = $structured_values[$index] ?? '';
 			}
 
 			$all_meta = \get_post_meta($post_id);

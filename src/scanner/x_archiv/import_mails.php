@@ -565,12 +565,14 @@ function cmx_mail_import_collect_contact_emails(int $kontakt_id): array {
 		}
 	}
 
-	$bundle = \get_post_meta($kontakt_id, '_cmx_kommunikation', true);
-	if (\is_array($bundle)) {
-		for ($i = 1; $i <= 3; $i++) {
-			$add((string) ($bundle['email'][$i]['value'] ?? ''));
-			$add((string) ($bundle['email'][$i] ?? ''));
-			$add((string) ($bundle['email_' . $i] ?? ''));
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+		$bundle = \get_post_meta($kontakt_id, '_cmx_kommunikation', true);
+		if (\is_array($bundle)) {
+			for ($i = 1; $i <= 3; $i++) {
+				$add((string) ($bundle['email'][$i]['value'] ?? ''));
+				$add((string) ($bundle['email'][$i] ?? ''));
+				$add((string) ($bundle['email_' . $i] ?? ''));
+			}
 		}
 	}
 
@@ -773,6 +775,21 @@ function cmx_mail_import_decode_mime_header(string $value): string {
 	if ($value === '') {
 		return '';
 	}
+
+	if (\function_exists('iconv_mime_decode')) {
+		$decoded = \iconv_mime_decode($value, \ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+		if (\is_string($decoded) && \trim($decoded) !== '') {
+			return \trim($decoded);
+		}
+	}
+
+	if (\function_exists('mb_decode_mimeheader')) {
+		$decoded = @\mb_decode_mimeheader($value);
+		if (\is_string($decoded) && \trim($decoded) !== '') {
+			return \trim($decoded);
+		}
+	}
+
 	$decoded = \imap_mime_header_decode($value);
 	if (!\is_array($decoded) || empty($decoded)) {
 		return $value;

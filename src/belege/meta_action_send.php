@@ -621,22 +621,24 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
 			}
 		}
 
-		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
-		if (\is_array($bundle)) {
-			$raw = \trim((string) ($bundle['email'][1]['value'] ?? ''));
-			if ($raw !== '') {
-				$candidate = \sanitize_email($raw);
-				if (\is_email($candidate)) {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+			$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+			if (\is_array($bundle)) {
+				$raw = \trim((string) ($bundle['email'][1]['value'] ?? ''));
+				if ($raw !== '') {
+					$candidate = \sanitize_email($raw);
+					if (\is_email($candidate)) {
+						return [
+							'email' => $candidate,
+							'error' => '',
+						];
+					}
+
 					return [
-						'email' => $candidate,
-						'error' => '',
+						'email' => '',
+						'error' => 'Im ersten Kommunikations-Eintrag des Kontakts ist keine gültige E-Mail-Adresse hinterlegt.',
 					];
 				}
-
-				return [
-					'email' => '',
-					'error' => 'Im ersten Kommunikations-Eintrag des Kontakts ist keine gültige E-Mail-Adresse hinterlegt.',
-				];
 			}
 		}
 
@@ -711,14 +713,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_collect_contact_reply_emails')) {
 			}
 		}
 
-		$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
-		if (\is_array($bundle)) {
-			$preferred_labels = ['direkt', 'direct', 'geschaeft', 'geschäft', 'privat', 'private', 'haupt', 'main'];
-			for ($i = 1; $i <= 3; $i++) {
-				$email_val = (string) ($bundle['email'][$i]['value'] ?? '');
-				$label = \sanitize_key((string) ($bundle['email'][$i]['label'] ?? ''));
-				$prio = \in_array($label, $preferred_labels, true) ? 220 - $i : 200 - $i;
-				$add_email($email_val, $prio);
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+			$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
+			if (\is_array($bundle)) {
+				$preferred_labels = ['direkt', 'direct', 'geschaeft', 'geschäft', 'privat', 'private', 'haupt', 'main'];
+				for ($i = 1; $i <= 3; $i++) {
+					$email_val = (string) ($bundle['email'][$i]['value'] ?? '');
+					$label = \sanitize_key((string) ($bundle['email'][$i]['label'] ?? ''));
+					$prio = \in_array($label, $preferred_labels, true) ? 220 - $i : 200 - $i;
+					$add_email($email_val, $prio);
+				}
 			}
 		}
 

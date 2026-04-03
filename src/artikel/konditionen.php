@@ -26,6 +26,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_FARBEN_TAXONOMY')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS', '_cmx_artikel_variant_rows');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_COUNT')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_COUNT', '_cmx_artikel_variant_count');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART', '_cmx_artikel_art');
 }
@@ -246,6 +249,63 @@ function cmx_artikel_variant_row_default(array $left_choices, array $right_choic
 	return \array_replace($row, $overrides);
 }
 
+function cmx_artikel_variant_row_fields(): array {
+	return [
+		'sku',
+		'anzahl',
+		'left_taxonomy',
+		'left_term_id',
+		'right_taxonomy',
+		'right_term_id',
+		'einheit_term_id',
+		'ek',
+		'aufwand',
+		'vk',
+		'belegtext',
+		'verkaufbar',
+		'katalog',
+		'woo_product_id',
+		'woo_variation_id',
+		'woo_variation_sku',
+	];
+}
+
+function cmx_artikel_variant_row_meta_key(int $slot, string $field): string {
+	return '_cmx_artikel_variant_' . \max(1, $slot) . '_' . \sanitize_key($field);
+}
+
+function cmx_artikel_variant_flat_slots(int $post_id): array {
+	$slots = [];
+	$count = (int) \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_COUNT, true);
+	if ($count > 0) {
+		for ($slot = 1; $slot <= $count; $slot++) {
+			$slots[$slot] = $slot;
+		}
+	}
+
+	foreach (\array_keys((array) \get_post_meta($post_id)) as $meta_key) {
+		if (!\preg_match('/^_cmx_artikel_variant_(\d+)_(sku|anzahl|left_taxonomy|left_term_id|right_taxonomy|right_term_id|einheit_term_id|ek|aufwand|vk|belegtext|verkaufbar|katalog|woo_product_id|woo_variation_id|woo_variation_sku)$/', (string) $meta_key, $matches)) {
+			continue;
+		}
+		$slot = (int) ($matches[1] ?? 0);
+		if ($slot > 0) {
+			$slots[$slot] = $slot;
+		}
+	}
+
+	\ksort($slots, \SORT_NUMERIC);
+	return \array_values($slots);
+}
+
+function cmx_artikel_variant_clear_flat_rows(int $post_id): void {
+	foreach (cmx_artikel_variant_flat_slots($post_id) as $slot) {
+		foreach (cmx_artikel_variant_row_fields() as $field) {
+			\delete_post_meta($post_id, cmx_artikel_variant_row_meta_key((int) $slot, $field));
+		}
+	}
+	\delete_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_COUNT);
+}
+
 function cmx_artikel_variant_row_normalize(array $row, array $left_choices, array $right_choices, array $base = []): array {
 	$default = cmx_artikel_variant_row_default($left_choices, $right_choices, $base);
 
@@ -346,9 +406,21 @@ function cmx_artikel_variant_row_legacy(int $post_id, array $left_choices, array
 }
 
 function cmx_artikel_variant_rows_load(int $post_id, array $left_choices, array $right_choices): array {
-	$stored = \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, true);
 	$rows = [];
 	$legacy_base = cmx_artikel_variant_row_legacy($post_id, $left_choices, $right_choices);
+
+	foreach (cmx_artikel_variant_flat_slots($post_id) as $slot) {
+		$row = [];
+		foreach (cmx_artikel_variant_row_fields() as $field) {
+			$row[$field] = \get_post_meta($post_id, cmx_artikel_variant_row_meta_key((int) $slot, $field), true);
+		}
+		$rows[] = cmx_artikel_variant_row_normalize((array) $row, $left_choices, $right_choices, $legacy_base);
+	}
+	if ($rows !== []) {
+		return \array_values($rows);
+	}
+
+	$stored = \get_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, true);
 
 	if (\is_array($stored)) {
 		foreach ($stored as $row) {
@@ -384,7 +456,23 @@ function cmx_artikel_variant_rows_persist(int $post_id, array $variant_rows, arr
 	}
 
 	$normalized_rows = \array_values($normalized_rows);
+	cmx_artikel_variant_clear_flat_rows($post_id);
+	foreach ($normalized_rows as $index => $row) {
+		$slot = $index + 1;
+		foreach (cmx_artikel_variant_row_fields() as $field) {
+			$value = $row[$field] ?? '';
+			if ($field === 'verkaufbar' || $field === 'katalog' || $field === 'woo_product_id' || $field === 'woo_variation_id' || $field === 'left_term_id' || $field === 'right_term_id' || $field === 'einheit_term_id') {
+				\update_post_meta($post_id, cmx_artikel_variant_row_meta_key($slot, $field), (int) $value);
+				continue;
+			}
+			if ((string) $value === '') {
+				continue;
+			}
+			\update_post_meta($post_id, cmx_artikel_variant_row_meta_key($slot, $field), (string) $value);
+		}
+	}
 	\update_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_ROWS, $normalized_rows);
+	\update_post_meta($post_id, CMX_ARTIKEL_META_VARIANT_COUNT, \count($normalized_rows));
 
 	$first_variant_row = $normalized_rows[0] ?? cmx_artikel_variant_row_default($left_choices, $right_choices);
 	$first_left_taxonomy = (string) ($first_variant_row['left_taxonomy'] ?? '');

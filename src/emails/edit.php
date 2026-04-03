@@ -688,9 +688,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_send_compose_post')) {
 			return new \WP_Error('missing_recipient', 'Bitte mindestens eine gueltige Empfaenger-Adresse eintragen.');
 		}
 
-		$subject = (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
+		$subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+			? cmx_emails_subject_text((string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true))
+			: (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
 		if ($subject === '') {
-			$subject = (string) $post->post_title;
+			$subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+				? cmx_emails_subject_text((string) $post->post_title)
+				: (string) $post->post_title;
 		}
 
 		$body_html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
@@ -896,7 +900,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_quoted_body')) {
 			'Von: ' . (string) \get_post_meta($source_id, cmx_emails_meta_key('sender_label'), true),
 			'An: ' . cmx_emails_address_text_from_items((array) \get_post_meta($source_id, cmx_emails_meta_key('to'), true)),
 			'Datum: ' . cmx_emails_date_label_long((int) \get_post_meta($source_id, cmx_emails_meta_key('received_ts'), true)),
-			'Betreff: ' . ((string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true) ?: (string) $source->post_title),
+			'Betreff: ' . (
+				(\function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+					? cmx_emails_subject_text((string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true))
+					: (string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true))
+				?: (\function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text') ? cmx_emails_subject_text((string) $source->post_title) : (string) $source->post_title)
+			),
 			'',
 			\trim($body),
 		];
@@ -914,7 +923,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 			$mode = $saved_mode;
 		}
 		$saved_account_id = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('account_id'), true));
-		$saved_subject = (string) \get_post_meta($post->ID, cmx_emails_meta_key('subject'), true);
+		$saved_subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+			? cmx_emails_subject_text((string) \get_post_meta($post->ID, cmx_emails_meta_key('subject'), true))
+			: (string) \get_post_meta($post->ID, cmx_emails_meta_key('subject'), true);
 		if (cmx_emails_is_auto_draft_title($saved_subject)) {
 			$saved_subject = '';
 		}
@@ -925,7 +936,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 		$saved_cc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('cc'), true));
 		$saved_bcc = cmx_emails_address_text_from_items((array) \get_post_meta($post->ID, cmx_emails_meta_key('bcc'), true));
 		$body = (string) $post->post_content;
-		$post_title = (string) $post->post_title;
+		$post_title = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+			? cmx_emails_subject_text((string) $post->post_title)
+			: (string) $post->post_title;
 		if (cmx_emails_is_auto_draft_title($post_title)) {
 			$post_title = '';
 		}
@@ -945,9 +958,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_compose_prefill')) {
 			return $data;
 		}
 
-		$source_subject = (string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true);
+		$source_subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+			? cmx_emails_subject_text((string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true))
+			: (string) \get_post_meta($source_id, cmx_emails_meta_key('subject'), true);
 		if ($source_subject === '') {
-			$source_subject = (string) \get_the_title($source_id);
+			$source_subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+				? cmx_emails_subject_text((string) \get_the_title($source_id))
+				: (string) \get_the_title($source_id);
 		}
 
 		if ($data['account_id'] === '') {
@@ -1001,7 +1018,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_compose_metabox')) {
 
 		if ($source_id > 0) {
 			$source_label = $mode === 'forward' ? 'Weiterleitung von' : 'Antwort auf';
-			echo '<div class="cmx-email-compose-note"><strong>' . \esc_html($source_label) . ':</strong> <a href="' . \esc_url(\get_edit_post_link($source_id, '')) . '">' . \esc_html((string) \get_the_title($source_id)) . '</a></div>';
+			$source_title = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+				? cmx_emails_subject_text((string) \get_the_title($source_id))
+				: (string) \get_the_title($source_id);
+			echo '<div class="cmx-email-compose-note"><strong>' . \esc_html($source_label) . ':</strong> <a href="' . \esc_url(\get_edit_post_link($source_id, '')) . '">' . \esc_html($source_title) . '</a></div>';
 		}
 
 		echo '<input type="hidden" name="cmx_email_compose_mode" value="' . \esc_attr($mode) . '">';
@@ -1045,7 +1065,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		$post_id = (int) $post->ID;
 		$sender_label = (string) \get_post_meta($post_id, cmx_emails_meta_key('sender_label'), true);
 		$sender_email = \sanitize_email((string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true));
-		$subject = (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
+		$subject = \function_exists(__NAMESPACE__ . '\\cmx_emails_subject_text')
+			? cmx_emails_subject_text((string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true))
+			: (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
 		$account_label = (string) \get_post_meta($post_id, cmx_emails_meta_key('account_label'), true);
 		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 		$status = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('status'), true));

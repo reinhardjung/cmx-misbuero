@@ -4,6 +4,51 @@ const CMX_KONTAKTE_ZU_KONTAKT_MB_ID = 'cmx_kontakte_zu_kontakt_box';
 const CMX_KONTAKTE_ZU_KONTAKT_META  = '_cmx_kontakte_zu_kontakt_id';
 const CMX_KONTAKTE_ZU_KONTAKT_BEZIEHUNG_META = '_cmx_kontakte_zu_kontakt_beziehung';
 const CMX_KONTAKTE_ZU_KONTAKT_ROWS_META = '_cmx_kontakte_zu_kontakt_rows';
+const CMX_KONTAKTE_ZU_KONTAKT_COUNT_META = '_cmx_kontakte_zu_kontakt_count';
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_row_meta_key')) {
+	function cmx_kontakte_zu_kontakt_row_meta_key(int $slot, string $field): string {
+		return '_cmx_kontakte_zu_kontakt_' . \max(1, $slot) . '_' . \sanitize_key($field);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_flat_slots')) {
+	/**
+	 * @return array<int,int>
+	 */
+	function cmx_kontakte_zu_kontakt_flat_slots(int $post_id): array {
+		$slots = [];
+		$count = (int) \get_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_COUNT_META, true);
+		if ($count > 0) {
+			for ($slot = 1; $slot <= $count; $slot++) {
+				$slots[$slot] = $slot;
+			}
+		}
+
+		foreach (\array_keys((array) \get_post_meta($post_id)) as $meta_key) {
+			if (!\preg_match('/^_cmx_kontakte_zu_kontakt_(\d+)_(id|beziehung)$/', (string) $meta_key, $matches)) {
+				continue;
+			}
+			$slot = (int) ($matches[1] ?? 0);
+			if ($slot > 0) {
+				$slots[$slot] = $slot;
+			}
+		}
+
+		\ksort($slots, \SORT_NUMERIC);
+		return \array_values($slots);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_clear_flat_rows')) {
+	function cmx_kontakte_zu_kontakt_clear_flat_rows(int $post_id): void {
+		foreach (cmx_kontakte_zu_kontakt_flat_slots($post_id) as $slot) {
+			\delete_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key((int) $slot, 'id'));
+			\delete_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key((int) $slot, 'beziehung'));
+		}
+		\delete_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_COUNT_META);
+	}
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_title')) {
 	function cmx_kontakte_zu_kontakt_title(int $kontakt_id): string {
@@ -133,6 +178,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_rows')) {
 	 * @return array<int,array{id:int,beziehung:string}>
 	 */
 	function cmx_kontakte_zu_kontakt_rows(int $post_id): array {
+		$flat_rows = [];
+		foreach (cmx_kontakte_zu_kontakt_flat_slots($post_id) as $slot) {
+			$slot = (int) $slot;
+			$id = (int) \get_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key($slot, 'id'), true);
+			$beziehung = \sanitize_title((string) \get_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key($slot, 'beziehung'), true));
+			if ($id <= 0 && $beziehung === '') {
+				continue;
+			}
+			$flat_rows[] = [
+				'id' => $id,
+				'beziehung' => $beziehung,
+			];
+		}
+		if ($flat_rows !== []) {
+			return cmx_kontakte_zu_kontakt_normalize_rows($flat_rows, $post_id);
+		}
+
 		$raw = \get_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_ROWS_META, true);
 		if (\is_array($raw) && $raw !== []) {
 			return cmx_kontakte_zu_kontakt_normalize_rows($raw, $post_id);
@@ -157,6 +219,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_store_rows')) {
 	 */
 	function cmx_kontakte_zu_kontakt_store_rows(int $post_id, array $rows): void {
 		$rows = cmx_kontakte_zu_kontakt_normalize_rows($rows, $post_id);
+		cmx_kontakte_zu_kontakt_clear_flat_rows($post_id);
 		if ($rows === []) {
 			\delete_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_ROWS_META);
 			\delete_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_META);
@@ -164,7 +227,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_zu_kontakt_store_rows')) {
 			return;
 		}
 
+		foreach (\array_values($rows) as $index => $row) {
+			$slot = $index + 1;
+			\update_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key($slot, 'id'), (int) ($row['id'] ?? 0));
+			$beziehung = (string) ($row['beziehung'] ?? '');
+			if ($beziehung !== '') {
+				\update_post_meta($post_id, cmx_kontakte_zu_kontakt_row_meta_key($slot, 'beziehung'), $beziehung);
+			}
+		}
 		\update_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_ROWS_META, \array_values($rows));
+		\update_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_COUNT_META, \count($rows));
 		\update_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_META, (int) $rows[0]['id']);
 		if ((string) $rows[0]['beziehung'] !== '') {
 			\update_post_meta($post_id, CMX_KONTAKTE_ZU_KONTAKT_BEZIEHUNG_META, (string) $rows[0]['beziehung']);

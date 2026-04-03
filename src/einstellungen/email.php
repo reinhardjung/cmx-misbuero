@@ -726,8 +726,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_ajax_guard')) {
 		if (!\current_user_can('manage_options')) {
 			\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
 		}
-		$nonce = isset($_POST['_ajax_nonce']) ? (string) \wp_unslash($_POST['_ajax_nonce']) : '';
-		if (!\wp_verify_nonce($nonce, 'cmx_email_test_conn')) {
+
+		$nonce_fields = ['_ajax_nonce', '_wpnonce', 'nonce', 'security'];
+		$valid_nonce = false;
+		foreach ($nonce_fields as $field) {
+			$value = isset($_REQUEST[$field]) ? (string) \wp_unslash($_REQUEST[$field]) : '';
+			if ($value !== '' && \wp_verify_nonce($value, 'cmx_email_test_conn')) {
+				$valid_nonce = true;
+				break;
+			}
+		}
+
+		if (!$valid_nonce && \function_exists('check_ajax_referer')) {
+			$valid_nonce = \check_ajax_referer('cmx_email_test_conn', false, false) !== false;
+		}
+
+		if (!$valid_nonce) {
 			\wp_send_json_error(['message' => 'Ungueltige Anfrage.'], 403);
 		}
 	}
@@ -888,6 +902,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 			var fd = new FormData();
 			fd.append('action', action);
 			fd.append('_ajax_nonce', nonce);
+			fd.append('_wpnonce', nonce);
+			fd.append('nonce', nonce);
+			fd.append('security', nonce);
 			fd.append('email', String(email || '').trim());
 			fd.append('password', String(password || ''));
 			fd.append('host', String(host || '').trim());
@@ -1078,12 +1095,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_test_imap_connection')) {
 				setPending(result, 'Teste Verbindung...');
 				btn.disabled = true;
 
-				var fd = new FormData();
-				fd.append('action', action);
-				fd.append('_ajax_nonce', nonce);
-				fd.append('email', email);
-				fd.append('password', password);
-				fd.append('host', host);
+					var fd = new FormData();
+					fd.append('action', action);
+					fd.append('_ajax_nonce', nonce);
+					fd.append('_wpnonce', nonce);
+					fd.append('nonce', nonce);
+					fd.append('security', nonce);
+					fd.append('email', email);
+					fd.append('password', password);
+					fd.append('host', host);
 
 				fetch(ajaxUrl, {
 					method: 'POST',

@@ -3,6 +3,96 @@ namespace CLOUDMEISTER\CMX\Buero;
 
 defined('ABSPATH') || exit;
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts_fallback')) {
+	function cmx_kommunikation_persist_contacts_fallback(int $post_id, array $contacts): void {
+		$row_fields = ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'anrede', 'duzis'];
+		$all_meta = (array) \get_post_meta($post_id);
+		foreach (\array_keys($all_meta) as $meta_key) {
+			if (\preg_match('/^_cmx_kommunikation_\d+_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|anrede|duzis)$/', (string) $meta_key)) {
+				\delete_post_meta($post_id, (string) $meta_key);
+			}
+		}
+
+		\update_post_meta($post_id, '_cmx_kommunikation_count', (string) \count($contacts));
+
+		foreach (\array_values($contacts) as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$slot = $index + 1;
+			foreach ($row_fields as $field) {
+				$value = (string) ($row[$field] ?? '');
+				if ($field === 'email') {
+					$value = \sanitize_email($value);
+				} elseif ($field === 'telefon_label' || $field === 'email_label') {
+					$value = \sanitize_key($value);
+				} elseif ($field === 'duzis') {
+					$value = !empty($value) && $value !== '0' ? '1' : '0';
+				} else {
+					$value = \sanitize_text_field($value);
+				}
+
+				$meta_key = '_cmx_kommunikation_' . $slot . '_' . $field;
+				if ($field === 'duzis') {
+					\update_post_meta($post_id, $meta_key, $value);
+				} elseif ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		for ($slot = 1; $slot <= 3; $slot++) {
+			$row = \is_array($contacts[$slot - 1] ?? null) ? (array) $contacts[$slot - 1] : [];
+			$legacy_map = [
+				"_cmx_telefon_{$slot}" => (string) ($row['telefon'] ?? ''),
+				"_cmx_email_{$slot}" => (string) ($row['email'] ?? ''),
+				"_cmx_telefon_label_{$slot}" => (string) ($row['telefon_label'] ?? ''),
+				"_cmx_email_label_{$slot}" => (string) ($row['email_label'] ?? ''),
+			];
+			foreach ($legacy_map as $meta_key => $value) {
+				$value = $meta_key === "_cmx_email_{$slot}" ? \sanitize_email($value) : \sanitize_text_field($value);
+				if ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
+			$bundle = cmx_kommunikation_build_legacy_bundle($contacts);
+		} else {
+			$bundle = ['kontakte' => [], 'telefon' => [], 'email' => []];
+			foreach (\array_values($contacts) as $index => $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$slot = $index + 1;
+				$email = \sanitize_email((string) ($row['email'] ?? ''));
+				$telefon = \sanitize_text_field((string) ($row['telefon'] ?? ''));
+				$email_label = \sanitize_key((string) ($row['email_label'] ?? ''));
+				$telefon_label = \sanitize_key((string) ($row['telefon_label'] ?? ''));
+				$bundle['kontakte'][] = $row;
+				$bundle['telefon'][$slot] = ['label' => $telefon_label, 'value' => $telefon];
+				$bundle['email'][$slot] = ['label' => $email_label, 'value' => $email, 'valid' => \is_email($email) ? '1' : '0'];
+				$bundle['telefon_' . $slot] = $telefon;
+				$bundle['email_' . $slot] = $email;
+			}
+		}
+		if (
+			(array) ($bundle['kontakte'] ?? []) === []
+			&& (array) ($bundle['telefon'] ?? []) === []
+			&& (array) ($bundle['email'] ?? []) === []
+		) {
+			\delete_post_meta($post_id, '_cmx_kommunikation');
+		} else {
+			\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_option_name')) {
 	function cmx_woocommerce_option_name(): string {
 		return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen';
@@ -1120,20 +1210,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_contact')) {
 				'duzis' => '0',
 			]]);
 		} else {
-			$bundle = \get_post_meta($contact_id, '_cmx_kommunikation', true);
-			if (!\is_array($bundle)) {
-				$bundle = ['telefon' => [], 'email' => []];
-			}
-			$bundle['telefon'][1] = [
-				'label' => (string) ($bundle['telefon'][1]['label'] ?? ''),
-				'value' => $parts['phone'],
-			];
-			$bundle['email'][1] = [
-				'label' => (string) ($bundle['email'][1]['label'] ?? ''),
-				'value' => $parts['email'],
-				'valid' => \is_email($parts['email']) ? '1' : '0',
-			];
-			\update_post_meta($contact_id, '_cmx_kommunikation', $bundle);
+			cmx_kommunikation_persist_contacts_fallback($contact_id, [[
+				'vorname' => (string) $parts['first_name'],
+				'nachname' => (string) $parts['last_name'],
+				'telefon_label' => '',
+				'telefon' => (string) $parts['phone'],
+				'email_label' => '',
+				'email' => (string) $parts['email'],
+				'geburtsdatum' => '',
+				'duzis' => '0',
+			]]);
 		}
 
 		return $contact_id;
