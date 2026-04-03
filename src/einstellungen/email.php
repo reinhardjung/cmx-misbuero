@@ -251,6 +251,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '<label class="cmx-email-client-field"><span>Kennwort</span><span class="cmx-email-password-wrap"><input type="password" class="regular-text cmx-email-password-input" name="' . $name_base . '[password]" value="' . $password . '" autocomplete="current-password"><button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden"><span class="cmx-email-password-icon is-show" aria-hidden="true"></span></button></span></label>';
 		echo '<label class="cmx-email-client-field"><span>SMTP Host (587)</span><input type="text" class="regular-text" name="' . $name_base . '[smtp_host]" value="' . $smtp_host . '" placeholder="smtp.infomaniak.com" autocomplete="off"></label>';
 		echo '<label class="cmx-email-client-field"><span>IMAP Host (993)</span><input type="text" class="regular-text" name="' . $name_base . '[imap_host]" value="' . $imap_host . '" placeholder="imap.infomaniak.com" autocomplete="off"></label>';
+		echo '<div class="cmx-email-client-inline-action"><button type="button" class="button button-secondary cmx-email-client-test">Testen</button></div>';
 		echo '<div class="cmx-email-client-actions">';
 		echo '<input type="hidden" class="cmx-email-client-category-enabled" name="' . $name_base . '[kontakt_kategorien_enabled]" value="' . ($contact_category_enabled ? '1' : '0') . '">';
 		echo '<div class="cmx-email-client-action-buttons">';
@@ -285,7 +286,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_client_item')) {
 		echo '</div>';
 		echo '</div>';
 		echo '</div>';
-		echo '<button type="button" class="button button-secondary cmx-email-client-test">Testen</button>';
 		echo '<button type="button" class="button-link-delete cmx-email-client-remove" aria-label="Client entfernen" title="Client entfernen"><span class="dashicons dashicons-trash" aria-hidden="true"></span></button>';
 		echo '</div>';
 		echo '</div>';
@@ -792,7 +792,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			}
 			.cmx-email-client-grid {
 				display: grid;
-				grid-template-columns: 0.72fr 0.83fr 0.94fr 0.8fr 0.8fr minmax(420px, 1.35fr);
+				grid-template-columns: 0.72fr 0.83fr 0.94fr 0.8fr 0.8fr auto minmax(270px, 1fr);
 				gap: 12px;
 				align-items: end;
 			}
@@ -818,15 +818,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				display: flex;
 				flex-direction: column;
 				align-self: end;
-				min-width: 420px;
-				gap: 8px;
+				min-width: 270px;
+				justify-self: end;
+				width: 100%;
+			}
+			.cmx-email-client-inline-action {
+				display: flex;
+				align-items: flex-end;
 			}
 			.cmx-email-client-action-buttons {
 				display: flex;
 				align-items: center;
 				gap: 10px;
-				justify-content: flex-start;
+				justify-content: flex-end;
 				flex-wrap: nowrap;
+				width: 100%;
 			}
 			.cmx-email-client-category-group {
 				display: flex;
@@ -845,8 +851,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				padding: 0;
 				border-radius: 12px;
 				box-shadow: inset 0 0 0 1px rgba(34, 113, 177, .08);
-				position: relative;
-				top: -3px;
 			}
 			.cmx-email-client-category-toggle .dashicons {
 				width: 18px;
@@ -854,7 +858,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				font-size: 18px;
 				line-height: 18px;
 				position: relative;
-				top: 5px;
+				top: 3px;
 			}
 			.cmx-email-client-category-toggle.is-active {
 				background: #2271b1;
@@ -885,8 +889,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				background: linear-gradient(180deg, #fff 0%, #f7f9fc 100%);
 				border-color: #c7d4e3;
 				box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
-				position: relative;
-				top: 5px;
 			}
 			.cmx-email-client-category-button .dashicons {
 				flex: 0 0 auto;
@@ -969,10 +971,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
-				width: 34px;
+				width: 38px;
 				height: var(--cmx-email-client-control-height);
 				min-height: var(--cmx-email-client-control-height);
 				padding: 0;
+				border-radius: 12px;
+				border: 1px solid #d63638;
+				background: #fff;
+				color: #d63638;
+			}
+			.cmx-email-client-remove:hover,
+			.cmx-email-client-remove:focus {
+				border-color: #b32d2e;
+				color: #b32d2e;
+				background: #fff;
 			}
 			.cmx-email-client-test {
 				height: var(--cmx-email-client-control-height);
