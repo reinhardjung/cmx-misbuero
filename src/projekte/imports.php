@@ -289,7 +289,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_extract_zip')) {
 		\fseek($handle, 0);
 	}
 
-	$header = \fgetcsv($handle, 0, $sep);
+	$header = \fgetcsv($handle, 0, $sep, '"', '\\');
 	if (!$header) {
 		\fclose($handle);
 		if ($cleanup_dir !== '') cmxpr_import_cleanup_dir($cleanup_dir);
@@ -316,7 +316,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_import_extract_zip')) {
 	];
 	$row_number = 1;
 
-	while (($line = \fgetcsv($handle, 0, $sep)) !== false) {
+	while (($line = \fgetcsv($handle, 0, $sep, '"', '\\')) !== false) {
 		$row_number++;
 		if (!\array_filter($line, static fn($value) => $value !== null && $value !== '')) continue;
 

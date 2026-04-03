@@ -424,7 +424,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 
 		$meta_headers = \array_map(static fn(string $key): string => 'meta__' . $key, \array_keys($meta_keys));
 		$headers = \array_merge($base_headers, $lieferanten_headers, $meta_headers, $tax_headers);
-		\fputcsv($fh, $headers, ';');
+		\fputcsv($fh, $headers, ';', '"', '\\');
 
 		foreach ($ids as $post_id) {
 			$post = \get_post($post_id);
@@ -522,7 +522,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_write_artikel_csv_to_handle')) {
 				}
 				$out[] = \str_replace(["\r", "\n"], ' ', (string) $value);
 			}
-			\fputcsv($fh, $out, ';');
+			\fputcsv($fh, $out, ';', '"', '\\');
 		}
 	}
 }

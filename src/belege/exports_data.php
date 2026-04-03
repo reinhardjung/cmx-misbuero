@@ -342,14 +342,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbeg_write_csv_dataset')) {
 		$rows = (array) ($dataset['rows'] ?? []);
 
 		\fwrite($handle, "\xEF\xBB\xBF");
-		\fputcsv($handle, $headers, ';');
+		\fputcsv($handle, $headers, ';', '"', '\\');
 
 		foreach ($rows as $row) {
 			$line = [];
 			foreach ($headers as $header) {
 				$line[] = (string) ($row[$header] ?? '');
 			}
-			\fputcsv($handle, $line, ';');
+			\fputcsv($handle, $line, ';', '"', '\\');
 		}
 	}
 }

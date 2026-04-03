@@ -1,7 +1,5 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-error_log('CMX: user-fields loaded');
-
 /**
  * ============================================================
  * 1) MAIL-BACKUP – PROFILFELD (muss vor den Redirect-Funktionen stehen!)

@@ -164,7 +164,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_extract_zip')) {
 			if ($first !== "\xEF\xBB\xBF") {
 				\fseek($handle, 0);
 			}
-			$header = \fgetcsv($handle, 0, ';');
+			$header = \fgetcsv($handle, 0, ';', '"', '\\');
 			\fclose($handle);
 
 			if ($header && cmxbei_import_header_is_valid(\array_map('trim', $header))) {
@@ -349,7 +349,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_refresh_beleg_pdf')) {
 		\fseek($handle, 0);
 	}
 
-	$header = \fgetcsv($handle, 0, $sep);
+	$header = \fgetcsv($handle, 0, $sep, '"', '\\');
 	if (!$header) {
 		\fclose($handle);
 		if ($cleanup_dir !== '') cmxbei_import_cleanup_dir($cleanup_dir);
@@ -377,7 +377,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_refresh_beleg_pdf')) {
 	];
 	$row_number = 1;
 
-	while (($line = \fgetcsv($handle, 0, $sep)) !== false) {
+	while (($line = \fgetcsv($handle, 0, $sep, '"', '\\')) !== false) {
 		$row_number++;
 		if (!\array_filter($line, static fn($value) => $value !== null && $value !== '')) continue;
 

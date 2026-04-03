@@ -601,9 +601,9 @@ function cmxbu_belege_csv_string(array $headers, array $rows): string {
 		return '';
 	}
 	\fwrite($fh, "\xEF\xBB\xBF");
-	\fputcsv($fh, $headers, ';');
+	\fputcsv($fh, $headers, ';', '"', '\\');
 	foreach ($rows as $row) {
-		\fputcsv($fh, (array) $row, ';');
+		\fputcsv($fh, (array) $row, ';', '"', '\\');
 	}
 	\rewind($fh);
 	$content = (string) \stream_get_contents($fh);

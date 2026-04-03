@@ -1340,7 +1340,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 	}
 
 	$res = cmx_fetch_logo_from_url((int) $post_id, 2.0);
-	if (\is_wp_error($res)) {
+	if (\is_wp_error($res) && $res->get_error_code() !== 'no_url') {
 		\error_log('[CMX Logo] ' . $res->get_error_code() . ': ' . $res->get_error_message());
 	}
 }, 20, 3);

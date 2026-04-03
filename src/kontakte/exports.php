@@ -477,7 +477,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 			// Roh-Metas exakt
 			'cmx_datum','_cmx_rechnung_land','_cmx_liefer_land',
 		];
-		\fputcsv($fh, $headers, ';');
+		\fputcsv($fh, $headers, ';', '"', '\\');
 
 		foreach ($ids as $pid) {
 			$post = \get_post($pid); if (!$post) continue;
@@ -634,7 +634,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_write_kontakte_csv_to_handle')) {
 				$liefer_land_raw,
 			];
 
-			\fputcsv($fh, $row, ';');
+			\fputcsv($fh, $row, ';', '"', '\\');
 		}
 	}
 }

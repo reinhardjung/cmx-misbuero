@@ -15,14 +15,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_csv_string_from_ids
 			? (array) cmxbu_beleg_export_headers()
 			: [];
 		if (!empty($headers)) {
-			\fputcsv($fh, $headers, ';');
+			\fputcsv($fh, $headers, ';', '"', '\\');
 		}
 
 		$rows = \function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_rows_from_ids')
 			? (array) cmxbu_beleg_export_rows_from_ids($ids)
 			: [];
 		foreach ($rows as $row) {
-			\fputcsv($fh, (array) $row, ';');
+			\fputcsv($fh, (array) $row, ';', '"', '\\');
 		}
 
 		\rewind($fh);

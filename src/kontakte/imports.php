@@ -530,7 +530,7 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 	$first = fread($h, 3);
 	if ($first !== "\xEF\xBB\xBF") fseek($h, 0);
 
-	$header = \fgetcsv($h, 0, $sep);
+	$header = \fgetcsv($h, 0, $sep, '"', '\\');
 	if (!$header) {
 		\fclose($h);
 		if ($cleanup_dir !== '') cmx_kontakte_import_cleanup_dir($cleanup_dir);
@@ -555,7 +555,7 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 	];
 	$row_number = 1;
 
-	while (($line = \fgetcsv($h, 0, $sep)) !== false) {
+	while (($line = \fgetcsv($h, 0, $sep, '"', '\\')) !== false) {
 		$row_number++;
 		if (!array_filter($line, static fn($v) => $v !== null && $v !== '')) continue;
 		$row = @array_combine($header, $line);

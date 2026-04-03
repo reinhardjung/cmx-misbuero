@@ -259,7 +259,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_write_csv_dataset')) {
 		$rows = (array) ($dataset['rows'] ?? []);
 
 		\fwrite($fh, "\xEF\xBB\xBF");
-		\fputcsv($fh, $headers, ';');
+		\fputcsv($fh, $headers, ';', '"', '\\');
 
 		foreach ($rows as $row) {
 			if (!\is_array($row)) continue;
@@ -271,7 +271,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_write_csv_dataset')) {
 				}
 				$out[] = \str_replace(["\r", "\n"], ' ', (string) $value);
 			}
-			\fputcsv($fh, $out, ';');
+			\fputcsv($fh, $out, ';', '"', '\\');
 		}
 	}
 }
