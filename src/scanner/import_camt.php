@@ -2106,7 +2106,7 @@ function cmx_bank_import_render_log_page(): void {
 	echo '<div class="cmx-camt-hero-layout">';
 	echo '<div class="cmx-camt-hero-copy">';
 	echo '<h1>Banken Import</h1>';
-	echo '<p class="cmx-camt-intro">camt.053 und camt.054 werden gemeinsam eingelesen und über ihre Buchungsmerkmale zusammengeführt, damit dieselbe Buchung nicht doppelt zugeordnet wird.<br>Bei Revolut XML &bull; camt.053 (V12)</p>';
+	echo '<p class="cmx-camt-intro">camt.053 und camt.054 werden gemeinsam eingelesen und über ihre Buchungsmerkmale zusammengeführt, damit dieselbe Buchung nicht doppelt zugeordnet wird.<br>Bei Revolut Business "XML &bull; camt.053 (V12)"</p>';
 	echo '</div>';
 
 	echo '<div id="cmx-camt-upload" class="cmx-camt-upload" tabindex="0" role="button" aria-label="CAMT Dateien hochladen">';

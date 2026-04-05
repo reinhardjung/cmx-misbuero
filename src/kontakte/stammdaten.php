@@ -423,11 +423,10 @@ function cmx_save_kontakte_meta(int $post_id): void {
 
 	// URL
 	if (isset($_POST['cmx_url'])) {
-		$url = (string) $_POST['cmx_url'];
-		if ($url !== '' && !\preg_match('~^https?://~i', $url)) {
-			$url = 'https://' . \ltrim($url, '/');
-		}
-		\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
+		$url = \function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_storage')
+			? cmx_normalize_url_for_storage((string) $_POST['cmx_url'])
+			: (string) \esc_url_raw((string) $_POST['cmx_url']);
+		\update_post_meta($post_id, CMX_KONTAKTE_META_URL, $url);
 	}
 
 	if (isset($_POST['cmx_status']) && \function_exists(__NAMESPACE__ . '\\cmx_kontakte_store_status')) {
@@ -486,6 +485,47 @@ function cmx_normalize_url_for_href(?string $url): string {
 		$url = 'https://' . \ltrim($url, '/');
 	}
 	return $url;
+}
+
+function cmx_normalize_url_for_storage(?string $url): string {
+	$url = \trim((string) $url);
+	if ($url === '') {
+		return '';
+	}
+	if (!\preg_match('~^https?://~i', $url)) {
+		$url = 'https://' . \ltrim($url, '/');
+	}
+	$parts = \wp_parse_url($url);
+	if (\is_array($parts) && !empty($parts['host'])) {
+		$parts['host'] = (string) \preg_replace('~^www\.~i', '', (string) $parts['host']);
+		$rebuilt = '';
+		if (!empty($parts['scheme'])) {
+			$rebuilt .= $parts['scheme'] . '://';
+		}
+		if (!empty($parts['user'])) {
+			$rebuilt .= $parts['user'];
+			if (\array_key_exists('pass', $parts) && $parts['pass'] !== '') {
+				$rebuilt .= ':' . $parts['pass'];
+			}
+			$rebuilt .= '@';
+		}
+		$rebuilt .= (string) $parts['host'];
+		if (!empty($parts['port'])) {
+			$rebuilt .= ':' . (string) $parts['port'];
+		}
+		$rebuilt .= (string) ($parts['path'] ?? '');
+		if (isset($parts['query']) && $parts['query'] !== '') {
+			$rebuilt .= '?' . $parts['query'];
+		}
+		if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+			$rebuilt .= '#' . $parts['fragment'];
+		}
+		$url = $rebuilt;
+	}
+	if ($url !== 'https://' && $url !== 'http://') {
+		$url = \preg_replace('~/+$~', '', $url) ?? $url;
+	}
+	return (string) \esc_url_raw($url);
 }
 
 /** Ursprungsdomain (ohne www, mit TLD-Intelligenz) */

@@ -320,6 +320,9 @@ function cmx_render_settings_page(): void {
 	$page_id = $sub ? "cmx_tab_{$tab}__{$sub}" : "cmx_tab_{$tab}";
 
 	echo '<div class="wrap"><h1>Einstellungen</h1>';
+	if (!empty($_GET['settings-updated'])) {
+		echo '<div class="notice notice-success is-dismissible"><p>Einstellungen gespeichert.</p></div>';
+	}
 
 	/* Tabs */
 	echo '<h2 class="nav-tab-wrapper">';

@@ -61,8 +61,8 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 	/* --- Stammdaten (per Nonce) --- */
 	if (isset($_POST['cmx_kontakte_nonce']) && \wp_verify_nonce($_POST['cmx_kontakte_nonce'], 'cmx_kontakte_save_meta')) {
 		$url = isset($_POST['cmx_url']) ? \trim((string) \wp_unslash($_POST['cmx_url'])) : null;
-		if ($url !== null && $url !== '' && !\preg_match('~^https?://~i', $url)) {
-			$url = 'https://'.\ltrim($url, '/');
+		if ($url !== null && \function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_storage')) {
+			$url = cmx_normalize_url_for_storage($url);
 		}
 
 		// Firmengründung / Kunde seit (YYYY-MM-DD), mit serverseitiger Validierung
@@ -87,7 +87,7 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 		}
 
 		if ($url !== null) {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_URL, \esc_url_raw($url));
+			\update_post_meta($post_id, CMX_KONTAKTE_META_URL, $url);
 		}
 		if ($firmengruendung !== null) {
 			if ($firmengruendung === '') {
