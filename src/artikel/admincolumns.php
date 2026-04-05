@@ -449,6 +449,9 @@ function cmx_lieferanten_args(): array {
 	$new['cb']             = $cols['cb'] ?? '<input type="checkbox" />';
 	$new['title']          = 'Artikel';
 	$new['sku']            = 'Nr';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_is_enabled') && cmx_artikel_carent_is_enabled()) {
+		$new['kennzeichen'] = 'Kennzeichen';
+	}
 	$new['typen']          = 'Typen';
 	$new['kategorien']     = 'Kategorie';
 	$new['groessen']       = 'Grösse';
@@ -477,6 +480,14 @@ function cmx_lieferanten_args(): array {
 	switch ($col) {
 		case 'sku':
 			echo \esc_html(\get_post_meta($post_id, CMX_ARTIKEL_META_SKU, true));
+			break;
+
+		case 'kennzeichen':
+			$kennzeichen = \trim((string) \get_post_meta($post_id, CMX_ARTIKEL_META_CARENT_KENNZEICHEN, true));
+			if ($kennzeichen !== '' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_normalize_kennzeichen')) {
+				$kennzeichen = (string) cmx_artikel_carent_normalize_kennzeichen($kennzeichen);
+			}
+			echo \esc_html($kennzeichen);
 			break;
 
 		case 'typen':
