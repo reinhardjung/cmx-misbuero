@@ -803,6 +803,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events'))
 	\wp_send_json_success(['message' => 'ok', 'id' => $entry['id']]);
 });
 
+\add_action('wp_ajax_cmx_cockpit_pendenzen_delete_manual_event', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	$nonce = isset($_POST['_ajax_nonce']) ? (string) \wp_unslash($_POST['_ajax_nonce']) : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_cockpit_pendenzen_delete_manual_event')) {
+		\wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+
+	$event_id = \sanitize_key((string) \wp_unslash($_POST['event_id'] ?? ''));
+	if ($event_id === '') {
+		\wp_send_json_error(['message' => 'missing_event_id'], 400);
+	}
+
+	$items = cmx_cockpit_pendenzen_manual_events();
+	$original_count = \count($items);
+	$items = \array_values(\array_filter($items, static function ($item) use ($event_id): bool {
+		return \sanitize_key((string) (($item['id'] ?? ''))) !== $event_id;
+	}));
+
+	if (\count($items) === $original_count) {
+		\wp_send_json_error(['message' => 'not_found'], 404);
+	}
+
+	\update_option(cmx_cockpit_pendenzen_manual_option_key(), $items, false);
+	\wp_send_json_success(['message' => 'deleted', 'id' => $event_id]);
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 	function cmx_cockpit_pendenzen_css(): string {
 		return '
@@ -905,11 +933,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-modal-close{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;border-radius:999px;background:#eef3fb;color:#42526b;cursor:pointer}
 			.cmx-pend-modal-close:hover{background:#e2ebf7}
 			.cmx-pend-modal-body{padding:18px 22px 0;overflow:visible}
-			.cmx-pend-modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px 22px}
+			.cmx-pend-modal-foot{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:18px 22px 22px}
+			.cmx-pend-modal-tools{display:flex;align-items:center;justify-content:flex-start;min-width:0}
 			.cmx-pend-modal-status{min-height:20px;color:#b32d2e;font-size:13px;line-height:1.4}
 			.cmx-pend-modal-status[data-tone="success"]{color:#2f7d32}
 			.cmx-pend-modal-actions{display:flex;align-items:center;gap:10px}
 			.cmx-pend-modal-actions .button{border-radius:8px !important}
+			.cmx-pend-modal-delete{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:36px;padding:0 10px;border-radius:8px !important;border:1px solid #f0c8cb;background:#fff7f7;color:#b32d2e}
+			.cmx-pend-modal-delete:hover,
+			.cmx-pend-modal-delete:focus{border-color:#e59ba0;background:#fff1f1;color:#8f1d21}
+			.cmx-pend-modal-delete .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
+			.cmx-pend-modal-delete[hidden]{display:none !important}
 			.cmx-pend-form-grid{display:grid;gap:16px}
 			.cmx-pend-form-row{display:grid;gap:16px}
 				.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(80px,106px) minmax(240px,320px) auto;align-items:end}
@@ -982,7 +1016,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-modal-head,
 				.cmx-pend-modal-body,
 				.cmx-pend-modal-foot{padding-left:16px;padding-right:16px}
-				.cmx-pend-modal-foot{flex-direction:column;align-items:stretch}
+				.cmx-pend-modal-foot{grid-template-columns:1fr;align-items:stretch}
+				.cmx-pend-modal-tools{justify-content:flex-start}
 				.cmx-pend-modal-actions{width:100%}
 				.cmx-pend-modal-actions .button{flex:1 1 auto;justify-content:center}
 				.cmx-pend-calendar-heading{flex-direction:column;align-items:stretch}
@@ -1304,6 +1339,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_modal')) {
 		echo '</form>';
 		echo '</div>';
 		echo '<div class="cmx-pend-modal-foot">';
+		echo '<div class="cmx-pend-modal-tools">';
+		echo '<button type="button" class="button cmx-pend-modal-delete" id="cmx-pend-modal-delete" aria-label="Termin löschen" title="Termin löschen" hidden><span class="dashicons dashicons-trash" aria-hidden="true"></span></button>';
+		echo '</div>';
 		echo '<div id="cmx-pend-modal-status" class="cmx-pend-modal-status" aria-live="polite"></div>';
 		echo '<div class="cmx-pend-modal-actions">';
 		echo '<button type="button" class="button" id="cmx-pend-modal-cancel">Abbrechen</button>';
@@ -1436,20 +1474,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		window.addEventListener("resize", scheduleCalendarSizing);
 	})();');
 
-	$pend_modal_data = [
-		'ajaxUrl' => (string) \admin_url('admin-ajax.php'),
-		'addNonce' => (string) \wp_create_nonce('cmx_cockpit_pendenzen_add_manual_event'),
-		'contactNonce' => (string) \wp_create_nonce('cmx_search_kontakte'),
-	];
+		$pend_modal_data = [
+			'ajaxUrl' => (string) \admin_url('admin-ajax.php'),
+			'addNonce' => (string) \wp_create_nonce('cmx_cockpit_pendenzen_add_manual_event'),
+			'deleteNonce' => (string) \wp_create_nonce('cmx_cockpit_pendenzen_delete_manual_event'),
+			'contactNonce' => (string) \wp_create_nonce('cmx_search_kontakte'),
+		];
 	\wp_add_inline_script($script_handle, '(function(config){
 		if (!config || !config.ajaxUrl) return;
 
 		var modal = document.getElementById("cmx-pend-modal");
 		var openButton = document.getElementById("cmx-pend-open-create");
-		var closeButton = document.getElementById("cmx-pend-modal-close");
-		var cancelButton = document.getElementById("cmx-pend-modal-cancel");
-		var saveButton = document.getElementById("cmx-pend-modal-save");
-		var form = document.getElementById("cmx-pend-create-form");
+			var closeButton = document.getElementById("cmx-pend-modal-close");
+			var cancelButton = document.getElementById("cmx-pend-modal-cancel");
+			var saveButton = document.getElementById("cmx-pend-modal-save");
+			var deleteButton = document.getElementById("cmx-pend-modal-delete");
+			var form = document.getElementById("cmx-pend-create-form");
 		var eventIdInput = document.getElementById("cmx-pend-create-event-id");
 		var status = document.getElementById("cmx-pend-modal-status");
 		var modalTitle = document.getElementById("cmx-pend-modal-title");
@@ -1472,7 +1512,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		var contactSearch = document.getElementById("cmx-pend-create-contact-search");
 		var contactId = document.getElementById("cmx-pend-create-contact-id");
 		var contactResults = document.getElementById("cmx-pend-create-contact-results");
-			if (!modal || !openButton || !closeButton || !cancelButton || !saveButton || !form || !eventIdInput || !status || !dateInput || !timeInput || !hinweisInput || !hinweisDateInput || !hinweisTimeInput || !allDayInput || !subjectInput || !descriptionInput || !urlInput || !contactSearch || !contactId || !contactResults) return;
+				if (!modal || !openButton || !closeButton || !cancelButton || !saveButton || !deleteButton || !form || !eventIdInput || !status || !dateInput || !timeInput || !hinweisInput || !hinweisDateInput || !hinweisTimeInput || !allDayInput || !subjectInput || !descriptionInput || !urlInput || !contactSearch || !contactId || !contactResults) return;
 
 		var timer = null;
 		var active = -1;
@@ -1485,6 +1525,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			} else {
 				status.removeAttribute("data-tone");
 			}
+		}
+
+		function syncDeleteButton(){
+			var hasEventId = String(eventIdInput.value || "").trim() !== "";
+			deleteButton.hidden = !hasEventId;
+			deleteButton.disabled = !hasEventId;
 		}
 
 		function triggerInputEvents(input){
@@ -1636,6 +1682,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 					hinweisDisplay.hidden = true;
 				}
 				updateHinweisPastState();
+				saveButton.disabled = false;
+				syncDeleteButton();
 				if (modalTitle) {
 					modalTitle.textContent = "Hinzufügen";
 				}
@@ -1666,6 +1714,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 					syncHinweisDate();
 				}
 				updateHinweisPastState();
+				syncDeleteButton();
 				if (modalTitle) {
 					modalTitle.textContent = "Bearbeiten";
 				}
@@ -1981,6 +2030,48 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		});
 		closeButton.addEventListener("click", function(){ closeModal(); });
 		cancelButton.addEventListener("click", function(){ closeModal(); });
+		deleteButton.addEventListener("click", function(){
+			var eventId = String(eventIdInput.value || "").trim();
+			if (!eventId) {
+				return;
+			}
+			if (!window.confirm("Termin wirklich löschen?")) {
+				return;
+			}
+
+			deleteButton.disabled = true;
+			saveButton.disabled = true;
+			setStatus("Pendenz wird gelöscht…", "");
+
+			var formData = new FormData();
+			formData.append("action", "cmx_cockpit_pendenzen_delete_manual_event");
+			formData.append("_ajax_nonce", String(config.deleteNonce || ""));
+			formData.append("event_id", eventId);
+
+			fetch(config.ajaxUrl, {
+				method: "POST",
+				credentials: "same-origin",
+				body: formData
+			}).then(function(response){
+				return response.json();
+			}).then(function(json){
+				if (!json || !json.success) {
+					var message = json && json.data && json.data.message ? String(json.data.message) : "Löschen fehlgeschlagen.";
+					setStatus(message, "");
+					deleteButton.disabled = false;
+					saveButton.disabled = false;
+					syncDeleteButton();
+					return;
+				}
+				setStatus("Pendenz gelöscht.", "success");
+				window.location.reload();
+			}).catch(function(){
+				setStatus("Löschen fehlgeschlagen.", "");
+				deleteButton.disabled = false;
+				saveButton.disabled = false;
+				syncDeleteButton();
+			});
+		});
 		modal.addEventListener("click", function(e){
 			if (e.target === modal) {
 				closeModal();
