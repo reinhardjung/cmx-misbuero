@@ -9,6 +9,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_ORT_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META', '_cmx_carent_uebernahme_datum');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META', '_cmx_carent_uebernahme_uhrzeit');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_VERMIETER_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_VERMIETER_META', '_cmx_carent_uebernahme_vermieter_attachment_id');
 }
@@ -20,6 +23,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')) {
 }
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META', '_cmx_carent_rueckgabe_datum');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META', '_cmx_carent_rueckgabe_uhrzeit');
 }
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_VERMIETER_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_VERMIETER_META', '_cmx_carent_rueckgabe_vermieter_attachment_id');
@@ -36,6 +42,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_box_configs')) {
 				'title' => \__('Übernahme', 'cmx-misbuero'),
 				'box_key' => 'uebernahme',
 				'datum_meta' => CMX_CARENT_UEBERNAHME_DATUM_META,
+				'uhrzeit_meta' => CMX_CARENT_UEBERNAHME_UHRZEIT_META,
 				'ort_meta' => CMX_CARENT_UEBERNAHME_ORT_META,
 				'vermieter_meta' => CMX_CARENT_UEBERNAHME_VERMIETER_META,
 				'mieter_meta' => CMX_CARENT_UEBERNAHME_MIETER_META,
@@ -45,6 +52,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_box_configs')) {
 				'title' => \__('Rückgabe', 'cmx-misbuero'),
 				'box_key' => 'rueckgabe',
 				'datum_meta' => CMX_CARENT_RUECKGABE_DATUM_META,
+				'uhrzeit_meta' => CMX_CARENT_RUECKGABE_UHRZEIT_META,
 				'ort_meta' => CMX_CARENT_RUECKGABE_ORT_META,
 				'vermieter_meta' => CMX_CARENT_RUECKGABE_VERMIETER_META,
 				'mieter_meta' => CMX_CARENT_RUECKGABE_MIETER_META,
@@ -52,6 +60,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_box_configs')) {
 		];
 	}
 }
+
+\add_action('admin_enqueue_scripts', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'carent') {
+		return;
+	}
+
+	$asset_path = \dirname(__DIR__, 2) . '/assets/geolocation.js';
+	$asset_url = (string) \plugins_url('assets/geolocation.js', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+	$asset_version = \file_exists($asset_path) ? (string) \filemtime($asset_path) : '1.0.0';
+
+	\wp_enqueue_script('cmx-geolocation', $asset_url, [], $asset_version, true);
+});
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_upload_empty_markup')) {
 	function cmx_carent_transfer_upload_empty_markup(string $preview_id): string {
@@ -94,7 +115,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		$box_id = 'cmx-carent-transfer-box-' . $box_key . '-' . (int) $post->ID;
 		$datum_name = 'cmx_carent_' . $box_key . '_datum';
 		$datum_label_id = $datum_name . '_label';
+		$uhrzeit_name = 'cmx_carent_' . $box_key . '_uhrzeit';
+		$uhrzeit_label_id = $uhrzeit_name . '_label';
 		$ort_name = 'cmx_carent_' . $box_key . '_ort';
+		$ort_label_id = $ort_name . '_label';
 		$vermieter_prefix = 'cmx_carent_' . $box_key . '_vermieter';
 		$mieter_prefix = 'cmx_carent_' . $box_key . '_mieter';
 		$km_stand_uebernahme_id = 'cmx_carent_fahrzeug_km_stand_uebernahme_' . (int) $post->ID;
@@ -102,6 +126,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		$km_stand_sync_id = 'cmx_carent_fahrzeug_km_stand_sync_' . (int) $post->ID;
 
 		$datum = (string) \get_post_meta($post->ID, (string) $config['datum_meta'], true);
+		$uhrzeit = (string) \get_post_meta($post->ID, (string) $config['uhrzeit_meta'], true);
 		$ort = (string) \get_post_meta($post->ID, (string) $config['ort_meta'], true);
 		$vermieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['vermieter_meta'], true);
 		$mieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['mieter_meta'], true);
@@ -131,6 +156,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<style>
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-stack{display:grid;gap:14px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-number label{display:block;margin:0 0 6px;font-weight:600}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(88px,104px);gap:8px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row .cmx-carent-transfer-number{min-width:0}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row input{width:100%;min-width:0}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row{display:flex;align-items:center;gap:6px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row input{flex:1 1 auto;min-width:0}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row .button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;padding:0 8px}
@@ -141,12 +169,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-transfer-box">';
 		echo '<div class="cmx-carent-transfer-stack">';
 		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
+		echo '<label id="' . \esc_attr($ort_label_id) . '" for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
 		echo '<input type="text" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
 		echo '</div>';
+		echo '<div class="cmx-carent-transfer-datetime-row">';
 		echo '<div class="cmx-carent-transfer-number">';
 		echo '<label id="' . \esc_attr($datum_label_id) . '" for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
 		echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
+		echo '</div>';
+		echo '<div class="cmx-carent-transfer-number">';
+		echo '<label id="' . \esc_attr($uhrzeit_label_id) . '" for="' . \esc_attr($uhrzeit_name) . '">' . \esc_html__('Uhrzeit', 'cmx-misbuero') . '</label>';
+		echo '<input type="time" class="widefat" name="' . \esc_attr($uhrzeit_name) . '" id="' . \esc_attr($uhrzeit_name) . '" value="' . \esc_attr($uhrzeit) . '">';
+		echo '</div>';
 		echo '</div>';
 		if ($box_key === 'uebernahme') {
 			echo '<div class="cmx-carent-transfer-number">';
@@ -180,13 +214,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
 			var postId = ' . (int) $post->ID . ';
 			var emptyText = ' . \wp_json_encode((string) \__('Foto hier ablegen oder anklicken.', 'cmx-misbuero')) . ';
+			var ortInput = document.getElementById(' . \wp_json_encode($ort_name) . ');
+			var ortLabel = document.getElementById(' . \wp_json_encode($ort_label_id) . ');
 			var dateInput = document.getElementById(' . \wp_json_encode($datum_name) . ');
 			var dateLabel = document.getElementById(' . \wp_json_encode($datum_label_id) . ');
+			var timeInput = document.getElementById(' . \wp_json_encode($uhrzeit_name) . ');
+			var timeLabel = document.getElementById(' . \wp_json_encode($uhrzeit_label_id) . ');
 
 			function getTodayValue(){
 				var now = new Date();
 				var local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
 				return local.toISOString().slice(0, 10);
+			}
+
+			function getCurrentTimeValue(){
+				var now = new Date();
+				var hours = String(now.getHours()).padStart(2, "0");
+				var minutes = String(now.getMinutes()).padStart(2, "0");
+				return hours + ":" + minutes;
+			}
+
+			function triggerInputEvents(input){
+				if (!input) return;
+				try {
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+				} catch (err) {}
 			}
 
 			function initUpload(prefix){
@@ -300,15 +353,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 			initUpload(' . \wp_json_encode($vermieter_prefix) . ');
 			initUpload(' . \wp_json_encode($mieter_prefix) . ');
+			if (ortInput && ortLabel) {
+				ortLabel.addEventListener("click", function(e){
+					if (typeof window.cmxGetLocation !== "function") return;
+					e.preventDefault();
+					window.cmxGetLocation(function(location){
+						if (!location) return;
+						var value = String(location.address || "").trim();
+						if (!value && location.lat && location.lon) {
+							value = String(location.lat) + ", " + String(location.lon);
+						}
+						if (!value) return;
+						ortInput.value = value;
+						triggerInputEvents(ortInput);
+						ortInput.focus();
+					});
+				});
+			}
 			if (dateInput && dateLabel) {
 				dateLabel.addEventListener("click", function(e){
 					e.preventDefault();
 					dateInput.value = getTodayValue();
-					try {
-						dateInput.dispatchEvent(new Event("input", { bubbles: true }));
-						dateInput.dispatchEvent(new Event("change", { bubbles: true }));
-					} catch (err) {}
+					triggerInputEvents(dateInput);
 					dateInput.focus();
+				});
+			}
+			if (timeInput && timeLabel) {
+				timeLabel.addEventListener("click", function(e){
+					e.preventDefault();
+					timeInput.value = getCurrentTimeValue();
+					triggerInputEvents(timeInput);
+					timeInput.focus();
 				});
 			}
 		})();
@@ -404,6 +479,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 				\delete_post_meta($post_id, (string) $config['datum_meta']);
 			} else {
 				\update_post_meta($post_id, (string) $config['datum_meta'], $datum_value);
+			}
+
+			$uhrzeit_field = 'cmx_carent_' . $box_key . '_uhrzeit';
+			$uhrzeit_value = isset($_POST[$uhrzeit_field]) ? (string) \wp_unslash($_POST[$uhrzeit_field]) : '';
+			$uhrzeit_value = \preg_match('/^\d{2}:\d{2}$/', $uhrzeit_value) ? $uhrzeit_value : '';
+			if ($uhrzeit_value === '') {
+				\delete_post_meta($post_id, (string) $config['uhrzeit_meta']);
+			} else {
+				\update_post_meta($post_id, (string) $config['uhrzeit_meta'], $uhrzeit_value);
 			}
 
 			$ort_field = 'cmx_carent_' . $box_key . '_ort';
