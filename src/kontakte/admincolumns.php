@@ -1090,6 +1090,17 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	return cmx_admin_deckungsbeitrag_add_view($views, 'kontakte', 'kontakte');
 }, 30);
 
+\add_filter('views_edit-kontakte', function(array $views): array {
+	$url = (string) \home_url('/telefonbuch/');
+	if ($url === '') {
+		return $views;
+	}
+
+	$views['cmx_telefonbuch_link'] = '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer">Telefonbuch</a>';
+
+	return $views;
+}, 999);
+
 \add_filter('manage_edit-kontakte_columns', function(array $columns): array {
 	if (!cmx_admin_deckungsbeitrag_view_active('kontakte')) {
 		return $columns;

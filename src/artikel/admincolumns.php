@@ -1281,6 +1281,20 @@ function cmx_lieferanten_args(): array {
 	return cmx_admin_deckungsbeitrag_add_view($views, 'artikel', 'artikel');
 }, 30);
 
+\add_filter('views_edit-artikel', function(array $views): array {
+	$url = \function_exists(__NAMESPACE__ . '\\cmx65_adminbar_katalog_focus_url')
+		? (string) cmx65_adminbar_katalog_focus_url()
+		: (string) \add_query_arg('cmx_focus_search', '1', \home_url('/katalog/'));
+
+	if ($url === '') {
+		return $views;
+	}
+
+	$views['cmx_katalog_link'] = '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer">Katalog</a>';
+
+	return $views;
+}, 999);
+
 \add_filter('manage_edit-artikel_columns', function(array $columns): array {
 	if (!cmx_admin_deckungsbeitrag_view_active('artikel')) {
 		return $columns;

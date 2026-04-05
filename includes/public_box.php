@@ -795,7 +795,7 @@ add_action('add_meta_boxes', function() {
 							echo '<a href="' . esc_url($new_beleg_url) . '" class="cmx-kontakt-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg anlegen"><span class="screen-reader-text">Neuen Beleg anlegen</span></a>';
 						}
 						if ($artikel_katalog_icon_html !== '') {
-							echo $artikel_katalog_icon_html;
+							echo '<span style="display:inline-flex;margin-left:15px;">' . $artikel_katalog_icon_html . '</span>';
 						}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';

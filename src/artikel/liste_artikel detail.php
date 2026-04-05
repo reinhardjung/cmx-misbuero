@@ -645,6 +645,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 					var menu=document.getElementById("cmx-artikel-cart-menu");
 					var continueBtn=document.getElementById("cmx-artikel-cart-continue");
 					var createBtn=document.getElementById("cmx-artikel-cart-create");
+					var menuOptions=[];
 					var createForm=document.getElementById("cmx-artikel-cart-create-form");
 					var createFields=document.getElementById("cmx-artikel-cart-create-fields");
 					var cartStorageKey=' . \wp_json_encode($cart_storage_key) . ';
@@ -655,6 +656,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 						title:' . \wp_json_encode($title) . '
 					};
 					if(!trigger||!wrap||!menu){return;}
+					menuOptions=Array.prototype.slice.call(menu.querySelectorAll(".cmx-artikel-cart-option:not([disabled])"));
+					function isTypingTarget(node){
+						if(!node || !(node instanceof HTMLElement)){return false;}
+						if(node.isContentEditable){return true;}
+						var tag=(node.tagName || "").toUpperCase();
+						return tag==="INPUT" || tag==="TEXTAREA" || tag==="SELECT";
+					}
 					function normalizeCart(items){
 						var merged=[];
 						var lookup={};
@@ -707,12 +715,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 					function buildSelection(){
 						return normalizeCart(readCart().concat([currentItem]));
 					}
+					function focusMenuOption(index){
+						if(!menuOptions.length){return;}
+						if(index < 0){index = menuOptions.length - 1;}
+						if(index >= menuOptions.length){index = 0;}
+						try{ menuOptions[index].focus(); }catch(err){}
+					}
+					function moveMenuFocus(step){
+						if(!menuOptions.length){return;}
+						var currentIndex=menuOptions.indexOf(document.activeElement);
+						if(currentIndex === -1){
+							focusMenuOption(step >= 0 ? 0 : menuOptions.length - 1);
+							return;
+						}
+						focusMenuOption(currentIndex + step);
+					}
 					function openMenu(){
 						menu.classList.add("is-open");
 						menu.setAttribute("aria-hidden","false");
 						trigger.setAttribute("aria-expanded","true");
 						window.setTimeout(function(){
-							if(continueBtn){ continueBtn.focus(); }
+							focusMenuOption(0);
 						},20);
 					}
 					function closeMenu(returnFocus){
@@ -759,8 +782,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 						}
 					});
 					document.addEventListener("keydown", function(event){
-						if(event.key==="Escape" && menu.classList.contains("is-open")){
-							closeMenu(true);
+						if(event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey){return;}
+						if(isTypingTarget(event.target)){return;}
+						if(menu.classList.contains("is-open")){
+							if(event.key==="ArrowDown" || event.key==="ArrowRight"){
+								event.preventDefault();
+								moveMenuFocus(1);
+								return;
+							}
+							if(event.key==="ArrowUp" || event.key==="ArrowLeft"){
+								event.preventDefault();
+								moveMenuFocus(-1);
+								return;
+							}
+							if(event.key==="Enter"){
+								event.preventDefault();
+								if(menuOptions.indexOf(document.activeElement) === -1){
+									focusMenuOption(0);
+									return;
+								}
+								try{ document.activeElement.click(); }catch(err){}
+								return;
+							}
+							if(event.key==="Escape"){
+								event.preventDefault();
+								closeMenu(true);
+								return;
+							}
+						}
+						if(event.key==="Enter"){
+							event.preventDefault();
+							openMenu();
+							return;
+						}
+						if(event.key==="Escape"){
+							event.preventDefault();
+							window.location.href=continueUrl;
 						}
 					});
 					if(continueBtn){
