@@ -1543,6 +1543,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 		document.addEventListener('DOMContentLoaded', function () {
 			var tries = 0;
 			var maxTries = 20;
+			var submitTitleTries = 0;
+			var submitTitleMaxTries = 20;
+			function syncSubmitBoxTitle() {
+				var submitBox = document.getElementById('submitdiv');
+				if (!submitBox) {
+					return false;
+				}
+				var titleNode = submitBox.querySelector('.postbox-header .hndle span');
+				if (titleNode) {
+					titleNode.textContent = 'E-Mail';
+					return true;
+				}
+				titleNode = submitBox.querySelector('.postbox-header .hndle, h2.hndle');
+				if (titleNode) {
+					titleNode.textContent = 'E-Mail';
+					return true;
+				}
+				return false;
+			}
 			function focusEditor() {
 				var textarea = document.getElementById('content');
 				if (typeof tinymce !== 'undefined') {
@@ -1569,6 +1588,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				}
 				window.setTimeout(tryFocus, 150);
 			}
+			function trySubmitBoxTitle() {
+				submitTitleTries += 1;
+				if (syncSubmitBoxTitle() || submitTitleTries >= submitTitleMaxTries) {
+					return;
+				}
+				window.setTimeout(trySubmitBoxTitle, 150);
+			}
+			window.setTimeout(trySubmitBoxTitle, 60);
 			window.setTimeout(tryFocus, 120);
 		});
 	</script>
@@ -1606,12 +1633,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 				}
 				var titleNode = submitBox.querySelector('.postbox-header .hndle span');
 				if (titleNode) {
-					titleNode.textContent = 'E-Mail...';
+					titleNode.textContent = 'E-Mail';
 					return;
 				}
 				titleNode = submitBox.querySelector('.postbox-header .hndle, h2.hndle');
 				if (titleNode) {
-					titleNode.textContent = 'E-Mail...';
+					titleNode.textContent = 'E-Mail';
 				}
 			}
 			function syncOptionalState(toggle, wrap) {
