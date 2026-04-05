@@ -1519,6 +1519,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			justify-self: end;
 			margin: 0 !important;
 		}
+		<?php else : ?>
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #postdivrich {
+			display: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #minor-publishing {
+			display: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #submitdiv #major-publishing-actions {
+			border-top: 0;
+		}
 		<?php endif; ?>
 	</style>
 	<?php
