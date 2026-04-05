@@ -190,14 +190,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		$selected_label = $selected > 0 ? cmx_carent_fahrzeug_display_label($selected) : '';
 		$artikel_defaults = cmx_carent_fahrzeug_article_meta_defaults($selected);
 		$kennzeichen = (string) ($artikel_defaults['kennzeichen'] ?? '');
-		$km_stand_uebernahme = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META);
-		if ($km_stand_uebernahme === '') {
-			$km_stand_uebernahme = (string) ($artikel_defaults['km_stand_uebernahme'] ?? '');
-		}
-		$km_stand_rueckgabe = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META);
-		if ($km_stand_rueckgabe === '') {
-			$km_stand_rueckgabe = (string) ($artikel_defaults['km_stand_rueckgabe'] ?? '');
-		}
 		$begrenzung = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
 		if ($begrenzung === '') {
 			$begrenzung = (string) ($artikel_defaults['begrenzung'] ?? '');
@@ -301,17 +293,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		echo '<input type="text" id="' . \esc_attr($kennzeichen_id) . '" class="widefat" value="' . \esc_attr($kennzeichen) . '" readonly>';
 		echo '</div>';
 		echo '<div class="cmx-carent-fahrzeug-field">';
-		echo '<label for="' . \esc_attr($km_stand_uebernahme_id) . '">KM-Stand Übernahme</label>';
-		echo '<input type="number" min="0" step="1" id="' . \esc_attr($km_stand_uebernahme_id) . '" name="cmx_carent_fahrzeug_km_stand_uebernahme" class="widefat" value="' . \esc_attr($km_stand_uebernahme) . '">';
-		echo '</div>';
-		echo '<div class="cmx-carent-fahrzeug-field">';
-		echo '<label for="' . \esc_attr($km_stand_rueckgabe_id) . '">KM-Stand Rückgabe</label>';
-		echo '<div class="cmx-carent-fahrzeug-inline-row">';
-		echo '<input type="number" min="0" step="1" id="' . \esc_attr($km_stand_rueckgabe_id) . '" name="cmx_carent_fahrzeug_km_stand_rueckgabe" class="widefat" value="' . \esc_attr($km_stand_rueckgabe) . '">';
-		echo '<button type="button" class="button" id="' . \esc_attr($km_stand_sync_id) . '" title="KM-Stand in Artikel übertragen" aria-label="KM-Stand in Artikel übertragen"><span class="dashicons dashicons-dashboard" aria-hidden="true"></span></button>';
-		echo '</div>';
-		echo '</div>';
-		echo '<div class="cmx-carent-fahrzeug-field">';
 		echo '<label for="' . \esc_attr($begrenzung_id) . '">Begrenzung</label>';
 		echo '<input type="number" min="0" step="1" id="' . \esc_attr($begrenzung_id) . '" name="cmx_carent_fahrzeug_km_begrenzung" class="widefat" value="' . \esc_attr($begrenzung) . '">';
 		echo '</div>';
@@ -333,9 +314,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 
 		echo '<script>
 		(function(){
+			function initCarentFahrzeugBox(){
 			var root = document.getElementById(' . \wp_json_encode($box_id) . ');
 			if (!root || root.dataset.cmxBound === "1") return;
-			root.dataset.cmxBound = "1";
 
 			var headerLink = document.getElementById(' . \wp_json_encode($link_id) . ');
 			var searchInput = document.getElementById(' . \wp_json_encode($search_id) . ');
@@ -351,6 +332,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 			var kaskoMinInput = document.getElementById(' . \wp_json_encode($kasko_min_id) . ');
 			var kaskoMaxInput = document.getElementById(' . \wp_json_encode($kasko_max_id) . ');
 			if (!headerLink || !searchInput || !hiddenInput || !listEl || !detailsEl || !kennzeichenInput || !kmStandUebernahmeInput || !kmStandRueckgabeInput || !kmStandSyncButton || !begrenzungInput || !mehrpreisInput || !kaskoMinInput || !kaskoMaxInput) return;
+			root.dataset.cmxBound = "1";
 
 			var ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
 			var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
@@ -628,6 +610,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 			syncHref();
 			setDetailsVisibility(selectedArtikelId() > 0);
 			updateKmStandSyncState();
+			}
+
+			if (document.readyState === "loading") {
+				document.addEventListener("DOMContentLoaded", initCarentFahrzeugBox, { once: true });
+			} else {
+				initCarentFahrzeugBox();
+			}
 		})();
 		</script>';
 

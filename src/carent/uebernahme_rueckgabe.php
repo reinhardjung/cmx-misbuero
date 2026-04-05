@@ -93,14 +93,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 		$box_id = 'cmx-carent-transfer-box-' . $box_key . '-' . (int) $post->ID;
 		$datum_name = 'cmx_carent_' . $box_key . '_datum';
+		$datum_label_id = $datum_name . '_label';
 		$ort_name = 'cmx_carent_' . $box_key . '_ort';
 		$vermieter_prefix = 'cmx_carent_' . $box_key . '_vermieter';
 		$mieter_prefix = 'cmx_carent_' . $box_key . '_mieter';
+		$km_stand_uebernahme_id = 'cmx_carent_fahrzeug_km_stand_uebernahme_' . (int) $post->ID;
+		$km_stand_rueckgabe_id = 'cmx_carent_fahrzeug_km_stand_rueckgabe_' . (int) $post->ID;
+		$km_stand_sync_id = 'cmx_carent_fahrzeug_km_stand_sync_' . (int) $post->ID;
 
 		$datum = (string) \get_post_meta($post->ID, (string) $config['datum_meta'], true);
 		$ort = (string) \get_post_meta($post->ID, (string) $config['ort_meta'], true);
 		$vermieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['vermieter_meta'], true);
 		$mieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['mieter_meta'], true);
+		$artikel_id = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			? (int) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_META, true)
+			: 0;
+		$artikel_defaults = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_article_meta_defaults')
+			? cmx_carent_fahrzeug_article_meta_defaults($artikel_id)
+			: ['km_stand_uebernahme' => '', 'km_stand_rueckgabe' => ''];
+		$km_stand_uebernahme = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_meta_value')
+			? cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META)
+			: \trim((string) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META, true));
+		if ($km_stand_uebernahme === '') {
+			$km_stand_uebernahme = (string) ($artikel_defaults['km_stand_uebernahme'] ?? '');
+		}
+		$km_stand_rueckgabe = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_meta_value')
+			? cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META)
+			: \trim((string) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META, true));
+		if ($km_stand_rueckgabe === '') {
+			$km_stand_rueckgabe = (string) ($artikel_defaults['km_stand_rueckgabe'] ?? '');
+		}
 		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_transfer_upload');
 		$ajax_url = (string) \admin_url('admin-ajax.php');
 
@@ -109,6 +131,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<style>
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-stack{display:grid;gap:14px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-number label{display:block;margin:0 0 6px;font-weight:600}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row{display:flex;align-items:center;gap:6px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row input{flex:1 1 auto;min-width:0}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row .button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;padding:0 8px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload p{font-size:12px}
 		</style>';
 
@@ -116,12 +142,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<div class="cmx-carent-transfer-stack">';
 		echo '<div class="cmx-carent-transfer-number">';
 		echo '<label for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
-		echo '<input type="number" min="0" step="1" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
+		echo '<input type="text" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
 		echo '</div>';
 		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
+		echo '<label id="' . \esc_attr($datum_label_id) . '" for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
 		echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
 		echo '</div>';
+		if ($box_key === 'uebernahme') {
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label for="' . \esc_attr($km_stand_uebernahme_id) . '">KM-Stand Übernahme</label>';
+			echo '<input type="number" min="0" step="1" id="' . \esc_attr($km_stand_uebernahme_id) . '" name="cmx_carent_fahrzeug_km_stand_uebernahme" class="widefat" value="' . \esc_attr($km_stand_uebernahme) . '">';
+			echo '</div>';
+		}
+		if ($box_key === 'rueckgabe') {
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label for="' . \esc_attr($km_stand_rueckgabe_id) . '">KM-Stand Rückgabe</label>';
+			echo '<div class="cmx-carent-transfer-inline-row">';
+			echo '<input type="number" min="0" step="1" id="' . \esc_attr($km_stand_rueckgabe_id) . '" name="cmx_carent_fahrzeug_km_stand_rueckgabe" class="widefat" value="' . \esc_attr($km_stand_rueckgabe) . '">';
+			echo '<button type="button" class="button" id="' . \esc_attr($km_stand_sync_id) . '" title="KM-Stand in Artikel übertragen" aria-label="KM-Stand in Artikel übertragen"' . ($artikel_id > 0 && $km_stand_rueckgabe !== '' ? '' : ' disabled') . '><span class="dashicons dashicons-dashboard" aria-hidden="true"></span></button>';
+			echo '</div>';
+			echo '</div>';
+		}
 
 		cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
 		cmx_carent_render_transfer_upload_field($mieter_prefix, (string) \__('Mieter', 'cmx-misbuero'), $mieter_attachment_id);
@@ -139,6 +180,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
 			var postId = ' . (int) $post->ID . ';
 			var emptyText = ' . \wp_json_encode((string) \__('Foto hier ablegen oder anklicken.', 'cmx-misbuero')) . ';
+			var dateInput = document.getElementById(' . \wp_json_encode($datum_name) . ');
+			var dateLabel = document.getElementById(' . \wp_json_encode($datum_label_id) . ');
+
+			function getTodayValue(){
+				var now = new Date();
+				var local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+				return local.toISOString().slice(0, 10);
+			}
 
 			function initUpload(prefix){
 				var attachmentInput = document.getElementById(prefix + "_attachment_id");
@@ -251,6 +300,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 			initUpload(' . \wp_json_encode($vermieter_prefix) . ');
 			initUpload(' . \wp_json_encode($mieter_prefix) . ');
+			if (dateInput && dateLabel) {
+				dateLabel.addEventListener("click", function(e){
+					e.preventDefault();
+					dateInput.value = getTodayValue();
+					try {
+						dateInput.dispatchEvent(new Event("input", { bubbles: true }));
+						dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+					} catch (err) {}
+					dateInput.focus();
+				});
+			}
 		})();
 		</script>';
 	}
@@ -348,12 +408,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 			$ort_field = 'cmx_carent_' . $box_key . '_ort';
 			$ort_raw = isset($_POST[$ort_field]) ? (string) \wp_unslash($_POST[$ort_field]) : '';
-			$ort_value = \trim($ort_raw);
-		if ($ort_value === '') {
-			\delete_post_meta($post_id, (string) $config['ort_meta']);
-		} else {
-			\update_post_meta($post_id, (string) $config['ort_meta'], (int) \max(0, (int) $ort_value));
-		}
+			$ort_value = \sanitize_text_field($ort_raw);
+			if ($ort_value === '') {
+				\delete_post_meta($post_id, (string) $config['ort_meta']);
+			} else {
+				\update_post_meta($post_id, (string) $config['ort_meta'], $ort_value);
+			}
 
 		foreach ([
 			'vermieter' => (string) $config['vermieter_meta'],
