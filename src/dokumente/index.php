@@ -201,19 +201,22 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	if (!empty($in_progress[$post_id])) return;
 
 	$current_title = \trim((string) $post->post_title);
-	if ($current_title !== '') {
+	if ($current_title !== '' && !(\function_exists(__NAMESPACE__ . '\\cmx_dok_is_placeholder_post_title') && cmx_dok_is_placeholder_post_title($current_title))) {
 		return;
 	}
 
 	$new_title = cmx_dokumente_sanitized_title_from_file($post_id);
 	if ($new_title === '') {
-		return;
+		$new_title = \function_exists(__NAMESPACE__ . '\\cmx_dok_missing_title')
+			? cmx_dok_missing_title()
+			: 'Dokumentname fehlt!!';
 	}
 
 	$in_progress[$post_id] = true;
 	\wp_update_post([
 		'ID'         => $post_id,
 		'post_title' => $new_title,
+		'post_status'=> 'publish',
 	]);
 	unset($in_progress[$post_id]);
 }, 10, 2);

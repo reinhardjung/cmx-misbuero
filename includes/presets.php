@@ -4,6 +4,8 @@
 add_action( 'admin_menu', __NAMESPACE__ . '\\cmx_remove_comments_menu', 999 );
 function cmx_remove_comments_menu() {
 	global $menu, $submenu;
+	$is_cloudmeister_switched = \function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched')
+		&& cmx_user_switch_is_cloudmeister_switched();
 
 	if (isset($menu[2][0])) { $menu[2][0] = 'Dashboard'; }	// "Dashboard" -> Übersicht
 	if (isset($submenu['index.php'][0][0])) {
@@ -15,8 +17,10 @@ function cmx_remove_comments_menu() {
 	remove_menu_page('edit-comments.php');        // Kommentare
 	remove_menu_page('themes.php');               // Design / Themes
 	remove_menu_page('plugins.php');              // Plugins
-	remove_menu_page('tools.php');                // Werkzeuge
-	remove_menu_page('options-general.php');      // Einstellungen
+	if (!$is_cloudmeister_switched) {
+		remove_menu_page('tools.php');                // Werkzeuge
+		remove_menu_page('options-general.php');      // Einstellungen
+	}
 	remove_menu_page('edit.php?post_type=page');  // Seiten
 
 	remove_menu_page('hello-elementor');

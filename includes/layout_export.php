@@ -4,7 +4,19 @@ if (!\is_admin()) {
 	return;
 }
 
+function cmx_layout_export_page_slug(): string {
+	return 'cmx-layout-export';
+}
+
+function cmx_layout_export_admin_url(array $args = []): string {
+	$args = \array_merge(['page' => cmx_layout_export_page_slug()], $args);
+	return (string) \admin_url('admin.php?' . \http_build_query($args));
+}
+
 function cmx_layout_export_can(): bool {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched') && cmx_user_switch_is_cloudmeister_switched()) {
+		return true;
+	}
 	if (\function_exists(__NAMESPACE__ . '\\cmx_help_is_cloud_meister')) {
 		return cmx_help_is_cloud_meister();
 	}
@@ -13,6 +25,14 @@ function cmx_layout_export_can(): bool {
 	if ($user->display_name === 'CLOUD Meister') return true;
 	if ($user->user_login === 'cloudmeister') return true;
 	return \current_user_can('manage_options');
+}
+
+function cmx_layout_export_capability(): string {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched') && cmx_user_switch_is_cloudmeister_switched()) {
+		return 'read';
+	}
+
+	return 'manage_options';
 }
 
 function cmx_layout_export_collect(int $user_id): array {
@@ -93,13 +113,54 @@ function cmx_layout_export_file_path(): string {
 
 \add_action('admin_menu', function () {
 	if (!cmx_layout_export_can()) return;
-	\add_management_page(
+
+	$settings_parent = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		: 'cmx-einstellungen';
+
+	\add_submenu_page(
+		$settings_parent,
 		'Layout Export',
 		'Layout Export',
-		'manage_options',
-		'cmx-layout-export',
+		cmx_layout_export_capability(),
+		cmx_layout_export_page_slug(),
 		__NAMESPACE__ . '\\cmx_render_layout_export_page'
 	);
+}, 30);
+
+\add_action('admin_init', function (): void {
+	$page = isset($_GET['page']) ? (string) \wp_unslash($_GET['page']) : '';
+	if ($page !== cmx_layout_export_page_slug()) {
+		return;
+	}
+
+	global $pagenow;
+	if ((string) $pagenow !== 'tools.php') {
+		return;
+	}
+
+	\wp_safe_redirect(cmx_layout_export_admin_url());
+	exit;
+});
+
+\add_filter('parent_file', function (string $parent_file): string {
+	$page = isset($_GET['page']) ? (string) \wp_unslash($_GET['page']) : '';
+	if ($page !== cmx_layout_export_page_slug()) {
+		return $parent_file;
+	}
+
+	return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		: 'cmx-einstellungen';
+});
+
+\add_filter('submenu_file', function (?string $submenu_file): ?string {
+	$page = isset($_GET['page']) ? (string) \wp_unslash($_GET['page']) : '';
+	if ($page !== cmx_layout_export_page_slug()) {
+		return $submenu_file;
+	}
+
+	return cmx_layout_export_page_slug();
 });
 
 function cmx_render_layout_export_page(): void {
@@ -174,8 +235,7 @@ function cmx_render_layout_export_page(): void {
 		}
 	}
 
-	$redirect = \admin_url('tools.php?page=cmx-layout-export');
-	$redirect = \add_query_arg(['cmx_layout_saved' => $ok ? '1' : '0'], $redirect);
+	$redirect = \add_query_arg(['cmx_layout_saved' => $ok ? '1' : '0'], cmx_layout_export_admin_url());
 	\wp_safe_redirect($redirect);
 	exit;
 });

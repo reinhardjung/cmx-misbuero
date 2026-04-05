@@ -8,6 +8,7 @@ function cmx_is_cloud_meister(): bool {
 	if (!$user || !$user->exists()) return false;
 	if ($user->display_name === 'CLOUD Meister') return true;
 	if ($user->user_login === 'cloudmeister') return true;
+	if (\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched') && cmx_user_switch_is_cloudmeister_switched()) return true;
 	return \current_user_can('manage_options');
 }
 

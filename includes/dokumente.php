@@ -18,6 +18,10 @@ if (!\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META')) {
 	\define(__NAMESPACE__ . '\\CMX_DOK_UPLOAD_NOTICE_FLASH_USER_META', '_cmx_dok_upload_notice_flash');
 }
 
+function cmx_dok_missing_title(): string {
+	return 'Dokumentname fehlt!!';
+}
+
 function cmx_dok_upload_target_dir(string $post_type, int $year): array {
 	if ($post_type === 'scanner') {
 		$base = WP_CONTENT_DIR . '/uploads/misbuero/scanner';
@@ -53,7 +57,8 @@ function cmx_dok_is_placeholder_post_title(string $title): bool {
 
 	return \str_contains($normalized, 'automatisch-gespeicherter-entwurf')
 		|| \str_contains($normalized, 'auto-draft')
-		|| \str_contains($normalized, 'autodraft');
+		|| \str_contains($normalized, 'autodraft')
+		|| $normalized === \strtolower(\str_replace(['_', ' '], '-', cmx_dok_missing_title()));
 }
 
 function cmx_dok_is_allowed_post_type(string $post_type): bool {
@@ -432,18 +437,39 @@ function cmx_dokumente_upload_file(): void {
 			$doc_title = \wp_date('ymd-His');
 		}
 
+		$existing_self_files = (array) \get_post_meta($post_id, CMX_DOK_SELF_META, true);
+		$existing_self_files = \array_values(\array_filter($existing_self_files, static function ($value): bool {
+			return (\is_string($value) && $value !== '') || \is_numeric($value);
+		}));
+		$existing_primary_file = \trim((string) \get_post_meta($post_id, '_cmx_dokumente_file_path', true));
+		$is_first_document_upload = ($existing_primary_file === '' && empty($existing_self_files));
 		$current_title = $post_obj ? \trim((string) $post_obj->post_title) : '';
+		$current_status = $post_obj ? (string) $post_obj->post_status : '';
 		$current_slug = $post_obj ? (string) $post_obj->post_name : '';
 		$new_slug = \sanitize_title($doc_title);
-		if ($current_title === '' && ($doc_title !== '' || $current_slug !== $new_slug)) {
-			\wp_update_post([
-				'ID' => $post_id,
-				'post_title' => $doc_title,
-				'post_name' => $new_slug,
-			]);
+		$post_update = ['ID' => $post_id];
+		$needs_update = false;
+
+		if ($doc_title !== '' && ($is_first_document_upload || cmx_dok_is_placeholder_post_title($current_title))) {
+			$post_update['post_title'] = $doc_title;
+			$needs_update = true;
 			$response_title = $doc_title;
 		} else {
-			$response_title = $current_title;
+			$response_title = $current_title !== '' ? $current_title : $doc_title;
+		}
+
+		if ($new_slug !== '' && ($current_slug === '' || $current_slug === 'auto-draft')) {
+			$post_update['post_name'] = $new_slug;
+			$needs_update = true;
+		}
+
+		if ($current_status !== 'publish') {
+			$post_update['post_status'] = 'publish';
+			$needs_update = true;
+		}
+
+		if ($needs_update) {
+			\wp_update_post($post_update);
 		}
 	}
 

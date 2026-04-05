@@ -23,6 +23,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_enabled')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched')) {
+	function cmx_user_switch_is_cloudmeister_switched(): bool {
+		$current_user = \wp_get_current_user();
+		if (!$current_user instanceof \WP_User || !$current_user->exists()) {
+			return false;
+		}
+
+		if (\strtolower((string) $current_user->user_login) === 'cloudmeister') {
+			return false;
+		}
+
+		$original_user_id = isset($_COOKIE['cmx_original_user']) ? \absint((string) $_COOKIE['cmx_original_user']) : 0;
+		if ($original_user_id <= 0) {
+			return false;
+		}
+
+		$original_user = \get_user_by('id', $original_user_id);
+		return $original_user instanceof \WP_User
+			&& $original_user->exists()
+			&& \strtolower((string) $original_user->user_login) === 'cloudmeister';
+	}
+}
+
 add_filter('user_row_actions', function($actions, $user) {
 	if (!cmx_user_switch_is_enabled()) {
 		unset($actions['cmx_switch_user']);

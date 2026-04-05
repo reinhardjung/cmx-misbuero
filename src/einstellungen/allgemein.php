@@ -364,7 +364,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			timer: 0,
 			controller: null,
 			requestId: 0,
-			activeResultIndex: -1
+			activeResultIndex: -1,
+			lastEscapeAt: 0
 		};
 		runtime.enabled = <?php echo \wp_json_encode($enabled); ?>;
 		runtime.buttonLabel = <?php echo \wp_json_encode($button_label); ?>;
@@ -630,6 +631,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			}, 220);
 		}
 
+		function clearSearchFilter(input){
+			var field = (input instanceof HTMLInputElement) ? input : getSearchInput(document);
+			var currentValue = field ? String(field.value || "") : "";
+			var hadSearchParam = false;
+
+			try {
+				hadSearchParam = new URLSearchParams(window.location.search).has("s");
+			} catch (error) {
+				hadSearchParam = false;
+			}
+
+			clearActiveResult();
+			updateSearchButtonLabel(document);
+
+			if (field) {
+				field.value = "";
+			}
+
+			if (currentValue.trim() === "" && !hadSearchParam) {
+				focusAndSelectSearchInput(field);
+				return;
+			}
+
+			window.clearTimeout(runtime.timer);
+
+			if (runtime.enabled) {
+				loadSearchResults("");
+				return;
+			}
+
+			window.location.assign(buildSearchUrl(""));
+		}
+
 		if (runtime.bound) {
 			updateSearchButtonLabel(document);
 			return;
@@ -679,10 +713,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			}
 
 			if (event.key === "Escape" || event.key === "Esc") {
-				if (!runtime.enabled) {
+				if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
 					return;
 				}
+
 				event.preventDefault();
+				var now = Date.now();
+				var elapsed = now - (runtime.lastEscapeAt || 0);
+				runtime.lastEscapeAt = now;
+
+				if (elapsed > 0 && elapsed <= 1000) {
+					clearSearchFilter(target);
+					return;
+				}
+
 				clearActiveResult();
 				focusAndSelectSearchInput(target);
 				return;
@@ -833,6 +877,172 @@ function cmx_print_cpt_double_escape_back_to_list(): void {
 			return false;
 		}
 
+		function toElement(target){
+			if (!target) {
+				return null;
+			}
+			return target.nodeType === 3 ? target.parentNode : target;
+		}
+
+		function hasValue(value){
+			return String(value || "").trim() !== "";
+		}
+
+		function getSelectionFieldState(target){
+			var el = toElement(target);
+			if (!el || el.nodeType !== 1) {
+				return null;
+			}
+
+			var selector = [
+				'#cmx_projekt_search',
+				'#cmx_kontakt_search',
+				'#cmx_projekt_kontakt_search',
+				'#cmx_carent_kontakt_search',
+				'input[id^="cmx_carent_fahrzeug_search_"]',
+				'.cmx-artikel-autocomplete'
+			].join(',');
+
+			var input = el.matches(selector) ? el : (el.closest ? el.closest(selector) : null);
+			if (!(input instanceof HTMLInputElement)) {
+				return null;
+			}
+
+			if (input.classList.contains('cmx-artikel-autocomplete')) {
+				var articleScope = input.closest('.cmx-task-article-picker') || input.closest('tr') || input.parentNode;
+				var articleIdInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-id') : null;
+				var articleNameInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-name') : null;
+				var articleVariantInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-variant-index') : null;
+				var articleEditLink = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-edit') : null;
+
+				return {
+					type: 'artikel',
+					input: input,
+					hiddenId: articleIdInput,
+					hiddenName: articleNameInput,
+					hiddenVariant: articleVariantInput,
+					editLink: articleEditLink,
+					isFilled: function(){
+						return hasValue(input.value)
+							|| (articleIdInput && hasValue(articleIdInput.value))
+							|| (articleNameInput && hasValue(articleNameInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_projekt_search') {
+				var projektIdInput = document.getElementById('cmx_projekt_id');
+				return {
+					type: 'projekt',
+					input: input,
+					clearButton: document.getElementById('cmx_projekt_clear'),
+					hiddenId: projektIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (projektIdInput && hasValue(projektIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_kontakt_search') {
+				var kontaktIdInput = document.getElementById('cmx_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					clearButton: document.getElementById('cmx_kontakt_clear'),
+					hiddenId: kontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (kontaktIdInput && hasValue(kontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_projekt_kontakt_search') {
+				var projektKontaktIdInput = document.getElementById('cmx_projekt_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					hiddenId: projektKontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (projektKontaktIdInput && hasValue(projektKontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_carent_kontakt_search') {
+				var carentKontaktIdInput = document.getElementById('cmx_carent_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					hiddenId: carentKontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (carentKontaktIdInput && hasValue(carentKontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id.indexOf('cmx_carent_fahrzeug_search_') === 0) {
+				var fahrzeugScope = input.closest('.cmx-carent-fahrzeug-box') || input.parentNode;
+				var fahrzeugIdInput = fahrzeugScope && fahrzeugScope.querySelector ? fahrzeugScope.querySelector('input[name="cmx_carent_fahrzeug_id"]') : null;
+				return {
+					type: 'artikel',
+					input: input,
+					hiddenId: fahrzeugIdInput,
+					scope: fahrzeugScope,
+					isFilled: function(){
+						return hasValue(input.value) || (fahrzeugIdInput && hasValue(fahrzeugIdInput.value));
+					}
+				};
+			}
+
+			return null;
+		}
+
+		function clearSelectionField(state){
+			if (!state || !state.input) {
+				return;
+			}
+
+			if (state.clearButton && typeof state.clearButton.click === 'function') {
+				state.clearButton.click();
+			} else {
+				state.input.value = '';
+				if (state.hiddenId) {
+					state.hiddenId.value = '';
+				}
+				if (state.hiddenName) {
+					state.hiddenName.value = '';
+				}
+				if (state.hiddenVariant) {
+					state.hiddenVariant.value = '';
+				}
+				if (state.editLink) {
+					state.editLink.removeAttribute('href');
+					state.editLink.style.pointerEvents = 'none';
+					state.editLink.style.opacity = '0.35';
+				}
+				if (state.scope && state.scope.querySelectorAll) {
+					var details = state.scope.querySelector('.cmx-carent-fahrzeug-details');
+					if (details) {
+						details.classList.add('is-hidden');
+					}
+					state.scope.querySelectorAll('.cmx-carent-fahrzeug-details input').forEach(function(field){
+						if (field instanceof HTMLInputElement) {
+							field.value = '';
+						}
+					});
+				}
+				state.input.dispatchEvent(new Event('input', { bubbles: true }));
+				state.input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+
+			if (typeof state.input.focus === 'function') {
+				state.input.focus({ preventScroll: true });
+			}
+			if (typeof state.input.select === 'function') {
+				state.input.select();
+			}
+		}
+
 		function handleKeydown(event){
 			var target = event.target || null;
 
@@ -866,6 +1076,14 @@ function cmx_print_cpt_double_escape_back_to_list(): void {
 			runtime.lastEscapeAt = now;
 
 			if (elapsed > 0 && elapsed <= 1000) {
+				var selectionField = getSelectionFieldState(target);
+				if (selectionField && typeof selectionField.isFilled === 'function' && selectionField.isFilled()) {
+					event.preventDefault();
+					event.stopPropagation();
+					clearSelectionField(selectionField);
+					runtime.lastEscapeAt = 0;
+					return;
+				}
 				event.preventDefault();
 				event.stopPropagation();
 				window.location.assign(targetUrl);

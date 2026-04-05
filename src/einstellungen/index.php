@@ -11,6 +11,10 @@ const CMX_SETTINGS_BELEG = 'cmx_belege';
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_settings_is_cloudmeister_switched_user')) {
 	function cmx_settings_is_cloudmeister_switched_user(): bool {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched')) {
+			return cmx_user_switch_is_cloudmeister_switched();
+		}
+
 		$current_user = \wp_get_current_user();
 		if (!$current_user instanceof \WP_User || !$current_user->exists()) {
 			return false;
@@ -86,7 +90,57 @@ add_action('admin_menu', function() {
 		'dashicons-admin-generic',
 		150
 	);
+
+	add_submenu_page(
+		CMX_SETTINGS_SLUG,
+		'Einstellungen',
+		'Einstellungen',
+		cmx_settings_page_capability(),
+		CMX_SETTINGS_SLUG,
+		__NAMESPACE__ . '\\cmx_render_settings_page'
+	);
 });
+
+\add_action('admin_menu', function (): void {
+	global $submenu;
+	if (empty($submenu[CMX_SETTINGS_SLUG]) || !\is_array($submenu[CMX_SETTINGS_SLUG])) {
+		return;
+	}
+
+	$bank_slug = \function_exists(__NAMESPACE__ . '\\cmx_bank_types_taxonomy')
+		? 'edit-tags.php?taxonomy=' . cmx_bank_types_taxonomy() . '&post_type=dokumente'
+		: 'edit-tags.php?taxonomy=einstellungen_banktypen&post_type=dokumente';
+	$priority = [
+		CMX_SETTINGS_SLUG,
+		$bank_slug,
+		'cmx-layout-export',
+	];
+
+	$current = $submenu[CMX_SETTINGS_SLUG];
+	$ordered = [];
+	$used = [];
+
+	foreach ($priority as $slug) {
+		foreach ($current as $item) {
+			if (!isset($item[2]) || (string) $item[2] !== (string) $slug) {
+				continue;
+			}
+			$ordered[] = $item;
+			$used[] = (string) $slug;
+			break;
+		}
+	}
+
+	foreach ($current as $item) {
+		$item_slug = isset($item[2]) ? (string) $item[2] : '';
+		if ($item_slug !== '' && \in_array($item_slug, $used, true)) {
+			continue;
+		}
+		$ordered[] = $item;
+	}
+
+	$submenu[CMX_SETTINGS_SLUG] = $ordered;
+}, 999);
 
 \add_filter('option_page_capability_' . CMX_SETTINGS_MAIN, static function (string $cap): string {
 	return cmx_settings_page_capability();
