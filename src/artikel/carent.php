@@ -9,6 +9,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN', '_cmx_artikel_carent_kennzeichen');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND')) {
+	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND', '_cmx_artikel_carent_km_stand');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG')) {
 	\define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG', '_cmx_artikel_carent_km_begrenzung');
 }
@@ -291,6 +294,7 @@ function cmx_artikel_carent_reorder_runtime_boxes(): void {
 function cmx_artikel_carent_box_html(\WP_Post $post): void {
 	$chassi_nr = cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_CHASSI_NR);
 	$kennzeichen = cmx_artikel_carent_normalize_kennzeichen(cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_KENNZEICHEN));
+	$km_stand = cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_KM_STAND);
 	$km_begrenzung = cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG);
 	$km_mehrpreis = cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_KM_MEHRPREIS);
 	$kasko_min = cmx_artikel_carent_meta_value($post->ID, CMX_ARTIKEL_META_CARENT_KASKO);
@@ -328,7 +332,7 @@ function cmx_artikel_carent_box_html(\WP_Post $post): void {
 		}
 		#' . \esc_attr((string) CMX_ARTIKEL_CARENT_BOX_ID) . ' .cmx-carent-grid{
 			display:grid;
-			grid-template-columns:minmax(150px,1.2fr) minmax(135px,.95fr) minmax(210px,1.4fr) minmax(120px,.8fr) minmax(130px,.95fr) minmax(120px,.85fr) minmax(120px,.85fr);
+			grid-template-columns:minmax(150px,1.2fr) minmax(135px,.95fr) minmax(210px,1.4fr) minmax(120px,.8fr) minmax(120px,.8fr) minmax(130px,.95fr) minmax(120px,.85fr) minmax(120px,.85fr);
 			gap:14px;
 			align-items:end;
 		}
@@ -419,6 +423,11 @@ function cmx_artikel_carent_box_html(\WP_Post $post): void {
 	if ($treibstoff_terms === []) {
 		echo '<p class="cmx-carent-note">Keine Treibstoffe in <code>[carent] Treibstoff</code> definiert.</p>';
 	}
+	echo '</div>';
+
+	echo '<div class="cmx-carent-field">';
+	echo '<label for="cmx_artikel_carent_km_stand">KM-Stand</label>';
+	echo '<input type="number" min="0" step="1" class="widefat" id="cmx_artikel_carent_km_stand" name="cmx_artikel_carent_km_stand" value="' . \esc_attr($km_stand) . '">';
 	echo '</div>';
 
 	echo '<div class="cmx-carent-field">';
@@ -665,6 +674,8 @@ function cmx_artikel_carent_box_html(\WP_Post $post): void {
 
 	$chassi_nr = \sanitize_text_field((string) \wp_unslash($_POST['cmx_artikel_carent_chassi_nr'] ?? ''));
 	$kennzeichen = cmx_artikel_carent_normalize_kennzeichen(\wp_unslash($_POST['cmx_artikel_carent_kennzeichen'] ?? ''));
+	$km_stand_raw = \trim((string) \wp_unslash($_POST['cmx_artikel_carent_km_stand'] ?? ''));
+	$km_stand = $km_stand_raw === '' ? '' : (string) \max(0, (int) \round(cmx_parse_number($km_stand_raw)));
 	$km_begrenzung_raw = \trim((string) \wp_unslash($_POST['cmx_artikel_carent_km_begrenzung'] ?? ''));
 	$km_begrenzung = $km_begrenzung_raw === '' ? '' : (string) \max(0, (int) \round(cmx_parse_number($km_begrenzung_raw)));
 	$km_mehrpreis = cmx_artikel_carent_normalize_decimal(\wp_unslash($_POST['cmx_artikel_carent_km_mehrpreis'] ?? ''));
@@ -673,6 +684,7 @@ function cmx_artikel_carent_box_html(\WP_Post $post): void {
 
 	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_CHASSI_NR, $chassi_nr);
 	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_KENNZEICHEN, $kennzeichen);
+	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_KM_STAND, $km_stand);
 	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG, $km_begrenzung);
 	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_KM_MEHRPREIS, $km_mehrpreis);
 	cmx_artikel_carent_upsert_meta($post_id, CMX_ARTIKEL_META_CARENT_KASKO, $kasko_min);
