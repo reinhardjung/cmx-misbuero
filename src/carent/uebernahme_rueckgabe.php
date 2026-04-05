@@ -115,12 +115,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-transfer-box">';
 		echo '<div class="cmx-carent-transfer-stack">';
 		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
-		echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
-		echo '</div>';
-		echo '<div class="cmx-carent-transfer-number">';
 		echo '<label for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
 		echo '<input type="number" min="0" step="1" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
+		echo '</div>';
+		echo '<div class="cmx-carent-transfer-number">';
+		echo '<label for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
+		echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
 		echo '</div>';
 
 		cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
