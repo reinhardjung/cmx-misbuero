@@ -331,6 +331,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		\nocache_headers();
 		\status_header(200);
 		$cart_storage_key = 'cmxArtikelKatalogCart';
+		$show_cart_widget = \is_user_logged_in();
 		$can_create_beleg = \is_user_logged_in()
 			&& \post_type_exists('belege')
 			&& \function_exists(__NAMESPACE__ . '\\cmx_post_type_can_create')
@@ -425,27 +426,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		echo '<h1 class="cmx-artikel-title">Katalog</h1>';
 		echo '<p class="cmx-artikel-sub"><a href="' . \esc_url($reload_url) . '" id="cmx-artikel-count">' . \esc_html(\count($rows) . ' Artikel') . '</a></p>';
 		echo '</div>';
-		echo '<div class="cmx-artikel-head-brand">';
-		if ($me_logo_url !== '') {
-			if ($me_contact_url !== '') {
-				echo '<a href="' . \esc_url($me_contact_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($me_contact_title) . '">';
+		if ($me_logo_url !== '' || $show_cart_widget) {
+			echo '<div class="cmx-artikel-head-brand">';
+			if ($me_logo_url !== '') {
+				if ($me_contact_url !== '') {
+					echo '<a href="' . \esc_url($me_contact_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($me_contact_title) . '">';
+				}
+				echo '<img class="cmx-artikel-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo">';
+				if ($me_contact_url !== '') {
+					echo '</a>';
+				}
 			}
-			echo '<img class="cmx-artikel-head-logo" src="' . \esc_url($me_logo_url) . '" alt="Das bin ich Logo">';
-			if ($me_contact_url !== '') {
-				echo '</a>';
+			if ($show_cart_widget) {
+				echo '<div class="cmx-artikel-cart-widget" id="cmx-artikel-cart-widget">';
+				echo '<button type="button" class="cmx-artikel-cart-trigger" id="cmx-artikel-cart-trigger" aria-label="Vorgemerkte Artikel anzeigen" aria-expanded="false">';
+				echo '<span class="dashicons dashicons-cart" aria-hidden="true"></span>';
+				echo '<span class="cmx-artikel-cart-badge" id="cmx-artikel-cart-badge" aria-hidden="true"></span>';
+				echo '</button>';
+				echo '<div class="cmx-artikel-cart-flyout" id="cmx-artikel-cart-flyout">';
+				echo '<ul class="cmx-artikel-cart-list" id="cmx-artikel-cart-list"></ul>';
+				echo '<div class="cmx-artikel-cart-empty" id="cmx-artikel-cart-empty">Keine Artikel im Warenkorb</div>';
+				echo '</div>';
+				echo '</div>';
 			}
+			echo '</div>';
 		}
-		echo '<div class="cmx-artikel-cart-widget" id="cmx-artikel-cart-widget">';
-		echo '<button type="button" class="cmx-artikel-cart-trigger" id="cmx-artikel-cart-trigger" aria-label="Vorgemerkte Artikel anzeigen" aria-expanded="false">';
-		echo '<span class="dashicons dashicons-cart" aria-hidden="true"></span>';
-		echo '<span class="cmx-artikel-cart-badge" id="cmx-artikel-cart-badge" aria-hidden="true"></span>';
-		echo '</button>';
-		echo '<div class="cmx-artikel-cart-flyout" id="cmx-artikel-cart-flyout">';
-		echo '<ul class="cmx-artikel-cart-list" id="cmx-artikel-cart-list"></ul>';
-		echo '<div class="cmx-artikel-cart-empty" id="cmx-artikel-cart-empty">Keine vorgemerkten Artikel.</div>';
-		echo '</div>';
-		echo '</div>';
-		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 
