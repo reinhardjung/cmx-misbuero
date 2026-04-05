@@ -57,7 +57,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_kontakt_header_url')) {
 	}
 
 	$kontakt_target_url = cmx_carent_kontakt_header_url($carent_id);
-	$box_title = '<a id="cmx_carent_kontakt_box_link" href="' . \esc_url($kontakt_target_url) . '" target="_blank" rel="noopener noreferrer" onclick="if(window.cmxCarentKontaktOpen){return window.cmxCarentKontaktOpen(event);}event.stopPropagation();" style="font-size:13px;font-weight:inherit;line-height:inherit;color:#2271b1;text-decoration:none;">' . \esc_html__('Zugehöriger Kontakt', 'cmx-misbuero') . '</a>';
+	$box_title = '<a id="cmx_carent_kontakt_box_link" href="' . \esc_url($kontakt_target_url) . '" target="_blank" rel="noopener noreferrer" onclick="if(window.cmxCarentKontaktOpen){return window.cmxCarentKontaktOpen(event);}event.stopPropagation();" style="font-size:13px;font-weight:inherit;line-height:inherit;color:#2271b1;text-decoration:none;">' . \esc_html__('Kontakt', 'cmx-misbuero') . '</a>';
 
 	\add_meta_box(
 		'cmx_carent_kontakt_box',
@@ -121,7 +121,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_kontakt_metabox')) {
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-kontakt-box">';
 		echo '<div class="cmx-carent-kontakt-suggest">';
 		echo '<div class="cmx-carent-kontakt-row">';
-		echo '<input type="search" id="cmx_carent_kontakt_search" class="widefat" autocomplete="off" placeholder="' . \esc_attr__('Kontakt suchen...', 'cmx-misbuero') . '" value="' . \esc_attr($selected_title) . '">';
+		echo '<input type="search" id="cmx_carent_kontakt_search" class="widefat" autocomplete="off" placeholder="' . \esc_attr__('suchen...', 'cmx-misbuero') . '" value="' . \esc_attr($selected_title) . '">';
 		echo '<input type="hidden" name="cmx_carent_kontakt_id" id="cmx_carent_kontakt_id" value="' . \esc_attr((string) $selected) . '">';
 		echo '</div>';
 		echo '<ul id="cmx_carent_kontakt_suggest" class="cmx-carent-kontakt-results" style="display:none"></ul>';
