@@ -398,7 +398,7 @@ function cmx_artikel_carent_box_html(\WP_Post $post): void {
 	echo '<div class="cmx-carent-grid">';
 
 	echo '<div class="cmx-carent-field">';
-	echo '<label for="cmx_artikel_carent_chassi_nr">Chassi-Nr</label>';
+	echo '<label for="cmx_artikel_carent_chassi_nr">Chassi-Nr (VIN)</label>';
 	echo '<input type="text" class="widefat" id="cmx_artikel_carent_chassi_nr" name="cmx_artikel_carent_chassi_nr" value="' . \esc_attr($chassi_nr) . '">';
 	echo '</div>';
 

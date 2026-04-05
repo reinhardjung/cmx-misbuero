@@ -6,6 +6,18 @@ defined('ABSPATH') || exit;
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META', '_cmx_carent_fahrzeug_id');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META', '_cmx_carent_fahrzeug_km_begrenzung');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META', '_cmx_carent_fahrzeug_km_mehrpreis');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MIN_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MIN_META', '_cmx_carent_fahrzeug_kasko_min');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META', '_cmx_carent_fahrzeug_kasko_max');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_post_type')) {
 	function cmx_carent_fahrzeug_post_type(): string {
@@ -53,6 +65,73 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_header_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_meta_value')) {
+	function cmx_carent_fahrzeug_meta_value(int $post_id, string $meta_key): string {
+		return \trim((string) \get_post_meta($post_id, $meta_key, true));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_article_meta_defaults')) {
+	function cmx_carent_fahrzeug_article_meta_defaults(int $artikel_id): array {
+		if ($artikel_id <= 0 || !\get_post_status($artikel_id) || (string) \get_post_type($artikel_id) !== cmx_carent_fahrzeug_post_type()) {
+			return [
+				'kennzeichen' => '',
+				'begrenzung'  => '',
+				'mehrpreis'   => '',
+				'kasko_min'   => '',
+				'kasko_max'   => '',
+			];
+		}
+
+		$kennzeichen_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN')
+			: '_cmx_artikel_carent_kennzeichen';
+		$begrenzung_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_BEGRENZUNG')
+			: '_cmx_artikel_carent_km_begrenzung';
+		$mehrpreis_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_MEHRPREIS')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_MEHRPREIS')
+			: '_cmx_artikel_carent_km_mehrpreis';
+		$kasko_min_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KASKO')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KASKO')
+			: '_cmx_artikel_carent_kasko';
+		$kasko_max_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KASKO_MAX')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KASKO_MAX')
+			: '_cmx_artikel_carent_kasko_max';
+
+		$kennzeichen = \trim((string) \get_post_meta($artikel_id, $kennzeichen_key, true));
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_normalize_kennzeichen')) {
+			$kennzeichen = cmx_artikel_carent_normalize_kennzeichen($kennzeichen);
+		}
+
+		return [
+			'kennzeichen' => $kennzeichen,
+			'begrenzung'  => \trim((string) \get_post_meta($artikel_id, $begrenzung_key, true)),
+			'mehrpreis'   => \trim((string) \get_post_meta($artikel_id, $mehrpreis_key, true)),
+			'kasko_min'   => \trim((string) \get_post_meta($artikel_id, $kasko_min_key, true)),
+			'kasko_max'   => \trim((string) \get_post_meta($artikel_id, $kasko_max_key, true)),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_normalize_decimal')) {
+	function cmx_carent_fahrzeug_normalize_decimal(mixed $value, int $decimals = 2): string {
+		$raw = \trim((string) $value);
+		if ($raw === '') {
+			return '';
+		}
+
+		$number = \function_exists(__NAMESPACE__ . '\\cmx_parse_number')
+			? cmx_parse_number($raw)
+			: (float) \str_replace(',', '.', $raw);
+		if (!\is_finite($number)) {
+			return '';
+		}
+
+		return \number_format(\max(0, $number), \max(0, $decimals), '.', '');
+	}
+}
+
 \add_action('add_meta_boxes', function (): void {
 	$carent_id = 0;
 	if (isset($_GET['post'])) {
@@ -78,9 +157,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 	function cmx_render_carent_fahrzeug_metabox(\WP_Post $post): void {
 		$selected = (int) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_META, true);
 		$selected_label = $selected > 0 ? cmx_carent_fahrzeug_display_label($selected) : '';
+		$artikel_defaults = cmx_carent_fahrzeug_article_meta_defaults($selected);
+		$kennzeichen = (string) ($artikel_defaults['kennzeichen'] ?? '');
+		$begrenzung = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
+		if ($begrenzung === '') {
+			$begrenzung = (string) ($artikel_defaults['begrenzung'] ?? '');
+		}
+		$mehrpreis = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META);
+		if ($mehrpreis === '') {
+			$mehrpreis = (string) ($artikel_defaults['mehrpreis'] ?? '');
+		}
+		$kasko_min = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KASKO_MIN_META);
+		if ($kasko_min === '') {
+			$kasko_min = (string) ($artikel_defaults['kasko_min'] ?? '');
+		}
+		$kasko_max = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KASKO_MAX_META);
+		if ($kasko_max === '') {
+			$kasko_max = (string) ($artikel_defaults['kasko_max'] ?? '');
+		}
+
 		$list_url = cmx_carent_fahrzeug_list_url();
 		$edit_prefix = (string) \admin_url('post.php?post=');
 		$ajax_url = (string) \admin_url('admin-ajax.php');
+		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_fahrzeug_details');
 		$post_type = cmx_carent_fahrzeug_post_type();
 		$has_artikel = ($post_type !== '') && !empty(\get_posts([
 			'post_type' => $post_type,
@@ -88,10 +187,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 			'posts_per_page' => 1,
 			'fields' => 'ids',
 		]));
+
 		$box_id = 'cmx-carent-fahrzeug-box-' . (int) $post->ID;
 		$search_id = 'cmx_carent_fahrzeug_search_' . (int) $post->ID;
 		$hidden_id = 'cmx_carent_fahrzeug_id_' . (int) $post->ID;
 		$list_id = 'cmx_carent_fahrzeug_suggest_' . (int) $post->ID;
+		$details_id = 'cmx_carent_fahrzeug_details_' . (int) $post->ID;
+		$kennzeichen_id = 'cmx_carent_fahrzeug_kennzeichen_' . (int) $post->ID;
+		$begrenzung_id = 'cmx_carent_fahrzeug_begrenzung_' . (int) $post->ID;
+		$mehrpreis_id = 'cmx_carent_fahrzeug_mehrpreis_' . (int) $post->ID;
+		$kasko_min_id = 'cmx_carent_fahrzeug_kasko_min_' . (int) $post->ID;
+		$kasko_max_id = 'cmx_carent_fahrzeug_kasko_max_' . (int) $post->ID;
 		$link_id = 'cmx_carent_fahrzeug_box_link';
 
 		\wp_nonce_field('cmx_carent_fahrzeug_save', 'cmx_carent_fahrzeug_nonce');
@@ -122,6 +228,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-results li.active,
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-results li:hover{background:#e5f3ff}
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-results small{display:block;color:#646970}
+		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-details{margin-top:10px;padding-top:10px;border-top:1px solid #e2e4e7}
+		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-details.is-hidden{display:none}
+		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field{margin-top:8px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field:first-child{margin-top:0}
+		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field label{display:block;margin:0 0 4px;font-weight:600}
 		</style>';
 
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-fahrzeug-box">';
@@ -131,6 +242,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		echo '<input type="hidden" name="cmx_carent_fahrzeug_id" id="' . \esc_attr($hidden_id) . '" value="' . \esc_attr((string) $selected) . '">';
 		echo '</div>';
 		echo '<ul id="' . \esc_attr($list_id) . '" class="cmx-carent-fahrzeug-results" style="display:none"></ul>';
+		echo '<div id="' . \esc_attr($details_id) . '" class="cmx-carent-fahrzeug-details' . ($selected > 0 ? '' : ' is-hidden') . '">';
+		echo '<div class="cmx-carent-fahrzeug-field">';
+		echo '<label for="' . \esc_attr($kennzeichen_id) . '">Kennzeichen</label>';
+		echo '<input type="text" id="' . \esc_attr($kennzeichen_id) . '" class="widefat" value="' . \esc_attr($kennzeichen) . '" readonly>';
+		echo '</div>';
+		echo '<div class="cmx-carent-fahrzeug-field">';
+		echo '<label for="' . \esc_attr($begrenzung_id) . '">Begrenzung</label>';
+		echo '<input type="number" min="0" step="1" id="' . \esc_attr($begrenzung_id) . '" name="cmx_carent_fahrzeug_km_begrenzung" class="widefat" value="' . \esc_attr($begrenzung) . '">';
+		echo '</div>';
+		echo '<div class="cmx-carent-fahrzeug-field">';
+		echo '<label for="' . \esc_attr($mehrpreis_id) . '">Mehrpreis</label>';
+		echo '<input type="number" min="0" step="0.01" id="' . \esc_attr($mehrpreis_id) . '" name="cmx_carent_fahrzeug_km_mehrpreis" class="widefat" value="' . \esc_attr($mehrpreis) . '">';
+		echo '</div>';
+		echo '<div class="cmx-carent-fahrzeug-field">';
+		echo '<label for="' . \esc_attr($kasko_min_id) . '">Kasko min</label>';
+		echo '<input type="number" min="0" step="0.01" id="' . \esc_attr($kasko_min_id) . '" name="cmx_carent_fahrzeug_kasko_min" class="widefat" value="' . \esc_attr($kasko_min) . '">';
+		echo '</div>';
+		echo '<div class="cmx-carent-fahrzeug-field">';
+		echo '<label for="' . \esc_attr($kasko_max_id) . '">Kasko max</label>';
+		echo '<input type="number" min="0" step="0.01" id="' . \esc_attr($kasko_max_id) . '" name="cmx_carent_fahrzeug_kasko_max" class="widefat" value="' . \esc_attr($kasko_max) . '">';
+		echo '</div>';
+		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 
@@ -139,13 +272,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 			var root = document.getElementById(' . \wp_json_encode($box_id) . ');
 			if (!root || root.dataset.cmxBound === "1") return;
 			root.dataset.cmxBound = "1";
+
 			var headerLink = document.getElementById(' . \wp_json_encode($link_id) . ');
 			var searchInput = document.getElementById(' . \wp_json_encode($search_id) . ');
 			var hiddenInput = document.getElementById(' . \wp_json_encode($hidden_id) . ');
 			var listEl = document.getElementById(' . \wp_json_encode($list_id) . ');
-			if (!headerLink || !searchInput || !hiddenInput || !listEl) return;
+			var detailsEl = document.getElementById(' . \wp_json_encode($details_id) . ');
+			var kennzeichenInput = document.getElementById(' . \wp_json_encode($kennzeichen_id) . ');
+			var begrenzungInput = document.getElementById(' . \wp_json_encode($begrenzung_id) . ');
+			var mehrpreisInput = document.getElementById(' . \wp_json_encode($mehrpreis_id) . ');
+			var kaskoMinInput = document.getElementById(' . \wp_json_encode($kasko_min_id) . ');
+			var kaskoMaxInput = document.getElementById(' . \wp_json_encode($kasko_max_id) . ');
+			if (!headerLink || !searchInput || !hiddenInput || !listEl || !detailsEl || !kennzeichenInput || !begrenzungInput || !mehrpreisInput || !kaskoMinInput || !kaskoMaxInput) return;
 
 			var ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
+			var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
 			var listUrl = ' . \wp_json_encode($list_url) . ';
 			var editPrefix = ' . \wp_json_encode($edit_prefix) . ';
 			var timer = null;
@@ -156,13 +297,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 				var id = parseInt(hiddenInput.value || "0", 10);
 				return (isNaN(id) || id <= 0) ? 0 : id;
 			}
+
 			function targetUrl(){
 				var artikelId = selectedArtikelId();
 				return artikelId > 0 ? (editPrefix + artikelId + "&action=edit") : listUrl;
 			}
+
 			function syncHref(){
 				headerLink.href = targetUrl();
 			}
+
 			function openCurrent(e){
 				if (e) {
 					e.preventDefault();
@@ -175,6 +319,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 				if (w) { w.opener = null; }
 				return false;
 			}
+
 			function esc(str){
 				return String(str || "").replace(/[&<>"\x27]/g, function(c){
 					if (c === "&") return "&amp;";
@@ -184,12 +329,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 					return "&#039;";
 				});
 			}
+
 			function closeList(){
 				listEl.style.display = "none";
 				listEl.innerHTML = "";
 				active = -1;
 				items = [];
 			}
+
+			function setDetailsVisibility(visible){
+				detailsEl.classList.toggle("is-hidden", !visible);
+			}
+
+			function setFieldValues(data){
+				var payload = data || {};
+				kennzeichenInput.value = payload.kennzeichen || "";
+				begrenzungInput.value = payload.begrenzung || "";
+				mehrpreisInput.value = payload.mehrpreis || "";
+				kaskoMinInput.value = payload.kasko_min || "";
+				kaskoMaxInput.value = payload.kasko_max || "";
+			}
+
+			function clearSelectionFields(){
+				setFieldValues({});
+				setDetailsVisibility(false);
+			}
+
 			function render(arr){
 				items = Array.isArray(arr) ? arr : [];
 				if (!items.length) {
@@ -207,6 +372,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 				listEl.style.display = "block";
 				active = -1;
 			}
+
 			function setActive(next){
 				if (!items.length) { active = -1; return; }
 				if (next < 0) next = items.length - 1;
@@ -219,19 +385,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 					}
 				});
 			}
+
 			function formatItemLabel(item){
 				var nr = item && item.nr ? String(item.nr) : "";
 				var title = item && item.title ? String(item.title) : "";
 				var label = item && item.label ? String(item.label) : ((nr ? nr + " – " : "") + title);
 				return label || title;
 			}
+
+			function loadArtikelDetails(artikelId){
+				artikelId = parseInt(artikelId || "0", 10);
+				if (!artikelId) {
+					clearSelectionFields();
+					return;
+				}
+				var url = ajaxUrl + "?action=cmx_carent_get_artikel_fahrzeug_meta&_ajax_nonce=" + encodeURIComponent(ajaxNonce) + "&artikel_id=" + encodeURIComponent(String(artikelId));
+				fetch(url, { credentials: "same-origin" }).then(function(r){
+					return r.json();
+				}).then(function(json){
+					if (!json || !json.success || !json.data) {
+						clearSelectionFields();
+						return;
+					}
+					setFieldValues(json.data);
+					setDetailsVisibility(true);
+				}).catch(function(){
+					clearSelectionFields();
+				});
+			}
+
 			function choose(item){
 				hiddenInput.value = item && item.id ? String(item.id) : "";
 				searchInput.value = formatItemLabel(item);
 				syncHref();
+				loadArtikelDetails(item && item.id ? item.id : 0);
 				closeList();
 				searchInput.focus();
 			}
+
 			function search(q){
 				var url = ajaxUrl + "?action=cmx_search_artikel&term=" + encodeURIComponent(q || "");
 				fetch(url, { credentials: "same-origin" }).then(function(r){
@@ -259,6 +450,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 			searchInput.addEventListener("input", function(){
 				hiddenInput.value = "";
 				syncHref();
+				clearSelectionFields();
 				if (timer) clearTimeout(timer);
 				var q = (searchInput.value || "").trim();
 				if (q.length === 0) {
@@ -271,14 +463,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 				}
 				timer = setTimeout(function(){ search(q); }, 200);
 			});
+
 			searchInput.addEventListener("focus", function(){
 				if (timer) clearTimeout(timer);
 				search((searchInput.value || "").trim());
 			});
+
 			searchInput.addEventListener("click", function(){
 				if (timer) clearTimeout(timer);
 				search((searchInput.value || "").trim());
 			});
+
 			searchInput.addEventListener("keydown", function(e){
 				if (listEl.style.display !== "block" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
 				if (e.key === "ArrowDown") {
@@ -296,6 +491,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 					closeList();
 				}
 			});
+
 			listEl.addEventListener("mousedown", function(e){
 				var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
 				if (!li) return;
@@ -305,17 +501,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 					choose(items[index]);
 				}
 			});
+
 			listEl.addEventListener("mousemove", function(e){
 				var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
 				if (!li) return;
 				var index = parseInt(li.getAttribute("data-index") || "-1", 10);
 				if (!isNaN(index)) setActive(index);
 			});
+
 			document.addEventListener("click", function(e){
 				if (e.target === searchInput || listEl.contains(e.target)) return;
 				closeList();
 			});
+
 			syncHref();
+			setDetailsVisibility(selectedArtikelId() > 0);
 		})();
 		</script>';
 
@@ -333,6 +533,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		}
 	}
 }
+
+\add_action('wp_ajax_cmx_carent_get_artikel_fahrzeug_meta', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['msg' => 'forbidden'], 403);
+	}
+	if (!isset($_GET['_ajax_nonce']) || !\wp_verify_nonce((string) \wp_unslash($_GET['_ajax_nonce']), 'cmx_carent_fahrzeug_details')) {
+		\wp_send_json_error(['msg' => 'bad_nonce'], 403);
+	}
+
+	$artikel_id = isset($_GET['artikel_id']) ? (int) \wp_unslash($_GET['artikel_id']) : 0;
+	\wp_send_json_success(cmx_carent_fahrzeug_article_meta_defaults($artikel_id));
+});
 
 \add_action('save_post_carent', function (int $post_id, \WP_Post $post, bool $update): void {
 	unset($update);
@@ -354,15 +566,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 	}
 
 	$artikel_id = isset($_POST['cmx_carent_fahrzeug_id']) ? (int) \wp_unslash($_POST['cmx_carent_fahrzeug_id']) : 0;
-	if ($artikel_id <= 0) {
+	if ($artikel_id <= 0 || (string) \get_post_type($artikel_id) !== cmx_carent_fahrzeug_post_type() || !\get_post_status($artikel_id)) {
 		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_META);
-		return;
-	}
-
-	if ((string) \get_post_type($artikel_id) !== cmx_carent_fahrzeug_post_type() || !\get_post_status($artikel_id)) {
-		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_META);
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META);
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MIN_META);
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MAX_META);
 		return;
 	}
 
 	\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_META, $artikel_id);
+
+	$begrenzung_raw = \trim((string) \wp_unslash($_POST['cmx_carent_fahrzeug_km_begrenzung'] ?? ''));
+	$begrenzung = $begrenzung_raw === ''
+		? ''
+		: (string) \max(0, (int) \round(\function_exists(__NAMESPACE__ . '\\cmx_parse_number') ? cmx_parse_number($begrenzung_raw) : (float) \str_replace(',', '.', $begrenzung_raw)));
+	$mehrpreis = cmx_carent_fahrzeug_normalize_decimal(\wp_unslash($_POST['cmx_carent_fahrzeug_km_mehrpreis'] ?? ''));
+	$kasko_min = cmx_carent_fahrzeug_normalize_decimal(\wp_unslash($_POST['cmx_carent_fahrzeug_kasko_min'] ?? ''));
+	$kasko_max = cmx_carent_fahrzeug_normalize_decimal(\wp_unslash($_POST['cmx_carent_fahrzeug_kasko_max'] ?? ''));
+
+	if ($begrenzung === '') {
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
+	} else {
+		\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META, $begrenzung);
+	}
+	if ($mehrpreis === '') {
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META);
+	} else {
+		\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_MEHRPREIS_META, $mehrpreis);
+	}
+	if ($kasko_min === '') {
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MIN_META);
+	} else {
+		\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MIN_META, $kasko_min);
+	}
+	if ($kasko_max === '') {
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MAX_META);
+	} else {
+		\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_KASKO_MAX_META, $kasko_max);
+	}
 }, 20, 3);
