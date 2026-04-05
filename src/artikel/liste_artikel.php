@@ -331,6 +331,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		\nocache_headers();
 		\status_header(200);
 		$cart_storage_key = 'cmxArtikelKatalogCart';
+		$can_create_beleg = \is_user_logged_in()
+			&& \post_type_exists('belege')
+			&& \function_exists(__NAMESPACE__ . '\\cmx_post_type_can_create')
+			&& \function_exists(__NAMESPACE__ . '\\cmx_post_type_can_publish')
+			&& cmx_post_type_can_create('belege')
+			&& cmx_post_type_can_publish('belege');
+		$create_beleg_action_url = $can_create_beleg ? (string) \admin_url('admin-post.php') : '';
+		$create_beleg_nonce = $can_create_beleg ? (string) \wp_create_nonce('cmx_artikel_create_beleg_cart') : '';
 
 		echo '<!doctype html><html lang="de"><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
@@ -450,6 +458,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 		echo '<div class="cmx-artikel-tools">';
 		echo '<input type="search" id="cmx-artikel-search" placeholder="Artikel durchsuchen">';
 		echo '</div>';
+		if ($can_create_beleg && $create_beleg_action_url !== '' && $create_beleg_nonce !== '') {
+			echo '<form method="post" action="' . \esc_url($create_beleg_action_url) . '" id="cmx-artikel-cart-create-form" style="display:none">';
+			echo '<input type="hidden" name="action" value="cmx_artikel_create_beleg">';
+			echo '<input type="hidden" name="_wpnonce" value="' . \esc_attr($create_beleg_nonce) . '">';
+			echo '<div id="cmx-artikel-cart-create-fields"></div>';
+			echo '</form>';
+		}
 		echo '<div class="cmx-artikel-table-wrap">';
 		echo '<table class="cmx-artikel-table"><thead><tr>';
 		echo '<th>Bild</th>';
@@ -538,7 +553,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 					var cartList=document.getElementById("cmx-artikel-cart-list");
 					var cartEmpty=document.getElementById("cmx-artikel-cart-empty");
 					var cartBadge=document.getElementById("cmx-artikel-cart-badge");
+					var createForm=document.getElementById("cmx-artikel-cart-create-form");
+					var createFields=document.getElementById("cmx-artikel-cart-create-fields");
 					var cartStorageKey=' . \wp_json_encode($cart_storage_key) . ';
+					var canCreate=' . ($can_create_beleg ? 'true' : 'false') . ';
 					var activeRow=null;
 					if(!body){return;}
 					function normalize(txt){return String(txt||"").toLowerCase().trim();}
@@ -648,6 +666,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 							entry.appendChild(remove);
 							cartList.appendChild(entry);
 						});
+					}
+					function submitCreateFromCart(){
+						var items;
+						if(!canCreate || !createForm || !createFields){return;}
+						items=readCart();
+						if(!items.length){return;}
+						createFields.innerHTML="";
+						items.forEach(function(item){
+							var idField=document.createElement("input");
+							var qtyField=document.createElement("input");
+							idField.type="hidden";
+							idField.name="artikel_ids[]";
+							idField.value=String(item.id);
+							createFields.appendChild(idField);
+							qtyField.type="hidden";
+							qtyField.name="artikel_mengen[" + String(item.id) + "]";
+							qtyField.value=String(item.count);
+							createFields.appendChild(qtyField);
+						});
+						createForm.submit();
 					}
 					function getRows(){return Array.prototype.slice.call(body.querySelectorAll("tr[data-search]"));}
 					function getVisibleRows(){return getRows().filter(function(row){ return row.style.display!=="none"; });}
@@ -826,6 +864,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_liste_page')) {
 								if(cartWidget && cartWidget.contains(document.activeElement)){return;}
 								cartTrigger.setAttribute("aria-expanded","false");
 							}, 80);
+						});
+						cartTrigger.addEventListener("dblclick", function(event){
+							event.preventDefault();
+							event.stopPropagation();
+							submitCreateFromCart();
 						});
 					}
 					if(cartList){
