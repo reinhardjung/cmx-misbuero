@@ -112,7 +112,7 @@ cmx_define_meta_constants(basename(__DIR__), 'sku,anzahl,ek,vk,marge,waehrungen,
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,admincolumns,doppelte,liste_artikel,liste_artikel detail,qr-code,exports,imports,bilder,preview,status');
+cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,carent,admincolumns,doppelte,liste_artikel,liste_artikel detail,qr-code,exports,imports,bilder,preview,status');
 
 
 // Halte den Slug immer synchron mit dem Titel beim Speichern.
