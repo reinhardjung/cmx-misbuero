@@ -484,18 +484,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_beleg_eve
 				continue;
 			}
 
-			$label = $due_ts < $today_ts ? 'Rechnung überfällig' : ($due_ts === $today_ts ? 'Rechnung fällig' : 'Zahlungstermin');
-			$events[] = [
-				'key' => 'invoice-' . $post_id . '-' . $due_ts,
-				'ts' => $due_ts,
-				'date' => cmx_cockpit_pendenzen_day_ymd($due_ts),
-				'label' => $label,
-				'subject' => $title,
-				'meta' => $amount !== '' ? $amount : $contact,
-				'tone' => 'red',
-				'icon' => 'warning',
-				'url' => $edit_url,
-			];
+				$label = $due_ts < $today_ts ? 'Rechnung überfällig' : ($due_ts === $today_ts ? 'Rechnung fällig' : 'Zahlungstermin');
+				$icon = ($label === 'Zahlungstermin') ? 'bank' : 'warning';
+				$events[] = [
+					'key' => 'invoice-' . $post_id . '-' . $due_ts,
+					'ts' => $due_ts,
+					'date' => cmx_cockpit_pendenzen_day_ymd($due_ts),
+					'label' => $label,
+					'subject' => $title,
+					'meta' => $amount !== '' ? $amount : $contact,
+					'tone' => 'red',
+					'icon' => $icon,
+					'url' => $edit_url,
+				];
 		}
 
 		return $events;
@@ -819,16 +820,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-postbox{margin:0}
 			.cmx-pend-postbox .postbox-header .hndle,
 			.cmx-pend-postbox .postbox-header h2{font-size:16px !important;line-height:1.3 !important;padding:7px 18px !important;min-height:0}
+			.cmx-pend-board-box .postbox-header .hndle,
+			.cmx-pend-board-box .postbox-header h2{font-size:15px !important;line-height:1.2 !important;padding:4px 14px !important;min-height:0}
 			.cmx-pend-postbox--full{grid-column:1 / -1}
 			.cmx-pend-postbox-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
 			.cmx-pend-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:999px;background:#eef4fb;color:#1f5180;font-size:12px;font-weight:700;line-height:1}
+			.cmx-pend-board-box .cmx-pend-count{min-width:24px;height:18px;padding:0 6px;font-size:11px}
 			.cmx-pend-postbox .inside{padding:16px 18px 18px}
+			.cmx-pend-postbox--range .inside{padding:8px 14px 10px}
 			.cmx-pend-toolbar-form{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:end}
+			.cmx-pend-postbox--range .cmx-pend-toolbar-form{gap:10px}
 			.cmx-pend-field{display:flex;flex-direction:column;gap:6px}
+			.cmx-pend-postbox--range .cmx-pend-field{gap:3px}
 			.cmx-pend-field label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;color:#646970}
+			.cmx-pend-postbox--range .cmx-pend-field label{font-size:10px}
 			.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
 			.cmx-pend-field--right select{align-self:flex-end}
 			.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
+			.cmx-pend-postbox--range .cmx-pend-toolbar-today{font-size:20px;line-height:1.1}
 			.cmx-pend-field--right{align-items:flex-end}
 			.cmx-pend-card-list{display:flex;flex-direction:column}
 				.cmx-pend-card{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
@@ -877,8 +886,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-number{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;color:#1d2327;font-size:13px;font-weight:700}
 			.cmx-pend-calendar-cell.is-today .cmx-pend-calendar-number{background:#135e96;color:#fff}
 			.cmx-pend-calendar-items{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto;padding-right:2px}
-			.cmx-pend-calendar-chip{display:block;padding:6px 8px;border-radius:8px;border:1px solid #e6ebf0;background:#fff;color:#2c3338;text-decoration:none;font-size:12px;line-height:1.3;font-weight:600}
+			.cmx-pend-calendar-chip{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1px solid #e6ebf0;background:#fff;color:#2c3338;text-decoration:none;font-size:12px;line-height:1.3;font-weight:600}
 			.cmx-pend-calendar-chip--button{width:100%;cursor:pointer;font:inherit;text-align:left}
+			.cmx-pend-calendar-chip-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:14px;height:14px;font-size:14px;line-height:14px}
+			.cmx-pend-calendar-chip-text{display:block;min-width:0;flex:1 1 auto}
 			.cmx-pend-calendar-chip:hover{text-decoration:none;background:#fafcff}
 			.cmx-pend-calendar-chip--red{border-color:#f3d0d2;background:#fff7f7;color:#b32d2e}
 			.cmx-pend-calendar-chip--orange{border-color:#f4dfb1;background:#fffbf2;color:#b96f00}
@@ -985,17 +996,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_event_card')) {
-	function cmx_cockpit_pendenzen_card_marker_html(array $event): string {
+	function cmx_cockpit_pendenzen_dashicon_class(array $event): string {
 		$icon = \trim((string) ($event['icon'] ?? ''));
-		$dashicon = '';
 
 		if ($icon === 'community') {
-			$dashicon = 'dashicons-buddicons-community';
-		} elseif ($icon === 'building') {
-			$dashicon = 'dashicons-building';
-		} elseif ($icon === 'calendar') {
-			$dashicon = 'dashicons-calendar-alt';
+			return 'dashicons-buddicons-community';
 		}
+		if ($icon === 'building') {
+			return 'dashicons-building';
+		}
+		if ($icon === 'bank') {
+			return 'dashicons-bank';
+		}
+		if ($icon === 'calendar') {
+			return 'dashicons-calendar-alt';
+		}
+
+		return '';
+	}
+
+	function cmx_cockpit_pendenzen_card_marker_html(array $event): string {
+		$dashicon = cmx_cockpit_pendenzen_dashicon_class($event);
 
 		if ($dashicon !== '') {
 			return '<span class="cmx-pend-card-icon dashicons ' . \esc_attr($dashicon) . '" aria-hidden="true"></span>';
@@ -1010,7 +1031,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_event_card
 		$subject = \trim((string) ($event['subject'] ?? ''));
 		$meta = \trim((string) ($event['meta'] ?? ''));
 		$url = \trim((string) ($event['url'] ?? ''));
-		$show_label = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung'], true));
+			$show_label = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung', 'Zahlungstermin'], true));
 
 		echo '<article class="cmx-pend-card cmx-pend-card--' . \esc_attr($tone) . '">';
 		echo cmx_cockpit_pendenzen_card_marker_html($event);
@@ -1095,7 +1116,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_board')) {
 		];
 
 		echo '<div class="cmx-pend-board-grid">';
-		echo '<section class="postbox cmx-pend-postbox cmx-pend-postbox--full">';
+			echo '<section class="postbox cmx-pend-postbox cmx-pend-board-box cmx-pend-postbox--full cmx-pend-postbox--range">';
 		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Zeitraum</span></span></h2></div>';
 		echo '<div class="inside">';
 		echo '<form class="cmx-pend-toolbar-form" method="get">';
@@ -1122,19 +1143,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_board')) {
 		echo '</div>';
 		echo '</section>';
 
-		echo '<section class="postbox cmx-pend-postbox">';
+			echo '<section class="postbox cmx-pend-postbox cmx-pend-board-box">';
 		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Vergangenheit</span><span class="cmx-pend-count">' . (int) \count($past_events) . '</span></span></h2></div>';
 		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($past_events, 'Keine Einträge in den letzten ' . $past_days . ' Tagen.');
 		echo '</div>';
 		echo '</section>';
-		echo '<section class="postbox cmx-pend-postbox">';
+			echo '<section class="postbox cmx-pend-postbox cmx-pend-board-box">';
 		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Heute</span><span class="cmx-pend-count">' . (int) \count($today_events) . '</span></span></h2></div>';
 		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($today_events, 'Heute sind keine Fristen erfasst.');
 		echo '</div>';
 		echo '</section>';
-		echo '<section class="postbox cmx-pend-postbox">';
+			echo '<section class="postbox cmx-pend-postbox cmx-pend-board-box">';
 		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>Zukunft</span><span class="cmx-pend-count">' . (int) \count($future_events) . '</span></span></h2></div>';
 		echo '<div class="inside">';
 		cmx_cockpit_pendenzen_render_day_column($future_events, 'Keine Einträge in den nächsten ' . $future_days . ' Tagen.');
@@ -1220,22 +1241,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 			echo '</div>';
 			echo '<div class="cmx-pend-calendar-items">';
 			$visible = \array_slice($day_events, 0, 3);
-			foreach ($visible as $event) {
-				$tone = \sanitize_html_class((string) ($event['tone'] ?? 'red'));
-				$url = \trim((string) ($event['url'] ?? ''));
-				$label = \trim((string) ($event['label'] ?? ''));
-				$subject = \trim((string) ($event['subject'] ?? ''));
-				$text = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung'], true))
-					? $label . ': ' . $subject
-					: $subject;
-				if (!empty($event['editable']) && !empty($event['manual_id'])) {
-					echo '<button type="button" class="cmx-pend-calendar-chip cmx-pend-calendar-chip--button cmx-pend-calendar-chip--' . \esc_attr($tone) . ' cmx-pend-edit-trigger" data-event="' . cmx_cockpit_pendenzen_manual_edit_payload_attr($event) . '">' . \esc_html($text) . '</button>';
-				} elseif ($url !== '') {
-					echo '<a class="cmx-pend-calendar-chip cmx-pend-calendar-chip--' . \esc_attr($tone) . '" href="' . \esc_url($url) . '">' . \esc_html($text) . '</a>';
-				} else {
-					echo '<span class="cmx-pend-calendar-chip cmx-pend-calendar-chip--' . \esc_attr($tone) . '">' . \esc_html($text) . '</span>';
+				foreach ($visible as $event) {
+					$tone = \sanitize_html_class((string) ($event['tone'] ?? 'red'));
+					$url = \trim((string) ($event['url'] ?? ''));
+					$label = \trim((string) ($event['label'] ?? ''));
+					$subject = \trim((string) ($event['subject'] ?? ''));
+					$dashicon = cmx_cockpit_pendenzen_dashicon_class($event);
+					$text = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung', 'Zahlungstermin'], true))
+						? $label . ': ' . $subject
+						: $subject;
+					$chip_inner = ($dashicon !== '' ? '<span class="cmx-pend-calendar-chip-icon dashicons ' . \esc_attr($dashicon) . '" aria-hidden="true"></span>' : '') . '<span class="cmx-pend-calendar-chip-text">' . \esc_html($text) . '</span>';
+					if (!empty($event['editable']) && !empty($event['manual_id'])) {
+						echo '<button type="button" class="cmx-pend-calendar-chip cmx-pend-calendar-chip--button cmx-pend-calendar-chip--' . \esc_attr($tone) . ' cmx-pend-edit-trigger" data-event="' . cmx_cockpit_pendenzen_manual_edit_payload_attr($event) . '">' . $chip_inner . '</button>';
+					} elseif ($url !== '') {
+						echo '<a class="cmx-pend-calendar-chip cmx-pend-calendar-chip--' . \esc_attr($tone) . '" href="' . \esc_url($url) . '">' . $chip_inner . '</a>';
+					} else {
+						echo '<span class="cmx-pend-calendar-chip cmx-pend-calendar-chip--' . \esc_attr($tone) . '">' . $chip_inner . '</span>';
+					}
 				}
-			}
 			if (\count($day_events) > 3) {
 				echo '<div class="cmx-pend-calendar-more">+' . (int) (\count($day_events) - 3) . ' weitere</div>';
 			}
