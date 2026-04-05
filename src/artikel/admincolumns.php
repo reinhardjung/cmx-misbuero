@@ -706,8 +706,18 @@ function cmx_lieferanten_args(): array {
 \add_action('admin_head-edit.php', function () {
 	if (!isset($_GET['post_type']) || $_GET['post_type'] !== 'artikel') return;
 	?>
-		<style>
-			.cmx-ac-thumb {
+				<style>
+					.fixed .column-sku{
+						width:100px;
+						min-width:100px;
+						white-space:nowrap;
+					}
+					.fixed .column-kennzeichen{
+						width:100px;
+						min-width:100px;
+						white-space:nowrap;
+					}
+				.cmx-ac-thumb {
 				width: 50px;
 				height: 50px;
 				object-fit: contain; /* ganzes Bild zeigen wie im Katalog */
