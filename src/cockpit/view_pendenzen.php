@@ -91,7 +91,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_events')) 
 				'all_day' => !empty($row['all_day']),
 				'subject' => $subject,
 				'hinweis' => $hinweis,
-				'hinweis_date' => \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($row['hinweis_date'] ?? '')) ? (string) $row['hinweis_date'] : '',
+					'hinweis_date' => \preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($row['hinweis_date'] ?? '')) ? (string) $row['hinweis_date'] : '',
+					'hinweis_time' => \preg_match('/^\d{2}:\d{2}$/', (string) ($row['hinweis_time'] ?? '')) ? (string) $row['hinweis_time'] : '',
 				'description' => \sanitize_textarea_field((string) ($row['description'] ?? '')),
 				'url' => \esc_url_raw((string) ($row['url'] ?? '')),
 				'contact_id' => \max(0, (int) ($row['contact_id'] ?? 0)),
@@ -151,7 +152,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_edit_paylo
 			'all_day' => !empty($event['manual_all_day']),
 			'subject' => (string) ($event['subject'] ?? ''),
 			'hinweis' => (string) ($event['manual_hinweis'] ?? ''),
-			'hinweis_date' => (string) ($event['manual_hinweis_date'] ?? ''),
+				'hinweis_date' => (string) ($event['manual_hinweis_date'] ?? ''),
+				'hinweis_time' => (string) ($event['manual_hinweis_time'] ?? ''),
 			'description' => (string) ($event['manual_description'] ?? ''),
 			'url' => (string) ($event['manual_url'] ?? ''),
 			'contact_id' => (int) ($event['manual_contact_id'] ?? 0),
@@ -686,6 +688,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_manual_ev
 				'manual_all_day' => $all_day,
 				'manual_hinweis' => $hinweis,
 				'manual_hinweis_date' => (string) ($event['hinweis_date'] ?? ''),
+				'manual_hinweis_time' => (string) ($event['hinweis_time'] ?? ''),
 				'manual_description' => (string) ($event['description'] ?? ''),
 				'manual_url' => \trim((string) ($event['url'] ?? '')),
 				'manual_contact_id' => (int) ($event['contact_id'] ?? 0),
@@ -740,9 +743,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events'))
 	if ($subject === '') {
 		$subject = 'Ereignis';
 	}
-	$hinweis = \sanitize_text_field((string) \wp_unslash($_POST['hinweis'] ?? ''));
-	$hinweis_date = isset($_POST['hinweis_date']) ? (string) \wp_unslash($_POST['hinweis_date']) : '';
-	$hinweis_date = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $hinweis_date) ? $hinweis_date : '';
+		$hinweis = \sanitize_text_field((string) \wp_unslash($_POST['hinweis'] ?? ''));
+		$hinweis_date = isset($_POST['hinweis_date']) ? (string) \wp_unslash($_POST['hinweis_date']) : '';
+		$hinweis_date = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $hinweis_date) ? $hinweis_date : '';
+		$hinweis_time = isset($_POST['hinweis_time']) ? (string) \wp_unslash($_POST['hinweis_time']) : '';
+		$hinweis_time = \preg_match('/^\d{2}:\d{2}$/', $hinweis_time) ? $hinweis_time : '';
 	$description = \sanitize_textarea_field((string) \wp_unslash($_POST['description'] ?? ''));
 	$url = \esc_url_raw((string) \wp_unslash($_POST['url'] ?? ''));
 	$contact_id = isset($_POST['contact_id']) ? (int) \wp_unslash($_POST['contact_id']) : 0;
@@ -768,10 +773,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events'))
 		'date' => $date,
 		'time' => $all_day ? '' : $time,
 		'all_day' => $all_day ? 1 : 0,
-		'subject' => $subject,
-		'hinweis' => $hinweis,
-		'hinweis_date' => $hinweis_date,
-		'description' => $description,
+			'subject' => $subject,
+			'hinweis' => $hinweis,
+			'hinweis_date' => $hinweis_date,
+			'hinweis_time' => $hinweis_time,
+			'description' => $description,
 		'url' => $url,
 		'contact_id' => $contact_id,
 		'contact_label' => $contact_label,
@@ -852,7 +858,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-shell{padding:0}
 			.cmx-pend-calendar-heading{display:flex;align-items:center;gap:10px;min-width:0}
 			.cmx-pend-calendar-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0}
-			.cmx-pend-calendar-switch select{min-width:130px;max-width:100%;height:34px}
+			.cmx-pend-calendar-switch select{min-width:130px;max-width:100%;height:34px;padding:0 28px 3px 12px;line-height:1.2;box-sizing:border-box}
 			.cmx-pend-calendar-switch .cmx-pend-calendar-year{min-width:96px}
 			.cmx-pend-calendar-nav{display:flex;align-items:center;gap:8px}
 			.cmx-pend-calendar-nav .button{display:inline-flex;align-items:center;justify-content:center;min-width:26px;min-height:26px;height:26px;padding:0 6px;line-height:1}
@@ -890,22 +896,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-modal-actions .button{border-radius:8px !important}
 			.cmx-pend-form-grid{display:grid;gap:16px}
 			.cmx-pend-form-row{display:grid;gap:16px}
-			.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(120px,146px) minmax(140px,180px) auto;align-items:end}
+				.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(120px,146px) minmax(240px,320px) auto;align-items:end}
 			.cmx-pend-form-field{display:flex;flex-direction:column;gap:6px;min-width:0}
 			.cmx-pend-form-field label{font-size:12px;font-weight:700;line-height:1.3;color:#334155}
 			.cmx-pend-form-label--quickfill{cursor:pointer;user-select:none}
-			.cmx-pend-time-picker{position:relative}
-			.cmx-pend-time-presets[hidden]{display:none !important}
-			.cmx-pend-time-presets{position:absolute;top:100%;left:0;z-index:100006;min-width:220px;margin:6px 0 0;padding:6px;border:1px solid #ccd8e6;border-radius:14px;background:#fff;box-shadow:0 20px 38px rgba(15,23,42,.18)}
+				.cmx-pend-date-picker,
+				.cmx-pend-time-picker{position:relative}
+				.cmx-pend-date-presets[hidden]{display:none !important}
+				.cmx-pend-date-presets{position:absolute;top:100%;left:0;z-index:100006;min-width:290px;margin:6px 0 0;padding:6px;border:1px solid #ccd8e6;border-radius:14px;background:#fff;box-shadow:0 20px 38px rgba(15,23,42,.18)}
+				.cmx-pend-date-presets button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;margin:0;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:#1f2937;text-align:left;cursor:pointer}
+				.cmx-pend-date-presets button:hover,
+				.cmx-pend-date-presets button:focus{background:#e8f2fe;outline:none}
+				.cmx-pend-date-presets-label{font-weight:600}
+				.cmx-pend-date-presets small{display:block;color:#64748b;font-size:12px;line-height:1.35}
+				.cmx-pend-time-presets[hidden]{display:none !important}
+				.cmx-pend-time-presets{position:absolute;top:100%;left:0;z-index:100006;min-width:220px;margin:6px 0 0;padding:6px;border:1px solid #ccd8e6;border-radius:14px;background:#fff;box-shadow:0 20px 38px rgba(15,23,42,.18)}
 			.cmx-pend-time-presets button{display:flex;align-items:center;justify-content:space-between;width:100%;margin:0;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:#1f2937;text-align:left;cursor:pointer}
 			.cmx-pend-time-presets button:hover,
 			.cmx-pend-time-presets button:focus{background:#e8f2fe;outline:none}
 			.cmx-pend-time-presets-label{font-weight:600}
 			.cmx-pend-time-presets-value{color:#64748b;font-size:12px;font-weight:700}
 			.cmx-pend-hint-picker{position:relative}
-				.cmx-pend-hint-head{display:flex;align-items:baseline;gap:10px;min-height:18px;flex-wrap:wrap}
+				.cmx-pend-hint-head{display:flex;align-items:baseline;gap:8px;min-height:18px;flex-wrap:wrap}
 				.cmx-pend-hint-display[hidden]{display:none !important}
-				.cmx-pend-hint-display{font-size:17px;font-weight:700;line-height:1.2;color:#1d2327}
+				.cmx-pend-hint-display{font-size:12px;font-weight:700;line-height:1.3;color:#64748b}
+				.cmx-pend-hint-inputs{display:grid;grid-template-columns:minmax(0,1fr) 118px;gap:8px}
 			.cmx-pend-hint-presets[hidden]{display:none !important}
 			.cmx-pend-hint-presets{position:absolute;top:100%;left:0;z-index:100006;min-width:220px;margin:6px 0 0;padding:6px;border:1px solid #ccd8e6;border-radius:14px;background:#fff;box-shadow:0 20px 38px rgba(15,23,42,.18)}
 			.cmx-pend-hint-presets button{display:flex;align-items:center;justify-content:flex-start;width:100%;margin:0;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:#1f2937;text-align:left;cursor:pointer}
@@ -1214,9 +1229,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_modal')) {
 		echo '<form id="cmx-pend-create-form" class="cmx-pend-form-grid">';
 		echo '<input type="hidden" id="cmx-pend-create-event-id" name="event_id" value="">';
 		echo '<div class="cmx-pend-form-row cmx-pend-form-row--datetime">';
-		echo '<div class="cmx-pend-form-field"><label id="cmx-pend-create-date-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-date">Datum</label><input type="date" id="cmx-pend-create-date" name="date" required></div>';
+			echo '<div class="cmx-pend-form-field cmx-pend-date-picker"><label id="cmx-pend-create-date-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-date">Datum</label><input type="date" id="cmx-pend-create-date" name="date" required><div id="cmx-pend-create-date-presets" class="cmx-pend-date-presets" hidden><button type="button" data-date-preset="today_plus_3"><span class="cmx-pend-date-presets-label">Heute (in 3 Stunden)</span><small>Heute mit auf volle Stunde gerundeter Uhrzeit in 3 Stunden.</small></button><button type="button" data-date-preset="tomorrow"><span class="cmx-pend-date-presets-label">Morgen</span><small>Setzt morgen und öffnet direkt die Uhrzeit-Auswahl.</small></button><button type="button" data-date-preset="next_workday"><span class="cmx-pend-date-presets-label">Nächster Arbeitstag</span><small>Setzt den nächsten Werktag und öffnet direkt die Uhrzeit-Auswahl.</small></button><button type="button" data-date-preset="next_week_tuesday"><span class="cmx-pend-date-presets-label">Nächste Woche (Dienstag)</span><small>Setzt Dienstag der nächsten Woche und öffnet direkt die Uhrzeit-Auswahl.</small></button></div></div>';
 		echo '<div class="cmx-pend-form-field cmx-pend-time-picker"><label id="cmx-pend-create-time-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-time">Uhrzeit</label><input type="time" id="cmx-pend-create-time" name="time"><div id="cmx-pend-create-time-presets" class="cmx-pend-time-presets" hidden><button type="button" data-time="07:00"><span class="cmx-pend-time-presets-label">Morgens</span><span class="cmx-pend-time-presets-value">07:00</span></button><button type="button" data-time="09:00"><span class="cmx-pend-time-presets-label">Vormittags</span><span class="cmx-pend-time-presets-value">09:00</span></button><button type="button" data-time="14:00"><span class="cmx-pend-time-presets-label">Nachmittags</span><span class="cmx-pend-time-presets-value">14:00</span></button><button type="button" data-time="19:00"><span class="cmx-pend-time-presets-label">Feierabend</span><span class="cmx-pend-time-presets-value">19:00</span></button></div></div>';
-			echo '<div class="cmx-pend-form-field cmx-pend-hint-picker"><div class="cmx-pend-hint-head"><label id="cmx-pend-create-hinweis-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-hinweis-date">Hinweis</label><span id="cmx-pend-create-hinweis-display" class="cmx-pend-hint-display" hidden></span></div><input type="hidden" id="cmx-pend-create-hinweis" name="hinweis" value=""><input type="date" id="cmx-pend-create-hinweis-date" name="hinweis_date"><div id="cmx-pend-create-hinweis-presets" class="cmx-pend-hint-presets" hidden><button type="button" data-hinweis="Bei Ereignisstart">Bei Ereignisstart</button><button type="button" data-hinweis="5 Minuten vorher">5 Minuten vorher</button><button type="button" data-hinweis="10 Minuten vorher">10 Minuten vorher</button><button type="button" data-hinweis="15 Minuten vorher">15 Minuten vorher</button><button type="button" data-hinweis="30 Minuten vorher">30 Minuten vorher</button><button type="button" data-hinweis="1 Stunde vorher">1 Stunde vorher</button><button type="button" data-hinweis="2 Stunden vorher">2 Stunden vorher</button><button type="button" data-hinweis="1 Tag vorher">1 Tag vorher</button><button type="button" data-hinweis="2 Tage vorher">2 Tage vorher</button></div></div>';
+				echo '<div class="cmx-pend-form-field cmx-pend-hint-picker"><div class="cmx-pend-hint-head"><label id="cmx-pend-create-hinweis-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-hinweis-date">Hinweis</label><span id="cmx-pend-create-hinweis-display" class="cmx-pend-hint-display" hidden></span></div><input type="hidden" id="cmx-pend-create-hinweis" name="hinweis" value=""><div class="cmx-pend-hint-inputs"><input type="date" id="cmx-pend-create-hinweis-date" name="hinweis_date"><input type="time" id="cmx-pend-create-hinweis-time" name="hinweis_time"></div><div id="cmx-pend-create-hinweis-presets" class="cmx-pend-hint-presets" hidden><button type="button" data-hinweis="Bei Ereignisstart">Bei Ereignisstart</button><button type="button" data-hinweis="5 Minuten vorher">5 Minuten vorher</button><button type="button" data-hinweis="10 Minuten vorher">10 Minuten vorher</button><button type="button" data-hinweis="15 Minuten vorher">15 Minuten vorher</button><button type="button" data-hinweis="30 Minuten vorher">30 Minuten vorher</button><button type="button" data-hinweis="1 Stunde vorher">1 Stunde vorher</button><button type="button" data-hinweis="2 Stunden vorher">2 Stunden vorher</button><button type="button" data-hinweis="1 Tag vorher">1 Tag vorher</button><button type="button" data-hinweis="2 Tage vorher">2 Tage vorher</button></div></div>';
 		echo '<label class="cmx-pend-form-checkbox" for="cmx-pend-create-all-day"><input type="checkbox" id="cmx-pend-create-all-day" name="all_day" value="1"> Ganztägig</label>';
 		echo '</div>';
 		echo '<div class="cmx-pend-form-field"><label for="cmx-pend-create-subject">Betreff</label><input type="text" id="cmx-pend-create-subject" name="subject" required></div>';
@@ -1382,16 +1397,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		var eventIdInput = document.getElementById("cmx-pend-create-event-id");
 		var status = document.getElementById("cmx-pend-modal-status");
 		var modalTitle = document.getElementById("cmx-pend-modal-title");
-		var dateLabel = document.getElementById("cmx-pend-create-date-label");
-		var dateInput = document.getElementById("cmx-pend-create-date");
+			var dateLabel = document.getElementById("cmx-pend-create-date-label");
+			var dateInput = document.getElementById("cmx-pend-create-date");
+			var datePresetMenu = document.getElementById("cmx-pend-create-date-presets");
 		var timeLabel = document.getElementById("cmx-pend-create-time-label");
 		var timeInput = document.getElementById("cmx-pend-create-time");
 		var timePresetMenu = document.getElementById("cmx-pend-create-time-presets");
-		var hinweisLabel = document.getElementById("cmx-pend-create-hinweis-label");
-		var hinweisDisplay = document.getElementById("cmx-pend-create-hinweis-display");
-		var hinweisInput = document.getElementById("cmx-pend-create-hinweis");
-		var hinweisDateInput = document.getElementById("cmx-pend-create-hinweis-date");
-		var hinweisPresetMenu = document.getElementById("cmx-pend-create-hinweis-presets");
+			var hinweisLabel = document.getElementById("cmx-pend-create-hinweis-label");
+			var hinweisDisplay = document.getElementById("cmx-pend-create-hinweis-display");
+			var hinweisInput = document.getElementById("cmx-pend-create-hinweis");
+			var hinweisDateInput = document.getElementById("cmx-pend-create-hinweis-date");
+			var hinweisTimeInput = document.getElementById("cmx-pend-create-hinweis-time");
+			var hinweisPresetMenu = document.getElementById("cmx-pend-create-hinweis-presets");
 		var allDayInput = document.getElementById("cmx-pend-create-all-day");
 		var subjectInput = document.getElementById("cmx-pend-create-subject");
 		var descriptionInput = document.getElementById("cmx-pend-create-description");
@@ -1399,7 +1416,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		var contactSearch = document.getElementById("cmx-pend-create-contact-search");
 		var contactId = document.getElementById("cmx-pend-create-contact-id");
 		var contactResults = document.getElementById("cmx-pend-create-contact-results");
-		if (!modal || !openButton || !closeButton || !cancelButton || !saveButton || !form || !eventIdInput || !status || !dateInput || !timeInput || !hinweisInput || !hinweisDateInput || !allDayInput || !subjectInput || !descriptionInput || !urlInput || !contactSearch || !contactId || !contactResults) return;
+			if (!modal || !openButton || !closeButton || !cancelButton || !saveButton || !form || !eventIdInput || !status || !dateInput || !timeInput || !hinweisInput || !hinweisDateInput || !hinweisTimeInput || !allDayInput || !subjectInput || !descriptionInput || !urlInput || !contactSearch || !contactId || !contactResults) return;
 
 		var timer = null;
 		var active = -1;
@@ -1447,6 +1464,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			return year + "-" + month + "-" + day;
 		}
 
+		function formatTimeValue(date){
+			if (!(date instanceof Date) || isNaN(date.getTime())) return "";
+			var hours = String(date.getHours()).padStart(2, "0");
+			var minutes = String(date.getMinutes()).padStart(2, "0");
+			return hours + ":" + minutes;
+		}
+
 		function getHinweisOffsetMinutes(value){
 			switch (String(value || "").trim()) {
 				case "Bei Ereignisstart": return 0;
@@ -1477,25 +1501,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			var now = new Date();
 			var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 			var selectedDate = parseDateValue(dateInput.value);
-			var candidateDate = selectedDate ? new Date(selectedDate.getTime()) : new Date(today.getTime());
+			var compareDate = selectedDate ? new Date(selectedDate.getTime()) : new Date(today.getTime());
 
-			if (candidateDate.getTime() < today.getTime()) {
-				candidateDate = new Date(today.getTime());
+			if (compareDate.getTime() !== today.getTime()) {
+				return;
 			}
 
-			var candidateDateTime = new Date(candidateDate.getTime());
+			var candidateDateTime = new Date(compareDate.getTime());
 			candidateDateTime.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
 
-			if (!selectedDate) {
-				if (candidateDateTime.getTime() <= now.getTime()) {
-					candidateDate.setDate(candidateDate.getDate() + 1);
-				}
-			} else if (candidateDateTime.getTime() <= now.getTime()) {
-				candidateDate.setDate(candidateDate.getDate() + 1);
+			if (candidateDateTime.getTime() > now.getTime()) {
+				return;
 			}
 
-			shiftToNextWeekday(candidateDate);
-			dateInput.value = formatDateValue(candidateDate);
+			var nextWorkday = new Date(today.getTime());
+			nextWorkday.setDate(nextWorkday.getDate() + 1);
+			shiftToNextWeekday(nextWorkday);
+			dateInput.value = formatDateValue(nextWorkday);
 			triggerInputEvents(dateInput);
 		}
 
@@ -1504,15 +1526,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			eventIdInput.value = "";
 			contactId.value = "";
 			contactSearch.value = "";
+			closeDatePresets();
 			closeTimePresets();
 			closeHinweisPresets();
 			closeResults();
-			toggleAllDay();
-			hinweisInput.value = "";
-			hinweisDateInput.value = "";
-			if (hinweisDisplay) {
-				hinweisDisplay.textContent = "";
-				hinweisDisplay.hidden = true;
+				toggleAllDay();
+				hinweisInput.value = "";
+				hinweisDateInput.value = "";
+				hinweisTimeInput.value = "";
+				if (hinweisDisplay) {
+					hinweisDisplay.textContent = "";
+					hinweisDisplay.hidden = true;
 			}
 			if (modalTitle) {
 				modalTitle.textContent = "Hinzufügen";
@@ -1525,23 +1549,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			if (data && typeof data === "object") {
 				eventIdInput.value = String(data.id || "").trim();
 				dateInput.value = String(data.date || "").trim();
-				allDayInput.checked = !!data.all_day;
-				timeInput.value = allDayInput.checked ? "" : String(data.time || "").trim();
-				hinweisInput.value = String(data.hinweis || "").trim();
-				hinweisDateInput.value = String(data.hinweis_date || "").trim();
-				if (hinweisDisplay) {
-					hinweisDisplay.textContent = hinweisInput.value;
-					hinweisDisplay.hidden = hinweisInput.value === "";
-				}
+					allDayInput.checked = !!data.all_day;
+					timeInput.value = allDayInput.checked ? "" : String(data.time || "").trim();
+					hinweisInput.value = String(data.hinweis || "").trim();
+					hinweisDateInput.value = String(data.hinweis_date || "").trim();
+					hinweisTimeInput.value = String(data.hinweis_time || "").trim();
+					if (hinweisDisplay) {
+						hinweisDisplay.textContent = hinweisInput.value;
+						hinweisDisplay.hidden = hinweisInput.value === "";
+					}
 				subjectInput.value = String(data.subject || "").trim();
 				descriptionInput.value = String(data.description || "").trim();
 				urlInput.value = String(data.url || "").trim();
 				contactId.value = data.contact_id ? String(data.contact_id) : "";
 				contactSearch.value = String(data.contact_label || "").trim();
 				toggleAllDay();
-				if (hinweisInput.value && !hinweisDateInput.value) {
-					syncHinweisDate();
-				}
+					if (hinweisInput.value && !hinweisDateInput.value && !hinweisTimeInput.value) {
+						syncHinweisDate();
+					}
 				if (modalTitle) {
 					modalTitle.textContent = "Bearbeiten";
 				}
@@ -1557,6 +1582,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			modal.hidden = true;
 			document.body.classList.remove("cmx-pend-modal-open");
 			setStatus("", "");
+			closeDatePresets();
 			closeTimePresets();
 			closeHinweisPresets();
 			closeResults();
@@ -1587,15 +1613,105 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			active = -1;
 		}
 
+		function closeDatePresets(){
+			if (!datePresetMenu) return;
+			datePresetMenu.hidden = true;
+		}
+
+		function toggleDatePresets(){
+			if (!datePresetMenu) return;
+			datePresetMenu.hidden = !datePresetMenu.hidden;
+		}
+
 		function closeTimePresets(){
 			if (!timePresetMenu) return;
 			timePresetMenu.hidden = true;
+		}
+
+		function openTimePresets(){
+			if (!timePresetMenu) return;
+			timePresetMenu.hidden = false;
 		}
 
 		function toggleTimePresets(){
 			if (!timePresetMenu) return;
 			timePresetMenu.hidden = !timePresetMenu.hidden;
 		}
+
+		function getRoundedFutureHour(hoursAhead){
+			var now = new Date();
+			var target = new Date(now.getTime());
+			target.setMinutes(0, 0, 0);
+			if (now.getMinutes() > 0 || now.getSeconds() > 0 || now.getMilliseconds() > 0) {
+				target.setHours(target.getHours() + 1);
+			}
+			target.setHours(target.getHours() + Math.max(0, parseInt(hoursAhead || 0, 10)));
+			return target;
+		}
+
+		function getTomorrowDate(){
+			var date = new Date();
+			date.setHours(0, 0, 0, 0);
+			date.setDate(date.getDate() + 1);
+			return date;
+		}
+
+		function getNextWorkdayDate(){
+			var date = getTomorrowDate();
+			return shiftToNextWeekday(date);
+		}
+
+		function getNextWeekTuesdayDate(){
+			var today = new Date();
+			today.setHours(0, 0, 0, 0);
+			var day = today.getDay();
+			var daysSinceMonday = (day + 6) % 7;
+			var monday = new Date(today.getTime());
+			monday.setDate(today.getDate() - daysSinceMonday + 7);
+			var tuesday = new Date(monday.getTime());
+			tuesday.setDate(monday.getDate() + 1);
+			return tuesday;
+		}
+
+		function chooseDatePreset(value){
+			var preset = String(value || "").trim();
+			if (!preset) return;
+
+			closeDatePresets();
+			closeHinweisPresets();
+
+			if (preset === "today_plus_3") {
+				var target = getRoundedFutureHour(3);
+				allDayInput.checked = false;
+				toggleAllDay();
+				dateInput.value = formatDateValue(target);
+				timeInput.value = formatTimeValue(target);
+				triggerInputEvents(dateInput);
+				triggerInputEvents(timeInput);
+				closeTimePresets();
+				try { timeInput.focus(); } catch (err) {}
+				return;
+			}
+
+			var targetDate = null;
+			if (preset === "tomorrow") {
+				targetDate = getTomorrowDate();
+			} else if (preset === "next_workday") {
+				targetDate = getNextWorkdayDate();
+			} else if (preset === "next_week_tuesday") {
+				targetDate = getNextWeekTuesdayDate();
+			}
+
+			if (!(targetDate instanceof Date) || isNaN(targetDate.getTime())) return;
+
+			allDayInput.checked = false;
+			toggleAllDay();
+				dateInput.value = formatDateValue(targetDate);
+				timeInput.value = "";
+				triggerInputEvents(dateInput);
+				triggerInputEvents(timeInput);
+				openTimePresets();
+			}
 
 		function chooseTimePreset(value){
 			var time = String(value || "").trim();
@@ -1625,21 +1741,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				hinweisDisplay.textContent = hinweis;
 				hinweisDisplay.hidden = hinweis === "";
 			}
-				if (hinweis === "") {
+			if (hinweis === "") {
 				hinweisDateInput.value = "";
+				hinweisTimeInput.value = "";
 				triggerInputEvents(hinweisDateInput);
+				triggerInputEvents(hinweisTimeInput);
 				return;
 			}
 
 			var baseDate = parseDateValue(dateInput.value);
 			if (!baseDate) {
 				hinweisDateInput.value = "";
+				hinweisTimeInput.value = "";
 				triggerInputEvents(hinweisDateInput);
+				triggerInputEvents(hinweisTimeInput);
 				return;
 			}
 
 			var offsetMinutes = getHinweisOffsetMinutes(hinweis);
 			var hintDate = new Date(baseDate.getTime());
+			var hintTime = "";
 
 			if (allDayInput.checked || !/^\d{2}:\d{2}$/.test(String(timeInput.value || "").trim())) {
 				var offsetDays = Math.floor(offsetMinutes / 1440);
@@ -1651,11 +1772,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				if (match) {
 					hintDate.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
 					hintDate = new Date(hintDate.getTime() - (offsetMinutes * 60000));
+					hintTime = formatTimeValue(hintDate);
 				}
 			}
 
 			hinweisDateInput.value = formatDateValue(hintDate);
+			hinweisTimeInput.value = hintTime;
 			triggerInputEvents(hinweisDateInput);
+			triggerInputEvents(hinweisTimeInput);
 		}
 
 		function chooseHinweisPreset(value){
@@ -1664,7 +1788,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			triggerInputEvents(hinweisInput);
 			syncHinweisDate();
 			closeHinweisPresets();
-			try { hinweisDateInput.focus(); } catch (err) {}
+			try { (hinweisTimeInput.value ? hinweisTimeInput : hinweisDateInput).focus(); } catch (err) {}
 		}
 
 		function setActive(next){
@@ -1745,23 +1869,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				closeModal();
 			}
 		});
-		document.addEventListener("keydown", function(e){
-			if (e.key === "Escape" && !modal.hidden) {
+			document.addEventListener("keydown", function(e){
+				if (e.key === "Escape" && !modal.hidden) {
+					if (datePresetMenu && !datePresetMenu.hidden) {
+						closeDatePresets();
+						return;
+					}
+					if (timePresetMenu && !timePresetMenu.hidden) {
+						closeTimePresets();
+						return;
+					}
+					if (hinweisPresetMenu && !hinweisPresetMenu.hidden) {
+						closeHinweisPresets();
+						return;
+					}
+					if (contactResults.style.display === "block") {
+						closeResults();
+						return;
+					}
+					closeModal();
+				}
+			});
+
+			document.addEventListener("click", function(e){
+				if (datePresetMenu && !datePresetMenu.hidden) {
+					if (!e.target.closest("#cmx-pend-create-date-presets") && !e.target.closest("#cmx-pend-create-date-label")) {
+						closeDatePresets();
+					}
+				}
 				if (timePresetMenu && !timePresetMenu.hidden) {
-					closeTimePresets();
-					return;
+					if (!e.target.closest("#cmx-pend-create-time-presets") && !e.target.closest("#cmx-pend-create-time-label")) {
+						closeTimePresets();
+					}
 				}
 				if (hinweisPresetMenu && !hinweisPresetMenu.hidden) {
-					closeHinweisPresets();
-					return;
+					if (!e.target.closest("#cmx-pend-create-hinweis-presets") && !e.target.closest("#cmx-pend-create-hinweis-label")) {
+						closeHinweisPresets();
+					}
 				}
-				if (contactResults.style.display === "block") {
-					closeResults();
-					return;
-				}
-				closeModal();
-			}
-		});
+			});
 
 		allDayInput.addEventListener("change", toggleAllDay);
 		allDayInput.addEventListener("change", syncHinweisDate);
@@ -1773,22 +1919,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		});
 		toggleAllDay();
 
-		if (dateLabel) {
-			dateLabel.addEventListener("click", function(e){
-				e.preventDefault();
-				dateInput.value = getTodayValue();
-				triggerInputEvents(dateInput);
-				try { dateInput.focus(); } catch (err) {}
-			});
-		}
+			if (dateLabel) {
+				dateLabel.addEventListener("click", function(e){
+					e.preventDefault();
+					closeTimePresets();
+					closeHinweisPresets();
+					toggleDatePresets();
+				});
+			}
 
-		if (timeLabel) {
-			timeLabel.addEventListener("click", function(e){
-				e.preventDefault();
-				closeHinweisPresets();
-				toggleTimePresets();
-			});
-		}
+			if (datePresetMenu) {
+				datePresetMenu.addEventListener("click", function(e){
+					var button = e.target && e.target.closest ? e.target.closest("button[data-date-preset]") : null;
+					if (!button) return;
+					e.preventDefault();
+					chooseDatePreset(button.getAttribute("data-date-preset") || "");
+				});
+			}
+
+			if (timeLabel) {
+				timeLabel.addEventListener("click", function(e){
+					e.preventDefault();
+					closeDatePresets();
+					closeHinweisPresets();
+					toggleTimePresets();
+				});
+			}
 
 		if (timePresetMenu) {
 			timePresetMenu.addEventListener("click", function(e){
@@ -1799,13 +1955,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			});
 		}
 
-		if (hinweisLabel) {
-			hinweisLabel.addEventListener("click", function(e){
-				e.preventDefault();
-				closeTimePresets();
-				toggleHinweisPresets();
-			});
-		}
+			if (hinweisLabel) {
+				hinweisLabel.addEventListener("click", function(e){
+					e.preventDefault();
+					closeDatePresets();
+					closeTimePresets();
+					toggleHinweisPresets();
+				});
+			}
 
 		if (hinweisPresetMenu) {
 			hinweisPresetMenu.addEventListener("click", function(e){
@@ -1880,9 +2037,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		saveButton.addEventListener("click", function(){
 			var date = String(dateInput.value || "").trim();
 			var allDay = !!allDayInput.checked;
-			var time = String(timeInput.value || "").trim();
-			var hinweis = String(hinweisInput.value || "").trim();
-			var subject = String(subjectInput.value || "").trim();
+				var time = String(timeInput.value || "").trim();
+				var hinweis = String(hinweisInput.value || "").trim();
+				var hinweisTime = String(hinweisTimeInput.value || "").trim();
+				var subject = String(subjectInput.value || "").trim();
 			var description = String(descriptionInput.value || "").trim();
 			var url = String(urlInput.value || "").trim();
 			var selectedContactId = String(contactId.value || "").trim();
@@ -1906,11 +2064,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			formData.append("action", "cmx_cockpit_pendenzen_add_manual_event");
 			formData.append("_ajax_nonce", config.addNonce);
 			formData.append("event_id", eventId);
-			formData.append("date", date);
-			formData.append("time", allDay ? "" : time);
-			formData.append("hinweis", hinweis);
-			formData.append("hinweis_date", String(hinweisDateInput.value || "").trim());
-			formData.append("all_day", allDay ? "1" : "");
+				formData.append("date", date);
+				formData.append("time", allDay ? "" : time);
+				formData.append("hinweis", hinweis);
+				formData.append("hinweis_date", String(hinweisDateInput.value || "").trim());
+				formData.append("hinweis_time", hinweisTime);
+				formData.append("all_day", allDay ? "1" : "");
 			formData.append("subject", subject);
 			formData.append("description", description);
 			formData.append("url", url);
