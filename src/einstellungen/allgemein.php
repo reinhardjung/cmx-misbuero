@@ -66,7 +66,7 @@ function cmx_register_general_tab(): void {
 				'key'   => 'quick_search',
 				'label' => 'CPT-Adminlisten beim Tippen direkt per AJAX durchsuchen',
 			]);
-			echo '<p class="description">Laedt Treffer in den Adminlisten Deiner Custom Post Types schon waehrend der Eingabe nach, statt erst nach Klick auf den Such-Button.</p>';
+			echo '<p class="description">Zeigt Treffer schon während der Eingabe, statt erst nach Klick auf den Suchen Button.</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
