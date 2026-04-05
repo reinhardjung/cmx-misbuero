@@ -345,6 +345,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			opacity:.72;
 			transition:opacity .16s ease;
 		}
+		#the-list tr.cmx-admin-quick-search-active-row > th,
+		#the-list tr.cmx-admin-quick-search-active-row > td{
+			background:#edf5ff !important;
+		}
+		#the-list tr.cmx-admin-quick-search-active-row > th:first-child,
+		#the-list tr.cmx-admin-quick-search-active-row > td:first-child{
+			box-shadow:inset 2px 0 0 #2271b1;
+		}
 	</style>
 	<script>
 	(function(){
@@ -355,7 +363,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			postType: "",
 			timer: 0,
 			controller: null,
-			requestId: 0
+			requestId: 0,
+			activeResultIndex: -1
 		};
 		runtime.enabled = <?php echo \wp_json_encode($enabled); ?>;
 		runtime.buttonLabel = <?php echo \wp_json_encode($button_label); ?>;
@@ -373,6 +382,110 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 		function getSearchButton(root){
 			var scope = root && root.querySelector ? root : document;
 			return scope.querySelector("#search-submit");
+		}
+
+		function getResultLink(row){
+			if (!(row instanceof HTMLTableRowElement)) {
+				return null;
+			}
+			return row.querySelector("a.row-title")
+				|| row.querySelector("td.title strong a")
+				|| row.querySelector("strong a");
+		}
+
+		function getResultRows(){
+			return Array.prototype.filter.call(document.querySelectorAll("#the-list tr"), function(row){
+				return row instanceof HTMLTableRowElement
+					&& !row.classList.contains("no-items")
+					&& !row.classList.contains("inline-editor")
+					&& !!getResultLink(row);
+			});
+		}
+
+		function clearActiveResult(){
+			runtime.activeResultIndex = -1;
+			document.querySelectorAll("#the-list tr.cmx-admin-quick-search-active-row").forEach(function(row){
+				row.classList.remove("cmx-admin-quick-search-active-row");
+				row.removeAttribute("aria-selected");
+			});
+		}
+
+		function setActiveResult(index){
+			var rows = getResultRows();
+			if (!rows.length) {
+				clearActiveResult();
+				return null;
+			}
+
+			if (index < 0) {
+				index = 0;
+			}
+			if (index >= rows.length) {
+				index = rows.length - 1;
+			}
+
+			clearActiveResult();
+			runtime.activeResultIndex = index;
+
+			var row = rows[index];
+			row.classList.add("cmx-admin-quick-search-active-row");
+			row.setAttribute("aria-selected", "true");
+			if (typeof row.scrollIntoView === "function") {
+				row.scrollIntoView({ block: "nearest", inline: "nearest" });
+			}
+
+			return row;
+		}
+
+		function moveActiveResult(step){
+			var rows = getResultRows();
+			if (!rows.length) {
+				clearActiveResult();
+				return null;
+			}
+
+			var nextIndex = runtime.activeResultIndex;
+			if (nextIndex < 0 || nextIndex >= rows.length) {
+				nextIndex = step > 0 ? 0 : rows.length - 1;
+			} else {
+				nextIndex += step;
+			}
+
+			if (nextIndex < 0) {
+				nextIndex = 0;
+			}
+			if (nextIndex >= rows.length) {
+				nextIndex = rows.length - 1;
+			}
+
+			return setActiveResult(nextIndex);
+		}
+
+		function getActiveResultLink(){
+			var rows = getResultRows();
+			if (!rows.length || runtime.activeResultIndex < 0 || runtime.activeResultIndex >= rows.length) {
+				return null;
+			}
+			return getResultLink(rows[runtime.activeResultIndex]);
+		}
+
+		function focusAndSelectSearchInput(input){
+			if (!(input instanceof HTMLInputElement)) {
+				input = getSearchInput(document);
+			}
+			if (!(input instanceof HTMLInputElement)) {
+				return;
+			}
+			if (typeof input.focus === "function") {
+				input.focus({ preventScroll: true });
+			}
+			if (typeof input.select === "function") {
+				input.select();
+				return;
+			}
+			if (typeof input.setSelectionRange === "function") {
+				input.setSelectionRange(0, input.value.length);
+			}
 		}
 
 		function updateSearchButtonLabel(root){
@@ -433,6 +546,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 		}
 
 		function afterRefresh(expectedValue, url){
+			clearActiveResult();
 			updateSearchButtonLabel(document);
 			document.dispatchEvent(new CustomEvent("cmx:admin-list-refreshed", {
 				detail: { postType: runtime.postType, url: url || "" }
@@ -532,6 +646,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			if (!form) {
 				return;
 			}
+			clearActiveResult();
 			updateSearchButtonLabel(document);
 			scheduleSearch(target.value || "");
 		});
@@ -541,17 +656,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
 				return;
 			}
-			if (!target.closest("#posts-filter") || event.key !== "Enter" || !runtime.enabled) {
+			if (!target.closest("#posts-filter")) {
 				return;
 			}
+
+			if (event.key === "ArrowDown" || event.key === "Down") {
+				if (!runtime.enabled || !getResultRows().length) {
+					return;
+				}
+				event.preventDefault();
+				moveActiveResult(1);
+				return;
+			}
+
+			if (event.key === "ArrowUp" || event.key === "Up") {
+				if (!runtime.enabled || !getResultRows().length) {
+					return;
+				}
+				event.preventDefault();
+				moveActiveResult(-1);
+				return;
+			}
+
+			if (event.key === "Escape" || event.key === "Esc") {
+				if (!runtime.enabled) {
+					return;
+				}
+				event.preventDefault();
+				clearActiveResult();
+				focusAndSelectSearchInput(target);
+				return;
+			}
+
+			if (event.key !== "Enter" || !runtime.enabled) {
+				return;
+			}
+
+			var activeLink = getActiveResultLink();
+			if (activeLink && activeLink.href) {
+				event.preventDefault();
+				window.location.assign(activeLink.href);
+				return;
+			}
+
 			event.preventDefault();
 			window.clearTimeout(runtime.timer);
 			loadSearchResults(target.value || "");
 		});
 
+		document.addEventListener("focusin", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			if (!target.closest("#posts-filter")) {
+				return;
+			}
+			updateSearchButtonLabel(document);
+		});
+
 		document.addEventListener("click", function(event){
 			var button = event.target instanceof Element ? event.target.closest("#search-submit") : null;
 			if (!button) {
+				var titleLink = event.target instanceof Element ? event.target.closest("#the-list tr a.row-title, #the-list tr td.title strong a, #the-list tr strong a") : null;
+				if (!titleLink) {
+					return;
+				}
+				var row = titleLink.closest("tr");
+				if (!(row instanceof HTMLTableRowElement)) {
+					return;
+				}
+				var rows = getResultRows();
+				var index = rows.indexOf(row);
+				if (index !== -1) {
+					setActiveResult(index);
+				}
 				return;
 			}
 			updateSearchButtonLabel(document);
@@ -592,3 +771,166 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
 	</script>
 	<?php
 }, 999);
+
+\add_action('admin_footer-post.php', __NAMESPACE__ . '\\cmx_print_cpt_double_escape_back_to_list');
+\add_action('admin_footer-post-new.php', __NAMESPACE__ . '\\cmx_print_cpt_double_escape_back_to_list');
+
+function cmx_print_cpt_double_escape_back_to_list(): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen) {
+		return;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '' || !\post_type_exists($post_type)) {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin) || empty($post_type_object->show_ui)) {
+		return;
+	}
+
+	$list_url = (string) \admin_url('edit.php?post_type=' . \rawurlencode($post_type));
+	?>
+	<script>
+	(function(){
+		var targetUrl = <?php echo \wp_json_encode($list_url); ?>;
+		if (!targetUrl) {
+			return;
+		}
+
+		var runtime = window.cmxAdminDoubleEscapeToList = window.cmxAdminDoubleEscapeToList || {
+			bound: false,
+			lastEscapeAt: 0,
+			boundDocs: [],
+			tinyMceHooked: false
+		};
+
+		if (runtime.bound) {
+			return;
+		}
+		runtime.bound = true;
+
+		function getSaveButton(){
+			return document.querySelector(
+				'#submitdiv #publish:not([disabled]), #submitdiv #save-post:not([disabled]), #publishing-action #publish:not([disabled]), #publishing-action #save-post:not([disabled]), #publish:not([disabled]), #save-post:not([disabled])'
+			);
+		}
+
+		function isTextareaTarget(target){
+			return !!(target && target.nodeType === 1 && String(target.nodeName || "").toLowerCase() === "textarea");
+		}
+
+		function isWithinContentEditable(target){
+			var current = target && target.nodeType === 3 ? target.parentNode : target;
+			while (current && current.nodeType === 1) {
+				if (current.isContentEditable) {
+					return true;
+				}
+				current = current.parentNode;
+			}
+			return false;
+		}
+
+		function handleKeydown(event){
+			var target = event.target || null;
+
+			if (
+				(isTextareaTarget(target) || isWithinContentEditable(target))
+				&& (event.ctrlKey || event.metaKey)
+				&& !event.altKey
+				&& !event.shiftKey
+				&& !event.repeat
+				&& !event.isComposing
+				&& (event.key === "Enter" || event.key === "NumpadEnter")
+			) {
+				var saveButton = getSaveButton();
+				if (saveButton) {
+					event.preventDefault();
+					event.stopPropagation();
+					saveButton.click();
+				}
+				return;
+			}
+
+			if (!event || (event.key !== "Escape" && event.key !== "Esc")) {
+				return;
+			}
+			if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
+				return;
+			}
+
+			var now = Date.now();
+			var elapsed = now - (runtime.lastEscapeAt || 0);
+			runtime.lastEscapeAt = now;
+
+			if (elapsed > 0 && elapsed <= 1000) {
+				event.preventDefault();
+				event.stopPropagation();
+				window.location.assign(targetUrl);
+			}
+		}
+
+		function bindKeydownDocument(doc){
+			if (!doc || typeof doc.addEventListener !== "function") {
+				return;
+			}
+			if (runtime.boundDocs.indexOf(doc) !== -1) {
+				return;
+			}
+			runtime.boundDocs.push(doc);
+			doc.addEventListener("keydown", handleKeydown, true);
+		}
+
+		function bindTinyMceEditor(editor){
+			if (!editor) {
+				return;
+			}
+
+			function tryBindEditorDoc(){
+				var editorDoc = null;
+				try {
+					editorDoc = typeof editor.getDoc === "function" ? editor.getDoc() : null;
+				} catch (error) {
+					editorDoc = null;
+				}
+				if (editorDoc) {
+					bindKeydownDocument(editorDoc);
+				}
+			}
+
+			if (typeof editor.on === "function") {
+				editor.on("init", tryBindEditorDoc);
+				editor.on("focus", tryBindEditorDoc);
+			}
+			tryBindEditorDoc();
+		}
+
+		function initTinyMceBindings(){
+			if (runtime.tinyMceHooked || !window.tinymce) {
+				return;
+			}
+			runtime.tinyMceHooked = true;
+
+			if (Array.isArray(window.tinymce.editors)) {
+				window.tinymce.editors.forEach(bindTinyMceEditor);
+			}
+
+			if (typeof window.tinymce.on === "function") {
+				window.tinymce.on("AddEditor", function(event){
+					if (event && event.editor) {
+						bindTinyMceEditor(event.editor);
+					}
+				});
+			}
+		}
+
+		bindKeydownDocument(document);
+		initTinyMceBindings();
+		window.addEventListener("load", initTinyMceBindings, { once: true });
+		window.setTimeout(initTinyMceBindings, 250);
+	})();
+	</script>
+	<?php
+}
