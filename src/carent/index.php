@@ -298,3 +298,91 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_CARENT)
 
 // Include: @ll metaboxes
 cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt,fahrzeug,ausweis_fahrer,ausweis_id');
+
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
+	function cmx_carent_composed_title(int $post_id): string {
+		$parts = [];
+
+		$artikel_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			: '_cmx_carent_fahrzeug_id';
+		$artikel_id = (int) \get_post_meta($post_id, $artikel_meta_key, true);
+		if ($artikel_id > 0 && \get_post_status($artikel_id)) {
+			$artikel_title = '';
+			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
+				$artikel_title = \trim((string) cmx_carent_fahrzeug_display_label($artikel_id));
+			}
+			if ($artikel_title === '') {
+				$artikel_title = \trim((string) \get_the_title($artikel_id));
+				if ($artikel_title !== '' && \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+					$artikel_title = (string) cmx_normalize_minus_sign($artikel_title);
+				}
+			}
+			if ($artikel_title !== '') {
+				$parts[] = $artikel_title;
+			}
+		}
+
+		$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META')
+			: '_cmx_carent_kontakt_id';
+		$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
+		if ($kontakt_id > 0 && \get_post_status($kontakt_id)) {
+			$valid_kontakt = true;
+			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_kontakt_post_types')) {
+				$valid_types = (array) cmx_carent_kontakt_post_types();
+				if ($valid_types !== []) {
+					$valid_kontakt = \in_array((string) \get_post_type($kontakt_id), $valid_types, true);
+				}
+			}
+			if ($valid_kontakt) {
+				$kontakt_title = \trim((string) \get_the_title($kontakt_id));
+				if ($kontakt_title !== '' && \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+					$kontakt_title = (string) cmx_normalize_minus_sign($kontakt_title);
+				}
+				if ($kontakt_title !== '') {
+					$parts[] = $kontakt_title;
+				}
+			}
+		}
+
+		return \implode(' - ', \array_values(\array_filter($parts, static fn($value): bool => \trim((string) $value) !== '')));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_sync_post_title')) {
+	function cmx_carent_sync_post_title(int $post_id, \WP_Post $post, bool $update): void {
+		unset($update);
+		static $running = false;
+		if ($running) {
+			return;
+		}
+		if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+			return;
+		}
+		if (\wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id)) {
+			return;
+		}
+		if ((string) $post->post_type !== 'carent') {
+			return;
+		}
+		if (!\current_user_can('edit_post', $post_id)) {
+			return;
+		}
+
+		$title = \trim((string) cmx_carent_composed_title($post_id));
+		if ($title === '' || $title === \trim((string) $post->post_title)) {
+			return;
+		}
+
+		$running = true;
+		\wp_update_post([
+			'ID'         => $post_id,
+			'post_title' => $title,
+		]);
+		$running = false;
+	}
+}
+
+\add_action('save_post_carent', __NAMESPACE__ . '\\cmx_carent_sync_post_title', 999, 3);
