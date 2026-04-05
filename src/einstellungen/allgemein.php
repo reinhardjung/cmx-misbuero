@@ -59,6 +59,20 @@ function cmx_register_general_tab(): void {
 	);
 
 	\add_settings_field(
+		'quick_search',
+		'Quick Search',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'quick_search',
+				'label' => 'CPT-Adminlisten beim Tippen direkt per AJAX durchsuchen',
+			]);
+			echo '<p class="description">Laedt Treffer in den Adminlisten Deiner Custom Post Types schon waehrend der Eingabe nach, statt erst nach Klick auf den Such-Button.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
 		'support_user_switch',
 		'Support',
 		function () {
@@ -291,3 +305,290 @@ function cmx_register_general_tab(): void {
 
 
 // QR-Referenz wird pro Bank verarbeitet (siehe Tab "Banken").
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
+	function cmx_admin_quick_search_enabled(): bool {
+		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+
+		return !empty($options['quick_search']);
+	}
+}
+
+\add_action('admin_footer-edit.php', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->base ?? '') !== 'edit') {
+		return;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '' || !\post_type_exists($post_type)) {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return;
+	}
+
+	$label = \trim(\wp_strip_all_tags((string) ($post_type_object->labels->name ?? $post_type_object->label ?? $post_type)));
+	if ($label === '') {
+		$label = $post_type;
+	}
+
+	$button_label = $label . ' suchen';
+	$enabled = cmx_admin_quick_search_enabled();
+	?>
+	<style>
+		#posts-filter.cmx-admin-quick-search-busy{
+			opacity:.72;
+			transition:opacity .16s ease;
+		}
+	</style>
+	<script>
+	(function(){
+		var runtime = window.cmxAdminQuickSearchRuntime = window.cmxAdminQuickSearchRuntime || {
+			bound: false,
+			enabled: false,
+			buttonLabel: "",
+			postType: "",
+			timer: 0,
+			controller: null,
+			requestId: 0
+		};
+		runtime.enabled = <?php echo \wp_json_encode($enabled); ?>;
+		runtime.buttonLabel = <?php echo \wp_json_encode($button_label); ?>;
+		runtime.postType = <?php echo \wp_json_encode($post_type); ?>;
+
+		function getPostsFilter(){
+			return document.getElementById("posts-filter");
+		}
+
+		function getSearchInput(root){
+			var scope = root && root.querySelector ? root : document;
+			return scope.querySelector('#posts-filter input[name="s"]');
+		}
+
+		function getSearchButton(root){
+			var scope = root && root.querySelector ? root : document;
+			return scope.querySelector("#search-submit");
+		}
+
+		function updateSearchButtonLabel(root){
+			var button = getSearchButton(root);
+			if (!button) return;
+			button.value = runtime.buttonLabel;
+			button.setAttribute("aria-label", runtime.buttonLabel);
+			button.setAttribute("title", runtime.buttonLabel);
+		}
+
+		function replaceRefreshFragments(nextDoc){
+			document.querySelectorAll("[data-cmx-admin-refresh-fragment][id]").forEach(function(currentEl){
+				var id = currentEl.getAttribute("id") || "";
+				if (!id) return;
+				var nextEl = nextDoc.getElementById(id);
+				if (nextEl && nextEl.getAttribute("data-cmx-admin-refresh-fragment") !== null) {
+					currentEl.outerHTML = nextEl.outerHTML;
+					return;
+				}
+				currentEl.remove();
+			});
+		}
+
+		function buildSearchUrl(rawQuery){
+			var form = getPostsFilter();
+			if (!form) {
+				return window.location.href;
+			}
+
+			var params = new URLSearchParams(new FormData(form));
+			var query = String(rawQuery || "");
+
+			params.delete("_wp_http_referer");
+			if (query.trim() === "") {
+				params.delete("s");
+			} else {
+				params.set("s", query);
+			}
+			params.set("paged", "1");
+			if (!params.get("post_type")) {
+				params.set("post_type", runtime.postType);
+			}
+
+			var qs = params.toString();
+			return window.location.pathname + (qs ? "?" + qs : "");
+		}
+
+		function setBusy(isBusy){
+			var form = getPostsFilter();
+			if (form) {
+				form.classList.toggle("cmx-admin-quick-search-busy", !!isBusy);
+			}
+			var button = getSearchButton();
+			if (!button) return;
+			button.disabled = !!isBusy;
+			button.classList.toggle("disabled", !!isBusy);
+			button.value = !!isBusy ? (runtime.buttonLabel + " ...") : runtime.buttonLabel;
+		}
+
+		function afterRefresh(expectedValue, url){
+			updateSearchButtonLabel(document);
+			document.dispatchEvent(new CustomEvent("cmx:admin-list-refreshed", {
+				detail: { postType: runtime.postType, url: url || "" }
+			}));
+			window.setTimeout(function(){
+				var input = getSearchInput(document);
+				if (!input) return;
+				input.value = String(expectedValue || "");
+				if (typeof input.focus === "function") {
+					input.focus({ preventScroll: true });
+				}
+				if (typeof input.setSelectionRange === "function") {
+					var pos = input.value.length;
+					input.setSelectionRange(pos, pos);
+				}
+			}, 0);
+		}
+
+		function applyResponse(html, expectedValue, url){
+			var parser = new DOMParser();
+			var nextDoc = parser.parseFromString(String(html || ""), "text/html");
+			var nextForm = nextDoc.getElementById("posts-filter");
+			var currentForm = getPostsFilter();
+			if (!nextForm || !currentForm) {
+				window.location.assign(url);
+				return;
+			}
+
+			currentForm.innerHTML = nextForm.innerHTML;
+			replaceRefreshFragments(nextDoc);
+			if (window.history && typeof window.history.replaceState === "function") {
+				window.history.replaceState({ cmxQuickSearch: true }, "", url);
+			}
+			afterRefresh(expectedValue, url);
+		}
+
+		function loadSearchResults(query){
+			if (!runtime.enabled) return;
+
+			var url = buildSearchUrl(query);
+			runtime.requestId += 1;
+			var requestId = runtime.requestId;
+
+			if (runtime.controller && typeof runtime.controller.abort === "function") {
+				runtime.controller.abort();
+			}
+			runtime.controller = ("AbortController" in window) ? new AbortController() : null;
+			setBusy(true);
+
+			fetch(url, {
+				credentials: "same-origin",
+				headers: { "X-Requested-With": "XMLHttpRequest" },
+				signal: runtime.controller ? runtime.controller.signal : undefined
+			})
+				.then(function(response){
+					if (!response.ok) {
+						throw new Error("request_failed");
+					}
+					return response.text();
+				})
+				.then(function(html){
+					if (requestId !== runtime.requestId) return;
+					applyResponse(html, query, url);
+				})
+				.catch(function(error){
+					if (error && error.name === "AbortError") return;
+					window.location.assign(url);
+				})
+				.finally(function(){
+					if (requestId === runtime.requestId) {
+						setBusy(false);
+					}
+				});
+		}
+
+		function scheduleSearch(query){
+			if (!runtime.enabled) return;
+			window.clearTimeout(runtime.timer);
+			runtime.timer = window.setTimeout(function(){
+				loadSearchResults(query);
+			}, 220);
+		}
+
+		if (runtime.bound) {
+			updateSearchButtonLabel(document);
+			return;
+		}
+
+		runtime.bound = true;
+
+		document.addEventListener("input", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			var form = target.closest("#posts-filter");
+			if (!form) {
+				return;
+			}
+			updateSearchButtonLabel(document);
+			scheduleSearch(target.value || "");
+		});
+
+		document.addEventListener("keydown", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			if (!target.closest("#posts-filter") || event.key !== "Enter" || !runtime.enabled) {
+				return;
+			}
+			event.preventDefault();
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(target.value || "");
+		});
+
+		document.addEventListener("click", function(event){
+			var button = event.target instanceof Element ? event.target.closest("#search-submit") : null;
+			if (!button) {
+				return;
+			}
+			updateSearchButtonLabel(document);
+			if (!runtime.enabled) {
+				return;
+			}
+			event.preventDefault();
+			var input = getSearchInput(document);
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(input ? (input.value || "") : "");
+		});
+
+		document.addEventListener("submit", function(event){
+			var form = event.target instanceof HTMLFormElement ? event.target : null;
+			if (!form || form.id !== "posts-filter") {
+				return;
+			}
+			updateSearchButtonLabel(document);
+			if (!runtime.enabled) {
+				return;
+			}
+			var submitter = event.submitter || null;
+			var searchInput = form.querySelector('input[name="s"]');
+			var triggerSearch = !!(submitter && submitter.id === "search-submit");
+			if (!triggerSearch && document.activeElement === searchInput) {
+				triggerSearch = true;
+			}
+			if (!triggerSearch) {
+				return;
+			}
+			event.preventDefault();
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(searchInput ? (searchInput.value || "") : "");
+		});
+
+		updateSearchButtonLabel(document);
+	})();
+	</script>
+	<?php
+}, 999);

@@ -1179,49 +1179,54 @@ function cmx_lieferanten_args(): array {
 
 \add_action('admin_footer-edit.php', function () {
 	if (!isset($_GET['post_type']) || $_GET['post_type'] !== 'artikel') return;
-
-	$current = isset($_GET['cmx_lieferant']) ? (string)$_GET['cmx_lieferant'] : '';
 	?>
 	<script>
 	(function(){
-		var sel = document.getElementById('cmx_lieferant');
-		var extra = document.getElementById('cmx_lieferant_extra');
-		if (!sel || !extra) return;
+		function init(){
+			var sel = document.getElementById('cmx_lieferant');
+			var extra = document.getElementById('cmx_lieferant_extra');
+			if (!sel || !extra) return;
 
-		// Stelle sicher, dass Option "— Kein Lieferant —" vorhanden bleibt (value = -1)
-		var hasNone = false;
-		for (var i=0;i<sel.options.length;i++){
-			if (sel.options[i].value === '-1') { hasNone = true; break; }
-		}
-		if (!hasNone) {
-			var noneOpt = document.createElement('option');
-			noneOpt.value = '-1';
-			noneOpt.textContent = '— Kein Lieferant —';
-			try { sel.add(noneOpt, sel.options[1] || null); } catch(e){ sel.appendChild(noneOpt); }
-		}
+			var currentValue = sel.value || '';
 
-		// Existierende Werte merken (zur Duplikat-Vermeidung)
-		var existing = new Set(Array.prototype.map.call(sel.options, function(o){ return o.value; }));
-
-		// Zusätzliche Lieferanten aus hidden-Select hinzufügen, falls nicht vorhanden
-		Array.prototype.forEach.call(extra.options, function(opt){
-			if (!existing.has(opt.value)) {
-				sel.appendChild(opt.cloneNode(true));
+			var hasNone = false;
+			for (var i = 0; i < sel.options.length; i++) {
+				if (sel.options[i].value === '-1') {
+					hasNone = true;
+					break;
+				}
 			}
-		});
+			if (!hasNone) {
+				var noneOpt = document.createElement('option');
+				noneOpt.value = '-1';
+				noneOpt.textContent = '— Kein Lieferant —';
+				try { sel.add(noneOpt, sel.options[1] || null); } catch(e){ sel.appendChild(noneOpt); }
+			}
 
-		// Ab Index 2 (nach "Alle Lieferanten" und "— Kein Lieferant —") alphabetisch sortieren
-		var staticCount = 2; // 0: Alle, 1: Kein
-		var tail = Array.prototype.slice.call(sel.options, staticCount);
-		tail.sort(function(a,b){ return a.text.localeCompare(b.text, undefined, {sensitivity:'base'}); });
-		// Neu zusammensetzen
-		while (sel.options.length > staticCount) sel.remove(staticCount);
-		tail.forEach(function(o){ sel.appendChild(o); });
+			var existing = new Set(Array.prototype.map.call(sel.options, function(o){ return o.value; }));
+			Array.prototype.forEach.call(extra.options, function(opt){
+				if (!existing.has(opt.value)) {
+					sel.appendChild(opt.cloneNode(true));
+				}
+			});
 
-		// Auswahl beibehalten
-		if (<?php echo json_encode($current); ?> !== '') {
-			sel.value = <?php echo json_encode($current); ?>;
+			var staticCount = 2;
+			var tail = Array.prototype.slice.call(sel.options, staticCount);
+			tail.sort(function(a,b){ return a.text.localeCompare(b.text, undefined, {sensitivity:'base'}); });
+			while (sel.options.length > staticCount) sel.remove(staticCount);
+			tail.forEach(function(o){ sel.appendChild(o); });
+
+			if (currentValue !== '') {
+				sel.value = currentValue;
+			}
 		}
+
+		window.cmxArtikelAdminInitSupplierFilter = init;
+		document.addEventListener('cmx:admin-list-refreshed', function(ev){
+			if (!ev.detail || ev.detail.postType !== 'artikel') return;
+			init();
+		});
+		init();
 	})();
 	</script>
 	<?php
@@ -1389,17 +1394,23 @@ function cmx_lieferanten_args(): array {
 		}
 	}
 
-	if (empty($payload)) {
-		return;
-	}
 	$json = \wp_json_encode($payload);
 	if (!\is_string($json) || $json === '') {
-		return;
+		$json = '{}';
 	}
 	?>
+	<script type="application/json" id="cmx-artikel-admin-variants-data" data-cmx-admin-refresh-fragment="1"><?php echo \esc_html($json); ?></script>
 	<script>
 	(function(){
-		const variantsByPost = <?php echo $json; ?>;
+		const readPayload = function(){
+			const node = document.getElementById("cmx-artikel-admin-variants-data");
+			if (!node) return {};
+			try {
+				return JSON.parse(node.textContent || "{}");
+			} catch (error) {
+				return {};
+			}
+		};
 		const setText = function(row, selector, value){
 			const cell = row.querySelector(selector);
 			if (!cell) return;
@@ -1423,37 +1434,51 @@ function cmx_lieferanten_args(): array {
 			}
 		};
 
-		Object.keys(variantsByPost).forEach(function(postId){
-			const baseRow = document.getElementById("post-" + postId);
-			if (!baseRow || !baseRow.parentNode) return;
-			let insertAfter = baseRow;
-			(variantsByPost[postId] || []).forEach(function(variant){
-				const clone = baseRow.cloneNode(true);
-				clone.id = "cmx-artikel-variant-" + postId + "-" + String(variant.index || "0");
-				clone.classList.add("cmx-artikel-variant-row");
-
-				const checkCell = clone.querySelector("th.check-column, td.check-column");
-				if (checkCell) {
-					checkCell.innerHTML = "";
-				}
-
-				setTitle(clone, variant);
-				setText(clone, ".column-sku", variant.sku);
-				setText(clone, ".column-groessen", variant.groessen);
-				setText(clone, ".column-ausfuehrungen", variant.ausfuehrungen);
-				setText(clone, ".column-materialien", variant.materialien);
-				setText(clone, ".column-farben", variant.farben);
-				setText(clone, ".column-einheiten", variant.einheit);
-				setText(clone, ".column-vk", variant.vk);
-				setText(clone, ".column-ek", variant.ek);
-				setText(clone, ".column-marge", variant.marge);
-				setHtml(clone, ".column-verkaufbar", variant.verkaufbar_html);
-				setHtml(clone, ".column-katalog", variant.katalog_html);
-
-				insertAfter.parentNode.insertBefore(clone, insertAfter.nextSibling);
-				insertAfter = clone;
+		const init = function(){
+			document.querySelectorAll(".cmx-artikel-variant-row").forEach(function(row){
+				row.remove();
 			});
+
+			const variantsByPost = readPayload();
+			Object.keys(variantsByPost).forEach(function(postId){
+				const baseRow = document.getElementById("post-" + postId);
+				if (!baseRow || !baseRow.parentNode) return;
+				let insertAfter = baseRow;
+				(variantsByPost[postId] || []).forEach(function(variant){
+					const clone = baseRow.cloneNode(true);
+					clone.id = "cmx-artikel-variant-" + postId + "-" + String(variant.index || "0");
+					clone.classList.add("cmx-artikel-variant-row");
+
+					const checkCell = clone.querySelector("th.check-column, td.check-column");
+					if (checkCell) {
+						checkCell.innerHTML = "";
+					}
+
+					setTitle(clone, variant);
+					setText(clone, ".column-sku", variant.sku);
+					setText(clone, ".column-groessen", variant.groessen);
+					setText(clone, ".column-ausfuehrungen", variant.ausfuehrungen);
+					setText(clone, ".column-materialien", variant.materialien);
+					setText(clone, ".column-farben", variant.farben);
+					setText(clone, ".column-einheiten", variant.einheit);
+					setText(clone, ".column-vk", variant.vk);
+					setText(clone, ".column-ek", variant.ek);
+					setText(clone, ".column-marge", variant.marge);
+					setHtml(clone, ".column-verkaufbar", variant.verkaufbar_html);
+					setHtml(clone, ".column-katalog", variant.katalog_html);
+
+					insertAfter.parentNode.insertBefore(clone, insertAfter.nextSibling);
+					insertAfter = clone;
+				});
+			});
+		};
+
+		window.cmxArtikelAdminInitVariantRows = init;
+		document.addEventListener('cmx:admin-list-refreshed', function(ev){
+			if (!ev.detail || ev.detail.postType !== 'artikel') return;
+			init();
 		});
+		init();
 	})();
 	</script>
 	<?php
