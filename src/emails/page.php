@@ -842,14 +842,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 
 		echo '<section class="cmx-email-body">';
 		if ($selected instanceof \WP_Post) {
-			$body_html = (string) \get_post_meta($selected->ID, cmx_emails_meta_key('body_html'), true);
-			$body_plain = (string) \get_post_meta($selected->ID, cmx_emails_meta_key('body_plain'), true);
+			$body = \function_exists(__NAMESPACE__ . '\\cmx_emails_load_body_content')
+				? cmx_emails_load_body_content((int) $selected->ID)
+				: [
+					'html' => (string) \get_post_meta($selected->ID, cmx_emails_meta_key('body_html'), true),
+					'plain' => (string) \get_post_meta($selected->ID, cmx_emails_meta_key('body_plain'), true),
+					'content' => (string) $selected->post_content,
+				];
+			$body_html = (string) ($body['html'] ?? '');
+			$body_plain = (string) ($body['plain'] ?? '');
+			$body_content = (string) ($body['content'] ?? '');
 			echo '<h3>Inhalt</h3>';
 			echo '<div class="cmx-email-body-copy">';
 			if ($body_html !== '') {
 				echo \wp_kses_post($body_html);
 			} else {
-				echo \wpautop(\esc_html($body_plain !== '' ? $body_plain : (string) $selected->post_content));
+				echo \wpautop(\esc_html($body_plain !== '' ? $body_plain : $body_content));
 			}
 			echo '</div>';
 		} else {

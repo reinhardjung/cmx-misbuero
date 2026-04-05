@@ -365,6 +365,69 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_part_filename')) {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_mail_import_part_filename')) {
 			return (string) cmx_mail_import_part_filename($part);
 		}
+
+		$params = [];
+		if (\is_object($part) && isset($part->parameters) && \is_array($part->parameters)) {
+			$params = \array_merge($params, $part->parameters);
+		}
+		if (\is_object($part) && isset($part->dparameters) && \is_array($part->dparameters)) {
+			$params = \array_merge($params, $part->dparameters);
+		}
+
+		$multipart_names = [
+			'filename' => [],
+			'name' => [],
+		];
+		$single_names = [
+			'filename' => '',
+			'name' => '',
+		];
+
+		foreach ($params as $param) {
+			if (!\is_object($param)) {
+				continue;
+			}
+
+			$attr = \strtolower((string) ($param->attribute ?? ''));
+			$value = cmx_emails_decode_mime_text((string) ($param->value ?? ''));
+
+			if (\preg_match('/^(filename|name)\\*(\\d+)\\*?$/', $attr, $match) === 1) {
+				$key = (string) ($match[1] ?? '');
+				$index = (int) ($match[2] ?? 0);
+				$value = (string) \rawurldecode($value);
+				if ($value !== '') {
+					$multipart_names[$key][$index] = $value;
+				}
+				continue;
+			}
+
+			if (\preg_match('/^(filename|name)\\*$/', $attr, $match) === 1) {
+				$key = (string) ($match[1] ?? '');
+				$value = (string) \rawurldecode($value);
+				if ($value !== '') {
+					$single_names[$key] = $value;
+				}
+				continue;
+			}
+
+			if ((\in_array($attr, ['filename', 'name'], true)) && $value !== '' && $single_names[$attr] === '') {
+				$single_names[$attr] = $value;
+			}
+		}
+
+		foreach (['filename', 'name'] as $key) {
+			if ($multipart_names[$key] !== []) {
+				\ksort($multipart_names[$key], \SORT_NUMERIC);
+				$joined = \implode('', $multipart_names[$key]);
+				if ($joined !== '') {
+					return \trim($joined);
+				}
+			}
+			if ($single_names[$key] !== '') {
+				return \trim($single_names[$key]);
+			}
+		}
+
 		return '';
 	}
 }
@@ -374,7 +437,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_part_mime_type')) {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_mail_import_get_mime_type')) {
 			return (string) cmx_mail_import_get_mime_type($part);
 		}
-		return 'application/octet-stream';
+
+		$type_map = ['text', 'multipart', 'message', 'application', 'audio', 'image', 'video', 'other'];
+		$type_id = \is_object($part) && isset($part->type) ? (int) $part->type : 7;
+		$primary = $type_map[$type_id] ?? 'other';
+		$subtype = \is_object($part) && isset($part->subtype) ? \strtolower((string) $part->subtype) : 'octet-stream';
+		return \strtolower($primary . '/' . $subtype);
 	}
 }
 
@@ -1459,20 +1527,129 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_link_html')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
+	function cmx_emails_load_body_content(int $post_id, bool $hydrate = true): array {
+		$post_id = (int) $post_id;
+		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			: 'emails';
+		$post = $post_id > 0 ? \get_post($post_id) : null;
+		$body_html = $post_id > 0 ? (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true) : '';
+		$body_plain = $post_id > 0 ? (string) \get_post_meta($post_id, cmx_emails_meta_key('body_plain'), true) : '';
+		$content = $post instanceof \WP_Post ? (string) $post->post_content : '';
+
+		if (
+			$hydrate
+			&& $post instanceof \WP_Post
+			&& (string) $post->post_type === $email_post_type
+			&& \trim($body_html) === ''
+			&& \trim($body_plain) === ''
+			&& \trim($content) === ''
+			&& \function_exists(__NAMESPACE__ . '\\cmx_emails_hydrate_post_body_from_imap')
+		) {
+			cmx_emails_hydrate_post_body_from_imap($post_id);
+			$post = \get_post($post_id);
+			$body_html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
+			$body_plain = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_plain'), true);
+			$content = $post instanceof \WP_Post ? (string) $post->post_content : '';
+		}
+
+		return [
+			'html' => $body_html,
+			'plain' => $body_plain,
+			'content' => $content,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_hydrate_post_body_from_imap')) {
+	function cmx_emails_hydrate_post_body_from_imap(int $post_id): bool {
+		$post_id = (int) $post_id;
+		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			: 'emails';
+		if ($post_id <= 0 || !\function_exists('imap_fetchstructure')) {
+			return false;
+		}
+
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== $email_post_type) {
+			return false;
+		}
+
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		$mailbox = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true));
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+		if ($account_id === '' || $uid <= 0) {
+			return false;
+		}
+
+		$client = \function_exists(__NAMESPACE__ . '\\cmx_emails_get_client')
+			? (array) cmx_emails_get_client($account_id)
+			: [];
+		if ($client === []) {
+			return false;
+		}
+
+		$resolved_mailbox = '';
+		if ($mailbox !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_mailbox')) {
+			$imap = cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox);
+		} elseif ($folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_archive_mailbox')) {
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder')) {
+			$imap = cmx_emails_open_client_folder($client, $folder !== '' ? $folder : 'inbox', $resolved_mailbox);
+		} else {
+			$imap = false;
+		}
+
+		if ($imap === false) {
+			return false;
+		}
+
+		$msg_no = \function_exists('imap_msgno') ? (int) \imap_msgno($imap, $uid) : 0;
+		if ($msg_no <= 0) {
+			@\imap_close($imap);
+			return false;
+		}
+
+		$payload = cmx_emails_fetch_message_payload($imap, $msg_no);
+		@\imap_close($imap);
+
+		$plain = \trim((string) ($payload['plain'] ?? ''));
+		$html = (string) ($payload['html'] ?? '');
+		$content = $plain !== '' ? $plain : \trim(\wp_strip_all_tags($html));
+		if ($plain === '' && $html === '' && $content === '') {
+			return false;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $plain);
+		\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $html);
+
+		$excerpt = cmx_emails_text_excerpt($content !== '' ? $content : (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
+		\wp_update_post([
+			'ID' => $post_id,
+			'post_content' => $content,
+			'post_excerpt' => $excerpt,
+		]);
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
 	function cmx_emails_sent_body_note_html(int $post_id): string {
-		$body_html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
+		$body = cmx_emails_load_body_content($post_id);
+		$body_html = (string) ($body['html'] ?? '');
 		if ($body_html !== '') {
 			return \trim((string) \wp_kses_post($body_html));
 		}
 
-		$body_plain = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_plain'), true);
+		$body_plain = (string) ($body['plain'] ?? '');
 		if ($body_plain === '') {
-			$post = \get_post($post_id);
-			if ($post instanceof \WP_Post) {
-				$body_plain = (string) $post->post_content;
-			}
+			$body_plain = (string) ($body['content'] ?? '');
 		}
-
 		$body_plain = \trim($body_plain);
 		return $body_plain !== '' ? \nl2br(\esc_html($body_plain)) : '';
 	}

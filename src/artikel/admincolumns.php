@@ -378,10 +378,10 @@ function cmx_lieferanten_args(): array {
 	$new['title']          = 'Artikel';
 	$new['sku']            = 'Nr';
 	$new['typen']          = 'Typen';
-	$new['kategorien']     = 'Kategorien';
-	$new['groessen']       = 'Grössen';
-	$new['ausfuehrungen']  = 'Ausführungen';
-	$new['materialien']    = 'Materialien';
+	$new['kategorien']     = 'Kategorie';
+	$new['groessen']       = 'Grösse';
+	$new['ausfuehrungen']  = 'Ausführung';
+	$new['materialien']    = 'Material';
 	$new['marken']         = 'Marke';
 	$new['farben']         = 'Farbe';
 	$new['einheiten']      = 'Einheit';
