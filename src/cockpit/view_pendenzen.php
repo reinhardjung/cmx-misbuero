@@ -33,6 +33,112 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_days_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_option_key')) {
+	function cmx_cockpit_pendenzen_manual_option_key(): string {
+		return 'cmx_cockpit_pendenzen_manual_events';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_contact_post_types')) {
+	function cmx_cockpit_pendenzen_contact_post_types(): array {
+		$types = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_cpt')) {
+			$cpt = (string) cmx_kontakte_cpt();
+			if ($cpt !== '' && \post_type_exists($cpt)) {
+				$types[] = $cpt;
+			}
+		}
+		foreach (['kontakte', 'kontakt', 'contact'] as $post_type) {
+			if (\post_type_exists($post_type) && !\in_array($post_type, $types, true)) {
+				$types[] = $post_type;
+			}
+		}
+		return $types;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_events')) {
+	function cmx_cockpit_pendenzen_manual_events(): array {
+		$raw = \get_option(cmx_cockpit_pendenzen_manual_option_key(), []);
+		if (!\is_array($raw)) {
+			return [];
+		}
+
+		$items = [];
+		foreach ($raw as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+
+			$date = isset($row['date']) ? (string) $row['date'] : '';
+			$date = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : '';
+			$time = isset($row['time']) ? (string) $row['time'] : '';
+			$time = \preg_match('/^\d{2}:\d{2}$/', $time) ? $time : '';
+			$subject = \sanitize_text_field((string) ($row['subject'] ?? ''));
+			if ($date === '' || $subject === '') {
+				continue;
+			}
+
+			$hinweis = isset($row['hinweis']) ? (string) $row['hinweis'] : '';
+			$hinweis = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $hinweis) ? $hinweis : '';
+
+			$items[] = [
+				'id' => \sanitize_key((string) ($row['id'] ?? '')),
+				'date' => $date,
+				'time' => !empty($row['all_day']) ? '' : $time,
+				'all_day' => !empty($row['all_day']),
+				'subject' => $subject,
+				'hinweis' => $hinweis,
+				'description' => \sanitize_textarea_field((string) ($row['description'] ?? '')),
+				'url' => \esc_url_raw((string) ($row['url'] ?? '')),
+				'contact_id' => \max(0, (int) ($row['contact_id'] ?? 0)),
+				'contact_label' => \sanitize_text_field((string) ($row['contact_label'] ?? '')),
+			];
+		}
+
+		return $items;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_contact_label')) {
+	function cmx_cockpit_pendenzen_manual_contact_label(int $contact_id, string $fallback = ''): string {
+		if ($contact_id <= 0 || !\get_post_status($contact_id)) {
+			return $fallback;
+		}
+		$post_type = (string) \get_post_type($contact_id);
+		if (!\in_array($post_type, cmx_cockpit_pendenzen_contact_post_types(), true)) {
+			return $fallback;
+		}
+		$title = \trim((string) \get_the_title($contact_id));
+		return $title !== '' ? $title : $fallback;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_time_sort_ts')) {
+	function cmx_cockpit_pendenzen_time_sort_ts(string $date, string $time): int {
+		$day_ts = cmx_cockpit_pendenzen_parse_date_to_ts($date);
+		if ($day_ts <= 0 || !\preg_match('/^(\d{2}):(\d{2})$/', $time, $matches)) {
+			return $day_ts;
+		}
+		$hours = \max(0, \min(23, (int) $matches[1]));
+		$minutes = \max(0, \min(59, (int) $matches[2]));
+		return $day_ts + ($hours * \HOUR_IN_SECONDS) + ($minutes * \MINUTE_IN_SECONDS);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_manual_description_snippet')) {
+	function cmx_cockpit_pendenzen_manual_description_snippet(string $text, int $limit = 140): string {
+		$text = \trim(\preg_replace('/\s+/', ' ', $text));
+		if ($text === '') {
+			return '';
+		}
+		if (\function_exists('mb_strimwidth')) {
+			return (string) \mb_strimwidth($text, 0, $limit, '…');
+		}
+		return \strlen($text) > $limit ? \substr($text, 0, $limit - 1) . '…' : $text;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_month_value')) {
 	function cmx_cockpit_pendenzen_month_value(): string {
 		$selected_year = isset($_GET['calendar_year']) ? (int) \sanitize_text_field((string) \wp_unslash($_GET['calendar_year'])) : 0;
@@ -239,8 +345,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_event_priority'))
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_sort_events')) {
 	function cmx_cockpit_pendenzen_sort_events(array &$events, string $direction = 'asc'): void {
 		\usort($events, static function (array $a, array $b) use ($direction): int {
-			$ts_a = (int) ($a['ts'] ?? 0);
-			$ts_b = (int) ($b['ts'] ?? 0);
+			$ts_a = (int) ($a['sort_ts'] ?? $a['ts'] ?? 0);
+			$ts_b = (int) ($b['sort_ts'] ?? $b['ts'] ?? 0);
 			$prio_a = cmx_cockpit_pendenzen_event_priority($a);
 			$prio_b = cmx_cockpit_pendenzen_event_priority($b);
 
@@ -521,9 +627,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_project_e
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_manual_events')) {
+	function cmx_cockpit_pendenzen_collect_manual_events(int $start_ts, int $end_ts): array {
+		$events = [];
+
+		foreach (cmx_cockpit_pendenzen_manual_events() as $event) {
+			$date = (string) ($event['date'] ?? '');
+			$day_ts = cmx_cockpit_pendenzen_parse_date_to_ts($date);
+			if ($day_ts < $start_ts || $day_ts > $end_ts) {
+				continue;
+			}
+
+			$all_day = !empty($event['all_day']);
+			$time = (string) ($event['time'] ?? '');
+			$contact_label = cmx_cockpit_pendenzen_manual_contact_label((int) ($event['contact_id'] ?? 0), (string) ($event['contact_label'] ?? ''));
+			$description = cmx_cockpit_pendenzen_manual_description_snippet((string) ($event['description'] ?? ''));
+			$hinweis = '';
+			$hinweis_raw = \trim((string) ($event['hinweis'] ?? ''));
+			if ($hinweis_raw !== '') {
+				$hinweis_ts = cmx_cockpit_pendenzen_parse_date_to_ts($hinweis_raw);
+				$hinweis = $hinweis_ts > 0 ? cmx_cockpit_pendenzen_format_date($hinweis_ts) : $hinweis_raw;
+			}
+			$meta_parts = \array_values(\array_filter([$contact_label, $hinweis, $description], static fn($value): bool => \trim((string) $value) !== ''));
+			$label = $all_day ? 'Ganztägig' : ($time !== '' ? $time : 'Termin');
+
+			$events[] = [
+				'key' => 'manual-' . \sanitize_key((string) ($event['id'] ?? '')) . '-' . $date,
+				'ts' => $day_ts,
+				'sort_ts' => $all_day ? $day_ts : cmx_cockpit_pendenzen_time_sort_ts($date, $time),
+				'date' => cmx_cockpit_pendenzen_day_ymd($day_ts),
+				'label' => $label,
+				'subject' => (string) ($event['subject'] ?? ''),
+				'meta' => \implode(' · ', $meta_parts),
+				'tone' => 'blue',
+				'icon' => 'calendar',
+				'url' => \trim((string) ($event['url'] ?? '')),
+			];
+		}
+
+		return $events;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events')) {
 	function cmx_cockpit_pendenzen_collect_events(int $start_ts, int $end_ts, int $today_ts): array {
 		$events = \array_merge(
+			cmx_cockpit_pendenzen_collect_manual_events($start_ts, $end_ts),
 			cmx_cockpit_pendenzen_collect_beleg_events($start_ts, $end_ts, $today_ts),
 			cmx_cockpit_pendenzen_collect_contact_events($start_ts, $end_ts),
 			cmx_cockpit_pendenzen_collect_project_events($start_ts, $end_ts)
@@ -544,16 +693,72 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_events'))
 	}
 }
 
+\add_action('wp_ajax_cmx_cockpit_pendenzen_add_manual_event', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	$nonce = isset($_POST['_ajax_nonce']) ? (string) \wp_unslash($_POST['_ajax_nonce']) : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_cockpit_pendenzen_add_manual_event')) {
+		\wp_send_json_error(['message' => 'bad_nonce'], 403);
+	}
+
+	$date = isset($_POST['date']) ? (string) \wp_unslash($_POST['date']) : '';
+	$date = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : '';
+	$all_day = !empty($_POST['all_day']);
+	$time = isset($_POST['time']) ? (string) \wp_unslash($_POST['time']) : '';
+	$time = \preg_match('/^\d{2}:\d{2}$/', $time) ? $time : '';
+	$subject = \sanitize_text_field((string) \wp_unslash($_POST['subject'] ?? ''));
+	$hinweis = isset($_POST['hinweis']) ? (string) \wp_unslash($_POST['hinweis']) : '';
+	$hinweis = \preg_match('/^\d{4}-\d{2}-\d{2}$/', $hinweis) ? $hinweis : '';
+	$description = \sanitize_textarea_field((string) \wp_unslash($_POST['description'] ?? ''));
+	$url = \esc_url_raw((string) \wp_unslash($_POST['url'] ?? ''));
+	$contact_id = isset($_POST['contact_id']) ? (int) \wp_unslash($_POST['contact_id']) : 0;
+	$contact_label = '';
+
+	if ($date === '' || $subject === '') {
+		\wp_send_json_error(['message' => 'missing_fields'], 400);
+	}
+	if (!$all_day && $time === '') {
+		\wp_send_json_error(['message' => 'missing_time'], 400);
+	}
+
+	if ($contact_id > 0) {
+		$contact_label = cmx_cockpit_pendenzen_manual_contact_label($contact_id, '');
+		if ($contact_label === '') {
+			$contact_id = 0;
+		}
+	}
+
+	$items = cmx_cockpit_pendenzen_manual_events();
+	$items[] = [
+		'id' => 'evt_' . \wp_generate_uuid4(),
+		'date' => $date,
+		'time' => $all_day ? '' : $time,
+		'all_day' => $all_day ? 1 : 0,
+		'subject' => $subject,
+		'hinweis' => $hinweis,
+		'description' => $description,
+		'url' => $url,
+		'contact_id' => $contact_id,
+		'contact_label' => $contact_label,
+	];
+
+	\update_option(cmx_cockpit_pendenzen_manual_option_key(), $items, false);
+	\wp_send_json_success(['message' => 'ok']);
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 	function cmx_cockpit_pendenzen_css(): string {
 		return '
 			.cmx-pend-wrap{margin:20px 0 0;padding:0 20px 0 0;box-sizing:border-box}
 			.cmx-pend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0 0 18px}
 			.cmx-pend-title-copy{min-width:0;flex:1 1 auto}
+			.cmx-pend-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 			.cmx-pend-title{margin:0;color:#1d2327;font-size:20px !important;line-height:1.2;font-weight:600}
 			.cmx-pend-subtitle{margin:8px 0 0;color:#646970;font-size:14px;line-height:1.55;max-width:760px}
 			.cmx-pend-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 			.cmx-pend-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px}
+			.page-title-action.cmx-pend-add-button{display:inline-flex;align-items:center;white-space:nowrap;border-radius:8px !important;margin-top:10px;padding-left:14px;padding-right:14px}
 			.cmx-pend-body{padding:0}
 			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
 			.cmx-pend-postbox{margin:0}
@@ -618,6 +823,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-calendar-chip--blue{border-color:#cfe0f0;background:#f7fbff;color:#135e96}
 			.cmx-pend-calendar-chip--green{border-color:#d3e7d3;background:#f7fcf7;color:#2f7d32}
 			.cmx-pend-calendar-more{margin-top:2px;color:#646970;font-size:12px}
+			.cmx-pend-modal[hidden]{display:none !important}
+			.cmx-pend-modal{position:fixed;inset:0;z-index:100000;display:flex;align-items:flex-start;justify-content:center;padding:56px 24px;overflow:auto;background:rgba(15,23,42,.26);backdrop-filter:blur(6px)}
+			.cmx-pend-modal-dialog{position:relative;width:min(760px,100%);max-height:calc(100vh - 96px);overflow:visible;border-radius:24px;background:linear-gradient(180deg,#ffffff 0%,#fbfcff 100%);box-shadow:0 28px 60px rgba(15,23,42,.22)}
+			.cmx-pend-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 22px 0}
+			.cmx-pend-modal-eyebrow{margin:0 0 4px;color:#6b7280;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+			.cmx-pend-modal-title{margin:0;color:#1f2937;font-size:18px;line-height:1.2;font-weight:700}
+			.cmx-pend-modal-close{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;border-radius:999px;background:#eef3fb;color:#42526b;cursor:pointer}
+			.cmx-pend-modal-close:hover{background:#e2ebf7}
+			.cmx-pend-modal-body{padding:18px 22px 0;overflow:visible}
+			.cmx-pend-modal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px 22px}
+			.cmx-pend-modal-status{min-height:20px;color:#b32d2e;font-size:13px;line-height:1.4}
+			.cmx-pend-modal-status[data-tone="success"]{color:#2f7d32}
+			.cmx-pend-modal-actions{display:flex;align-items:center;gap:10px}
+			.cmx-pend-modal-actions .button{border-radius:8px !important}
+			.cmx-pend-form-grid{display:grid;gap:16px}
+			.cmx-pend-form-row{display:grid;gap:16px}
+			.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(120px,146px) minmax(140px,180px) auto;align-items:end}
+			.cmx-pend-form-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+			.cmx-pend-form-field label{font-size:12px;font-weight:700;line-height:1.3;color:#334155}
+			.cmx-pend-form-label--quickfill{cursor:pointer;user-select:none}
+			.cmx-pend-form-field input[type="text"],
+			.cmx-pend-form-field input[type="url"],
+			.cmx-pend-form-field input[type="date"],
+			.cmx-pend-form-field input[type="time"],
+			.cmx-pend-form-field textarea{width:100%;min-height:42px;padding:10px 12px;border:1px solid #c9d4e2;border-radius:14px;background:#fff;color:#1f2937;box-shadow:none}
+			.cmx-pend-form-field textarea{min-height:110px;resize:vertical}
+			.cmx-pend-form-field input:focus,
+			.cmx-pend-form-field textarea:focus{border-color:#2271b1;outline:none;box-shadow:0 0 0 1px #2271b1}
+			.cmx-pend-form-checkbox{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:0 2px;color:#334155;font-size:13px;font-weight:600}
+			.cmx-pend-form-checkbox input{margin:0}
+			.cmx-pend-contact-suggest{position:relative;z-index:20}
+			.cmx-pend-contact-results{position:absolute;z-index:100005;left:0;right:0;max-height:220px;overflow:auto;margin:6px 0 0;padding:0;border:1px solid #ccd8e6;border-radius:14px;background:#fff;box-shadow:0 20px 38px rgba(15,23,42,.18);list-style:none}
+			.cmx-pend-contact-results li{margin:0;padding:8px 10px;cursor:pointer}
+			.cmx-pend-contact-results li.active,
+			.cmx-pend-contact-results li:hover{background:#e8f2fe}
+			.cmx-pend-contact-results small{display:block;margin-top:2px;color:#64748b}
 			@media (max-width: 1280px){
 				.cmx-pend-board-grid{grid-template-columns:1fr}
 				.cmx-pend-postbox--full{grid-column:auto}
@@ -634,6 +875,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-head{flex-direction:column;align-items:stretch}
 				.cmx-pend-actions{justify-content:flex-start}
 				.cmx-pend-actions .button{flex:1 1 auto}
+				.cmx-pend-title-row{align-items:flex-start}
+				.cmx-pend-form-row--datetime{grid-template-columns:1fr}
+				.cmx-pend-modal{padding:24px 10px}
+				.cmx-pend-modal-head,
+				.cmx-pend-modal-body,
+				.cmx-pend-modal-foot{padding-left:16px;padding-right:16px}
+				.cmx-pend-modal-foot{flex-direction:column;align-items:stretch}
+				.cmx-pend-modal-actions{width:100%}
+				.cmx-pend-modal-actions .button{flex:1 1 auto;justify-content:center}
 				.cmx-pend-calendar-heading{flex-direction:column;align-items:stretch}
 				.cmx-pend-calendar-switch{width:100%}
 				.cmx-pend-calendar-switch select,
@@ -880,6 +1130,47 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_modal')) {
+	function cmx_cockpit_pendenzen_render_modal(): void {
+		echo '<div id="cmx-pend-modal" class="cmx-pend-modal" hidden>';
+		echo '<div class="cmx-pend-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="cmx-pend-modal-title">';
+		echo '<div class="cmx-pend-modal-head">';
+		echo '<div><p class="cmx-pend-modal-eyebrow">Pendenz</p><h2 id="cmx-pend-modal-title" class="cmx-pend-modal-title">Hinzufügen</h2></div>';
+		echo '<button type="button" class="cmx-pend-modal-close" id="cmx-pend-modal-close" aria-label="Schließen"><span class="dashicons dashicons-no-alt"></span></button>';
+		echo '</div>';
+		echo '<div class="cmx-pend-modal-body">';
+		echo '<form id="cmx-pend-create-form" class="cmx-pend-form-grid">';
+		echo '<div class="cmx-pend-form-row cmx-pend-form-row--datetime">';
+		echo '<div class="cmx-pend-form-field"><label id="cmx-pend-create-date-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-date">Datum</label><input type="date" id="cmx-pend-create-date" name="date" required></div>';
+		echo '<div class="cmx-pend-form-field"><label id="cmx-pend-create-time-label" class="cmx-pend-form-label--quickfill" for="cmx-pend-create-time">Uhrzeit</label><input type="time" id="cmx-pend-create-time" name="time"></div>';
+		echo '<div class="cmx-pend-form-field"><label for="cmx-pend-create-hinweis">Hinweis</label><input type="date" id="cmx-pend-create-hinweis" name="hinweis"></div>';
+		echo '<label class="cmx-pend-form-checkbox" for="cmx-pend-create-all-day"><input type="checkbox" id="cmx-pend-create-all-day" name="all_day" value="1"> Ganztägig</label>';
+		echo '</div>';
+		echo '<div class="cmx-pend-form-field"><label for="cmx-pend-create-subject">Betreff</label><input type="text" id="cmx-pend-create-subject" name="subject" required></div>';
+		echo '<div class="cmx-pend-form-field"><label for="cmx-pend-create-description">Beschreibung</label><textarea id="cmx-pend-create-description" name="description"></textarea></div>';
+		echo '<div class="cmx-pend-form-field"><label for="cmx-pend-create-url">URL</label><input type="url" id="cmx-pend-create-url" name="url" placeholder="https://"></div>';
+		echo '<div class="cmx-pend-form-field">';
+		echo '<label for="cmx-pend-create-contact-search">Kontakt</label>';
+		echo '<div class="cmx-pend-contact-suggest">';
+		echo '<input type="text" id="cmx-pend-create-contact-search" autocomplete="off" placeholder="Kontakt auswählen">';
+		echo '<input type="hidden" id="cmx-pend-create-contact-id" name="contact_id" value="">';
+		echo '<ul id="cmx-pend-create-contact-results" class="cmx-pend-contact-results" style="display:none"></ul>';
+		echo '</div>';
+		echo '</div>';
+		echo '</form>';
+		echo '</div>';
+		echo '<div class="cmx-pend-modal-foot">';
+		echo '<div id="cmx-pend-modal-status" class="cmx-pend-modal-status" aria-live="polite"></div>';
+		echo '<div class="cmx-pend-modal-actions">';
+		echo '<button type="button" class="button" id="cmx-pend-modal-cancel">Abbrechen</button>';
+		echo '<button type="button" class="button button-primary" id="cmx-pend-modal-save">Speichern</button>';
+		echo '</div>';
+		echo '</div>';
+		echo '</div>';
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 	function cmx_render_view_pendenzen_page(): void {
 		$view = cmx_cockpit_pendenzen_view();
@@ -891,7 +1182,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		echo '<div class="wrap cmx-pend-wrap">';
 		echo '<div class="cmx-pend-head">';
 		echo '<div class="cmx-pend-title-copy">';
+		echo '<div class="cmx-pend-title-row">';
 		echo '<h1 class="cmx-pend-title">Pendenzenübersicht</h1>';
+		echo '<a href="#" id="cmx-pend-open-create" class="page-title-action cmx-pend-add-button">Hinzufügen</a>';
+		echo '</div>';
 		echo '<p class="cmx-pend-subtitle">Alle Fristen aus Belegen, Kontakten und Projekten in einer gemeinsamen Ansicht.</p>';
 		echo '</div>';
 		echo '<div class="cmx-pend-actions">';
@@ -909,6 +1203,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		}
 
 		echo '</div>';
+		cmx_cockpit_pendenzen_render_modal();
 		echo '</div>';
 	}
 }
@@ -996,4 +1291,328 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		window.addEventListener("load", scheduleCalendarSizing);
 		window.addEventListener("resize", scheduleCalendarSizing);
 	})();');
+
+	$pend_modal_data = [
+		'ajaxUrl' => (string) \admin_url('admin-ajax.php'),
+		'addNonce' => (string) \wp_create_nonce('cmx_cockpit_pendenzen_add_manual_event'),
+		'contactNonce' => (string) \wp_create_nonce('cmx_search_kontakte'),
+	];
+	\wp_add_inline_script($script_handle, '(function(config){
+		if (!config || !config.ajaxUrl) return;
+
+		var modal = document.getElementById("cmx-pend-modal");
+		var openButton = document.getElementById("cmx-pend-open-create");
+		var closeButton = document.getElementById("cmx-pend-modal-close");
+		var cancelButton = document.getElementById("cmx-pend-modal-cancel");
+		var saveButton = document.getElementById("cmx-pend-modal-save");
+		var form = document.getElementById("cmx-pend-create-form");
+		var status = document.getElementById("cmx-pend-modal-status");
+		var dateLabel = document.getElementById("cmx-pend-create-date-label");
+		var dateInput = document.getElementById("cmx-pend-create-date");
+		var timeLabel = document.getElementById("cmx-pend-create-time-label");
+		var timeInput = document.getElementById("cmx-pend-create-time");
+		var hinweisInput = document.getElementById("cmx-pend-create-hinweis");
+		var allDayInput = document.getElementById("cmx-pend-create-all-day");
+		var subjectInput = document.getElementById("cmx-pend-create-subject");
+		var descriptionInput = document.getElementById("cmx-pend-create-description");
+		var urlInput = document.getElementById("cmx-pend-create-url");
+		var contactSearch = document.getElementById("cmx-pend-create-contact-search");
+		var contactId = document.getElementById("cmx-pend-create-contact-id");
+		var contactResults = document.getElementById("cmx-pend-create-contact-results");
+		if (!modal || !openButton || !closeButton || !cancelButton || !saveButton || !form || !status || !dateInput || !timeInput || !hinweisInput || !allDayInput || !subjectInput || !descriptionInput || !urlInput || !contactSearch || !contactId || !contactResults) return;
+
+		var timer = null;
+		var active = -1;
+		var items = [];
+
+		function setStatus(message, tone){
+			status.textContent = String(message || "");
+			if (tone) {
+				status.setAttribute("data-tone", String(tone));
+			} else {
+				status.removeAttribute("data-tone");
+			}
+		}
+
+		function triggerInputEvents(input){
+			if (!input) return;
+			try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (err) {}
+			try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (err) {}
+		}
+
+		function getTodayValue(){
+			var now = new Date();
+			var local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+			return local.toISOString().slice(0, 10);
+		}
+
+		function getCurrentTimeValue(){
+			var now = new Date();
+			var hours = String(now.getHours()).padStart(2, "0");
+			var minutes = String(now.getMinutes()).padStart(2, "0");
+			return hours + ":" + minutes;
+		}
+
+		function resetForm(){
+			form.reset();
+			contactId.value = "";
+			contactSearch.value = "";
+			closeResults();
+			toggleAllDay();
+			setStatus("", "");
+		}
+
+		function openModal(){
+			resetForm();
+			modal.hidden = false;
+			document.body.classList.add("cmx-pend-modal-open");
+			window.setTimeout(function(){
+				try { dateInput.focus(); } catch (err) {}
+			}, 30);
+		}
+
+		function closeModal(){
+			modal.hidden = true;
+			document.body.classList.remove("cmx-pend-modal-open");
+			setStatus("", "");
+			closeResults();
+		}
+
+		function toggleAllDay(){
+			var allDay = !!allDayInput.checked;
+			timeInput.disabled = allDay;
+			if (allDay) {
+				timeInput.value = "";
+			}
+		}
+
+		function esc(str){
+			return String(str || "").replace(/[&<>"\\x27]/g, function(c){
+				if (c === "&") return "&amp;";
+				if (c === "<") return "&lt;";
+				if (c === ">") return "&gt;";
+				if (c.charCodeAt(0) === 34) return "&quot;";
+				return "&#039;";
+			});
+		}
+
+		function closeResults(){
+			contactResults.style.display = "none";
+			contactResults.innerHTML = "";
+			items = [];
+			active = -1;
+		}
+
+		function setActive(next){
+			if (!items.length) {
+				active = -1;
+				return;
+			}
+			if (next < 0) next = items.length - 1;
+			if (next >= items.length) next = 0;
+			active = next;
+			Array.prototype.forEach.call(contactResults.children, function(li, index){
+				li.classList.toggle("active", index === active);
+				if (index === active) {
+					try { li.scrollIntoView({ block: "nearest" }); } catch (err) {}
+				}
+			});
+		}
+
+		function chooseContact(item){
+			contactId.value = item && item.id ? String(item.id) : "";
+			contactSearch.value = item && item.title ? String(item.title) : "";
+			closeResults();
+			contactSearch.focus();
+		}
+
+		function renderResults(rows){
+			items = Array.isArray(rows) ? rows : [];
+			if (!items.length) {
+				contactResults.innerHTML = "<li style=\"color:#64748b;cursor:default;\">Keine Kontakte gefunden.</li>";
+				contactResults.style.display = "block";
+				active = -1;
+				return;
+			}
+			contactResults.innerHTML = items.map(function(item, index){
+				var title = item && item.title ? item.title : "";
+				var addr = item && item.addr ? item.addr : "";
+				return "<li data-index=\"" + index + "\"><span>" + esc(title) + "</span>" + (addr ? "<small>" + esc(addr) + "</small>" : "") + "</li>";
+			}).join("");
+			contactResults.style.display = "block";
+			active = -1;
+		}
+
+		function searchContacts(query){
+			var url = config.ajaxUrl + "?action=cmx_search_kontakte&_ajax_nonce=" + encodeURIComponent(config.contactNonce) + "&q=" + encodeURIComponent(query || "");
+			fetch(url, { credentials: "same-origin" }).then(function(response){
+				return response.json();
+			}).then(function(json){
+				if (!json || !json.success || !json.data || !Array.isArray(json.data.items)) {
+					closeResults();
+					return;
+				}
+				renderResults(json.data.items || []);
+			}).catch(function(){
+				closeResults();
+			});
+		}
+
+		openButton.addEventListener("click", function(e){
+			e.preventDefault();
+			openModal();
+		});
+		closeButton.addEventListener("click", function(){ closeModal(); });
+		cancelButton.addEventListener("click", function(){ closeModal(); });
+		modal.addEventListener("click", function(e){
+			if (e.target === modal) {
+				closeModal();
+			}
+		});
+		document.addEventListener("keydown", function(e){
+			if (e.key === "Escape" && !modal.hidden) {
+				if (contactResults.style.display === "block") {
+					closeResults();
+					return;
+				}
+				closeModal();
+			}
+		});
+
+		allDayInput.addEventListener("change", toggleAllDay);
+		toggleAllDay();
+
+		if (dateLabel) {
+			dateLabel.addEventListener("click", function(e){
+				e.preventDefault();
+				dateInput.value = getTodayValue();
+				triggerInputEvents(dateInput);
+				try { dateInput.focus(); } catch (err) {}
+			});
+		}
+
+		if (timeLabel) {
+			timeLabel.addEventListener("click", function(e){
+				e.preventDefault();
+				allDayInput.checked = false;
+				toggleAllDay();
+				timeInput.value = getCurrentTimeValue();
+				triggerInputEvents(timeInput);
+				try { timeInput.focus(); } catch (err) {}
+			});
+		}
+
+		contactSearch.addEventListener("input", function(){
+			contactId.value = "";
+			if (timer) window.clearTimeout(timer);
+			var query = String(contactSearch.value || "").trim();
+			if (query.length === 0) {
+				searchContacts("");
+				return;
+			}
+			if (query.length < 2) {
+				closeResults();
+				return;
+			}
+			timer = window.setTimeout(function(){ searchContacts(query); }, 180);
+		});
+		contactSearch.addEventListener("focus", function(){
+			searchContacts(String(contactSearch.value || "").trim());
+		});
+		contactSearch.addEventListener("click", function(){
+			searchContacts(String(contactSearch.value || "").trim());
+		});
+		contactSearch.addEventListener("keydown", function(e){
+			if (contactResults.style.display !== "block" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return;
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setActive(active + 1);
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setActive(active - 1);
+			} else if (e.key === "Enter") {
+				if (active > -1 && items[active]) {
+					e.preventDefault();
+					chooseContact(items[active]);
+				}
+			} else if (e.key === "Escape") {
+				closeResults();
+			}
+		});
+		contactResults.addEventListener("mousedown", function(e){
+			var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
+			if (!li) return;
+			e.preventDefault();
+			var index = parseInt(li.getAttribute("data-index") || "-1", 10);
+			if (!isNaN(index) && items[index]) {
+				chooseContact(items[index]);
+			}
+		});
+		contactResults.addEventListener("mousemove", function(e){
+			var li = e.target && e.target.closest ? e.target.closest("li[data-index]") : null;
+			if (!li) return;
+			var index = parseInt(li.getAttribute("data-index") || "-1", 10);
+			if (!isNaN(index)) setActive(index);
+		});
+		document.addEventListener("click", function(e){
+			if (e.target === contactSearch || contactResults.contains(e.target)) return;
+			closeResults();
+		});
+
+		saveButton.addEventListener("click", function(){
+			var date = String(dateInput.value || "").trim();
+			var allDay = !!allDayInput.checked;
+			var time = String(timeInput.value || "").trim();
+			var hinweis = String(hinweisInput.value || "").trim();
+			var subject = String(subjectInput.value || "").trim();
+			var description = String(descriptionInput.value || "").trim();
+			var url = String(urlInput.value || "").trim();
+			var selectedContactId = String(contactId.value || "").trim();
+
+			if (!date || !subject) {
+				setStatus("Datum und Betreff sind erforderlich.", "");
+				return;
+			}
+			if (!allDay && !time) {
+				setStatus("Bitte eine Uhrzeit angeben oder Ganztägig aktivieren.", "");
+				return;
+			}
+
+			saveButton.disabled = true;
+			setStatus("Eintrag wird gespeichert…", "success");
+			var formData = new FormData();
+			formData.append("action", "cmx_cockpit_pendenzen_add_manual_event");
+			formData.append("_ajax_nonce", config.addNonce);
+			formData.append("date", date);
+			formData.append("time", allDay ? "" : time);
+			formData.append("hinweis", hinweis);
+			formData.append("all_day", allDay ? "1" : "");
+			formData.append("subject", subject);
+			formData.append("description", description);
+			formData.append("url", url);
+			formData.append("contact_id", selectedContactId);
+
+			fetch(config.ajaxUrl, {
+				method: "POST",
+				credentials: "same-origin",
+				body: formData
+			}).then(function(response){
+				return response.json();
+			}).then(function(json){
+				if (!json || !json.success) {
+					var message = json && json.data && json.data.message ? String(json.data.message) : "Speichern fehlgeschlagen.";
+					setStatus(message, "");
+					saveButton.disabled = false;
+					return;
+				}
+				setStatus("Pendenz gespeichert.", "success");
+				window.location.reload();
+			}).catch(function(){
+				setStatus("Speichern fehlgeschlagen.", "");
+				saveButton.disabled = false;
+			});
+		});
+
+		resetForm();
+	})(' . \wp_json_encode($pend_modal_data) . ');');
 });

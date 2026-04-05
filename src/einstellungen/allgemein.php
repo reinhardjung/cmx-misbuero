@@ -50,9 +50,9 @@ function cmx_register_general_tab(): void {
 		function () {
 			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
 				'key'   => 'quick_edit',
-				'label' => 'Beleg Schnell-Erfassung in der Admin-Bar anzeigen',
+				'label' => 'Beleg Schnell-Erfassung in der roten Menüleiste anzeigen',
 			]);
-			echo '<p class="description">Blendet im WP-Admin zentriert die beiden Auswahllisten für Kontakt und Artikel sowie den Button zum direkten Erstellen eines Belegs ein.</p>';
+			echo '<p class="description">Blendet zentriert die beiden Auswahllisten für Kontakt und Artikel zum direkten Erstellen eines Belegs ein.</p>';
 		},
 		'cmx_tab_general',
 		'cmx_sec_general'
@@ -64,7 +64,7 @@ function cmx_register_general_tab(): void {
 		function () {
 			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
 				'key'   => 'quick_search',
-				'label' => 'CPT-Adminlisten beim Tippen direkt per AJAX durchsuchen',
+				'label' => 'LIVE Suche in den Übersichten1',
 			]);
 			echo '<p class="description">Zeigt Treffer schon während der Eingabe, statt erst nach Klick auf den Suchen Button.</p>';
 		},
