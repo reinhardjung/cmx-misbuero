@@ -300,8 +300,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	\check_admin_referer('cmx_emails_import');
 	$post_id = isset($_REQUEST['post_id']) ? (int) \wp_unslash($_REQUEST['post_id']) : 0;
 	$context = cmx_emails_action_context($post_id);
-	$result = cmx_emails_import_post_attachments($post_id);
-	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Uebernahme beendet.'), !empty($result['ok']) ? 'success' : 'error');
+	$context['email_id'] = 0;
+	$result = cmx_emails_store_all_pdf_attachments($post_id);
+	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'PDF wurde verarbeitet.'), !empty($result['ok']) ? 'success' : 'error');
+});
+
+\add_action('admin_post_cmx_emails_store_pdf_attachment', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_die('Keine Berechtigung.');
+	}
+	\check_admin_referer('cmx_emails_store_pdf_attachment');
+	$post_id = isset($_REQUEST['post_id']) ? (int) \wp_unslash($_REQUEST['post_id']) : 0;
+	$attachment_key = isset($_REQUEST['attachment_key']) && !\is_array($_REQUEST['attachment_key'])
+		? \sanitize_text_field((string) \wp_unslash($_REQUEST['attachment_key']))
+		: '';
+	$context = cmx_emails_action_context($post_id);
+	$result = cmx_emails_store_attachment_by_key($post_id, $attachment_key);
+	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'PDF wurde verarbeitet.'), !empty($result['ok']) ? 'success' : 'error');
 });
 
 \add_action('admin_post_cmx_emails_assign', function (): void {
@@ -638,6 +653,53 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			border-radius: 12px;
 			background: #fff;
 		}
+		.cmx-email-attachment-main {
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		.cmx-email-attachment-title {
+			font-weight: 600;
+			color: #1f2937;
+			text-decoration: none;
+			word-break: break-word;
+		}
+		.cmx-email-attachment-title:hover {
+			color: #0f5f9c;
+		}
+		.cmx-email-attachment-meta {
+			font-size: 12px;
+			color: #64748b;
+			word-break: break-word;
+		}
+		.cmx-email-attachment-actions {
+			flex: 0 0 auto;
+			margin: 0;
+		}
+		.cmx-email-attachment-store {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 34px;
+			height: 34px;
+			padding: 0;
+			border: 1px solid #d7e3f3;
+			border-radius: 999px;
+			background: #fff;
+			color: #0f5f9c;
+			cursor: pointer;
+		}
+		.cmx-email-attachment-store:hover {
+			background: #eff6ff;
+			border-color: #93c5fd;
+			color: #0c4a6e;
+		}
+		.cmx-email-attachment-store .dashicons {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+		}
 		.cmx-email-actions {
 			display: flex;
 			flex-wrap: wrap;
@@ -901,18 +963,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			if ($attachments === []) {
 				echo '<div class="cmx-email-empty" style="padding:0;color:#64748b;">Keine Anhaenge vorhanden.</div>';
 			} else {
-				echo '<div class="cmx-email-attachments">';
-				foreach ($attachments as $attachment) {
-					$url = (string) ($attachment['url'] ?? '');
-					$size = (int) ($attachment['size'] ?? 0);
-					echo '<div class="cmx-email-attachment">';
-					echo '<div><strong>' . \esc_html((string) ($attachment['filename'] ?? 'Anhang')) . '</strong><br><span>' . \esc_html($size > 0 ? \size_format($size, 0) : '') . '</span></div>';
-					if ($url !== '') {
-						echo '<a class="button button-link" href="' . \esc_url($url) . '" download>Download</a>';
-					}
-					echo '</div>';
-				}
-				echo '</div>';
+				cmx_emails_render_attachment_list($selected_id, $attachments, cmx_emails_action_context($selected_id));
 			}
 			echo '</div></section>';
 
@@ -948,14 +999,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			echo '</div>';
 			echo '<div class="cmx-email-assign-actions">';
 			echo '<button type="submit" class="button">Zuordnung speichern</button>';
-			echo '</form>';
-			echo '<form method="post" action="' . \esc_url(\admin_url('admin-post.php')) . '">';
-			\wp_nonce_field('cmx_emails_import');
-			echo '<input type="hidden" name="action" value="cmx_emails_import">';
-			echo '<input type="hidden" name="post_id" value="' . (int) $selected_id . '">';
-			echo '<input type="hidden" name="account_id" value="' . \esc_attr($account_id) . '">';
-			echo '<input type="hidden" name="folder" value="' . \esc_attr($folder) . '">';
-			echo '<button type="submit" class="button button-primary">Als Beleg uebernehmen</button>';
 			echo '</form>';
 			echo '</div>';
 			echo '</div>';

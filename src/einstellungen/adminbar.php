@@ -129,6 +129,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_kontakt_post_types')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_katalog_focus_url')) {
+	function cmx65_adminbar_katalog_focus_url(): string {
+		$url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')
+			? (string) cmx_artikel_liste_url()
+			: (string) \home_url('/katalog/');
+		if ($url === '') {
+			return '';
+		}
+
+		return (string) \add_query_arg('cmx_focus_search', '1', $url);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_quickcreate_enabled')) {
 	function cmx65_adminbar_quickcreate_enabled(): bool {
 		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
@@ -965,7 +978,7 @@ function cmx65_render_front_quicklinks(): void {
 	];
 
 	$pages_links = [
-		['label' => 'Katalog', 'href' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/'), 'target' => '_blank'],
+		['label' => 'Katalog', 'href' => cmx65_adminbar_katalog_focus_url(), 'target' => '_blank'],
 		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/'), 'target' => '_blank'],
 	];
 
@@ -1193,7 +1206,7 @@ function cmx65_adminbar($wp_admin_bar) {
 		'id'    => 'cmx65_katalog_id',
 		'parent' => 'cmx65_pages_id',
 		'title' => 'Katalog',
-		'href'  => \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url') ? cmx_artikel_liste_url() : \home_url('/katalog/'),
+		'href'  => cmx65_adminbar_katalog_focus_url(),
 		'meta'  => [
 			'title'  => __('Dein Online Katalog', 'textdomain'),
 			'target' => '_blank',

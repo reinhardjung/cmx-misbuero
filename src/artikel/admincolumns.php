@@ -286,6 +286,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_katalog_link_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_katalog_icon_html')) {
+	function cmx_artikel_katalog_icon_html(int $post_id): string {
+		$url = cmx_artikel_katalog_link_url($post_id);
+		if ($url === '') {
+			return '';
+		}
+
+		return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" title="Artikel im Katalog öffnen" aria-label="Artikel im Katalog öffnen" style="text-decoration:none;color:#2271b1;display:inline-flex;align-items:center;justify-content:center;"><span class="dashicons dashicons-store" style="font-size:18px;width:18px;height:18px;line-height:18px;"></span></a><span class="screen-reader-text">Artikel im Katalog öffnen</span>';
+	}
+}
+
 /* =========================================================
  * Helpers: Taxonomie-Ermittlung + Kontakte + Lieferantenliste
  * ========================================================= */
@@ -386,8 +397,8 @@ function cmx_lieferanten_args(): array {
 	$new['farben']         = 'Farbe';
 	$new['einheiten']      = 'Einheit';
 	$new['lieferant']      = 'Lieferant';
-	$new['vk']             = 'VK';
 	$new['ek']             = 'EK';
+	$new['vk']             = 'VK';
 	$new['marge']          = 'Marge';
 	$new['verkaufbar']     = 'Verkaufbar';
 	$new['katalog']        = 'Katalog';
@@ -553,13 +564,8 @@ function cmx_lieferanten_args(): array {
 
 		case 'katalog':
 			$in_catalog = cmx_artikel_is_katalog_sichtbar($post_id);
-			$katalog_url = $in_catalog ? cmx_artikel_katalog_link_url($post_id) : '';
 			echo $in_catalog
-				? (
-					$katalog_url !== ''
-						? '<a href="' . \esc_url($katalog_url) . '" target="_blank" rel="noopener noreferrer" title="Artikel im Katalog öffnen" aria-label="Artikel im Katalog öffnen" style="text-decoration:none;">&#10003;</a><span class="screen-reader-text">Im Katalog</span>'
-						: '<span title="Im Katalog" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Im Katalog</span>'
-				)
+				? cmx_artikel_katalog_icon_html($post_id)
 				: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>';
 			break;
 
@@ -1355,17 +1361,13 @@ function cmx_lieferanten_args(): array {
 				'vk' => (string) ($entry['vk'] ?? ''),
 				'ek' => (string) ($entry['ek'] ?? ''),
 				'marge' => (string) ($entry['marge'] ?? ''),
-				'verkaufbar_html' => !empty($entry['verkaufbar'])
-					? '<span title="Verkaufbar" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Verkaufbar</span>'
-					: '<span title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>',
-				'katalog_html' => !empty($entry['katalog'])
-					? (
-						cmx_artikel_katalog_link_url($post_id) !== ''
-							? '<a href="' . \esc_url(cmx_artikel_katalog_link_url($post_id)) . '" target="_blank" rel="noopener noreferrer" title="Artikel im Katalog öffnen" aria-label="Artikel im Katalog öffnen" style="text-decoration:none;">&#10003;</a><span class="screen-reader-text">Im Katalog</span>'
-							: '<span title="Im Katalog" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Im Katalog</span>'
-					)
-					: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>',
-				'edit_url' => $edit_url,
+					'verkaufbar_html' => !empty($entry['verkaufbar'])
+						? '<span title="Verkaufbar" aria-hidden="true">&#10003;</span><span class="screen-reader-text">Verkaufbar</span>'
+						: '<span title="Nicht verkaufbar" aria-hidden="true"></span><span class="screen-reader-text">Nicht verkaufbar</span>',
+					'katalog_html' => !empty($entry['katalog'])
+						? cmx_artikel_katalog_icon_html($post_id)
+						: '<span title="Nicht im Katalog" aria-hidden="true"></span><span class="screen-reader-text">Nicht im Katalog</span>',
+					'edit_url' => $edit_url,
 			];
 		}
 		if (!empty($rows)) {

@@ -563,17 +563,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 		echo '</div></div>';
 
-		echo '<div class="cmx-artikel-detail-content-wrap">';
-		echo '<div class="cmx-artikel-detail-section">';
-		echo '<h2 class="cmx-artikel-detail-section-title">Beschreibung</h2>';
-		if ($content_html !== '') {
-			echo '<div class="cmx-artikel-detail-content">' . $content_html . '</div>';
-		} elseif ($excerpt !== '') {
-			echo '<div class="cmx-artikel-detail-content"><p>' . \esc_html($excerpt) . '</p></div>';
-		} else {
-			echo '<div class="cmx-artikel-detail-content"><p>Zu diesem Artikel ist aktuell keine Beschreibung hinterlegt.</p></div>';
+		if ($content_html !== '' || $excerpt !== '') {
+			echo '<div class="cmx-artikel-detail-content-wrap">';
+			echo '<div class="cmx-artikel-detail-section">';
+			echo '<h2 class="cmx-artikel-detail-section-title">Beschreibung</h2>';
+			if ($content_html !== '') {
+				echo '<div class="cmx-artikel-detail-content">' . $content_html . '</div>';
+			} else {
+				echo '<div class="cmx-artikel-detail-content"><p>' . \esc_html($excerpt) . '</p></div>';
+			}
+			echo '</div></div>';
 		}
-		echo '</div></div>';
 		echo '<script>
 			(function(){
 				var media=document.getElementById("cmx-artikel-detail-media");

@@ -289,12 +289,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$actions['edit'] = '<a href="' . \esc_url($edit_url) . '">Bearbeiten</a>';
 	}
 
-	$import_url = \wp_nonce_url(\add_query_arg([
-		'action' => 'cmx_emails_import',
-		'post_id' => (int) $post->ID,
-		'email_id' => (int) $post->ID,
-	], \admin_url('admin-post.php')), 'cmx_emails_import');
-	$actions['import'] = '<a href="' . \esc_url($import_url) . '">Als Beleg uebernehmen</a>';
+	$pdf_attachments = \function_exists(__NAMESPACE__ . '\\cmx_emails_pdf_attachments_for_post')
+		? cmx_emails_pdf_attachments_for_post((int) $post->ID)
+		: [];
+	if ($pdf_attachments !== []) {
+		$import_url = \wp_nonce_url(\add_query_arg([
+			'action' => 'cmx_emails_import',
+			'post_id' => (int) $post->ID,
+		], \admin_url('admin-post.php')), 'cmx_emails_import');
+		$actions['import'] = '<a href="' . \esc_url($import_url) . '">Als Beleg &uuml;bernehmen</a>';
+	}
 
 	$folder = \sanitize_key((string) \get_post_meta($post->ID, cmx_emails_meta_key('folder'), true));
 	if ($folder === 'spam') {

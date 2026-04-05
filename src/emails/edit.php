@@ -206,6 +206,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_recheck_post_for_spam')) {
 		return;
 	}
 
+	\remove_meta_box('cmx_dokumente_box', CMX_EMAILS_CPT, 'side');
+
 	if (cmx_emails_is_compose_post($post)) {
 		\add_meta_box(
 			'cmx_email_compose',
@@ -1142,11 +1144,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
 		$reply_url = cmx_emails_compose_admin_url('reply', $post_id);
 		$forward_url = cmx_emails_compose_admin_url('forward', $post_id);
-		$import_url = \wp_nonce_url(\add_query_arg([
-			'action' => 'cmx_emails_import',
-			'post_id' => $post_id,
-			'email_id' => $post_id,
-		], \admin_url('admin-post.php')), 'cmx_emails_import');
 
 		echo '<div class="cmx-email-edit-meta">';
 		echo '<dl class="cmx-email-edit-grid">';
@@ -1170,7 +1167,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		echo '<div class="cmx-email-edit-actions">';
 		echo '<a class="button button-primary" href="' . \esc_url($reply_url) . '">Antworten</a>';
 		echo '<a class="button" href="' . \esc_url($forward_url) . '">Weiterleiten</a>';
-		echo '<a class="button" href="' . \esc_url($import_url) . '">Als Beleg uebernehmen</a>';
 		echo '</div>';
 
 		echo '<div class="cmx-email-edit-attachments">';
@@ -1178,23 +1174,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_details_metabox')) {
 		if ($attachments === []) {
 			echo '<p>Keine Anhaenge vorhanden.</p>';
 		} else {
-			echo '<ul>';
-			foreach ($attachments as $attachment) {
-				$url = (string) ($attachment['url'] ?? '');
-				$filename = (string) ($attachment['filename'] ?? 'Anhang');
-				$size = (int) ($attachment['size'] ?? 0);
-				echo '<li>';
-				if ($url !== '') {
-					echo '<a href="' . \esc_url($url) . '" download>' . \esc_html($filename) . '</a>';
-				} else {
-					echo \esc_html($filename);
-				}
-				if ($size > 0) {
-					echo ' <span>(' . \esc_html(\size_format($size, 0)) . ')</span>';
-				}
-				echo '</li>';
-			}
-			echo '</ul>';
+			cmx_emails_render_attachment_list($post_id, $attachments);
 		}
 		echo '</div>';
 		echo '</div>';
@@ -1466,8 +1446,68 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_metabox'))
 			padding-top: 14px;
 			border-top: 1px solid #e4e7ec;
 		}
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-edit-attachments ul {
-			margin: 10px 0 0 18px;
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachments {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			margin-top: 10px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 14px;
+			padding: 12px 14px;
+			border: 1px solid #e4e7ec;
+			border-radius: 12px;
+			background: #fff;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-main {
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-title {
+			font-weight: 600;
+			color: #1f2937;
+			text-decoration: none;
+			word-break: break-word;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-title:hover {
+			color: #135e96;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-meta {
+			font-size: 12px;
+			color: #667085;
+			word-break: break-word;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-actions {
+			flex: 0 0 auto;
+			margin: 0;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-store {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 34px;
+			height: 34px;
+			padding: 0;
+			border: 1px solid #d0d5dd;
+			border-radius: 999px;
+			background: #fff;
+			color: #135e96;
+			cursor: pointer;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-store:hover {
+			background: #eff6ff;
+			border-color: #93c5fd;
+			color: #0c4a6e;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-attachment-store .dashicons {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
 		}
 		<?php if ($is_compose) : ?>
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> #postdivrich #content,

@@ -303,6 +303,723 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_attachment_list'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_action_key')) {
+	function cmx_emails_attachment_action_key(array $attachment): string {
+		$rel = \ltrim((string) ($attachment['rel'] ?? ''), '/');
+		$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+		$filename = \sanitize_file_name((string) ($attachment['filename'] ?? ''));
+		$mime = \strtolower(\trim((string) ($attachment['mime'] ?? '')));
+		$size = isset($attachment['size']) ? (string) (int) $attachment['size'] : '';
+
+		return \sha1(\implode('|', [$rel, $path, $filename, $mime, $size]));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_is_pdf')) {
+	function cmx_emails_attachment_is_pdf(array $attachment): bool {
+		$mime = \strtolower(\trim((string) ($attachment['mime'] ?? '')));
+		if ($mime === 'application/pdf') {
+			return true;
+		}
+
+		$filename = (string) ($attachment['filename'] ?? '');
+		return \strtolower((string) \pathinfo($filename, \PATHINFO_EXTENSION)) === 'pdf';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_binary')) {
+	function cmx_emails_attachment_binary(array $attachment): string {
+		$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+		$rel = \ltrim((string) ($attachment['rel'] ?? ''), '/');
+		if ($path === '' && $rel !== '') {
+			$uploads = \wp_get_upload_dir();
+			$basedir = \wp_normalize_path((string) ($uploads['basedir'] ?? ''));
+			if ($basedir !== '') {
+				$path = $basedir . '/' . $rel;
+			}
+		}
+
+		if ($path === '' || !\is_file($path) || !\is_readable($path)) {
+			return '';
+		}
+
+		$binary = @\file_get_contents($path);
+		return \is_string($binary) ? $binary : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_flatten_keywords')) {
+	function cmx_emails_flatten_keywords($value): array {
+		$words = [];
+		if (\is_array($value)) {
+			foreach ($value as $entry) {
+				$words = \array_merge($words, cmx_emails_flatten_keywords($entry));
+			}
+		} elseif (\is_scalar($value)) {
+			$parts = \preg_split('/\s*,\s*/', (string) $value) ?: [];
+			foreach ($parts as $part) {
+				$part = \trim((string) $part, " \t\n\r\0\x0B\"'");
+				if ($part !== '') {
+					$words[] = \strtolower($part);
+				}
+			}
+		}
+
+		return \array_values(\array_unique(\array_filter($words, static function ($word): bool {
+			return \is_string($word) && $word !== '';
+		})));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_beleg_filter_keywords')) {
+	function cmx_emails_beleg_filter_keywords(): array {
+		static $keywords = null;
+		if (\is_array($keywords)) {
+			return $keywords;
+		}
+
+		$keywords = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')) {
+			$keywords = \array_merge($keywords, cmx_emails_flatten_keywords(cmx_ini_get_value('Belege', 'Filter')));
+		}
+
+		if ($keywords === []) {
+			$ini_file = \dirname(__DIR__, 2) . '/includes/globales.ini';
+			if (\is_file($ini_file)) {
+				$ini = \parse_ini_file($ini_file, true, \INI_SCANNER_TYPED);
+				if (\is_array($ini)) {
+					foreach ($ini as $section => $section_data) {
+						if (!\is_array($section_data) || \strtolower(\trim((string) $section)) !== 'belege') {
+							continue;
+						}
+						foreach ($section_data as $key => $value) {
+							if (\strtolower(\trim((string) $key)) !== 'filter') {
+								continue;
+							}
+							$keywords = \array_merge($keywords, cmx_emails_flatten_keywords($value));
+						}
+					}
+				}
+			}
+		}
+
+		$keywords = \array_values(\array_unique($keywords));
+		return $keywords;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_pdf_keyword_match')) {
+	function cmx_emails_pdf_keyword_match(string $pdf_binary, array $keywords): bool {
+		$keywords = cmx_emails_flatten_keywords($keywords);
+		if ($keywords === []) {
+			return false;
+		}
+
+		$haystacks = [\strtolower($pdf_binary)];
+		if (\preg_match_all('/stream\\r?\\n(.*?)\\r?\\nendstream/s', $pdf_binary, $matches)) {
+			foreach ((array) ($matches[1] ?? []) as $stream) {
+				$stream = \trim((string) $stream, "\r\n");
+				if ($stream === '') {
+					continue;
+				}
+
+				$decoded_variants = [$stream];
+				$gzu = @\gzuncompress($stream);
+				if (\is_string($gzu) && $gzu !== '') {
+					$decoded_variants[] = $gzu;
+				}
+				$gzi = @\gzinflate($stream);
+				if (\is_string($gzi) && $gzi !== '') {
+					$decoded_variants[] = $gzi;
+				}
+				$gzd = \function_exists('gzdecode') ? @\gzdecode($stream) : false;
+				if (\is_string($gzd) && $gzd !== '') {
+					$decoded_variants[] = $gzd;
+				}
+
+				foreach ($decoded_variants as $decoded) {
+					$decoded = (string) $decoded;
+					if ($decoded !== '') {
+						$haystacks[] = \strtolower($decoded);
+					}
+				}
+			}
+		}
+
+		foreach ($keywords as $keyword) {
+			foreach ($haystacks as $haystack) {
+				if ($keyword !== '' && \strpos($haystack, $keyword) !== false) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_store_mode')) {
+	function cmx_emails_attachment_store_mode(array $attachment): string {
+		if (!cmx_emails_attachment_is_pdf($attachment)) {
+			return '';
+		}
+
+		static $cache = [];
+		$key = cmx_emails_attachment_action_key($attachment);
+		if (isset($cache[$key])) {
+			return $cache[$key];
+		}
+
+		$binary = cmx_emails_attachment_binary($attachment);
+		if ($binary === '') {
+			$cache[$key] = '';
+			return '';
+		}
+
+		$cache[$key] = cmx_emails_pdf_keyword_match($binary, cmx_emails_beleg_filter_keywords())
+			? 'beleg'
+			: 'dokument';
+
+		return $cache[$key];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_document_contact_rel_key')) {
+	function cmx_emails_document_contact_rel_key(): string {
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+			$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+			if (\is_array($map) && isset($map['kontakte']) && \is_string($map['kontakte']) && $map['kontakte'] !== '') {
+				return $map['kontakte'];
+			}
+		}
+
+		return 'cmx_dokumente_kunden';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_document_uploads_meta_key')) {
+	function cmx_emails_document_uploads_meta_key(): string {
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')) {
+			$key = (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META');
+			if ($key !== '') {
+				return $key;
+			}
+		}
+
+		return '_cmx_dokumente_uploads';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_document_self_meta_key')) {
+	function cmx_emails_document_self_meta_key(): string {
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')) {
+			$key = (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META');
+			if ($key !== '') {
+				return $key;
+			}
+		}
+
+		return '_cmx_dokumente_files';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_pdf_for_document')) {
+	function cmx_emails_store_pdf_for_document(string $filename, string $binary): string {
+		$year = (int) \wp_date('Y');
+		$target_dir = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_dok_upload_target_dir')) {
+			[$base] = cmx_dok_upload_target_dir('dokumente', $year);
+			$target_dir = (string) $base;
+		}
+		if ($target_dir === '') {
+			$target_dir = (string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/dokumente');
+			if (!\is_dir($target_dir)) {
+				@\wp_mkdir_p($target_dir);
+			}
+		}
+		if (!\is_dir($target_dir) || !\is_writable($target_dir)) {
+			return '';
+		}
+
+		$name = \sanitize_file_name($filename);
+		if ($name === '' || \strtolower((string) \pathinfo($name, \PATHINFO_EXTENSION)) !== 'pdf') {
+			$name = \wp_date('ymd-His') . '-mail.pdf';
+		}
+		$name = \wp_unique_filename($target_dir, $name);
+		$target_abs = \wp_normalize_path((string) ($target_dir . '/' . $name));
+		if (@\file_put_contents($target_abs, $binary) === false) {
+			return '';
+		}
+		@\chmod($target_abs, 0666);
+
+		return cmx_emails_upload_rel_from_abs($target_abs);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_pdf_for_beleg')) {
+	function cmx_emails_store_pdf_for_beleg(int $beleg_id, string $filename, string $binary): string {
+		$year = \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_upload_year')
+			? (int) cmx_get_beleg_upload_year($beleg_id)
+			: (int) \wp_date('Y');
+		if ($year <= 0) {
+			$year = (int) \wp_date('Y');
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_upload_dir')) {
+			[$target_dir] = cmx_belege_upload_dir($year);
+		} else {
+			$target_dir = (string) (\WP_CONTENT_DIR . '/uploads/misbuero/archiv/' . $year . '/belege');
+			if (!\is_dir($target_dir)) {
+				@\wp_mkdir_p($target_dir);
+			}
+		}
+		if (!\is_dir($target_dir) || !\is_writable($target_dir)) {
+			return '';
+		}
+
+		$prefix = \sanitize_title((string) \get_post_meta($beleg_id, '_cmx_beleg_upload_prefix', true));
+		if ($prefix === '') {
+			$prefix = \sanitize_title((string) \get_the_title($beleg_id));
+			if ($prefix === '') {
+				$prefix = \wp_date('ymd-His') . '-mail';
+			}
+			\update_post_meta($beleg_id, '_cmx_beleg_upload_prefix', $prefix);
+		}
+
+		$next = \function_exists(__NAMESPACE__ . '\\cmx_belege_next_suffix')
+			? \max(1, (int) cmx_belege_next_suffix($target_dir, $prefix))
+			: 1;
+
+		do {
+			$target_name = $prefix . '_upload_' . \str_pad((string) $next, 3, '0', \STR_PAD_LEFT) . '.pdf';
+			$next++;
+			$target_abs = \wp_normalize_path((string) (\rtrim($target_dir, '/\\') . \DIRECTORY_SEPARATOR . $target_name));
+		} while (\is_file($target_abs));
+
+		if (@\file_put_contents($target_abs, $binary) === false) {
+			return '';
+		}
+		@\chmod($target_abs, 0666);
+
+		$target_rel = cmx_emails_upload_rel_from_abs($target_abs);
+		if ($target_rel === '') {
+			return '';
+		}
+
+		$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_UPLOADS_META')
+			: '_cmx_belege_uploads';
+		$current = (array) \get_post_meta($beleg_id, $uploads_meta_key, true);
+		$current = \array_values(\array_filter($current, static function ($value): bool {
+			return !($value === '' || $value === null);
+		}));
+		if (!\in_array($target_rel, $current, true)) {
+			$current[] = $target_rel;
+			\update_post_meta($beleg_id, $uploads_meta_key, $current);
+		}
+
+		return $target_rel;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_subject')) {
+	function cmx_emails_attachment_subject(int $post_id): string {
+		$subject = cmx_emails_subject_text((string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
+		if ($subject !== '') {
+			return $subject;
+		}
+
+		return cmx_emails_subject_text((string) \get_the_title($post_id));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_target_contact_ids')) {
+	function cmx_emails_attachment_target_contact_ids(int $post_id): array {
+		$contact_ids = cmx_emails_assignment_contact_ids($post_id);
+		$contact_ids = \array_values(\array_unique(\array_map('intval', $contact_ids)));
+		$contact_ids = \array_values(\array_filter($contact_ids, static function (int $contact_id): bool {
+			return $contact_id > 0;
+		}));
+
+		return $contact_ids !== [] ? $contact_ids : [0];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_pdf_attachments_for_post')) {
+	function cmx_emails_pdf_attachments_for_post(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+			return [];
+		}
+
+		$pdf_attachments = [];
+		foreach (cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true)) as $attachment) {
+			if (\is_array($attachment) && cmx_emails_attachment_is_pdf($attachment)) {
+				$pdf_attachments[] = $attachment;
+			}
+		}
+
+		return $pdf_attachments;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_create_attachment_document')) {
+	function cmx_emails_create_attachment_document(int $contact_id, string $subject, array $attachment, string $binary, array $project_ids = []): array {
+		if (!\post_type_exists('dokumente')) {
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		$file_name = (string) ($attachment['filename'] ?? '');
+		$title_from_file = (string) \pathinfo($file_name, \PATHINFO_FILENAME);
+		$title = \sanitize_text_field(\trim($title_from_file !== '' ? $title_from_file : $subject));
+		if ($title === '') {
+			$title = \wp_date('ymd-His') . ' mail';
+		}
+
+		$inserted = \wp_insert_post([
+			'post_type' => 'dokumente',
+			'post_status' => 'publish',
+			'post_title' => $title,
+		], true);
+		if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		$doc_id = (int) $inserted;
+		$rel = cmx_emails_store_pdf_for_document($file_name !== '' ? $file_name : 'attachment.pdf', $binary);
+		if ($rel === '') {
+			\wp_delete_post($doc_id, true);
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel);
+		\update_post_meta($doc_id, cmx_emails_document_self_meta_key(), [$rel]);
+
+		$contact_id = (int) $contact_id;
+		if ($contact_id > 0) {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_kontakt')) {
+				cmx_scanner_link_docs_to_kontakt($contact_id, [$doc_id]);
+			} else {
+				$kontakt_rel_key = cmx_emails_document_contact_rel_key();
+				$current_contacts = (array) \get_post_meta($doc_id, $kontakt_rel_key, true);
+				$current_contacts = \array_values(\array_unique(\array_map('intval', $current_contacts)));
+				if (!\in_array($contact_id, $current_contacts, true)) {
+					$current_contacts[] = $contact_id;
+					\update_post_meta($doc_id, $kontakt_rel_key, \array_values(\array_filter($current_contacts)));
+				}
+
+				$kontakt_uploads_meta = cmx_emails_document_uploads_meta_key();
+				$kontakt_docs = (array) \get_post_meta($contact_id, $kontakt_uploads_meta, true);
+				$kontakt_docs = \array_values(\array_unique(\array_map('intval', $kontakt_docs)));
+				if (!\in_array($doc_id, $kontakt_docs, true)) {
+					$kontakt_docs[] = $doc_id;
+					\update_post_meta($contact_id, $kontakt_uploads_meta, $kontakt_docs);
+				}
+			}
+		}
+
+		$project_ids = \array_values(\array_unique(\array_map('intval', $project_ids)));
+		if ($project_ids !== [] && \function_exists(__NAMESPACE__ . '\\cmx_scanner_link_docs_to_projekte')) {
+			foreach ($project_ids as $project_id) {
+				if ($project_id > 0) {
+					cmx_scanner_link_docs_to_projekte($project_id, [$doc_id]);
+				}
+			}
+		}
+
+		return ['post_id' => $doc_id, 'upload_rel' => $rel];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_create_attachment_beleg')) {
+	function cmx_emails_create_attachment_beleg(int $contact_id, string $subject, array $attachment, string $binary, int $source_post_id = 0): array {
+		if (!\post_type_exists('belege')) {
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		$inserted = \wp_insert_post([
+			'post_type' => 'belege',
+			'post_status' => 'draft',
+			'post_title' => '',
+			'meta_input' => ['_cmx_title_auto' => 1],
+		], true);
+		if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		$beleg_id = (int) $inserted;
+		if (\function_exists(__NAMESPACE__ . '\\cmx_scanner_prepare_new_beleg_defaults')) {
+			cmx_scanner_prepare_new_beleg_defaults($beleg_id);
+		}
+
+		$richtung_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+			: '_cmx_beleg_richtung';
+		$datum_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+			: '_cmx_beleg_rng_datum';
+		$betreff_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BETREFF')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BETREFF')
+			: '_cmx_beleg_betreff';
+		$kontakt_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')
+			: '_cmx_beleg_kontakt_id';
+
+		\update_post_meta($beleg_id, $richtung_key, 'eingang');
+		$received_ts = $source_post_id > 0 ? (int) \get_post_meta($source_post_id, cmx_emails_meta_key('received_ts'), true) : 0;
+		\update_post_meta($beleg_id, $datum_key, \wp_date('Y-m-d', $received_ts > 0 ? $received_ts : \time()));
+
+		if (\trim($subject) !== '') {
+			\update_post_meta($beleg_id, $betreff_key, \sanitize_text_field($subject));
+		}
+
+		$contact_id = (int) $contact_id;
+		if ($contact_id > 0) {
+			\update_post_meta($beleg_id, $kontakt_key, $contact_id);
+			\update_post_meta($beleg_id, '_cmx_beleg_kontakt_label', (string) \get_the_title($contact_id));
+		} else {
+			\delete_post_meta($beleg_id, $kontakt_key);
+			\delete_post_meta($beleg_id, '_cmx_beleg_kontakt_label');
+		}
+
+		$rel = cmx_emails_store_pdf_for_beleg($beleg_id, (string) ($attachment['filename'] ?? 'attachment.pdf'), $binary);
+		if ($rel === '') {
+			\wp_delete_post($beleg_id, true);
+			return ['post_id' => 0, 'upload_rel' => ''];
+		}
+
+		return ['post_id' => $beleg_id, 'upload_rel' => $rel];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_register_imported_posts')) {
+	function cmx_emails_register_imported_posts(int $post_id, array $created_ids): void {
+		$created_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $created_ids))));
+		if ($created_ids === []) {
+			return;
+		}
+
+		$existing_ids = (array) \get_post_meta($post_id, cmx_emails_meta_key('imported_post_ids'), true);
+		$existing_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $existing_ids))));
+		$merged_ids = \array_values(\array_unique(\array_merge($existing_ids, $created_ids)));
+
+		\update_post_meta($post_id, cmx_emails_meta_key('imported_post_ids'), $merged_ids);
+		\update_post_meta($post_id, cmx_emails_meta_key('manual_status'), 'processed');
+		\update_post_meta($post_id, cmx_emails_meta_key('status'), 'processed');
+		\update_post_meta($post_id, cmx_emails_meta_key('imported_at'), (string) \time());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_attachment_by_key')) {
+	function cmx_emails_store_attachment_by_key(int $post_id, string $attachment_key): array {
+		$post_id = (int) $post_id;
+		$attachment_key = \sanitize_text_field($attachment_key);
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+			return ['ok' => false, 'message' => 'E-Mail wurde nicht gefunden.'];
+		}
+		if ($attachment_key === '') {
+			return ['ok' => false, 'message' => 'Anhang wurde nicht gefunden.'];
+		}
+
+		$attachment = [];
+		foreach (cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true)) as $candidate) {
+			if (cmx_emails_attachment_action_key($candidate) === $attachment_key) {
+				$attachment = (array) $candidate;
+				break;
+			}
+		}
+		if ($attachment === []) {
+			return ['ok' => false, 'message' => 'Anhang wurde nicht gefunden.'];
+		}
+		if (!cmx_emails_attachment_is_pdf($attachment)) {
+			return ['ok' => false, 'message' => 'Nur PDF-Anhaenge koennen gespeichert werden.'];
+		}
+
+		$binary = cmx_emails_attachment_binary($attachment);
+		if ($binary === '') {
+			return ['ok' => false, 'message' => 'PDF-Datei ist nicht lesbar.'];
+		}
+
+		$mode = cmx_emails_attachment_store_mode($attachment);
+		if ($mode === '') {
+			return ['ok' => false, 'message' => 'Speicherziel fuer PDF konnte nicht ermittelt werden.'];
+		}
+
+		$subject = cmx_emails_attachment_subject($post_id);
+		$contact_ids = cmx_emails_attachment_target_contact_ids($post_id);
+		$project_ids = cmx_emails_assignment_project_ids($post_id);
+		$created_ids = [];
+		foreach ($contact_ids as $contact_id) {
+			$contact_id = (int) $contact_id;
+			$created = $mode === 'beleg'
+				? cmx_emails_create_attachment_beleg($contact_id, $subject, $attachment, $binary, $post_id)
+				: cmx_emails_create_attachment_document($contact_id, $subject, $attachment, $binary, $project_ids);
+			$created_id = (int) ($created['post_id'] ?? 0);
+			if ($created_id > 0) {
+				$created_ids[] = $created_id;
+			}
+		}
+
+		if ($created_ids === []) {
+			return ['ok' => false, 'message' => 'PDF konnte nicht gespeichert werden.'];
+		}
+
+		cmx_emails_register_imported_posts($post_id, $created_ids);
+
+		$count = \count($created_ids);
+		$message = $mode === 'beleg'
+			? ($count === 1 ? '1 Beleg wurde erstellt.' : $count . ' Belege wurden erstellt.')
+			: ($count === 1 ? '1 Dokument wurde erstellt.' : $count . ' Dokumente wurden erstellt.');
+
+		return [
+			'ok' => true,
+			'message' => $message,
+			'created_ids' => \array_values(\array_unique(\array_map('intval', $created_ids))),
+			'mode' => $mode,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_all_pdf_attachments')) {
+	function cmx_emails_store_all_pdf_attachments(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+			return ['ok' => false, 'message' => 'E-Mail wurde nicht gefunden.'];
+		}
+
+		$pdf_attachments = cmx_emails_pdf_attachments_for_post($post_id);
+		if ($pdf_attachments === []) {
+			return ['ok' => false, 'message' => 'Diese E-Mail hat keine PDF-Anhaenge.'];
+		}
+
+		$created_ids = [];
+		$beleg_count = 0;
+		$dokument_count = 0;
+		$processed_pdf_count = 0;
+		$last_error = '';
+
+		foreach ($pdf_attachments as $attachment) {
+			$result = cmx_emails_store_attachment_by_key($post_id, cmx_emails_attachment_action_key((array) $attachment));
+			if (empty($result['ok'])) {
+				$last_error = (string) ($result['message'] ?? '');
+				continue;
+			}
+
+			$processed_pdf_count++;
+			$current_ids = \array_values(\array_unique(\array_map('intval', (array) ($result['created_ids'] ?? []))));
+			$created_ids = \array_merge($created_ids, $current_ids);
+
+			$mode = (string) ($result['mode'] ?? '');
+			if ($mode === 'beleg') {
+				$beleg_count += \count($current_ids);
+			} elseif ($mode === 'dokument') {
+				$dokument_count += \count($current_ids);
+			}
+		}
+
+		$created_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $created_ids))));
+		if ($created_ids === []) {
+			return ['ok' => false, 'message' => $last_error !== '' ? $last_error : 'PDF konnte nicht gespeichert werden.'];
+		}
+
+		if ($beleg_count > 0 && $dokument_count > 0) {
+			$message = $processed_pdf_count . ' PDF-Anhaenge uebernommen: ' . $beleg_count . ' Belege, ' . $dokument_count . ' Dokumente erstellt.';
+		} elseif ($beleg_count > 0) {
+			$message = $processed_pdf_count . ' PDF-Anhaenge uebernommen: ' . $beleg_count . ' Belege erstellt.';
+		} else {
+			$message = $processed_pdf_count . ' PDF-Anhaenge uebernommen: ' . $dokument_count . ' Dokumente erstellt.';
+		}
+
+		return [
+			'ok' => true,
+			'message' => $message,
+			'created_ids' => $created_ids,
+			'beleg_count' => $beleg_count,
+			'dokument_count' => $dokument_count,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_store_button_title')) {
+	function cmx_emails_attachment_store_button_title(array $attachment): string {
+		$mode = cmx_emails_attachment_store_mode($attachment);
+		if ($mode === 'beleg') {
+			return 'PDF als Beleg speichern';
+		}
+		if ($mode === 'dokument') {
+			return 'PDF als Dokument speichern';
+		}
+
+		return 'PDF speichern';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_attachment_list')) {
+	function cmx_emails_render_attachment_list(int $post_id, array $attachments, array $context = []): void {
+		if ($context === [] && \function_exists(__NAMESPACE__ . '\\cmx_emails_action_context')) {
+			$context = cmx_emails_action_context($post_id);
+		}
+
+		echo '<div class="cmx-email-attachments">';
+		foreach ($attachments as $attachment) {
+			if (!\is_array($attachment)) {
+				continue;
+			}
+
+			$filename = \sanitize_file_name((string) ($attachment['filename'] ?? 'Anhang'));
+			if ($filename === '') {
+				$filename = 'Anhang';
+			}
+			$url = (string) ($attachment['url'] ?? '');
+			$size = (int) ($attachment['size'] ?? 0);
+			$is_pdf = cmx_emails_attachment_is_pdf($attachment);
+			$store_mode = $is_pdf ? cmx_emails_attachment_store_mode($attachment) : '';
+			$store_title = $store_mode !== '' ? cmx_emails_attachment_store_button_title($attachment) : '';
+
+			$meta_parts = [];
+			if ($size > 0) {
+				$meta_parts[] = \size_format($size, 0);
+			}
+			if ($store_mode === 'beleg') {
+				$meta_parts[] = 'Wird als Beleg gespeichert';
+			} elseif ($store_mode === 'dokument') {
+				$meta_parts[] = 'Wird als Dokument gespeichert';
+			}
+
+			echo '<div class="cmx-email-attachment">';
+			echo '<div class="cmx-email-attachment-main">';
+			if ($url !== '') {
+				echo '<a class="cmx-email-attachment-title" href="' . \esc_url($url) . '" download>' . \esc_html($filename) . '</a>';
+			} else {
+				echo '<span class="cmx-email-attachment-title">' . \esc_html($filename) . '</span>';
+			}
+			if ($meta_parts !== []) {
+				echo '<div class="cmx-email-attachment-meta">' . \esc_html(\implode(' | ', $meta_parts)) . '</div>';
+			}
+			echo '</div>';
+
+			if ($store_mode !== '') {
+				echo '<form method="post" action="' . \esc_url(\admin_url('admin-post.php')) . '" class="cmx-email-attachment-actions">';
+				\wp_nonce_field('cmx_emails_store_pdf_attachment', '_wpnonce', false, true);
+				echo '<input type="hidden" name="action" value="cmx_emails_store_pdf_attachment">';
+				echo '<input type="hidden" name="post_id" value="' . (int) $post_id . '">';
+				echo '<input type="hidden" name="attachment_key" value="' . \esc_attr(cmx_emails_attachment_action_key($attachment)) . '">';
+				echo '<input type="hidden" name="account_id" value="' . \esc_attr(\sanitize_key((string) ($context['account_id'] ?? ''))) . '">';
+				echo '<input type="hidden" name="folder" value="' . \esc_attr(\sanitize_key((string) ($context['folder'] ?? ''))) . '">';
+				echo '<input type="hidden" name="archive_year" value="' . \esc_attr(\preg_replace('/[^0-9]/', '', (string) ($context['archive_year'] ?? ''))) . '">';
+				echo '<input type="hidden" name="archive_month" value="' . \esc_attr(\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month') ? cmx_emails_normalize_archive_month((string) ($context['archive_month'] ?? '')) : '') . '">';
+				echo '<button type="submit" class="cmx-email-attachment-store" title="' . \esc_attr($store_title) . '" aria-label="' . \esc_attr($store_title) . '">';
+				echo '<span class="dashicons dashicons-database-add" aria-hidden="true"></span>';
+				echo '</button>';
+				echo '</form>';
+			}
+
+			echo '</div>';
+		}
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_decode_mime_text')) {
 	function cmx_emails_decode_mime_text(string $value): string {
 		$value = \trim($value);
@@ -1819,13 +2536,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_contact_ids_by_emails')
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_auto_contact_ids_for_message')) {
 	function cmx_emails_auto_contact_ids_for_message(string $sender_email = '', array $to = [], array $cc = [], array $bcc = []): array {
-		$emails = [];
-		if ($sender_email !== '') {
-			$emails[] = $sender_email;
+		if ($sender_email === '') {
+			return [];
 		}
-		$emails = \array_merge($emails, $to, $cc, $bcc);
 
-		return cmx_emails_find_contact_ids_by_emails($emails);
+		return cmx_emails_find_contact_ids_by_emails([$sender_email]);
 	}
 }
 

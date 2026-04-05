@@ -382,6 +382,9 @@ add_action('add_meta_boxes', function() {
 				$new_beleg_from_artikel_url = ($is_artikel && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_action_url'))
 					? (string) cmx_artikel_create_beleg_action_url((int) $post->ID)
 					: '';
+				$artikel_katalog_icon_html = ($is_artikel && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_katalog_icon_html'))
+					? (string) cmx_artikel_katalog_icon_html((int) $post->ID)
+					: '';
 
 				echo '<div style="padding:2px 0 8px;">';
 			if ($is_belege) {
@@ -642,7 +645,7 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
-					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
+					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
 						$justify = $is_belege ? 'space-between' : 'flex-start';
 							echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 						if ($dup_link !== '') {
@@ -653,6 +656,9 @@ add_action('add_meta_boxes', function() {
 						}
 						if ($new_beleg_url !== '') {
 							echo '<a href="' . esc_url($new_beleg_url) . '" class="cmx-kontakt-new-beleg-link dashicons dashicons-media-text" style="text-decoration:none;color:#d63638;" title="Neuen Beleg anlegen"><span class="screen-reader-text">Neuen Beleg anlegen</span></a>';
+						}
+						if ($artikel_katalog_icon_html !== '') {
+							echo $artikel_katalog_icon_html;
 						}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
