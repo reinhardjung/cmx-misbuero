@@ -841,7 +841,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-title{margin:0;color:#1d2327;font-size:20px !important;line-height:1.2;font-weight:600}
 			.cmx-pend-subtitle{margin:8px 0 0;color:#646970;font-size:14px;line-height:1.55;max-width:760px}
 			.cmx-pend-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-			.cmx-pend-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px}
+				.cmx-pend-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:8px !important}
 			.page-title-action.cmx-pend-add-button{display:inline-flex;align-items:center;white-space:nowrap;border-radius:8px !important;margin-top:10px;padding-left:14px;padding-right:14px}
 			.cmx-pend-body{padding:0}
 			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
@@ -862,7 +862,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-field{display:flex;flex-direction:column;gap:6px}
 				.cmx-pend-postbox--range .cmx-pend-field{gap:1px}
 				.cmx-pend-field label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;color:#646970}
-				.cmx-pend-postbox--range .cmx-pend-field label{font-size:7px}
+				.cmx-pend-postbox--range .cmx-pend-field label{font-size:14px}
 				.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
 				.cmx-pend-field--right select{align-self:flex-end}
 				.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
@@ -1886,8 +1886,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			hinweisPresetMenu.hidden = !hinweisPresetMenu.hidden;
 		}
 
-		function syncHinweisDate(){
-			var hinweis = String(hinweisInput.value || "").trim();
+			function syncHinweisDate(){
+				var hinweis = String(hinweisInput.value || "").trim();
 			if (hinweisDisplay) {
 				hinweisDisplay.textContent = hinweis;
 				hinweisDisplay.hidden = hinweis === "";
@@ -1911,9 +1911,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				return;
 			}
 
-			var hintDate = new Date(baseDate.getTime());
-			var hintTime = "";
-			var hasEventTime = !allDayInput.checked && /^\d{2}:\d{2}$/.test(String(timeInput.value || "").trim());
+				var hintDate = new Date(baseDate.getTime());
+				var hintTime = "";
+				var hasEventTime = !allDayInput.checked && /^\d{2}:\d{2}$/.test(String(timeInput.value || "").trim());
+				var shouldShiftHintToWeekday = hinweis !== "" && hinweis !== "Bei Ereignisstart";
 
 			if (hinweis === "1 Monat vorher") {
 				if (hasEventTime) {
@@ -1937,10 +1938,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				}
 			}
 
-			shiftToPreviousWeekday(hintDate);
-			if (hasEventTime) {
-				hintTime = formatTimeValue(hintDate);
-			}
+				if (shouldShiftHintToWeekday) {
+					shiftToPreviousWeekday(hintDate);
+				}
+				if (hasEventTime) {
+					hintTime = formatTimeValue(hintDate);
+				}
 			hinweisDateInput.value = formatDateValue(hintDate);
 			hinweisTimeInput.value = hintTime;
 			triggerInputEvents(hinweisDateInput);

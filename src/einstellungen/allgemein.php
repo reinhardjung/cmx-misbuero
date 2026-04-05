@@ -64,7 +64,7 @@ function cmx_register_general_tab(): void {
 		function () {
 			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
 				'key'   => 'quick_search',
-				'label' => 'LIVE Suche in den Übersichten1',
+				'label' => 'LIVE Suche in den Übersichten',
 			]);
 			echo '<p class="description">Zeigt Treffer schon während der Eingabe, statt erst nach Klick auf den Suchen Button.</p>';
 		},
