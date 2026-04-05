@@ -356,13 +356,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 
 		$artikel = cmx_artikel_detail_find_post();
 		$sort_state = cmx_artikel_detail_sort_state();
-		$reload_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')
-			? cmx_artikel_liste_url()
-			: (string) \home_url('/katalog/');
-		$reload_url = (string) \add_query_arg([
-			'sort_key' => (string) $sort_state['key'],
-			'sort_dir' => (string) $sort_state['dir'],
-		], $reload_url);
+			$reload_url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')
+				? cmx_artikel_liste_url()
+				: (string) \home_url('/katalog/');
+			$reload_url = (string) \add_query_arg([
+				'sort_key' => (string) $sort_state['key'],
+				'sort_dir' => (string) $sort_state['dir'],
+			], $reload_url);
+			$continue_url = (string) \add_query_arg('cmx_focus_search', '1', $reload_url);
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -421,11 +422,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		$image_url = \trim((string) \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true));
 		$me_logo_url = cmx_artikel_detail_me_logo_url();
 		$me_contact_url = cmx_artikel_detail_me_contact_url();
-		$me_contact_title = cmx_artikel_detail_me_contact_title();
-		$price_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_label')
-			&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_raw')
-			? cmx_artikel_liste_price_label(cmx_artikel_liste_price_raw($artikel_id))
-			: '';
+			$me_contact_title = cmx_artikel_detail_me_contact_title();
+			$price_label = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_label')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_price_raw')
+				? cmx_artikel_liste_price_label(cmx_artikel_liste_price_raw($artikel_id))
+				: '';
+			$can_create_beleg = \is_user_logged_in()
+				&& \current_user_can('edit_post', $artikel_id)
+				&& \post_type_exists('belege')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_post_type_can_create')
+				&& \function_exists(__NAMESPACE__ . '\\cmx_post_type_can_publish')
+				&& cmx_post_type_can_create('belege')
+				&& cmx_post_type_can_publish('belege');
+			$create_beleg_action_url = $can_create_beleg ? (string) \admin_url('admin-post.php') : '';
+			$create_beleg_nonce = $can_create_beleg ? (string) \wp_create_nonce('cmx_artikel_create_beleg_cart') : '';
+			$cart_storage_key = 'cmxArtikelKatalogCart';
+			$cart_trigger_html = '<div class="cmx-artikel-detail-cart-wrap" id="cmx-artikel-cart-wrap">';
+			$cart_trigger_html .= '<button type="button" class="cmx-artikel-detail-back cmx-artikel-detail-cart-trigger" id="cmx-artikel-detail-cart-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="cmx-artikel-cart-menu">in den Warenkorb</button>';
+			$cart_trigger_html .= '<div class="cmx-artikel-cart-menu" id="cmx-artikel-cart-menu" role="menu" aria-hidden="true">';
+			$cart_trigger_html .= '<button type="button" class="cmx-artikel-cart-option" id="cmx-artikel-cart-continue" role="menuitem">Weiter einkaufen</button>';
+			if ($can_create_beleg) {
+				$cart_trigger_html .= '<button type="button" class="cmx-artikel-cart-option" id="cmx-artikel-cart-create" role="menuitem">Beleg erstellen</button>';
+			} else {
+				$cart_trigger_html .= '<button type="button" class="cmx-artikel-cart-option" id="cmx-artikel-cart-create" role="menuitem" disabled>Beleg erstellen</button>';
+			}
+			$cart_trigger_html .= '</div></div>';
 
 		echo '<!doctype html><html lang="de"><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
@@ -466,14 +487,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 			.cmx-artikel-detail-price-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-radius:14px;background:#0f5f9a;color:#fff}
 			.cmx-artikel-detail-price-copy{display:flex;flex-direction:column;gap:6px}
 			.cmx-artikel-detail-price-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.78}
-			.cmx-artikel-detail-price-value{font-size:34px;font-weight:800;line-height:1}
-			.cmx-artikel-detail-back{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;color:#1d2327;text-decoration:none;font-weight:600}
-			.cmx-artikel-detail-back:hover{background:#f5faff;border-color:#9abfe1}
-			.cmx-artikel-detail-content-wrap{padding:0 28px 28px}
-			.cmx-artikel-detail-section{border-top:1px solid #ececec;padding-top:22px}
-			.cmx-artikel-detail-section-title{margin:0 0 12px;font-size:18px}
-			.cmx-artikel-detail-content{color:#374151;font-size:15px;line-height:1.75}
-			.cmx-artikel-detail-content p{margin:0 0 14px}
+				.cmx-artikel-detail-price-value{font-size:34px;font-weight:800;line-height:1}
+				.cmx-artikel-detail-back{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;color:#1d2327;text-decoration:none;font-weight:600}
+				.cmx-artikel-detail-back:hover{background:#f5faff;border-color:#9abfe1}
+				.cmx-artikel-detail-cart-wrap{position:relative;display:inline-flex;flex-direction:column;align-items:flex-end}
+				.cmx-artikel-detail-cart-trigger{cursor:pointer;font:inherit}
+				.cmx-artikel-cart-menu{position:absolute;top:calc(100% + 10px);right:0;display:none;min-width:220px;padding:8px;background:#fff;border:1px solid #d7e0ea;border-radius:14px;box-shadow:0 18px 36px rgba(15,23,42,.18);z-index:50}
+				.cmx-artikel-cart-menu.is-open{display:block}
+				.cmx-artikel-cart-option{display:flex;align-items:center;justify-content:flex-start;width:100%;min-height:42px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#1d2327;font:inherit;font-weight:700;text-align:left;cursor:pointer;white-space:nowrap;transition:background .16s ease,color .16s ease}
+				.cmx-artikel-cart-option:hover,.cmx-artikel-cart-option:focus{background:#f1f7ff;color:#135e96}
+				.cmx-artikel-cart-option[disabled]{opacity:.45;cursor:not-allowed;background:transparent;color:#7b8794}
+				.cmx-artikel-detail-content-wrap{padding:0 28px 28px}
+				.cmx-artikel-detail-section{border-top:1px solid #ececec;padding-top:22px}
+				.cmx-artikel-detail-section-title{margin:0 0 12px;font-size:18px}
+				.cmx-artikel-detail-content{color:#374151;font-size:15px;line-height:1.75}
+				.cmx-artikel-detail-content p{margin:0 0 14px}
 			.cmx-artikel-detail-content p:last-child{margin-bottom:0}
 			@media (max-width:860px){
 				.cmx-artikel-detail-nav{display:none}
@@ -484,13 +512,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 				.cmx-artikel-detail-media{height:auto;min-height:320px}
 				.cmx-artikel-detail-image{width:auto;height:auto;max-width:100%;max-height:100%}
 			}
-			@media (max-width:720px){
-				.cmx-artikel-detail-page{padding:18px 12px 24px}
-				.cmx-artikel-detail-head,.cmx-artikel-detail-stage,.cmx-artikel-detail-content-wrap{padding-left:16px;padding-right:16px}
-				.cmx-artikel-detail-meta{grid-template-columns:1fr}
-				.cmx-artikel-detail-price-card{align-items:flex-start;flex-direction:column}
-			}
-		</style>';
+				@media (max-width:720px){
+					.cmx-artikel-detail-page{padding:18px 12px 24px}
+					.cmx-artikel-detail-head,.cmx-artikel-detail-stage,.cmx-artikel-detail-content-wrap{padding-left:16px;padding-right:16px}
+					.cmx-artikel-detail-meta{grid-template-columns:1fr}
+					.cmx-artikel-detail-price-card{align-items:flex-start;flex-direction:column}
+					.cmx-artikel-detail-cart-wrap{width:100%;align-items:stretch}
+					.cmx-artikel-cart-menu{left:0;right:0;min-width:0}
+				}
+			</style>';
 		echo '</head><body>';
 		echo '<div class="cmx-artikel-detail-shell">';
 		if ($prev_item !== null && !empty($prev_item['id'])) {
@@ -533,17 +563,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		echo '</div>';
 
 		echo '<div class="cmx-artikel-detail-panel" id="cmx-artikel-detail-panel">';
-		if ($price_label !== '') {
-			echo '<div class="cmx-artikel-detail-price-card">';
-			echo '<div class="cmx-artikel-detail-price-copy">';
-			echo '<span class="cmx-artikel-detail-price-label">Verkaufspreis</span>';
-			echo '<span class="cmx-artikel-detail-price-value">' . \esc_html($price_label) . ' <span style="font-size:15px;font-weight:700;opacity:.82;vertical-align:middle">CHF</span></span>';
-			echo '</div>';
-			echo '<a class="cmx-artikel-detail-back" href="' . \esc_url($reload_url) . '">in den Warenkorb</a>';
-			echo '</div>';
-		} else {
-			echo '<div><a class="cmx-artikel-detail-back" href="' . \esc_url($reload_url) . '">in den Warenkorb</a></div>';
-		}
+			if ($price_label !== '') {
+				echo '<div class="cmx-artikel-detail-price-card">';
+				echo '<div class="cmx-artikel-detail-price-copy">';
+				echo '<span class="cmx-artikel-detail-price-label">Verkaufspreis</span>';
+				echo '<span class="cmx-artikel-detail-price-value">' . \esc_html($price_label) . ' <span style="font-size:15px;font-weight:700;opacity:.82;vertical-align:middle">CHF</span></span>';
+				echo '</div>';
+				echo $cart_trigger_html;
+				echo '</div>';
+			} else {
+				echo '<div>' . $cart_trigger_html . '</div>';
+			}
 
 		if (!empty($meta_items)) {
 			echo '<div class="cmx-artikel-detail-meta">';
@@ -563,22 +593,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 		}
 		echo '</div></div>';
 
-		if ($content_html !== '' || $excerpt !== '') {
-			echo '<div class="cmx-artikel-detail-content-wrap">';
-			echo '<div class="cmx-artikel-detail-section">';
-			echo '<h2 class="cmx-artikel-detail-section-title">Beschreibung</h2>';
-			if ($content_html !== '') {
+			if ($content_html !== '' || $excerpt !== '') {
+				echo '<div class="cmx-artikel-detail-content-wrap">';
+				echo '<div class="cmx-artikel-detail-section">';
+				echo '<h2 class="cmx-artikel-detail-section-title">Beschreibung</h2>';
+				if ($content_html !== '') {
 				echo '<div class="cmx-artikel-detail-content">' . $content_html . '</div>';
 			} else {
 				echo '<div class="cmx-artikel-detail-content"><p>' . \esc_html($excerpt) . '</p></div>';
+				}
+				echo '</div></div>';
 			}
-			echo '</div></div>';
-		}
-		echo '<script>
-			(function(){
-				var media=document.getElementById("cmx-artikel-detail-media");
-				var panel=document.getElementById("cmx-artikel-detail-panel");
-				var stage=document.getElementById("cmx-artikel-detail-stage");
+			if ($can_create_beleg && $create_beleg_action_url !== '' && $create_beleg_nonce !== '') {
+				echo '<form method="post" action="' . \esc_url($create_beleg_action_url) . '" id="cmx-artikel-cart-create-form" style="display:none">';
+				echo '<input type="hidden" name="action" value="cmx_artikel_create_beleg">';
+				echo '<input type="hidden" name="_wpnonce" value="' . \esc_attr($create_beleg_nonce) . '">';
+				echo '<div id="cmx-artikel-cart-create-fields"></div>';
+				echo '</form>';
+			}
+			echo '<script>
+				(function(){
+					var media=document.getElementById("cmx-artikel-detail-media");
+					var panel=document.getElementById("cmx-artikel-detail-panel");
+					var stage=document.getElementById("cmx-artikel-detail-stage");
 				var navLeft=document.getElementById("cmx-artikel-detail-nav-left");
 				var navRight=document.getElementById("cmx-artikel-detail-nav-right");
 				if(!media||!panel){return;}
@@ -597,12 +634,153 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_artikel_detail_page')) {
 					}
 				}
 				window.addEventListener("load", syncLayout);
-				window.addEventListener("resize", syncLayout);
-				syncLayout();
-			})();
-		</script>';
-		echo '</div></div></div></body></html>';
-		exit;
+					window.addEventListener("resize", syncLayout);
+					syncLayout();
+				})();
+			</script>';
+			echo '<script>
+				(function(){
+					var trigger=document.getElementById("cmx-artikel-detail-cart-trigger");
+					var wrap=document.getElementById("cmx-artikel-cart-wrap");
+					var menu=document.getElementById("cmx-artikel-cart-menu");
+					var continueBtn=document.getElementById("cmx-artikel-cart-continue");
+					var createBtn=document.getElementById("cmx-artikel-cart-create");
+					var createForm=document.getElementById("cmx-artikel-cart-create-form");
+					var createFields=document.getElementById("cmx-artikel-cart-create-fields");
+					var cartStorageKey=' . \wp_json_encode($cart_storage_key) . ';
+					var continueUrl=' . \wp_json_encode($continue_url) . ';
+					var canCreate=' . ($can_create_beleg ? 'true' : 'false') . ';
+					var currentItem={
+						id:' . (int) $artikel_id . ',
+						title:' . \wp_json_encode($title) . '
+					};
+					if(!trigger||!wrap||!menu){return;}
+					function normalizeCart(items){
+						var merged=[];
+						var lookup={};
+						(items||[]).forEach(function(entry){
+							var id=0;
+							var count=1;
+							var title="";
+							if(entry && typeof entry==="object"){
+								id=parseInt(entry.id || entry.artikelId || 0, 10) || 0;
+								count=parseInt(entry.count || entry.qty || entry.menge || 1, 10) || 1;
+								title=String(entry.title || "");
+							}else{
+								id=parseInt(entry || 0, 10) || 0;
+							}
+							if(id<=0 || count<=0){return;}
+							if(!lookup[id]){
+								lookup[id]={id:id,count:0,title:title};
+								merged.push(lookup[id]);
+							}
+							lookup[id].count += count;
+							if(!lookup[id].title && title){
+								lookup[id].title=title;
+							}
+						});
+						return merged;
+					}
+					function readCart(){
+						var raw="";
+						try{
+							raw=window.localStorage ? String(window.localStorage.getItem(cartStorageKey) || "") : "";
+						}catch(err){
+							raw="";
+						}
+						if(!raw){return [];}
+						try{
+							return normalizeCart(JSON.parse(raw));
+						}catch(err){
+							return [];
+						}
+					}
+					function writeCart(items){
+						var normalized=normalizeCart(items);
+						try{
+							if(window.localStorage){
+								window.localStorage.setItem(cartStorageKey, JSON.stringify(normalized));
+							}
+						}catch(err){}
+						return normalized;
+					}
+					function buildSelection(){
+						return normalizeCart(readCart().concat([currentItem]));
+					}
+					function openMenu(){
+						menu.classList.add("is-open");
+						menu.setAttribute("aria-hidden","false");
+						trigger.setAttribute("aria-expanded","true");
+						window.setTimeout(function(){
+							if(continueBtn){ continueBtn.focus(); }
+						},20);
+					}
+					function closeMenu(returnFocus){
+						menu.classList.remove("is-open");
+						menu.setAttribute("aria-hidden","true");
+						trigger.setAttribute("aria-expanded","false");
+						if(returnFocus){
+							try{ trigger.focus(); }catch(err){}
+						}
+					}
+					function toggleMenu(){
+						if(menu.classList.contains("is-open")){
+							closeMenu(false);
+							return;
+						}
+						openMenu();
+					}
+					function submitCreate(){
+						var items;
+						if(!canCreate || !createForm || !createFields){return;}
+						items=writeCart(buildSelection());
+						createFields.innerHTML="";
+						items.forEach(function(item){
+							var idField=document.createElement("input");
+							idField.type="hidden";
+							idField.name="artikel_ids[]";
+							idField.value=String(item.id);
+							createFields.appendChild(idField);
+							var qtyField=document.createElement("input");
+							qtyField.type="hidden";
+							qtyField.name="artikel_mengen[" + String(item.id) + "]";
+							qtyField.value=String(item.count);
+							createFields.appendChild(qtyField);
+						});
+						createForm.submit();
+					}
+					trigger.addEventListener("click", function(event){
+						event.preventDefault();
+						toggleMenu();
+					});
+					document.addEventListener("click", function(event){
+						if(!wrap.contains(event.target)){
+							closeMenu(false);
+						}
+					});
+					document.addEventListener("keydown", function(event){
+						if(event.key==="Escape" && menu.classList.contains("is-open")){
+							closeMenu(true);
+						}
+					});
+					if(continueBtn){
+						continueBtn.addEventListener("click", function(){
+							writeCart(buildSelection());
+							closeMenu(false);
+							window.location.href=continueUrl;
+						});
+					}
+					if(createBtn){
+						createBtn.addEventListener("click", function(){
+							if(createBtn.hasAttribute("disabled")){return;}
+							closeMenu(false);
+							submitCreate();
+						});
+					}
+				})();
+			</script>';
+			echo '</div></div></div></body></html>';
+			exit;
 	}
 }
 

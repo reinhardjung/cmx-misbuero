@@ -103,6 +103,120 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_assign_default_beleg_invoice')) {
+	function cmx_artikel_assign_default_beleg_invoice(int $beleg_id): void {
+		$beleg_id = (int) $beleg_id;
+		if ($beleg_id <= 0) {
+			return;
+		}
+
+		\update_post_meta($beleg_id, '_cmx_beleg_richtung', 'ausgang');
+
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax')
+			? (string) cmx_belege_tax()
+			: '';
+		if ($tax === '') {
+			return;
+		}
+
+		$term = \get_term_by('slug', 'rechnung', $tax);
+		if ($term instanceof \WP_Term) {
+			\wp_set_post_terms($beleg_id, [(int) $term->term_id], $tax, false);
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_requested_items')) {
+	function cmx_artikel_create_beleg_requested_items(): array {
+		$order = [];
+		$quantities = [];
+
+		if (isset($_REQUEST['artikel_ids'])) {
+			foreach ((array) \wp_unslash((array) $_REQUEST['artikel_ids']) as $raw_id) {
+				$artikel_id = (int) $raw_id;
+				if ($artikel_id > 0) {
+					$order[] = $artikel_id;
+				}
+			}
+		}
+
+		if (isset($_REQUEST['artikel_mengen']) && \is_array($_REQUEST['artikel_mengen'])) {
+			foreach ((array) \wp_unslash((array) $_REQUEST['artikel_mengen']) as $raw_id => $raw_qty) {
+				$artikel_id = (int) $raw_id;
+				$qty = (int) $raw_qty;
+				if ($artikel_id <= 0 || $qty <= 0) {
+					continue;
+				}
+				$quantities[$artikel_id] = $qty;
+				if (!\in_array($artikel_id, $order, true)) {
+					$order[] = $artikel_id;
+				}
+			}
+		}
+
+		if ($order === []) {
+			$artikel_id = isset($_REQUEST['artikel_id']) ? (int) \wp_unslash($_REQUEST['artikel_id']) : 0;
+			if ($artikel_id > 0) {
+				$order[] = $artikel_id;
+			}
+		}
+
+		$items = [];
+		$seen = [];
+		foreach ($order as $artikel_id) {
+			$artikel_id = (int) $artikel_id;
+			if ($artikel_id <= 0 || isset($seen[$artikel_id])) {
+				continue;
+			}
+			$seen[$artikel_id] = true;
+			$qty = isset($quantities[$artikel_id]) ? (int) $quantities[$artikel_id] : 1;
+			if ($qty <= 0) {
+				continue;
+			}
+			$items[] = [
+				'artikel_id' => $artikel_id,
+				'menge'      => $qty,
+			];
+		}
+
+		return $items;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_position_rows')) {
+	function cmx_artikel_create_beleg_position_rows(array $items): array {
+		$rows = [];
+		foreach ($items as $item) {
+			$artikel_id = (int) ($item['artikel_id'] ?? 0);
+			$qty = (int) ($item['menge'] ?? 1);
+			if ($artikel_id <= 0 || $qty <= 0) {
+				continue;
+			}
+
+			$artikel_post = \get_post($artikel_id);
+			if (
+				!$artikel_post instanceof \WP_Post
+				|| (string) $artikel_post->post_type !== 'artikel'
+				|| !\current_user_can('edit_post', $artikel_id)
+			) {
+				continue;
+			}
+
+			$row = \function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')
+				? (array) cmx_beleg_position_row_from_artikel($artikel_id)
+				: [];
+			if ($row === []) {
+				continue;
+			}
+
+			$row['menge'] = $qty;
+			$rows[] = $row;
+		}
+
+		return $rows;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_action_url')) {
 	function cmx_artikel_create_beleg_action_url(int $artikel_id): string {
 		$artikel_id = (int) $artikel_id;
@@ -125,79 +239,102 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_action_url')) 
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_handler')) {
 	function cmx_artikel_create_beleg_handler(): void {
-		$artikel_id = isset($_REQUEST['artikel_id']) ? (int) \wp_unslash($_REQUEST['artikel_id']) : 0;
-		$redirect_url = $artikel_id > 0
-			? (string) \get_edit_post_link($artikel_id, '')
-			: (string) \admin_url('edit.php?post_type=artikel');
-
-		if ($artikel_id <= 0) {
-			\wp_safe_redirect($redirect_url);
-			exit;
-		}
-
-		if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_REQUEST['_wpnonce']), 'cmx_artikel_create_beleg_' . $artikel_id)) {
-			\wp_die('Ungültige Anfrage.');
-		}
-
-		$artikel_post = \get_post($artikel_id);
-			if (
-				!$artikel_post instanceof \WP_Post
-				|| (string) $artikel_post->post_type !== 'artikel'
-				|| !\current_user_can('edit_post', $artikel_id)
-				|| !\post_type_exists('belege')
-				|| !cmx_post_type_can_create('belege')
-				|| !cmx_post_type_can_publish('belege')
-			) {
-				\wp_safe_redirect($redirect_url);
-				exit;
-			}
-
-		$position_row = \function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')
-			? (array) cmx_beleg_position_row_from_artikel($artikel_id)
+		$requested_items = \function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_requested_items')
+			? (array) cmx_artikel_create_beleg_requested_items()
 			: [];
-		if ($position_row === []) {
+		$primary_artikel_id = (int) ($requested_items[0]['artikel_id'] ?? 0);
+		$is_cart_request = isset($_REQUEST['artikel_ids']) || (isset($_REQUEST['artikel_mengen']) && \is_array($_REQUEST['artikel_mengen']));
+
+		$redirect_url = (string) (\wp_get_referer() ?: '');
+		if ($redirect_url === '') {
+			if ($primary_artikel_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_url')) {
+				$redirect_url = (string) cmx_artikel_detail_url($primary_artikel_id);
+			} elseif ($primary_artikel_id > 0) {
+				$redirect_url = (string) \get_edit_post_link($primary_artikel_id, '');
+			} else {
+				$redirect_url = (string) \admin_url('edit.php?post_type=artikel');
+			}
+		}
+
+		if ($requested_items === []) {
 			\wp_safe_redirect($redirect_url);
 			exit;
 		}
 
-			$beleg_id = \wp_insert_post([
-				'post_type'   => 'belege',
-				'post_status' => 'publish',
-				'post_title'  => '',
-				'post_author' => (int) \get_current_user_id(),
-				'meta_input'  => [
-					'_cmx_title_auto'       => 1,
-				'_cmx_beleg_positionen' => [$position_row],
+		if ($is_cart_request) {
+			if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_REQUEST['_wpnonce']), 'cmx_artikel_create_beleg_cart')) {
+				\wp_die('Ungültige Anfrage.');
+			}
+		} else {
+			if (!isset($_REQUEST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_REQUEST['_wpnonce']), 'cmx_artikel_create_beleg_' . $primary_artikel_id)) {
+				\wp_die('Ungültige Anfrage.');
+			}
+		}
+
+		if (
+			! \post_type_exists('belege')
+			|| !cmx_post_type_can_create('belege')
+			|| !cmx_post_type_can_publish('belege')
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$position_rows = \function_exists(__NAMESPACE__ . '\\cmx_artikel_create_beleg_position_rows')
+			? (array) cmx_artikel_create_beleg_position_rows($requested_items)
+			: [];
+		if ($position_rows === []) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$beleg_id = \wp_insert_post([
+			'post_type'   => 'belege',
+			'post_status' => 'publish',
+			'post_title'  => '',
+			'post_author' => (int) \get_current_user_id(),
+			'meta_input'  => [
+				'_cmx_title_auto'       => 1,
+				'_cmx_beleg_richtung'   => 'ausgang',
+				'_cmx_beleg_positionen' => $position_rows,
 			],
 		], true);
 
-			if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+		$beleg_id = (int) $beleg_id;
+		if ((string) \get_post_status($beleg_id) !== 'publish') {
+			$publish_result = \wp_update_post([
+				'ID'          => $beleg_id,
+				'post_status' => 'publish',
+			], true);
+			if (\is_wp_error($publish_result)) {
 				\wp_safe_redirect($redirect_url);
 				exit;
 			}
-			$beleg_id = (int) $beleg_id;
-			if ((string) \get_post_status($beleg_id) !== 'publish') {
-				$publish_result = \wp_update_post([
-					'ID'          => $beleg_id,
-					'post_status' => 'publish',
-				], true);
-				if (\is_wp_error($publish_result)) {
-					\wp_safe_redirect($redirect_url);
-					exit;
-				}
-			}
+		}
 
-			$edit_url = (string) \get_edit_post_link($beleg_id, '');
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_assign_default_beleg_invoice')) {
+			cmx_artikel_assign_default_beleg_invoice($beleg_id);
+		}
+
+		$edit_url = (string) \get_edit_post_link($beleg_id, '');
 		if ($edit_url === '') {
 			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
 		}
-		$edit_url = (string) \add_query_arg(
-			[
-				'cmx_focus_contact'       => '1',
-				'cmx_created_from_artikel'=> $artikel_id,
-			],
-			$edit_url
-		);
+
+		$edit_args = [
+			'cmx_focus_contact' => '1',
+		];
+		if ($primary_artikel_id > 0) {
+			$edit_args['cmx_created_from_artikel'] = $primary_artikel_id;
+		}
+		if ($is_cart_request) {
+			$edit_args['cmx_clear_artikel_cart'] = '1';
+		}
+		$edit_url = (string) \add_query_arg($edit_args, $edit_url);
 
 		\wp_safe_redirect($edit_url);
 		exit;

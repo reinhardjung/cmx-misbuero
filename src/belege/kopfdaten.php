@@ -1360,6 +1360,7 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	$ajax_url = \admin_url('admin-ajax.php');
 	$edit_post_prefix = \admin_url('post.php?post=');
 	$should_autofocus_kontakt = isset($_GET['cmx_focus_contact']) && (string) $_GET['cmx_focus_contact'] === '1';
+	$should_clear_artikel_cart = isset($_GET['cmx_clear_artikel_cart']) && (string) $_GET['cmx_clear_artikel_cart'] === '1';
 	echo '<script>
 		(function(){
 			function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -1529,6 +1530,8 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 				const kC=document.getElementById("cmx_kontakt_clear");
 				const kA=document.getElementById("cmx_kontakt_addr");
 				const SHOULD_AUTOFOCUS_KONTAKT=' . ($should_autofocus_kontakt ? 'true' : 'false') . ';
+				const SHOULD_CLEAR_ARTIKEL_CART=' . ($should_clear_artikel_cart ? 'true' : 'false') . ';
+				const ARTIKEL_CART_STORAGE_KEY="cmxArtikelKatalogCart";
 				let kT=null;
 				const kontNav=makeNavigator(kI,kL,chooseKontakt);
 
@@ -1577,6 +1580,13 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 					}
 					kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus();
 				}); }
+				if(SHOULD_CLEAR_ARTIKEL_CART){
+					try {
+						if(window.localStorage){
+							window.localStorage.removeItem(ARTIKEL_CART_STORAGE_KEY);
+						}
+					} catch(err) {}
+				}
 				if(SHOULD_AUTOFOCUS_KONTAKT && kI){
 					window.setTimeout(function(){
 						kI.focus();
