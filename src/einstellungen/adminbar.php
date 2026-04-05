@@ -1079,6 +1079,87 @@ function cmx65_render_front_quicklinks(): void {
 	echo '</nav>';
 }
 
+add_action('wp_footer', __NAMESPACE__ . '\\cmx65_render_front_quicklinks_script', 20);
+function cmx65_render_front_quicklinks_script(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+	?>
+	<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		var nav = document.querySelector('.cmx-front-quicklinks');
+		if (!nav) {
+			return;
+		}
+
+		var dropdowns = Array.prototype.slice.call(nav.querySelectorAll('.cmx-front-dropdown'));
+		if (!dropdowns.length) {
+			return;
+		}
+
+		var closeDropdown = function (dropdown) {
+			if (dropdown) {
+				dropdown.removeAttribute('open');
+			}
+		};
+
+		var closeAllDropdowns = function (except) {
+			dropdowns.forEach(function (dropdown) {
+				if (dropdown !== except) {
+					closeDropdown(dropdown);
+				}
+			});
+		};
+
+		dropdowns.forEach(function (dropdown) {
+			var summary = dropdown.querySelector('.cmx-front-dropdown-toggle');
+			if (summary) {
+				summary.addEventListener('click', function () {
+					if (!dropdown.hasAttribute('open')) {
+						closeAllDropdowns(dropdown);
+					}
+				});
+			}
+
+			dropdown.addEventListener('toggle', function () {
+				if (dropdown.open) {
+					closeAllDropdowns(dropdown);
+				}
+			});
+
+			dropdown.addEventListener('mouseleave', function () {
+				closeDropdown(dropdown);
+			});
+
+			dropdown.querySelectorAll('.cmx-front-dropdown-menu a').forEach(function (link) {
+				link.addEventListener('click', function () {
+					closeAllDropdowns();
+				});
+			});
+		});
+
+		document.addEventListener('click', function (event) {
+			if (!nav.contains(event.target)) {
+				closeAllDropdowns();
+			}
+		});
+
+		document.addEventListener('focusin', function (event) {
+			if (!nav.contains(event.target)) {
+				closeAllDropdowns();
+			}
+		});
+
+		document.addEventListener('keydown', function (event) {
+			if (event.key === 'Escape') {
+				closeAllDropdowns();
+			}
+		});
+	});
+	</script>
+	<?php
+}
+
 add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar', 999);
 function cmx65_adminbar($wp_admin_bar) {
 

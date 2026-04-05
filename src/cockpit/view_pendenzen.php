@@ -549,10 +549,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_contact_e
 				$title = '#' . $post_id;
 			}
 
-			$rows = [
-				['label' => 'Geburtstag', 'raw' => (string) \get_post_meta($post_id, '_cmx_kontakte_geburtsdatum', true)],
-				['label' => 'Firmengründung', 'raw' => (string) \get_post_meta($post_id, '_cmx_kontakte_firmengruendung', true)],
-			];
+				$rows = [
+					['label' => 'Geburtstag', 'raw' => (string) \get_post_meta($post_id, '_cmx_kontakte_geburtsdatum', true), 'icon' => 'community'],
+					['label' => 'Firmengründung', 'raw' => (string) \get_post_meta($post_id, '_cmx_kontakte_firmengruendung', true), 'icon' => 'building'],
+				];
 
 			foreach ($rows as $row) {
 				$raw = \trim((string) ($row['raw'] ?? ''));
@@ -574,7 +574,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_collect_contact_e
 						'subject' => $title,
 						'meta' => '',
 						'tone' => 'blue',
-						'icon' => 'cake',
+							'icon' => (string) ($row['icon'] ?? ''),
 						'url' => (string) \get_edit_post_link($post_id, ''),
 					];
 				}
@@ -831,29 +831,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
 			.cmx-pend-field--right{align-items:flex-end}
 			.cmx-pend-card-list{display:flex;flex-direction:column}
-			.cmx-pend-card{display:grid;grid-template-columns:10px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
-			.cmx-pend-card:first-child{padding-top:0}
-			.cmx-pend-card:last-child{padding-bottom:0;border-bottom:0}
-			.cmx-pend-card-dot{display:block;width:10px;height:10px;border-radius:999px;background:#c0cad5;margin-top:6px}
-			.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
+				.cmx-pend-card{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
+				.cmx-pend-card:first-child{padding-top:0}
+				.cmx-pend-card:last-child{padding-bottom:0;border-bottom:0}
+				.cmx-pend-card-dot{display:block;width:10px;height:10px;border-radius:999px;background:#c0cad5;margin-top:6px}
+				.cmx-pend-card-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-top:1px;font-size:18px;line-height:18px;color:#c0cad5}
+				.cmx-pend-card-body{min-width:0;flex:1 1 auto;padding-top:0}
 			.cmx-pend-card-line{display:block;font-size:15px;line-height:1.4;color:#2c3338}
 			.cmx-pend-card-label{font-weight:800}
 			.cmx-pend-card-link{color:inherit;text-decoration:none;font-weight:600}
 			.cmx-pend-card-link--button{padding:0;border:0;background:none;cursor:pointer;font:inherit}
 			.cmx-pend-card-link:hover{text-decoration:underline}
 			.cmx-pend-card-meta{display:block;margin-top:3px;font-size:12px;line-height:1.45;color:#646970}
-			.cmx-pend-card--red .cmx-pend-card-label,
-			.cmx-pend-card--red .cmx-pend-card-link{color:#b32d2e}
-			.cmx-pend-card--red .cmx-pend-card-dot{background:#d63638}
-			.cmx-pend-card--orange .cmx-pend-card-label,
-			.cmx-pend-card--orange .cmx-pend-card-link{color:#b96f00}
-			.cmx-pend-card--orange .cmx-pend-card-dot{background:#dba617}
-			.cmx-pend-card--blue .cmx-pend-card-label,
-			.cmx-pend-card--blue .cmx-pend-card-link{color:#135e96}
-			.cmx-pend-card--blue .cmx-pend-card-dot{background:#2271b1}
-			.cmx-pend-card--green .cmx-pend-card-label,
-			.cmx-pend-card--green .cmx-pend-card-link{color:#2f7d32}
-			.cmx-pend-card--green .cmx-pend-card-dot{background:#46a546}
+				.cmx-pend-card--red .cmx-pend-card-label,
+				.cmx-pend-card--red .cmx-pend-card-link{color:#b32d2e}
+				.cmx-pend-card--red .cmx-pend-card-dot{background:#d63638}
+				.cmx-pend-card--red .cmx-pend-card-icon{color:#d63638}
+				.cmx-pend-card--orange .cmx-pend-card-label,
+				.cmx-pend-card--orange .cmx-pend-card-link{color:#b96f00}
+				.cmx-pend-card--orange .cmx-pend-card-dot{background:#dba617}
+				.cmx-pend-card--orange .cmx-pend-card-icon{color:#dba617}
+				.cmx-pend-card--blue .cmx-pend-card-label,
+				.cmx-pend-card--blue .cmx-pend-card-link{color:#135e96}
+				.cmx-pend-card--blue .cmx-pend-card-dot{background:#2271b1}
+				.cmx-pend-card--blue .cmx-pend-card-icon{color:#2271b1}
+				.cmx-pend-card--green .cmx-pend-card-label,
+				.cmx-pend-card--green .cmx-pend-card-link{color:#2f7d32}
+				.cmx-pend-card--green .cmx-pend-card-dot{background:#46a546}
+				.cmx-pend-card--green .cmx-pend-card-icon{color:#46a546}
 			.cmx-pend-empty{padding:8px 0 2px;color:#646970;font-size:14px;font-style:italic}
 			.cmx-pend-calendar-shell{padding:0}
 			.cmx-pend-calendar-heading{display:flex;align-items:center;gap:10px;min-width:0}
@@ -896,7 +901,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-modal-actions .button{border-radius:8px !important}
 			.cmx-pend-form-grid{display:grid;gap:16px}
 			.cmx-pend-form-row{display:grid;gap:16px}
-				.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(100px,126px) minmax(240px,320px) auto;align-items:end}
+				.cmx-pend-form-row--datetime{grid-template-columns:minmax(0,1fr) minmax(80px,106px) minmax(240px,320px) auto;align-items:end}
 			.cmx-pend-form-field{display:flex;flex-direction:column;gap:6px;min-width:0}
 			.cmx-pend-form-field label{font-size:12px;font-weight:700;line-height:1.3;color:#334155}
 			.cmx-pend-form-label--quickfill{cursor:pointer;user-select:none}
@@ -920,7 +925,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-hint-head{display:flex;align-items:baseline;gap:8px;min-height:18px;flex-wrap:wrap}
 				.cmx-pend-hint-display[hidden]{display:none !important}
 				.cmx-pend-hint-display{font-size:12px;font-weight:700;line-height:1.3;color:#64748b}
-				.cmx-pend-hint-inputs{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:8px}
+				.cmx-pend-hint-inputs{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:8px}
 				.cmx-pend-input--past{border-color:#d63638 !important;box-shadow:0 0 0 1px rgba(214,54,56,.18) inset}
 				.cmx-pend-input--past:focus{border-color:#d63638 !important;box-shadow:0 0 0 1px #d63638 !important}
 			.cmx-pend-hint-presets[hidden]{display:none !important}
@@ -980,18 +985,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_event_card')) {
+	function cmx_cockpit_pendenzen_card_marker_html(array $event): string {
+		$icon = \trim((string) ($event['icon'] ?? ''));
+		$dashicon = '';
+
+		if ($icon === 'community') {
+			$dashicon = 'dashicons-buddicons-community';
+		} elseif ($icon === 'building') {
+			$dashicon = 'dashicons-building';
+		} elseif ($icon === 'calendar') {
+			$dashicon = 'dashicons-calendar-alt';
+		}
+
+		if ($dashicon !== '') {
+			return '<span class="cmx-pend-card-icon dashicons ' . \esc_attr($dashicon) . '" aria-hidden="true"></span>';
+		}
+
+		return '<span class="cmx-pend-card-dot" aria-hidden="true"></span>';
+	}
+
 	function cmx_cockpit_pendenzen_render_event_card(array $event): void {
 		$tone = \sanitize_html_class((string) ($event['tone'] ?? 'red'));
 		$label = \trim((string) ($event['label'] ?? ''));
 		$subject = \trim((string) ($event['subject'] ?? ''));
 		$meta = \trim((string) ($event['meta'] ?? ''));
 		$url = \trim((string) ($event['url'] ?? ''));
+		$show_label = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung'], true));
 
 		echo '<article class="cmx-pend-card cmx-pend-card--' . \esc_attr($tone) . '">';
-		echo '<span class="cmx-pend-card-dot" aria-hidden="true"></span>';
+		echo cmx_cockpit_pendenzen_card_marker_html($event);
 		echo '<div class="cmx-pend-card-body">';
 		echo '<span class="cmx-pend-card-line">';
-		echo '<span class="cmx-pend-card-label">' . \esc_html($label) . ':</span> ';
+		if ($show_label) {
+			echo '<span class="cmx-pend-card-label">' . \esc_html($label) . ':</span> ';
+		}
 		if (!empty($event['editable']) && !empty($event['manual_id'])) {
 			echo '<button type="button" class="cmx-pend-card-link cmx-pend-card-link--button cmx-pend-edit-trigger" data-event="' . cmx_cockpit_pendenzen_manual_edit_payload_attr($event) . '">' . \esc_html($subject) . '</button>';
 		} elseif ($url !== '') {
@@ -1196,7 +1223,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 			foreach ($visible as $event) {
 				$tone = \sanitize_html_class((string) ($event['tone'] ?? 'red'));
 				$url = \trim((string) ($event['url'] ?? ''));
-				$text = \trim((string) ($event['label'] ?? '')) . ': ' . \trim((string) ($event['subject'] ?? ''));
+				$label = \trim((string) ($event['label'] ?? ''));
+				$subject = \trim((string) ($event['subject'] ?? ''));
+				$text = ($label !== '' && !\in_array($label, ['Geburtstag', 'Firmengründung'], true))
+					? $label . ': ' . $subject
+					: $subject;
 				if (!empty($event['editable']) && !empty($event['manual_id'])) {
 					echo '<button type="button" class="cmx-pend-calendar-chip cmx-pend-calendar-chip--button cmx-pend-calendar-chip--' . \esc_attr($tone) . ' cmx-pend-edit-trigger" data-event="' . cmx_cockpit_pendenzen_manual_edit_payload_attr($event) . '">' . \esc_html($text) . '</button>';
 				} elseif ($url !== '') {
@@ -1998,6 +2029,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 					var button = e.target && e.target.closest ? e.target.closest("button[data-date-preset]") : null;
 					if (!button) return;
 					e.preventDefault();
+					e.stopPropagation();
 					chooseDatePreset(button.getAttribute("data-date-preset") || "");
 				});
 			}
@@ -2016,6 +2048,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				var button = e.target && e.target.closest ? e.target.closest("button[data-time]") : null;
 				if (!button) return;
 				e.preventDefault();
+				e.stopPropagation();
 				chooseTimePreset(button.getAttribute("data-time") || "");
 			});
 		}
@@ -2034,6 +2067,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				var button = e.target && e.target.closest ? e.target.closest("button[data-hinweis]") : null;
 				if (!button) return;
 				e.preventDefault();
+				e.stopPropagation();
 				chooseHinweisPreset(button.getAttribute("data-hinweis") || "");
 			});
 		}
