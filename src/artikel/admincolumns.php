@@ -14,6 +14,8 @@ if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_BEZUGSQUELLE'))   \define(__NA
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_LIEFERANT_ID', '_cmx_artikel_lieferant_id');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS'))   \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VARIANT_ROWS', '_cmx_artikel_variant_rows');
 if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART'))            \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_ART', '_cmx_artikel_art');
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR')) \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR', '_cmx_artikel_carent_chassi_nr');
+if (!\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN')) \define(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN', '_cmx_artikel_carent_kennzeichen');
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_term_name')) {
 	function cmx_artikel_admin_variant_term_name(string $taxonomy, int $term_id): string {
@@ -189,6 +191,65 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_search_ids'))
 			foreach (cmx_artikel_admin_variant_entries((int) $post_id) as $entry) {
 				$haystack = (string) ($entry['search'] ?? '');
 				if ($haystack !== '' && \strpos($haystack, $needle) !== false) {
+					$matches[] = (int) $post_id;
+					break;
+				}
+			}
+		}
+
+		$cache[$needle] = \array_values(\array_unique($matches));
+		return $cache[$needle];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_carent_search_ids')) {
+	function cmx_artikel_admin_carent_search_ids(string $term): array {
+		static $cache = [];
+		$term = \trim($term);
+		if ($term === '') {
+			return [];
+		}
+
+		$needle = \function_exists('mb_strtolower') ? (string) \mb_strtolower($term, 'UTF-8') : (string) \strtolower($term);
+		if (isset($cache[$needle])) {
+			return $cache[$needle];
+		}
+
+		$compact_needle = (string) \preg_replace('/[^a-z0-9]+/i', '', $needle);
+		$post_ids = \get_posts([
+			'post_type'      => 'artikel',
+			'post_status'    => ['publish', 'draft', 'pending', 'future', 'private'],
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+			'meta_query'     => [
+				'relation' => 'OR',
+				[
+					'key'     => CMX_ARTIKEL_META_CARENT_CHASSI_NR,
+					'compare' => 'EXISTS',
+				],
+				[
+					'key'     => CMX_ARTIKEL_META_CARENT_KENNZEICHEN,
+					'compare' => 'EXISTS',
+				],
+			],
+		]);
+
+		$matches = [];
+		foreach ((array) $post_ids as $post_id) {
+			$values = [
+				\trim((string) \get_post_meta((int) $post_id, CMX_ARTIKEL_META_CARENT_CHASSI_NR, true)),
+				\trim((string) \get_post_meta((int) $post_id, CMX_ARTIKEL_META_CARENT_KENNZEICHEN, true)),
+			];
+
+			foreach ($values as $value) {
+				if ($value === '') {
+					continue;
+				}
+
+				$haystack = \function_exists('mb_strtolower') ? (string) \mb_strtolower($value, 'UTF-8') : (string) \strtolower($value);
+				$compact_haystack = (string) \preg_replace('/[^a-z0-9]+/i', '', $haystack);
+				if (\strpos($haystack, $needle) !== false || ($compact_needle !== '' && \strpos($compact_haystack, $compact_needle) !== false)) {
 					$matches[] = (int) $post_id;
 					break;
 				}
@@ -1332,7 +1393,10 @@ function cmx_lieferanten_args(): array {
 	if ($term === '') {
 		return $search;
 	}
-	$match_ids = cmx_artikel_admin_variant_search_ids($term);
+	$match_ids = \array_values(\array_unique(\array_merge(
+		cmx_artikel_admin_variant_search_ids($term),
+		cmx_artikel_admin_carent_search_ids($term)
+	)));
 	if (empty($match_ids)) {
 		return $search;
 	}

@@ -233,6 +233,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field{margin-top:8px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field:first-child{margin-top:0}
 		#' . \esc_attr($box_id) . ' .cmx-carent-fahrzeug-field label{display:block;margin:0 0 4px;font-weight:600}
+		#' . \esc_attr($box_id) . ' input[readonly]{
+			background:#f6f7f7 !important;
+			color:#50575e !important;
+			border-color:#dcdcde !important;
+			opacity:1 !important;
+		}
 		</style>';
 
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-fahrzeug-box">';

@@ -35,6 +35,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_days_value')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_month_value')) {
 	function cmx_cockpit_pendenzen_month_value(): string {
+		$selected_year = isset($_GET['calendar_year']) ? (int) \sanitize_text_field((string) \wp_unslash($_GET['calendar_year'])) : 0;
+		$selected_month = isset($_GET['calendar_month']) ? (int) \sanitize_text_field((string) \wp_unslash($_GET['calendar_month'])) : 0;
+		if ($selected_year >= 1000 && $selected_year <= 9999 && $selected_month >= 1 && $selected_month <= 12) {
+			return \sprintf('%04d-%02d', $selected_year, $selected_month);
+		}
+
 		$raw = isset($_GET['month']) ? \sanitize_text_field((string) \wp_unslash($_GET['month'])) : '';
 		if ($raw !== '' && \preg_match('/^\d{4}-\d{2}$/', $raw)) {
 			return $raw;
@@ -589,19 +595,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-card--green .cmx-pend-card-dot{background:#46a546}
 			.cmx-pend-empty{padding:8px 0 2px;color:#646970;font-size:14px;font-style:italic}
 			.cmx-pend-calendar-shell{padding:0}
+			.cmx-pend-calendar-heading{display:flex;align-items:center;gap:10px;min-width:0}
+			.cmx-pend-calendar-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0}
+			.cmx-pend-calendar-switch select{min-width:130px;max-width:100%;height:34px}
+			.cmx-pend-calendar-switch .cmx-pend-calendar-year{min-width:96px}
 			.cmx-pend-calendar-nav{display:flex;align-items:center;gap:8px}
 			.cmx-pend-calendar-nav .button{display:inline-flex;align-items:center;justify-content:center;min-width:26px;min-height:26px;height:26px;padding:0 6px;line-height:1}
 			.cmx-pend-calendar-nav .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
-			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+			.cmx-pend-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:clamp(6px,.7vw,12px);align-items:stretch;--cmx-pend-calendar-cell-height:112px}
 			.cmx-pend-calendar-weekday{padding:0 4px;color:#646970;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;text-align:center}
-			.cmx-pend-calendar-cell{min-height:160px;padding:10px;border:1px solid #e6ebf0;border-radius:10px;background:#fff;box-shadow:none}
+			.cmx-pend-calendar-cell{height:var(--cmx-pend-calendar-cell-height);min-height:var(--cmx-pend-calendar-cell-height);padding:8px;border:1px solid #e6ebf0;border-radius:10px;background:#fff;box-shadow:none;display:flex;flex-direction:column;overflow:hidden}
 			.cmx-pend-calendar-cell.is-muted{background:#fafbfc}
 			.cmx-pend-calendar-cell.is-today{border-color:#c8daf6;box-shadow:0 0 0 1px #c8daf6}
-			.cmx-pend-calendar-day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+			.cmx-pend-calendar-day{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 			.cmx-pend-calendar-number{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;color:#1d2327;font-size:13px;font-weight:700}
 			.cmx-pend-calendar-cell.is-today .cmx-pend-calendar-number{background:#135e96;color:#fff}
-			.cmx-pend-calendar-items{display:flex;flex-direction:column;gap:8px}
-			.cmx-pend-calendar-chip{display:block;padding:8px 10px;border-radius:8px;border:1px solid #e6ebf0;background:#fff;color:#2c3338;text-decoration:none;font-size:12px;line-height:1.35;font-weight:600}
+			.cmx-pend-calendar-items{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto;padding-right:2px}
+			.cmx-pend-calendar-chip{display:block;padding:6px 8px;border-radius:8px;border:1px solid #e6ebf0;background:#fff;color:#2c3338;text-decoration:none;font-size:12px;line-height:1.3;font-weight:600}
 			.cmx-pend-calendar-chip:hover{text-decoration:none;background:#fafcff}
 			.cmx-pend-calendar-chip--red{border-color:#f3d0d2;background:#fff7f7;color:#b32d2e}
 			.cmx-pend-calendar-chip--orange{border-color:#f4dfb1;background:#fffbf2;color:#b96f00}
@@ -614,13 +624,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-toolbar-form{grid-template-columns:1fr}
 				.cmx-pend-toolbar-today{justify-self:start;text-align:left;white-space:normal}
 				.cmx-pend-field--right{align-items:stretch}
+				.cmx-pend-calendar-heading{align-items:flex-start}
 				.cmx-pend-calendar-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+				.cmx-pend-calendar-cell{height:auto;min-height:72px}
+				.cmx-pend-calendar-items{overflow:visible}
 			}
 			@media (max-width: 782px){
 				.cmx-pend-wrap{padding-right:10px}
 				.cmx-pend-head{flex-direction:column;align-items:stretch}
 				.cmx-pend-actions{justify-content:flex-start}
 				.cmx-pend-actions .button{flex:1 1 auto}
+				.cmx-pend-calendar-heading{flex-direction:column;align-items:stretch}
+				.cmx-pend-calendar-switch{width:100%}
+				.cmx-pend-calendar-switch select,
+				.cmx-pend-calendar-switch .cmx-pend-calendar-year{width:100%;min-width:0}
 				.cmx-pend-calendar-grid{grid-template-columns:1fr}
 			}
 		';
@@ -787,19 +804,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_render_calendar')
 
 		$prev_month = $month_start->modify('-1 month')->format('Y-m');
 		$next_month = $month_start->modify('+1 month')->format('Y-m');
-		$month_title = (string) \wp_date('F Y', (int) $month_start->getTimestamp(), $tz);
+		$current_month = (string) \wp_date('Y-m', null, $tz);
 		$weekday_labels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+		$selected_year = (int) $month_start->format('Y');
+		$selected_month = (int) $month_start->format('n');
+		$month_options = '';
+		for ($month_number = 1; $month_number <= 12; $month_number++) {
+			$month_date = \DateTimeImmutable::createFromFormat('!Y-n-j', $selected_year . '-' . $month_number . '-1', $tz);
+			$month_label = $month_date instanceof \DateTimeImmutable
+				? (string) \wp_date('F', (int) $month_date->getTimestamp(), $tz)
+				: \sprintf('%02d', $month_number);
+			$month_options .= '<option value="' . (int) $month_number . '"' . \selected($selected_month, $month_number, false) . '>' . \esc_html($month_label) . '</option>';
+		}
+
+		$year_options = '';
+		for ($year = $selected_year - 5; $year <= $selected_year + 5; $year++) {
+			$year_options .= '<option value="' . (int) $year . '"' . \selected($selected_year, $year, false) . '>' . (int) $year . '</option>';
+		}
 
 		echo '<section class="postbox cmx-pend-postbox">';
-		echo '<div class="postbox-header"><h2 class="hndle"><span class="cmx-pend-postbox-title"><span>' . \esc_html($month_title) . '</span><span class="cmx-pend-calendar-nav"><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $prev_month])) . '" aria-label="Vorheriger Monat"><span class="dashicons dashicons-arrow-left-alt2"></span></a><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $next_month])) . '" aria-label="Nächster Monat"><span class="dashicons dashicons-arrow-right-alt2"></span></a></span></span></h2></div>';
-		echo '<div class="inside cmx-pend-calendar-shell">';
-		echo '<div class="cmx-pend-calendar-grid">';
+		echo '<div class="postbox-header"><div class="hndle"><div class="cmx-pend-postbox-title"><div class="cmx-pend-calendar-heading"><form class="cmx-pend-calendar-switch cmx-pend-auto-submit" method="get" action="' . \esc_url(\admin_url('index.php')) . '"><input type="hidden" name="page" value="' . \esc_attr(cmx_cockpit_pendenzen_slug()) . '"><input type="hidden" name="view" value="calendar"><select name="calendar_month" aria-label="Monat wählen">' . $month_options . '</select><select class="cmx-pend-calendar-year" name="calendar_year" aria-label="Jahr wählen">' . $year_options . '</select></form></div><span class="cmx-pend-calendar-nav"><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $prev_month])) . '" aria-label="Vorheriger Monat"><span class="dashicons dashicons-arrow-left-alt2"></span></a><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $current_month])) . '" aria-label="Zum aktuellen Monat"><span class="dashicons dashicons-calendar-alt"></span></a><a class="button" href="' . \esc_url(cmx_cockpit_pendenzen_base_url(['view' => 'calendar', 'month' => $next_month])) . '" aria-label="Nächster Monat"><span class="dashicons dashicons-arrow-right-alt2"></span></a></span></div></div></div>';
+		$grid_start = $month_start->modify('-' . ((int) $month_start->format('N') - 1) . ' days');
+		$grid_end = $month_end->modify('+' . (7 - (int) $month_end->format('N')) . ' days');
+		$grid_days = ((int) $grid_start->diff($grid_end)->days) + 1;
+		$week_count = \max(1, (int) ($grid_days / 7));
+		echo '<div class="inside cmx-pend-calendar-shell" data-calendar-weeks="' . (int) $week_count . '">';
+		echo '<div class="cmx-pend-calendar-grid" style="--cmx-pend-calendar-weeks:' . (int) $week_count . '">';
 		foreach ($weekday_labels as $weekday_label) {
 			echo '<div class="cmx-pend-calendar-weekday">' . \esc_html($weekday_label) . '</div>';
 		}
 
-		$grid_start = $month_start->modify('-' . ((int) $month_start->format('N') - 1) . ' days');
-		$grid_end = $month_end->modify('+' . (7 - (int) $month_end->format('N')) . ' days');
 		$cursor = $grid_start;
 		while ($cursor <= $grid_end) {
 			$is_current_month = $cursor->format('Y-m') === $month_start->format('Y-m');
@@ -905,8 +939,46 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 	\wp_register_script($script_handle, false, [], '1.0', true);
 	\wp_enqueue_script($script_handle);
 	\wp_add_inline_script($script_handle, '(function(){
+		var resizeTimer = 0;
+		var applyCalendarSizing = function(){
+			document.querySelectorAll(".cmx-pend-calendar-shell").forEach(function(shell){
+				var grid = shell.querySelector(".cmx-pend-calendar-grid");
+				if (!grid) {
+					return;
+				}
+				if (window.matchMedia("(max-width: 1280px)").matches) {
+					grid.style.removeProperty("--cmx-pend-calendar-cell-height");
+					return;
+				}
+
+				var weeks = parseInt(shell.getAttribute("data-calendar-weeks") || grid.style.getPropertyValue("--cmx-pend-calendar-weeks") || "6", 10);
+				if (!weeks || weeks < 1) {
+					weeks = 6;
+				}
+
+				var weekday = grid.querySelector(".cmx-pend-calendar-weekday");
+				var top = grid.getBoundingClientRect().top;
+				var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+				var availableHeight = Math.floor(viewportHeight - top - 24);
+				if (availableHeight <= 0) {
+					return;
+				}
+
+				var computed = window.getComputedStyle(grid);
+				var rowGap = parseFloat(computed.rowGap || computed.gap || "12") || 12;
+				var weekdayHeight = weekday ? Math.ceil(weekday.getBoundingClientRect().height) : 18;
+				var reservedHeight = weekdayHeight + (rowGap * weeks) + 120;
+				var cellHeight = Math.floor((availableHeight - reservedHeight) / weeks);
+				cellHeight = Math.max(48, Math.min(112, cellHeight));
+				grid.style.setProperty("--cmx-pend-calendar-cell-height", cellHeight + "px");
+			});
+		};
+		var scheduleCalendarSizing = function(){
+			window.clearTimeout(resizeTimer);
+			resizeTimer = window.setTimeout(applyCalendarSizing, 30);
+		};
 		var init = function(){
-			document.querySelectorAll(".cmx-pend-board-select select").forEach(function(select){
+			document.querySelectorAll(".cmx-pend-board-select select, .cmx-pend-auto-submit select").forEach(function(select){
 				select.addEventListener("change", function(){
 					var form = select.closest("form");
 					if (form) {
@@ -914,11 +986,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 					}
 				});
 			});
+			scheduleCalendarSizing();
 		};
 		if (document.readyState === "loading") {
 			document.addEventListener("DOMContentLoaded", init);
 		} else {
 			init();
 		}
+		window.addEventListener("load", scheduleCalendarSizing);
+		window.addEventListener("resize", scheduleCalendarSizing);
 	})();');
 });
