@@ -67,14 +67,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_types_taxonomy')) {
 		'meta_box_cb'        => false,
 		'rewrite'            => false,
 		'query_var'          => false,
-		'capabilities'       => [
-			'manage_terms' => 'manage_options',
-			'edit_terms'   => 'manage_options',
-			'delete_terms' => 'manage_options',
-			'assign_terms' => 'manage_options',
-		],
-	]);
-}, 15);
+			'capabilities'       => [
+				'manage_terms' => \function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability') ? cmx_settings_page_capability() : 'manage_options',
+				'edit_terms'   => \function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability') ? cmx_settings_page_capability() : 'manage_options',
+				'delete_terms' => \function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability') ? cmx_settings_page_capability() : 'manage_options',
+				'assign_terms' => \function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability') ? cmx_settings_page_capability() : 'manage_options',
+			],
+		]);
+	}, 15);
 
 \add_action('admin_init', function (): void {
 	$taxonomy = cmx_bank_types_taxonomy();
@@ -122,7 +122,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_bank_types_taxonomy')) {
 		CMX_SETTINGS_SLUG,
 		'Banktypen',
 		'Banktypen',
-		'manage_options',
+		\function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability') ? cmx_settings_page_capability() : 'manage_options',
 		$slug
 	);
 }, 20);

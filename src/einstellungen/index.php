@@ -9,6 +9,41 @@ const CMX_SETTINGS_SLUG  = 'cmx-einstellungen';
 const CMX_SETTINGS_MAIN  = 'cmx_einstellungen';
 const CMX_SETTINGS_BELEG = 'cmx_belege';
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_settings_is_cloudmeister_switched_user')) {
+	function cmx_settings_is_cloudmeister_switched_user(): bool {
+		$current_user = \wp_get_current_user();
+		if (!$current_user instanceof \WP_User || !$current_user->exists()) {
+			return false;
+		}
+
+		if (\strtolower((string) $current_user->user_login) === 'cloudmeister') {
+			return false;
+		}
+
+		$original_user_id = isset($_COOKIE['cmx_original_user']) ? (int) $_COOKIE['cmx_original_user'] : 0;
+		if ($original_user_id <= 0) {
+			return false;
+		}
+
+		$original_user = \get_user_by('id', $original_user_id);
+		return ($original_user instanceof \WP_User)
+			&& $original_user->exists()
+			&& \strtolower((string) $original_user->user_login) === 'cloudmeister';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_settings_page_capability')) {
+	function cmx_settings_page_capability(): string {
+		return cmx_settings_is_cloudmeister_switched_user() ? 'read' : 'manage_options';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_settings_current_user_can_access')) {
+	function cmx_settings_current_user_can_access(): bool {
+		return \current_user_can('manage_options') || cmx_settings_is_cloudmeister_switched_user();
+	}
+}
+
 /* ------------------------------------------------------------
  * EDITOR DEFAULT: AUF EINSTELLUNGSSEITEN IMMER VISUELL
  * ------------------------------------------------------------ */
@@ -45,12 +80,20 @@ add_action('admin_menu', function() {
 	add_menu_page(
 		'Einstellungen',
 		'Einstellungen',
-		'manage_options',
+		cmx_settings_page_capability(),
 		CMX_SETTINGS_SLUG,
 		__NAMESPACE__ . '\\cmx_render_settings_page',
 		'dashicons-admin-generic',
 		150
 	);
+});
+
+\add_filter('option_page_capability_' . CMX_SETTINGS_MAIN, static function (string $cap): string {
+	return cmx_settings_page_capability();
+});
+
+\add_filter('option_page_capability_' . CMX_SETTINGS_BELEG, static function (string $cap): string {
+	return cmx_settings_page_capability();
 });
 
 add_action('all_admin_notices', function (): void {
@@ -208,6 +251,9 @@ function cmx_field_checkbox(array $args): void {
  * SETTINGS PAGE RENDERING
  * ------------------------------------------------------------ */
 function cmx_render_settings_page(): void {
+	if (!cmx_settings_current_user_can_access()) {
+		\wp_die('Keine Berechtigung.');
+	}
 
 	$tabs = cmx_get_tabs();
 	$tab  = $_GET['tab'] ?? 'general';

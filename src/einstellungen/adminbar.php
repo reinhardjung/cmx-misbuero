@@ -1127,10 +1127,6 @@ function cmx65_render_front_quicklinks_script(): void {
 				}
 			});
 
-			dropdown.addEventListener('mouseleave', function () {
-				closeDropdown(dropdown);
-			});
-
 			dropdown.querySelectorAll('.cmx-front-dropdown-menu a').forEach(function (link) {
 				link.addEventListener('click', function () {
 					closeAllDropdowns();

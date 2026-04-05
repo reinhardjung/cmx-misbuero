@@ -21,16 +21,27 @@ function cmx_render_cpt_count_widget() {
 		return;
 	}
 
-	echo '<style>
-		#cmx_cpt_counts_widget,
-		#cmx_cpt_counts_widget .inside,
-		#cmx_cpt_counts_widget .cmx-cpt-table,
+		echo '<style>
+			#cmx_cpt_counts_widget,
+			#cmx_cpt_counts_widget .inside,
+			#cmx_cpt_counts_widget .cmx-cpt-table,
 		#cmx_cpt_counts_widget .cmx-cpt-table tbody,
-		#cmx_cpt_counts_widget .cmx-cpt-table tr,
-		#cmx_cpt_counts_widget .cmx-cpt-table td{
-			overflow:visible;
-		}
-		.cmx-cpt-table{width:100%;border-collapse:collapse;table-layout:fixed}
+			#cmx_cpt_counts_widget .cmx-cpt-table tr,
+			#cmx_cpt_counts_widget .cmx-cpt-table td{
+				overflow:visible;
+			}
+			#cmx_cpt_counts_widget{
+				border-radius:12px;
+			}
+			#cmx_cpt_counts_widget .postbox-header{
+				border-top-left-radius:12px;
+				border-top-right-radius:12px;
+			}
+			#cmx_cpt_counts_widget .inside{
+				border-bottom-left-radius:12px;
+				border-bottom-right-radius:12px;
+			}
+			.cmx-cpt-table{width:100%;border-collapse:collapse;table-layout:fixed}
 		.cmx-cpt-table td{padding:6px 10px;text-align:left;vertical-align:middle;font-size:14px;border:0}
 		.cmx-cpt-table td.summe{text-align:right;width:68px}
 		.cmx-cpt-table td.add{width:42px;text-align:right;padding-right:4px}

@@ -846,29 +846,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-body{padding:0}
 			.cmx-pend-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
 			.cmx-pend-postbox{margin:0}
-			.cmx-pend-postbox .postbox-header .hndle,
-			.cmx-pend-postbox .postbox-header h2{font-size:16px !important;line-height:1.3 !important;padding:7px 18px !important;min-height:0}
-			.cmx-pend-board-box .postbox-header .hndle,
-			.cmx-pend-board-box .postbox-header h2{font-size:15px !important;line-height:1.2 !important;padding:4px 14px !important;min-height:0}
+				.cmx-pend-postbox .postbox-header .hndle,
+				.cmx-pend-postbox .postbox-header h2{font-size:14px !important;line-height:1.1 !important;padding:2px 12px !important;min-height:0}
+				.cmx-pend-board-box .postbox-header .hndle,
+				.cmx-pend-board-box .postbox-header h2{font-size:12px !important;line-height:1 !important;padding:0 8px !important;min-height:0}
 			.cmx-pend-postbox--full{grid-column:1 / -1}
 			.cmx-pend-postbox-title{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
-			.cmx-pend-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:999px;background:#eef4fb;color:#1f5180;font-size:12px;font-weight:700;line-height:1}
-			.cmx-pend-board-box .cmx-pend-count{min-width:24px;height:18px;padding:0 6px;font-size:11px}
-			.cmx-pend-postbox .inside{padding:16px 18px 18px}
-			.cmx-pend-postbox--range .inside{padding:8px 14px 10px}
-			.cmx-pend-toolbar-form{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:end}
-			.cmx-pend-postbox--range .cmx-pend-toolbar-form{gap:10px}
-			.cmx-pend-field{display:flex;flex-direction:column;gap:6px}
-			.cmx-pend-postbox--range .cmx-pend-field{gap:3px}
-			.cmx-pend-field label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;color:#646970}
-			.cmx-pend-postbox--range .cmx-pend-field label{font-size:10px}
-			.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
-			.cmx-pend-field--right select{align-self:flex-end}
-			.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
-			.cmx-pend-postbox--range .cmx-pend-toolbar-today{font-size:20px;line-height:1.1}
+				.cmx-pend-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:16px;padding:0 5px;border-radius:999px;background:#eef4fb;color:#1f5180;font-size:10px;font-weight:700;line-height:1}
+				.cmx-pend-board-box .cmx-pend-count{min-width:18px;height:12px;padding:0 4px;font-size:8px}
+				.cmx-pend-postbox .inside{padding:8px 12px 10px}
+				.cmx-pend-board-box .inside{padding:3px 8px 4px}
+				.cmx-pend-postbox--range .inside{padding:1px 8px 2px}
+				.cmx-pend-toolbar-form{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:end}
+				.cmx-pend-postbox--range .cmx-pend-toolbar-form{gap:4px}
+				.cmx-pend-field{display:flex;flex-direction:column;gap:6px}
+				.cmx-pend-postbox--range .cmx-pend-field{gap:1px}
+				.cmx-pend-field label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;color:#646970}
+				.cmx-pend-postbox--range .cmx-pend-field label{font-size:7px}
+				.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
+				.cmx-pend-field--right select{align-self:flex-end}
+				.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
+				.cmx-pend-postbox--range .cmx-pend-toolbar-today{font-size:13px;line-height:1}
 			.cmx-pend-field--right{align-items:flex-end}
 			.cmx-pend-card-list{display:flex;flex-direction:column}
-				.cmx-pend-card{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
+				.cmx-pend-card{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;padding:8px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
 				.cmx-pend-card:first-child{padding-top:0}
 				.cmx-pend-card:last-child{padding-bottom:0;border-bottom:0}
 				.cmx-pend-card-dot{display:block;width:10px;height:10px;border-radius:999px;background:#c0cad5;margin-top:6px}
@@ -942,7 +943,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 			.cmx-pend-modal-delete{display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:36px;padding:0 10px;border-radius:8px !important;border:1px solid #f0c8cb;background:#fff7f7;color:#b32d2e}
 			.cmx-pend-modal-delete:hover,
 			.cmx-pend-modal-delete:focus{border-color:#e59ba0;background:#fff1f1;color:#8f1d21}
-			.cmx-pend-modal-delete .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
+				.cmx-pend-modal-delete .dashicons{width:16px;height:16px;font-size:16px;line-height:16px;transform:translateY(5px)}
 			.cmx-pend-modal-delete[hidden]{display:none !important}
 			.cmx-pend-form-grid{display:grid;gap:16px}
 			.cmx-pend-form-row{display:grid;gap:16px}
@@ -1618,20 +1619,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 			return result;
 		}
 
-		function updateHinweisPastState(){
-			var date = parseDateValue(hinweisDateInput.value);
-			var isPast = false;
+			function updateHinweisPastState(){
+				var date = parseDateValue(hinweisDateInput.value);
+				var isPast = false;
 
-			if (date) {
-				var compare = new Date(date.getTime());
-				var match = String(hinweisTimeInput.value || "").trim().match(/^(\d{2}):(\d{2})$/);
-				if (match) {
-					compare.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
-				} else {
-					compare.setHours(23, 59, 59, 999);
+				if (date) {
+					var compare = new Date(date.getTime());
+					var now = new Date();
+					now.setSeconds(0, 0);
+					var match = String(hinweisTimeInput.value || "").trim().match(/^(\d{2}):(\d{2})$/);
+					if (match) {
+						compare.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
+					} else {
+						compare.setHours(23, 59, 59, 999);
+					}
+					isPast = compare.getTime() < now.getTime();
 				}
-				isPast = compare.getTime() < Date.now();
-			}
 
 			hinweisDateInput.classList.toggle("cmx-pend-input--past", isPast);
 			hinweisTimeInput.classList.toggle("cmx-pend-input--past", isPast);
@@ -2030,18 +2033,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 		});
 		closeButton.addEventListener("click", function(){ closeModal(); });
 		cancelButton.addEventListener("click", function(){ closeModal(); });
-		deleteButton.addEventListener("click", function(){
-			var eventId = String(eventIdInput.value || "").trim();
-			if (!eventId) {
-				return;
-			}
-			if (!window.confirm("Termin wirklich löschen?")) {
-				return;
-			}
-
-			deleteButton.disabled = true;
-			saveButton.disabled = true;
-			setStatus("Pendenz wird gelöscht…", "");
+			deleteButton.addEventListener("click", function(){
+				var eventId = String(eventIdInput.value || "").trim();
+				if (!eventId) {
+					return;
+				}
+	
+				deleteButton.disabled = true;
+				saveButton.disabled = true;
+				setStatus("Pendenz wird gelöscht…", "");
 
 			var formData = new FormData();
 			formData.append("action", "cmx_cockpit_pendenzen_delete_manual_event");
