@@ -80,11 +80,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_anteil_betrag_display'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_zahlbar_pro_display')) {
+	function cmx_budget_admin_zahlbar_pro_display(int $post_id): string {
+		$meta_key = \defined(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META')
+			: '_cmx_budget_kosten_zahlbar_pro';
+		$value = \trim((string) \get_post_meta($post_id, $meta_key, true));
+		if ($value === '') {
+			$value = 'monat';
+		}
+
+		$options = \function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_zahlbar_pro_options')
+			? (array) cmx_budget_kosten_zahlbar_pro_options()
+			: [
+				'monat'         => 'Monat',
+				'quartal'       => 'Quartal',
+				'halbjaehrlich' => 'Halbjährlich',
+				'jaehrlich'     => 'Jährlich',
+			];
+
+		return isset($options[$value]) ? (string) $options[$value] : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_categories_display')) {
 	function cmx_budget_admin_categories_display(int $post_id): string {
-		$taxonomy = \defined(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
-			? (string) \constant(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
-			: '';
+		$taxonomy = cmx_budget_admin_taxonomy();
 		if ($taxonomy === '') {
 			return '';
 		}
@@ -111,9 +132,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_categories_display')) 
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_taxonomy')) {
 	function cmx_budget_admin_taxonomy(): string {
-		return \defined(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
-			? (string) \constant(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
-			: '';
+		if (\defined(__NAMESPACE__ . '\\TAX_BUDGET_KATEGORIEN')) {
+			return (string) \constant(__NAMESPACE__ . '\\TAX_BUDGET_KATEGORIEN');
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_tax_key')) {
+			return (string) cmx_tax_key('budget', 'Kategorien');
+		}
+
+		return 'budget_kategorien';
 	}
 }
 
@@ -172,6 +199,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_contact_filter_options
 
 		\natcasesort($options);
 		return $options;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_contact_display')) {
+	function cmx_budget_admin_contact_display(int $post_id): array {
+		$contact_id = (int) \get_post_meta($post_id, cmx_budget_admin_contact_meta_key(), true);
+		if ($contact_id <= 0 || (string) \get_post_status($contact_id) === '') {
+			return ['label' => '', 'url' => ''];
+		}
+
+		$label = \trim((string) \get_the_title($contact_id));
+		if ($label === '') {
+			$label = '#' . $contact_id;
+		}
+
+		$url = (string) \get_edit_post_link($contact_id, '');
+		return [
+			'label' => cmx_normalize_minus_sign($label),
+			'url'   => $url,
+		];
 	}
 }
 
@@ -316,6 +363,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 
 	$new_columns = [
 		'cmx_budget_kategorien'     => 'Kategorien',
+		'cmx_budget_kontakt'        => 'Kontakt',
+		'cmx_budget_zahlbar_pro'    => 'Zahlbar pro',
 		'cmx_budget_einnahme'       => 'Einnahme',
 		'cmx_budget_ausgabe'        => 'Ausgabe',
 		'cmx_budget_anteil'         => 'Anteil',
@@ -335,6 +384,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 	$columns['cmx_budget_anteil_betrag'] = 'cmx_budget_anteil_betrag';
 	return $columns;
 });
+
+\add_filter('disable_months_dropdown', function ($disable, $post_type) {
+	return $post_type === 'budget' ? true : $disable;
+}, 10, 2);
 
 \add_action('restrict_manage_posts', function (string $post_type, string $which = 'top'): void {
 	if ($post_type !== 'budget' || $which !== 'top') {
@@ -356,27 +409,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		]);
 	}
 
-	$selected_contact = isset($_GET['cmx_budget_kontakt_filter']) ? (int) $_GET['cmx_budget_kontakt_filter'] : 0;
-	$options = cmx_budget_admin_contact_filter_options();
-	if ($selected_contact > 0 && !isset($options[$selected_contact]) && \get_post_status($selected_contact)) {
-		$title = \trim((string) \get_the_title($selected_contact));
-		$options[$selected_contact] = $title !== '' ? cmx_normalize_minus_sign($title) : ('#' . $selected_contact);
-		\natcasesort($options);
-	}
-
-	if ($options !== []) {
-		echo '<select name="cmx_budget_kontakt_filter">';
-		echo '<option value="0">Alle Kontakte</option>';
-		foreach ($options as $contact_id => $label) {
-			printf(
-				'<option value="%d"%s>%s</option>',
-				(int) $contact_id,
-				\selected($selected_contact, (int) $contact_id, false),
-				\esc_html((string) $label)
-			);
-		}
-		echo '</select>';
-	}
 }, 10, 2);
 
 \add_action('pre_get_posts', function (\WP_Query $query): void {
@@ -400,20 +432,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		$query->set('tax_query', $tax_query);
 	}
 
-	$selected_contact = isset($_GET['cmx_budget_kontakt_filter']) ? (int) $_GET['cmx_budget_kontakt_filter'] : 0;
-	if ($selected_contact > 0) {
-		$meta_query = (array) $query->get('meta_query');
-		$meta_query[] = [
-			'key'     => cmx_budget_admin_contact_meta_key(),
-			'value'   => $selected_contact,
-			'compare' => '=',
-			'type'    => 'NUMERIC',
-		];
-		if (!isset($meta_query['relation'])) {
-			$meta_query = \array_merge(['relation' => 'AND'], $meta_query);
-		}
-		$query->set('meta_query', $meta_query);
-	}
 });
 
 \add_filter('posts_clauses', function (array $clauses, \WP_Query $query): array {
@@ -480,6 +498,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		return;
 	}
 
+	if ($column === 'cmx_budget_kontakt') {
+		$data = cmx_budget_admin_contact_display($post_id);
+		$label = (string) ($data['label'] ?? '');
+		$url = (string) ($data['url'] ?? '');
+		if ($label === '') {
+			echo '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return;
+		}
+		if ($url !== '') {
+			echo '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($label) . '</a>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return;
+		}
+		echo \esc_html($label);
+		return;
+	}
+
+	if ($column === 'cmx_budget_zahlbar_pro') {
+		$label = cmx_budget_admin_zahlbar_pro_display($post_id);
+		echo $label !== '' ? \esc_html($label) : '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		return;
+	}
+
 	if ($column === 'cmx_budget_einnahme') {
 		$label = cmx_budget_admin_amount_display($post_id, 'einnahme');
 		echo $label !== '' ? \esc_html($label) : '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -527,13 +567,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 
 	echo '<style>
 		.wp-list-table .column-cmx_budget_kategorien{width:180px}
+		.wp-list-table .column-cmx_budget_kontakt{width:200px}
+		.wp-list-table .column-cmx_budget_zahlbar_pro{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_einnahme{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_ausgabe{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_anteil{width:110px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_anteil_betrag{width:130px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_datei{width:46px;text-align:center}
 		select[name="cmx_budget_kategorie"]{max-width:180px}
-		select[name="cmx_budget_kontakt_filter"]{max-width:220px}
 		.wp-list-table td.column-cmx_budget_datei{text-align:center;vertical-align:top}
 		.cmx-budget-doc-icon{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#111}
 		.cmx-budget-doc-icon .dashicons{width:18px;height:18px;font-size:18px;line-height:18px}

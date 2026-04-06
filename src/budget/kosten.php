@@ -15,6 +15,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ANTEIL_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ANTEIL_BETRAG_META')) {
 	\define(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ANTEIL_BETRAG_META', '_cmx_budget_kosten_anteil_betrag');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META')) {
+	\define(__NAMESPACE__ . '\\CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META', '_cmx_budget_kosten_zahlbar_pro');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_normalize_decimal')) {
 	function cmx_budget_kosten_normalize_decimal($value): string {
@@ -78,6 +81,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_format_display')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_zahlbar_pro_options')) {
+	function cmx_budget_kosten_zahlbar_pro_options(): array {
+		return [
+			'monat'         => 'Monat',
+			'quartal'       => 'Quartal',
+			'halbjaehrlich' => 'Halbjährlich',
+			'jaehrlich'     => 'Jährlich',
+		];
+	}
+}
+
 \add_action('add_meta_boxes', function (): void {
 	\add_meta_box(
 		'cmx_budget_kosten_side',
@@ -104,6 +118,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_box_html')) {
 		if ($anteil_betrag === '') {
 			$anteil_betrag = cmx_budget_kosten_calculate_anteil_betrag($betrag, $anteil);
 		}
+		$zahlbar_pro = (string) \get_post_meta($post->ID, CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META, true);
+		$zahlbar_pro_options = cmx_budget_kosten_zahlbar_pro_options();
+		if (!isset($zahlbar_pro_options[$zahlbar_pro])) {
+			$zahlbar_pro = 'monat';
+		}
 
 		\wp_nonce_field('cmx_budget_kosten_save', 'cmx_budget_kosten_nonce');
 
@@ -117,6 +136,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_box_html')) {
 		#' . \esc_attr($box_id) . ' .cmx-budget-kosten-radio-row{display:flex;flex-wrap:wrap;gap:10px}
 		#' . \esc_attr($box_id) . ' .cmx-budget-kosten-radio-row label{display:inline-flex;align-items:center;gap:5px;margin:0}
 		#' . \esc_attr($box_id) . ' input[type="text"]{width:100%}
+		#' . \esc_attr($box_id) . ' select{width:100%}
 		#' . \esc_attr($box_id) . ' .cmx-budget-kosten-readonly{background:#f6f7f7;color:#50575e}
 		#' . \esc_attr($box_id) . ' .cmx-budget-kosten-note{margin:4px 0 0;color:#646970;font-size:12px}
 		</style>';
@@ -146,6 +166,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_box_html')) {
 		echo '<div>';
 		echo '<label class="cmx-budget-kosten-label" for="cmx_budget_kosten_anteil_betrag_display">Anteil Betrag</label>';
 		echo '<input type="text" class="widefat cmx-budget-kosten-readonly" id="cmx_budget_kosten_anteil_betrag_display" value="' . \esc_attr($anteil_betrag_display) . '" readonly>';
+		echo '</div>';
+
+		echo '<div>';
+		echo '<label class="cmx-budget-kosten-label" for="cmx_budget_kosten_zahlbar_pro">Zahlbar pro</label>';
+		echo '<select id="cmx_budget_kosten_zahlbar_pro" name="cmx_budget_kosten_zahlbar_pro">';
+		foreach ($zahlbar_pro_options as $value => $label) {
+			echo '<option value="' . \esc_attr($value) . '"' . \selected($zahlbar_pro, $value, false) . '>' . \esc_html($label) . '</option>';
+		}
+		echo '</select>';
 		echo '</div>';
 
 		echo '</div>';
@@ -250,9 +279,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_box_html')) {
 
 	$betrag_input = isset($_POST['cmx_budget_kosten_betrag']) ? (string) \wp_unslash($_POST['cmx_budget_kosten_betrag']) : '';
 	$anteil_input = isset($_POST['cmx_budget_kosten_anteil']) ? (string) \wp_unslash($_POST['cmx_budget_kosten_anteil']) : '';
+	$zahlbar_pro_input = isset($_POST['cmx_budget_kosten_zahlbar_pro']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_budget_kosten_zahlbar_pro'])) : '';
 	$betrag = cmx_budget_kosten_normalize_decimal($betrag_input);
 	$anteil = \sanitize_text_field($anteil_input);
 	$anteil_betrag = cmx_budget_kosten_calculate_anteil_betrag($betrag_input, $anteil_input);
+	$zahlbar_pro_options = cmx_budget_kosten_zahlbar_pro_options();
+	$zahlbar_pro = isset($zahlbar_pro_options[$zahlbar_pro_input]) ? $zahlbar_pro_input : 'monat';
 
 	\update_post_meta($post_id, CMX_BUDGET_KOSTEN_TYP_META, $typ);
 
@@ -273,4 +305,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_kosten_box_html')) {
 	} else {
 		\update_post_meta($post_id, CMX_BUDGET_KOSTEN_ANTEIL_BETRAG_META, $anteil_betrag);
 	}
+
+	\update_post_meta($post_id, CMX_BUDGET_KOSTEN_ZAHLBAR_PRO_META, $zahlbar_pro);
 }, 10, 2);
