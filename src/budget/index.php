@@ -18,7 +18,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUDGET)
 
 // Create: @ll Taxos
 \add_action('init', function () {
-	// cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
+	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Kategorien');
 }, 15);
 
 
@@ -33,4 +33,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUDGET)
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt');
+cmx_require_files(__DIR__,'stammdaten,kosten,admincolumns,kontakt');

@@ -57,6 +57,7 @@ function cmx_layout_defaults_builtin(): array {
 		'closedpostboxes_artikel' => [],
 		'closedpostboxes_ausgaben' => [],
 		'closedpostboxes_belege' => [],
+		'closedpostboxes_budget' => [],
 		'closedpostboxes_dashboard' => [],
 		'closedpostboxes_kontakte' => [],
 		'closedpostboxes_projekte' => [],
@@ -75,6 +76,11 @@ function cmx_layout_defaults_builtin(): array {
 		'meta-box-order_belege' => [
 			'side' => 'cmx_savebox,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,belege_zahlungsgrunddiv,cmx_uploads_box,cmx_dokumente_box',
 			'normal' => 'cmx_beleg_details,cmx_beleg_positionen,cmx_belege_internenotizen',
+			'advanced' => '',
+		],
+		'meta-box-order_budget' => [
+			'side' => 'cmx_savebox,cmx_budget_kontakt_box,cmx_budget_kosten_side,cmx_dokumente_box',
+			'normal' => '',
 			'advanced' => '',
 		],
 		'meta-box-order_dashboard' => [
@@ -104,6 +110,7 @@ function cmx_layout_defaults_builtin(): array {
 		'metaboxhidden_belege' => [
 			'cmx_belege_mwst_box',
 		],
+		'metaboxhidden_budget' => [],
 		'metaboxhidden_dashboard' => [
 			'dashboard_site_health',
 			'dashboard_right_now',
@@ -118,6 +125,7 @@ function cmx_layout_defaults_builtin(): array {
 		'screen_layout_artikel' => '2',
 		'screen_layout_ausgaben' => '2',
 		'screen_layout_belege' => '2',
+		'screen_layout_budget' => '2',
 		'screen_layout_dokumente' => '2',
 		'screen_layout_kontakte' => '2',
 		'screen_layout_projekte' => '2',
