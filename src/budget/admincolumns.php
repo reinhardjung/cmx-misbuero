@@ -80,8 +80,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_anteil_betrag_display'
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_categories_display')) {
+	function cmx_budget_admin_categories_display(int $post_id): string {
+		$taxonomy = \defined(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_TAX_BUDGET')
+			: '';
+		if ($taxonomy === '') {
+			return '';
+		}
+
+		$terms = \get_the_terms($post_id, $taxonomy);
+		if (!\is_array($terms) || \is_wp_error($terms) || $terms === []) {
+			return '';
+		}
+
+		$labels = [];
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term) {
+				continue;
+			}
+			$name = \trim((string) $term->name);
+			if ($name !== '') {
+				$labels[] = $name;
+			}
+		}
+
+		return \implode(', ', \array_unique($labels));
+	}
+}
+
 \add_filter('manage_edit-budget_columns', function (array $columns): array {
+	if (isset($columns['title'])) {
+		$columns['title'] = 'Name';
+	}
+
 	$new_columns = [
+		'cmx_budget_kategorien'     => 'Kategorien',
 		'cmx_budget_einnahme'       => 'Einnahme',
 		'cmx_budget_ausgabe'        => 'Ausgabe',
 		'cmx_budget_anteil'         => 'Anteil',
@@ -92,6 +126,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_anteil_betrag_display'
 }, 20);
 
 \add_action('manage_budget_posts_custom_column', function (string $column, int $post_id): void {
+	if ($column === 'cmx_budget_kategorien') {
+		$label = cmx_budget_admin_categories_display($post_id);
+		echo $label !== '' ? \esc_html($label) : '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		return;
+	}
+
 	if ($column === 'cmx_budget_einnahme') {
 		$label = cmx_budget_admin_amount_display($post_id, 'einnahme');
 		echo $label !== '' ? \esc_html($label) : '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -123,6 +163,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_anteil_betrag_display'
 	}
 
 	echo '<style>
+		.wp-list-table .column-cmx_budget_kategorien{width:180px}
 		.wp-list-table .column-cmx_budget_einnahme{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_ausgabe{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_anteil{width:110px;white-space:nowrap}
