@@ -32,5 +32,29 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BUDGET)
 // cmx_define_meta_constants(basename(__DIR__), ['umsatz']);
 
 
+// Fill: empty post title on save
+\add_filter('wp_insert_post_data', function (array $data, array $postarr): array {
+	if ((string) ($data['post_type'] ?? ($postarr['post_type'] ?? '')) !== 'budget') {
+		return $data;
+	}
+	if ((string) ($data['post_status'] ?? '') === 'auto-draft') {
+		return $data;
+	}
+
+	$title = \trim((string) ($data['post_title'] ?? ''));
+	if ($title !== '') {
+		return $data;
+	}
+
+	$fallback_title = 'Belegname fehlt...';
+	$data['post_title'] = $fallback_title;
+	if (\trim((string) ($data['post_name'] ?? '')) === '') {
+		$data['post_name'] = \sanitize_title($fallback_title);
+	}
+
+	return $data;
+}, 20, 2);
+
+
 // Include: @ll metaboxes
 cmx_require_files(__DIR__,'stammdaten,kosten,admincolumns,kontakt');
