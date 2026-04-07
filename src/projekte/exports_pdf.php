@@ -1054,7 +1054,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_build_pdf_project_items')) {
 
 	$filename = \function_exists(__NAMESPACE__ . '\\cmx_export_filename')
 		? (string) cmx_export_filename('projekte-ausdrucken', 'pdf')
-		: ('projekte-ausdrucken-' . \gmdate('Ymd-His') . '.pdf');
+		: ('projekte-ausdrucken-' . (
+			\function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
+				? (string) cmx_export_now_stamp()
+				: (\function_exists('\\wp_date')
+					? (string) \wp_date('Ymd-His')
+					: (\function_exists('\\date_i18n')
+						? (string) \date_i18n('Ymd-His')
+						: (string) \date('Ymd-His')))
+		) . '.pdf');
 
 	\header('Content-Type: application/pdf');
 	\header('Content-Disposition: attachment; filename="' . $filename . '"');

@@ -138,7 +138,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_export_collect_ids')) {
 	$taxonomy = cmx_budget_export_taxonomy();
 	$stamp = \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
 		? (string) cmx_export_now_stamp()
-		: (\function_exists('\\wp_date') ? (string) \wp_date('Ymd-His') : (string) \gmdate('Ymd-His'));
+		: (\function_exists('\\wp_date')
+			? (string) \wp_date('Ymd-His')
+			: (\function_exists('\\date_i18n')
+				? (string) \date_i18n('Ymd-His')
+				: (string) \date('Ymd-His')));
 	$filename = 'budget-export-' . $stamp . '.csv';
 
 	\header('Content-Type: text/csv; charset=utf-8');

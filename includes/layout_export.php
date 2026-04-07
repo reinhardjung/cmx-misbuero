@@ -79,7 +79,11 @@ function cmx_layout_export_collect(int $user_id): array {
 	$user = \get_user_by('id', $user_id);
 	$payload = [
 		'format' => 1,
-		'exported_at' => \gmdate('c'),
+		'exported_at' => \function_exists('\\wp_date')
+			? (string) \wp_date('c')
+			: (\function_exists('\\date_i18n')
+				? (string) \date_i18n('c')
+				: (string) \date('c')),
 		'site_url' => \home_url('/'),
 		'blog_id' => $blog_id,
 		'blog_prefix' => $blog_prefix,
@@ -207,7 +211,15 @@ function cmx_render_layout_export_page(): void {
 	\check_admin_referer('cmx_layout_export');
 
 	$json = cmx_layout_export_get_json();
-	$filename = 'cmx-layout-export-' . \gmdate('Ymd-His') . '.json';
+	$filename = 'cmx-layout-export-' . (
+		\function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
+			? (string) cmx_export_now_stamp()
+			: (\function_exists('\\wp_date')
+				? (string) \wp_date('Ymd-His')
+				: (\function_exists('\\date_i18n')
+					? (string) \date_i18n('Ymd-His')
+					: (string) \date('Ymd-His')))
+	) . '.json';
 
 	\header('Content-Type: application/json; charset=utf-8');
 	\header('Content-Disposition: attachment; filename="' . $filename . '"');

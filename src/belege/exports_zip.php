@@ -1252,7 +1252,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belege_zip_download_filename')) {
 		if ($range_stamp === '') {
 			$range_stamp = \function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_now_stamp')
 				? (string) cmxbu_belege_export_now_stamp()
-				: (string) \date('Ymd-His');
+				: (\function_exists('\\wp_date')
+					? (string) \wp_date('Ymd-His')
+					: (\function_exists('\\date_i18n')
+						? (string) \date_i18n('Ymd-His')
+						: (string) \date('Ymd-His')));
 			$range_stamp = \sanitize_file_name($range_stamp);
 		}
 

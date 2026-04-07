@@ -942,7 +942,11 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_export_filename')) {
 			: 'misbuero';
 		$stamp = \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
 			? cmx_export_now_stamp()
-			: (string) \gmdate('Ymd-His');
+			: (\function_exists('\\wp_date')
+				? (string) \wp_date('Ymd-His')
+				: (\function_exists('\\date_i18n')
+					? (string) \date_i18n('Ymd-His')
+					: (string) \date('Ymd-His')));
 
 		return $prefix . '-' . $base . '-' . $stamp . '.' . $ext;
 	}

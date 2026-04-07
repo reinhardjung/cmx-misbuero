@@ -83,7 +83,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_export_stamp')) {
 		}
 		return \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
 			? (string) cmx_export_now_stamp()
-			: (string) \gmdate('Ymd-His');
+			: (\function_exists('\\wp_date')
+				? (string) \wp_date('Ymd-His')
+				: (\function_exists('\\date_i18n')
+					? (string) \date_i18n('Ymd-His')
+					: (string) \date('Ymd-His')));
 	}
 }
 
@@ -283,7 +287,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_stream_projekte_csv_from_ids')) {
 			: ['headers' => [], 'rows' => []];
 		$filename = \function_exists(__NAMESPACE__ . '\\cmxpr_export_filename')
 			? (string) cmxpr_export_filename('csv')
-			: ('projekte-export-' . \gmdate('Ymd-His') . '.csv');
+			: ('projekte-export-' . cmxpr_export_stamp() . '.csv');
 
 		\header('Content-Type: text/csv; charset=UTF-8');
 		\header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -331,13 +335,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxpr_stream_projekte_export_zip_from_i
 
 		$csv_name = \function_exists(__NAMESPACE__ . '\\cmxpr_export_filename')
 			? (string) cmxpr_export_filename('csv')
-			: ('projekte-export-' . \gmdate('Ymd-His') . '.csv');
+			: ('projekte-export-' . cmxpr_export_stamp() . '.csv');
 		$zip->addFile($tmp_csv, $csv_name);
 		$zip->close();
 
 		$filename = \function_exists(__NAMESPACE__ . '\\cmxpr_export_filename')
 			? (string) cmxpr_export_filename('zip')
-			: ('projekte-export-' . \gmdate('Ymd-His') . '.zip');
+			: ('projekte-export-' . cmxpr_export_stamp() . '.zip');
 
 		\header('Content-Type: application/zip');
 		\header('Content-Disposition: attachment; filename="' . $filename . '"');

@@ -50,7 +50,7 @@ require_once __DIR__ . '/includes/layout_export.php';
 require_once __DIR__ . '/includes/layout_defaults.php';
 
 if (CMX_ENABLE_HELP_ONCE) {
-	require_once __DIR__ . '/includes/help/once.php';
+	require_once __DIR__ . '/includes/once.php';
 }
 
 if (\is_admin()) {

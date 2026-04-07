@@ -228,7 +228,11 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_export_stamp')) {
 		}
 		return \function_exists(__NAMESPACE__ . '\\cmx_export_now_stamp')
 			? (string) cmx_export_now_stamp()
-			: (string) \gmdate('Ymd-His');
+			: (\function_exists('\\wp_date')
+				? (string) \wp_date('Ymd-His')
+				: (\function_exists('\\date_i18n')
+					? (string) \date_i18n('Ymd-His')
+					: (string) \date('Ymd-His')));
 	}
 }
 if (!function_exists(__NAMESPACE__.'\\cmxkl_export_filename')) {
@@ -643,7 +647,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_csv_from_ids')) {
 
 		$filename = \function_exists(__NAMESPACE__ . '\\cmxkl_export_filename')
 			? (string) cmxkl_export_filename('csv')
-			: ('kontakte-export-' . \gmdate('Ymd-His') . '.csv');
+			: ('kontakte-export-' . cmxkl_export_stamp() . '.csv');
 		$content = \function_exists(__NAMESPACE__ . '\\cmxkl_kontakte_csv_string_from_ids')
 			? (string) cmxkl_kontakte_csv_string_from_ids($ids)
 			: '';
@@ -708,7 +712,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_export_zip_from_ids'
 			: '';
 		$csv_name = \function_exists(__NAMESPACE__ . '\\cmxkl_export_filename')
 			? (string) cmxkl_export_filename('csv')
-			: ('kontakte-export-' . \gmdate('Ymd-His') . '.csv');
+			: ('kontakte-export-' . cmxkl_export_stamp() . '.csv');
 		if ($csv_content !== '') {
 			$zip->addFromString($csv_name, $csv_content);
 		}
@@ -726,7 +730,7 @@ if (!function_exists(__NAMESPACE__.'\\cmxkl_stream_kontakte_export_zip_from_ids'
 
 		$filename = \function_exists(__NAMESPACE__ . '\\cmxkl_export_filename')
 			? (string) cmxkl_export_filename('zip')
-			: ('kontakte-export-' . \gmdate('Ymd-His') . '.zip');
+			: ('kontakte-export-' . cmxkl_export_stamp() . '.zip');
 		header('Content-Type: application/zip');
 		header('Content-Disposition: attachment; filename="' . $filename . '"');
 		header('Content-Length: ' . (string) \filesize($tmpZip));

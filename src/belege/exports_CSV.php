@@ -580,7 +580,15 @@ function cmxbu_belege_csv_export_range_stamp(): string {
 		? (string) cmxbu_belege_export_range_stamp()
 		: '';
 	$range = \sanitize_file_name($range);
-	return $range !== '' ? $range : (string) \gmdate('Ymd-His');
+	return $range !== '' ? $range : (
+		\function_exists(__NAMESPACE__ . '\\cmxbu_belege_export_now_stamp')
+			? (string) cmxbu_belege_export_now_stamp()
+			: (\function_exists('\\wp_date')
+				? (string) \wp_date('Ymd-His')
+				: (\function_exists('\\date_i18n')
+					? (string) \date_i18n('Ymd-His')
+					: (string) \date('Ymd-His')))
+	);
 }
 
 function cmxbu_belege_csv_export_filename_main(): string {
