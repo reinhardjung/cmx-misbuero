@@ -367,6 +367,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		'cmx_budget_zahlbar_pro'    => 'Zahlbar pro',
 		'cmx_budget_einnahme'       => 'Einnahme',
 		'cmx_budget_ausgabe'        => 'Ausgabe',
+		'cmx_budget_ist_betrag'     => 'Ist-Betrag',
+		'cmx_budget_differenz'      => 'Differenz',
+		'cmx_budget_status'         => 'Status',
 		'cmx_budget_anteil'         => 'Anteil',
 		'cmx_budget_anteil_betrag'  => 'Anteil Betrag',
 	];
@@ -532,6 +535,37 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		return;
 	}
 
+	if ($column === 'cmx_budget_ist_betrag') {
+		$metrics = \function_exists(__NAMESPACE__ . '\\cmx_budget_overview_row_metrics')
+			? (array) cmx_budget_overview_row_metrics($post_id)
+			: [];
+		$value = isset($metrics['actual']) ? (float) $metrics['actual'] : 0.0;
+		echo \esc_html(\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_money') ? cmx_budget_overview_money($value) : cmx_budget_kosten_format_display((string) $value));
+		return;
+	}
+
+	if ($column === 'cmx_budget_differenz') {
+		$metrics = \function_exists(__NAMESPACE__ . '\\cmx_budget_overview_row_metrics')
+			? (array) cmx_budget_overview_row_metrics($post_id)
+			: [];
+		$value = isset($metrics['diff']) ? (float) $metrics['diff'] : 0.0;
+		echo \esc_html(\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_signed_money') ? cmx_budget_overview_signed_money($value) : cmx_budget_kosten_format_display((string) $value));
+		return;
+	}
+
+	if ($column === 'cmx_budget_status') {
+		$metrics = \function_exists(__NAMESPACE__ . '\\cmx_budget_overview_row_metrics')
+			? (array) cmx_budget_overview_row_metrics($post_id)
+			: [];
+		$status = isset($metrics['status']) && \is_array($metrics['status']) ? (array) $metrics['status'] : ['slug' => 'green', 'label' => 'Grün', 'text' => 'im Plan'];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_status_badge_html')) {
+			echo cmx_budget_overview_status_badge_html($status); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return;
+		}
+		echo \esc_html((string) ($status['label'] ?? 'Grün'));
+		return;
+	}
+
 	if ($column === 'cmx_budget_anteil') {
 		$label = cmx_budget_admin_anteil_display($post_id);
 		echo $label !== '' ? \esc_html($label) : '<span aria-hidden="true"></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -571,13 +605,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_admin_document_icon_data')) 
 		.wp-list-table .column-cmx_budget_zahlbar_pro{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_einnahme{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_ausgabe{width:120px;white-space:nowrap}
+		.wp-list-table .column-cmx_budget_ist_betrag{width:120px;white-space:nowrap}
+		.wp-list-table .column-cmx_budget_differenz{width:120px;white-space:nowrap}
+		.wp-list-table .column-cmx_budget_status{width:110px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_anteil{width:110px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_anteil_betrag{width:130px;white-space:nowrap}
 		.wp-list-table .column-cmx_budget_datei{width:46px;text-align:center}
 		select[name="cmx_budget_kategorie"]{max-width:180px}
 		.wp-list-table td.column-cmx_budget_datei{text-align:center;vertical-align:top}
+		.wp-list-table td.column-cmx_budget_status .cmx-budget-status{font-size:12px}
 		.cmx-budget-doc-icon{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#111}
 		.cmx-budget-doc-icon .dashicons{width:18px;height:18px;font-size:18px;line-height:18px}
+		.cmx-budget-doc-icon .dashicons.dashicons-pdf{width:20px;height:20px;font-size:20px;line-height:20px}
 		.cmx-budget-doc-placeholder{display:inline-block;width:18px;height:18px}
 	</style>';
 });
