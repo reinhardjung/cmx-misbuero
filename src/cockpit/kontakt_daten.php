@@ -171,8 +171,12 @@ function cmx_render_kontakt_wichtige_daten(): void {
 			$birth  = (string) get_post_meta($pid, CMX_KONTAKTE_META_GEBURTSDATUM, true);
 			$kunde_seit_saved = (string) get_post_meta($pid, CMX_KONTAKTE_META_KUNDE_SEIT, true);
 			$kunde_seit = trim($kunde_seit_saved) !== '' ? trim($kunde_seit_saved) : ((string) ($first_beleg_map[$pid] ?? ''));
-			$email  = $get_first_meta($pid, ['_cmx_email_1','cmx_email_1','email_1','e_mail_1','kontakt_email','email','e_mail','mail']);
-			$phone  = $get_first_meta($pid, ['_cmx_telefon_1','cmx_telefon_1','telefon_1','tel_1','phone_1','telefon','tel','phone']);
+			$email  = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+				? (string) cmx_kommunikation_primary_email($pid)
+				: $get_first_meta($pid, ['_cmx_email_1','cmx_email_1','email_1','e_mail_1','kontakt_email','email','e_mail','mail']);
+			$phone  = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')
+				? (string) cmx_kommunikation_primary_phone($pid)
+				: $get_first_meta($pid, ['_cmx_telefon_1','cmx_telefon_1','telefon_1','tel_1','phone_1','telefon','tel','phone']);
 
 			$privat = (bool) get_post_meta($pid, CMX_KONTAKTE_META_PRIVAT, true);
 			if (!$privat) {

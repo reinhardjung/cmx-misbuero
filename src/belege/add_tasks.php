@@ -20,6 +20,23 @@ function cmxbu_meta_array(int $post_id, string $meta_key): array {
 	return \is_array($raw) ? $raw : [];
 }
 
+function cmxbu_meta_list(int $post_id, string $meta_key): array {
+	$raw = \get_post_meta($post_id, $meta_key, true);
+	if (\is_string($raw) && $raw !== '') {
+		$tmp = \json_decode($raw, true);
+		if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+			$raw = $tmp;
+		} else {
+			$tmp = @\maybe_unserialize($raw);
+			$raw = \is_array($tmp) ? $tmp : [];
+		}
+	}
+	if (!\is_array($raw)) {
+		return [];
+	}
+	return \array_values($raw);
+}
+
 function cmxbu_truthy($value): bool {
 	if ($value === true) return true;
 	if ($value === 1 || $value === '1') return true;
@@ -176,8 +193,8 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		$idx  = \is_array($refs['idx'] ?? null) ? $refs['idx'] : [];
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $source_id);
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_type', $source_type);
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', \wp_json_encode(\array_values($idx)));
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \wp_json_encode(\array_values($uids)));
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', \array_values($idx));
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \array_values($uids));
 		\error_log("[CMX] Beleg {$post_id}: JS-Übernahme aktiv, kein Server-Doppelimport ({$source_label} {$source_id}).");
 		return;
 	}
@@ -206,10 +223,10 @@ function cmxbu_add_tasks_to_beleg(int $post_id, \WP_Post $post, bool $update): v
 		$positionen = array_values($positionen);
 		$_POST['cmx_positionen'] = $positionen;
 		// In Request einspeisen, damit andere Hooks (z. B. positionen.php) die Daten wie gewohnt speichern
-		\update_post_meta($post_id, '_cmx_beleg_positionen', wp_json_encode($positionen));
+		\update_post_meta($post_id, '_cmx_beleg_positionen', $positionen);
 		\update_post_meta($post_id, '_cmx_beleg_tasks_imported', (string) $source_id);
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', wp_json_encode($import_result['imported_keys']));
-		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', wp_json_encode($import_result['imported_uids']));
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', $import_result['imported_keys']);
+		\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', $import_result['imported_uids']);
 		// Tasks in der Quelle sofort als abgerechnet markieren, damit sie nicht erneut importiert werden
 		$uid_set = [];
 		foreach (($import_result['imported_uids'] ?? []) as $uid) {
@@ -255,10 +272,12 @@ function cmxbu_mark_project_tasks_paid(int $post_id, \WP_Post $post, bool $updat
 	// Wurden Tasks importiert? Nur dann weiter
 	$projekt_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
 	if ($projekt_imported === '') return;
-	$imported_uids_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', true);
-	$imported_uids = $imported_uids_json ? json_decode($imported_uids_json, true) : [];
-	$imported_keys_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', true);
-	$imported_keys = $imported_keys_json ? json_decode($imported_keys_json, true) : [];
+	$imported_uids = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_list')
+		? cmxbu_meta_list($post_id, '_cmx_beleg_tasks_imported_uids')
+		: [];
+	$imported_keys = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_list')
+		? cmxbu_meta_list($post_id, '_cmx_beleg_tasks_imported_keys')
+		: [];
 	if (!is_array($imported_keys)) $imported_keys = [];
 	if (!is_array($imported_uids)) $imported_uids = [];
 	if (empty($imported_keys) && empty($imported_uids)) return;
@@ -325,10 +344,12 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 
 	$projekt_imported = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported', true);
 	if ($projekt_imported === '') return;
-	$imported_uids_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', true);
-	$imported_uids = $imported_uids_json ? json_decode($imported_uids_json, true) : [];
-	$imported_keys_json = (string) \get_post_meta($post_id, '_cmx_beleg_tasks_imported_keys', true);
-	$imported_keys = $imported_keys_json ? json_decode($imported_keys_json, true) : [];
+	$imported_uids = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_list')
+		? cmxbu_meta_list($post_id, '_cmx_beleg_tasks_imported_uids')
+		: [];
+	$imported_keys = \function_exists(__NAMESPACE__ . '\\cmxbu_meta_list')
+		? cmxbu_meta_list($post_id, '_cmx_beleg_tasks_imported_keys')
+		: [];
 	if (!is_array($imported_keys)) $imported_keys = [];
 	if (!is_array($imported_uids)) $imported_uids = [];
 	if (empty($imported_keys) && empty($imported_uids)) return;
@@ -395,7 +416,7 @@ function cmxbu_sync_task_billing_flags(int $post_id, \WP_Post $post, bool $updat
 		}
 		if (!empty($migrated_uids)) {
 			$import_uid_set = $migrated_uids;
-			\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \wp_json_encode(\array_keys($migrated_uids)));
+			\update_post_meta($post_id, '_cmx_beleg_tasks_imported_uids', \array_keys($migrated_uids));
 		}
 	}
 

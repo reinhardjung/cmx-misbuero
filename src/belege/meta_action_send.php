@@ -621,6 +621,16 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
 			}
 		}
 
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
+			$primary = \sanitize_email((string) cmx_kommunikation_primary_email($post_id));
+			if (\is_email($primary)) {
+				return [
+					'email' => $primary,
+					'error' => '',
+				];
+			}
+		}
+
 		if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 			$bundle = \get_post_meta($post_id, '_cmx_kommunikation', true);
 			if (\is_array($bundle)) {
@@ -710,6 +720,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_collect_contact_reply_emails')) {
 				$label = \sanitize_key((string) ($row['email_label'] ?? ''));
 				$prio = \in_array($label, $preferred_labels, true) ? 260 - $idx : 240 - $idx;
 				$add_email($email_val, $prio);
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')) {
+			foreach ((array) cmx_kommunikation_collect_emails($post_id) as $email) {
+				$add_email((string) $email, 280);
 			}
 		}
 

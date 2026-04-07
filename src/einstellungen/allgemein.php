@@ -3,6 +3,7 @@
 /**
  * Tab: Allgemein
  */
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')) {
 	function cmx_mwst_exempt_default_note_html(): string {
 		return 'Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>';

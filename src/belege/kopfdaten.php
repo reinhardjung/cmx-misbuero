@@ -932,6 +932,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_meta_keys')) {
 		$email_keys = [
 			'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
 		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+			$email_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('email', 10), $email_keys);
+		}
 
 		$address_keys = [
 			'_cmx_rechnung_strasse',
@@ -953,6 +956,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_meta_keys')) {
 		$phone_keys = [
 			'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
 		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+			$phone_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('telefon', 10), $phone_keys);
+		}
 
 		$general_keys = [
 			'_cmx_kontakte_vorname', '_cmx_kontakte_nachname', '_cmx_kontakte_anrede',

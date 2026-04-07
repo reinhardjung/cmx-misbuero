@@ -363,7 +363,7 @@ function cmx_camt_store_beleg_partial_rows(int $beleg_id, array $rows): void {
 		return;
 	}
 
-	\update_post_meta($beleg_id, cmx_camt_beleg_partial_meta_key(), \wp_json_encode(\array_values($clean)));
+	\update_post_meta($beleg_id, cmx_camt_beleg_partial_meta_key(), \array_values($clean));
 }
 
 function cmx_camt_beleg_partial_sum(int $beleg_id): float {

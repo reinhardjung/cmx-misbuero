@@ -300,7 +300,9 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_contact_email')) {
 			}
 		}
 
-		$email = \sanitize_email((string) \get_post_meta($kontakt_id, '_cmx_email_1', true));
+		$email = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+			? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id))
+			: \sanitize_email((string) \get_post_meta($kontakt_id, '_cmx_email_1', true));
 		return \is_email($email) ? $email : '';
 	}
 }

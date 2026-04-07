@@ -500,7 +500,9 @@ add_action('add_meta_boxes', function() {
 					$send_href = esc_url(admin_url('admin-post.php?action=cmxbu_beleg_send&post_id='.(int)$post->ID));
 					$kontakt_id = (int) get_post_meta((int) $post->ID, '_cmx_beleg_kontakt_id', true);
 					if ($kontakt_id > 0) {
-						$recipient_mail = \sanitize_email((string) get_post_meta($kontakt_id, '_cmx_email_1', true));
+						$recipient_mail = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+							? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id))
+							: \sanitize_email((string) get_post_meta($kontakt_id, '_cmx_email_1', true));
 						if (\is_email($recipient_mail)) {
 							$send_tooltip .= ' an: ' . $recipient_mail;
 						}

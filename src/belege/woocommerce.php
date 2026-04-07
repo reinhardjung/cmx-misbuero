@@ -43,52 +43,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts_fall
 			}
 		}
 
-		for ($slot = 1; $slot <= 3; $slot++) {
-			$row = \is_array($contacts[$slot - 1] ?? null) ? (array) $contacts[$slot - 1] : [];
-			$legacy_map = [
-				"_cmx_telefon_{$slot}" => (string) ($row['telefon'] ?? ''),
-				"_cmx_email_{$slot}" => (string) ($row['email'] ?? ''),
-				"_cmx_telefon_label_{$slot}" => (string) ($row['telefon_label'] ?? ''),
-				"_cmx_email_label_{$slot}" => (string) ($row['email_label'] ?? ''),
-			];
-			foreach ($legacy_map as $meta_key => $value) {
-				$value = $meta_key === "_cmx_email_{$slot}" ? \sanitize_email($value) : \sanitize_text_field($value);
-				if ($value === '') {
-					\delete_post_meta($post_id, $meta_key);
-				} else {
-					\update_post_meta($post_id, $meta_key, $value);
-				}
+		$legacy_direct_meta_keys = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_direct_meta_keys')
+			? (array) cmx_kommunikation_legacy_direct_meta_keys()
+			: [];
+		foreach ($legacy_direct_meta_keys as $legacy_meta_key) {
+			$legacy_meta_key = (string) $legacy_meta_key;
+			if ($legacy_meta_key !== '') {
+				\delete_post_meta($post_id, $legacy_meta_key);
 			}
 		}
 
-		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
-			$bundle = cmx_kommunikation_build_legacy_bundle($contacts);
-		} else {
-			$bundle = ['kontakte' => [], 'telefon' => [], 'email' => []];
-			foreach (\array_values($contacts) as $index => $row) {
-				if (!\is_array($row)) {
-					continue;
-				}
-				$slot = $index + 1;
-				$email = \sanitize_email((string) ($row['email'] ?? ''));
-				$telefon = \sanitize_text_field((string) ($row['telefon'] ?? ''));
-				$email_label = \sanitize_key((string) ($row['email_label'] ?? ''));
-				$telefon_label = \sanitize_key((string) ($row['telefon_label'] ?? ''));
-				$bundle['kontakte'][] = $row;
-				$bundle['telefon'][$slot] = ['label' => $telefon_label, 'value' => $telefon];
-				$bundle['email'][$slot] = ['label' => $email_label, 'value' => $email, 'valid' => \is_email($email) ? '1' : '0'];
-				$bundle['telefon_' . $slot] = $telefon;
-				$bundle['email_' . $slot] = $email;
+		$legacy_bundle_keys = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_bundle_meta_keys')
+			? (array) cmx_kommunikation_legacy_bundle_meta_keys()
+			: ['_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation', 'cmx_kommunikation_data'];
+		foreach ($legacy_bundle_keys as $legacy_meta_key) {
+			$legacy_meta_key = (string) $legacy_meta_key;
+			if ($legacy_meta_key !== '') {
+				\delete_post_meta($post_id, $legacy_meta_key);
 			}
-		}
-		if (
-			(array) ($bundle['kontakte'] ?? []) === []
-			&& (array) ($bundle['telefon'] ?? []) === []
-			&& (array) ($bundle['email'] ?? []) === []
-		) {
-			\delete_post_meta($post_id, '_cmx_kommunikation');
-		} else {
-			\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 		}
 	}
 }
@@ -1103,6 +1075,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_find_existing_contact_i
 			$email_keys = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_email_meta_keys')
 				? (array) cmx_kontakte_search_email_meta_keys()
 				: ['_cmx_email_1', '_cmx_email_2', '_cmx_email_3', 'email', 'mail'];
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+				$email_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('email', 10), $email_keys);
+			}
 			$email_keys = \array_values(\array_unique(\array_filter(\array_map('strval', $email_keys))));
 			$meta_query = ['relation' => 'OR'];
 			foreach ($email_keys as $key) {
@@ -1191,8 +1166,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_woocommerce_upsert_contact')) {
 		\update_post_meta($contact_id, '_cmx_kontakte_vorname', $parts['first_name']);
 		\update_post_meta($contact_id, '_cmx_kontakte_nachname', $parts['last_name']);
 		\update_post_meta($contact_id, '_cmx_kontakte_privat', $private);
-		\update_post_meta($contact_id, '_cmx_email_1', $parts['email']);
-		\update_post_meta($contact_id, '_cmx_telefon_1', $parts['phone']);
 		\update_post_meta($contact_id, '_cmx_rechnung_strasse', $full_address);
 		\update_post_meta($contact_id, '_cmx_rechnung_plz', $parts['postcode']);
 		\update_post_meta($contact_id, '_cmx_rechnung_ort', $parts['city']);

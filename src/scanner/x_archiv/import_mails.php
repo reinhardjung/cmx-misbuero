@@ -565,6 +565,12 @@ function cmx_mail_import_collect_contact_emails(int $kontakt_id): array {
 		}
 	}
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')) {
+		foreach ((array) cmx_kommunikation_collect_emails($kontakt_id) as $email) {
+			$add((string) $email);
+		}
+	}
+
 	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 		$bundle = \get_post_meta($kontakt_id, '_cmx_kommunikation', true);
 		if (\is_array($bundle)) {
@@ -643,6 +649,9 @@ function cmx_mail_import_find_contact_by_sender(string $sender_email): int {
 	}
 
 	$direct_keys = ['_cmx_email_1', '_cmx_email_2', '_cmx_email_3', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail'];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$direct_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('email', 10), $direct_keys);
+	}
 	$meta_query = ['relation' => 'OR'];
 	foreach ($direct_keys as $key) {
 		$meta_query[] = [

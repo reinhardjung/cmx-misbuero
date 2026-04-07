@@ -344,6 +344,9 @@ function cmx_comm_container_keys(): array {
 function cmx_meta_keys_tel_1(): array {
 	$c = __NAMESPACE__ . '\\CMX_KONTAKTE_META_TELEFON_1';
 	$list = \defined($c) ? [\constant($c)] : [];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$list = \array_merge($list, (array) cmx_kommunikation_flat_field_meta_keys('telefon', 10));
+	}
 	// NEU: direkte Felder zuerst, dann Legacy-Keys
 	$list = array_merge($list, [
 		'_cmx_telefon_1','cmx_telefon_1','telefon_1','tel_1','phone_1','telefon','tel','phone'
@@ -354,6 +357,9 @@ function cmx_meta_keys_tel_1(): array {
 function cmx_meta_keys_email_1(): array {
 	$c = __NAMESPACE__ . '\\CMX_KONTAKTE_META_EMAIL_1';
 	$list = \defined($c) ? [\constant($c)] : [];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$list = \array_merge($list, (array) cmx_kommunikation_flat_field_meta_keys('email', 10));
+	}
 	// NEU: direkte Felder zuerst, dann Legacy-Keys
 	$list = array_merge($list, [
 		'_cmx_email_1','cmx_email_1','email_1','e_mail_1','kontakt_email','email','e_mail','mail'
@@ -940,6 +946,9 @@ function cmx_kontakte_search_email_meta_keys(): array {
 		'kontakt_email', 'email', 'e_mail', 'mail',
 		'_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation',
 	];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('email', 10), $keys);
+	}
 
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
 }

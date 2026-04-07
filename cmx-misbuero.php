@@ -14,7 +14,7 @@
  * Requires at least: 6.7.1
  */
 
-const CMX_ENABLE_HELP_ONCE = false;
+const CMX_ENABLE_HELP_ONCE = true;
 
 require_once __DIR__ . '/includes/cmx_version.php';
 

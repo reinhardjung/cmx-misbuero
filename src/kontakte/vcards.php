@@ -157,52 +157,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts_fall
 			}
 		}
 
-		for ($slot = 1; $slot <= 3; $slot++) {
-			$row = \is_array($contacts[$slot - 1] ?? null) ? (array) $contacts[$slot - 1] : [];
-			$legacy_map = [
-				"_cmx_telefon_{$slot}" => (string) ($row['telefon'] ?? ''),
-				"_cmx_email_{$slot}" => (string) ($row['email'] ?? ''),
-				"_cmx_telefon_label_{$slot}" => (string) ($row['telefon_label'] ?? ''),
-				"_cmx_email_label_{$slot}" => (string) ($row['email_label'] ?? ''),
-			];
-			foreach ($legacy_map as $meta_key => $value) {
-				$value = $meta_key === "_cmx_email_{$slot}" ? \sanitize_email($value) : \sanitize_text_field($value);
-				if ($value === '') {
-					\delete_post_meta($post_id, $meta_key);
-				} else {
-					\update_post_meta($post_id, $meta_key, $value);
-				}
+		$legacy_direct_meta_keys = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_direct_meta_keys')
+			? (array) cmx_kommunikation_legacy_direct_meta_keys()
+			: [];
+		foreach ($legacy_direct_meta_keys as $legacy_meta_key) {
+			$legacy_meta_key = (string) $legacy_meta_key;
+			if ($legacy_meta_key !== '') {
+				\delete_post_meta($post_id, $legacy_meta_key);
 			}
 		}
 
-		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
-			$bundle = cmx_kommunikation_build_legacy_bundle($contacts);
-		} else {
-			$bundle = ['kontakte' => [], 'telefon' => [], 'email' => []];
-			foreach (\array_values($contacts) as $index => $row) {
-				if (!\is_array($row)) {
-					continue;
-				}
-				$slot = $index + 1;
-				$email = \sanitize_email((string) ($row['email'] ?? ''));
-				$telefon = \sanitize_text_field((string) ($row['telefon'] ?? ''));
-				$email_label = \sanitize_key((string) ($row['email_label'] ?? ''));
-				$telefon_label = \sanitize_key((string) ($row['telefon_label'] ?? ''));
-				$bundle['kontakte'][] = $row;
-				$bundle['telefon'][$slot] = ['label' => $telefon_label, 'value' => $telefon];
-				$bundle['email'][$slot] = ['label' => $email_label, 'value' => $email, 'valid' => \is_email($email) ? '1' : '0'];
-				$bundle['telefon_' . $slot] = $telefon;
-				$bundle['email_' . $slot] = $email;
+		$legacy_bundle_keys = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_bundle_meta_keys')
+			? (array) cmx_kommunikation_legacy_bundle_meta_keys()
+			: ['_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation', 'cmx_kommunikation_data'];
+		foreach ($legacy_bundle_keys as $legacy_meta_key) {
+			$legacy_meta_key = (string) $legacy_meta_key;
+			if ($legacy_meta_key !== '') {
+				\delete_post_meta($post_id, $legacy_meta_key);
 			}
-		}
-		if (
-			(array) ($bundle['kontakte'] ?? []) === []
-			&& (array) ($bundle['telefon'] ?? []) === []
-			&& (array) ($bundle['email'] ?? []) === []
-		) {
-			\delete_post_meta($post_id, '_cmx_kommunikation');
-		} else {
-			\update_post_meta($post_id, '_cmx_kommunikation', $bundle);
 		}
 	}
 }
@@ -353,9 +325,9 @@ function cmx_kontakte_vcard_apply_contact_data(int $post_id, array $d, bool $is_
 			'vorname' => $slot === 1 ? $first_name : '',
 			'nachname' => $slot === 1 ? $last_name : '',
 			'telefon_label' => (string) ($bundle['telefon'][$slot]['label'] ?? ''),
-			'telefon' => (string) \get_post_meta($post_id, "_cmx_telefon_{$slot}", true),
+			'telefon' => (string) ($bundle['telefon'][$slot]['value'] ?? ''),
 			'email_label' => (string) ($bundle['email'][$slot]['label'] ?? ''),
-			'email' => (string) \get_post_meta($post_id, "_cmx_email_{$slot}", true),
+			'email' => (string) ($bundle['email'][$slot]['value'] ?? ''),
 			'geburtsdatum' => '',
 			'duzis' => '0',
 		];
@@ -431,7 +403,7 @@ function cmx_kontakte_vcard_apply_email_row(int $post_id, int $slot, array $row,
 		'value' => $val,
 		'valid' => \is_email($val) ? '1' : '0',
 	];
-	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, "_cmx_email_{$slot}", $val);
+	$changed = false;
 	$current_entry = $bundle['email'][$slot] ?? [];
 	if (!\is_array($current_entry) || $current_entry !== $target_entry) {
 		$bundle['email'][$slot] = $target_entry;
@@ -453,7 +425,7 @@ function cmx_kontakte_vcard_apply_phone_row(int $post_id, int $slot, array $row,
 		'label' => $label,
 		'value' => $val,
 	];
-	$changed = cmx_kontakte_vcard_update_meta_if_changed($post_id, "_cmx_telefon_{$slot}", $val);
+	$changed = false;
 	$current_entry = $bundle['telefon'][$slot] ?? [];
 	if (!\is_array($current_entry) || $current_entry !== $target_entry) {
 		$bundle['telefon'][$slot] = $target_entry;

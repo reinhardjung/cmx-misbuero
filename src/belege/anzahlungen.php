@@ -310,5 +310,5 @@ function cmx_render_beleg_anzahlungen_metabox(\WP_Post $post): void {
 		return;
 	}
 
-	\update_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN, \wp_json_encode($clean));
+	\update_post_meta($post_id, CMX_BELEG_META_ANZAHLUNGEN, $clean);
 }, 10, 3);

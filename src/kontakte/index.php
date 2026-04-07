@@ -111,7 +111,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_make_taxonomy_metabox_titl
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 	function cmx_kontakte_notice_first_email(int $post_id): string {
-		$email = \sanitize_email((string) \get_post_meta($post_id, '_cmx_email_1', true));
+		$email = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+			? \sanitize_email((string) cmx_kommunikation_primary_email($post_id))
+			: \sanitize_email((string) \get_post_meta($post_id, '_cmx_email_1', true));
 		if (\is_email($email)) {
 			return $email;
 		}

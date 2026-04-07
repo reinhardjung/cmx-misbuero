@@ -457,8 +457,12 @@ if (!function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact')) {
 			'plz'     => get_post_meta($id, '_cmx_rechnung_plz', true),
 			'ort'     => get_post_meta($id, '_cmx_rechnung_ort', true),
 			'land'    => get_post_meta($id, '_cmx_rechnung_land', true),
-			'phone'   => get_post_meta($id, '_cmx_telefon_1', true),
-			'email'   => get_post_meta($id, '_cmx_email_1', true),
+			'phone'   => \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')
+				? cmx_kommunikation_primary_phone($id)
+				: get_post_meta($id, '_cmx_telefon_1', true),
+			'email'   => \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+				? cmx_kommunikation_primary_email($id)
+				: get_post_meta($id, '_cmx_email_1', true),
 			'website' => get_post_meta($id, '_cmx_kontakte_url', true),
 		];
 	}
@@ -611,9 +615,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_payrexx_contact_data')) {
 			$company = '';
 		}
 
-		$email = \sanitize_email(cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
-			'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
-		])));
+		$email = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+			? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id))
+			: \sanitize_email(cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+				'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
+			])));
 		if (!\is_email($email)) {
 			$email = '';
 		}
@@ -1461,12 +1467,16 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 		if ($beleg_richtung === 'eingang') {
 			if ($kontakt_id > 0) {
 				$counterparty_contact = [
-					'phone' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
-						'_cmx_telefon_1', 'cmx_telefon_1', 'telefon_1', 'tel_1', 'phone_1', 'telefon', 'tel', 'phone',
-					])),
-					'email' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
-						'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
-					])),
+					'phone' => \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')
+						? (string) cmx_kommunikation_primary_phone($kontakt_id)
+						: cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+							'_cmx_telefon_1', 'cmx_telefon_1', 'telefon_1', 'tel_1', 'phone_1', 'telefon', 'tel', 'phone',
+						])),
+					'email' => \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+						? (string) cmx_kommunikation_primary_email($kontakt_id)
+						: cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
+							'_cmx_email_1', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail',
+						])),
 					'website' => cmxbu_take_first_token(cmxbu_meta_first($kontakt_id, [
 						'_cmx_kontakte_url', 'cmx_kontakte_meta_url', 'cmx_kontakte_url', '_cmx_url', 'cmx_url', '_website', 'website', 'url',
 					])),
