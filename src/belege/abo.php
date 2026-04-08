@@ -21,14 +21,13 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const META_LAST_RUN = '_cmx_abo_last_run';
 		const STOP_ACTION = 'cmx_beleg_abo_stop';
 		const NOTICE_QUERY_ARG = 'cmx_beleg_abo_notice';
-		const DEFAULT_ENABLED_OPTION = 'belege_abo_default_enabled';
-		const DEFAULT_FREQUENCY_OPTION = 'belege_abo_default_frequency';
-		const DEFAULT_TIME_OPTION = 'belege_abo_default_time';
 
 			public static function init(): void {
 				\add_action('add_meta_boxes', [__CLASS__, 'add_meta_box']);
 				\add_action('save_post_' . self::POST_TYPE, [__CLASS__, 'save_meta_box'], 20, 3);
 				\add_filter('cron_schedules', [__CLASS__, 'register_cron_schedule']);
+				\add_filter('get_user_option_metaboxhidden_belege', [__CLASS__, 'filter_hidden_meta_boxes']);
+				\add_filter('hidden_meta_boxes', [__CLASS__, 'filter_hidden_meta_boxes_for_screen'], 10, 2);
 				\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_belege']);
 				\add_action('admin_post_' . self::STOP_ACTION, [__CLASS__, 'handle_stop_request']);
 				\add_action('all_admin_notices', [__CLASS__, 'render_admin_notice']);
@@ -49,6 +48,19 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				'side',
 				'default'
 			);
+		}
+
+		public static function filter_hidden_meta_boxes($hidden): array {
+			$hidden = \is_array($hidden) ? $hidden : (array) $hidden;
+			return \array_values(\array_diff($hidden, ['cmx-beleg-abo']));
+		}
+
+		public static function filter_hidden_meta_boxes_for_screen($hidden, $screen): array {
+			if ($screen && (($screen->post_type ?? '') === self::POST_TYPE)) {
+				return self::filter_hidden_meta_boxes($hidden);
+			}
+
+			return \is_array($hidden) ? $hidden : (array) $hidden;
 		}
 
 		public static function render_meta_box(\WP_Post $post): void {
@@ -512,9 +524,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 
 		private static function sanitize_settings_from_post(array $source, array $fallback = []): array {
 			$fallback = \wp_parse_args($fallback, self::get_default_settings());
-			$frequency = isset($source['cmx_abo_frequency']) ? \sanitize_key((string) \wp_unslash($source['cmx_abo_frequency'])) : 'monthly';
+			$frequency = isset($source['cmx_abo_frequency']) ? \sanitize_key((string) \wp_unslash($source['cmx_abo_frequency'])) : 'never';
 			if (!\in_array($frequency, self::allowed_frequencies(), true)) {
-				$frequency = (string) ($fallback['frequency'] ?? 'monthly');
+				$frequency = (string) ($fallback['frequency'] ?? 'never');
 			}
 
 			return [
@@ -759,12 +771,6 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return $datetime instanceof \DateTimeImmutable ? $datetime : null;
 		}
 
-		public static function default_settings_option_name(): string {
-			return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
-				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
-				: 'cmx_einstellungen';
-		}
-
 		public static function settings_url(): string {
 			$slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
@@ -773,36 +779,15 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return \admin_url('admin.php?page=' . $slug . '&tab=vorgaben&sub=belege');
 		}
 
-		public static function sanitize_default_frequency(string $frequency): string {
-			$frequency = \sanitize_key($frequency);
-			if (!isset(self::all_frequency_labels()[$frequency])) {
-				return 'monthly';
-			}
-			if (!self::is_debug_mode_enabled() && \in_array($frequency, ['minutely', 'hourly'], true)) {
-				return 'monthly';
-			}
-
-			return $frequency;
-		}
-
-		public static function sanitize_default_time(string $value): string {
-			return self::normalize_time($value);
-		}
-
 		private static function get_default_settings(): array {
-			$options = (array) \get_option(self::default_settings_option_name(), []);
-			$enabled = !empty($options[self::DEFAULT_ENABLED_OPTION]) ? '1' : '0';
-			$frequency = self::sanitize_default_frequency((string) ($options[self::DEFAULT_FREQUENCY_OPTION] ?? 'monthly'));
-			$time = self::sanitize_default_time((string) ($options[self::DEFAULT_TIME_OPTION] ?? '08:00'));
-
 			return [
-				'enabled' => $enabled,
-				'frequency' => $enabled === '1' ? $frequency : 'never',
+				'enabled' => '0',
+				'frequency' => 'never',
 				'weekday' => 1,
 				'monthday' => 1,
 				'year_month' => 1,
 				'year_day' => 1,
-				'time' => $time,
+				'time' => '08:00',
 				'next_run' => '',
 				'last_run' => '',
 			];
