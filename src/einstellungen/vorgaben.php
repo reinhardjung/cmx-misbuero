@@ -6,10 +6,10 @@
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_defaults')) {
 	function cmx_vorgaben_recurring_period_defaults(): array {
 		return [
-			'weekly' => 'current',
-			'monthly' => 'current',
-			'quarterly' => 'current',
-			'yearly' => 'current',
+			'weekly' => 'next',
+			'monthly' => 'next',
+			'quarterly' => 'next',
+			'yearly' => 'next',
 		];
 	}
 }
@@ -429,7 +429,7 @@ function cmx_register_vorgaben_belege_trustee_field(): void {
 			echo '<label>';
 			echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_treuhaender_notice]" value="0">';
 			echo '<input type="checkbox" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'[belege_use_treuhaender_notice]" value="1" '.\checked($enabled, true, false).'> ';
-			echo 'Kann Milchbüchli an den Treuhänder versenden';
+			echo 'Das Milchbüchli kann an den Treuhänder versenden werden';
 			echo '</label>';
 		},
 		'cmx_tab_vorgaben__belege',

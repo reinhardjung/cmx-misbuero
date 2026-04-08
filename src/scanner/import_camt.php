@@ -877,7 +877,7 @@ function cmx_camt_format_amount_no_decimals($value): string {
 function cmx_camt_reference_display_html(string $reference): string {
 	$reference = \trim($reference);
 	if ($reference === '') {
-		return '-';
+		return '';
 	}
 
 	// Insert invisible joiners around separators so browser phone detectors stop linking invoice refs as tel numbers.
