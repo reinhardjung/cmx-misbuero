@@ -737,6 +737,41 @@ function cmx_camt_auto_assign_entries(array $entries): array {
 	return $summary;
 }
 
+function cmx_camt_reprocess_state(array $state, bool $force = true): array {
+	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
+	$summary = [
+		'assigned' => 0,
+		'skipped'  => 0,
+		'count'    => \count($entries),
+	];
+
+	if (empty($entries)) {
+		return [
+			'state'   => $state,
+			'ran'     => false,
+			'summary' => $summary,
+		];
+	}
+
+	if (!$force && (string) ($state['auto_assign_checked_at'] ?? '') !== '') {
+		return [
+			'state'   => $state,
+			'ran'     => false,
+			'summary' => $summary,
+		];
+	}
+
+	$summary = \array_merge($summary, cmx_camt_auto_assign_entries(\array_values($entries)));
+	$state['auto_assign_checked_at'] = (string) \wp_date('c');
+	cmx_camt_state_set($state);
+
+	return [
+		'state'   => cmx_camt_state_get(),
+		'ran'     => true,
+		'summary' => $summary,
+	];
+}
+
 function cmx_camt_revert_assignment_on_beleg(string $signature, array $assignment): void {
 	$beleg_id = (int) ($assignment['beleg_id'] ?? 0);
 	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
@@ -2121,10 +2156,7 @@ function cmx_bank_import_render_log_page(): void {
 	$state = cmx_camt_state_get();
 	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
 	if (!empty($entries) && (string) ($state['auto_assign_checked_at'] ?? '') === '') {
-		cmx_camt_auto_assign_entries(\array_values($entries));
-		$state['auto_assign_checked_at'] = (string) \wp_date('c');
-		cmx_camt_state_set($state);
-		$state = cmx_camt_state_get();
+		$state = (array) (cmx_camt_reprocess_state($state, true)['state'] ?? $state);
 	}
 	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
 	$files = \is_array($state['files'] ?? null) ? (array) $state['files'] : [];
@@ -2239,6 +2271,27 @@ function cmx_bank_import_render_log_page(): void {
 		box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 24px rgba(16,24,40,.04);
 	}
 	.cmx-camt-pane h2{margin:0 0 12px;color:#162033;font-size:15px;line-height:1.35}
+	.cmx-camt-heading-button{
+		appearance:none;
+		border:0;
+		background:none;
+		padding:0;
+		margin:0;
+		font:inherit;
+		font-weight:inherit;
+		color:inherit;
+		cursor:pointer;
+		text-decoration:none;
+	}
+	.cmx-camt-heading-button:hover,
+	.cmx-camt-heading-button:focus{
+		color:#135e96;
+		outline:none;
+	}
+	.cmx-camt-heading-button[disabled]{
+		cursor:wait;
+		opacity:.7;
+	}
 	.cmx-camt-pane--left{max-height:72vh;overflow:auto}
 	.cmx-camt-pane--right{max-height:72vh;overflow:auto}
 	.cmx-camt-table th,.cmx-camt-table td{vertical-align:top}
@@ -2421,7 +2474,7 @@ function cmx_bank_import_render_log_page(): void {
 	} else {
 		echo '<div class="cmx-camt-layout">';
 		echo '<div class="cmx-camt-pane cmx-camt-pane--left">';
-		echo '<h2>Buchungen</h2>';
+		echo '<h2><button type="button" class="cmx-camt-heading-button" id="cmx-camt-reprocess-trigger" title="CAMT-Arbeitsliste neu einlesen und Zuordnungen erneut prüfen">Buchungen</button></h2>';
 		cmx_camt_render_left_rows($entries);
 		echo '</div>';
 
@@ -2445,6 +2498,7 @@ function cmx_bank_import_render_log_page(): void {
 	var input = document.getElementById("cmx-camt-files");
 	var messages = document.getElementById("cmx-camt-messages");
 	var detail = document.getElementById("cmx-camt-detail");
+	var reprocessTrigger = document.getElementById("cmx-camt-reprocess-trigger");
 	var rows = Array.prototype.slice.call(document.querySelectorAll(".cmx-camt-entry-row"));
 	var tableBody = document.querySelector(".cmx-camt-table tbody");
 	var dateResetButton = document.querySelector(".cmx-camt-date-reset");
@@ -2581,6 +2635,30 @@ function cmx_bank_import_render_log_page(): void {
 			});
 	}
 
+	function reprocessEntries(){
+		if (!reprocessTrigger) return;
+		reprocessTrigger.disabled = true;
+		setMessage("info", "CAMT-Arbeitsliste wird neu eingelesen...");
+		var fd = new FormData();
+		fd.append("action", "cmx_camt_reprocess_entries");
+		fd.append("nonce", nonce);
+		fetch(ajaxUrl, {method:"POST", body:fd, credentials:"same-origin"})
+			.then(function(r){ return r.json(); })
+			.then(function(res){
+				if (!res || !res.success) {
+					throw new Error((res && res.data && res.data.message) ? res.data.message : "CAMT-Arbeitsliste konnte nicht neu eingelesen werden.");
+				}
+				setMessage("success", (res.data && res.data.message) ? String(res.data.message) : "CAMT-Arbeitsliste neu geprüft.");
+				window.setTimeout(function(){
+					window.location.href = pageUrl;
+				}, 220);
+			})
+			.catch(function(err){
+				setMessage("error", err && err.message ? err.message : "CAMT-Arbeitsliste konnte nicht neu eingelesen werden.");
+				reprocessTrigger.disabled = false;
+			});
+	}
+
 	function getPanelAmountWindow(source){
 		var panel = source ? source.closest(".cmx-camt-candidates-head") : null;
 		if (!panel && detail) {
@@ -2676,6 +2754,13 @@ function cmx_bank_import_render_log_page(): void {
 			upload.classList.remove("is-dragover");
 			var files = e.dataTransfer ? e.dataTransfer.files : null;
 			uploadFiles(files);
+		});
+	}
+
+	if (reprocessTrigger) {
+		reprocessTrigger.addEventListener("click", function(e){
+			e.preventDefault();
+			reprocessEntries();
 		});
 	}
 
@@ -2995,10 +3080,8 @@ HTML;
 		'files'                  => $files,
 		'entries'                => $entries,
 	];
-	cmx_camt_state_set($state);
-	$auto_assign = cmx_camt_auto_assign_entries($entries);
-	$state['auto_assign_checked_at'] = (string) \wp_date('c');
-	cmx_camt_state_set($state);
+	$reprocess = cmx_camt_reprocess_state($state, true);
+	$auto_assign = (array) ($reprocess['summary'] ?? []);
 	cmx_bank_import_log('CAMT Upload verarbeitet', [
 		'files'        => \count($files),
 		'entries'      => \count($entries),
@@ -3019,6 +3102,37 @@ HTML;
 	}
 
 	\wp_send_json_success($response);
+});
+
+\add_action('wp_ajax_cmx_camt_reprocess_entries', function (): void {
+	if (!cmx_camt_current_user_can()) {
+		\wp_send_json_error(['message' => 'forbidden'], 403);
+	}
+	\check_ajax_referer('cmx_camt_ajax', 'nonce');
+
+	$state = cmx_camt_state_get();
+	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
+	if (empty($entries)) {
+		\wp_send_json_error(['message' => 'Keine CAMT-Buchungen geladen.'], 400);
+	}
+
+	$reprocess = cmx_camt_reprocess_state($state, true);
+	$summary = (array) ($reprocess['summary'] ?? []);
+	cmx_bank_import_log('CAMT Arbeitsliste neu eingelesen', [
+		'entries'       => \count($entries),
+		'auto_assigned' => (int) ($summary['assigned'] ?? 0),
+	]);
+
+	$message = 'CAMT-Arbeitsliste neu eingelesen.';
+	if ((int) ($summary['assigned'] ?? 0) > 0) {
+		$message .= ' ' . (int) $summary['assigned'] . ' Beleg(e) wurden automatisch zugeordnet.';
+	}
+
+	\wp_send_json_success([
+		'message'  => $message,
+		'assigned' => (int) ($summary['assigned'] ?? 0),
+		'count'    => \count($entries),
+	]);
 });
 
 \add_action('wp_ajax_cmx_camt_load_candidates', function (): void {
