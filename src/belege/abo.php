@@ -35,6 +35,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const META_LAST_RESULT_AT = '_cmx_abo_last_result_at';
 		const META_PROCESSING_LOCK = '_cmx_abo_processing_lock';
 		const STOP_ACTION = 'cmx_beleg_abo_stop';
+		const PING_ACTION = 'cmx_beleg_abo_ping';
 		const NOTICE_QUERY_ARG = 'cmx_beleg_abo_notice';
 
 			public static function init(): void {
@@ -46,11 +47,14 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				\add_filter('cmx_duplicate_meta_blacklist', [__CLASS__, 'filter_duplicate_meta_blacklist']);
 				\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_belege']);
 				\add_action('admin_post_' . self::STOP_ACTION, [__CLASS__, 'handle_stop_request']);
+				\add_action('wp_ajax_' . self::PING_ACTION, [__CLASS__, 'handle_ajax_ping']);
 				\add_action('all_admin_notices', [__CLASS__, 'render_admin_notice']);
 				if (\did_action('init')) {
 					self::ensure_cron_event();
+					self::maybe_process_due_belege_on_request();
 				} else {
-					\add_action('init', [__CLASS__, 'ensure_cron_event']);
+					\add_action('init', [__CLASS__, 'ensure_cron_event'], 20);
+					\add_action('init', [__CLASS__, 'maybe_process_due_belege_on_request'], 21);
 				}
 			}
 
@@ -116,6 +120,12 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			$source_link = $source_post_id > 0 ? self::post_edit_link_html($source_post_id) : '';
 			$last_generated_link = $last_generated_post_id > 0 ? self::post_edit_link_html($last_generated_post_id) : '';
 			$mail_status_text = self::format_mail_status_text($last_mail_status, $last_mail_message, $last_mail_to);
+			$ping_config = (!$is_generated_copy && $settings['enabled'] === '1' && $settings['frequency'] !== 'never' && $settings['next_run'] !== '')
+				? (string) \wp_json_encode([
+					'action' => self::PING_ACTION,
+					'nonce' => \wp_create_nonce(self::PING_ACTION),
+				])
+				: '';
 			?>
 			<style>
 				#cmx-beleg-abo .inside {
@@ -292,6 +302,33 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					sync();
 				})(<?php echo $js_settings; ?>);
 				</script>
+				<?php if ($ping_config !== '') : ?>
+					<script>
+					(function(config){
+						if (!config || !window.ajaxurl) {
+							return;
+						}
+						var pending = false;
+						var ping = function() {
+							if (pending) {
+								return;
+							}
+							pending = true;
+							var body = new URLSearchParams();
+							body.set('action', config.action || '');
+							body.set('nonce', config.nonce || '');
+							fetch(window.ajaxurl, {
+								method: 'POST',
+								credentials: 'same-origin',
+								headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+								body: body.toString()
+							}).catch(function(){})
+							.finally(function(){ pending = false; });
+						};
+						window.setInterval(ping, 60000);
+					})(<?php echo $ping_config; ?>);
+					</script>
+				<?php endif; ?>
 			</div>
 			<?php
 		}
@@ -358,13 +395,42 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		public static function ensure_cron_event(): void {
 			\wp_clear_scheduled_hook('cmx_beleg_abo_single_execute');
 			$event = \function_exists('wp_get_scheduled_event') ? \wp_get_scheduled_event(self::CRON_HOOK) : null;
-			if ($event && (string) ($event->schedule ?? '') !== self::CRON_INTERVAL) {
+			$now = \time();
+			if ($event && ((string) ($event->schedule ?? '') !== self::CRON_INTERVAL || (int) ($event->timestamp ?? 0) < ($now - 10 * MINUTE_IN_SECONDS))) {
 				\wp_clear_scheduled_hook(self::CRON_HOOK);
 				$event = null;
 			}
 
 			if (!$event && !\wp_next_scheduled(self::CRON_HOOK)) {
-				\wp_schedule_event(\time() + 60, self::CRON_INTERVAL, self::CRON_HOOK);
+				\wp_schedule_event($now + 60, self::CRON_INTERVAL, self::CRON_HOOK);
+			}
+		}
+
+		public static function maybe_process_due_belege_on_request(): void {
+			if ((\defined('DOING_CRON') && DOING_CRON)
+				|| (\function_exists('wp_doing_cron') && \wp_doing_cron())
+				|| (\function_exists('wp_doing_ajax') && \wp_doing_ajax())
+				|| (\defined('REST_REQUEST') && REST_REQUEST)
+				|| (\defined('XMLRPC_REQUEST') && XMLRPC_REQUEST)
+				|| (\defined('WP_CLI') && WP_CLI)
+			) {
+				return;
+			}
+
+			if (!self::has_due_belege()) {
+				return;
+			}
+
+			$lock_key = 'cmx_beleg_abo_request_runner_lock';
+			if ((string) \get_transient($lock_key) !== '') {
+				return;
+			}
+
+			\set_transient($lock_key, '1', 30);
+			try {
+				self::process_due_belege();
+			} finally {
+				\delete_transient($lock_key);
 			}
 		}
 
@@ -382,15 +448,6 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					'type' => 'DATETIME',
 				],
 			];
-
-			$blocked_frequencies = self::blocked_runtime_frequencies();
-			if ($blocked_frequencies !== []) {
-				$meta_query[] = [
-					'key' => self::META_FREQUENCY,
-					'value' => $blocked_frequencies,
-					'compare' => 'NOT IN',
-				];
-			}
 
 			$post_ids = \get_posts([
 				'post_type' => self::POST_TYPE,
@@ -418,10 +475,6 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			$settings = self::get_settings($post_id);
 			if ($settings['enabled'] !== '1' || $settings['frequency'] === 'never') {
 				\delete_post_meta($post_id, self::META_NEXT_RUN);
-				return false;
-			}
-			if (!self::is_runtime_frequency_allowed($settings['frequency'])) {
-				self::stop_recurring($post_id);
 				return false;
 			}
 			$scheduled_for = (string) ($settings['next_run'] ?? '');
@@ -502,6 +555,29 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return $handled;
 		}
 
+		private static function has_due_belege(): bool {
+			$post_ids = \get_posts([
+				'post_type' => self::POST_TYPE,
+				'post_status' => ['publish', 'private'],
+				'posts_per_page' => 1,
+				'fields' => 'ids',
+				'meta_query' => [
+					[
+						'key' => self::META_ENABLED,
+						'value' => '1',
+					],
+					[
+						'key' => self::META_NEXT_RUN,
+						'value' => \current_time('mysql'),
+						'compare' => '<=',
+						'type' => 'DATETIME',
+					],
+				],
+			]);
+
+			return !empty($post_ids);
+		}
+
 		public static function stop_recurring(int $post_id): bool {
 			$post_id = \absint($post_id);
 			if ($post_id <= 0 || \get_post_type($post_id) !== self::POST_TYPE) {
@@ -542,6 +618,16 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 
 			\wp_safe_redirect(\add_query_arg($args, $redirect_to));
 			exit;
+		}
+
+		public static function handle_ajax_ping(): void {
+			\check_ajax_referer(self::PING_ACTION, 'nonce');
+			if (!\current_user_can('edit_posts')) {
+				\wp_send_json_error(['message' => \__('Keine Berechtigung.', 'cmx-misbuero')], 403);
+			}
+
+			self::process_due_belege();
+			\wp_send_json_success(['now' => \current_time('mysql')]);
 		}
 
 		public static function render_admin_notice(): void {
@@ -794,21 +880,8 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'never'];
 		}
 
-		private static function blocked_runtime_frequencies(): array {
-			return self::is_debug_mode_enabled() ? [] : ['minutely', 'hourly'];
-		}
-
-		private static function is_runtime_frequency_allowed(string $frequency): bool {
-			return !\in_array($frequency, self::blocked_runtime_frequencies(), true);
-		}
-
 		public static function visible_frequency_labels(): array {
-			$labels = self::all_frequency_labels();
-			if (!self::is_debug_mode_enabled()) {
-				unset($labels['minutely'], $labels['hourly']);
-			}
-
-			return $labels;
+			return self::all_frequency_labels();
 		}
 
 		public static function all_frequency_labels(): array {
