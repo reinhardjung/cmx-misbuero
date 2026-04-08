@@ -3,6 +3,72 @@
 /**
  * Tab: Vorgaben
  */
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_defaults')) {
+	function cmx_vorgaben_recurring_period_defaults(): array {
+		return [
+			'weekly' => 'current',
+			'monthly' => 'current',
+			'quarterly' => 'current',
+			'yearly' => 'current',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_labels')) {
+	function cmx_vorgaben_recurring_period_labels(): array {
+		return [
+			'weekly' => [
+				'current' => 'akt. Woche',
+				'next' => 'Folgewoche',
+			],
+			'monthly' => [
+				'current' => 'akt. Monat',
+				'next' => 'Folgemonat',
+			],
+			'quarterly' => [
+				'current' => 'akt. Quartal',
+				'next' => 'Folgequartal',
+			],
+			'yearly' => [
+				'current' => 'akt. Jahr',
+				'next' => 'Folgejahr',
+			],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_normalize')) {
+	function cmx_vorgaben_recurring_period_normalize(string $value, string $fallback = 'current'): string {
+		$value = \sanitize_key($value);
+		return \in_array($value, ['current', 'next'], true) ? $value : $fallback;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vorgaben_recurring_period_field')) {
+	function cmx_render_vorgaben_recurring_period_field(string $frequency): void {
+		$defaults = cmx_vorgaben_recurring_period_defaults();
+		$labels = cmx_vorgaben_recurring_period_labels();
+		if (!isset($defaults[$frequency], $labels[$frequency])) {
+			return;
+		}
+
+		$opts = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+		$key = 'belege_abo_period_' . $frequency;
+		$current = \array_key_exists($key, $opts)
+			? cmx_vorgaben_recurring_period_normalize((string) $opts[$key], (string) $defaults[$frequency])
+			: (string) $defaults[$frequency];
+
+		echo '<fieldset style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">';
+		foreach ($labels[$frequency] as $value => $label) {
+			echo '<label style="display:inline-flex;align-items:center;gap:6px;">';
+			echo '<input type="radio" name="' . \esc_attr(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN . '[' . $key . ']') . '" value="' . \esc_attr($value) . '" ' . \checked($current, $value, false) . '>';
+			echo '<span>' . \esc_html($label) . '</span>';
+			echo '</label>';
+		}
+		echo '</fieldset>';
+	}
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_vorgaben_tab');
 function cmx_register_vorgaben_tab(): void {
 
@@ -16,6 +82,13 @@ function cmx_register_vorgaben_tab(): void {
 	\add_settings_section(
 		'cmx_sec_vorgaben_belege',
 		__('Belege', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__belege'
+	);
+
+	\add_settings_section(
+		'cmx_sec_vorgaben_belege_recurring',
+		__('Wiederkehrende Zahlungen', 'default'),
 		'__return_false',
 		'cmx_tab_vorgaben__belege'
 	);
@@ -221,6 +294,46 @@ function cmx_register_vorgaben_tab(): void {
 			'cmx_sec_vorgaben_belege'
 		);
 
+		\add_settings_field(
+			'belege_abo_period_weekly',
+			'Wöchentlich',
+			function () {
+				cmx_render_vorgaben_recurring_period_field('weekly');
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_recurring'
+		);
+
+		\add_settings_field(
+			'belege_abo_period_monthly',
+			'Monatlich',
+			function () {
+				cmx_render_vorgaben_recurring_period_field('monthly');
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_recurring'
+		);
+
+		\add_settings_field(
+			'belege_abo_period_quarterly',
+			'Quartal',
+			function () {
+				cmx_render_vorgaben_recurring_period_field('quarterly');
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_recurring'
+		);
+
+		\add_settings_field(
+			'belege_abo_period_yearly',
+			'Jährlich',
+			function () {
+				cmx_render_vorgaben_recurring_period_field('yearly');
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_recurring'
+		);
+
 	\register_setting(
 		'cmx_einstellungen',
 		'cmx_katalog_online',
@@ -322,6 +435,17 @@ function cmx_register_vorgaben_belege_trustee_field(): void {
 	if (!\is_array($new)) {
 		return $old;
 	}
+
+	$recurring_defaults = \function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_defaults')
+		? (array) cmx_vorgaben_recurring_period_defaults()
+		: [];
+	foreach ($recurring_defaults as $frequency => $fallback) {
+		$key = 'belege_abo_period_' . (string) $frequency;
+		$new[$key] = \function_exists(__NAMESPACE__ . '\\cmx_vorgaben_recurring_period_normalize')
+			? cmx_vorgaben_recurring_period_normalize((string) ($new[$key] ?? ''), (string) $fallback)
+			: ((string) ($new[$key] ?? '') === 'next' ? 'next' : (string) $fallback);
+	}
+
 	unset(
 		$new['belege_abo_default_enabled'],
 		$new['belege_abo_default_frequency'],

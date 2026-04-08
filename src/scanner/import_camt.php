@@ -1624,6 +1624,18 @@ function cmx_camt_row_status_payload(array $entry): array {
 	];
 }
 
+function cmx_camt_row_highlight_class(array $entry): string {
+	$status_mode = cmx_camt_row_status_mode($entry);
+	if ($status_mode === 'assigned') {
+		return ' is-assigned';
+	}
+	if ($status_mode === 'geschlossen') {
+		return ' is-booked';
+	}
+
+	return '';
+}
+
 function cmx_camt_entry_state_set(string $signature, string $entry_state): array {
 	$signature = \sanitize_key($signature);
 	if ($signature === '') {
@@ -1786,8 +1798,7 @@ function cmx_camt_render_left_rows(array $entries): void {
 			$reference = \trim((string) ($entry['reference'] ?? ''));
 		}
 		$counterparty = \trim((string) ($entry['counterparty_name'] ?? ''));
-		$assignment = cmx_camt_assignment_get($signature);
-		$row_class = (int) ($assignment['beleg_id'] ?? 0) > 0 ? ' is-assigned' : '';
+		$row_class = cmx_camt_row_highlight_class($entry);
 		$amount = (float) cmx_camt_normalize_amount((string) ($entry['amount'] ?? '0'));
 		$entry_state = cmx_camt_entry_state_get($entry);
 		$status_mode = cmx_camt_row_status_mode($entry);
@@ -1964,7 +1975,8 @@ function cmx_bank_import_render_log_page(): void {
 	.cmx-camt-table th,.cmx-camt-table td{vertical-align:top}
 	.cmx-camt-entry-row{cursor:pointer}
 	.cmx-camt-entry-row.is-selected{background:#e9f4ff !important}
-	.cmx-camt-entry-row.is-assigned td{background:#f3fbe9}
+	.cmx-camt-entry-row.is-assigned td,
+	.cmx-camt-entry-row.is-booked td{background:#f3fbe9}
 	.cmx-camt-chip{
 		display:inline-block;
 		padding:2px 8px;
@@ -2343,7 +2355,12 @@ function cmx_bank_import_render_log_page(): void {
 
 			var isAssigned = !!(meta && meta.is_assigned);
 			var entryState = meta && meta.entry_state ? String(meta.entry_state) : "offen";
-			var statusMode = meta && meta.status_mode ? String(meta.status_mode) : (String(html).indexOf("cmx-camt-status--open") !== -1 ? "offen" : "assigned");
+			var statusMode = meta && meta.status_mode
+				? String(meta.status_mode)
+				: (String(html).indexOf("cmx-camt-status--open") !== -1
+					? "offen"
+					: (String(html).indexOf("cmx-camt-status--closed") !== -1 ? "geschlossen" : "assigned"));
+			var isBooked = statusMode === "geschlossen";
 
 			row.setAttribute("data-entry-state", entryState);
 			row.setAttribute("data-status-mode", statusMode);
@@ -2351,6 +2368,11 @@ function cmx_bank_import_render_log_page(): void {
 				row.classList.add("is-assigned");
 			} else {
 				row.classList.remove("is-assigned");
+			}
+			if (isBooked) {
+				row.classList.add("is-booked");
+			} else {
+				row.classList.remove("is-booked");
 			}
 		});
 		applyRowsView();

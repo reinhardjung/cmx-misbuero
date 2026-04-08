@@ -200,11 +200,11 @@ function cmx_passwort_mails_reset_message($message, $key, $user_login, $user_dat
 	$body_html .= '<p style="margin:0;">Wenn Du diese Anfrage nicht gestartet hast, kannst Du diese E-Mail ignorieren.</p>';
 
 	return cmx_passwort_mails_build_html(
-		'Passwort zuruecksetzen',
+		'Passwort zurücksetzen',
 		$body_html,
 		[
 			'url'   => $reset_url,
-			'label' => 'Passwort zuruecksetzen',
+			'label' => 'Passwort zurücksetzen',
 		]
 	);
 }

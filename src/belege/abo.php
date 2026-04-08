@@ -33,6 +33,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const META_LAST_MAIL_MESSAGE = '_cmx_abo_last_mail_message';
 		const META_LAST_MAIL_TO = '_cmx_abo_last_mail_to';
 		const META_LAST_RESULT_AT = '_cmx_abo_last_result_at';
+		const META_STOPPED_AT = '_cmx_abo_stopped_at';
 		const META_PROCESSING_LOCK = '_cmx_abo_processing_lock';
 		const STOP_ACTION = 'cmx_beleg_abo_stop';
 		const PING_ACTION = 'cmx_beleg_abo_ping';
@@ -104,6 +105,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			$last_mail_to = $is_generated_copy
 				? \sanitize_email((string) \get_post_meta($post_id, self::META_MAIL_TO, true))
 				: \sanitize_email((string) \get_post_meta($post_id, self::META_LAST_MAIL_TO, true));
+			$stopped_at = !$is_generated_copy
+				? (string) \get_post_meta($post_id, self::META_STOPPED_AT, true)
+				: '';
 			$stop_url = (!$is_generated_copy && $settings['enabled'] === '1' && $settings['frequency'] !== 'never')
 				? self::build_stop_url($post_id, (string) \get_edit_post_link($post_id, ''))
 				: '';
@@ -119,7 +123,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			$all_frequency_labels = self::all_frequency_labels();
 			$source_link = $source_post_id > 0 ? self::post_edit_link_html($source_post_id) : '';
 			$last_generated_link = $last_generated_post_id > 0 ? self::post_edit_link_html($last_generated_post_id) : '';
-			$mail_status_text = self::format_mail_status_text($last_mail_status, $last_mail_message, $last_mail_to);
+			$mail_status_text = self::format_mail_status_text($last_mail_status, $last_mail_message, $last_mail_to, $stopped_at);
 			$ping_config = (!$is_generated_copy && $settings['enabled'] === '1' && $settings['frequency'] !== 'never' && $settings['next_run'] !== '')
 				? (string) \wp_json_encode([
 					'action' => self::PING_ACTION,
@@ -359,7 +363,8 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			}
 			$GLOBALS['cmx_beleg_abo_save_guard'][$post_id] = true;
 
-			$settings = self::sanitize_settings_from_post($_POST, self::get_settings($post_id));
+			$previous_settings = self::get_settings($post_id);
+			$settings = self::sanitize_settings_from_post($_POST, $previous_settings);
 
 			\update_post_meta($post_id, self::META_ENABLED, $settings['enabled']);
 			\update_post_meta($post_id, self::META_FREQUENCY, $settings['frequency']);
@@ -371,6 +376,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			\delete_post_meta($post_id, '_cmx_abo_immediate_once');
 
 			if ($settings['enabled'] === '1') {
+				\delete_post_meta($post_id, self::META_STOPPED_AT);
 				$next_run = self::calculate_next_run($settings);
 				if ($next_run !== '') {
 					\update_post_meta($post_id, self::META_NEXT_RUN, $next_run);
@@ -378,6 +384,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					\delete_post_meta($post_id, self::META_NEXT_RUN);
 				}
 			} else {
+				if (($previous_settings['enabled'] ?? '0') === '1' || (string) ($previous_settings['next_run'] ?? '') !== '') {
+					\update_post_meta($post_id, self::META_STOPPED_AT, \current_time('mysql'));
+				}
 				\delete_post_meta($post_id, self::META_NEXT_RUN);
 			}
 		}
@@ -586,6 +595,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 
 			\update_post_meta($post_id, self::META_ENABLED, '0');
 			\update_post_meta($post_id, self::META_FREQUENCY, 'never');
+			\update_post_meta($post_id, self::META_STOPPED_AT, \current_time('mysql'));
 			\delete_post_meta($post_id, self::META_NEXT_RUN);
 			\delete_post_meta($post_id, '_cmx_abo_immediate_once');
 			\delete_post_meta($post_id, self::META_PROCESSING_LOCK);
@@ -1011,27 +1021,47 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return '<a href="' . \esc_url($url) . '">' . \esc_html($label) . '</a>';
 		}
 
-		private static function format_mail_status_text(string $status, string $message = '', string $mail_to = ''): string {
+		private static function format_mail_status_text(string $status, string $message = '', string $mail_to = '', string $stopped_at = ''): string {
 			$status = \sanitize_key($status);
 			$message = \trim($message);
 			$mail_to = \sanitize_email($mail_to);
+			$stopped_at = \trim($stopped_at);
+
+			$base = '';
 
 			switch ($status) {
 				case 'sent':
-					return $mail_to !== ''
+					$base = $mail_to !== ''
 						? \sprintf(\__('Gesendet an %s', 'cmx-misbuero'), $mail_to)
 						: (string) \__('Gesendet', 'cmx-misbuero');
+					break;
 
 				case 'failed':
-					return $message !== ''
+					$base = $message !== ''
 						? \sprintf(\__('Fehlgeschlagen: %s', 'cmx-misbuero'), $message)
 						: (string) \__('Fehlgeschlagen', 'cmx-misbuero');
+					break;
 
 				case 'existing':
-					return (string) \__('Bereits erzeugt, kein zweites Mal versendet.', 'cmx-misbuero');
+					$base = (string) \__('Bereits erzeugt, kein zweites Mal versendet.', 'cmx-misbuero');
+					break;
 			}
 
-			return $message;
+			if ($base === '') {
+				$base = $message;
+			}
+
+			if ($stopped_at !== '') {
+				$stopped_text = \sprintf(
+					\__('Gestoppt am %s', 'cmx-misbuero'),
+					self::format_local_datetime($stopped_at)
+				);
+				return $base !== ''
+					? $stopped_text . ' | ' . $base
+					: $stopped_text;
+			}
+
+			return $base;
 		}
 
 		private static function build_run_key(int $source_post_id, string $scheduled_for): string {
@@ -1188,6 +1218,97 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return '';
 		}
 
+		private static function run_without_request_payload(callable $callback) {
+			$post_backup = \is_array($_POST ?? null) ? $_POST : [];
+			$request_backup = \is_array($_REQUEST ?? null) ? $_REQUEST : [];
+			$files_backup = \is_array($_FILES ?? null) ? $_FILES : [];
+
+			$_POST = [];
+			$_FILES = [];
+			$_REQUEST = $request_backup;
+			foreach (\array_keys($post_backup) as $request_key) {
+				unset($_REQUEST[$request_key]);
+			}
+
+			try {
+				return $callback();
+			} finally {
+				$_POST = $post_backup;
+				$_REQUEST = $request_backup;
+				$_FILES = $files_backup;
+			}
+		}
+
+		private static function reset_generated_copy_payment_state(int $post_id): void {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return;
+			}
+
+			\delete_post_meta($post_id, '_cmx_beleg_bezahlt_am');
+			\update_post_meta($post_id, '_cmx_beleg_status', 'offen');
+			\delete_post_meta($post_id, '_cmx_beleg_anzahlungen');
+
+			foreach (self::payment_taxonomies() as $tax) {
+				if (\taxonomy_exists($tax)) {
+					\wp_set_post_terms($post_id, [], $tax, false);
+				}
+			}
+		}
+
+		private static function payment_taxonomies(): array {
+			$candidates = [];
+
+			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')) {
+				$candidates[] = (string) cmx_beleg_zahlungsart_tax();
+			}
+			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_tax')) {
+				$candidates[] = (string) cmx_beleg_zahlungsgrund_tax();
+			}
+
+			$candidates = \array_merge($candidates, [
+				'belege_zahlungsarten',
+				'belege_zahlungsart',
+				'belege_zahlungsgrund',
+				'belege_zahlungsgruende',
+			]);
+
+			return \array_values(\array_unique(\array_filter(\array_map('strval', $candidates), static function (string $tax): bool {
+				return $tax !== '';
+			})));
+		}
+
+		private static function sync_generated_copy_taxonomies(int $post_id, int $source_post_id): void {
+			$post_id = \absint($post_id);
+			$source_post_id = \absint($source_post_id);
+			if ($post_id <= 0 || $source_post_id <= 0) {
+				return;
+			}
+
+			$payment_taxonomies = self::payment_taxonomies();
+
+			foreach ((array) \get_object_taxonomies(self::POST_TYPE, 'names') as $tax) {
+				$tax = (string) $tax;
+				if ($tax === '' || !\taxonomy_exists($tax)) {
+					continue;
+				}
+				if (\in_array($tax, $payment_taxonomies, true)) {
+					continue;
+				}
+
+				$term_ids = \wp_get_post_terms($source_post_id, $tax, ['fields' => 'ids']);
+				if (\is_wp_error($term_ids)) {
+					continue;
+				}
+
+				$clean_ids = \array_values(\array_filter(\array_map('intval', (array) $term_ids), static function (int $term_id): bool {
+					return $term_id > 0;
+				}));
+
+				\wp_set_post_terms($post_id, $clean_ids, $tax, false);
+			}
+		}
+
 		public static function settings_url(): string {
 			$slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
@@ -1241,7 +1362,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				return new \WP_Error('duplicate_unavailable', \__('Rechnungskopie ist aktuell nicht verfügbar.', 'cmx-misbuero'));
 			}
 
-			$new_post_id = cmx_duplicate_do($post_id);
+			$new_post_id = self::run_without_request_payload(static function () use ($post_id) {
+				return cmx_duplicate_do($post_id);
+			});
 			if (\is_wp_error($new_post_id)) {
 				return $new_post_id;
 			}
@@ -1262,6 +1385,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			\update_post_meta($new_post_id, self::META_SCHEDULED_FOR, $scheduled_for);
 			\update_post_meta($new_post_id, self::META_GENERATED_AT, \current_time('mysql'));
 			\update_post_meta($new_post_id, '_cmx_beleg_copied_from', $post_id);
+			self::reset_generated_copy_payment_state($new_post_id);
+			self::sync_generated_copy_taxonomies($new_post_id, $post_id);
+			\clean_post_cache($new_post_id);
 
 			return $new_post_id;
 		}
@@ -1291,6 +1417,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				self::META_LAST_MAIL_MESSAGE,
 				self::META_LAST_MAIL_TO,
 				self::META_LAST_RESULT_AT,
+				self::META_STOPPED_AT,
 				self::META_PROCESSING_LOCK,
 				'_cmx_abo_immediate_once',
 			];

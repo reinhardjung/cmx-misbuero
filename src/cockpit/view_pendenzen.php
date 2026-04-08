@@ -1,9 +1,8 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+
 // if (!in_array(UserDomain, cmx_ini_get_value('vip', 'instanzen'))) return;
-
-
-if (!\in_array(UserDomain, (array) cmx_ini_get_value('vip', 'instanzen'), true)) return;
+// if (!\in_array(UserDomain, (array) cmx_ini_get_value('vip', 'instanzen'), true)) return;
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_slug')) {
 	function cmx_cockpit_pendenzen_slug(): string {
@@ -2041,7 +2040,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_view_pendenzen_page')) {
 				if (!eventId) {
 					return;
 				}
-	
+
 				deleteButton.disabled = true;
 				saveButton.disabled = true;
 				setStatus("Pendenz wird gelöscht…", "");
