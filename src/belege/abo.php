@@ -19,6 +19,21 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const META_TIME = '_cmx_abo_time';
 		const META_NEXT_RUN = '_cmx_abo_next_run';
 		const META_LAST_RUN = '_cmx_abo_last_run';
+		const META_SOURCE_ID = '_cmx_abo_source_id';
+		const META_RUN_KEY = '_cmx_abo_run_key';
+		const META_SCHEDULED_FOR = '_cmx_abo_scheduled_for';
+		const META_GENERATED_AT = '_cmx_abo_generated_at';
+		const META_MAIL_STATUS = '_cmx_abo_mail_status';
+		const META_MAIL_MESSAGE = '_cmx_abo_mail_message';
+		const META_MAIL_TO = '_cmx_abo_mail_to';
+		const META_MAIL_RESULT_AT = '_cmx_abo_mail_result_at';
+		const META_LAST_RUN_KEY = '_cmx_abo_last_run_key';
+		const META_LAST_GENERATED_POST_ID = '_cmx_abo_last_generated_post_id';
+		const META_LAST_MAIL_STATUS = '_cmx_abo_last_mail_status';
+		const META_LAST_MAIL_MESSAGE = '_cmx_abo_last_mail_message';
+		const META_LAST_MAIL_TO = '_cmx_abo_last_mail_to';
+		const META_LAST_RESULT_AT = '_cmx_abo_last_result_at';
+		const META_PROCESSING_LOCK = '_cmx_abo_processing_lock';
 		const STOP_ACTION = 'cmx_beleg_abo_stop';
 		const NOTICE_QUERY_ARG = 'cmx_beleg_abo_notice';
 
@@ -28,6 +43,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				\add_filter('cron_schedules', [__CLASS__, 'register_cron_schedule']);
 				\add_filter('get_user_option_metaboxhidden_belege', [__CLASS__, 'filter_hidden_meta_boxes']);
 				\add_filter('hidden_meta_boxes', [__CLASS__, 'filter_hidden_meta_boxes_for_screen'], 10, 2);
+				\add_filter('cmx_duplicate_meta_blacklist', [__CLASS__, 'filter_duplicate_meta_blacklist']);
 				\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_belege']);
 				\add_action('admin_post_' . self::STOP_ACTION, [__CLASS__, 'handle_stop_request']);
 				\add_action('all_admin_notices', [__CLASS__, 'render_admin_notice']);
@@ -63,11 +79,30 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return \is_array($hidden) ? $hidden : (array) $hidden;
 		}
 
+		public static function filter_duplicate_meta_blacklist(array $keys): array {
+			return \array_values(\array_unique(\array_merge($keys, self::recurring_meta_keys())));
+		}
+
 		public static function render_meta_box(\WP_Post $post): void {
 			\wp_nonce_field('cmx_beleg_abo_save', 'cmx_beleg_abo_nonce');
 
-			$settings = self::get_settings($post->ID);
 			$post_id = (int) $post->ID;
+			$settings = self::get_settings($post_id);
+			$source_post_id = self::get_source_post_id($post_id);
+			$is_generated_copy = $source_post_id > 0;
+			$last_generated_post_id = $is_generated_copy ? 0 : (int) \get_post_meta($post_id, self::META_LAST_GENERATED_POST_ID, true);
+			$last_mail_status = $is_generated_copy
+				? \sanitize_key((string) \get_post_meta($post_id, self::META_MAIL_STATUS, true))
+				: \sanitize_key((string) \get_post_meta($post_id, self::META_LAST_MAIL_STATUS, true));
+			$last_mail_message = $is_generated_copy
+				? (string) \get_post_meta($post_id, self::META_MAIL_MESSAGE, true)
+				: (string) \get_post_meta($post_id, self::META_LAST_MAIL_MESSAGE, true);
+			$last_mail_to = $is_generated_copy
+				? \sanitize_email((string) \get_post_meta($post_id, self::META_MAIL_TO, true))
+				: \sanitize_email((string) \get_post_meta($post_id, self::META_LAST_MAIL_TO, true));
+			$stop_url = (!$is_generated_copy && $settings['enabled'] === '1' && $settings['frequency'] !== 'never')
+				? self::build_stop_url($post_id, (string) \get_edit_post_link($post_id, ''))
+				: '';
 			$js_settings = (string) \wp_json_encode([
 				'frequencyId' => 'cmx_abo_frequency_' . $post_id,
 				'weeklyId' => 'cmx-abo-row-weekly-' . $post_id,
@@ -78,11 +113,14 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			]);
 			$visible_frequency_labels = self::visible_frequency_labels();
 			$all_frequency_labels = self::all_frequency_labels();
+			$source_link = $source_post_id > 0 ? self::post_edit_link_html($source_post_id) : '';
+			$last_generated_link = $last_generated_post_id > 0 ? self::post_edit_link_html($last_generated_post_id) : '';
+			$mail_status_text = self::format_mail_status_text($last_mail_status, $last_mail_message, $last_mail_to);
 			?>
 			<style>
 				#cmx-beleg-abo .inside {
 					margin: 0;
-					padding: 12px 12px 6px;
+					padding: 12px 12px 8px;
 				}
 				#cmx-beleg-abo .cmx-abo-metabox p {
 					margin: 0 0 12px;
@@ -107,8 +145,13 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					font-weight: 600;
 					text-align: right;
 				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-actions {
+					margin-top: 12px;
+					padding-top: 10px;
+					border-top: 1px solid #dcdcde;
+				}
 			</style>
-				<div class="cmx-abo-metabox">
+			<div class="cmx-abo-metabox">
 				<p>
 					<label for="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>"><strong><?php echo \esc_html__('Rhythmus', 'cmx-misbuero'); ?></strong></label><br>
 					<select name="cmx_abo_frequency" id="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>" style="width:100%;">
@@ -121,18 +164,18 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					</select>
 				</p>
 
-			<p id="<?php echo \esc_attr('cmx-abo-row-weekly-' . $post_id); ?>" class="cmx-abo-row">
-				<label for="<?php echo \esc_attr('cmx_abo_weekday_' . $post_id); ?>"><strong><?php echo \esc_html__('Wochentag', 'cmx-misbuero'); ?></strong></label><br>
-				<select name="cmx_abo_weekday" id="<?php echo \esc_attr('cmx_abo_weekday_' . $post_id); ?>" style="width:100%;">
-					<option value="1" <?php \selected($settings['weekday'], 1); ?>><?php echo \esc_html__('Montag', 'cmx-misbuero'); ?></option>
-					<option value="2" <?php \selected($settings['weekday'], 2); ?>><?php echo \esc_html__('Dienstag', 'cmx-misbuero'); ?></option>
-					<option value="3" <?php \selected($settings['weekday'], 3); ?>><?php echo \esc_html__('Mittwoch', 'cmx-misbuero'); ?></option>
-					<option value="4" <?php \selected($settings['weekday'], 4); ?>><?php echo \esc_html__('Donnerstag', 'cmx-misbuero'); ?></option>
-					<option value="5" <?php \selected($settings['weekday'], 5); ?>><?php echo \esc_html__('Freitag', 'cmx-misbuero'); ?></option>
-					<option value="6" <?php \selected($settings['weekday'], 6); ?>><?php echo \esc_html__('Samstag', 'cmx-misbuero'); ?></option>
-					<option value="7" <?php \selected($settings['weekday'], 7); ?>><?php echo \esc_html__('Sonntag', 'cmx-misbuero'); ?></option>
-				</select>
-			</p>
+				<p id="<?php echo \esc_attr('cmx-abo-row-weekly-' . $post_id); ?>" class="cmx-abo-row">
+					<label for="<?php echo \esc_attr('cmx_abo_weekday_' . $post_id); ?>"><strong><?php echo \esc_html__('Wochentag', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_weekday" id="<?php echo \esc_attr('cmx_abo_weekday_' . $post_id); ?>" style="width:100%;">
+						<option value="1" <?php \selected($settings['weekday'], 1); ?>><?php echo \esc_html__('Montag', 'cmx-misbuero'); ?></option>
+						<option value="2" <?php \selected($settings['weekday'], 2); ?>><?php echo \esc_html__('Dienstag', 'cmx-misbuero'); ?></option>
+						<option value="3" <?php \selected($settings['weekday'], 3); ?>><?php echo \esc_html__('Mittwoch', 'cmx-misbuero'); ?></option>
+						<option value="4" <?php \selected($settings['weekday'], 4); ?>><?php echo \esc_html__('Donnerstag', 'cmx-misbuero'); ?></option>
+						<option value="5" <?php \selected($settings['weekday'], 5); ?>><?php echo \esc_html__('Freitag', 'cmx-misbuero'); ?></option>
+						<option value="6" <?php \selected($settings['weekday'], 6); ?>><?php echo \esc_html__('Samstag', 'cmx-misbuero'); ?></option>
+						<option value="7" <?php \selected($settings['weekday'], 7); ?>><?php echo \esc_html__('Sonntag', 'cmx-misbuero'); ?></option>
+					</select>
+				</p>
 
 				<p id="<?php echo \esc_attr('cmx-abo-row-monthly-' . $post_id); ?>" class="cmx-abo-row">
 					<label for="<?php echo \esc_attr('cmx_abo_monthday_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag im Monat', 'cmx-misbuero'); ?></strong></label><br>
@@ -163,34 +206,61 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					</select>
 				</p>
 
-			<p id="<?php echo \esc_attr('cmx-abo-row-time-' . $post_id); ?>" class="cmx-abo-row">
-				<label for="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>"><strong><?php echo \esc_html__('Uhrzeit', 'cmx-misbuero'); ?></strong></label><br>
-				<input type="time" name="cmx_abo_time" id="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>" value="<?php echo \esc_attr($settings['time']); ?>" style="width:100%;">
-			</p>
-
-			<?php if ($settings['next_run'] !== '') : ?>
-				<p class="cmx-abo-status">
-					<span class="cmx-abo-status-label"><?php echo \esc_html__('Nächste Ausführung', 'cmx-misbuero'); ?></span>
-					<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['next_run'])); ?></span>
+				<p id="<?php echo \esc_attr('cmx-abo-row-time-' . $post_id); ?>" class="cmx-abo-row">
+					<label for="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>"><strong><?php echo \esc_html__('Uhrzeit', 'cmx-misbuero'); ?></strong></label><br>
+					<input type="time" name="cmx_abo_time" id="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>" value="<?php echo \esc_attr($settings['time']); ?>" style="width:100%;">
 				</p>
-			<?php endif; ?>
 
-			<?php if ($settings['last_run'] !== '') : ?>
-				<p class="cmx-abo-status">
-					<span class="cmx-abo-status-label"><?php echo \esc_html__('Letzte Ausführung', 'cmx-misbuero'); ?></span>
-					<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['last_run'])); ?></span>
-				</p>
-			<?php endif; ?>
+				<?php if ($source_link !== '') : ?>
+					<p class="cmx-abo-status">
+						<span class="cmx-abo-status-label"><?php echo \esc_html__('Abo-Quelle', 'cmx-misbuero'); ?></span>
+						<span class="cmx-abo-status-value"><?php echo $source_link; ?></span>
+					</p>
+				<?php endif; ?>
 
-			<script>
-			(function(config){
-				if (!config) {
-					return;
-				}
-				var frequency = document.getElementById(config.frequencyId);
-				if (!frequency) {
-					return;
-				}
+				<?php if ($settings['next_run'] !== '') : ?>
+					<p class="cmx-abo-status">
+						<span class="cmx-abo-status-label"><?php echo \esc_html__('Nächste Ausführung', 'cmx-misbuero'); ?></span>
+						<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['next_run'])); ?></span>
+					</p>
+				<?php endif; ?>
+
+				<?php if ($settings['last_run'] !== '') : ?>
+					<p class="cmx-abo-status">
+						<span class="cmx-abo-status-label"><?php echo \esc_html__('Letzte Ausführung', 'cmx-misbuero'); ?></span>
+						<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['last_run'])); ?></span>
+					</p>
+				<?php endif; ?>
+
+				<?php if ($last_generated_link !== '') : ?>
+					<p class="cmx-abo-status">
+						<span class="cmx-abo-status-label"><?php echo \esc_html__('Letzter Beleg', 'cmx-misbuero'); ?></span>
+						<span class="cmx-abo-status-value"><?php echo $last_generated_link; ?></span>
+					</p>
+				<?php endif; ?>
+
+				<?php if ($mail_status_text !== '') : ?>
+					<p class="cmx-abo-status">
+						<span class="cmx-abo-status-label"><?php echo \esc_html__('Mailstatus', 'cmx-misbuero'); ?></span>
+						<span class="cmx-abo-status-value"><?php echo \esc_html($mail_status_text); ?></span>
+					</p>
+				<?php endif; ?>
+
+				<?php if ($stop_url !== '') : ?>
+					<p class="cmx-abo-actions">
+						<a href="<?php echo \esc_url($stop_url); ?>" class="button button-secondary" onclick="return window.confirm('Wiederkehrenden Versand fuer diesen Beleg stoppen?');"><?php echo \esc_html__('Stoppen', 'cmx-misbuero'); ?></a>
+					</p>
+				<?php endif; ?>
+
+				<script>
+				(function(config){
+					if (!config) {
+						return;
+					}
+					var frequency = document.getElementById(config.frequencyId);
+					if (!frequency) {
+						return;
+					}
 					var rows = {
 						weekly: document.getElementById(config.weeklyId),
 						monthly: document.getElementById(config.monthlyId),
@@ -199,16 +269,16 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 						time: document.getElementById(config.timeId)
 					};
 					var sync = function() {
-						var mode = frequency.value || 'monthly';
+						var mode = frequency.value || 'never';
 						['weekly', 'monthly', 'quarterly', 'yearly'].forEach(function(key) {
-						if (!rows[key]) {
-							return;
-						}
-						var active = key === mode;
-						rows[key].style.display = active ? '' : 'none';
-						Array.prototype.forEach.call(rows[key].querySelectorAll('input, select, textarea'), function(field) {
-							field.disabled = !active;
-						});
+							if (!rows[key]) {
+								return;
+							}
+							var active = key === mode;
+							rows[key].style.display = active ? '' : 'none';
+							Array.prototype.forEach.call(rows[key].querySelectorAll('input, select, textarea'), function(field) {
+								field.disabled = !active;
+							});
 						});
 						if (rows.time) {
 							var showTime = mode !== 'minutely' && mode !== 'hourly' && mode !== 'never';
@@ -220,8 +290,8 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					};
 					frequency.addEventListener('change', sync);
 					sync();
-			})(<?php echo $js_settings; ?>);
-			</script>
+				})(<?php echo $js_settings; ?>);
+				</script>
 			</div>
 			<?php
 		}
@@ -354,15 +424,55 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				self::stop_recurring($post_id);
 				return false;
 			}
+			$scheduled_for = (string) ($settings['next_run'] ?? '');
+			$run_key = self::build_run_key($post_id, $scheduled_for);
+			if ($run_key === '') {
+				return false;
+			}
+			if (!self::acquire_processing_lock($post_id)) {
+				return false;
+			}
 
-			$executed = false;
+			$handled = false;
+			$generated_post_id = 0;
+			$mail_status = '';
+			$mail_message = '';
+			$mail_to = '';
 			$had_internal_write = !empty($GLOBALS['cmx_woocommerce_internal_import']);
 			$GLOBALS['cmx_woocommerce_internal_import'] = true;
 
 			try {
-				$duplicate_result = self::duplicate_beleg_for_recurring_send($post_id);
-				if (!\is_wp_error($duplicate_result)) {
-					$executed = (int) $duplicate_result > 0;
+				$generated_post_id = self::find_generated_post_by_run_key($run_key);
+				if ($generated_post_id > 0) {
+					$handled = true;
+					[$mail_status, $mail_message, $mail_to] = self::read_generated_mail_snapshot($generated_post_id);
+					if ($mail_status === '') {
+						$mail_status = 'existing';
+						$mail_message = (string) \__('Für diesen Termin existiert bereits ein erzeugter Beleg.', 'cmx-misbuero');
+					}
+				} else {
+					$duplicate_result = self::duplicate_beleg_for_recurring_send($post_id, $run_key, $scheduled_for);
+					if (\is_wp_error($duplicate_result)) {
+						$mail_status = 'failed';
+						$mail_message = \trim((string) $duplicate_result->get_error_message());
+					} else {
+						$generated_post_id = (int) $duplicate_result;
+						$handled = $generated_post_id > 0;
+					}
+				}
+
+				if ($handled && $generated_post_id > 0 && $mail_status !== 'existing') {
+					$mail_result = self::send_generated_beleg_mail($generated_post_id);
+					if (\is_wp_error($mail_result)) {
+						$mail_status = 'failed';
+						$mail_message = \trim((string) $mail_result->get_error_message());
+						$mail_to = self::extract_mail_to_from_result($mail_result);
+					} else {
+						$mail_status = 'sent';
+						$mail_message = '';
+						$mail_to = \sanitize_email((string) ($mail_result['to'] ?? ''));
+					}
+					self::store_generated_mail_snapshot($generated_post_id, $mail_status, $mail_message, $mail_to);
 				}
 			} finally {
 				if ($had_internal_write) {
@@ -370,26 +480,26 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				} else {
 					unset($GLOBALS['cmx_woocommerce_internal_import']);
 				}
+				self::release_processing_lock($post_id);
 			}
 
-			if ($executed) {
+			if ($handled) {
 				$last_run = \current_time('mysql');
 				\update_post_meta($post_id, self::META_LAST_RUN, $last_run);
-				if ($settings['enabled'] === '1') {
-					$next_run = self::calculate_next_run($settings, \wp_timezone());
-					if ($next_run !== '') {
-						\update_post_meta($post_id, self::META_NEXT_RUN, $next_run);
-					} else {
-						\delete_post_meta($post_id, self::META_NEXT_RUN);
-					}
+				self::store_source_run_snapshot($post_id, $run_key, $generated_post_id, $mail_status, $mail_message, $mail_to);
+				$next_run = self::calculate_next_run($settings, \wp_timezone());
+				if ($next_run !== '') {
+					\update_post_meta($post_id, self::META_NEXT_RUN, $next_run);
 				} else {
 					\delete_post_meta($post_id, self::META_NEXT_RUN);
 				}
+			} elseif ($mail_status !== '' || $mail_message !== '') {
+				self::store_source_run_snapshot($post_id, $run_key, 0, $mail_status, $mail_message, $mail_to);
 			} elseif ($settings['enabled'] !== '1') {
 				\delete_post_meta($post_id, self::META_NEXT_RUN);
 			}
 
-			return $executed;
+			return $handled;
 		}
 
 		public static function stop_recurring(int $post_id): bool {
@@ -402,6 +512,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			\update_post_meta($post_id, self::META_FREQUENCY, 'never');
 			\delete_post_meta($post_id, self::META_NEXT_RUN);
 			\delete_post_meta($post_id, '_cmx_abo_immediate_once');
+			\delete_post_meta($post_id, self::META_PROCESSING_LOCK);
 
 			return true;
 		}
@@ -435,7 +546,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 
 		public static function render_admin_notice(): void {
 			$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
-			if (!$screen || $screen->post_type !== self::POST_TYPE || $screen->base !== 'edit') {
+			if (!$screen || $screen->post_type !== self::POST_TYPE || !\in_array((string) $screen->base, ['edit', 'post'], true)) {
 				return;
 			}
 
@@ -771,6 +882,238 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return $datetime instanceof \DateTimeImmutable ? $datetime : null;
 		}
 
+		private static function build_stop_url(int $post_id, string $redirect_to = ''): string {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return '';
+			}
+
+			if ($redirect_to === '') {
+				$redirect_to = \admin_url('edit.php?post_type=' . self::POST_TYPE);
+			}
+
+			$url = (string) \add_query_arg(
+				[
+					'action' => self::STOP_ACTION,
+					'post_id' => $post_id,
+					'redirect_to' => $redirect_to,
+				],
+				\admin_url('admin-post.php')
+			);
+
+			return (string) \wp_nonce_url($url, 'cmx_beleg_abo_stop_' . $post_id);
+		}
+
+		private static function get_source_post_id(int $post_id): int {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return 0;
+			}
+
+			$source_post_id = (int) \get_post_meta($post_id, self::META_SOURCE_ID, true);
+			if ($source_post_id <= 0 || \get_post_type($source_post_id) !== self::POST_TYPE) {
+				return 0;
+			}
+
+			return $source_post_id;
+		}
+
+		private static function post_edit_link_html(int $post_id): string {
+			$post = \get_post($post_id);
+			if (!$post instanceof \WP_Post || $post->post_type !== self::POST_TYPE || $post->post_status === 'trash') {
+				return '';
+			}
+
+			$label = \trim((string) $post->post_title);
+			if ($label === '') {
+				$label = '#' . (int) $post_id;
+			}
+
+			$url = \get_edit_post_link($post_id, '');
+			if (!\is_string($url) || $url === '') {
+				return \esc_html($label);
+			}
+
+			return '<a href="' . \esc_url($url) . '">' . \esc_html($label) . '</a>';
+		}
+
+		private static function format_mail_status_text(string $status, string $message = '', string $mail_to = ''): string {
+			$status = \sanitize_key($status);
+			$message = \trim($message);
+			$mail_to = \sanitize_email($mail_to);
+
+			switch ($status) {
+				case 'sent':
+					return $mail_to !== ''
+						? \sprintf(\__('Gesendet an %s', 'cmx-misbuero'), $mail_to)
+						: (string) \__('Gesendet', 'cmx-misbuero');
+
+				case 'failed':
+					return $message !== ''
+						? \sprintf(\__('Fehlgeschlagen: %s', 'cmx-misbuero'), $message)
+						: (string) \__('Fehlgeschlagen', 'cmx-misbuero');
+
+				case 'existing':
+					return (string) \__('Bereits erzeugt, kein zweites Mal versendet.', 'cmx-misbuero');
+			}
+
+			return $message;
+		}
+
+		private static function build_run_key(int $source_post_id, string $scheduled_for): string {
+			$source_post_id = \absint($source_post_id);
+			$scheduled_for = \preg_replace('/[^0-9]/', '', \trim($scheduled_for));
+			if ($source_post_id <= 0 || !\is_string($scheduled_for) || $scheduled_for === '') {
+				return '';
+			}
+
+			return 'abo-' . $source_post_id . '-' . $scheduled_for;
+		}
+
+		private static function find_generated_post_by_run_key(string $run_key): int {
+			$run_key = \sanitize_key($run_key);
+			if ($run_key === '') {
+				return 0;
+			}
+
+			$post_ids = \get_posts([
+				'post_type' => self::POST_TYPE,
+				'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+				'posts_per_page' => 1,
+				'fields' => 'ids',
+				'orderby' => 'ID',
+				'order' => 'DESC',
+				'meta_query' => [
+					[
+						'key' => self::META_RUN_KEY,
+						'value' => $run_key,
+					],
+				],
+			]);
+
+			return isset($post_ids[0]) ? (int) $post_ids[0] : 0;
+		}
+
+		private static function acquire_processing_lock(int $post_id): bool {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return false;
+			}
+
+			$existing = (string) \get_post_meta($post_id, self::META_PROCESSING_LOCK, true);
+			if ($existing !== '') {
+				$existing_dt = self::create_mysql_datetime($existing, \wp_timezone());
+				$stale_before = new \DateTimeImmutable('-15 minutes', \wp_timezone());
+				if ($existing_dt instanceof \DateTimeImmutable && $existing_dt > $stale_before) {
+					return false;
+				}
+				\delete_post_meta($post_id, self::META_PROCESSING_LOCK);
+			}
+
+			return (bool) \add_post_meta($post_id, self::META_PROCESSING_LOCK, \current_time('mysql'), true);
+		}
+
+		private static function release_processing_lock(int $post_id): void {
+			if ($post_id > 0) {
+				\delete_post_meta($post_id, self::META_PROCESSING_LOCK);
+			}
+		}
+
+		private static function store_source_run_snapshot(int $source_post_id, string $run_key, int $generated_post_id, string $mail_status, string $mail_message, string $mail_to): void {
+			$source_post_id = \absint($source_post_id);
+			if ($source_post_id <= 0) {
+				return;
+			}
+
+			\update_post_meta($source_post_id, self::META_LAST_RUN_KEY, \sanitize_key($run_key));
+			if ($generated_post_id > 0) {
+				\update_post_meta($source_post_id, self::META_LAST_GENERATED_POST_ID, $generated_post_id);
+			}
+			if ($mail_status !== '') {
+				\update_post_meta($source_post_id, self::META_LAST_MAIL_STATUS, \sanitize_key($mail_status));
+			} else {
+				\delete_post_meta($source_post_id, self::META_LAST_MAIL_STATUS);
+			}
+			if ($mail_message !== '') {
+				\update_post_meta($source_post_id, self::META_LAST_MAIL_MESSAGE, $mail_message);
+			} else {
+				\delete_post_meta($source_post_id, self::META_LAST_MAIL_MESSAGE);
+			}
+			if ($mail_to !== '') {
+				\update_post_meta($source_post_id, self::META_LAST_MAIL_TO, \sanitize_email($mail_to));
+			} else {
+				\delete_post_meta($source_post_id, self::META_LAST_MAIL_TO);
+			}
+			\update_post_meta($source_post_id, self::META_LAST_RESULT_AT, \current_time('mysql'));
+		}
+
+		private static function read_generated_mail_snapshot(int $post_id): array {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return ['', '', ''];
+			}
+
+			return [
+				\sanitize_key((string) \get_post_meta($post_id, self::META_MAIL_STATUS, true)),
+				(string) \get_post_meta($post_id, self::META_MAIL_MESSAGE, true),
+				\sanitize_email((string) \get_post_meta($post_id, self::META_MAIL_TO, true)),
+			];
+		}
+
+		private static function store_generated_mail_snapshot(int $post_id, string $mail_status, string $mail_message, string $mail_to): void {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0) {
+				return;
+			}
+
+			if ($mail_status !== '') {
+				\update_post_meta($post_id, self::META_MAIL_STATUS, \sanitize_key($mail_status));
+			} else {
+				\delete_post_meta($post_id, self::META_MAIL_STATUS);
+			}
+			if ($mail_message !== '') {
+				\update_post_meta($post_id, self::META_MAIL_MESSAGE, $mail_message);
+			} else {
+				\delete_post_meta($post_id, self::META_MAIL_MESSAGE);
+			}
+			if ($mail_to !== '') {
+				\update_post_meta($post_id, self::META_MAIL_TO, \sanitize_email($mail_to));
+			} else {
+				\delete_post_meta($post_id, self::META_MAIL_TO);
+			}
+			\update_post_meta($post_id, self::META_MAIL_RESULT_AT, \current_time('mysql'));
+		}
+
+		private static function send_generated_beleg_mail(int $post_id) {
+			if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+				$send_file = __DIR__ . '/meta_action_send.php';
+				if (\is_file($send_file)) {
+					require_once $send_file;
+				}
+			}
+
+			if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+				return new \WP_Error('mail_unavailable', \__('E-Mail-Versand ist aktuell nicht verfügbar.', 'cmx-misbuero'));
+			}
+
+			return cmxbu_send_beleg_mail($post_id, ['regenerate_pdf' => true]);
+		}
+
+		private static function extract_mail_to_from_result($result): string {
+			if ($result instanceof \WP_Error) {
+				$data = $result->get_error_data();
+				if (\is_array($data) && !empty($data['to'])) {
+					return \sanitize_email((string) $data['to']);
+				}
+			}
+
+			if (\is_array($result) && !empty($result['to'])) {
+				return \sanitize_email((string) $result['to']);
+			}
+
+			return '';
+		}
+
 		public static function settings_url(): string {
 			$slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
@@ -812,7 +1155,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return \min($configured_day, $max_day);
 		}
 
-		private static function duplicate_beleg_for_recurring_send(int $post_id) {
+		private static function duplicate_beleg_for_recurring_send(int $post_id, string $run_key, string $scheduled_for) {
 			if (!\function_exists(__NAMESPACE__ . '\\cmx_duplicate_do')) {
 				$duplicate_file = \dirname(__DIR__, 2) . '/includes/dublicate.php';
 				if (\is_file($duplicate_file)) {
@@ -838,8 +1181,13 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				\delete_post_meta($new_post_id, $meta_key);
 			}
 
+			\update_post_meta($new_post_id, self::META_ENABLED, '0');
+			\update_post_meta($new_post_id, self::META_FREQUENCY, 'never');
+			\update_post_meta($new_post_id, self::META_SOURCE_ID, $post_id);
+			\update_post_meta($new_post_id, self::META_RUN_KEY, \sanitize_key($run_key));
+			\update_post_meta($new_post_id, self::META_SCHEDULED_FOR, $scheduled_for);
+			\update_post_meta($new_post_id, self::META_GENERATED_AT, \current_time('mysql'));
 			\update_post_meta($new_post_id, '_cmx_beleg_copied_from', $post_id);
-			\update_post_meta($post_id, '_cmx_beleg_copied_to', $new_post_id);
 
 			return $new_post_id;
 		}
@@ -855,6 +1203,21 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				self::META_TIME,
 				self::META_NEXT_RUN,
 				self::META_LAST_RUN,
+				self::META_SOURCE_ID,
+				self::META_RUN_KEY,
+				self::META_SCHEDULED_FOR,
+				self::META_GENERATED_AT,
+				self::META_MAIL_STATUS,
+				self::META_MAIL_MESSAGE,
+				self::META_MAIL_TO,
+				self::META_MAIL_RESULT_AT,
+				self::META_LAST_RUN_KEY,
+				self::META_LAST_GENERATED_POST_ID,
+				self::META_LAST_MAIL_STATUS,
+				self::META_LAST_MAIL_MESSAGE,
+				self::META_LAST_MAIL_TO,
+				self::META_LAST_RESULT_AT,
+				self::META_PROCESSING_LOCK,
 				'_cmx_abo_immediate_once',
 			];
 		}
