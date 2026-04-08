@@ -8,7 +8,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const POST_TYPE = 'belege';
 
 		const CRON_HOOK = 'cmx_beleg_abo_cron_process';
-		const CRON_INTERVAL = 'cmx_beleg_abo_five_minutes';
+		const CRON_INTERVAL = 'cmx_beleg_abo_every_minute';
 
 		const META_ENABLED = '_cmx_abo_enabled';
 		const META_FREQUENCY = '_cmx_abo_frequency';
@@ -19,23 +19,31 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		const META_TIME = '_cmx_abo_time';
 		const META_NEXT_RUN = '_cmx_abo_next_run';
 		const META_LAST_RUN = '_cmx_abo_last_run';
-		const META_IMMEDIATE_ONCE = '_cmx_abo_immediate_once';
+		const STOP_ACTION = 'cmx_beleg_abo_stop';
+		const NOTICE_QUERY_ARG = 'cmx_beleg_abo_notice';
+		const DEFAULT_ENABLED_OPTION = 'belege_abo_default_enabled';
+		const DEFAULT_FREQUENCY_OPTION = 'belege_abo_default_frequency';
+		const DEFAULT_TIME_OPTION = 'belege_abo_default_time';
 
-		const NOTICE_TRANSIENT_PREFIX = 'cmx_beleg_abo_notice_';
-
-		public static function init(): void {
-			\add_action('add_meta_boxes', [__CLASS__, 'add_meta_box']);
-			\add_action('save_post_' . self::POST_TYPE, [__CLASS__, 'save_meta_box'], 20, 3);
-			\add_action('admin_notices', [__CLASS__, 'admin_notice']);
-			\add_filter('cron_schedules', [__CLASS__, 'register_cron_schedule']);
-			\add_action('init', [__CLASS__, 'ensure_cron_event']);
-			\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_belege']);
-		}
+			public static function init(): void {
+				\add_action('add_meta_boxes', [__CLASS__, 'add_meta_box']);
+				\add_action('save_post_' . self::POST_TYPE, [__CLASS__, 'save_meta_box'], 20, 3);
+				\add_filter('cron_schedules', [__CLASS__, 'register_cron_schedule']);
+				\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_belege']);
+				\add_action('admin_post_' . self::STOP_ACTION, [__CLASS__, 'handle_stop_request']);
+				\add_action('all_admin_notices', [__CLASS__, 'render_admin_notice']);
+				if (\did_action('init')) {
+					self::ensure_cron_event();
+				} else {
+					\add_action('init', [__CLASS__, 'ensure_cron_event']);
+				}
+			}
 
 		public static function add_meta_box(): void {
+			$title = '<a href="' . \esc_url(self::settings_url()) . '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="color:inherit;text-decoration:none;font-size:14px;font-weight:600;line-height:1.4;display:inline-block;">' . \esc_html__('Wiederkehrender Versand', 'cmx-misbuero') . '</a>';
 			\add_meta_box(
 				'cmx-beleg-abo',
-				\__('Wiederkehrender Versand', 'cmx-misbuero'),
+				$title,
 				[__CLASS__, 'render_meta_box'],
 				self::POST_TYPE,
 				'side',
@@ -50,34 +58,56 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			$post_id = (int) $post->ID;
 			$js_settings = (string) \wp_json_encode([
 				'frequencyId' => 'cmx_abo_frequency_' . $post_id,
-				'dailyId' => 'cmx-abo-row-daily-' . $post_id,
 				'weeklyId' => 'cmx-abo-row-weekly-' . $post_id,
 				'monthlyId' => 'cmx-abo-row-monthly-' . $post_id,
 				'quarterlyId' => 'cmx-abo-row-quarterly-' . $post_id,
 				'yearlyId' => 'cmx-abo-row-yearly-' . $post_id,
+				'timeId' => 'cmx-abo-row-time-' . $post_id,
 			]);
+			$visible_frequency_labels = self::visible_frequency_labels();
+			$all_frequency_labels = self::all_frequency_labels();
 			?>
-			<p>
-				<label>
-					<input type="checkbox" name="cmx_abo_enabled" value="1" <?php \checked($settings['enabled'], '1'); ?>>
-					<?php echo \esc_html__('Wiederkehrenden Versand aktivieren', 'cmx-misbuero'); ?>
-				</label>
-			</p>
-
-			<p>
-				<label for="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>"><strong><?php echo \esc_html__('Rhythmus', 'cmx-misbuero'); ?></strong></label><br>
-				<select name="cmx_abo_frequency" id="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>" style="width:100%;">
-					<option value="daily" <?php \selected($settings['frequency'], 'daily'); ?>><?php echo \esc_html__('Täglich', 'cmx-misbuero'); ?></option>
-					<option value="weekly" <?php \selected($settings['frequency'], 'weekly'); ?>><?php echo \esc_html__('Wöchentlich', 'cmx-misbuero'); ?></option>
-					<option value="monthly" <?php \selected($settings['frequency'], 'monthly'); ?>><?php echo \esc_html__('Monatlich', 'cmx-misbuero'); ?></option>
-					<option value="quarterly" <?php \selected($settings['frequency'], 'quarterly'); ?>><?php echo \esc_html__('Quartal', 'cmx-misbuero'); ?></option>
-					<option value="yearly" <?php \selected($settings['frequency'], 'yearly'); ?>><?php echo \esc_html__('Jährlich', 'cmx-misbuero'); ?></option>
-				</select>
-			</p>
-
-			<p id="<?php echo \esc_attr('cmx-abo-row-daily-' . $post_id); ?>" class="cmx-abo-row">
-				<?php echo \esc_html__('Wird jeden Tag zur gewählten Uhrzeit ausgeführt.', 'cmx-misbuero'); ?>
-			</p>
+			<style>
+				#cmx-beleg-abo .inside {
+					margin: 0;
+					padding: 12px 12px 6px;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox p {
+					margin: 0 0 12px;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-row {
+					margin-top: 0;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-status {
+					display: flex;
+					align-items: baseline;
+					justify-content: space-between;
+					gap: 10px;
+					margin-bottom: 6px;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-status:last-of-type {
+					margin-bottom: 0;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-status-label {
+					font-weight: 400;
+				}
+				#cmx-beleg-abo .cmx-abo-metabox .cmx-abo-status-value {
+					font-weight: 600;
+					text-align: right;
+				}
+			</style>
+				<div class="cmx-abo-metabox">
+				<p>
+					<label for="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>"><strong><?php echo \esc_html__('Rhythmus', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_frequency" id="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>" style="width:100%;">
+						<?php if (!isset($visible_frequency_labels[$settings['frequency']]) && isset($all_frequency_labels[$settings['frequency']])) : ?>
+							<option value="<?php echo \esc_attr($settings['frequency']); ?>" selected hidden></option>
+						<?php endif; ?>
+						<?php foreach ($visible_frequency_labels as $frequency_key => $frequency_label) : ?>
+							<option value="<?php echo \esc_attr($frequency_key); ?>" <?php \selected($settings['frequency'], $frequency_key); ?>><?php echo \esc_html($frequency_label); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</p>
 
 			<p id="<?php echo \esc_attr('cmx-abo-row-weekly-' . $post_id); ?>" class="cmx-abo-row">
 				<label for="<?php echo \esc_attr('cmx_abo_weekday_' . $post_id); ?>"><strong><?php echo \esc_html__('Wochentag', 'cmx-misbuero'); ?></strong></label><br>
@@ -92,56 +122,53 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				</select>
 			</p>
 
-			<p id="<?php echo \esc_attr('cmx-abo-row-monthly-' . $post_id); ?>" class="cmx-abo-row">
-				<label for="<?php echo \esc_attr('cmx_abo_monthday_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag im Monat', 'cmx-misbuero'); ?></strong></label><br>
-				<input type="number" min="1" max="31" name="cmx_abo_monthday" id="<?php echo \esc_attr('cmx_abo_monthday_' . $post_id); ?>" value="<?php echo \esc_attr((string) $settings['monthday']); ?>" style="width:100%;">
-			</p>
+				<p id="<?php echo \esc_attr('cmx-abo-row-monthly-' . $post_id); ?>" class="cmx-abo-row">
+					<label for="<?php echo \esc_attr('cmx_abo_monthday_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag im Monat', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_monthday" id="<?php echo \esc_attr('cmx_abo_monthday_' . $post_id); ?>" style="width:100%;">
+						<?php self::render_day_options($settings['monthday']); ?>
+					</select>
+				</p>
 
-			<p id="<?php echo \esc_attr('cmx-abo-row-quarterly-' . $post_id); ?>" class="cmx-abo-row">
-				<label for="<?php echo \esc_attr('cmx_abo_quarter_monthday_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag im Quartal', 'cmx-misbuero'); ?></strong></label><br>
-				<input type="number" min="1" max="31" name="cmx_abo_monthday" id="<?php echo \esc_attr('cmx_abo_quarter_monthday_' . $post_id); ?>" value="<?php echo \esc_attr((string) $settings['monthday']); ?>" style="width:100%;">
-				<span class="description" style="display:block;margin-top:4px;"><?php echo \esc_html__('Ausführung jeweils in Jan / Apr / Jul / Okt.', 'cmx-misbuero'); ?></span>
-			</p>
+				<p id="<?php echo \esc_attr('cmx-abo-row-quarterly-' . $post_id); ?>" class="cmx-abo-row">
+					<label for="<?php echo \esc_attr('cmx_abo_quarter_monthday_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag im Quartal', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_monthday" id="<?php echo \esc_attr('cmx_abo_quarter_monthday_' . $post_id); ?>" style="width:100%;">
+						<?php self::render_day_options($settings['monthday']); ?>
+					</select>
+					<span class="description" style="display:block;margin-top:4px;"><?php echo \esc_html__('Ausführung jeweils in Jan / Apr / Jul / Okt.', 'cmx-misbuero'); ?></span>
+				</p>
 
-			<p id="<?php echo \esc_attr('cmx-abo-row-yearly-' . $post_id); ?>" class="cmx-abo-row">
-				<label for="<?php echo \esc_attr('cmx_abo_year_month_' . $post_id); ?>"><strong><?php echo \esc_html__('Monat', 'cmx-misbuero'); ?></strong></label><br>
-				<input type="number" min="1" max="12" name="cmx_abo_year_month" id="<?php echo \esc_attr('cmx_abo_year_month_' . $post_id); ?>" value="<?php echo \esc_attr((string) $settings['year_month']); ?>" style="width:100%;margin-bottom:8px;">
+				<p id="<?php echo \esc_attr('cmx-abo-row-yearly-' . $post_id); ?>" class="cmx-abo-row">
+					<label for="<?php echo \esc_attr('cmx_abo_year_month_' . $post_id); ?>"><strong><?php echo \esc_html__('Monat', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_year_month" id="<?php echo \esc_attr('cmx_abo_year_month_' . $post_id); ?>" style="width:100%;margin-bottom:8px;">
+						<?php foreach (self::month_labels() as $month_value => $month_label) : ?>
+							<option value="<?php echo \esc_attr((string) $month_value); ?>" <?php \selected($settings['year_month'], $month_value); ?>><?php echo \esc_html($month_label); ?></option>
+						<?php endforeach; ?>
+					</select>
 
-				<label for="<?php echo \esc_attr('cmx_abo_year_day_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag', 'cmx-misbuero'); ?></strong></label><br>
-				<input type="number" min="1" max="31" name="cmx_abo_year_day" id="<?php echo \esc_attr('cmx_abo_year_day_' . $post_id); ?>" value="<?php echo \esc_attr((string) $settings['year_day']); ?>" style="width:100%;">
-			</p>
+					<label for="<?php echo \esc_attr('cmx_abo_year_day_' . $post_id); ?>"><strong><?php echo \esc_html__('Tag', 'cmx-misbuero'); ?></strong></label><br>
+					<select name="cmx_abo_year_day" id="<?php echo \esc_attr('cmx_abo_year_day_' . $post_id); ?>" style="width:100%;">
+						<?php self::render_day_options($settings['year_day']); ?>
+					</select>
+				</p>
 
-			<p>
+			<p id="<?php echo \esc_attr('cmx-abo-row-time-' . $post_id); ?>" class="cmx-abo-row">
 				<label for="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>"><strong><?php echo \esc_html__('Uhrzeit', 'cmx-misbuero'); ?></strong></label><br>
 				<input type="time" name="cmx_abo_time" id="<?php echo \esc_attr('cmx_abo_time_' . $post_id); ?>" value="<?php echo \esc_attr($settings['time']); ?>" style="width:100%;">
 			</p>
 
-			<hr>
-
-			<p>
-				<label>
-					<input type="checkbox" name="cmx_abo_immediate_once" value="1">
-					<?php echo \esc_html__('Sofort einmalig ausführen', 'cmx-misbuero'); ?>
-				</label>
-			</p>
-
 			<?php if ($settings['next_run'] !== '') : ?>
-				<p>
-					<strong><?php echo \esc_html__('Nächste Ausführung', 'cmx-misbuero'); ?></strong><br>
-					<?php echo \esc_html(self::format_local_datetime($settings['next_run'])); ?>
+				<p class="cmx-abo-status">
+					<span class="cmx-abo-status-label"><?php echo \esc_html__('Nächste Ausführung', 'cmx-misbuero'); ?></span>
+					<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['next_run'])); ?></span>
 				</p>
 			<?php endif; ?>
 
 			<?php if ($settings['last_run'] !== '') : ?>
-				<p>
-					<strong><?php echo \esc_html__('Letzte Ausführung', 'cmx-misbuero'); ?></strong><br>
-					<?php echo \esc_html(self::format_local_datetime($settings['last_run'])); ?>
+				<p class="cmx-abo-status">
+					<span class="cmx-abo-status-label"><?php echo \esc_html__('Letzte Ausführung', 'cmx-misbuero'); ?></span>
+					<span class="cmx-abo-status-value"><?php echo \esc_html(self::format_local_datetime($settings['last_run'])); ?></span>
 				</p>
 			<?php endif; ?>
-
-			<p class="description">
-				<?php echo \esc_html__('Die eigentliche Verarbeitung wird über den Hook cmx_beleg_abo_execute angebunden.', 'cmx-misbuero'); ?>
-			</p>
 
 			<script>
 			(function(config){
@@ -152,16 +179,16 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				if (!frequency) {
 					return;
 				}
-				var rows = {
-					daily: document.getElementById(config.dailyId),
-					weekly: document.getElementById(config.weeklyId),
-					monthly: document.getElementById(config.monthlyId),
-					quarterly: document.getElementById(config.quarterlyId),
-					yearly: document.getElementById(config.yearlyId)
-				};
-				var sync = function() {
-					var mode = frequency.value || 'monthly';
-					Object.keys(rows).forEach(function(key) {
+					var rows = {
+						weekly: document.getElementById(config.weeklyId),
+						monthly: document.getElementById(config.monthlyId),
+						quarterly: document.getElementById(config.quarterlyId),
+						yearly: document.getElementById(config.yearlyId),
+						time: document.getElementById(config.timeId)
+					};
+					var sync = function() {
+						var mode = frequency.value || 'monthly';
+						['weekly', 'monthly', 'quarterly', 'yearly'].forEach(function(key) {
 						if (!rows[key]) {
 							return;
 						}
@@ -170,12 +197,20 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 						Array.prototype.forEach.call(rows[key].querySelectorAll('input, select, textarea'), function(field) {
 							field.disabled = !active;
 						});
-					});
-				};
-				frequency.addEventListener('change', sync);
-				sync();
+						});
+						if (rows.time) {
+							var showTime = mode !== 'minutely' && mode !== 'hourly' && mode !== 'never';
+							rows.time.style.display = showTime ? '' : 'none';
+							Array.prototype.forEach.call(rows.time.querySelectorAll('input, select, textarea'), function(field) {
+								field.disabled = !showTime;
+							});
+						}
+					};
+					frequency.addEventListener('change', sync);
+					sync();
 			})(<?php echo $js_settings; ?>);
 			</script>
+			</div>
 			<?php
 		}
 
@@ -197,8 +232,15 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			if ((string) $post->post_type !== self::POST_TYPE) {
 				return;
 			}
+			if (!isset($GLOBALS['cmx_beleg_abo_save_guard']) || !\is_array($GLOBALS['cmx_beleg_abo_save_guard'])) {
+				$GLOBALS['cmx_beleg_abo_save_guard'] = [];
+			}
+			if (!empty($GLOBALS['cmx_beleg_abo_save_guard'][$post_id])) {
+				return;
+			}
+			$GLOBALS['cmx_beleg_abo_save_guard'][$post_id] = true;
 
-			$settings = self::sanitize_settings_from_post($_POST);
+			$settings = self::sanitize_settings_from_post($_POST, self::get_settings($post_id));
 
 			\update_post_meta($post_id, self::META_ENABLED, $settings['enabled']);
 			\update_post_meta($post_id, self::META_FREQUENCY, $settings['frequency']);
@@ -207,7 +249,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			\update_post_meta($post_id, self::META_YEAR_MONTH, (string) $settings['year_month']);
 			\update_post_meta($post_id, self::META_YEAR_DAY, (string) $settings['year_day']);
 			\update_post_meta($post_id, self::META_TIME, $settings['time']);
-			\update_post_meta($post_id, self::META_IMMEDIATE_ONCE, '0');
+			\delete_post_meta($post_id, '_cmx_abo_immediate_once');
 
 			if ($settings['enabled'] === '1') {
 				$next_run = self::calculate_next_run($settings);
@@ -219,48 +261,61 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			} else {
 				\delete_post_meta($post_id, self::META_NEXT_RUN);
 			}
-
-			if ($settings['immediate_once'] === '1') {
-				self::execute_beleg($post_id, true);
-				self::queue_notice('success', \__('Der Beleg wurde sofort einmalig verarbeitet.', 'cmx-misbuero'));
-			}
 		}
 
 		public static function register_cron_schedule(array $schedules): array {
 			if (!isset($schedules[self::CRON_INTERVAL])) {
 				$schedules[self::CRON_INTERVAL] = [
-					'interval' => 300,
-					'display' => \__('CMX Beleg-Abo (5 Minuten)', 'cmx-misbuero'),
+					'interval' => 60,
+					'display' => \__('CMX Beleg-Abo (1 Minute)', 'cmx-misbuero'),
 				];
 			}
 			return $schedules;
 		}
 
 		public static function ensure_cron_event(): void {
-			if (!\wp_next_scheduled(self::CRON_HOOK)) {
-				\wp_schedule_event(\time() + 120, self::CRON_INTERVAL, self::CRON_HOOK);
+			\wp_clear_scheduled_hook('cmx_beleg_abo_single_execute');
+			$event = \function_exists('wp_get_scheduled_event') ? \wp_get_scheduled_event(self::CRON_HOOK) : null;
+			if ($event && (string) ($event->schedule ?? '') !== self::CRON_INTERVAL) {
+				\wp_clear_scheduled_hook(self::CRON_HOOK);
+				$event = null;
+			}
+
+			if (!$event && !\wp_next_scheduled(self::CRON_HOOK)) {
+				\wp_schedule_event(\time() + 60, self::CRON_INTERVAL, self::CRON_HOOK);
 			}
 		}
 
 		public static function process_due_belege(): void {
+			$meta_query = [
+				'relation' => 'AND',
+				[
+					'key' => self::META_ENABLED,
+					'value' => '1',
+				],
+				[
+					'key' => self::META_NEXT_RUN,
+					'value' => \current_time('mysql'),
+					'compare' => '<=',
+					'type' => 'DATETIME',
+				],
+			];
+
+			$blocked_frequencies = self::blocked_runtime_frequencies();
+			if ($blocked_frequencies !== []) {
+				$meta_query[] = [
+					'key' => self::META_FREQUENCY,
+					'value' => $blocked_frequencies,
+					'compare' => 'NOT IN',
+				];
+			}
+
 			$post_ids = \get_posts([
 				'post_type' => self::POST_TYPE,
 				'post_status' => ['publish', 'private'],
 				'posts_per_page' => 50,
 				'fields' => 'ids',
-				'meta_query' => [
-					'relation' => 'AND',
-					[
-						'key' => self::META_ENABLED,
-						'value' => '1',
-					],
-					[
-						'key' => self::META_NEXT_RUN,
-						'value' => \current_time('mysql'),
-						'compare' => '<=',
-						'type' => 'DATETIME',
-					],
-				],
+				'meta_query' => $meta_query,
 			]);
 
 			if ($post_ids === []) {
@@ -268,115 +323,212 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			}
 
 			foreach ($post_ids as $post_id) {
-				self::execute_beleg((int) $post_id, false);
+				self::execute_beleg((int) $post_id);
 			}
 		}
 
-		public static function execute_beleg(int $post_id, bool $manual = false): bool {
+		public static function execute_beleg(int $post_id): bool {
 			$post_id = \absint($post_id);
 			if ($post_id <= 0 || \get_post_type($post_id) !== self::POST_TYPE) {
 				return false;
 			}
 
 			$settings = self::get_settings($post_id);
-			\do_action('cmx_beleg_abo_execute', $post_id, $manual, $settings);
+			if ($settings['enabled'] !== '1' || $settings['frequency'] === 'never') {
+				\delete_post_meta($post_id, self::META_NEXT_RUN);
+				return false;
+			}
+			if (!self::is_runtime_frequency_allowed($settings['frequency'])) {
+				self::stop_recurring($post_id);
+				return false;
+			}
 
-			$last_run = \current_time('mysql');
-			\update_post_meta($post_id, self::META_LAST_RUN, $last_run);
-			\update_post_meta($post_id, self::META_IMMEDIATE_ONCE, '0');
+			$executed = false;
+			$had_internal_write = !empty($GLOBALS['cmx_woocommerce_internal_import']);
+			$GLOBALS['cmx_woocommerce_internal_import'] = true;
 
-			if ($settings['enabled'] === '1') {
-				$next_run = self::calculate_next_run($settings);
-				if ($next_run !== '') {
-					\update_post_meta($post_id, self::META_NEXT_RUN, $next_run);
+			try {
+				$duplicate_result = self::duplicate_beleg_for_recurring_send($post_id);
+				if (!\is_wp_error($duplicate_result)) {
+					$executed = (int) $duplicate_result > 0;
+				}
+			} finally {
+				if ($had_internal_write) {
+					$GLOBALS['cmx_woocommerce_internal_import'] = true;
+				} else {
+					unset($GLOBALS['cmx_woocommerce_internal_import']);
+				}
+			}
+
+			if ($executed) {
+				$last_run = \current_time('mysql');
+				\update_post_meta($post_id, self::META_LAST_RUN, $last_run);
+				if ($settings['enabled'] === '1') {
+					$next_run = self::calculate_next_run($settings, \wp_timezone());
+					if ($next_run !== '') {
+						\update_post_meta($post_id, self::META_NEXT_RUN, $next_run);
+					} else {
+						\delete_post_meta($post_id, self::META_NEXT_RUN);
+					}
 				} else {
 					\delete_post_meta($post_id, self::META_NEXT_RUN);
 				}
-			} else {
+			} elseif ($settings['enabled'] !== '1') {
 				\delete_post_meta($post_id, self::META_NEXT_RUN);
 			}
+
+			return $executed;
+		}
+
+		public static function stop_recurring(int $post_id): bool {
+			$post_id = \absint($post_id);
+			if ($post_id <= 0 || \get_post_type($post_id) !== self::POST_TYPE) {
+				return false;
+			}
+
+			\update_post_meta($post_id, self::META_ENABLED, '0');
+			\update_post_meta($post_id, self::META_FREQUENCY, 'never');
+			\delete_post_meta($post_id, self::META_NEXT_RUN);
+			\delete_post_meta($post_id, '_cmx_abo_immediate_once');
 
 			return true;
 		}
 
-		public static function admin_notice(): void {
-			if (!\is_admin()) {
-				return;
+		public static function handle_stop_request(): void {
+			$post_id = isset($_REQUEST['post_id']) ? \absint(\wp_unslash($_REQUEST['post_id'])) : 0;
+			$redirect_to = isset($_REQUEST['redirect_to'])
+				? \wp_validate_redirect((string) \wp_unslash($_REQUEST['redirect_to']), \admin_url('edit.php?post_type=' . self::POST_TYPE))
+				: \admin_url('edit.php?post_type=' . self::POST_TYPE);
+
+			if ($post_id <= 0) {
+				\wp_safe_redirect(\add_query_arg(self::NOTICE_QUERY_ARG, 'error', $redirect_to));
+				exit;
 			}
 
-			$user_id = (int) \get_current_user_id();
-			if ($user_id <= 0) {
-				return;
+			\check_admin_referer('cmx_beleg_abo_stop_' . $post_id);
+
+			if (!\current_user_can('edit_post', $post_id)) {
+				\wp_die(\__('Keine Berechtigung.', 'cmx-misbuero'));
 			}
 
-			$key = self::NOTICE_TRANSIENT_PREFIX . $user_id;
-			$notice = \get_transient($key);
-			if (!\is_array($notice) || empty($notice['message'])) {
-				return;
+			$notice = self::stop_recurring($post_id) ? 'stopped' : 'error';
+			$args = [self::NOTICE_QUERY_ARG => $notice];
+			if ($notice === 'stopped') {
+				$args['cmx_beleg_abo_post'] = $post_id;
 			}
 
-			\delete_transient($key);
-			$type = \in_array((string) ($notice['type'] ?? ''), ['success', 'error', 'warning', 'info'], true) ? (string) $notice['type'] : 'success';
-			echo '<div class="notice notice-' . \esc_attr($type) . ' is-dismissible"><p>' . \esc_html((string) $notice['message']) . '</p></div>';
+			\wp_safe_redirect(\add_query_arg($args, $redirect_to));
+			exit;
 		}
 
-		private static function queue_notice(string $type, string $message): void {
-			$user_id = (int) \get_current_user_id();
-			if ($user_id <= 0 || $message === '') {
+		public static function render_admin_notice(): void {
+			$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+			if (!$screen || $screen->post_type !== self::POST_TYPE || $screen->base !== 'edit') {
 				return;
 			}
 
-			\set_transient(
-				self::NOTICE_TRANSIENT_PREFIX . $user_id,
-				[
-					'type' => $type,
-					'message' => $message,
-				],
-				120
-			);
+			$notice = isset($_GET[self::NOTICE_QUERY_ARG])
+				? \sanitize_key((string) \wp_unslash($_GET[self::NOTICE_QUERY_ARG]))
+				: '';
+			if ($notice === '') {
+				return;
+			}
+
+			if ($notice === 'stopped') {
+				$post_id = isset($_GET['cmx_beleg_abo_post']) ? \absint(\wp_unslash($_GET['cmx_beleg_abo_post'])) : 0;
+				$title = $post_id > 0 ? \get_the_title($post_id) : '';
+				$message = $title !== ''
+					? \sprintf(\__('Wiederkehrender Lauf wurde für "%s" gestoppt.', 'cmx-misbuero'), $title)
+					: \__('Wiederkehrender Lauf wurde gestoppt.', 'cmx-misbuero');
+				echo '<div class="notice notice-success is-dismissible"><p>' . \esc_html($message) . '</p></div>';
+				return;
+			}
+
+			echo '<div class="notice notice-error is-dismissible"><p>' . \esc_html__('Wiederkehrender Lauf konnte nicht gestoppt werden.', 'cmx-misbuero') . '</p></div>';
 		}
 
 		private static function get_settings(int $post_id): array {
-			$frequency = (string) \get_post_meta($post_id, self::META_FREQUENCY, true);
+			$defaults = self::get_default_settings();
+
+			$frequency = \metadata_exists('post', $post_id, self::META_FREQUENCY)
+				? (string) \get_post_meta($post_id, self::META_FREQUENCY, true)
+				: (string) $defaults['frequency'];
 			if (!\in_array($frequency, self::allowed_frequencies(), true)) {
-				$frequency = 'monthly';
+				$frequency = (string) $defaults['frequency'];
 			}
 
-			$time = self::normalize_time((string) \get_post_meta($post_id, self::META_TIME, true));
+			$enabled = \metadata_exists('post', $post_id, self::META_ENABLED)
+				? (\get_post_meta($post_id, self::META_ENABLED, true) === '1' ? '1' : '0')
+				: (string) $defaults['enabled'];
+			if ($enabled !== '1') {
+				$frequency = 'never';
+			}
 
-			return [
-				'enabled' => \get_post_meta($post_id, self::META_ENABLED, true) === '1' ? '1' : '0',
+			$time = \metadata_exists('post', $post_id, self::META_TIME)
+				? self::normalize_time((string) \get_post_meta($post_id, self::META_TIME, true))
+				: (string) $defaults['time'];
+
+			$settings = [
+				'enabled' => $frequency === 'never' ? '0' : '1',
 				'frequency' => $frequency,
-				'weekday' => self::normalize_weekday((int) \get_post_meta($post_id, self::META_WEEKDAY, true)),
-				'monthday' => self::normalize_monthday((int) \get_post_meta($post_id, self::META_MONTHDAY, true)),
-				'year_month' => self::normalize_year_month((int) \get_post_meta($post_id, self::META_YEAR_MONTH, true)),
-				'year_day' => self::normalize_year_day((int) \get_post_meta($post_id, self::META_YEAR_DAY, true)),
+				'weekday' => \metadata_exists('post', $post_id, self::META_WEEKDAY)
+					? self::normalize_weekday((int) \get_post_meta($post_id, self::META_WEEKDAY, true))
+					: (int) $defaults['weekday'],
+				'monthday' => \metadata_exists('post', $post_id, self::META_MONTHDAY)
+					? self::normalize_monthday((int) \get_post_meta($post_id, self::META_MONTHDAY, true))
+					: (int) $defaults['monthday'],
+				'year_month' => \metadata_exists('post', $post_id, self::META_YEAR_MONTH)
+					? self::normalize_year_month((int) \get_post_meta($post_id, self::META_YEAR_MONTH, true))
+					: (int) $defaults['year_month'],
+				'year_day' => \metadata_exists('post', $post_id, self::META_YEAR_DAY)
+					? self::normalize_year_day((int) \get_post_meta($post_id, self::META_YEAR_DAY, true))
+					: (int) $defaults['year_day'],
 				'time' => $time,
 				'next_run' => (string) \get_post_meta($post_id, self::META_NEXT_RUN, true),
 				'last_run' => (string) \get_post_meta($post_id, self::META_LAST_RUN, true),
-				'immediate_once' => \get_post_meta($post_id, self::META_IMMEDIATE_ONCE, true) === '1' ? '1' : '0',
 			];
+
+			$timezone = \wp_timezone();
+			$next_dt = self::create_mysql_datetime((string) $settings['next_run'], $timezone);
+			$last_dt = self::create_mysql_datetime((string) $settings['last_run'], $timezone);
+			if ($next_dt instanceof \DateTimeImmutable && $last_dt instanceof \DateTimeImmutable && $next_dt <= $last_dt) {
+				$settings['last_run'] = '';
+				\delete_post_meta($post_id, self::META_LAST_RUN);
+				$last_dt = null;
+			}
+
+			if ($settings['enabled'] === '1' && $settings['frequency'] !== 'never' && !($next_dt instanceof \DateTimeImmutable)) {
+				$recalculated_next_run = self::calculate_next_run($settings, $timezone);
+				$settings['next_run'] = $recalculated_next_run;
+				if ($recalculated_next_run !== '') {
+					\update_post_meta($post_id, self::META_NEXT_RUN, $recalculated_next_run);
+				} else {
+					\delete_post_meta($post_id, self::META_NEXT_RUN);
+				}
+			}
+
+			return $settings;
 		}
 
-		private static function sanitize_settings_from_post(array $source): array {
+		private static function sanitize_settings_from_post(array $source, array $fallback = []): array {
+			$fallback = \wp_parse_args($fallback, self::get_default_settings());
 			$frequency = isset($source['cmx_abo_frequency']) ? \sanitize_key((string) \wp_unslash($source['cmx_abo_frequency'])) : 'monthly';
 			if (!\in_array($frequency, self::allowed_frequencies(), true)) {
-				$frequency = 'monthly';
+				$frequency = (string) ($fallback['frequency'] ?? 'monthly');
 			}
 
 			return [
-				'enabled' => isset($source['cmx_abo_enabled']) ? '1' : '0',
+				'enabled' => $frequency === 'never' ? '0' : '1',
 				'frequency' => $frequency,
-				'weekday' => self::normalize_weekday(isset($source['cmx_abo_weekday']) ? (int) \wp_unslash($source['cmx_abo_weekday']) : 1),
-				'monthday' => self::normalize_monthday(isset($source['cmx_abo_monthday']) ? (int) \wp_unslash($source['cmx_abo_monthday']) : 1),
-				'year_month' => self::normalize_year_month(isset($source['cmx_abo_year_month']) ? (int) \wp_unslash($source['cmx_abo_year_month']) : 1),
-				'year_day' => self::normalize_year_day(isset($source['cmx_abo_year_day']) ? (int) \wp_unslash($source['cmx_abo_year_day']) : 1),
-				'time' => self::normalize_time(isset($source['cmx_abo_time']) ? (string) \wp_unslash($source['cmx_abo_time']) : '08:00'),
-				'immediate_once' => isset($source['cmx_abo_immediate_once']) ? '1' : '0',
+				'weekday' => self::normalize_weekday(isset($source['cmx_abo_weekday']) ? (int) \wp_unslash($source['cmx_abo_weekday']) : (int) ($fallback['weekday'] ?? 1)),
+				'monthday' => self::normalize_monthday(isset($source['cmx_abo_monthday']) ? (int) \wp_unslash($source['cmx_abo_monthday']) : (int) ($fallback['monthday'] ?? 1)),
+				'year_month' => self::normalize_year_month(isset($source['cmx_abo_year_month']) ? (int) \wp_unslash($source['cmx_abo_year_month']) : (int) ($fallback['year_month'] ?? 1)),
+				'year_day' => self::normalize_year_day(isset($source['cmx_abo_year_day']) ? (int) \wp_unslash($source['cmx_abo_year_day']) : (int) ($fallback['year_day'] ?? 1)),
+				'time' => self::normalize_time(isset($source['cmx_abo_time']) ? (string) \wp_unslash($source['cmx_abo_time']) : (string) ($fallback['time'] ?? '08:00')),
 			];
 		}
 
-		public static function calculate_next_run(array $settings = []): string {
+		public static function calculate_next_run(array $settings = [], ?\DateTimeZone $timezone = null): string {
 			$defaults = [
 				'frequency' => 'monthly',
 				'weekday' => 1,
@@ -387,11 +539,32 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			];
 			$settings = \wp_parse_args($settings, $defaults);
 
-			$timezone = \wp_timezone();
+			$timezone = $timezone instanceof \DateTimeZone ? $timezone : \wp_timezone();
 			$now = new \DateTimeImmutable('now', $timezone);
 			[$hour, $minute] = self::parse_time_parts((string) $settings['time']);
 
 			switch ((string) $settings['frequency']) {
+				case 'never':
+					return '';
+
+				case 'minutely':
+					$current_minute = (int) $now->format('i');
+					$next_minute = ((int) \floor($current_minute / 15) * 15) + 15;
+					$candidate = $now->setTime((int) $now->format('G'), 0, 0);
+					if ($next_minute >= 60) {
+						$candidate = $candidate->modify('+1 hour');
+						$next_minute = 0;
+					}
+					$candidate = $candidate->setTime((int) $candidate->format('G'), $next_minute, 0);
+					break;
+
+				case 'hourly':
+					$candidate = $now->setTime((int) $now->format('G'), 0, 0);
+					if ($candidate <= $now) {
+						$candidate = $candidate->modify('+1 hour')->setTime((int) $candidate->format('G'), 0, 0);
+					}
+					break;
+
 				case 'daily':
 					$candidate = $now->setTime($hour, $minute, 0);
 					if ($candidate <= $now) {
@@ -412,25 +585,25 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					}
 					break;
 
-				case 'quarterly':
-					$candidate = self::next_quarterly_datetime($now, self::normalize_monthday((int) $settings['monthday']), $hour, $minute);
-					break;
+					case 'quarterly':
+						$candidate = self::next_quarterly_datetime($now, self::calendar_day_from_setting((int) $settings['monthday']), $hour, $minute);
+						break;
 
 				case 'yearly':
 					$candidate = self::next_yearly_datetime(
-						$now,
-						self::normalize_year_month((int) $settings['year_month']),
-						self::normalize_year_day((int) $settings['year_day']),
-						$hour,
-						$minute
-					);
+							$now,
+							self::normalize_year_month((int) $settings['year_month']),
+							self::calendar_day_from_setting((int) $settings['year_day']),
+							$hour,
+							$minute
+						);
 					break;
 
-				case 'monthly':
-				default:
-					$candidate = self::next_monthly_datetime($now, self::normalize_monthday((int) $settings['monthday']), $hour, $minute);
-					break;
-			}
+					case 'monthly':
+					default:
+						$candidate = self::next_monthly_datetime($now, self::calendar_day_from_setting((int) $settings['monthday']), $hour, $minute);
+						break;
+				}
 
 			return $candidate instanceof \DateTimeImmutable ? $candidate->format('Y-m-d H:i:s') : '';
 		}
@@ -442,8 +615,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			for ($i = 0; $i < 24; $i++) {
 				$target_year = $year + (int) \floor(($month - 1 + $i) / 12);
 				$target_month = (($month - 1 + $i) % 12) + 1;
-				$max_day = (int) \cal_days_in_month(\CAL_GREGORIAN, $target_month, $target_year);
-				$target_day = \min($day, $max_day);
+				$target_day = self::resolve_calendar_day($day, $target_month, $target_year);
 				$candidate = new \DateTimeImmutable(
 					\sprintf('%04d-%02d-%02d %02d:%02d:00', $target_year, $target_month, $target_day, $hour, $minute),
 					\wp_timezone()
@@ -463,8 +635,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			for ($year_offset = 0; $year_offset < 3; $year_offset++) {
 				$target_year = $year + $year_offset;
 				foreach ($quarter_months as $target_month) {
-					$max_day = (int) \cal_days_in_month(\CAL_GREGORIAN, $target_month, $target_year);
-					$target_day = \min($day, $max_day);
+					$target_day = self::resolve_calendar_day($day, $target_month, $target_year);
 					$candidate = new \DateTimeImmutable(
 						\sprintf('%04d-%02d-%02d %02d:%02d:00', $target_year, $target_month, $target_day, $hour, $minute),
 						\wp_timezone()
@@ -483,8 +654,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 
 			for ($i = 0; $i < 3; $i++) {
 				$target_year = $year + $i;
-				$max_day = (int) \cal_days_in_month(\CAL_GREGORIAN, $month, $target_year);
-				$target_day = \min($day, $max_day);
+				$target_day = self::resolve_calendar_day($day, $month, $target_year);
 				$candidate = new \DateTimeImmutable(
 					\sprintf('%04d-%02d-%02d %02d:%02d:00', $target_year, $month, $target_day, $hour, $minute),
 					\wp_timezone()
@@ -498,7 +668,37 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		}
 
 		private static function allowed_frequencies(): array {
-			return ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
+			return ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'never'];
+		}
+
+		private static function blocked_runtime_frequencies(): array {
+			return self::is_debug_mode_enabled() ? [] : ['minutely', 'hourly'];
+		}
+
+		private static function is_runtime_frequency_allowed(string $frequency): bool {
+			return !\in_array($frequency, self::blocked_runtime_frequencies(), true);
+		}
+
+		public static function visible_frequency_labels(): array {
+			$labels = self::all_frequency_labels();
+			if (!self::is_debug_mode_enabled()) {
+				unset($labels['minutely'], $labels['hourly']);
+			}
+
+			return $labels;
+		}
+
+		public static function all_frequency_labels(): array {
+			return [
+				'minutely' => \__('15Minütlich', 'cmx-misbuero'),
+				'hourly' => \__('Stündlich', 'cmx-misbuero'),
+				'daily' => \__('Täglich', 'cmx-misbuero'),
+				'weekly' => \__('Wöchentlich', 'cmx-misbuero'),
+				'monthly' => \__('Monatlich', 'cmx-misbuero'),
+				'quarterly' => \__('Quartal', 'cmx-misbuero'),
+				'yearly' => \__('Jährlich', 'cmx-misbuero'),
+				'never' => \__('Nie', 'cmx-misbuero'),
+			];
 		}
 
 		private static function normalize_weekday(int $value): int {
@@ -506,7 +706,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		}
 
 		private static function normalize_monthday(int $value): int {
-			return \max(1, \min(31, $value > 0 ? $value : 1));
+			return \max(0, \min(28, $value));
 		}
 
 		private static function normalize_year_month(int $value): int {
@@ -514,7 +714,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		}
 
 		private static function normalize_year_day(int $value): int {
-			return \max(1, \min(31, $value > 0 ? $value : 1));
+			return \max(0, \min(28, $value));
 		}
 
 		private static function normalize_time(string $value): string {
@@ -548,6 +748,154 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			}
 
 			return \wp_date('d.m.Y H:i', $datetime->getTimestamp(), \wp_timezone());
+		}
+
+		private static function create_mysql_datetime(string $mysql, \DateTimeZone $timezone): ?\DateTimeImmutable {
+			if ($mysql === '') {
+				return null;
+			}
+
+			$datetime = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $mysql, $timezone);
+			return $datetime instanceof \DateTimeImmutable ? $datetime : null;
+		}
+
+		public static function default_settings_option_name(): string {
+			return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+				: 'cmx_einstellungen';
+		}
+
+		public static function settings_url(): string {
+			$slug = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+				: 'cmx-einstellungen';
+
+			return \admin_url('admin.php?page=' . $slug . '&tab=vorgaben&sub=belege');
+		}
+
+		public static function sanitize_default_frequency(string $frequency): string {
+			$frequency = \sanitize_key($frequency);
+			if (!isset(self::all_frequency_labels()[$frequency])) {
+				return 'monthly';
+			}
+			if (!self::is_debug_mode_enabled() && \in_array($frequency, ['minutely', 'hourly'], true)) {
+				return 'monthly';
+			}
+
+			return $frequency;
+		}
+
+		public static function sanitize_default_time(string $value): string {
+			return self::normalize_time($value);
+		}
+
+		private static function get_default_settings(): array {
+			$options = (array) \get_option(self::default_settings_option_name(), []);
+			$enabled = !empty($options[self::DEFAULT_ENABLED_OPTION]) ? '1' : '0';
+			$frequency = self::sanitize_default_frequency((string) ($options[self::DEFAULT_FREQUENCY_OPTION] ?? 'monthly'));
+			$time = self::sanitize_default_time((string) ($options[self::DEFAULT_TIME_OPTION] ?? '08:00'));
+
+			return [
+				'enabled' => $enabled,
+				'frequency' => $enabled === '1' ? $frequency : 'never',
+				'weekday' => 1,
+				'monthday' => 1,
+				'year_month' => 1,
+				'year_day' => 1,
+				'time' => $time,
+				'next_run' => '',
+				'last_run' => '',
+			];
+		}
+
+		private static function is_debug_mode_enabled(): bool {
+			return \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+				&& cmx_system_is_debug_mode_enabled();
+		}
+
+		private static function calendar_day_from_setting(int $value): int {
+			return self::normalize_monthday($value);
+		}
+
+		private static function resolve_calendar_day(int $configured_day, int $month, int $year): int {
+			$configured_day = self::normalize_monthday($configured_day);
+			$max_day = (int) \cal_days_in_month(\CAL_GREGORIAN, $month, $year);
+			if ($configured_day === 0) {
+				return $max_day;
+			}
+
+			return \min($configured_day, $max_day);
+		}
+
+		private static function duplicate_beleg_for_recurring_send(int $post_id) {
+			if (!\function_exists(__NAMESPACE__ . '\\cmx_duplicate_do')) {
+				$duplicate_file = \dirname(__DIR__, 2) . '/includes/dublicate.php';
+				if (\is_file($duplicate_file)) {
+					require_once $duplicate_file;
+				}
+			}
+
+			if (!\function_exists(__NAMESPACE__ . '\\cmx_duplicate_do')) {
+				return new \WP_Error('duplicate_unavailable', \__('Rechnungskopie ist aktuell nicht verfügbar.', 'cmx-misbuero'));
+			}
+
+			$new_post_id = cmx_duplicate_do($post_id);
+			if (\is_wp_error($new_post_id)) {
+				return $new_post_id;
+			}
+
+			$new_post_id = \absint($new_post_id);
+			if ($new_post_id <= 0) {
+				return new \WP_Error('duplicate_failed', \__('Rechnungskopie konnte nicht erstellt werden.', 'cmx-misbuero'));
+			}
+
+			foreach (self::recurring_meta_keys() as $meta_key) {
+				\delete_post_meta($new_post_id, $meta_key);
+			}
+
+			\update_post_meta($new_post_id, '_cmx_beleg_copied_from', $post_id);
+			\update_post_meta($post_id, '_cmx_beleg_copied_to', $new_post_id);
+
+			return $new_post_id;
+		}
+
+		private static function recurring_meta_keys(): array {
+			return [
+				self::META_ENABLED,
+				self::META_FREQUENCY,
+				self::META_WEEKDAY,
+				self::META_MONTHDAY,
+				self::META_YEAR_MONTH,
+				self::META_YEAR_DAY,
+				self::META_TIME,
+				self::META_NEXT_RUN,
+				self::META_LAST_RUN,
+				'_cmx_abo_immediate_once',
+			];
+		}
+
+		private static function render_day_options(int $selected): void {
+			$selected = self::normalize_monthday($selected);
+			for ($day = 0; $day <= 28; $day++) {
+				echo '<option value="' . \esc_attr((string) $day) . '"' . \selected($selected, $day, false) . '>' . \esc_html((string) $day) . '</option>';
+			}
+		}
+
+		private static function month_labels(): array {
+			return [
+				1 => \__('Januar', 'cmx-misbuero'),
+				2 => \__('Februar', 'cmx-misbuero'),
+				3 => \__('März', 'cmx-misbuero'),
+				4 => \__('April', 'cmx-misbuero'),
+				5 => \__('Mai', 'cmx-misbuero'),
+				6 => \__('Juni', 'cmx-misbuero'),
+				7 => \__('Juli', 'cmx-misbuero'),
+				8 => \__('August', 'cmx-misbuero'),
+				9 => \__('September', 'cmx-misbuero'),
+				10 => \__('Oktober', 'cmx-misbuero'),
+				11 => \__('November', 'cmx-misbuero'),
+				12 => \__('Dezember', 'cmx-misbuero'),
+			];
 		}
 	}
 

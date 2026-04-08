@@ -21,6 +21,13 @@ function cmx_register_vorgaben_tab(): void {
 	);
 
 	\add_settings_section(
+		'cmx_sec_vorgaben_belege_abo',
+		__('Wiederkehrender Versand', 'default'),
+		'__return_false',
+		'cmx_tab_vorgaben__belege'
+	);
+
+	\add_settings_section(
 		'cmx_sec_vorgaben_artikel',
 		__('Artikel', 'default'),
 		'__return_false',
@@ -217,9 +224,75 @@ function cmx_register_vorgaben_tab(): void {
 			echo '<p class="description">Standard für "Fällig am" in Belegen. Beim Setzen des Belegdatums wird das Fälligkeitsdatum auf Belegdatum + diese Tage gesetzt. Ist "Monatsende" aktiv, wird stattdessen immer der letzte Tag des Beleg-Monats übernommen.</p>';
 			echo '<script>(function(){var days=document.getElementById("cmx-belege-faelligkeit-tage");var monthEnd=document.getElementById("cmx-belege-faelligkeit-monatsende");if(!days||!monthEnd){return;}function sync(){var active=!!monthEnd.checked;days.readOnly=active;days.setAttribute("aria-readonly",active?"true":"false");days.style.backgroundColor=active?"#f3f4f6":"";days.style.color=active?"#6b7280":"";}monthEnd.addEventListener("change",sync);sync();})();</script>';
 		},
-		'cmx_tab_vorgaben__belege',
-		'cmx_sec_vorgaben_belege'
-	);
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege'
+		);
+
+		\add_settings_field(
+			'belege_abo_default_enabled',
+			'Aktiv',
+			function (): void {
+				if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
+					return;
+				}
+				$options = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+				$enabled_key = CMX_Beleg_Abo::DEFAULT_ENABLED_OPTION;
+				$enabled = !empty($options[$enabled_key]);
+
+				echo '<input type="hidden" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'['.\esc_attr($enabled_key).']" value="0">';
+				echo '<label><input type="checkbox" id="cmx-belege-abo-default-enabled" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'['.\esc_attr($enabled_key).']" value="1" '.\checked($enabled, true, false).'> Ja</label>';
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_abo'
+		);
+
+		\add_settings_field(
+			'belege_abo_default_frequency',
+			'Rhythmus',
+			function (): void {
+				if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
+					return;
+				}
+				$options = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+				$frequency_key = CMX_Beleg_Abo::DEFAULT_FREQUENCY_OPTION;
+				$current = CMX_Beleg_Abo::sanitize_default_frequency((string) ($options[$frequency_key] ?? 'monthly'));
+				$visible_labels = CMX_Beleg_Abo::visible_frequency_labels();
+				$all_labels = CMX_Beleg_Abo::all_frequency_labels();
+				$select_id = 'cmx-belege-abo-default-frequency';
+				echo '<div class="cmx-belege-abo-default-dependent">';
+				echo '<select id="'.\esc_attr($select_id).'" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'['.\esc_attr($frequency_key).']" style="width:100%;max-width:320px;">';
+				if (!isset($visible_labels[$current]) && isset($all_labels[$current])) {
+					echo '<option value="'.\esc_attr($current).'" selected hidden></option>';
+				}
+				foreach ($visible_labels as $value => $label) {
+					echo '<option value="'.\esc_attr((string) $value).'" '.\selected($current, (string) $value, false).'>'.\esc_html((string) $label).'</option>';
+				}
+				echo '</select>';
+				echo '</div>';
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_abo'
+		);
+
+		\add_settings_field(
+			'belege_abo_default_time',
+			'Default Uhrzeit',
+			function (): void {
+				if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
+					return;
+				}
+				$options = (array) \get_option(\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN, []);
+				$time_key = CMX_Beleg_Abo::DEFAULT_TIME_OPTION;
+				$time = CMX_Beleg_Abo::sanitize_default_time((string) ($options[$time_key] ?? '08:00'));
+				$row_id = 'cmx-belege-abo-default-time-row';
+				echo '<div id="'.\esc_attr($row_id).'" class="cmx-belege-abo-default-dependent">';
+				echo '<input type="time" id="cmx-belege-abo-default-time" name="'.\CLOUDMEISTER\CMX\Buero\CMX_SETTINGS_MAIN.'['.\esc_attr($time_key).']" value="'.\esc_attr($time).'" style="width:100%;max-width:320px;">';
+				echo '</div>';
+				echo '<script>(function(){var enabled=document.getElementById("cmx-belege-abo-default-enabled");var select=document.getElementById("cmx-belege-abo-default-frequency");var row=document.getElementById("'.\esc_js($row_id).'");var input=document.getElementById("cmx-belege-abo-default-time");var dependentRows=document.querySelectorAll(".cmx-belege-abo-default-dependent");if(!enabled||!select||!row||!input||!dependentRows.length){return;}function sync(){var active=!!enabled.checked;var mode=select.value||"monthly";var showTime=active&&mode!=="minutely"&&mode!=="hourly"&&mode!=="never";dependentRows.forEach(function(node){node.style.display=active?\"\":\"none\";Array.prototype.forEach.call(node.querySelectorAll(\"input, select, textarea\"),function(field){field.disabled=!active;});});row.style.display=showTime?\"\":\"none\";input.disabled=!showTime;}enabled.addEventListener(\"change\",sync);select.addEventListener(\"change\",sync);sync();})();</script>';
+			},
+			'cmx_tab_vorgaben__belege',
+			'cmx_sec_vorgaben_belege_abo'
+		);
 
 	\register_setting(
 		'cmx_einstellungen',
@@ -317,6 +390,25 @@ function cmx_register_vorgaben_belege_trustee_field(): void {
 		'cmx_sec_vorgaben_belege'
 	);
 }
+
+\add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
+	if (!\is_array($new)) {
+		return $old;
+	}
+	if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
+		return $new;
+	}
+
+	$enabled_key = CMX_Beleg_Abo::DEFAULT_ENABLED_OPTION;
+	$frequency_key = CMX_Beleg_Abo::DEFAULT_FREQUENCY_OPTION;
+	$time_key = CMX_Beleg_Abo::DEFAULT_TIME_OPTION;
+
+	$new[$enabled_key] = !empty($new[$enabled_key]) ? '1' : '0';
+	$new[$frequency_key] = CMX_Beleg_Abo::sanitize_default_frequency((string) ($new[$frequency_key] ?? 'monthly'));
+	$new[$time_key] = CMX_Beleg_Abo::sanitize_default_time((string) ($new[$time_key] ?? '08:00'));
+
+	return $new;
+}, 20, 2);
 
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_vorgaben_belege_geplante_saetze_field', 100);
 function cmx_register_vorgaben_belege_geplante_saetze_field(): void {

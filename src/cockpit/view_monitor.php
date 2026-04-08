@@ -1209,6 +1209,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_post_is_publis
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_beleg_query_limit')) {
+	function cmx_cockpit_view_monitor_beleg_query_limit(): int {
+		return 1500;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_project_query_limit')) {
+	function cmx_cockpit_view_monitor_project_query_limit(): int {
+		return 1500;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_detail_row_limit')) {
+	function cmx_cockpit_view_monitor_detail_row_limit(): int {
+		return 3000;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_append_limited_row')) {
+	function cmx_cockpit_view_monitor_append_limited_row(array &$rows, array $row, int $limit): void {
+		if ($limit > 0 && \count($rows) >= $limit) {
+			return;
+		}
+
+		$rows[] = $row;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload')) {
 	function cmx_cockpit_view_monitor_chart_payload(): array {
 		$labels = cmx_cockpit_view_monitor_month_labels();
@@ -1263,32 +1291,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 		$contact_rows = [];
 		$project_rows = [];
 		$project_task_rows = [];
+		$detail_row_limit = cmx_cockpit_view_monitor_detail_row_limit();
 		$post_type = \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE')
 			: 'belege';
 
-		$query = new \WP_Query([
+		$beleg_ids = \array_map('intval', (array) \get_posts([
 			'post_type' => $post_type,
 			'post_status' => 'publish',
-			'posts_per_page' => -1,
+			'posts_per_page' => cmx_cockpit_view_monitor_beleg_query_limit(),
+			'fields' => 'ids',
 			'orderby' => 'date',
-			'order' => 'ASC',
+			'order' => 'DESC',
 			'no_found_rows' => true,
-			'update_post_meta_cache' => true,
-			'update_post_term_cache' => true,
-		]);
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'suppress_filters' => true,
+		]));
 
-		foreach ((array) $query->posts as $post) {
+		foreach ($beleg_ids as $post_id) {
+			$post = \get_post($post_id);
 			if (!$post instanceof \WP_Post) {
 				continue;
 			}
 			if (\in_array((string) $post->post_status, ['trash', 'auto-draft'], true)) {
+				\clean_post_cache($post_id);
 				continue;
 			}
-			$is_paid = cmx_cockpit_view_monitor_beleg_has_paid_date((int) $post->ID);
+			$is_paid = cmx_cockpit_view_monitor_beleg_has_paid_date($post_id);
 
-			$timestamp = cmx_cockpit_view_monitor_beleg_timestamp((int) $post->ID);
+			$timestamp = cmx_cockpit_view_monitor_beleg_timestamp($post_id);
 			if ($timestamp <= 0) {
+				\clean_post_cache($post_id);
 				continue;
 			}
 
@@ -1383,17 +1417,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				}
 			}
 
-			$total = cmx_cockpit_view_monitor_beleg_total((int) $post->ID);
-			$cost_total = cmx_cockpit_view_monitor_beleg_cost((int) $post->ID);
+			$total = cmx_cockpit_view_monitor_beleg_total($post_id);
+			$cost_total = cmx_cockpit_view_monitor_beleg_cost($post_id);
 			$type_info = cmx_cockpit_view_monitor_beleg_type_info($post);
 			$type_slug = (string) ($type_info['slug'] ?? '__without_type__');
 			$type_label = (string) ($type_info['label'] ?? 'Ohne Belegtyp');
 			$direction_side = cmx_cockpit_view_monitor_beleg_side($post, $type_slug);
-			$contact_meta = cmx_cockpit_view_monitor_contact_meta((int) $post->ID);
-			$project_meta = cmx_cockpit_view_monitor_project_meta((int) $post->ID);
-			$beleg_title = \trim((string) (\get_the_title((int) $post->ID) ?: ''));
+			$contact_meta = cmx_cockpit_view_monitor_contact_meta($post_id);
+			$project_meta = cmx_cockpit_view_monitor_project_meta($post_id);
+			$beleg_title = \trim((string) (\get_the_title($post_id) ?: ''));
 			if ($beleg_title === '') {
-				$beleg_title = 'Beleg #' . (int) $post->ID;
+				$beleg_title = 'Beleg #' . $post_id;
 			}
 			if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
 				$beleg_title = (string) cmx_beleg_decode_label_text($beleg_title);
@@ -1567,22 +1601,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$paid_counts_monthly_by_type[$type_slug][$year][$month_number] = (int) (($paid_counts_monthly_by_type[$type_slug][$year][$month_number] ?? 0) + 1);
 				$paid_counts_daily_by_type[$type_slug][$year][$month_number][$day_index] = (int) (($paid_counts_daily_by_type[$type_slug][$year][$month_number][$day_index] ?? 0) + 1);
 			}
-			$beleg_rows[] = [
+			cmx_cockpit_view_monitor_append_limited_row($beleg_rows, [
 				'year' => $year,
 				'month' => $month_number,
 				'day' => $day_number,
 				'type' => $type_slug,
-				'beleg_id' => (int) $post->ID,
+				'beleg_id' => $post_id,
 				'beleg_title' => $beleg_title,
-				'edit_link' => (string) (\get_edit_post_link((int) $post->ID, '') ?: ''),
+				'edit_link' => (string) (\get_edit_post_link($post_id, '') ?: ''),
 				'side' => $direction_side,
 				'is_paid' => $is_paid,
 				'revenue' => (float) $total,
 				'cost' => (float) $cost_total,
-			];
+			], $detail_row_limit);
 
 			if ((int) ($contact_meta['contact_id'] ?? 0) > 0) {
-				$contact_rows[] = [
+				cmx_cockpit_view_monitor_append_limited_row($contact_rows, [
 					'year' => $year,
 					'month' => $month_number,
 					'day' => $day_number,
@@ -1593,10 +1627,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'is_paid' => $is_paid,
 					'revenue' => (float) $total,
 					'cost' => (float) $cost_total,
-				];
+				], $detail_row_limit);
 			}
 			if ((int) ($project_meta['project_id'] ?? 0) > 0) {
-				$project_rows[] = [
+				cmx_cockpit_view_monitor_append_limited_row($project_rows, [
 					'year' => $year,
 					'month' => $month_number,
 					'day' => $day_number,
@@ -1607,10 +1641,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'is_paid' => $is_paid,
 					'revenue' => (float) $total,
 					'cost' => (float) $cost_total,
-				];
+				], $detail_row_limit);
 			}
 
-			foreach (cmx_cockpit_view_monitor_position_rows((int) $post->ID) as $row) {
+			foreach (cmx_cockpit_view_monitor_position_rows($post_id) as $row) {
 				if (!\is_array($row)) {
 					continue;
 				}
@@ -1636,7 +1670,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 				$article_meta = cmx_cockpit_view_monitor_article_meta($artikel_id, $row);
 				$line_revenue = cmx_cockpit_view_monitor_position_revenue($row);
 				$line_cost = \round($qty * cmx_cockpit_view_monitor_artikel_unit_cost($artikel_id), 2);
-				$article_rows[] = [
+				cmx_cockpit_view_monitor_append_limited_row($article_rows, [
 					'year' => $year,
 					'month' => $month_number,
 					'day' => $day_number,
@@ -1648,8 +1682,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'is_paid' => $is_paid,
 					'revenue' => (float) $line_revenue,
 					'cost' => (float) $line_cost,
-				];
+				], $detail_row_limit);
 			}
+
+			\clean_post_cache($post_id);
 		}
 
 		\wp_reset_postdata();
@@ -1661,23 +1697,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 			? (string) \constant(__NAMESPACE__ . '\\CMX_PROJEKT_TASK_META')
 			: '_cmx_projekt_tasks';
 
-		$project_query = new \WP_Query([
+		$project_ids = \array_map('intval', (array) \get_posts([
 			'post_type' => $project_post_type,
 			'post_status' => 'publish',
-			'posts_per_page' => -1,
-			'orderby' => 'title',
-			'order' => 'ASC',
+			'posts_per_page' => cmx_cockpit_view_monitor_project_query_limit(),
+			'fields' => 'ids',
+			'orderby' => 'ID',
+			'order' => 'DESC',
 			'no_found_rows' => true,
-			'update_post_meta_cache' => true,
+			'update_post_meta_cache' => false,
 			'update_post_term_cache' => false,
-		]);
+			'suppress_filters' => true,
+		]));
 
-		foreach ((array) $project_query->posts as $project_post) {
+		foreach ($project_ids as $project_id) {
+			$project_post = \get_post($project_id);
 			if (!$project_post instanceof \WP_Post) {
 				continue;
 			}
-			$project_id = (int) $project_post->ID;
 			if (!cmx_cockpit_view_monitor_post_is_published($project_id)) {
+				\clean_post_cache($project_id);
 				continue;
 			}
 
@@ -1731,7 +1770,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					? (\function_exists(__NAMESPACE__ . '\\cmx_projekt_truthy') ? cmx_projekt_truthy($task['abgerechnet']) : !empty($task['abgerechnet']))
 					: false;
 
-				$project_task_rows[] = [
+				cmx_cockpit_view_monitor_append_limited_row($project_task_rows, [
 					'year' => $year,
 					'month' => $month_number,
 					'day' => $day_number,
@@ -1741,8 +1780,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_view_monitor_chart_payload'
 					'billed' => $is_billable && $is_invoiced ? (float) $task_value : 0.0,
 					'open' => $is_billable && !$is_invoiced ? (float) $task_value : 0.0,
 					'internal' => !$is_billable ? (float) $task_cost : 0.0,
-				];
+				], $detail_row_limit);
 			}
+
+			\clean_post_cache($project_id);
 		}
 
 		\wp_reset_postdata();

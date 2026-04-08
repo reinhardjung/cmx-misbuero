@@ -372,6 +372,9 @@ function cmx_render_settings_page(): void {
 	do_settings_sections($page_id);
 	submit_button();
 	echo '</form>';
+	if ($tab === 'system' && \function_exists(__NAMESPACE__ . '\\cmx_render_system_bulk_delete_panel')) {
+		cmx_render_system_bulk_delete_panel();
+	}
 
 	echo '</div></div>';
 }

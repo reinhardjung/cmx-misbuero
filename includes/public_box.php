@@ -494,11 +494,11 @@ add_action('add_meta_boxes', function() {
 			$has_pdf = false;
 			$send_tooltip = 'PDF-Link per Mail versendern';
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
-				[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
-				$has_pdf = is_file($pdf_abs_path);
-				if ($has_pdf) {
+				if ((int) $post->ID > 0) {
 					$send_href = esc_url(admin_url('admin-post.php?action=cmxbu_beleg_send&post_id='.(int)$post->ID));
-					$kontakt_id = (int) get_post_meta((int) $post->ID, '_cmx_beleg_kontakt_id', true);
+					$kontakt_id = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_contact_id')
+						? (int) cmxbu_get_beleg_contact_id((int) $post->ID)
+						: (int) get_post_meta((int) $post->ID, '_cmx_beleg_kontakt_id', true);
 					if ($kontakt_id > 0) {
 						$recipient_mail = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
 							? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id))
@@ -507,6 +507,10 @@ add_action('add_meta_boxes', function() {
 							$send_tooltip .= ' an: ' . $recipient_mail;
 						}
 					}
+				}
+				[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
+				$has_pdf = is_file($pdf_abs_path);
+				if ($has_pdf) {
 					if (function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token')) {
 						$token = cmxbu_get_stable_token($post->ID);
 						$download_url = esc_url(add_query_arg('beleg', $token, home_url('/')));

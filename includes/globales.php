@@ -255,55 +255,22 @@ add_action('admin_head', function() {
 });
 // .notice-need-update-pro :-(
 
-
-/**
- * Entfernt alle Standard-Dashboard-Widgets,
- * lässt aber bestimmte eigene Widgets stehen.
- */
-add_action('wp_dashboard_setup', function () {
-
-	global $wp_meta_boxes;
-
-	// IDs deiner eigenen Widgets (hier ergänzen, falls mehrere)
-	if(wp_get_current_user()->user_login !== 'cloudmeister') {
-		remove_action('welcome_panel', 'wp_welcome_panel');
-
-
-		$allow = [
-			'cmx_dashboard_widget',
-			'cmx_stoppuhr_notizen_widget',
-			'cmx_stoppuhr_taetigkeiten_widget',
-		];
-
-		// Bereiche im Dashboard
-		$areas = [
-			'normal', 'side',
-		];
-
-		foreach ($areas as $area) {
-
-			if (!isset($wp_meta_boxes['dashboard'][$area])) {
-				continue;
-			}
-
-			foreach ($wp_meta_boxes['dashboard'][$area] as $priority => $widgets) {
-
-				foreach ($widgets as $widget_id => $widget) {
-
-					if (!in_array($widget_id, $allow, true)) {
-						unset($wp_meta_boxes['dashboard'][$area][$priority][$widget_id]);
-					}
-				}
-			}
-		}
+add_action('load-index.php', function (): void {
+	$user_id = \get_current_user_id();
+	if ($user_id <= 0) {
+		return;
 	}
+
+	$version = '20260408_restore_all_dashboard_widgets';
+	$current = (string) \get_user_meta($user_id, 'cmx_dashboard_restore_all_version', true);
+	if ($current === $version) {
+		return;
+	}
+
+	\update_user_option($user_id, 'metaboxhidden_dashboard', [], true);
+	\update_user_option($user_id, 'closedpostboxes_dashboard', [], true);
+	\update_user_meta($user_id, 'cmx_dashboard_restore_all_version', $version);
 });
-
-
-
-
-
-
 
 
 // wp-not-current-submenu wp-menu-separator elementor: .menu-icon-users,

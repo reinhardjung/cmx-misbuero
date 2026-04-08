@@ -16,6 +16,57 @@ if (!\defined(__NAMESPACE__.'\\CMX_PT_BELEGE'))          \define(__NAMESPACE__.'
 if (!\defined(__NAMESPACE__.'\\CMX_PT_KONTAKTE'))        \define(__NAMESPACE__.'\\CMX_PT_KONTAKTE', 'kontakte');
 if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT', '_cmx_beleg_kontakt_id');
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_meta_keys')) {
+	function cmx_beleg_kontakt_meta_keys(): array {
+		$keys = [CMX_BELEG_META_KONTAKT, '_cmx_beleg_kontakt_id', 'cmx_beleg_kontakt_id'];
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_meta_query')) {
+	function cmx_beleg_kontakt_meta_query(int $kontakt_id): array {
+		$kontakt_id = (int) $kontakt_id;
+		if ($kontakt_id <= 0) {
+			return [];
+		}
+
+		$meta_keys = cmx_beleg_kontakt_meta_keys();
+		if (\count($meta_keys) === 1) {
+			return [
+				'key'     => (string) ($meta_keys[0] ?? CMX_BELEG_META_KONTAKT),
+				'value'   => $kontakt_id,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		}
+
+		$meta_query = ['relation' => 'OR'];
+		foreach ($meta_keys as $key) {
+			$meta_query[] = [
+				'key'     => $key,
+				'value'   => $kontakt_id,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		}
+
+		return $meta_query;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_id_for_post')) {
+	function cmx_beleg_kontakt_id_for_post(int $post_id): int {
+		foreach (cmx_beleg_kontakt_meta_keys() as $meta_key) {
+			$kontakt_id = (int) \get_post_meta($post_id, $meta_key, true);
+			if ($kontakt_id > 0) {
+				return $kontakt_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
 /** =========================
  * 1) Spalte "Kontakt" hinzufügen
  * ========================= */
@@ -41,7 +92,9 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 		return;
 	}
 
-	$kontakt_id = (int) \get_post_meta($post_id, CMX_BELEG_META_KONTAKT, true);
+	$kontakt_id = \function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_id_for_post')
+		? cmx_beleg_kontakt_id_for_post($post_id)
+		: (int) \get_post_meta($post_id, CMX_BELEG_META_KONTAKT, true);
 	if ($kontakt_id <= 0) {
 		echo '<span style="color:#777"></span>';
 		return;
@@ -90,6 +143,7 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 		'posts_per_page'          => -1,          // <-- wichtig: ALLE
 		'orderby'                 => 'title',
 		'order'                   => 'ASC',
+		'fields'                  => 'ids',
 		'no_found_rows'           => true,
 		'update_post_meta_cache'  => false,
 		'update_post_term_cache'  => false,
@@ -100,9 +154,11 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 	echo '<select name="cmx_kontakt_id" id="cmx_kontakt_id">';
 	echo '<option value="0">'.\esc_html__('Alle Kontakte', 'cmx').'</option>';
 
-	foreach ($kontakte as $k) {
-		echo '<option value="'.(int)$k->ID.'" '.\selected($selected, (int)$k->ID, false).'>'
-			.\esc_html($k->post_title ?: ('#'.$k->ID))
+	foreach ($kontakte as $kontakt_id) {
+		$kontakt_id = (int) $kontakt_id;
+		$title = (string) \get_the_title($kontakt_id);
+		echo '<option value="'.(int)$kontakt_id.'" '.\selected($selected, (int)$kontakt_id, false).'>'
+			.\esc_html($title !== '' ? $title : ('#'.$kontakt_id))
 			.'</option>';
 	}
 	echo '</select>';
@@ -113,6 +169,10 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
  * ========================= */
 \add_action('pre_get_posts', function(\WP_Query $q){
 	if (!\is_admin() || !$q->is_main_query()) {
+		return;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_query_post_type')) {
+		// Der zentrale Filter in admincolumns.php übernimmt die eigentliche Query-Anpassung.
 		return;
 	}
 	// Robust: prüfe direkt den post_type statt get_current_screen()
@@ -129,12 +189,17 @@ if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT')) \define(__NAMESPACE__.'
 		: (isset($_GET['cmx_kontakt_id']) ? (int) $_GET['cmx_kontakt_id'] : 0);
 	if ($kontakt_id > 0) {
 		$meta_query   = (array) $q->get('meta_query');
-		$meta_query[] = [
-			'key'     => CMX_BELEG_META_KONTAKT,
-			'value'   => $kontakt_id,
-			'compare' => '=',
-			'type'    => 'NUMERIC',
-		];
+		$kontakt_filter = \function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_meta_query')
+			? cmx_beleg_kontakt_meta_query($kontakt_id)
+			: [
+				'key'     => CMX_BELEG_META_KONTAKT,
+				'value'   => $kontakt_id,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		if (!empty($kontakt_filter)) {
+			$meta_query[] = $kontakt_filter;
+		}
 		$q->set('meta_query', $meta_query);
 	}
 });

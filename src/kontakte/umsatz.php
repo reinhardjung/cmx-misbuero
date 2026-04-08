@@ -68,12 +68,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_allowed_slugs')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_list_url')) {
-	function cmx_kontakt_belege_list_url(int $kontakt_id): string {
+	function cmx_kontakt_belege_list_url(int $kontakt_id, array $beleg_ids = []): string {
 		$args = [
 			'post_type' => CMX_PT_BELEGE,
 		];
 		if ($kontakt_id > 0) {
 			$args['cmx_kontakt_id'] = $kontakt_id;
+		}
+		$beleg_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $beleg_ids))));
+		if ($beleg_ids !== []) {
+			$args['cmx_beleg_ids'] = \implode(',', $beleg_ids);
 		}
 		return (string) \add_query_arg($args, \admin_url('edit.php'));
 	}
@@ -385,11 +389,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 	}
 	$data = cmx_kontakt_belege_data($kontakt_id);
 	$sum = (float) ($data['sum'] ?? 0.0);
-	$count = \count((array) ($data['rows'] ?? []));
+	$rows = (array) ($data['rows'] ?? []);
+	$count = \count($rows);
 	$sum_label = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
 		? (string) cmx_format_swiss_number($sum, 2)
 		: \number_format($sum, 2, '.', "'");
-	$title = $count . ' Belege (' . $sum_label . ')';
+	$title_text = $count . ' Belege (' . $sum_label . ')';
+	$list_url = cmx_kontakt_belege_list_url($kontakt_id, \array_map(static function ($row): int {
+		return (int) ($row['id'] ?? 0);
+	}, $rows));
+	$title = '<a href="' . \esc_url($list_url) . '" style="text-decoration:none;color:inherit;" onclick="event.stopPropagation();">' . \esc_html($title_text) . '</a>';
 
 	\add_meta_box(
 		'cmx_kontakt_belege_umsatz',
@@ -410,7 +419,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 		}
 			$data = cmx_kontakt_belege_data($kontakt_id);
 			$rows = (array) ($data['rows'] ?? []);
-			$list_url = cmx_kontakt_belege_list_url($kontakt_id);
+			$list_url = cmx_kontakt_belege_list_url($kontakt_id, \array_map(static function ($row): int {
+				return (int) ($row['id'] ?? 0);
+			}, $rows));
 
 				echo '<style>
 					#cmx_kontakt_belege_umsatz .cmx-kb-wrap{width:100%;max-height:320px;overflow:auto}
@@ -435,14 +446,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 			echo 'var box=document.getElementById("cmx_kontakt_belege_umsatz");';
 				echo 'if(!box){return;}';
 				echo 'var h=box.querySelector(".hndle, .postbox-header h2");';
-				echo 'if(!h){return;}';
-				echo 'h.style.cursor="pointer";';
-				echo 'h.style.color="#2271b1";';
-				echo 'h.addEventListener("click",function(e){';
-				echo 'if(e.target&&e.target.closest&&e.target.closest("a,button,input,select,textarea")){return;}';
+				echo 'var header=box.querySelector(".postbox-header");';
+				echo 'var clickTarget=header||h;';
+				echo 'if(h){h.style.cursor="pointer";h.style.color="#2271b1";}';
+				echo 'if(clickTarget){clickTarget.addEventListener("click",function(e){';
+				echo 'if(e.target&&e.target.closest&&e.target.closest(".handle-actions, .handlediv, button, input, select, textarea")){return;}';
 				echo 'e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation){e.stopImmediatePropagation();}';
 				echo 'window.location.href=' . \wp_json_encode($list_url) . ';';
-				echo '}, true);';
+				echo '}, true);}';
 				echo '})();</script>';
 				return;
 			}
@@ -494,7 +505,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 					$ajax_url = \admin_url('admin-ajax.php');
 					echo '<script>(function(){';
 					echo 'var box=document.getElementById("cmx_kontakt_belege_umsatz");';
-					echo 'if(box){var h=box.querySelector(".hndle, .postbox-header h2");if(h){h.style.cursor="pointer";h.style.color="#2271b1";h.addEventListener("click",function(e){if(e.target&&e.target.closest&&e.target.closest("a,button,input,select,textarea")){return;}e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation){e.stopImmediatePropagation();}window.location.href=' . \wp_json_encode($list_url) . ';}, true);}}';
+					echo 'if(box){var h=box.querySelector(".hndle, .postbox-header h2");var header=box.querySelector(".postbox-header");var clickTarget=header||h;if(h){h.style.cursor="pointer";h.style.color="#2271b1";}if(clickTarget){clickTarget.addEventListener("click",function(e){if(e.target&&e.target.closest&&e.target.closest(".handle-actions, .handlediv, button, input, select, textarea")){return;}e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation){e.stopImmediatePropagation();}window.location.href=' . \wp_json_encode($list_url) . ';}, true);}}';
 					echo 'var root=document.getElementById("cmx_kontakt_belege_umsatz"); if(!root){return;}';
 				echo 'root.addEventListener("dblclick", function(e){';
 			echo 'var el=e.target&&e.target.closest?e.target.closest(".cmx-kb-due-mark-paid[data-beleg]"):null;';

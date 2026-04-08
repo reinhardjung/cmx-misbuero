@@ -300,8 +300,50 @@ add_filter('query_vars', function(array $vars){
 	if (!in_array('cmx_zeitraumfilter', $vars, true)) {
 		$vars[] = 'cmx_zeitraumfilter';
 	}
+	if (!in_array('cmx_belegdatum_von', $vars, true)) {
+		$vars[] = 'cmx_belegdatum_von';
+	}
+	if (!in_array('cmx_belegdatum_bis', $vars, true)) {
+		$vars[] = 'cmx_belegdatum_bis';
+	}
 	return $vars;
 });
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_normalize_date_value')) {
+	function cmx_beleg_admin_normalize_date_value($raw): string {
+		if (\is_array($raw)) {
+			$raw = \reset($raw);
+		} elseif (\is_object($raw)) {
+			$tmp = \get_object_vars($raw);
+			$raw = $tmp ? \reset($tmp) : '';
+		}
+
+		$raw = \trim((string) $raw);
+		if ($raw === '') {
+			return '';
+		}
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+			return $raw;
+		}
+
+		$ts = \function_exists(__NAMESPACE__ . '\\cmx_to_ts') ? cmx_to_ts($raw) : 0;
+		if ($ts <= 0) {
+			return '';
+		}
+
+		return \wp_date('Y-m-d', $ts);
+	}
+}
+
+if (!function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_request_date_value')) {
+	function cmx_beleg_admin_request_date_value(string $key): string {
+		if (!isset($_GET[$key]) || \is_array($_GET[$key])) {
+			return '';
+		}
+
+		return cmx_beleg_admin_normalize_date_value((string) \wp_unslash($_GET[$key]));
+	}
+}
 
 /** =========================
  * Helper: Rohwert → Timestamp
@@ -454,7 +496,23 @@ add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function(string $
 			echo \implode(', ', $links);
 			break;
 			case 'beleg_datum':
-				cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_DATUM, true) );
+				$raw_date = (string) \get_post_meta($post_id, CMX_BELEG_META_DATUM, true);
+				$date_filter_value = cmx_beleg_admin_normalize_date_value($raw_date);
+				if ($date_filter_value !== '') {
+					$url = \add_query_arg(
+						[
+							'post_type' => CMX_PT_BELEGE,
+							'cmx_belegdatum_von' => $date_filter_value,
+							'cmx_belegdatum_bis' => $date_filter_value,
+						],
+						\admin_url('edit.php')
+					);
+					echo '<a href="' . \esc_url($url) . '">';
+					cmx_echo_date($raw_date);
+					echo '</a>';
+					break;
+				}
+				cmx_echo_date($raw_date);
 				break;
 			case 'beleg_faellig':
 				cmx_echo_date( get_post_meta($post_id, CMX_BELEG_META_FAELLIG, true) );
@@ -579,6 +637,8 @@ add_action('restrict_manage_posts', function($post_type){
 	$za_selected = isset($_GET['cmx_zahlungsartfilter']) ? sanitize_text_field($_GET['cmx_zahlungsartfilter']) : '';
 	$zg_selected = isset($_GET['cmx_zahlungsgrundfilter']) ? sanitize_text_field($_GET['cmx_zahlungsgrundfilter']) : '';
 	$zeitraum_selected = cmx_beleg_admin_zeitraum_selected();
+	$date_from_selected = cmx_beleg_admin_request_date_value('cmx_belegdatum_von');
+	$date_to_selected = cmx_beleg_admin_request_date_value('cmx_belegdatum_bis');
 	$show_paid_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_bezahlt');
 	$show_date_filter = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('beleg_datum');
 	$show_category_filter_by_column = !\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible') || cmx_beleg_admin_column_is_visible('cmx_belege_kategorie');
@@ -605,6 +665,10 @@ add_action('restrict_manage_posts', function($post_type){
 				echo '<option value="' . esc_attr((string) $value) . '" ' . selected($zeitraum_selected, (string) $value, false) . '>' . esc_html((string) $label) . '</option>';
 			}
 		echo '</select>';
+		echo '<label class="screen-reader-text" for="cmx_belegdatum_von">' . esc_html__('Belegdatum von', 'cmx') . '</label>';
+		echo '<input type="date" name="cmx_belegdatum_von" id="cmx_belegdatum_von" value="' . esc_attr($date_from_selected) . '" style="height:32px;min-height:32px;line-height:30px;border-radius:6px;" />';
+		echo '<label class="screen-reader-text" for="cmx_belegdatum_bis">' . esc_html__('Belegdatum bis', 'cmx') . '</label>';
+		echo '<input type="date" name="cmx_belegdatum_bis" id="cmx_belegdatum_bis" value="' . esc_attr($date_to_selected) . '" style="height:32px;min-height:32px;line-height:30px;border-radius:6px;" />';
 	}
 
 	$show_category_filter = true;
@@ -742,6 +806,26 @@ add_action('pre_get_posts', function(\WP_Query $q){
 	$zeitraum_filter = \sanitize_key((string) $zeitraum_filter);
 	$q->set('cmx_zeitraumfilter', $zeitraum_filter);
 
+	$date_from = $q->get('cmx_belegdatum_von');
+	if ($date_from === null || $date_from === '') {
+		$date_from = cmx_beleg_admin_request_date_value('cmx_belegdatum_von');
+	}
+	$date_from = cmx_beleg_admin_normalize_date_value($date_from);
+	$q->set('cmx_belegdatum_von', $date_from);
+
+	$date_to = $q->get('cmx_belegdatum_bis');
+	if ($date_to === null || $date_to === '') {
+		$date_to = cmx_beleg_admin_request_date_value('cmx_belegdatum_bis');
+	}
+	$date_to = cmx_beleg_admin_normalize_date_value($date_to);
+	$q->set('cmx_belegdatum_bis', $date_to);
+
+	if ($date_from !== '' && $date_to !== '' && \strcmp($date_from, $date_to) > 0) {
+		[$date_from, $date_to] = [$date_to, $date_from];
+		$q->set('cmx_belegdatum_von', $date_from);
+		$q->set('cmx_belegdatum_bis', $date_to);
+	}
+
 	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible')) {
 		if (!cmx_beleg_admin_column_is_visible('beleg_bezahlt')) {
 			$filter = '';
@@ -750,6 +834,10 @@ add_action('pre_get_posts', function(\WP_Query $q){
 		if (!cmx_beleg_admin_column_is_visible('beleg_datum')) {
 			$zeitraum_filter = '';
 			$q->set('cmx_zeitraumfilter', '');
+			$date_from = '';
+			$date_to = '';
+			$q->set('cmx_belegdatum_von', '');
+			$q->set('cmx_belegdatum_bis', '');
 		}
 		if (!cmx_beleg_admin_column_is_visible('beleg_richtung')) {
 			$richtung_filter = '';
@@ -818,11 +906,36 @@ add_action('pre_get_posts', function(\WP_Query $q){
 		$range = cmx_beleg_admin_zeitraum_range($zeitraum_filter);
 		$from = (string) ($range['from'] ?? '');
 		$to = (string) ($range['to'] ?? '');
-		if ($from !== '' && $to !== '') {
+		if ($date_from === '' && $date_to === '' && $from !== '' && $to !== '') {
 			$meta_query[] = [
 				'key'     => CMX_BELEG_META_DATUM,
 				'value'   => [$from, $to],
 				'compare' => 'BETWEEN',
+				'type'    => 'DATE',
+			];
+		}
+	}
+
+	if ($date_from !== '' || $date_to !== '') {
+		if ($date_from !== '' && $date_to !== '') {
+			$meta_query[] = [
+				'key'     => CMX_BELEG_META_DATUM,
+				'value'   => [$date_from, $date_to],
+				'compare' => 'BETWEEN',
+				'type'    => 'DATE',
+			];
+		} elseif ($date_from !== '') {
+			$meta_query[] = [
+				'key'     => CMX_BELEG_META_DATUM,
+				'value'   => $date_from,
+				'compare' => '>=',
+				'type'    => 'DATE',
+			];
+		} else {
+			$meta_query[] = [
+				'key'     => CMX_BELEG_META_DATUM,
+				'value'   => $date_to,
+				'compare' => '<=',
 				'type'    => 'DATE',
 			];
 		}

@@ -64,9 +64,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_latest_related_doc_url')) {
 	}
 }
 
-$add_action_columns = static function (array $columns): array {
-	unset($columns['cmx_beleg_pdf_action'], $columns['cmx_beleg_mail_action']);
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_has_recurring_run')) {
+	function cmx_beleg_has_recurring_run(int $post_id): bool {
+		if ($post_id <= 0) {
+			return false;
+		}
 
+		if ((int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true) > 0) {
+			return false;
+		}
+
+		$enabled = (string) \get_post_meta($post_id, '_cmx_abo_enabled', true) === '1';
+		$frequency = \sanitize_key((string) \get_post_meta($post_id, '_cmx_abo_frequency', true));
+
+		return $enabled && $frequency !== '' && $frequency !== 'never';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_recurring_stop_url')) {
+	function cmx_beleg_recurring_stop_url(int $post_id): string {
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$redirect_to = \admin_url('edit.php?post_type=' . CMX_PT_BELEGE);
+		if (isset($_SERVER['REQUEST_URI'])) {
+			$request_uri = (string) \wp_unslash($_SERVER['REQUEST_URI']);
+			if ($request_uri !== '' && \strpos($request_uri, '/wp-admin/') === 0) {
+				$redirect_to = (string) \home_url($request_uri);
+			}
+		}
+
+		$url = (string) \add_query_arg(
+			[
+				'action' => 'cmx_beleg_abo_stop',
+				'post_id' => $post_id,
+				'redirect_to' => $redirect_to,
+			],
+			\admin_url('admin-post.php')
+		);
+
+		return (string) \wp_nonce_url($url, 'cmx_beleg_abo_stop_' . $post_id);
+	}
+}
+
+$add_action_columns = static function (array $columns): array {
+	unset($columns['cmx_beleg_repeat_action'], $columns['cmx_beleg_pdf_action'], $columns['cmx_beleg_mail_action']);
+
+	$columns['cmx_beleg_repeat_action'] = 'Abo';
 	$columns['cmx_beleg_pdf_action'] = 'PDF';
 
 	return $columns;
@@ -76,6 +121,22 @@ $add_action_columns = static function (array $columns): array {
 \add_filter('manage_' . CMX_PT_BELEGE . '_posts_columns', $add_action_columns, 999);
 
 \add_action('manage_' . CMX_PT_BELEGE . '_posts_custom_column', function (string $column, int $post_id): void {
+	if ($column === 'cmx_beleg_repeat_action') {
+		if (!cmx_beleg_has_recurring_run($post_id)) {
+			echo '<span class="cmx-beleg-action-placeholder" aria-hidden="true"></span>';
+			return;
+		}
+
+		$stop_url = cmx_beleg_recurring_stop_url($post_id);
+		if ($stop_url === '') {
+			echo '<span class="cmx-beleg-action-placeholder" aria-hidden="true"></span>';
+			return;
+		}
+
+		echo '<a href="' . \esc_url($stop_url) . '" class="cmx-beleg-repeat-action" title="Wiederkehrenden Lauf stoppen" aria-label="Wiederkehrenden Lauf stoppen" onclick="return window.confirm(\'Wiederkehrenden Lauf fuer diesen Beleg stoppen?\');"><span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span></a>';
+		return;
+	}
+
 	if ($column !== 'cmx_beleg_pdf_action') {
 		return;
 	}
@@ -137,6 +198,14 @@ $add_action_columns = static function (array $columns): array {
 	\wp_enqueue_style('dashicons');
 
 		echo '<style>
+			.wp-list-table th.column-cmx_beleg_repeat_action {
+				width: 46px;
+				text-align: center;
+			}
+			.wp-list-table td.column-cmx_beleg_repeat_action {
+				text-align: center;
+				vertical-align: top;
+			}
 			.wp-list-table th.column-cmx_beleg_pdf_action {
 				width: 98px;
 				text-align: center;
@@ -166,6 +235,18 @@ $add_action_columns = static function (array $columns): array {
 			font-size: 18px;
 			line-height: 18px;
 		}
+			.cmx-beleg-repeat-action {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				color: #cc4b00;
+				text-decoration: none;
+				min-height: 20px;
+			}
+			.cmx-beleg-repeat-action:hover,
+			.cmx-beleg-repeat-action:focus {
+				color: #8a3200;
+			}
 			.cmx-beleg-action-pdf {
 				color: #a42c24;
 			}

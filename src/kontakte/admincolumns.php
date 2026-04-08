@@ -245,10 +245,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_deckungsbeitrag_add_view')) {
 		$args['cmx_view'] = 'deckungsbeitrag';
 
 		$url = \add_query_arg($args, \admin_url('edit.php'));
-		$count = \count(cmx_admin_deckungsbeitrag_map($kind));
 		$is_current = cmx_admin_deckungsbeitrag_view_active($post_type);
+		$count_html = '';
+		if ($is_current) {
+			$count_html = ' <span class="count">(' . (int) \count(cmx_admin_deckungsbeitrag_map($kind)) . ')</span>';
+		}
 
-		$views['cmx_deckungsbeitrag'] = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>Deckungsbeitrag <span class="count">(' . (int) $count . ')</span></a>';
+		$views['cmx_deckungsbeitrag'] = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>Deckungsbeitrag' . $count_html . '</a>';
 		return $views;
 	}
 }

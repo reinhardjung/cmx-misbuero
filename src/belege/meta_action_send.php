@@ -88,20 +88,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_belegmail_mode')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_contact_id')) {
+	function cmxbu_get_beleg_contact_id(int $post_id): int {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return 0;
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_id_for_post')) {
+			$kontakt_id = (int) cmx_beleg_kontakt_id_for_post($post_id);
+			if ($kontakt_id > 0) {
+				return $kontakt_id;
+			}
+		}
+
+		$meta_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')) {
+			$meta_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID');
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')) {
+			$meta_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT');
+		}
+		$meta_keys = \array_merge($meta_keys, ['_cmx_beleg_kontakt_id', 'cmx_beleg_kontakt_id']);
+		$meta_keys = \array_values(\array_unique(\array_filter(\array_map('strval', $meta_keys))));
+
+		foreach ($meta_keys as $meta_key) {
+			$kontakt_id = (int) \get_post_meta($post_id, $meta_key, true);
+			if ($kontakt_id > 0) {
+				return $kontakt_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
 /**
  * Metabox-Teil: "versenden"-Button
  */
 function cmxbu_render_beleg_send_metabox(\WP_Post $post): void {
-
-	[, $pdf_abs_path] = cmxbu_get_beleg_pdf_paths($post);
-	$has_pdf          = is_file($pdf_abs_path);
-	$post_id          = (int) $post->ID;
-
-	if ($has_pdf) {
-		$href = \esc_url(\admin_url("admin-post.php?action=cmxbu_beleg_send&post_id={$post_id}"));
-		// echo '<a href="' . $href . '" class="button button-secondary alignleft">versenden</a>';
-		echo '<a href="' . esc_url( $href ) . '" title="PDF-Link per Mail versenden" class="button button-secondary alignleft"><span style="margin-top:5px;" class="dashicons dashicons-email"></span></a>';
+	$post_id = (int) $post->ID;
+	if ($post_id <= 0) {
+		return;
 	}
+
+	$href = \esc_url(\admin_url("admin-post.php?action=cmxbu_beleg_send&post_id={$post_id}"));
+	echo '<a href="' . esc_url($href) . '" title="PDF-Link per Mail versenden" class="button button-secondary alignleft"><span style="margin-top:5px;" class="dashicons dashicons-email"></span></a>';
 	// else {
 	// 	echo '<a href="#" class="button button-secondary alignleft disabled" style="pointer-events:none;opacity:0.5;">versenden</a>';
 	// }
@@ -130,7 +162,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 
 		$beleg_id = (string) ($post->post_title ?? '');
 
-		if (!empty($args['regenerate_pdf']) && \current_user_can('edit_post', $post_id) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+		$allow_internal = \function_exists(__NAMESPACE__ . '\\cmx_woocommerce_allows_internal_write')
+			? cmx_woocommerce_allows_internal_write()
+			: false;
+		if (!empty($args['regenerate_pdf']) && ($allow_internal || \current_user_can('edit_post', $post_id)) && \function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
 			cmxbu_generate_document_on_save($post_id, $post, true);
 		}
 
@@ -146,7 +181,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 		$token = cmxbu_get_stable_token($post_id);
 		$download_url = \add_query_arg('beleg', $token, \home_url('/'));
 
-		$kontakt_id = (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
+		$kontakt_id = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_contact_id')
+			? (int) cmxbu_get_beleg_contact_id($post_id)
+			: (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
 		if ($kontakt_id <= 0) {
 			if (\function_exists(__NAMESPACE__ . '\\cmxbu_log')) {
 				cmxbu_log('MAIL: missing kontakt_id', ['post_id' => $post_id]);
@@ -390,10 +427,6 @@ function cmxbu_handle_beleg_send(): void {
 				$args['cmx_beleg_mail_error_token'] = $token;
 			}
 			\wp_safe_redirect(\add_query_arg($args, $redirect_base));
-			exit;
-		}
-		if ($code === 'missing_kontakt') {
-			\wp_safe_redirect(\get_edit_post_link($post_id, ''));
 			exit;
 		}
 		$args = ['cmx_beleg_mail_error' => '1'];

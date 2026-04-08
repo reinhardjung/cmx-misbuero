@@ -8,6 +8,62 @@ include_once 'ac_konditionen.php';
 include_once 'ac_summe.php';
 include_once 'ac_actions.php';
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_query_post_type')) {
+	function cmx_beleg_admin_query_post_type(\WP_Query $query): string {
+		$post_type = $query->get('post_type');
+		if (\is_array($post_type)) {
+			$post_type = (string) \reset($post_type);
+		}
+
+		$post_type = \sanitize_key((string) $post_type);
+		if ($post_type !== '') {
+			return $post_type;
+		}
+
+		if (isset($_GET['post_type'])) {
+			$post_type = \sanitize_key((string) \wp_unslash($_GET['post_type']));
+			if ($post_type !== '') {
+				return $post_type;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_system_current_admin_post_type')) {
+			$post_type = (string) cmx_system_current_admin_post_type();
+			if ($post_type !== '') {
+				return \sanitize_key($post_type);
+			}
+		}
+
+		if (\function_exists('get_current_screen')) {
+			$screen = \get_current_screen();
+			if ($screen && !empty($screen->post_type)) {
+				return \sanitize_key((string) $screen->post_type);
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_requested_ids')) {
+	function cmx_beleg_admin_requested_ids(): array {
+		$raw = isset($_GET['cmx_beleg_ids']) ? (string) \wp_unslash($_GET['cmx_beleg_ids']) : '';
+		if ($raw === '') {
+			return [];
+		}
+
+		$ids = [];
+		foreach (\preg_split('/[\s,;]+/', $raw) ?: [] as $value) {
+			$post_id = (int) $value;
+			if ($post_id > 0) {
+				$ids[] = $post_id;
+			}
+		}
+
+		return \array_values(\array_unique($ids));
+	}
+}
+
 /**
  * Zentraler Filter-Handler für die Belege-Liste.
  * Greift alle Selects ab (Kontakt, Kategorie, Zahlstatus, Projekt) und baut
@@ -18,11 +74,7 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		return;
 	}
 
-	$post_type = $q->get('post_type');
-	if (
-		(is_array($post_type) && !in_array('belege', $post_type, true))
-		|| (!is_array($post_type) && $post_type !== 'belege')
-	) {
+	if (cmx_beleg_admin_query_post_type($q) !== 'belege') {
 		return;
 	}
 
@@ -43,29 +95,24 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 		$cat_slug = sanitize_text_field(wp_unslash($_GET[$tax]));
 	}
 
-	if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_column_is_visible')) {
-		if (!cmx_beleg_admin_column_is_visible('cmx_kontakt')) {
-			$kontakt_id = 0;
-		}
-		if (!cmx_beleg_admin_column_is_visible('cmx_beleg_projekt')) {
-			$proj_id = 0;
-		}
-		if (!cmx_beleg_admin_column_is_visible('cmx_belege_kategorie')) {
-			$cat_slug = '';
-		}
-	}
-
 	// ---- meta_query aufbauen ----
 	$meta_query = ['relation' => 'AND'];
 
 	// Kontakt-Filter
 	if ($kontakt_id > 0) {
-		$meta_query[] = [
-			'key'     => defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT') ? CMX_BELEG_META_KONTAKT : '_cmx_beleg_kontakt_id',
-			'value'   => $kontakt_id,
-			'compare' => '=',
-			'type'    => 'NUMERIC',
-		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_meta_query')) {
+			$kontakt_filter = cmx_beleg_kontakt_meta_query($kontakt_id);
+		} else {
+			$kontakt_filter = [
+				'key'     => defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT') ? CMX_BELEG_META_KONTAKT : '_cmx_beleg_kontakt_id',
+				'value'   => $kontakt_id,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+			];
+		}
+		if (!empty($kontakt_filter)) {
+			$meta_query[] = $kontakt_filter;
+		}
 	}
 
 	// Projekt-Filter (nutzt Helper falls vorhanden)
@@ -125,6 +172,13 @@ add_action('pre_get_posts', function(\WP_Query $q) {
 			],
 		];
 		$q->set('tax_query', $tax_query);
+	}
+
+	$requested_ids = cmx_beleg_admin_requested_ids();
+	if ($requested_ids !== []) {
+		$q->set('post__in', $requested_ids);
+		$q->set('orderby', 'post__in');
+		$q->set('order', 'ASC');
 	}
 }, 20);
 
