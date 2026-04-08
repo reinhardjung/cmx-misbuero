@@ -166,7 +166,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 					<label for="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>"><strong><?php echo \esc_html__('Rhythmus', 'cmx-misbuero'); ?></strong></label><br>
 					<select name="cmx_abo_frequency" id="<?php echo \esc_attr('cmx_abo_frequency_' . $post_id); ?>" style="width:100%;">
 						<?php if (!isset($visible_frequency_labels[$settings['frequency']]) && isset($all_frequency_labels[$settings['frequency']])) : ?>
-							<option value="<?php echo \esc_attr($settings['frequency']); ?>" selected hidden></option>
+							<option value="<?php echo \esc_attr($settings['frequency']); ?>" selected hidden><?php echo \esc_html($all_frequency_labels[$settings['frequency']]); ?></option>
 						<?php endif; ?>
 						<?php foreach ($visible_frequency_labels as $frequency_key => $frequency_label) : ?>
 							<option value="<?php echo \esc_attr($frequency_key); ?>" <?php \selected($settings['frequency'], $frequency_key); ?>><?php echo \esc_html($frequency_label); ?></option>
@@ -881,7 +881,12 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 		}
 
 		public static function visible_frequency_labels(): array {
-			return self::all_frequency_labels();
+			$labels = self::all_frequency_labels();
+			if (!self::is_debug_mode_enabled()) {
+				unset($labels['minutely'], $labels['hourly'], $labels['daily']);
+			}
+
+			return $labels;
 		}
 
 		public static function all_frequency_labels(): array {
@@ -965,14 +970,10 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				$redirect_to = \admin_url('edit.php?post_type=' . self::POST_TYPE);
 			}
 
-			$url = (string) \add_query_arg(
-				[
-					'action' => self::STOP_ACTION,
-					'post_id' => $post_id,
-					'redirect_to' => $redirect_to,
-				],
-				\admin_url('admin-post.php')
-			);
+			$url = \admin_url('admin-post.php?action=' . self::STOP_ACTION . '&post_id=' . $post_id);
+			if ($redirect_to !== '') {
+				$url .= '&redirect_to=' . \rawurlencode($redirect_to);
+			}
 
 			return (string) \wp_nonce_url($url, 'cmx_beleg_abo_stop_' . $post_id);
 		}

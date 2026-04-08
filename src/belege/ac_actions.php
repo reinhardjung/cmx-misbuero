@@ -95,14 +95,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_recurring_stop_url')) {
 			}
 		}
 
-		$url = (string) \add_query_arg(
-			[
-				'action' => 'cmx_beleg_abo_stop',
-				'post_id' => $post_id,
-				'redirect_to' => $redirect_to,
-			],
-			\admin_url('admin-post.php')
-		);
+		$url = \admin_url('admin-post.php?action=cmx_beleg_abo_stop&post_id=' . (int) $post_id);
+		if ($redirect_to !== '') {
+			$url .= '&redirect_to=' . \rawurlencode($redirect_to);
+		}
 
 		return (string) \wp_nonce_url($url, 'cmx_beleg_abo_stop_' . $post_id);
 	}
