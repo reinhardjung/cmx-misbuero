@@ -2107,7 +2107,7 @@ function cmx_camt_render_left_rows(array $entries): void {
 		echo '<td>' . \esc_html(cmx_camt_format_date((string) ($entry['booking_date'] ?? ''))) . '</td>';
 		echo '<td><strong>' . \esc_html(cmx_camt_format_amount((string) ($entry['amount'] ?? ''))) . '</strong> ' . \esc_html((string) ($entry['currency'] ?? 'CHF')) . '</td>';
 		echo '<td>' . \esc_html(cmx_camt_direction_label((string) ($entry['direction'] ?? ''))) . '</td>';
-		echo '<td>' . \esc_html($counterparty !== '' ? $counterparty : '-') . '</td>';
+		echo '<td>' . \esc_html($counterparty) . '</td>';
 		echo '<td>' . cmx_camt_reference_display_html($reference) . '</td>';
 		echo '<td>';
 		foreach ($source_versions as $version) {

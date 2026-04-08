@@ -119,22 +119,12 @@ cmx_require_files(__DIR__,'modules,status,validity,admincolumns,features_image')
 	}
 
 	$meta_query = (array) $query->get('meta_query');
-	$meta_query[] = [
-		'relation' => 'OR',
-		[
-			'key'     => '_cmx_dokumente_file_path',
-			'compare' => 'NOT EXISTS',
-		],
-		[
-			'relation' => 'AND',
-			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/scanner/',        'compare' => 'NOT LIKE'],
-			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/Scanner/',        'compare' => 'NOT LIKE'],
-			['key' => '_cmx_dokumente_file_path', 'value' => 'scanner/',                 'compare' => 'NOT LIKE'],
-			['key' => '_cmx_dokumente_file_path', 'value' => 'Scanner/',                 'compare' => 'NOT LIKE'],
-			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/archiv/scanner/', 'compare' => 'NOT LIKE'],
-			['key' => '_cmx_dokumente_file_path', 'value' => 'misbuero/archiv/Scanner/', 'compare' => 'NOT LIKE'],
-		],
-	];
+	$visible_meta_query = \function_exists(__NAMESPACE__ . '\\cmx_dokumente_admin_visible_meta_query')
+		? (array) cmx_dokumente_admin_visible_meta_query()
+		: [];
+	foreach ($visible_meta_query as $meta_condition) {
+		$meta_query[] = $meta_condition;
+	}
 	$query->set('meta_query', $meta_query);
 }, 20);
 
