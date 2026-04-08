@@ -69,6 +69,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vorgaben_recurring_period_fi
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vorgaben_recurring_section_intro')) {
+	function cmx_render_vorgaben_recurring_section_intro(): void {
+		echo '<h3 style="margin:2px 0 10px;font-size:14px;line-height:1.4;color:#646970;">Leistungszeitraum</h3>';
+	}
+}
+
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_vorgaben_tab');
 function cmx_register_vorgaben_tab(): void {
 
@@ -86,12 +92,12 @@ function cmx_register_vorgaben_tab(): void {
 		'cmx_tab_vorgaben__belege'
 	);
 
-	\add_settings_section(
-		'cmx_sec_vorgaben_belege_recurring',
-		__('Wiederkehrende Zahlungen', 'default'),
-		'__return_false',
-		'cmx_tab_vorgaben__belege'
-	);
+		\add_settings_section(
+			'cmx_sec_vorgaben_belege_recurring',
+			__('Wiederkehrende Zahlungen', 'default'),
+			__NAMESPACE__ . '\\cmx_render_vorgaben_recurring_section_intro',
+			'cmx_tab_vorgaben__belege'
+		);
 
 	\add_settings_section(
 		'cmx_sec_vorgaben_artikel',
