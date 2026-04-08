@@ -485,7 +485,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			'Kennwort*',
 			static function (): void {
 				$value = \esc_attr(cmx_email_option_value('email_password'));
-				echo '<span class="cmx-email-password-wrap">';
+				echo '<span class="cmx-email-password-wrap cmx-email-password-wrap-main">';
 				echo '<input type="password" class="regular-text cmx-email-password-input" id="cmx-email-password-input" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[email_password]" value="' . $value . '" autocomplete="current-password">';
 				echo '<button type="button" class="button-link cmx-email-password-toggle" aria-label="Kennwort einblenden" aria-pressed="false" title="Kennwort einblenden">';
 				echo '<span class="cmx-email-password-icon is-show" aria-hidden="true"></span>';
@@ -716,7 +716,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 				width: 100%;
 				height: var(--cmx-email-client-control-height, 44px);
 			}
+			.cmx-email-password-wrap-main {
+				width: min(100%, 25em);
+				max-width: 100%;
+			}
 			.cmx-email-password-wrap .cmx-email-password-input {
+				width: 100%;
+				max-width: none;
 				padding-right: 62px;
 				height: var(--cmx-email-client-control-height, 44px);
 				min-height: var(--cmx-email-client-control-height, 44px);
@@ -724,7 +730,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 			}
 			.cmx-email-password-wrap .cmx-email-password-toggle {
 				position: absolute;
-				right: -2px;
+				right: 4px;
 				top: 50%;
 				transform: translateY(-50%);
 				display: inline-flex;

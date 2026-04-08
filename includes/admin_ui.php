@@ -57,35 +57,6 @@ function cmx_admin_footer_version(?string $text): string {
 	return '<span class="cmx-admin-version" translate="no">Version ' . esc_html($version) . '</span>';
 }
 
-add_filter('plugin_row_meta', __NAMESPACE__ . '\\cmx_plugin_row_meta_version', 10, 4);
-function cmx_plugin_row_meta_version(array $plugin_meta, string $plugin_file, array $plugin_data, string $status): array {
-	if (strpos($plugin_file, 'cmx-misbuero.php') === false) {
-		return $plugin_meta;
-	}
-	$version = isset($plugin_data['Version']) ? trim((string) $plugin_data['Version']) : '';
-	if ($version === '') {
-		return $plugin_meta;
-	}
-
-	$replacement = '<span class="cmx-plugin-version" translate="no">Version ' . esc_html($version) . '</span>';
-	$replaced = false;
-	foreach ($plugin_meta as $index => $meta) {
-		if (!is_string($meta)) {
-			continue;
-		}
-		if (stripos($meta, 'Version ') === 0 || stripos($meta, 'Version&nbsp;') === 0) {
-			$plugin_meta[$index] = $replacement;
-			$replaced = true;
-			break;
-		}
-	}
-	if (!$replaced) {
-		array_unshift($plugin_meta, $replacement);
-	}
-
-	return $plugin_meta;
-}
-
 add_filter('wp_editor_settings', __NAMESPACE__ . '\\cmx_admin_reduce_cpt_content_editor_settings', 25, 2);
 function cmx_admin_reduce_cpt_content_editor_settings(array $settings, string $editor_id): array {
 	if (!\is_admin() || !\function_exists('get_current_screen')) {

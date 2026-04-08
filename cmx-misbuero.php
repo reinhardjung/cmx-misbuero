@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 4.3.236
+ * Version: 4.8.257
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -14,7 +14,7 @@
  * Requires at least: 6.7.1
  */
 
-const CMX_ENABLE_HELP_ONCE = true;
+const CMX_ENABLE_HELP_ONCE = false;
 
 require_once __DIR__ . '/includes/cmx_version.php';
 
