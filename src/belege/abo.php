@@ -513,7 +513,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 						$mail_message = (string) \__('Für diesen Termin existiert bereits ein erzeugter Beleg.', 'cmx-misbuero');
 					}
 				} else {
-					$duplicate_result = self::duplicate_beleg_for_recurring_send($post_id, $run_key, $scheduled_for);
+					$duplicate_result = self::duplicate_beleg_for_recurring_send($post_id, (string) ($settings['frequency'] ?? 'never'), $run_key, $scheduled_for);
 					if (\is_wp_error($duplicate_result)) {
 						$mail_status = 'failed';
 						$mail_message = \trim((string) $duplicate_result->get_error_message());
@@ -1350,7 +1350,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			return \min($configured_day, $max_day);
 		}
 
-		private static function duplicate_beleg_for_recurring_send(int $post_id, string $run_key, string $scheduled_for) {
+		private static function duplicate_beleg_for_recurring_send(int $post_id, string $frequency, string $run_key, string $scheduled_for) {
 			if (!\function_exists(__NAMESPACE__ . '\\cmx_duplicate_do')) {
 				$duplicate_file = \dirname(__DIR__, 2) . '/includes/dublicate.php';
 				if (\is_file($duplicate_file)) {
@@ -1385,6 +1385,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 			\update_post_meta($new_post_id, self::META_SCHEDULED_FOR, $scheduled_for);
 			\update_post_meta($new_post_id, self::META_GENERATED_AT, \current_time('mysql'));
 			\update_post_meta($new_post_id, '_cmx_beleg_copied_from', $post_id);
+			self::sync_generated_copy_leistungszeitraum($new_post_id, $frequency, $scheduled_for);
 			self::reset_generated_copy_payment_state($new_post_id);
 			self::sync_generated_copy_taxonomies($new_post_id, $post_id);
 			\clean_post_cache($new_post_id);
@@ -1421,6 +1422,103 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Beleg_Abo')) {
 				self::META_PROCESSING_LOCK,
 				'_cmx_abo_immediate_once',
 			];
+		}
+
+		private static function recurring_period_defaults(): array {
+			return [
+				'weekly' => 'current',
+				'monthly' => 'current',
+				'quarterly' => 'current',
+				'yearly' => 'current',
+			];
+		}
+
+		private static function recurring_period_choice(string $frequency, array $opts = []): string {
+			$frequency = \sanitize_key($frequency);
+			$defaults = self::recurring_period_defaults();
+			if (!isset($defaults[$frequency])) {
+				return 'current';
+			}
+
+			if ($opts === []) {
+				$option_key = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen';
+				$opts = (array) \get_option($option_key, []);
+			}
+
+			$value = \sanitize_key((string) ($opts['belege_abo_period_' . $frequency] ?? $defaults[$frequency]));
+			return \in_array($value, ['current', 'next'], true) ? $value : (string) $defaults[$frequency];
+		}
+
+		private static function sync_generated_copy_leistungszeitraum(int $post_id, string $frequency, string $scheduled_for): void {
+			$post_id = \absint($post_id);
+			$frequency = \sanitize_key($frequency);
+			$meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_LEISTUNGSMONAT')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_LEISTUNGSMONAT')
+				: '_cmx_beleg_leistungsmonat';
+			if ($post_id <= 0 || !isset(self::recurring_period_defaults()[$frequency])) {
+				return;
+			}
+
+			$option_key = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen';
+			$opts = (array) \get_option($option_key, []);
+			$use_leistungszeitraum = \function_exists(__NAMESPACE__ . '\\cmx_belege_uses_leistungszeitraum')
+				? cmx_belege_uses_leistungszeitraum($opts)
+				: !empty($opts['belege_use_leistungszeitraum']);
+			if (!$use_leistungszeitraum) {
+				\delete_post_meta($post_id, $meta_key);
+				return;
+			}
+
+			$reference = self::generated_copy_reference_datetime($post_id, $scheduled_for);
+			if (!$reference instanceof \DateTimeImmutable) {
+				return;
+			}
+
+			$choice = self::recurring_period_choice($frequency, $opts);
+			$period = self::shift_period_datetime($reference, $frequency, $choice);
+			\update_post_meta($post_id, $meta_key, $period->format('m'));
+		}
+
+		private static function generated_copy_reference_datetime(int $post_id, string $scheduled_for): ?\DateTimeImmutable {
+			$timezone = \wp_timezone();
+			$scheduled_dt = self::create_mysql_datetime($scheduled_for, $timezone);
+			if ($scheduled_dt instanceof \DateTimeImmutable) {
+				return $scheduled_dt;
+			}
+
+			$invoice_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+				: '_cmx_beleg_rng_datum';
+			$invoice_date = \trim((string) \get_post_meta($post_id, $invoice_meta_key, true));
+			if ($invoice_date !== '') {
+				$invoice_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $invoice_date, $timezone);
+				if ($invoice_dt instanceof \DateTimeImmutable) {
+					return $invoice_dt;
+				}
+			}
+
+			$fallback_date = (string) \current_time('Y-m-d');
+			$fallback_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $fallback_date, $timezone);
+			return $fallback_dt instanceof \DateTimeImmutable ? $fallback_dt : null;
+		}
+
+		private static function shift_period_datetime(\DateTimeImmutable $reference, string $frequency, string $choice): \DateTimeImmutable {
+			if ($choice !== 'next') {
+				return $reference;
+			}
+
+			switch (\sanitize_key($frequency)) {
+				case 'weekly':
+					return $reference->modify('+1 week');
+				case 'monthly':
+					return $reference->modify('+1 month');
+				case 'quarterly':
+					return $reference->modify('+3 months');
+				case 'yearly':
+					return $reference->modify('+1 year');
+				default:
+					return $reference;
+			}
 		}
 
 		private static function render_day_options(int $selected): void {

@@ -70,14 +70,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_has_recurring_run')) {
 			return false;
 		}
 
-		if ((int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true) > 0) {
-			return false;
-		}
-
-		$enabled = (string) \get_post_meta($post_id, '_cmx_abo_enabled', true) === '1';
 		$frequency = \sanitize_key((string) \get_post_meta($post_id, '_cmx_abo_frequency', true));
 
-		return $enabled && $frequency !== '' && $frequency !== 'never';
+		return $frequency !== '' && $frequency !== 'never';
 	}
 }
 
