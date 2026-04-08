@@ -187,6 +187,7 @@ function cmx_dokumente_sanitized_title_from_file(int $post_id): string {
 	if (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (\wp_is_post_revision($post_id)) return;
 	if (!\current_user_can('edit_post', $post_id)) return;
+	if (\in_array((string) $post->post_status, ['trash', 'inherit'], true)) return;
 	static $in_progress = [];
 	if (!empty($in_progress[$post_id])) return;
 
