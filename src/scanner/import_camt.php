@@ -102,9 +102,10 @@ function cmx_camt_state_get(): array {
 	}
 
 	return [
-		'loaded_at' => (string) ($state['loaded_at'] ?? ''),
-		'files'     => \is_array($state['files'] ?? null) ? \array_values((array) $state['files']) : [],
-		'entries'   => $entries,
+		'loaded_at'              => (string) ($state['loaded_at'] ?? ''),
+		'auto_assign_checked_at' => (string) ($state['auto_assign_checked_at'] ?? ''),
+		'files'                  => \is_array($state['files'] ?? null) ? \array_values((array) $state['files']) : [],
+		'entries'                => $entries,
 	];
 }
 
@@ -287,6 +288,63 @@ function cmx_camt_store_assignment(string $signature, int $beleg_id, array $entr
 	\update_option((string) \constant(__NAMESPACE__ . '\\CMX_CAMT_ASSIGNMENTS_OPTION'), $assignments, false);
 	cmx_camt_append_beleg_signature($beleg_id, $signature, $entry);
 	return true;
+}
+
+function cmx_camt_assign_entry_to_beleg(string $signature, int $beleg_id, array $entry, string $mode = 'manual'): array {
+	$signature = \sanitize_key($signature);
+	$mode = \sanitize_key($mode);
+	$mode = $mode !== '' ? $mode : 'manual';
+	if ($signature === '' || $beleg_id <= 0 || empty($entry)) {
+		return [
+			'ok'      => false,
+			'status'  => 400,
+			'message' => 'Ungültige Zuordnung.',
+		];
+	}
+	if ((string) \get_post_type($beleg_id) !== 'belege') {
+		return [
+			'ok'      => false,
+			'status'  => 404,
+			'message' => 'Beleg nicht gefunden.',
+		];
+	}
+	if (cmx_camt_beleg_is_assigned($beleg_id, $signature)) {
+		return [
+			'ok'      => false,
+			'status'  => 409,
+			'message' => 'Dieser Beleg ist bereits einer anderen Buchung zugeordnet.',
+		];
+	}
+	if (!cmx_camt_store_assignment($signature, $beleg_id, $entry)) {
+		return [
+			'ok'      => false,
+			'status'  => 409,
+			'message' => 'Diese Buchung ist bereits einem anderen Beleg zugeordnet.',
+		];
+	}
+
+	$assignment_effect = cmx_camt_apply_assignment_to_beleg($beleg_id, $signature, $entry);
+	if (!empty($assignment_effect)) {
+		cmx_camt_assignment_update($signature, $assignment_effect);
+	}
+
+	$log_message = $mode === 'auto_reference'
+		? 'CAMT Buchung automatisch zugeordnet'
+		: 'CAMT Buchung zugeordnet';
+	cmx_bank_import_log($log_message, [
+		'signature'    => $signature,
+		'beleg_id'     => $beleg_id,
+		'mode'         => $mode,
+		'payment_mode' => (string) ($assignment_effect['payment_mode'] ?? 'paid'),
+		'reference'    => (string) ($entry['document_ref'] ?? ($entry['reference'] ?? '')),
+	]);
+
+	return [
+		'ok'                => true,
+		'status'            => 200,
+		'beleg_id'          => $beleg_id,
+		'assignment_effect' => $assignment_effect,
+	];
 }
 
 function cmx_camt_assignment_update(string $signature, array $updates): void {
@@ -494,6 +552,191 @@ function cmx_camt_apply_assignment_to_beleg(int $beleg_id, string $signature, ar
 	];
 }
 
+function cmx_camt_entry_reference_candidates(array $entry): array {
+	$raw_values = [];
+	foreach ([
+		(string) ($entry['document_ref'] ?? ''),
+		(string) ($entry['reference'] ?? ''),
+	] as $value) {
+		$value = \trim($value);
+		if ($value !== '') {
+			$raw_values[] = $value;
+		}
+	}
+
+	foreach ((array) ($entry['reference_labels'] ?? []) as $value) {
+		$value = \trim((string) $value);
+		if ($value !== '') {
+			$raw_values[] = $value;
+		}
+	}
+
+	foreach ((array) ($entry['refs'] ?? []) as $value) {
+		$value = \trim((string) $value);
+		if ($value !== '') {
+			$raw_values[] = $value;
+		}
+	}
+
+	$refs = [];
+	foreach ($raw_values as $value) {
+		$normalized = cmx_camt_normalize_ref($value);
+		if ($normalized === '' || \strlen($normalized) < 8) {
+			continue;
+		}
+		if (!isset($refs[$normalized])) {
+			$refs[$normalized] = $value;
+		}
+	}
+
+	return $refs;
+}
+
+function cmx_camt_reference_search_variants(string $reference): array {
+	$reference = \trim($reference);
+	$normalized = cmx_camt_normalize_ref($reference);
+	if ($normalized === '') {
+		return [];
+	}
+
+	$variants = [$reference, $normalized];
+	if (\preg_match('~^\d{12,}$~', $normalized)) {
+		$variants[] = \substr($normalized, 0, 6) . '-' . \substr($normalized, 6);
+	}
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $variants))));
+}
+
+function cmx_camt_beleg_title_matches_reference(int $beleg_id, string $reference): bool {
+	if ($beleg_id <= 0) {
+		return false;
+	}
+
+	$reference = cmx_camt_normalize_ref($reference);
+	if ($reference === '') {
+		return false;
+	}
+
+	$title = cmx_camt_normalize_ref((string) \get_the_title($beleg_id));
+	if ($title === '') {
+		return false;
+	}
+
+	return $title === $reference || \str_contains($title, $reference);
+}
+
+function cmx_camt_reference_match_beleg_ids(array $entry, string $reference): array {
+	$reference = \trim($reference);
+	$normalized = cmx_camt_normalize_ref($reference);
+	if ($normalized === '') {
+		return [];
+	}
+
+	$ids = [];
+	foreach (cmx_camt_reference_search_variants($reference) as $variant) {
+		$ids = \array_merge($ids, cmx_camt_beleg_title_ids_like($variant, 25));
+	}
+	$ids = \array_merge($ids, cmx_camt_recent_beleg_ids($entry, 120));
+	$ids = \array_values(\array_unique(\array_filter(\array_map('intval', $ids))));
+
+	$matches = [];
+	foreach ($ids as $beleg_id) {
+		if (cmx_camt_beleg_title_matches_reference($beleg_id, $normalized)) {
+			$matches[] = $beleg_id;
+		}
+	}
+
+	return \array_values(\array_unique($matches));
+}
+
+function cmx_camt_beleg_can_auto_assign(int $beleg_id, array $entry): bool {
+	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
+		return false;
+	}
+
+	$status = \sanitize_key((string) \get_post_meta($beleg_id, cmx_camt_beleg_status_meta_key(), true));
+	$paid_date = cmx_camt_normalize_date((string) \get_post_meta($beleg_id, cmx_camt_beleg_paid_meta_key(), true));
+	if ($status === 'bezahlt' || $paid_date !== '') {
+		return false;
+	}
+
+	$entry_direction = \sanitize_key((string) ($entry['beleg_direction'] ?? ''));
+	$beleg_direction = \sanitize_key((string) \get_post_meta(
+		$beleg_id,
+		\defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG') ? CMX_BELEG_META_RICHTUNG : '_cmx_beleg_richtung',
+		true
+	));
+	if ($entry_direction !== '' && $beleg_direction !== '' && $entry_direction !== $beleg_direction) {
+		return false;
+	}
+
+	$candidate = cmx_camt_beleg_score_candidate($beleg_id, $entry, 0.0);
+	return (int) ($candidate['score'] ?? 0) > 0;
+}
+
+function cmx_camt_find_auto_assignable_beleg(array $entry): array {
+	$signature = \sanitize_key((string) ($entry['signature'] ?? ''));
+	if ($signature === '' || !empty(cmx_camt_assignment_get($signature))) {
+		return [];
+	}
+
+	$matches = [];
+	foreach (cmx_camt_entry_reference_candidates($entry) as $normalized_ref => $raw_ref) {
+		foreach (cmx_camt_reference_match_beleg_ids($entry, $raw_ref) as $beleg_id) {
+			if (cmx_camt_beleg_is_assigned($beleg_id, $signature) || !cmx_camt_beleg_can_auto_assign($beleg_id, $entry)) {
+				continue;
+			}
+			if (!isset($matches[$beleg_id])) {
+				$matches[$beleg_id] = [
+					'beleg_id'   => $beleg_id,
+					'reference'  => $raw_ref,
+					'ref_key'    => $normalized_ref,
+				];
+			}
+		}
+	}
+
+	if (\count($matches) !== 1) {
+		return [];
+	}
+
+	return (array) \reset($matches);
+}
+
+function cmx_camt_auto_assign_entries(array $entries): array {
+	$summary = [
+		'assigned' => 0,
+		'skipped'  => 0,
+	];
+
+	foreach ($entries as $entry) {
+		if (!\is_array($entry)) {
+			continue;
+		}
+
+		$match = cmx_camt_find_auto_assignable_beleg($entry);
+		if (empty($match)) {
+			$summary['skipped']++;
+			continue;
+		}
+
+		$result = cmx_camt_assign_entry_to_beleg(
+			(string) ($entry['signature'] ?? ''),
+			(int) ($match['beleg_id'] ?? 0),
+			$entry,
+			'auto_reference'
+		);
+		if (!empty($result['ok'])) {
+			$summary['assigned']++;
+			continue;
+		}
+
+		$summary['skipped']++;
+	}
+
+	return $summary;
+}
+
 function cmx_camt_revert_assignment_on_beleg(string $signature, array $assignment): void {
 	$beleg_id = (int) ($assignment['beleg_id'] ?? 0);
 	if ($beleg_id <= 0 || (string) \get_post_type($beleg_id) !== 'belege') {
@@ -594,6 +837,25 @@ function cmx_camt_format_amount_no_decimals($value): string {
 	}
 	$num = (float) $amount;
 	return \number_format($num, 0, '.', "'");
+}
+
+function cmx_camt_reference_display_html(string $reference): string {
+	$reference = \trim($reference);
+	if ($reference === '') {
+		return '-';
+	}
+
+	// Insert invisible joiners around separators so browser phone detectors stop linking invoice refs as tel numbers.
+	$html = '';
+	foreach ((array) \preg_split('~([\-\/])~u', $reference, -1, \PREG_SPLIT_DELIM_CAPTURE | \PREG_SPLIT_NO_EMPTY) as $part) {
+		if ($part === '-' || $part === '/') {
+			$html .= '&#8288;' . \esc_html($part) . '&#8288;';
+			continue;
+		}
+		$html .= \esc_html($part);
+	}
+
+	return '<span class="cmx-camt-ref" data-raw-ref="' . \esc_attr($reference) . '">' . $html . '</span>';
 }
 
 function cmx_camt_amount_filter_bounds(array $entry, float $amount_window = 0.0): array {
@@ -1682,10 +1944,10 @@ function cmx_camt_render_candidates_panel(array $entry, float $amount_window = 0
 		echo '<p><strong>Gegenpartei:</strong> ' . \esc_html($counterparty) . '</p>';
 	}
 	if ($doc_ref !== '') {
-		echo '<p><strong>Beleg-Nr.:</strong> ' . \esc_html($doc_ref) . '</p>';
+		echo '<p><strong>Beleg-Nr.:</strong> ' . cmx_camt_reference_display_html($doc_ref) . '</p>';
 	}
 	if ($reference !== '' && $reference !== $doc_ref) {
-		echo '<p><strong>Referenz:</strong> ' . \esc_html($reference) . '</p>';
+		echo '<p><strong>Referenz:</strong> ' . cmx_camt_reference_display_html($reference) . '</p>';
 	}
 	if ($remittance !== '') {
 		echo '<p><strong>Verwendungszweck:</strong> ' . \esc_html($remittance) . '</p>';
@@ -1811,7 +2073,7 @@ function cmx_camt_render_left_rows(array $entries): void {
 		echo '<td><strong>' . \esc_html(cmx_camt_format_amount((string) ($entry['amount'] ?? ''))) . '</strong> ' . \esc_html((string) ($entry['currency'] ?? 'CHF')) . '</td>';
 		echo '<td>' . \esc_html(cmx_camt_direction_label((string) ($entry['direction'] ?? ''))) . '</td>';
 		echo '<td>' . \esc_html($counterparty !== '' ? $counterparty : '-') . '</td>';
-		echo '<td>' . \esc_html($reference !== '' ? $reference : '-') . '</td>';
+		echo '<td>' . cmx_camt_reference_display_html($reference) . '</td>';
 		echo '<td>';
 		foreach ($source_versions as $version) {
 			echo '<span class="cmx-camt-chip">camt.' . \esc_html($version) . '</span> ';
@@ -1857,6 +2119,13 @@ function cmx_bank_import_render_log_page(): void {
 	}
 
 	$state = cmx_camt_state_get();
+	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
+	if (!empty($entries) && (string) ($state['auto_assign_checked_at'] ?? '') === '') {
+		cmx_camt_auto_assign_entries(\array_values($entries));
+		$state['auto_assign_checked_at'] = (string) \wp_date('c');
+		cmx_camt_state_set($state);
+		$state = cmx_camt_state_get();
+	}
 	$entries = \is_array($state['entries'] ?? null) ? (array) $state['entries'] : [];
 	$files = \is_array($state['files'] ?? null) ? (array) $state['files'] : [];
 	$log_file_path = cmx_bank_import_log_file_path();
@@ -2721,15 +2990,20 @@ HTML;
 	}
 
 	$state = [
-		'loaded_at' => (string) \wp_date('c'),
-		'files'     => $files,
-		'entries'   => $entries,
+		'loaded_at'              => (string) \wp_date('c'),
+		'auto_assign_checked_at' => '',
+		'files'                  => $files,
+		'entries'                => $entries,
 	];
+	cmx_camt_state_set($state);
+	$auto_assign = cmx_camt_auto_assign_entries($entries);
+	$state['auto_assign_checked_at'] = (string) \wp_date('c');
 	cmx_camt_state_set($state);
 	cmx_bank_import_log('CAMT Upload verarbeitet', [
 		'files'        => \count($files),
 		'entries'      => \count($entries),
 		'new_files'    => \count((array) ($parsed['files'] ?? [])),
+		'auto_assigned'=> (int) ($auto_assign['assigned'] ?? 0),
 		'errors'       => \array_values((array) ($parsed['errors'] ?? [])),
 	]);
 
@@ -2737,6 +3011,9 @@ HTML;
 		'message' => 'CAMT-Dateien geladen.',
 		'count'   => \count($entries),
 	];
+	if (!empty($auto_assign['assigned'])) {
+		$response['message'] .= ' ' . (int) $auto_assign['assigned'] . ' Beleg(e) wurden automatisch zugeordnet.';
+	}
 	if (!empty($parsed['errors'])) {
 		$response['message'] .= ' Hinweise: ' . \implode(' ', (array) $parsed['errors']);
 	}
@@ -2775,27 +3052,10 @@ HTML;
 	if ($signature === '' || $beleg_id <= 0 || empty($entry)) {
 		\wp_send_json_error(['message' => 'Ungültige Zuordnung.'], 400);
 	}
-	if ((string) \get_post_type($beleg_id) !== 'belege') {
-		\wp_send_json_error(['message' => 'Beleg nicht gefunden.'], 404);
+	$result = cmx_camt_assign_entry_to_beleg($signature, $beleg_id, $entry, 'manual');
+	if (empty($result['ok'])) {
+		\wp_send_json_error(['message' => (string) ($result['message'] ?? 'Zuordnung fehlgeschlagen.')], (int) ($result['status'] ?? 400));
 	}
-	if (cmx_camt_beleg_is_assigned($beleg_id, $signature)) {
-		\wp_send_json_error(['message' => 'Dieser Beleg ist bereits einer anderen Buchung zugeordnet.'], 409);
-	}
-
-	if (!cmx_camt_store_assignment($signature, $beleg_id, $entry)) {
-		\wp_send_json_error(['message' => 'Diese Buchung ist bereits einem anderen Beleg zugeordnet.'], 409);
-	}
-
-	$assignment_effect = cmx_camt_apply_assignment_to_beleg($beleg_id, $signature, $entry);
-	if (!empty($assignment_effect)) {
-		cmx_camt_assignment_update($signature, $assignment_effect);
-	}
-
-	cmx_bank_import_log('CAMT Buchung zugeordnet', [
-		'signature' => $signature,
-		'beleg_id' => $beleg_id,
-		'payment_mode' => (string) ($assignment_effect['payment_mode'] ?? 'paid'),
-	]);
 	\wp_send_json_success(\array_merge(
 		cmx_camt_row_status_payload($entry),
 		[

@@ -228,7 +228,11 @@ require_once 'dublicate.php';
 // TITLE Bereich
 add_filter('enter_title_here', function($title, $post) {
 	if ($post->post_type === 'belege') {
-		$title = '{Die Nummer des Beleges wird hier automatisch vergeben}';
+		$is_debug = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+			&& cmx_system_is_debug_mode_enabled();
+		$title = $is_debug
+			? 'Beleg-ID manuell eingeben'
+			: '{Die Nummer des Beleges wird hier automatisch vergeben}';
 	}
 	return $title;
 }, 10, 2);
@@ -237,7 +241,11 @@ add_filter('enter_title_here', function($title, $post) {
 add_action('admin_head', function() {
 	$screen = get_current_screen();
 	if ($screen && $screen->post_type === 'belege') {
-		echo '<style> div#titlediv { background:#f7f7f7 !important; pointer-events:none; } </style>';
+		$is_debug = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+			&& cmx_system_is_debug_mode_enabled();
+		if (!$is_debug) {
+			echo '<style> div#titlediv { background:#f7f7f7 !important; pointer-events:none; } </style>';
+		}
 		// echo '<script>document.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("title");if(t){t.readOnly=true;}});</script>';
 	}
 	if(wp_get_current_user()->user_login !== 'cloudmeister') {

@@ -1618,6 +1618,17 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	}
 
 	$inv_no = cmx_ensure_rechnungsnummer($post_id);
+	$is_debug_title_editable = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+		&& cmx_system_is_debug_mode_enabled();
+	$posted_title = isset($_POST['post_title'])
+		? \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field((string) \wp_unslash($_POST['post_title']))))
+		: '';
+	$manual_debug_title = $is_debug_title_editable && $posted_title !== '' && $posted_title !== $inv_no;
+	if ($manual_debug_title) {
+		\update_post_meta($post_id, '_cmx_rechnungsnummer', $posted_title);
+		$inv_no = $posted_title;
+		\delete_post_meta($post_id, '_cmx_title_auto');
+	}
 
 	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
 	$has_save_as_nonce = isset($_POST['cmx_beleg_save_as_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_save_as_nonce'], 'cmx_beleg_save_as');
@@ -1878,7 +1889,8 @@ echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link
 	}
 
 	$current = \get_post($post_id);
-	$should_set_title = empty($current->post_title) || ((int)\get_post_meta($post_id, '_cmx_title_auto', true) === 1);
+	$should_set_title = !$manual_debug_title
+		&& (empty($current->post_title) || ((int)\get_post_meta($post_id, '_cmx_title_auto', true) === 1));
 
 	if ($should_set_title) {
 		$new_title = $inv_no;
