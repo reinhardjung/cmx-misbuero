@@ -61,7 +61,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_is_enabled')
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_placeholders')) {
 	function cmx_email_contact_placeholders(): array {
-		return ['{anrede}', '{tageszeit}', '{vorname}', '{nachname}', '{firma}', '{geburtsdatum}', '{firmengruendung}', '{alter}', '{jahre}', '{das_bin_ich_url}', '{das_bin_ich_email}', '{logo}', '{Danke-Logo}'];
+		return ['{anrede}', '{tageszeit}', '{vorname}', '{nachname}', '{firma}', '{geburtsdatum}', '{firmengruendung}', '{alter}', '{jahre}', '{das_bin_ich_url}', '{das_bin_ich_email}', '{logo}', '{Danke-Logo}', '{firmengruendung-Logo}', '{geburtstag-Logo}'];
 	}
 }
 

@@ -381,10 +381,14 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 			$embedded_logo_listener = static function ($phpmailer): void {
 				if (!\function_exists(__NAMESPACE__ . '\\cmx_email_embed_self_logo_for_phpmailer')) {
 					self::embed_thank_you_logo_for_phpmailer($phpmailer);
+					self::embed_birthday_logo_for_phpmailer($phpmailer);
+					self::embed_company_birthday_logo_for_phpmailer($phpmailer);
 					return;
 				}
 				cmx_email_embed_self_logo_for_phpmailer($phpmailer);
 				self::embed_thank_you_logo_for_phpmailer($phpmailer);
+				self::embed_birthday_logo_for_phpmailer($phpmailer);
+				self::embed_company_birthday_logo_for_phpmailer($phpmailer);
 			};
 			\add_action('phpmailer_init', $embedded_logo_listener, 100, 1);
 
@@ -431,12 +435,18 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 
 		private static function replace_html_template_tokens(string $message): string {
 			$thank_you_logo_html = self::thank_you_logo_html();
+			$birthday_logo_html = self::birthday_logo_html();
+			$company_birthday_logo_html = self::company_birthday_logo_html();
 			$self_contact_url_html = self::self_contact_url_html();
 			$self_contact_email_html = self::self_contact_email_html();
 
 			return \strtr($message, [
 				'{Danke-Logo}' => $thank_you_logo_html,
 				'{danke-logo}' => $thank_you_logo_html,
+				'{geburtstag-Logo}' => $birthday_logo_html,
+				'{Geburtstag-Logo}' => $birthday_logo_html,
+				'{firmengruendung-Logo}' => $company_birthday_logo_html,
+				'{Firmengruendung-Logo}' => $company_birthday_logo_html,
 				'{das_bin_ich_url}' => $self_contact_url_html,
 				'{Das_bin_ich_url}' => $self_contact_url_html,
 				'{das_bin_ich_email}' => $self_contact_email_html,
@@ -447,11 +457,22 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		}
 
 		private static function thank_you_logo_html(): string {
+			return self::mail_logo_html(self::thank_you_logo_src(), 'Danke');
+		}
+
+		private static function birthday_logo_html(): string {
+			return self::mail_logo_html(self::birthday_logo_src(), 'Geburtstag');
+		}
+
+		private static function company_birthday_logo_html(): string {
+			return self::mail_logo_html(self::company_birthday_logo_src(), 'Firmengruendung');
+		}
+
+		private static function mail_logo_html(string $src, string $alt): string {
 			$img_style = 'display:block;margin:0 auto;max-width:220px;height:auto;border:0;outline:none;text-decoration:none;';
 			$dimension_attrs = \function_exists(__NAMESPACE__ . '\\cmx_email_inline_img_dimension_attributes')
 				? (string) cmx_email_inline_img_dimension_attributes($img_style)
 				: '';
-			$src = self::thank_you_logo_src();
 			if ($src === '') {
 				return '';
 			}
@@ -460,7 +481,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 				? \esc_attr($src)
 				: \esc_url($src);
 
-			return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;border-collapse:collapse;"><tr><td align="center" style="padding:0;text-align:center;"><img src="' . $src_attr . '" alt="Danke" align="center"' . $dimension_attrs . ' style="' . \esc_attr($img_style) . '"></td></tr></table>';
+			return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;border-collapse:collapse;"><tr><td align="center" style="padding:0;text-align:center;"><img src="' . $src_attr . '" alt="' . \esc_attr($alt) . '" align="center"' . $dimension_attrs . ' style="' . \esc_attr($img_style) . '"></td></tr></table>';
 		}
 
 		private static function thank_you_logo_path(): string {
@@ -470,6 +491,24 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 
 		private static function thank_you_logo_cid(): string {
 			return 'cmx-thank-you-logo@cmx-misbuero';
+		}
+
+		private static function birthday_logo_path(): string {
+			$path = \dirname(__DIR__, 2) . '/assets/birthday.png';
+			return \is_readable($path) ? $path : '';
+		}
+
+		private static function company_birthday_logo_path(): string {
+			$path = \dirname(__DIR__, 2) . '/assets/birthday_company.png';
+			return \is_readable($path) ? $path : '';
+		}
+
+		private static function birthday_logo_cid(): string {
+			return 'cmx-birthday-logo@cmx-misbuero';
+		}
+
+		private static function company_birthday_logo_cid(): string {
+			return 'cmx-company-birthday-logo@cmx-misbuero';
 		}
 
 		private static function thank_you_logo_src(): string {
@@ -482,12 +521,43 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 			return \esc_url($src);
 		}
 
+		private static function birthday_logo_src(): string {
+			$path = self::birthday_logo_path();
+			if ($path !== '') {
+				return 'cid:' . self::birthday_logo_cid();
+			}
+
+			$src = \plugins_url('assets/birthday.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+			return \esc_url($src);
+		}
+
+		private static function company_birthday_logo_src(): string {
+			$path = self::company_birthday_logo_path();
+			if ($path !== '') {
+				return 'cid:' . self::company_birthday_logo_cid();
+			}
+
+			$src = \plugins_url('assets/birthday_company.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+			return \esc_url($src);
+		}
+
 		private static function embed_thank_you_logo_for_phpmailer($phpmailer): void {
+			self::embed_logo_for_phpmailer($phpmailer, self::thank_you_logo_path(), self::thank_you_logo_cid());
+		}
+
+		private static function embed_birthday_logo_for_phpmailer($phpmailer): void {
+			self::embed_logo_for_phpmailer($phpmailer, self::birthday_logo_path(), self::birthday_logo_cid());
+		}
+
+		private static function embed_company_birthday_logo_for_phpmailer($phpmailer): void {
+			self::embed_logo_for_phpmailer($phpmailer, self::company_birthday_logo_path(), self::company_birthday_logo_cid());
+		}
+
+		private static function embed_logo_for_phpmailer($phpmailer, string $logo_path, string $cid): void {
 			if (!$phpmailer instanceof \PHPMailer\PHPMailer\PHPMailer) {
 				return;
 			}
 
-			$logo_path = self::thank_you_logo_path();
 			if ($logo_path === '') {
 				return;
 			}
@@ -499,7 +569,7 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 			}
 
 			try {
-				$phpmailer->addEmbeddedImage($logo_path, self::thank_you_logo_cid(), \basename($logo_path), 'base64', $mime);
+				$phpmailer->addEmbeddedImage($logo_path, $cid, \basename($logo_path), 'base64', $mime);
 			} catch (\Throwable $e) {
 				return;
 			}
