@@ -39,6 +39,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_fields')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_enabled_key')) {
+	function cmx_email_contact_template_enabled_key(string $template_key): string {
+		return \sanitize_key($template_key) . '_enabled';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_is_enabled')) {
+	function cmx_email_contact_template_is_enabled(string $template_key): bool {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		$enabled_key = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_enabled_key')
+			? (string) cmx_email_contact_template_enabled_key($template_key)
+			: (\sanitize_key($template_key) . '_enabled');
+		if (!\array_key_exists($enabled_key, $options)) {
+			return true;
+		}
+
+		return (string) ($options[$enabled_key] ?? '1') === '1';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_placeholders')) {
 	function cmx_email_contact_placeholders(): array {
 		return ['{anrede}', '{tageszeit}', '{vorname}', '{nachname}', '{firma}', '{geburtsdatum}', '{firmengruendung}', '{alter}', '{jahre}', '{das_bin_ich_url}', '{das_bin_ich_email}', '{logo}', '{Danke-Logo}'];
@@ -65,6 +85,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_template_editor')) {
 
 		$value = cmx_email_option_value($key);
 		$editor_id = cmx_email_field_input_id($key);
+		$contact_fields = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_fields')
+			? (array) cmx_email_contact_template_fields()
+			: [];
+		if (\array_key_exists($key, $contact_fields)) {
+			$enabled_key = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_enabled_key')
+				? (string) cmx_email_contact_template_enabled_key($key)
+				: (\sanitize_key($key) . '_enabled');
+			$enabled = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_is_enabled')
+				? cmx_email_contact_template_is_enabled($key)
+				: true;
+			echo '<p style="margin:0 0 10px 0;">';
+			echo '<input type="hidden" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[' . \esc_attr($enabled_key) . ']" value="0">';
+			echo '<label><input type="checkbox" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[' . \esc_attr($enabled_key) . ']" value="1" ' . \checked($enabled, true, false) . '> Mails dieser Art versenden</label>';
+			echo '</p>';
+		}
 
 		\wp_editor($value, $editor_id, [
 			'textarea_name' => CMX_SETTINGS_MAIN . '[' . $key . ']',
@@ -1164,6 +1199,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['imap_port'] = '993';
 	foreach (['email_kontakt_geburtstag', 'email_kontakt_firmenjubilaeum', 'email_kontakt_dankeschoen'] as $template_key) {
 		$new[$template_key] = \wp_kses_post((string) ($new[$template_key] ?? ''));
+		$enabled_key = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_enabled_key')
+			? (string) cmx_email_contact_template_enabled_key($template_key)
+			: (\sanitize_key($template_key) . '_enabled');
+		$enabled_raw = \array_key_exists($enabled_key, $new)
+			? $new[$enabled_key]
+			: ($old[$enabled_key] ?? '1');
+		$new[$enabled_key] = (string) $enabled_raw === '1' ? '1' : '0';
 	}
 
 	return $new;

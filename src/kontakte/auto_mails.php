@@ -82,6 +82,9 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 			if (!$post instanceof \WP_Post || (string) $post->post_type !== 'kontakte') {
 				return new \WP_Error('invalid_post', 'Kontakt nicht gefunden.');
 			}
+			if (!self::mail_type_enabled('thanks')) {
+				return new \WP_Error('mail_disabled', 'Danke-Mails sind deaktiviert.');
+			}
 
 			if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 				return new \WP_Error('missing_contacts', 'Kommunikation ist nicht verfügbar.');
@@ -177,6 +180,10 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		}
 
 		private static function process_birthdays_for_contact(int $post_id, string $today): void {
+			if (!self::mail_type_enabled('birthday')) {
+				return;
+			}
+
 			if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 				return;
 			}
@@ -223,6 +230,10 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		}
 
 		private static function process_company_anniversary_for_contact(int $post_id, string $today): void {
+			if (!self::mail_type_enabled('anniversary')) {
+				return;
+			}
+
 			$founding_date = self::contact_founding_date($post_id);
 			if ($founding_date === '' || !self::matches_today($founding_date, $today)) {
 				return;
@@ -597,6 +608,27 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 			}
 
 			return '<p>{anrede},</p><p>herzliche Gratulation zum Firmenjubiläum und weiterhin viel Freude und Erfolg.</p><p>{logo}</p>';
+		}
+
+		private static function mail_type_enabled(string $type): bool {
+			if (!\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')) {
+				return true;
+			}
+
+			$template_key = match ($type) {
+				'birthday' => 'email_kontakt_geburtstag',
+				'thanks' => 'email_kontakt_dankeschoen',
+				default => 'email_kontakt_firmenjubilaeum',
+			};
+			$enabled_key = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_enabled_key')
+				? (string) cmx_email_contact_template_enabled_key($template_key)
+				: (\sanitize_key($template_key) . '_enabled');
+			$options = (array) \get_option((string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN'), []);
+			if (!\array_key_exists($enabled_key, $options)) {
+				return true;
+			}
+
+			return (string) ($options[$enabled_key] ?? '1') === '1';
 		}
 
 		private static function mail_subject(string $type, int $years): string {
