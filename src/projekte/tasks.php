@@ -170,8 +170,9 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	#cmx-projekt-tasks .cmx-ac-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 	#cmx-projekt-tasks .cmx-task-footer{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:10px;}
 	#cmx-projekt-tasks .cmx-task-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:0;}
-	#cmx-projekt-tasks .cmx-task-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;}
-	#cmx-task-add{min-width:140px;}
+	#cmx-projekt-tasks button.cmx-task-remove{display:inline-flex;align-items:center;justify-content:center;line-height:1;min-height:30px;min-width:36px;padding:0 8px;border-radius:6px;}
+	#cmx-projekt-tasks button.cmx-task-remove .dashicons{color:#d63638;transform:translateY(0);}
+	#cmx-task-add{min-width:140px;border-radius:6px;}
 	@media (max-width:782px){
 		#cmx-projekt-tasks .cmx-task-row{grid-template-columns:1fr;}
 		#cmx-projekt-tasks .cmx-task-article-grid{grid-template-columns:1fr;}
@@ -183,7 +184,7 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 	}
 	echo '</div>';
 
-	echo '<p style="display:none;"><button type="button" class="button" id="cmx-task-add">weitere hinzufügen</button></p>';
+	echo '<p style="display:none;"><button type="button" class="button button-secondary" id="cmx-task-add">weitere hinzufügen</button></p>';
 
 	?>
 		<script>
@@ -594,7 +595,7 @@ function cmx_render_task_row($idx, array $row, array $artikel_options, bool $is_
 	echo '<div class="cmx-task-check"><label class="cmx-task-check-label"><input type="checkbox" name="cmx_tasks['.$name_base.'][abgerechnet]" value="1" '.$checked.'><span>Verrechnet</span></label></div>';
 	echo '</div>';
 	echo '<div class="cmx-task-actions">';
-	echo '<button type="button" class="button cmx-task-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash cmx-task-remove"></span></button>';
+	echo '<button type="button" class="button button-secondary cmx-task-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash cmx-task-remove"></span></button>';
 	echo '</div>';
 	echo '</div>';
 	echo '</div>';

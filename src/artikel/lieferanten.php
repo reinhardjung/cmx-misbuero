@@ -542,7 +542,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	#cmx-artikel-lieferanten-list .cmx-lief-note-label{display:block;font-weight:600;margin:0 0 6px}
 	#cmx-artikel-lieferanten-list .cmx-lief-note{width:100%;min-height:44px;height:44px;resize:vertical;box-sizing:border-box}
 	#cmx-artikel-lieferanten-list .cmx-lief-actions-stack{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;margin:0}
-	#cmx-artikel-lieferanten-list .cmx-lief-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
+	#cmx-artikel-lieferanten-list .cmx-lief-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px;border-radius:6px}
 	#cmx-artikel-lieferanten-list .cmx-lief-row:last-child .cmx-lief-add{display:inline-flex;justify-content:center}
 	@media (max-width: 1280px){
 		#cmx-artikel-lieferanten-head{display:none}
@@ -569,7 +569,8 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 		#cmx-artikel-lieferanten-list .cmx-lief-grid{grid-template-columns:1fr}
 	}
 	.cmx-inline-help{font-size:11px;color:#666;margin-top:6px;display:block}
-	.cmx-lief-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
+	.cmx-lief-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border-radius:6px !important;overflow:hidden}
+	.cmx-lief-del .dashicons{color:#d63638;transform:translateY(5px)}
 	</style>';
 
 	echo '<div id="cmx-artikel-lieferanten-head">';
@@ -608,7 +609,7 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 			echo '<label class="cmx-lief-note-label" for="cmx_artikel_lieferanten_notiz_' . (int)$i . '">Notizen</label>';
 			echo '<textarea id="cmx_artikel_lieferanten_notiz_' . (int)$i . '" name="cmx_artikel_lieferanten['.(int)$i.'][notiz]" class="cmx-lief-note">' . \esc_textarea($r_notiz) . '</textarea>';
 			echo '</div>';
-			echo '<div class="cmx-lief-actions-stack"><button type="button" class="button button-secondary cmx-lief-add">Lieferant hinzufügen</button><button type="button" class="button-link-delete cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div>';
+			echo '<div class="cmx-lief-actions-stack"><button type="button" class="button button-secondary cmx-lief-add">Lieferant hinzufügen</button><button type="button" class="button button-secondary cmx-lief-del" title="Zeile löschen"><span class="dashicons dashicons-trash" style=""></span></button></div>';
 			echo '</div>';
 			echo '</div>';
 		}
@@ -1163,7 +1164,7 @@ function cmx_render_beleg_position_row_unified($i, $pos): void {
 	echo '<td class="cmx-pos-rabatt-td" style="width:100px;"><input type="text" name="cmx_positionen['.$i.'][rabatt]" value="'.$rabatt.'" style="width:100px"></td>';
 	echo '<td class="cmx-pos-total" style="width:90px;text-align:right;">'.esc_html(cmx_format_swiss_number(cmx_parse_number($preis_raw) * cmx_parse_number($menge_raw), 2)).'</td>';
 	echo '<td><textarea name="cmx_positionen['.$i.'][beschreibung]" rows="1" style="width:100%">'.$beschreibung.'</textarea></td>';
-	echo '<td><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" style="position:relative; top:8px;"></span>✕</button></td>';
+	echo '<td><button type="button" class="button-link-delete cmx-del-pos"><span class="dashicons dashicons-trash" aria-hidden="true"></span></button></td>';
 
 	echo '</tr>';
 }

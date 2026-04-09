@@ -306,4 +306,4 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_has_trustee_contact')) {
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,status,zuordnung_kontakt,kommunikation,adressen,bilder,admincolumns,doppelte,stufen,exports,imports,sichern,vcards,umsatz');
+cmx_require_files(__DIR__,'stammdaten,status,zuordnung_kontakt,kommunikation,auto_mails,adressen,bilder,admincolumns,doppelte,stufen,exports,imports,sichern,vcards,umsatz');

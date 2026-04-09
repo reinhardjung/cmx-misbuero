@@ -158,7 +158,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 			}
 			echo '<input type="hidden" name="cmx_zu_projekt_ids[]" value="' . (int) $projekt_id . '">';
 			echo '</div>';
-			echo '<button type="button" class="button-link-delete cmx-zu-projekt-remove" style="line-height:1;"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
+			echo '<button type="button" class="button-link-delete cmx-zu-projekt-remove" style="line-height:1;"><span class="dashicons dashicons-trash" aria-hidden="true"></span></button>';
 			echo '</li>';
 		}
 		echo '</ul>';
@@ -204,7 +204,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_zu_projekt_metabox')) {
 		echo 'const link=document.createElement("a");link.href=' . \wp_json_encode(\admin_url('post.php')) . '+"?post="+encodeURIComponent(String(id))+"&action=edit";link.target="_blank";link.rel="noopener noreferrer";link.textContent=safeTitle;';
 		echo 'const hidden=document.createElement("input");hidden.type="hidden";hidden.name="cmx_zu_projekt_ids[]";hidden.value=String(id);';
 		echo 'left.appendChild(link);left.appendChild(hidden);';
-		echo 'const btn=document.createElement("button");btn.type="button";btn.className="button-link-delete cmx-zu-projekt-remove";btn.style.lineHeight="1";btn.textContent="x";';
+		echo 'const btn=document.createElement("button");btn.type="button";btn.className="button-link-delete cmx-zu-projekt-remove";btn.style.lineHeight="1";btn.innerHTML="<span class=\"dashicons dashicons-trash\" aria-hidden=\"true\"></span>";';
 		echo 'li.appendChild(left);li.appendChild(btn);selected.appendChild(li);';
 		echo '}';
 

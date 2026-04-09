@@ -29,6 +29,67 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_option_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_fields')) {
+	function cmx_email_contact_template_fields(): array {
+		return [
+			'email_kontakt_geburtstag'      => 'Geburtstag',
+			'email_kontakt_firmenjubilaeum' => 'Firmenjubiläum',
+			'email_kontakt_dankeschoen'     => 'Danke schön',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_contact_placeholders')) {
+	function cmx_email_contact_placeholders(): array {
+		return ['{anrede}', '{tageszeit}', '{vorname}', '{nachname}', '{firma}', '{geburtsdatum}', '{firmengruendung}', '{alter}', '{jahre}', '{das_bin_ich_url}', '{das_bin_ich_email}', '{logo}', '{Danke-Logo}'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_field_input_id')) {
+	function cmx_email_field_input_id(string $key): string {
+		return 'cmx_email_' . \sanitize_key($key);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_render_template_editor')) {
+	function cmx_email_render_template_editor(array $args): void {
+		$key = (string) ($args['key'] ?? '');
+		if ($key === '') {
+			return;
+		}
+
+		$rows = (int) ($args['rows'] ?? 10);
+		if ($rows <= 0) {
+			$rows = 10;
+		}
+
+		$value = cmx_email_option_value($key);
+		$editor_id = cmx_email_field_input_id($key);
+
+		\wp_editor($value, $editor_id, [
+			'textarea_name' => CMX_SETTINGS_MAIN . '[' . $key . ']',
+			'textarea_rows' => $rows,
+			'media_buttons' => false,
+			'quicktags' => [
+				'buttons' => 'strong,em,link,ul,ol,li,close',
+			],
+			'tinymce' => [
+				'menubar' => false,
+				'statusbar' => true,
+				'resize' => true,
+				'toolbar1' => 'bold,italic,link,unlink,bullist,numlist,undo,redo',
+				'toolbar2' => '',
+				'toolbar3' => '',
+				'toolbar4' => '',
+			],
+		]);
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_render_beleg_placeholder_buttons')) {
+			cmx_render_beleg_placeholder_buttons($editor_id, cmx_email_contact_placeholders());
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_normalize_client_list')) {
 	function cmx_email_normalize_client_list($raw): array {
 		$rows = \is_array($raw) ? $raw : [];
@@ -447,6 +508,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 
 \add_action('admin_init', function (): void {
 	$page = 'cmx_tab_email__belege';
+	$contact_page = 'cmx_tab_email__kontakt';
 	$clients_page = 'cmx_tab_email__clients';
 
 	\add_settings_section(
@@ -526,23 +588,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		static function (): void {
 			$value = \esc_attr(cmx_email_option_value('reply'));
 			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[reply]" value="' . $value . '" placeholder="antwort@beispiel.ch" autocomplete="off">';
-		},
-		$page,
-		'cmx_sec_email_account'
-	);
-
-	\add_settings_field(
-		'cmx_email_supplier',
-		'Lieferantenrechnung',
-		static function (): void {
-			$value = \esc_attr(cmx_email_option_value('supplier'));
-			$email_address = \sanitize_email(cmx_email_option_value('email_address'));
-			if (!\is_email($email_address)) {
-				$email_address = 'E-Mail-Adresse';
-			}
-			echo '<input type="email" class="regular-text" name="' . \esc_attr(CMX_SETTINGS_MAIN) . '[supplier]" value="' . $value . '" placeholder="rechnung@beispiel.ch" autocomplete="off">';
-			echo '<span style="margin-left:8px;">(optional) muss dann an die <code id="cmx-email-supplier-forward-target">' . \esc_html($email_address) . '</code> weitergeleitet werden</span>';
-			echo '<script>(function(){var source=document.getElementById("cmx-email-address-input");var target=document.getElementById("cmx-email-supplier-forward-target");if(!source||!target||target.dataset.bound==="1"){return;}var fallback="E-Mail-Adresse";var update=function(){var value=(source.value||"").trim();target.textContent=value!==""?value:fallback;};target.dataset.bound="1";source.addEventListener("input",update);source.addEventListener("change",update);update();})();</script>';
 		},
 		$page,
 		'cmx_sec_email_account'
@@ -648,6 +693,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 		$page,
 		'cmx_sec_email_links'
 	);
+
+	\add_settings_section(
+		'cmx_sec_email_contact',
+		'Kontakt',
+		static function (): void {
+			echo '<p class="description">Vorlagen für Kontakt-E-Mails rund um Geburtstag, Firmenjubiläum und Danke schön. Geburtstag und Firmenjubiläum werden täglich automatisch um 09:00 versendet.</p>';
+		},
+		$contact_page
+	);
+
+	$contact_fields = \function_exists(__NAMESPACE__ . '\\cmx_email_contact_template_fields')
+		? cmx_email_contact_template_fields()
+		: [];
+	foreach ($contact_fields as $key => $label) {
+		\add_settings_field(
+			'cmx_' . $key,
+			(string) $label,
+			__NAMESPACE__ . '\\cmx_email_render_template_editor',
+			$contact_page,
+			'cmx_sec_email_contact',
+			[
+				'key'  => (string) $key,
+				'rows' => 10,
+			]
+		);
+	}
 
 	\add_settings_section(
 		'cmx_sec_email_clients',
@@ -1084,13 +1155,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_sender_mailto_html')) {
 	$new['agb_link'] = \esc_url_raw((string) ($new['agb_link'] ?? ''));
 	$new['AGB_Belege'] = !empty($new['AGB_Belege']) ? '1' : '0';
 	$new['kundenportal_link'] = !empty($new['kundenportal_link']) ? '1' : '0';
-		$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
-			? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
-			: 'rot';
-		$new['email_button_text'] = \sanitize_text_field((string) ($new['email_button_text'] ?? ''));
-		$new['email_hide_logo'] = !empty($new['email_hide_logo']) ? '1' : '0';
-		$new['smtp_port'] = '587';
-		$new['imap_port'] = '993';
+	$new['email_theme'] = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_sanitize')
+		? (string) cmx_email_theme_sanitize((string) ($new['email_theme'] ?? 'rot'))
+		: 'rot';
+	$new['email_button_text'] = \sanitize_text_field((string) ($new['email_button_text'] ?? ''));
+	$new['email_hide_logo'] = !empty($new['email_hide_logo']) ? '1' : '0';
+	$new['smtp_port'] = '587';
+	$new['imap_port'] = '993';
+	foreach (['email_kontakt_geburtstag', 'email_kontakt_firmenjubilaeum', 'email_kontakt_dankeschoen'] as $template_key) {
+		$new[$template_key] = \wp_kses_post((string) ($new[$template_key] ?? ''));
+	}
 
 	return $new;
 }, 20, 2);

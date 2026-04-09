@@ -514,7 +514,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_bank_row_markup')) {
 				<span class="dashicons dashicons-move cmx-bank-handle" title="Ziehen zum Verschieben"></span>
 				<strong class="cmx-bank-item-title"><?php echo \esc_html($row_title); ?></strong>
 				<span class="cmx-bank-active-badge">Aktiv</span>
-				<button type="button" class="button-link-delete cmx-bank-remove">Entfernen</button>
+				<button type="button" class="button button-secondary cmx-bank-remove" aria-label="Entfernen" title="Entfernen">
+					<span class="dashicons dashicons-trash" aria-hidden="true"></span>
+					<span class="screen-reader-text">Entfernen</span>
+				</button>
 			</div>
 			<input type="hidden" data-field="id" name="<?php echo $name_base; ?>[id]" value="<?php echo \esc_attr((string) $bank['id']); ?>">
 			<input type="hidden" data-field="api" name="<?php echo $name_base; ?>[api]" value="<?php echo \esc_attr((string) $bank['api']); ?>">
@@ -682,6 +685,8 @@ function cmx_render_banken_list_field(): void {
 			.cmx-bank-handle{cursor:move;color:#667085}
 			.cmx-bank-item-title{flex:1 1 auto}
 			.cmx-bank-active-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#e8f3ff;color:#1858a8;font-size:11px;font-weight:600}
+			.cmx-bank-remove{display:inline-flex;align-items:center;justify-content:center;line-height:1;min-height:30px;padding:0 8px}
+			.cmx-bank-remove .dashicons{width:18px;height:18px;font-size:18px;color:#d63638;transform:translateY(5px)}
 			.cmx-bank-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.85fr) minmax(0,.85fr) minmax(0,1.05fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,.85fr);gap:14px;padding:14px}
 		.cmx-bank-grid p{margin:0}
 		.cmx-bank-grid label{display:block;margin-bottom:4px;font-weight:600}

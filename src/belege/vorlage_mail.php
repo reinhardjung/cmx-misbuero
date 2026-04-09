@@ -170,24 +170,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 			$daytime = \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_daytime_text')
 				? cmxbu_belegmail_daytime_text()
 				: 'Tag';
-		$has_name_tokens = $context !== ''
-			&& (bool) \preg_match('/\{(?:vorname|nachname|Vorname|Nachname)\}/u', $context);
-		$anrede_text = '';
-		if ($has_name_tokens && \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
-			$anrede_text = cmxbu_belegmail_salutation_text($data, false);
-		}
-		if ($anrede_text === '') {
-			$anrede_text = \trim((string) ($data['anrede_text'] ?? ''));
-		}
-		if ($anrede_text === '') {
-			$anrede_text = cmxbu_belegmail_salutation_text($data);
-		}
+			$self_contact_url = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')
+				? (string) cmx_email_self_contact_url()
+				: '';
+			$self_contact_email = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_primary_email')
+				? (string) cmx_email_self_contact_primary_email()
+				: '';
+			$has_name_tokens = $context !== ''
+				&& (bool) \preg_match('/\{(?:vorname|nachname|Vorname|Nachname)\}/u', $context);
+			$anrede_text = '';
+			if ($has_name_tokens && \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_salutation_text')) {
+				$anrede_text = cmxbu_belegmail_salutation_text($data, false);
+			}
+			if ($anrede_text === '') {
+				$anrede_text = \trim((string) ($data['anrede_text'] ?? ''));
+			}
+			if ($anrede_text === '') {
+				$anrede_text = cmxbu_belegmail_salutation_text($data);
+			}
 
-		return [
-			'{anrede}' => $anrede_text,
-			'{Anrede}' => $anrede_text,
-			'{vorname}' => $vorname,
-			'{Vorname}' => $vorname,
+			return [
+				'{anrede}' => $anrede_text,
+				'{Anrede}' => $anrede_text,
+				'{vorname}' => $vorname,
+				'{Vorname}' => $vorname,
 				'{nachname}' => $nachname,
 				'{Nachname}' => $nachname,
 				'{firma}' => $firma,
@@ -197,14 +203,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_replace_content_tokens'
 				'{tageszeit}' => $daytime,
 				'{Tageszeit}' => $daytime,
 				'{tagenszeit}' => $daytime,
-			'{Tagenszeit}' => $daytime,
-			'{firma_bezeichnung}' => cmxbu_belegmail_company_label($data),
-			'{beleg_datum}' => \trim((string) ($data['beleg_date'] ?? '')),
-			'{faellig_bis}' => \trim((string) ($data['faellig_bis'] ?? '')),
-			'{betrag}' => \trim((string) ($data['betrag'] ?? '')),
-			'{beleg_id}' => \trim((string) ($data['beleg_id'] ?? '')),
-			'{beleg_label}' => \trim((string) ($data['beleg_label'] ?? '')),
-		];
+				'{Tagenszeit}' => $daytime,
+				'{das_bin_ich_url}' => $self_contact_url,
+				'{Das_bin_ich_url}' => $self_contact_url,
+				'{das_bin_ich_email}' => $self_contact_email,
+				'{Das_bin_ich_email}' => $self_contact_email,
+				'{firma_bezeichnung}' => cmxbu_belegmail_company_label($data),
+				'{beleg_datum}' => \trim((string) ($data['beleg_date'] ?? '')),
+				'{faellig_bis}' => \trim((string) ($data['faellig_bis'] ?? '')),
+				'{betrag}' => \trim((string) ($data['betrag'] ?? '')),
+				'{beleg_id}' => \trim((string) ($data['beleg_id'] ?? '')),
+				'{beleg_label}' => \trim((string) ($data['beleg_label'] ?? '')),
+			];
 	}
 
 	function cmxbu_belegmail_replace_content_tokens(string $text, array $data = []): string {
@@ -444,6 +454,9 @@ function cmxbu_render_belegmail_template(array $data = []): string {
 </head>
 <body style="margin:0;padding:0;background:#f5f6f8;">
 	<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f5f6f8;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
+		<tr>
+			<td height="18" style="height:18px;line-height:18px;font-size:0;">&nbsp;</td>
+		</tr>
 		<tr>
 			<td align="center" style="padding:24px 12px;">
 					<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">

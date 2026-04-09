@@ -780,9 +780,9 @@ function cmx_artikel_waehrung_preise_box_html(\WP_Post $post): void {
 		.cmx-price-row .cmx-check-left{display:flex;align-items:center;gap:14px;white-space:nowrap;flex-wrap:wrap}
 		.cmx-price-row .cmx-check-left label{position:relative;top:-5px}
 		.cmx-price-row .cmx-variant-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
-		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px}
-		.cmx-price-row .cmx-variant-actions .cmx-variant-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px}
-		.cmx-price-row .cmx-variant-actions .cmx-variant-del .dashicons{color:#d63638}
+		.cmx-price-row .cmx-variant-actions .cmx-variant-add{display:none;min-width:170px;width:170px;height:36px;box-sizing:border-box;align-items:center;justify-content:center;text-align:center;padding:0 10px;border-radius:6px}
+		.cmx-price-row .cmx-variant-actions .cmx-variant-del{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border-radius:6px}
+		.cmx-price-row .cmx-variant-actions .cmx-variant-del .dashicons{color:#d63638;transform:translateY(5px)}
 		.cmx-price-row .cmx-variant-actions button[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
 		@media (max-width: 1200px){
 			.cmx-price-row{gap:10px}

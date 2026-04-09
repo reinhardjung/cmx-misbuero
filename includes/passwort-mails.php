@@ -92,14 +92,27 @@ function cmx_passwort_mails_build_html(string $title, string $body_html, ?array 
 	$show_powered_by = \function_exists(__NAMESPACE__ . '\\cmx_powered_by_enabled') && cmx_powered_by_enabled();
 	$show_footer_meta = ($agb_footer_html !== '' || $show_powered_by);
 	$mail_head_html = cmx_mail_outlook_head_html();
+	$branding_text = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_branding_text')
+		? (string) cmx_email_self_contact_branding_text()
+		: 'MIS BUERO';
+	if (\trim($branding_text) === '') {
+		$branding_text = 'MIS BUERO';
+	}
+	$header_logo_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')
+		? (string) cmx_email_header_logo_html('display:block;max-width:158px;width:100%;height:auto;max-height:66px;border:0;outline:none;text-decoration:none;margin:0 0 0 auto;', true)
+		: '';
+	$header_content_html = \function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')
+		? (string) cmx_email_header_content_html(\esc_html($branding_text), \esc_html($title), '', '', $header_logo_html)
+		: '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:' . \esc_attr($header_text) . ';">' . \esc_html($branding_text) . '</div>'
+			. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;color:' . \esc_attr($header_text) . ';">' . \esc_html($title) . '</div>';
 
 	return '<!doctype html><html lang="de" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' . $mail_head_html . '</head><body style="margin:0;padding:0;background:#dcdcdc;">'
 		. '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;background:#dcdcdc;padding:24px 0;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">'
+		. '<tr><td height="18" style="height:18px;line-height:18px;font-size:0;">&nbsp;</td></tr>'
 		. '<tr><td align="center">'
 		. '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;">'
 		. '<tr><td style="' . $header_style . '">'
-		. '<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:' . \esc_attr($header_text) . ';">MIS BUERO</div>'
-		. '<div style="font-size:24px;font-weight:700;margin:6px 0 4px;color:' . \esc_attr($header_text) . ';">' . \esc_html($title) . '</div>'
+		. $header_content_html
 		. '</td></tr>'
 		. '<tr><td style="background:#f2f2f2;padding:26px 28px 28px;border:1px solid #d8d8d8;border-top:none;border-radius:0 0 14px 14px;font-family:Arial, sans-serif;color:#202124;font-size:15px;line-height:1.5;">'
 		. $body_html

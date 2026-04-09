@@ -183,6 +183,9 @@ function cmxbu_render_belegmail_mahnung_template(array $data = []): string {
 <body style="margin:0;padding:0;background:#f5f6f8;">
 	<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f5f6f8;mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 		<tr>
+			<td height="18" style="height:18px;line-height:18px;font-size:0;">&nbsp;</td>
+		</tr>
+		<tr>
 			<td align="center" style="padding:24px 12px;">
 					<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;">
 						<tr>

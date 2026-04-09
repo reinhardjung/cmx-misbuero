@@ -374,8 +374,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_render_row')) {
 		echo '<input type="time" name="cmx_intern_notizen_rows[' . $name_index . '][zeit]" value="' . $zeit . '" />';
 		echo '</label>';
 		echo '<p class="cmx-intern-notiz-actions-wrap">';
-		echo '<button type="button" class="button cmx-notiz-add">' . \esc_html__('Notiz hinzufügen', 'cmx') . '</button>';
-		echo '<button type="button" class="button cmx-notiz-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash" style=""></span></button>';
+		echo '<button type="button" class="button button-secondary cmx-notiz-add">' . \esc_html__('Notiz hinzufügen', 'cmx') . '</button>';
+		echo '<button type="button" class="button button-secondary cmx-notiz-remove" aria-label="Zeile entfernen"><span class="dashicons dashicons-trash" style=""></span></button>';
 		echo '</p>';
 		echo '</div>';
 		echo '</div>';
@@ -412,9 +412,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_central_notizen_box')) {
 			echo '#cmx-intern-notizen-list .wp-editor-container textarea.wp-editor-area{min-height:152px;}';
 		echo '#cmx-intern-notizen-list .cmx-notiz-heute,#cmx-intern-notizen-list .cmx-notiz-jetzt{color:#d63638;text-decoration:none;}';
 			echo '#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;width:100%;}';
-		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;}';
+		echo '#cmx-intern-notizen-list .cmx-notiz-add{display:none;min-width:140px;border-radius:6px;}';
 			echo '#cmx-intern-notizen-list .cmx-intern-notiz-row:last-child .cmx-notiz-add{display:inline-flex;justify-content:center;}';
-			echo '#cmx-intern-notizen-list .cmx-notiz-remove{color:#a00;font-size:18px;line-height:1;min-width:36px;margin-left:auto;}';
+			echo '#cmx-intern-notizen-list .cmx-notiz-remove{display:inline-flex;align-items:center;justify-content:center;line-height:1;min-width:36px;min-height:30px;padding:0 8px;border-radius:6px;margin-left:auto;}';
+			echo '#cmx-intern-notizen-list .cmx-notiz-remove .dashicons{color:#d63638;transform:translateY(0);}';
 			echo '@media (max-width:782px){#cmx-intern-notizen-list .cmx-intern-notiz-row{grid-template-columns:1fr;}#cmx-intern-notizen-list .cmx-intern-notiz-actions-wrap{justify-content:space-between;}#cmx-intern-notizen-list .cmx-notiz-add{min-width:0;}}';
 		echo '</style>';
 			echo '<div id="cmx-intern-notizen-list">';

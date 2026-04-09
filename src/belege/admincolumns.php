@@ -64,6 +64,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_requested_ids')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_date_value')) {
+	function cmx_beleg_admin_search_date_value(string $term): string {
+		$term = \trim($term);
+		if ($term === '') {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_normalize_date_value')) {
+			return (string) cmx_beleg_admin_normalize_date_value($term);
+		}
+
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $term)) {
+			return $term;
+		}
+
+		$ts = \strtotime($term);
+		return $ts ? (string) \wp_date('Y-m-d', $ts) : '';
+	}
+}
+
 /**
  * Zentraler Filter-Handler für die Belege-Liste.
  * Greift alle Selects ab (Kontakt, Kategorie, Zahlstatus, Projekt) und baut
@@ -353,14 +373,39 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 		$kontakt_post_type,
 		$like
 	);
+	$date_sql = '';
+	$date_value = cmx_beleg_admin_search_date_value($term);
+	if ($date_value !== '') {
+		$date_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
+			: '_cmx_beleg_rng_datum';
+		$date_sql = $wpdb->prepare(
+			"EXISTS (
+				SELECT 1
+				FROM {$wpdb->postmeta} AS cmx_bdate
+				WHERE cmx_bdate.post_id = {$wpdb->posts}.ID
+					AND cmx_bdate.meta_key = %s
+					AND cmx_bdate.meta_value = %s
+			)",
+			$date_meta_key,
+			$date_value
+		);
+	}
+
+	$extra_conditions = \array_values(\array_filter([$contact_sql, $date_sql]));
+	$extra_sql = \implode(' OR ', $extra_conditions);
 
 	$search_sql = \trim((string) $search);
 	$search_sql = (string) \preg_replace('/^\s*AND\s*/i', '', $search_sql);
 	if ($search_sql === '') {
-		return " AND {$contact_sql} ";
+		return $extra_sql !== '' ? " AND ({$extra_sql}) " : $search;
 	}
 
-	return " AND (({$search_sql}) OR {$contact_sql}) ";
+	if ($extra_sql === '') {
+		return " AND ({$search_sql}) ";
+	}
+
+	return " AND (({$search_sql}) OR {$extra_sql}) ";
 }, 20, 2);
 
 \add_filter('views_edit-belege', function(array $views): array {

@@ -330,6 +330,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_theme_presets')) {
 				'link_color' => '#4c5562',
 				'logo_badge_border' => '#d7dde4',
 			],
+			'gruen' => [
+				'label' => 'Grün',
+				'header_background' => '#2f7a3f',
+				'header_gradient_start' => '#225f31',
+				'header_gradient_end' => '#53a867',
+				'header_text' => '#ffffff',
+				'header_plain' => false,
+				'header_border' => 'transparent',
+				'button_background' => '#225f31',
+				'button_text' => '#ffffff',
+				'button_mode' => 'button',
+				'button_accent' => '#53a867',
+				'link_color' => '#225f31',
+				'logo_badge_border' => '#cfe7d4',
+			],
+			'schwarz' => [
+				'label' => 'Schwarz',
+				'header_background' => '#1b1b1d',
+				'header_gradient_start' => '#080809',
+				'header_gradient_end' => '#3a3a3f',
+				'header_text' => '#ffffff',
+				'header_plain' => false,
+				'header_border' => 'transparent',
+				'button_background' => '#080809',
+				'button_text' => '#ffffff',
+				'button_mode' => 'button',
+				'button_accent' => '#3a3a3f',
+				'link_color' => '#080809',
+				'logo_badge_border' => '#d7d7da',
+			],
 			'ohne' => [
 				'label' => 'Ohne',
 				'header_background' => '#ffffff',
@@ -436,6 +466,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_logo_html')) {
 			return '';
 		}
 
+		if ($img_style !== '') {
+			$img_style = (string) \preg_replace('/(?:^|;)\s*display\s*:[^;]*/i', '', $img_style);
+			$img_style = (string) \preg_replace('/(?:^|;)\s*margin\s*:[^;]*/i', '', $img_style);
+			$img_style = \trim((string) \preg_replace('/;{2,}/', ';', $img_style), " ;\t\n\r\0\x0B");
+			$img_style .= ($img_style !== '' ? ';' : '') . 'display:inline-block;margin:0;';
+		}
+
 		return \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')
 			? (string) cmx_email_self_logo_html($img_style, $prefer_outlook_embed)
 			: '';
@@ -462,6 +499,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')) {
 		]);
 
 		return !empty($query->posts[0]) ? (int) $query->posts[0] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_title')) {
+	function cmx_email_self_contact_title(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		$title = \trim((string) \get_the_title($post_id));
+		if ($title !== '') {
+			return $title;
+		}
+
+		$firma_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			: '_cmx_kontakte_firma';
+
+		return \trim((string) \get_post_meta($post_id, $firma_key, true));
 	}
 }
 
@@ -499,6 +558,58 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')) {
 		}
 
 		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_branding_text')) {
+	function cmx_email_self_contact_branding_text(): string {
+		$title = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_title')
+			? (string) cmx_email_self_contact_title()
+			: '';
+		if ($title !== '') {
+			return $title;
+		}
+
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return 'MIS BUERO';
+		}
+
+		$firma_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+			: '_cmx_kontakte_firma';
+		$vorname_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+			: '_cmx_kontakte_vorname';
+		$nachname_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+			: '_cmx_kontakte_nachname';
+
+		$firma = \trim((string) \get_post_meta($post_id, $firma_key, true));
+		$vorname = \trim((string) \get_post_meta($post_id, $vorname_key, true));
+		$nachname = \trim((string) \get_post_meta($post_id, $nachname_key, true));
+		$name = \trim($vorname . ' ' . $nachname);
+
+		if ($firma === '') {
+			$post = \get_post($post_id);
+			if ($post instanceof \WP_Post) {
+				$firma = \trim((string) $post->post_title);
+			}
+		}
+
+		if ($firma !== '' && $name !== '') {
+			return \rtrim($firma, '. ') . '. - ' . $name;
+		}
+		if ($firma !== '') {
+			return $firma;
+		}
+		if ($name !== '') {
+			return $name;
+		}
+
+		return 'MIS BUERO';
 	}
 }
 
@@ -769,6 +880,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_primary_email')) {
+	function cmx_email_self_contact_primary_email(): string {
+		$post_id = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_id')
+			? (int) cmx_email_self_contact_id()
+			: 0;
+		if ($post_id <= 0) {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
+			$email = \sanitize_email((string) cmx_kommunikation_primary_email($post_id));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_contact')) {
+			$row = (array) cmx_kommunikation_primary_contact($post_id);
+			$email = \sanitize_email((string) ($row['email'] ?? ''));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+
+		$meta_keys = [
+			'_cmx_email_1',
+			'cmx_email_1',
+			'email_1',
+			'e_mail_1',
+			'kontakt_email',
+			'email',
+			'e_mail',
+			'mail',
+		];
+
+		foreach ($meta_keys as $meta_key) {
+			$email = \sanitize_email((string) \get_post_meta($post_id, $meta_key, true));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')) {
 	function cmx_email_header_content_html(string $header_kicker_html, string $title_html, string $beleg_date_html, string $preheader_html, string $logo_html = ''): string {
 		$theme = \function_exists(__NAMESPACE__ . '\\cmx_email_theme_palette')
@@ -779,7 +936,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_header_content_html')) {
 		$text_html = '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;color:' . \esc_attr($header_text) . ';">' . $header_kicker_html . '</div>'
 			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:26px;line-height:1.2;margin-top:6px;font-weight:600;color:' . \esc_attr($header_text) . ';">' . $title_html . '</div>'
 			. ($beleg_date_html !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:13px;line-height:1.4;margin-top:4px;opacity:0.9;color:' . \esc_attr($header_text) . ';">vom ' . $beleg_date_html . '</div>' : '')
-			. '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;color:' . \esc_attr($header_text) . ';">' . $preheader_html . '</div>';
+			. ($preheader_html !== '' ? '<div style="font-family:Segoe UI,Roboto,Arial,sans-serif;font-size:12px;opacity:0.85;margin-top:4px;color:' . \esc_attr($header_text) . ';">' . $preheader_html . '</div>' : '');
 
 		if ($logo_html === '') {
 			return $text_html;
@@ -839,7 +996,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_html')) {
 			: '';
 		$default_html = $link_url === ''
 			? $default_img_html
-			: '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;border:0;outline:none;">' . $default_img_html . '</a>';
+			: '<a href="' . \esc_url($link_url) . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;border:0;outline:none;text-align:center;">' . $default_img_html . '</a>';
 
 		if ($prefer_outlook_embed) {
 			$outlook_src = $logo_url;

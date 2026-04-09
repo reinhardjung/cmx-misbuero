@@ -785,11 +785,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
 });
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row')) {
-	function cmx_kommunikation_render_contact_row(array $row, int|string $index, array $phone_terms, array $mail_terms): void {
+	function cmx_kommunikation_render_contact_row(array $row, int|string $index, array $phone_terms, array $mail_terms, int $post_id = 0, bool $row_is_saved = false): void {
 		$index_attr = (string) $index;
 		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
 		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
 		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails';
+		$anrede_value = \trim((string) ($row['anrede'] ?? ''));
+		$thank_title = !$row_is_saved
+			? 'Kontakt zuerst speichern'
+			: ($anrede_value !== '' ? 'Danke schön senden' : 'Erst Anrede ausfüllen');
+		$thank_disabled = !$row_is_saved || $anrede_value === '';
+		$saved_index_attr = ($row_is_saved && \is_numeric($index_attr)) ? (string) ((int) $index_attr) : '';
 		$emails_enabled = \post_type_exists($email_post_type);
 		if (
 			$emails_enabled
@@ -805,7 +811,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 		$phone_title = cmx_kommunikation_phone_title();
 		$phone_placeholder = cmx_kommunikation_phone_placeholder();
 		?>
-		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>">
+		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>" data-row-saved="<?php echo $row_is_saved ? '1' : '0'; ?>" data-saved-index="<?php echo \esc_attr($saved_index_attr); ?>" data-post-id="<?php echo (int) $post_id; ?>">
 			<div class="cmx-kommu-field cmx-kommu-field-handle">
 				<!-- <span class="cmx-kommu-field-title">Reihenfolge</span> -->
 				<span class="cmx-kommu-drag" draggable="true" title="Kontakt verschieben" aria-label="Kontakt verschieben">
@@ -891,6 +897,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 					<label for="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>">Anrede</label>
 					<input id="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[anrede]'); ?>" value="<?php echo \esc_attr((string) ($row['anrede'] ?? '')); ?>" data-cmx-tab-role="anrede">
 				</div>
+				<div class="cmx-kommu-field cmx-kommu-field-icon">
+					<button
+						type="button"
+						class="button-link cmx-kommu-thanks<?php echo $thank_disabled ? ' is-disabled' : ''; ?>"
+						title="<?php echo \esc_attr($thank_title); ?>"
+						aria-label="<?php echo \esc_attr($thank_title); ?>"
+						<?php echo $thank_disabled ? 'disabled' : ''; ?>
+					>
+						<span class="dashicons dashicons-buddicons-groups" aria-hidden="true"></span>
+						<span class="screen-reader-text">Danke schön senden</span>
+					</button>
+				</div>
 				<div class="cmx-kommu-field cmx-kommu-field-check">
 					<span class="cmx-kommu-field-title">Duzis</span>
 					<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
@@ -899,7 +917,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row'))
 				</label>
 			</div>
 			<div class="cmx-kommu-field cmx-kommu-field-actions">
-				<button type="button" class="button-link-delete cmx-kommu-remove" aria-label="Kontakt entfernen" title="Kontakt entfernen">
+				<button type="button" class="button button-secondary cmx-kommu-remove" aria-label="Kontakt entfernen" title="Kontakt entfernen">
 					<span class="dashicons dashicons-trash" aria-hidden="true"></span>
 					<span class="screen-reader-text">Entfernen</span>
 				</button>
@@ -963,12 +981,51 @@ function cmx_kommunikation_videochat_url_ajax(): void {
 	]);
 }
 
+\add_action('wp_ajax_cmx_kommunikation_send_thanks_mail', __NAMESPACE__ . '\\cmx_kommunikation_send_thanks_mail_ajax');
+function cmx_kommunikation_send_thanks_mail_ajax(): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+
+	\check_ajax_referer('cmx_kommunikation_send_thanks_mail', 'nonce');
+
+	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+	$row_index = isset($_POST['row_index']) ? (int) \wp_unslash($_POST['row_index']) : -1;
+	if ($post_id <= 0 || $row_index < 0) {
+		\wp_send_json_error(['message' => 'Kontakt oder Ansprechpartner fehlt.'], 400);
+	}
+	if (!\current_user_can('edit_post', $post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung für diesen Kontakt.'], 403);
+	}
+	if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
+		\wp_send_json_error(['message' => 'Danke-Mail ist derzeit nicht verfügbar.'], 500);
+	}
+
+	$result = CMX_Kontakt_Auto_Mails::send_manual_thank_you_mail($post_id, $row_index);
+	if ($result instanceof \WP_Error) {
+		\wp_send_json_error(['message' => (string) $result->get_error_message()], 400);
+	}
+
+	$email = \sanitize_email((string) ($result['email'] ?? ''));
+	$message = $email !== ''
+		? 'Danke-Mail an ' . $email . ' versendet.'
+		: 'Danke-Mail versendet.';
+
+	\wp_send_json_success([
+		'message' => $message,
+		'email' => $email,
+		'subject' => (string) ($result['subject'] ?? ''),
+	]);
+}
+
 function cmx_kommunikation_box_html($post): void {
 	$rows = cmx_kommunikation_read_contacts((int) $post->ID);
 	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
 	$mail_terms = \taxonomy_exists(CMX_TAX_MAIL_LABELS) ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS) : [];
 	$nextcloud_call_url = cmx_kommunikation_nextcloud_call_url();
 	$videochat_nonce = \wp_create_nonce('cmx_kommunikation_videochat');
+	$thanks_nonce = \wp_create_nonce('cmx_kommunikation_send_thanks_mail');
+	$post_is_saved = ((int) ($post->ID ?? 0) > 0) && ((string) ($post->post_status ?? '') !== 'auto-draft');
 	\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
 	?>
 		<style>
@@ -979,7 +1036,7 @@ function cmx_kommunikation_box_html($post): void {
 			}
 			#cmx_kommunikation_box .cmx-kommu-contact-row {
 				display: grid;
-				grid-template-columns: 40px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.82fr) minmax(138px, 1fr) minmax(108px, 0.82fr) minmax(168px, 1.08fr) 136px minmax(108px, 0.85fr) 72px 34px;
+				grid-template-columns: 40px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.82fr) minmax(138px, 1fr) minmax(108px, 0.82fr) minmax(168px, 1.08fr) 136px minmax(108px, 0.85fr) 34px 72px 34px;
 				gap: 8px;
 				padding: 10px;
 				border: 1px solid #dcdcde;
@@ -1144,6 +1201,48 @@ function cmx_kommunikation_box_html($post): void {
 			gap: 2px;
 			padding-bottom: 1px;
 		}
+		#cmx_kommunikation_box .cmx-kommu-field-icon {
+			display: flex;
+			align-items: flex-end;
+			justify-content: center;
+			padding-bottom: 2px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			padding: 0;
+			color: #646970;
+			line-height: 1;
+			text-decoration: none;
+			border-radius: 6px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks .dashicons {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks:hover,
+		#cmx_kommunikation_box .cmx-kommu-thanks:focus {
+			color: #d63638;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-disabled,
+		#cmx_kommunikation_box .cmx-kommu-thanks:disabled {
+			color: #c3c4c7;
+			cursor: not-allowed;
+			pointer-events: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-loading {
+			opacity: 0.55;
+			pointer-events: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-success {
+			color: #2e7d32;
+		}
 		#cmx_kommunikation_box .cmx-kommu-toggle {
 			position: relative;
 			display: inline-flex;
@@ -1199,25 +1298,28 @@ function cmx_kommunikation_box_html($post): void {
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			width: 32px;
-			height: 32px;
-			padding: 0;
-			color: #d63638;
+			min-height: 30px;
+			padding: 0 8px;
 			line-height: 1;
-			text-decoration: none;
+			border-radius: 6px;
 		}
 		#cmx_kommunikation_box .cmx-kommu-remove .dashicons {
-			font-size: 16px;
-			width: 16px;
-			height: 16px;
-			line-height: 16px;
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+			color: #d63638;
+			transform: translateY(0);
 		}
 		#cmx_kommunikation_box .cmx-kommu-remove:hover,
 		#cmx_kommunikation_box .cmx-kommu-remove:focus {
-			color: #b42527;
+			color: inherit;
 		}
 		#cmx_kommunikation_box .cmx-kommu-toolbar {
 			margin-top: 10px;
+		}
+		#cmx_kommunikation_box #cmx-kommu-add-row {
+			border-radius: 6px;
 		}
 		@media (max-width: 1280px) {
 			#cmx_kommunikation_box .cmx-kommu-contact-row {
@@ -1233,14 +1335,14 @@ function cmx_kommunikation_box_html($post): void {
 			}
 		}
 	</style>
-	<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>" data-videochat-nonce="<?php echo \esc_attr($videochat_nonce); ?>">
+	<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>" data-videochat-nonce="<?php echo \esc_attr($videochat_nonce); ?>" data-thanks-nonce="<?php echo \esc_attr($thanks_nonce); ?>" data-ajax-url="<?php echo \esc_url(\admin_url('admin-ajax.php')); ?>" data-post-id="<?php echo (int) $post->ID; ?>" data-post-saved="<?php echo $post_is_saved ? '1' : '0'; ?>">
 		<div class="cmx-kommu-rows">
-			<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms); } ?>
+			<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms, (int) $post->ID, !cmx_kommunikation_contact_row_is_empty((array) $row)); } ?>
 		</div>
 		<div class="cmx-kommu-toolbar">
 			<button type="button" class="button button-secondary" id="cmx-kommu-add-row">Kontakt hinzufügen</button>
 		</div>
-		<template id="cmx-kommu-row-template"><?php cmx_kommunikation_render_contact_row(cmx_kommunikation_normalize_contact_row([]), '__INDEX__', $phone_terms, $mail_terms); ?></template>
+		<template id="cmx-kommu-row-template"><?php cmx_kommunikation_render_contact_row(cmx_kommunikation_normalize_contact_row([]), '__INDEX__', $phone_terms, $mail_terms, (int) $post->ID, false); ?></template>
 		<div class="cmx-kommu-email-menu" id="cmx-kommu-email-menu" aria-hidden="true">
 			<button type="button" data-action="internal">Intern</button>
 			<button type="button" data-action="external">Extern</button>
@@ -1266,8 +1368,49 @@ function cmx_kommunikation_box_html($post): void {
 		var draggedRow = null;
 		var emailMenuState = null;
 		var phoneMenuState = null;
-		var videoChatUrl = String(root.getAttribute("data-videochat-url") || "");
-		var videoChatNonce = String(root.getAttribute("data-videochat-nonce") || "");
+		var videoChatUrl = <?php echo \wp_json_encode((string) $nextcloud_call_url); ?>;
+		var videoChatNonce = <?php echo \wp_json_encode((string) $videochat_nonce); ?>;
+		var thanksNonce = <?php echo \wp_json_encode((string) $thanks_nonce); ?>;
+		var ajaxUrl = <?php echo \wp_json_encode(\admin_url('admin-ajax.php')); ?>;
+		if (!ajaxUrl && typeof window.ajaxurl === "string") {
+			ajaxUrl = window.ajaxurl;
+		}
+		var postId = <?php echo (int) $post->ID; ?>;
+			if (!postId || isNaN(postId)) {
+				var postIdField = document.getElementById("post_ID");
+				if (postIdField) {
+					postId = parseInt(postIdField.value || "0", 10);
+				}
+			}
+				var postIsSaved = String(root.getAttribute("data-post-saved") || "") === "1";
+
+		function showAdminNotice(message, type) {
+			var text = String(message || "").trim();
+			if (text === "") {
+				return;
+			}
+
+			document.querySelectorAll(".cmx-kommu-admin-notice").forEach(function(node) {
+				node.remove();
+			});
+
+			var noticeType = type === "error" ? "error" : "success";
+			var notice = document.createElement("div");
+			notice.className = "notice notice-" + noticeType + " is-dismissible cmx-kommu-admin-notice";
+			notice.innerHTML = "<p></p><button type=\"button\" class=\"notice-dismiss\"><span class=\"screen-reader-text\">Dismiss this notice.</span></button>";
+			notice.querySelector("p").textContent = text;
+			notice.querySelector(".notice-dismiss").addEventListener("click", function() {
+				notice.remove();
+			});
+
+			var target = document.querySelector("#wpbody-content .wrap")
+				|| document.querySelector("#wpbody-content")
+				|| root.parentNode
+				|| document.body;
+			target.insertBefore(notice, target.firstChild);
+
+			window.scrollTo({top: 0, behavior: "smooth"});
+		}
 
 		function closeEmailMenu() {
 			emailMenu.classList.remove("is-open");
@@ -1458,6 +1601,31 @@ function cmx_kommunikation_box_html($post): void {
 			updateE164PhoneValidity(input);
 		}
 
+		function updateThanksButton(row) {
+			if (!row) return;
+			var button = row.querySelector(".cmx-kommu-thanks");
+			if (!button) return;
+			var anredeInput = row.querySelector('[data-cmx-tab-role="anrede"]');
+			var hasAnrede = !!(anredeInput && String(anredeInput.value || "").trim() !== "");
+			var rowIsSaved = String(row.getAttribute("data-row-saved") || "") === "1";
+			var isLoading = button.classList.contains("is-loading");
+				var enabled = rowIsSaved && hasAnrede && !isLoading;
+					var title = !rowIsSaved
+						? "Kontakt zuerst speichern"
+						: (hasAnrede ? "Danke schön senden" : "Erst Anrede ausfüllen");
+			button.disabled = !enabled;
+			button.classList.toggle("is-disabled", !enabled);
+			button.title = title;
+			button.setAttribute("aria-label", title);
+		}
+
+		function updateThanksButtons(scope) {
+			var context = scope && scope.querySelectorAll ? scope : rows;
+			context.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row) {
+				updateThanksButton(row);
+			});
+		}
+
 		function fetchVideoChatUrl() {
 			if (videoChatUrl) {
 				return Promise.resolve(videoChatUrl);
@@ -1529,6 +1697,8 @@ function cmx_kommunikation_box_html($post): void {
 						trigger.setAttribute("data-phone-target", phoneTarget.replace(/_[^_]+$/, "_" + index));
 					}
 				});
+
+				updateThanksButton(row);
 			});
 		}
 
@@ -1585,6 +1755,7 @@ function cmx_kommunikation_box_html($post): void {
 			rows.appendChild(row);
 			renumberRows();
 			updateRemoveButtons();
+			updateThanksButtons(row.parentNode || rows);
 		}
 
 		addButton.addEventListener("click", function () {
@@ -1613,6 +1784,75 @@ function cmx_kommunikation_box_html($post): void {
 				} else {
 					openEmailMenu(emailTrigger);
 				}
+				return;
+			}
+
+			var thanksButton = event.target.closest(".cmx-kommu-thanks");
+			if (thanksButton) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (thanksButton.disabled || thanksButton.classList.contains("is-loading")) {
+					return;
+				}
+					if (!postId || isNaN(postId)) {
+						showAdminNotice("Kontakt-ID fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					if (!ajaxUrl) {
+						showAdminNotice("AJAX-Verbindung fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					if (!thanksNonce) {
+						showAdminNotice("Sicherheits-Token fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					var thanksRow = thanksButton.closest(".cmx-kommu-contact-row");
+				if (!thanksRow) {
+					return;
+				}
+					var savedIndex = parseInt(thanksRow.getAttribute("data-saved-index") || "-1", 10);
+					if (savedIndex < 0) {
+						savedIndex = parseInt(thanksRow.getAttribute("data-row-index") || "-1", 10);
+					}
+					if (savedIndex < 0) {
+					showAdminNotice("Bitte Ansprechpartner zuerst speichern.", "error");
+						return;
+					}
+				thanksButton.classList.remove("is-success");
+				thanksButton.classList.add("is-loading");
+				updateThanksButton(thanksRow);
+
+				var requestBody = new URLSearchParams();
+				requestBody.set("action", "cmx_kommunikation_send_thanks_mail");
+				requestBody.set("nonce", thanksNonce);
+				requestBody.set("post_id", String(postId));
+				requestBody.set("row_index", String(savedIndex));
+
+					fetch(ajaxUrl, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {"Content-Type": "application/x-www-form-urlencoded"},
+					body: requestBody.toString()
+				}).then(function(response) {
+					return response.json().catch(function() {
+						return {success: false, data: {message: "Ungültige Serverantwort."}};
+					});
+				}).then(function(payload) {
+					if (!payload || !payload.success) {
+						var errorMessage = payload && payload.data && payload.data.message ? payload.data.message : "Danke-Mail konnte nicht versendet werden.";
+						throw new Error(errorMessage);
+					}
+					thanksButton.classList.add("is-success");
+					window.setTimeout(function() {
+						thanksButton.classList.remove("is-success");
+					}, 3200);
+					showAdminNotice(payload.data && payload.data.message ? payload.data.message : "Danke-Mail versendet.", "success");
+				}).catch(function(error) {
+					showAdminNotice(error && error.message ? error.message : "Danke-Mail konnte nicht versendet werden.", "error");
+				}).finally(function() {
+					thanksButton.classList.remove("is-loading");
+					updateThanksButton(thanksRow);
+				});
 				return;
 			}
 
@@ -1651,6 +1891,10 @@ function cmx_kommunikation_box_html($post): void {
 		});
 
 		rows.addEventListener("input", function(event) {
+			var anredeInput = event.target.closest('[data-cmx-tab-role="anrede"]');
+			if (anredeInput) {
+				updateThanksButton(anredeInput.closest(".cmx-kommu-contact-row"));
+			}
 			var phoneInput = event.target.closest("[data-cmx-phone]");
 			if (!phoneInput) return;
 			phoneInput.setCustomValidity("");
@@ -1823,6 +2067,7 @@ function cmx_kommunikation_box_html($post): void {
 
 		renumberRows();
 		updateRemoveButtons();
+		updateThanksButtons();
 	})();
 	</script>
 	<?php

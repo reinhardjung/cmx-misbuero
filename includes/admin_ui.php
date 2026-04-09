@@ -1246,6 +1246,146 @@ add_action('admin_head', function () {
 	<?php
 });
 
+add_action('admin_head', function (): void {
+	if (\is_network_admin()) {
+		return;
+	}
+	?>
+	<style id="cmx-trash-button-uniform">
+		.cmx-bank-remove,
+		.cmx-email-client-remove,
+		.cmx-notiz-remove,
+		#cmx-projekt-tasks button.cmx-task-remove,
+		.cmx-kommu-remove,
+		.cmx-variant-del,
+		.cmx-lief-del,
+		.cmx-pend-modal-delete,
+		.cmx-camt-assignment-notice .cmx-camt-unassign-btn,
+		.cmx-anzahlung-del,
+		.cmx-del-pos,
+		.cmx-scanner-rel-remove,
+		.cmx-dok-rel-remove,
+		.cmx-email-rel-remove,
+		.cmx-kontakte-zu-kontakt-remove,
+		.cmx-zu-projekt-remove,
+		.cmx-li-remove-file,
+		.cmx-kl-remove-file,
+		.cmx-dok-remove,
+		.cmx-belege-remove,
+		#cmx_projekt_clear,
+		#cmx_kontakt_clear,
+		#cmx-export-zip-share-delete {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			box-sizing: border-box;
+			width: 36px !important;
+			min-width: 36px !important;
+			height: 36px !important;
+			min-height: 36px !important;
+			padding: 0 !important;
+			line-height: 1 !important;
+			border-radius: 6px !important;
+			border: 1px solid #c3c4c7 !important;
+			background: #fff !important;
+			box-shadow: none !important;
+			color: #d63638 !important;
+			text-decoration: none !important;
+			transform: none !important;
+			margin-top: 0 !important;
+			overflow: hidden;
+		}
+		.cmx-bank-remove:hover,
+		.cmx-bank-remove:focus,
+		.cmx-email-client-remove:hover,
+		.cmx-email-client-remove:focus,
+		.cmx-notiz-remove:hover,
+		.cmx-notiz-remove:focus,
+		#cmx-projekt-tasks button.cmx-task-remove:hover,
+		#cmx-projekt-tasks button.cmx-task-remove:focus,
+		.cmx-kommu-remove:hover,
+		.cmx-kommu-remove:focus,
+		.cmx-variant-del:hover,
+		.cmx-variant-del:focus,
+		.cmx-lief-del:hover,
+		.cmx-lief-del:focus,
+		.cmx-pend-modal-delete:hover,
+		.cmx-pend-modal-delete:focus,
+		.cmx-camt-assignment-notice .cmx-camt-unassign-btn:hover,
+		.cmx-camt-assignment-notice .cmx-camt-unassign-btn:focus,
+		.cmx-anzahlung-del:hover,
+		.cmx-anzahlung-del:focus,
+		.cmx-del-pos:hover,
+		.cmx-del-pos:focus,
+		.cmx-scanner-rel-remove:hover,
+		.cmx-scanner-rel-remove:focus,
+		.cmx-dok-rel-remove:hover,
+		.cmx-dok-rel-remove:focus,
+		.cmx-email-rel-remove:hover,
+		.cmx-email-rel-remove:focus,
+		.cmx-kontakte-zu-kontakt-remove:hover,
+		.cmx-kontakte-zu-kontakt-remove:focus,
+		.cmx-zu-projekt-remove:hover,
+		.cmx-zu-projekt-remove:focus,
+		.cmx-li-remove-file:hover,
+		.cmx-li-remove-file:focus,
+		.cmx-kl-remove-file:hover,
+		.cmx-kl-remove-file:focus,
+		.cmx-dok-remove:hover,
+		.cmx-dok-remove:focus,
+		.cmx-belege-remove:hover,
+		.cmx-belege-remove:focus,
+		#cmx_projekt_clear:hover,
+		#cmx_projekt_clear:focus,
+		#cmx_kontakt_clear:hover,
+		#cmx_kontakt_clear:focus,
+		#cmx-export-zip-share-delete:hover,
+		#cmx-export-zip-share-delete:focus {
+			border-color: #8c8f94 !important;
+			background: #f6f7f7 !important;
+			color: #b32d2e !important;
+		}
+		.cmx-bank-remove .dashicons-trash,
+		.cmx-email-client-remove .dashicons-trash,
+		.cmx-notiz-remove .dashicons-trash,
+		#cmx-projekt-tasks button.cmx-task-remove .dashicons-trash,
+		.cmx-kommu-remove .dashicons-trash,
+		.cmx-variant-del .dashicons-trash,
+		.cmx-lief-del .dashicons-trash,
+		.cmx-pend-modal-delete .dashicons-trash,
+		.cmx-camt-assignment-notice .cmx-camt-unassign-btn .dashicons-trash,
+		.cmx-anzahlung-del .dashicons-trash,
+		.cmx-del-pos .dashicons-trash,
+		.cmx-scanner-rel-remove .dashicons-trash,
+		.cmx-dok-rel-remove .dashicons-trash,
+		.cmx-email-rel-remove .dashicons-trash,
+		.cmx-kontakte-zu-kontakt-remove .dashicons-trash,
+		.cmx-zu-projekt-remove .dashicons-trash,
+		.cmx-li-remove-file .dashicons-trash,
+		.cmx-kl-remove-file .dashicons-trash,
+		.cmx-dok-remove .dashicons-trash,
+		.cmx-belege-remove .dashicons-trash,
+		#cmx_projekt_clear .dashicons-trash,
+		#cmx_kontakt_clear .dashicons-trash,
+		#cmx-export-zip-share-delete .dashicons-trash {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 18px !important;
+			height: 18px !important;
+			font-size: 18px !important;
+			line-height: 1 !important;
+			color: #d63638 !important;
+			margin: 0 !important;
+			position: static !important;
+			top: auto !important;
+			left: auto !important;
+			transform: none !important;
+		}
+	</style>
+	<?php
+}, 120);
+
 add_action('admin_footer', function (): void {
 	if (!\function_exists('get_current_screen')) {
 		return;
