@@ -1003,7 +1003,13 @@ function cmx_kommunikation_send_thanks_mail_ajax(): void {
 
 	$result = CMX_Kontakt_Auto_Mails::send_manual_thank_you_mail($post_id, $row_index);
 	if ($result instanceof \WP_Error) {
-		\wp_send_json_error(['message' => (string) $result->get_error_message()], 400);
+		$message = (string) $result->get_error_message();
+		$data = ['message' => $message];
+		if ($result->get_error_code() === 'mail_disabled') {
+			$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email&sub=kontakt');
+			$data['message_html'] = $message . ' <a href="' . \esc_url($settings_url) . '" target="_blank" rel="noopener noreferrer">Hier ändern</a>';
+		}
+		\wp_send_json_error($data, 400);
 	}
 
 	$email = \sanitize_email((string) ($result['email'] ?? ''));
@@ -1384,7 +1390,7 @@ function cmx_kommunikation_box_html($post): void {
 			}
 				var postIsSaved = String(root.getAttribute("data-post-saved") || "") === "1";
 
-		function showAdminNotice(message, type) {
+		function showAdminNotice(message, type, allowHtml) {
 			var text = String(message || "").trim();
 			if (text === "") {
 				return;
@@ -1398,7 +1404,11 @@ function cmx_kommunikation_box_html($post): void {
 			var notice = document.createElement("div");
 			notice.className = "notice notice-" + noticeType + " is-dismissible cmx-kommu-admin-notice";
 			notice.innerHTML = "<p></p><button type=\"button\" class=\"notice-dismiss\"><span class=\"screen-reader-text\">Dismiss this notice.</span></button>";
-			notice.querySelector("p").textContent = text;
+			if (allowHtml) {
+				notice.querySelector("p").innerHTML = text;
+			} else {
+				notice.querySelector("p").textContent = text;
+			}
 			notice.querySelector(".notice-dismiss").addEventListener("click", function() {
 				notice.remove();
 			});
@@ -1840,7 +1850,9 @@ function cmx_kommunikation_box_html($post): void {
 				}).then(function(payload) {
 					if (!payload || !payload.success) {
 						var errorMessage = payload && payload.data && payload.data.message ? payload.data.message : "Danke-Mail konnte nicht versendet werden.";
-						throw new Error(errorMessage);
+						var error = new Error(errorMessage);
+						error.messageHtml = payload && payload.data && payload.data.message_html ? payload.data.message_html : "";
+						throw error;
 					}
 					thanksButton.classList.add("is-success");
 					window.setTimeout(function() {
@@ -1848,7 +1860,11 @@ function cmx_kommunikation_box_html($post): void {
 					}, 3200);
 					showAdminNotice(payload.data && payload.data.message ? payload.data.message : "Danke-Mail versendet.", "success");
 				}).catch(function(error) {
-					showAdminNotice(error && error.message ? error.message : "Danke-Mail konnte nicht versendet werden.", "error");
+					showAdminNotice(
+						error && error.messageHtml ? error.messageHtml : (error && error.message ? error.message : "Danke-Mail konnte nicht versendet werden."),
+						"error",
+						Boolean(error && error.messageHtml)
+					);
 				}).finally(function() {
 					thanksButton.classList.remove("is-loading");
 					updateThanksButton(thanksRow);
