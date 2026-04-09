@@ -1981,6 +1981,111 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_capture_delete_redirect_targe
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_is_camt_delete_locked')) {
+	function cmx_beleg_is_camt_delete_locked(int $post_id): bool {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'belege') {
+			return false;
+		}
+
+		$camt_check = __NAMESPACE__ . '\\cmx_camt_beleg_is_assigned';
+		if (\function_exists($camt_check)) {
+			return (bool) \call_user_func($camt_check, $post_id);
+		}
+
+		$signatures = \get_post_meta($post_id, '_cmx_camt_signatures', true);
+		if (\is_array($signatures)) {
+			return !empty(\array_filter(\array_map('strval', $signatures)));
+		}
+
+		return \is_string($signatures) ? \trim($signatures) !== '' : !empty($signatures);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_camt_delete_notice_url')) {
+	function cmx_beleg_camt_delete_notice_url(int $post_id): string {
+		$fallback = \admin_url('edit.php?post_type=belege');
+		if ($post_id > 0 && \current_user_can('edit_post', $post_id)) {
+			$fallback = \get_edit_post_link($post_id, '') ?: $fallback;
+		}
+
+		$location = \wp_get_referer();
+		if (!\is_string($location) || $location === '') {
+			$location = $fallback;
+		}
+
+		$location = (string) \remove_query_arg([
+			'_wpnonce',
+			'action',
+			'action2',
+			'deleted',
+			'ids',
+			'post',
+			'trashed',
+			'untrashed',
+			'cmx_beleg_delete_notice',
+		], $location);
+
+		return (string) \add_query_arg('cmx_beleg_delete_notice', 'camt_assigned', $location);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_maybe_redirect_blocked_camt_delete_request')) {
+	function cmx_beleg_maybe_redirect_blocked_camt_delete_request(): void {
+		if (!\is_admin()) {
+			return;
+		}
+
+		$action = isset($_REQUEST['action']) ? \sanitize_key((string) \wp_unslash($_REQUEST['action'])) : '';
+		if (!\in_array($action, ['trash', 'delete'], true)) {
+			return;
+		}
+
+		$post_id = isset($_REQUEST['post']) ? (int) \wp_unslash($_REQUEST['post']) : 0;
+		if ($post_id <= 0 || !cmx_beleg_is_camt_delete_locked($post_id)) {
+			return;
+		}
+
+		if (!\current_user_can('delete_post', $post_id)) {
+			return;
+		}
+
+		\wp_safe_redirect(cmx_beleg_camt_delete_notice_url($post_id));
+		exit;
+	}
+}
+
+\add_action('load-post.php', __NAMESPACE__ . '\\cmx_beleg_maybe_redirect_blocked_camt_delete_request');
+
+\add_filter('pre_trash_post', function ($trash, \WP_Post $post, string $previous_status) {
+	if (cmx_beleg_is_camt_delete_locked((int) $post->ID)) {
+		return false;
+	}
+
+	return $trash;
+}, 10, 3);
+
+\add_filter('pre_delete_post', function ($delete, \WP_Post $post, bool $force_delete) {
+	if (cmx_beleg_is_camt_delete_locked((int) $post->ID)) {
+		return false;
+	}
+
+	return $delete;
+}, 10, 3);
+
+\add_action('all_admin_notices', function (): void {
+	$notice = isset($_GET['cmx_beleg_delete_notice']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_delete_notice'])) : '';
+	if ($notice !== 'camt_assigned') {
+		return;
+	}
+
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if ($screen && (string) ($screen->post_type ?? '') !== 'belege') {
+		return;
+	}
+
+	echo '<div class="notice notice-error is-dismissible"><p>Dieser Beleg kann nicht gelöscht werden, weil er über CAMT zugeordnet ist.</p></div>';
+});
+
 // Nach dem Löschen/Trash eines verknüpften Lieferscheins direkt zur Rechnung springen.
 \add_filter('wp_redirect', function (string $location, int $status): string {
 	if (empty($GLOBALS['cmx_belege_delete_redirect_id'])) {
