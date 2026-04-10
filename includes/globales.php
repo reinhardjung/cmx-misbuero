@@ -248,6 +248,16 @@ add_action('admin_head', function() {
 		}
 		// echo '<script>document.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("title");if(t){t.readOnly=true;}});</script>';
 	}
+	if ($screen && (string) ($screen->base ?? '') === 'edit' && !empty($screen->post_type)) {
+		$post_type_object = \get_post_type_object((string) $screen->post_type);
+		if ($post_type_object instanceof \WP_Post_Type && empty($post_type_object->_builtin)) {
+			echo '<style>
+				.wrap .page-title-action{
+					border-radius:10px !important;
+				}
+			</style>';
+		}
+	}
 	if(wp_get_current_user()->user_login !== 'cloudmeister') {
 	echo '
 	<style>

@@ -1247,11 +1247,13 @@ function cmx_anyboard_kontakte_letzte_nutzung_rows(int $limit = 10): array
             $amount_value = abs($amount_value);
         }
 
+        $amount_label = number_format(abs($amount_value), 2, '.', "'");
+
         $rows[] = [
             'name' => $name,
             'date' => cmx_anyboard_format_display_timestamp($beleg_ts),
             'source' => (string) ($beleg['type_label'] ?? 'Beleg'),
-            'amount' => number_format($amount_value, 2, '.', "'"),
+            'amount' => $amount_label,
             'amount_value' => round($amount_value, 2),
             '_sort_ts' => $beleg_ts,
         ];
@@ -1576,12 +1578,6 @@ function cmx_anyboard_data_response(): \WP_REST_Response
                 'green' => $angebote_paid_label,
                 'red' => $angebote_open_label,
                 'sum' => $sum_angebote,
-            ],
-            [
-                'label' => 'Ausgaben',
-                'green' => $ausgaben_paid_label,
-                'red' => $ausgaben_open_label,
-                'sum' => $ausgaben_diff_label,
             ],
             [
                 'label' => 'Quittungen',

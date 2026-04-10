@@ -7,7 +7,7 @@ return [
     'width' => 3,
     'height' => 8,
     'table' => [
-        'title' => 'Zuletzt genutzt',
+        'title' => 'Zuletzt aktiv',
         'columns' => [
             [
                 'id' => 'name',
@@ -33,8 +33,8 @@ return [
                 'flex' => 1.2,
                 'style' => 'bold',
                 'colors' => [
-                    'danger' => 'amount_value < 0',
-                    'success' => 'amount_value > 0',
+                    '#d92d20' => 'amount_value < 0',
+                    '#16a34a' => 'amount_value > 0',
                 ],
             ],
         ],
