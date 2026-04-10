@@ -33,9 +33,14 @@ return [
                 'flex' => 1.2,
                 'style' => 'bold',
                 'colors' => [
-                    '#d92d20' => 'amount_value < 0',
-                    '#16a34a' => 'amount_value > 0',
+                    'danger' => 'amount_value<0',
+                    'success' => 'amount_value>0',
                 ],
+            ],
+            [
+                'id' => 'amount_value',
+                'title' => '',
+                'flex' => 0.01,
             ],
         ],
         'data' => [
