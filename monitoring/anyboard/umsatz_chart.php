@@ -120,7 +120,7 @@ return [
     'source' => [
         'endpoint' => 'stats',
         'mapping' => [
-            'image.url' => 'data.umsatz_pie_url',
+            'url' => 'data.umsatz_pie_url',
         ],
     ],
 ];

@@ -15,7 +15,7 @@ return [
     'source' => [
         'endpoint' => 'stats',
         'mapping' => [
-            'basic.value' => 'data.projekte',
+            'value' => 'data.projekte',
         ],
     ],
 ];

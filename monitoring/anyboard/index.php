@@ -372,6 +372,76 @@ function cmx_anyboard_first_beleg_map(array $kontakt_ids): array
     return $map;
 }
 
+function cmx_anyboard_latest_beleg_usage_map(array $kontakt_ids): array
+{
+    $kontakt_ids = array_values(array_filter(array_map('intval', $kontakt_ids), static function (int $id): bool {
+        return $id > 0;
+    }));
+    if ($kontakt_ids === []) {
+        return [];
+    }
+
+    global $wpdb;
+    if (!($wpdb instanceof \wpdb)) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($kontakt_ids), '%d'));
+    $sql = $wpdb->prepare(
+        "SELECT CAST(pm.meta_value AS UNSIGNED) AS kontakt_id, p.ID AS beleg_id
+        FROM {$wpdb->postmeta} pm
+        INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+        WHERE pm.meta_key = %s
+          AND CAST(pm.meta_value AS UNSIGNED) IN ($placeholders)
+          AND p.post_type = 'belege'
+          AND p.post_status NOT IN ('trash','auto-draft','inherit')
+        ORDER BY CAST(pm.meta_value AS UNSIGNED) ASC, p.post_modified DESC, p.ID DESC",
+        array_merge(['_cmx_beleg_kontakt_id'], $kontakt_ids)
+    );
+    if (!is_string($sql) || $sql === '') {
+        return [];
+    }
+
+    $rows = $wpdb->get_results($sql, ARRAY_A);
+    if (!is_array($rows)) {
+        return [];
+    }
+
+    $map = [];
+    foreach ($rows as $row) {
+        $kontakt_id = isset($row['kontakt_id']) ? (int) $row['kontakt_id'] : 0;
+        $beleg_id = isset($row['beleg_id']) ? (int) $row['beleg_id'] : 0;
+        if ($kontakt_id <= 0 || $beleg_id <= 0 || isset($map[$kontakt_id])) {
+            continue;
+        }
+
+        $ts = (int) get_post_modified_time('U', false, $beleg_id);
+        if ($ts <= 0) {
+            $ts = (int) get_post_time('U', false, $beleg_id);
+        }
+
+        $map[$kontakt_id] = [
+            'beleg_id' => $beleg_id,
+            'ts' => $ts,
+        ];
+    }
+
+    return $map;
+}
+
+function cmx_anyboard_format_display_timestamp(int $timestamp): string
+{
+    if ($timestamp <= 0) {
+        return '';
+    }
+
+    $tz = function_exists('wp_timezone')
+        ? wp_timezone()
+        : new \DateTimeZone(date_default_timezone_get());
+
+    return wp_date('d.m.Y H:i', $timestamp, $tz);
+}
+
 function cmx_anyboard_rechnungen_stats(int $year): array
 {
     if (!class_exists('\\WP_Query')) {
@@ -938,6 +1008,84 @@ function cmx_anyboard_erinnerungen_rows(int $limit = 5): array
     return $items;
 }
 
+function cmx_anyboard_kontakte_letzte_nutzung_rows(int $limit = 10): array
+{
+    if (!class_exists('\\WP_Query')) {
+        return [];
+    }
+
+    $q = new \WP_Query([
+        'post_type' => 'kontakte',
+        'post_status' => ['publish', 'private'],
+        'posts_per_page' => -1,
+        'fields' => 'ids',
+        'no_found_rows' => true,
+        'update_post_meta_cache' => false,
+        'update_post_term_cache' => false,
+    ]);
+
+    $usage_map = cmx_anyboard_latest_beleg_usage_map((array) $q->posts);
+    $rows = [];
+
+    foreach ((array) $q->posts as $pid) {
+        $pid = (int) $pid;
+        if ($pid <= 0) {
+            continue;
+        }
+
+        $name = html_entity_decode(wp_strip_all_tags((string) get_the_title($pid)), ENT_QUOTES, 'UTF-8');
+        $kontakt_ts = (int) get_post_modified_time('U', false, $pid);
+        if ($kontakt_ts <= 0) {
+            $kontakt_ts = (int) get_post_time('U', false, $pid);
+        }
+
+        $usage = $usage_map[$pid] ?? null;
+        $beleg_ts = (int) ($usage['ts'] ?? 0);
+        $beleg_id = (int) ($usage['beleg_id'] ?? 0);
+        $latest_ts = max($kontakt_ts, $beleg_ts);
+        if ($latest_ts <= 0) {
+            continue;
+        }
+
+        $source = ($beleg_ts > 0 && $beleg_ts >= $kontakt_ts) ? 'Beleg' : 'Kontakt';
+        $amount = '';
+        if ($beleg_id > 0) {
+            $amount = number_format(cmx_anyboard_beleg_total($beleg_id), 2, '.', "'");
+        }
+
+        $rows[] = [
+            'name' => $name,
+            'date' => cmx_anyboard_format_display_timestamp($latest_ts),
+            'source' => $source,
+            'amount' => $amount,
+            '_sort_ts' => $latest_ts,
+        ];
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        $sort_a = (int) ($a['_sort_ts'] ?? 0);
+        $sort_b = (int) ($b['_sort_ts'] ?? 0);
+        if ($sort_a !== $sort_b) {
+            return $sort_b <=> $sort_a;
+        }
+
+        return strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    });
+
+    $rows = array_slice($rows, 0, $limit);
+
+    foreach ($rows as &$row) {
+        unset($row['_sort_ts']);
+    }
+    unset($row);
+
+    while (count($rows) < $limit) {
+        $rows[] = ['name' => '', 'date' => '', 'source' => '', 'amount' => ''];
+    }
+
+    return $rows;
+}
+
 function cmx_anyboard_kontakte_info_summary(array $rows): array
 {
     foreach ($rows as $row) {
@@ -1008,7 +1156,6 @@ function cmx_anyboard_widget_files(): array
 {
     return [
         __DIR__ . '/favicon.php',
-        __DIR__ . '/kontakte_info.php',
         __DIR__ . '/datum_zeit.php',
         __DIR__ . '/kontakte.php',
         __DIR__ . '/artikel.php',
@@ -1025,6 +1172,7 @@ function cmx_anyboard_kontakte_widget_files(): array
 {
     return [
         __DIR__ . '/kontakt_daten.php',
+        __DIR__ . '/kontakte_letzte_nutzung.php',
     ];
 }
 
@@ -1192,6 +1340,7 @@ function cmx_anyboard_data_response(): \WP_REST_Response
         $ausgaben = cmx_anyboard_ausgaben_stats($year);
         $umsatz = cmx_anyboard_umsatz_series($year);
         $kontakt_daten = cmx_anyboard_kontakt_daten_rows(10);
+        $kontakte_letzte_nutzung = cmx_anyboard_kontakte_letzte_nutzung_rows(10);
         $erinnerungen = cmx_anyboard_erinnerungen_rows(5);
         $kontakte_info = cmx_anyboard_kontakte_info_summary($kontakt_daten);
 
@@ -1242,6 +1391,7 @@ function cmx_anyboard_data_response(): \WP_REST_Response
             'umsatz_year' => $year,
             'kontakte_info' => $kontakte_info,
             'kontakt_daten' => $kontakt_daten,
+            'kontakte_letzte_nutzung' => $kontakte_letzte_nutzung,
             'erinnerungen' => $erinnerungen,
             'umsatz_breakdown' => [
                 [

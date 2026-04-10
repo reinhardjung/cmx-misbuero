@@ -14,7 +14,7 @@ return [
     'source' => [
         'endpoint' => 'stats',
         'mapping' => [
-            'basic.value' => 'data.artikel',
+            'value' => 'data.artikel',
         ],
     ],
 ];
