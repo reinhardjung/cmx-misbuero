@@ -1063,7 +1063,7 @@ function cmx_anyboard_umsatz_series(int $year): array
         $series[] = [
             'month' => $labels[$i - 1],
             'value' => round($raw_value, 2),
-            'label' => number_format($raw_value, 0, '.', "'"),
+            'label' => number_format($raw_value, 2, '.', "'"),
         ];
     }
 
@@ -1307,6 +1307,110 @@ function cmx_anyboard_kontakte_info_summary(array $rows): array
     ];
 }
 
+function cmx_anyboard_swiss_amount(float $value, int $decimals = 2): string
+{
+    return number_format($value, $decimals, '.', "'");
+}
+
+function cmx_anyboard_svg_escape(string $text): string
+{
+    return htmlspecialchars($text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+}
+
+function cmx_anyboard_nice_step(float $value): float
+{
+    if ($value <= 0.0) {
+        return 1.0;
+    }
+
+    $power = pow(10, floor(log10($value)));
+    $normalized = $value / $power;
+
+    if ($normalized <= 1.0) {
+        $nice = 1.0;
+    } elseif ($normalized <= 2.0) {
+        $nice = 2.0;
+    } elseif ($normalized <= 5.0) {
+        $nice = 5.0;
+    } else {
+        $nice = 10.0;
+    }
+
+    return $nice * $power;
+}
+
+function cmx_anyboard_kontakte_letzte_nutzung_svg(array $rows): string
+{
+    $width = 1200;
+    $height = 720;
+    $title_y = 28;
+    $header_y = 64;
+    $row_start_y = 106;
+    $row_height = 55;
+    $left = 28;
+    $col_name = 28;
+    $col_date = 650;
+    $col_source = 900;
+    $col_amount = 1145;
+
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '">';
+    $svg .= '<rect width="100%" height="100%" fill="transparent"/>';
+    $svg .= '<text x="' . $left . '" y="' . $title_y . '" fill="#ffffff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Zuletzt aktiv</text>';
+    $svg .= '<text x="' . $col_name . '" y="' . $header_y . '" fill="#9fb0d2" font-family="Arial, sans-serif" font-size="13">Kontakt</text>';
+    $svg .= '<text x="' . $col_date . '" y="' . $header_y . '" fill="#9fb0d2" font-family="Arial, sans-serif" font-size="13">Zuletzt</text>';
+    $svg .= '<text x="' . $col_source . '" y="' . $header_y . '" fill="#9fb0d2" font-family="Arial, sans-serif" font-size="13">Beleg</text>';
+    $svg .= '<text x="' . $col_amount . '" y="' . $header_y . '" text-anchor="end" fill="#9fb0d2" font-family="Arial, sans-serif" font-size="13">Betrag</text>';
+    $svg .= '<line x1="' . $left . '" y1="78" x2="1172" y2="78" stroke="rgba(233,238,247,0.18)" stroke-width="1"/>';
+
+    $rendered = 0;
+    foreach ($rows as $row) {
+        $name = trim((string) ($row['name'] ?? ''));
+        $date = trim((string) ($row['date'] ?? ''));
+        $source = trim((string) ($row['source'] ?? ''));
+        $amount = trim((string) ($row['amount'] ?? ''));
+        $amount_value = (float) ($row['amount_value'] ?? 0.0);
+
+        if ($name === '' && $date === '' && $source === '' && $amount === '') {
+            continue;
+        }
+
+        $y = $row_start_y + ($rendered * $row_height);
+        $amount_color = '#ffffff';
+        if ($amount_value < 0.0) {
+            $amount_color = '#ff5c7a';
+        } elseif ($amount_value > 0.0) {
+            $amount_color = '#2ce5a0';
+        }
+
+        $svg .= '<line x1="' . $left . '" y1="' . ($y + 18) . '" x2="1172" y2="' . ($y + 18) . '" stroke="rgba(233,238,247,0.08)" stroke-width="1"/>';
+        $svg .= '<text x="' . $col_name . '" y="' . $y . '" fill="#ffffff" font-family="Arial, sans-serif" font-size="14" font-weight="700">'
+            . cmx_anyboard_svg_escape($name)
+            . '</text>';
+        $svg .= '<text x="' . $col_date . '" y="' . $y . '" fill="#e6edff" font-family="Arial, sans-serif" font-size="14">'
+            . cmx_anyboard_svg_escape($date)
+            . '</text>';
+        $svg .= '<text x="' . $col_source . '" y="' . $y . '" fill="#8ea0c5" font-family="Arial, sans-serif" font-size="14">'
+            . cmx_anyboard_svg_escape($source)
+            . '</text>';
+        $svg .= '<text x="' . $col_amount . '" y="' . $y . '" text-anchor="end" fill="' . $amount_color . '" font-family="Arial, sans-serif" font-size="14" font-weight="700">'
+            . cmx_anyboard_svg_escape($amount)
+            . '</text>';
+
+        $rendered++;
+        if ($rendered >= 10) {
+            break;
+        }
+    }
+
+    if ($rendered === 0) {
+        $svg .= '<text x="' . $left . '" y="122" fill="#9fb0d2" font-family="Arial, sans-serif" font-size="15">Keine Einträge</text>';
+    }
+
+    $svg .= '</svg>';
+
+    return $svg;
+}
+
 function cmx_anyboard_pie_svg(float $rechnungen, float $ausgaben): string
 {
     $total = $rechnungen + $ausgaben;
@@ -1519,6 +1623,15 @@ function cmx_anyboard_pie_response(): \WP_REST_Response
     return $response;
 }
 
+function cmx_anyboard_kontakte_letzte_nutzung_response(): \WP_REST_Response
+{
+    $svg = cmx_anyboard_kontakte_letzte_nutzung_svg(cmx_anyboard_kontakte_letzte_nutzung_rows(10));
+
+    $response = new \WP_REST_Response($svg, 200);
+    $response->header('Content-Type', 'image/svg+xml; charset=utf-8');
+    return $response;
+}
+
 function cmx_anyboard_data_response(): \WP_REST_Response
 {
     $query_user = isset($_GET['user']) ? (string) $_GET['user'] : '';
@@ -1629,6 +1742,9 @@ function cmx_anyboard_data_response(): \WP_REST_Response
     $pie_url = function_exists('home_url')
         ? home_url('/wp-json/cmx-misbuero/v1/anyboard-pie')
         : '';
+    $kontakte_letzte_nutzung_url = function_exists('home_url')
+        ? home_url('/wp-json/cmx-misbuero/v1/anyboard-kontakte-aktiv')
+        : '';
     if ($pie_url !== '') {
         $pie_args = [];
         if ($query_user !== '') {
@@ -1641,8 +1757,21 @@ function cmx_anyboard_data_response(): \WP_REST_Response
             $pie_url = add_query_arg($pie_args, $pie_url);
         }
     }
+    if ($kontakte_letzte_nutzung_url !== '') {
+        $kontakte_args = [];
+        if ($query_user !== '') {
+            $kontakte_args['user'] = $query_user;
+        }
+        if ($query_pass !== '') {
+            $kontakte_args['pw'] = $query_pass;
+        }
+        if (!empty($kontakte_args)) {
+            $kontakte_letzte_nutzung_url = add_query_arg($kontakte_args, $kontakte_letzte_nutzung_url);
+        }
+    }
 
     $response_data = $data + [
+        'kontakte_letzte_nutzung_url' => $kontakte_letzte_nutzung_url,
         'umsatz_pie_url' => $pie_url,
     ];
 
@@ -1674,10 +1803,18 @@ if (!defined('CMX_ANYBOARD_SKIP_BOOT')) {
                 'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
                 'callback' => __NAMESPACE__ . '\\cmx_anyboard_pie_response',
             ]);
+            register_rest_route('cmx-misbuero/v1', '/anyboard-kontakte-aktiv', [
+                'methods' => 'GET',
+                'permission_callback' => __NAMESPACE__ . '\\cmx_anyboard_permission',
+                'callback' => __NAMESPACE__ . '\\cmx_anyboard_kontakte_letzte_nutzung_response',
+            ]);
         });
 
         add_filter('rest_pre_serve_request', function ($served, $result, $request, $server) {
-            if ($request->get_route() !== '/cmx-misbuero/v1/anyboard-pie') {
+            if (!in_array($request->get_route(), [
+                '/cmx-misbuero/v1/anyboard-pie',
+                '/cmx-misbuero/v1/anyboard-kontakte-aktiv',
+            ], true)) {
                 return $served;
             }
 

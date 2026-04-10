@@ -5,7 +5,7 @@ defined('ABSPATH') || die('Oxytocin!');
 return [
     'type' => 'chart',
     'width' => 6,
-    'height' => 5,
+    'height' => 4,
     'chart' => [
         'title' => 'Umsatz (akt. Jahr)',
         'legend' => false,

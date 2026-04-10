@@ -6,7 +6,7 @@ return [
     'name' => 'Cockpit',
     'color' => 'danger',
     'cols' => 6,
-    'rows' => 11,
+    'rows' => 8,
     'source' => [
         'endpoint' => 'stats',
         'refresh' => 60,
