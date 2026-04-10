@@ -248,13 +248,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_register_projekte_widget')) {
 			return;
 		}
 
-		$data = cmx_cockpit_projekte_data();
-			$title = 'Freigegebene Projekte (' . (int) ($data['total'] ?? 0) . ')';
-		$title_link = '<a href="' . \esc_url((string) ($data['list_url'] ?? '')) . '" style="font-weight:700;font-size:14px;text-decoration:none;">' . \esc_html($title) . '</a>';
-
 		\wp_add_dashboard_widget(
 			'cmx_projekte_widget',
-			$title_link,
+			'Freigegebene Projekte',
 			__NAMESPACE__ . '\\cmx_render_projekte_widget'
 		);
 	}

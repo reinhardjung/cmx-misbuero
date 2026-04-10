@@ -2,10 +2,6 @@
 namespace CLOUDMEISTER\CMX\Buero;
 defined('ABSPATH') || die('Oxytocin!');
 
-$count = function_exists(__NAMESPACE__ . '\\cmx_anyboard_count_posts')
-    ? cmx_anyboard_count_posts('dokumente')
-    : 0;
-
 return [
     'type' => 'basic',
     'width' => 1,
@@ -13,7 +9,7 @@ return [
     'background' => '#8c8f94',
     'basic' => [
         'title' => 'Dokumente',
-        'value' => (string) $count,
+        'value' => '0',
     ],
     'source' => [
         'endpoint' => 'stats',
