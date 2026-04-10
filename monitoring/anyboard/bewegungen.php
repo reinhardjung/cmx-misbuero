@@ -44,6 +44,7 @@ return [
             ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
             ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
             ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
         ],
     ],
     'source' => [

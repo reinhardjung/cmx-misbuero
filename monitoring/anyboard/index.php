@@ -429,6 +429,114 @@ function cmx_anyboard_latest_beleg_usage_map(array $kontakt_ids): array
     return $map;
 }
 
+function cmx_anyboard_normalize_beleg_type_slug(string $type_slug): string
+{
+    $type_slug = strtolower(sanitize_key($type_slug));
+    if ($type_slug === '') {
+        return '';
+    }
+
+    if (function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_type')) {
+        return (string) cmxbu_beleg_export_normalize_type($type_slug);
+    }
+
+    $map = [
+        'rechnungen' => 'rechnung',
+        'quittungen' => 'quittung',
+        'gutschriften' => 'gutschrift',
+    ];
+
+    return (string) ($map[$type_slug] ?? $type_slug);
+}
+
+function cmx_anyboard_beleg_type_label(string $type_slug): string
+{
+    $type_slug = cmx_anyboard_normalize_beleg_type_slug($type_slug);
+    if ($type_slug === '') {
+        return 'Beleg';
+    }
+
+    $labels = [
+        'rechnung' => 'Rechnung',
+        'quittung' => 'Quittung',
+        'gutschrift' => 'Gutschrift',
+        'lieferantenrechnung' => 'Lieferantenrechnung',
+        'lieferantenquittung' => 'Lieferantenquittung',
+    ];
+
+    if (isset($labels[$type_slug])) {
+        return $labels[$type_slug];
+    }
+
+    return ucfirst(str_replace(['-', '_'], ' ', $type_slug));
+}
+
+function cmx_anyboard_beleg_usage_context(int $beleg_id): array
+{
+    $type_slug = '';
+    $post = get_post($beleg_id);
+    if ($post instanceof \WP_Post && function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_raw_type')) {
+        $type_slug = (string) cmxbu_beleg_export_raw_type($post);
+    }
+
+    if ($type_slug === '' && function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy')) {
+        $taxonomy = (string) cmx_belege_kategorie_taxonomy();
+        if ($taxonomy !== '' && taxonomy_exists($taxonomy)) {
+            $terms = wp_get_post_terms($beleg_id, $taxonomy, ['fields' => 'slugs']);
+            if (!is_wp_error($terms) && !empty($terms[0])) {
+                $type_slug = (string) $terms[0];
+            }
+        }
+    }
+
+    $type_slug = cmx_anyboard_normalize_beleg_type_slug($type_slug);
+
+    $direction_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+        ? CMX_BELEG_META_RICHTUNG
+        : '_cmx_beleg_richtung';
+    $direction_key_alt = ltrim($direction_key, '_');
+    $direction_raw = sanitize_key((string) cmx_anyboard_meta_first_non_empty($beleg_id, [$direction_key, $direction_key_alt]));
+
+    if (function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_normalize_richtung')) {
+        $direction = (string) cmxbu_beleg_export_normalize_richtung($direction_raw);
+    } elseif (in_array($direction_raw, ['ausgabe', 'ausgaben', 'expense', 'expenses', 'eingang'], true)) {
+        $direction = 'eingang';
+    } elseif (in_array($direction_raw, ['einnahme', 'einnahmen', 'income', 'revenues', 'ausgang'], true)) {
+        $direction = 'ausgang';
+    } else {
+        $direction = $direction_raw;
+    }
+
+    $side_map = [];
+    if ($type_slug !== '' && function_exists(__NAMESPACE__ . '\\cmxbu_beleg_export_direction_side_map')) {
+        $side_map = (array) cmxbu_beleg_export_direction_side_map($type_slug);
+    }
+    if ($side_map === []) {
+        if (in_array($type_slug, ['rechnung', 'quittung', 'lieferantenrechnung', 'lieferantenquittung'], true)) {
+            $side_map = ['ausgang' => 'income', 'eingang' => 'expense'];
+        } elseif ($type_slug === 'gutschrift') {
+            $side_map = ['ausgang' => 'expense', 'eingang' => 'income'];
+        }
+    }
+
+    $side = (string) ($side_map[$direction] ?? '');
+    if ($side !== 'income' && $side !== 'expense') {
+        if ($direction === 'ausgang') {
+            $side = 'income';
+        } elseif ($direction === 'eingang') {
+            $side = 'expense';
+        } else {
+            $side = '';
+        }
+    }
+
+    return [
+        'type_slug' => $type_slug,
+        'type_label' => cmx_anyboard_beleg_type_label($type_slug),
+        'side' => $side,
+    ];
+}
+
 function cmx_anyboard_format_display_timestamp(int $timestamp): string
 {
     if ($timestamp <= 0) {
@@ -508,6 +616,96 @@ function cmx_anyboard_rechnungen_stats(int $year): array
         'open_sum' => $open_sum,
         'sum_total' => $sum_total,
     ];
+}
+
+function cmx_anyboard_belege_term_stats(int $year, array $terms): array
+{
+    if (!class_exists('\\WP_Query')) {
+        return ['paid_sum' => 0.0, 'open_sum' => 0.0, 'sum_total' => 0.0];
+    }
+
+    $terms = array_values(array_filter(array_map('strval', $terms), static function (string $term): bool {
+        return $term !== '';
+    }));
+    if ($terms === []) {
+        return ['paid_sum' => 0.0, 'open_sum' => 0.0, 'sum_total' => 0.0];
+    }
+
+    $paid_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
+        ? CMX_BELEG_META_BEZAHLT
+        : '_cmx_beleg_bezahlt_am';
+    $paid_key_alt = ltrim($paid_key, '_');
+    $rng_key = defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+        ? CMX_BELEG_META_RNG_DATUM
+        : '_cmx_beleg_rng_datum';
+    $rng_key_alt = ltrim($rng_key, '_');
+
+    $query = new \WP_Query([
+        'post_type' => 'belege',
+        'post_status' => ['publish', 'private'],
+        'posts_per_page' => -1,
+        'no_found_rows' => true,
+        'fields' => 'ids',
+        'update_post_meta_cache' => true,
+        'update_post_term_cache' => false,
+        'tax_query' => [
+            [
+                'taxonomy' => 'belege_kategorien',
+                'field' => 'slug',
+                'terms' => $terms,
+                'operator' => 'IN',
+            ],
+        ],
+    ]);
+
+    $sum_total = 0.0;
+    $paid_sum = 0.0;
+    $open_sum = 0.0;
+
+    foreach ((array) $query->posts as $bid) {
+        $bid = (int) $bid;
+        $total = cmx_anyboard_beleg_total($bid);
+
+        $paid_raw = cmx_anyboard_meta_first_non_empty($bid, [$paid_key, $paid_key_alt]);
+        $paid_date = cmx_anyboard_normalize_date($paid_raw);
+        if ($paid_date !== '' && (int) substr($paid_date, 0, 4) === $year) {
+            $paid_sum += $total;
+            $sum_total += $total;
+            continue;
+        }
+
+        if ($paid_raw !== '') {
+            continue;
+        }
+
+        $rng_raw = cmx_anyboard_meta_first_non_empty($bid, [$rng_key, $rng_key_alt]);
+        $rng_date = cmx_anyboard_normalize_date($rng_raw);
+        if ($rng_date !== '' && (int) substr($rng_date, 0, 4) === $year) {
+            $open_sum += $total;
+            $sum_total += $total;
+        }
+    }
+
+    return [
+        'paid_sum' => $paid_sum,
+        'open_sum' => $open_sum,
+        'sum_total' => $sum_total,
+    ];
+}
+
+function cmx_anyboard_quittungen_stats(int $year): array
+{
+    return cmx_anyboard_belege_term_stats($year, ['quittung', 'quittungen']);
+}
+
+function cmx_anyboard_gutschriften_stats(int $year): array
+{
+    return cmx_anyboard_belege_term_stats($year, ['gutschrift', 'gutschriften']);
+}
+
+function cmx_anyboard_lieferanten_stats(int $year): array
+{
+    return cmx_anyboard_belege_term_stats($year, ['lieferantenrechnung', 'lieferantenrechnungen']);
 }
 
 function cmx_anyboard_angebote_stats(int $year): array
@@ -1033,32 +1231,29 @@ function cmx_anyboard_kontakte_letzte_nutzung_rows(int $limit = 10): array
             continue;
         }
 
-        $name = html_entity_decode(wp_strip_all_tags((string) get_the_title($pid)), ENT_QUOTES, 'UTF-8');
-        $kontakt_ts = (int) get_post_modified_time('U', false, $pid);
-        if ($kontakt_ts <= 0) {
-            $kontakt_ts = (int) get_post_time('U', false, $pid);
-        }
-
         $usage = $usage_map[$pid] ?? null;
         $beleg_ts = (int) ($usage['ts'] ?? 0);
         $beleg_id = (int) ($usage['beleg_id'] ?? 0);
-        $latest_ts = max($kontakt_ts, $beleg_ts);
-        if ($latest_ts <= 0) {
+        if ($beleg_id <= 0 || $beleg_ts <= 0) {
             continue;
         }
 
-        $source = ($beleg_ts > 0 && $beleg_ts >= $kontakt_ts) ? 'Beleg' : 'Kontakt';
-        $amount = '';
-        if ($beleg_id > 0) {
-            $amount = number_format(cmx_anyboard_beleg_total($beleg_id), 2, '.', "'");
+        $name = html_entity_decode(wp_strip_all_tags((string) get_the_title($pid)), ENT_QUOTES, 'UTF-8');
+        $beleg = cmx_anyboard_beleg_usage_context($beleg_id);
+        $amount_value = (float) cmx_anyboard_beleg_total($beleg_id);
+        if (($beleg['side'] ?? '') === 'expense') {
+            $amount_value = -abs($amount_value);
+        } elseif (($beleg['side'] ?? '') === 'income') {
+            $amount_value = abs($amount_value);
         }
 
         $rows[] = [
             'name' => $name,
-            'date' => cmx_anyboard_format_display_timestamp($latest_ts),
-            'source' => $source,
-            'amount' => $amount,
-            '_sort_ts' => $latest_ts,
+            'date' => cmx_anyboard_format_display_timestamp($beleg_ts),
+            'source' => (string) ($beleg['type_label'] ?? 'Beleg'),
+            'amount' => number_format($amount_value, 2, '.', "'"),
+            'amount_value' => round($amount_value, 2),
+            '_sort_ts' => $beleg_ts,
         ];
     }
 
@@ -1080,7 +1275,7 @@ function cmx_anyboard_kontakte_letzte_nutzung_rows(int $limit = 10): array
     unset($row);
 
     while (count($rows) < $limit) {
-        $rows[] = ['name' => '', 'date' => '', 'source' => '', 'amount' => ''];
+        $rows[] = ['name' => '', 'date' => '', 'source' => '', 'amount' => '', 'amount_value' => 0];
     }
 
     return $rows;
@@ -1337,6 +1532,9 @@ function cmx_anyboard_data_response(): \WP_REST_Response
         $dokumente = cmx_anyboard_count_posts('dokumente');
         $rechnungen = cmx_anyboard_rechnungen_stats($year);
         $angebote = cmx_anyboard_angebote_stats($year);
+        $quittungen = cmx_anyboard_quittungen_stats($year);
+        $gutschriften = cmx_anyboard_gutschriften_stats($year);
+        $lieferanten = cmx_anyboard_lieferanten_stats($year);
         $ausgaben = cmx_anyboard_ausgaben_stats($year);
         $umsatz = cmx_anyboard_umsatz_series($year);
         $kontakt_daten = cmx_anyboard_kontakt_daten_rows(10);
@@ -1350,6 +1548,15 @@ function cmx_anyboard_data_response(): \WP_REST_Response
         $rechnungen_open_label = number_format((float) ($rechnungen['open_sum'] ?? 0.0), 2, '.', "'");
         $angebote_paid_label = number_format((float) ($angebote['paid_sum'] ?? 0.0), 2, '.', "'");
         $angebote_open_label = number_format((float) ($angebote['open_sum'] ?? 0.0), 2, '.', "'");
+        $quittungen_paid_label = number_format((float) ($quittungen['paid_sum'] ?? 0.0), 2, '.', "'");
+        $quittungen_open_label = number_format((float) ($quittungen['open_sum'] ?? 0.0), 2, '.', "'");
+        $quittungen_sum_label = number_format((float) ($quittungen['sum_total'] ?? 0.0), 2, '.', "'");
+        $gutschriften_paid_label = number_format((float) ($gutschriften['paid_sum'] ?? 0.0), 2, '.', "'");
+        $gutschriften_open_label = number_format((float) ($gutschriften['open_sum'] ?? 0.0), 2, '.', "'");
+        $gutschriften_sum_label = number_format((float) ($gutschriften['sum_total'] ?? 0.0), 2, '.', "'");
+        $lieferanten_paid_label = number_format((float) ($lieferanten['paid_sum'] ?? 0.0), 2, '.', "'");
+        $lieferanten_open_label = number_format((float) ($lieferanten['open_sum'] ?? 0.0), 2, '.', "'");
+        $lieferanten_sum_label = number_format((float) ($lieferanten['sum_total'] ?? 0.0), 2, '.', "'");
         $ausgaben_paid = (float) ($ausgaben['paid_sum'] ?? 0.0);
         $ausgaben_open = (float) ($ausgaben['open_sum'] ?? 0.0);
         $ausgaben_diff = $ausgaben_paid - $ausgaben_open;
@@ -1376,9 +1583,24 @@ function cmx_anyboard_data_response(): \WP_REST_Response
                 'red' => $ausgaben_open_label,
                 'sum' => $ausgaben_diff_label,
             ],
-            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
-            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
-            ['label' => '', 'green' => '', 'red' => '', 'sum' => ''],
+            [
+                'label' => 'Quittungen',
+                'green' => $quittungen_paid_label,
+                'red' => $quittungen_open_label,
+                'sum' => $quittungen_sum_label,
+            ],
+            [
+                'label' => 'Gutschriften',
+                'green' => $gutschriften_paid_label,
+                'red' => $gutschriften_open_label,
+                'sum' => $gutschriften_sum_label,
+            ],
+            [
+                'label' => 'Lieferanten',
+                'green' => $lieferanten_paid_label,
+                'red' => $lieferanten_open_label,
+                'sum' => $lieferanten_sum_label,
+            ],
         ];
 
         $data = [
