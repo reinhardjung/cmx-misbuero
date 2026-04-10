@@ -3,17 +3,62 @@ namespace CLOUDMEISTER\CMX\Buero;
 defined('ABSPATH') || die('Oxytocin!');
 
 return [
-    'type' => 'image',
+    'type' => 'table',
     'width' => 3,
     'height' => 8,
-    'background' => '',
-    'image' => [
-        'url' => '',
+    'table' => [
+        'title' => 'Zuletzt aktiv',
+        'columns' => [
+            [
+                'id' => 'name',
+                'title' => 'Kontakt',
+                'flex' => 2.1,
+                'style' => 'bold',
+            ],
+            [
+                'id' => 'date',
+                'title' => 'Zuletzt',
+                'flex' => 1.8,
+            ],
+            [
+                'id' => 'source',
+                'title' => 'Beleg',
+                'flex' => 1.0,
+                'color' => 'neutral',
+            ],
+            [
+                'id' => 'amount_value',
+                'title' => 'Betrag',
+                'align' => 'right',
+                'flex' => 1.2,
+                'style' => 'bold',
+                'format' => '.2',
+                'colors' => [
+                    'danger' => 'amount_value<0',
+                    'success' => 'amount_value>0',
+                ],
+            ],
+        ],
+        'data' => [
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+            ['name' => '', 'date' => '', 'source' => '', 'amount_value' => 0],
+        ],
     ],
     'source' => [
         'endpoint' => 'stats',
         'mapping' => [
-            'url' => 'data.kontakte_letzte_nutzung_url',
+            'data[].name' => 'data.kontakte_letzte_nutzung[].name',
+            'data[].date' => 'data.kontakte_letzte_nutzung[].date',
+            'data[].source' => 'data.kontakte_letzte_nutzung[].source',
+            'data[].amount_value' => 'data.kontakte_letzte_nutzung[].amount_value',
         ],
     ],
 ];
