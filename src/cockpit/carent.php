@@ -131,9 +131,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_register_carent_widget')) {
 			return;
 		}
 
+		$list_url = (string) \admin_url('edit.php?post_type=carent');
+		$title = '<a class="cmx-carent-widget-heading" href="' . \esc_url($list_url) . '">CaRent</a>';
+
 		\wp_add_dashboard_widget(
 			'cmx_carent_widget',
-			'CaRent',
+			$title,
 			__NAMESPACE__ . '\\cmx_render_carent_widget'
 		);
 	}
@@ -151,7 +154,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_widget')) {
 		$items = (array) ($data['items'] ?? []);
 		$closed_count = (int) ($data['closed_count'] ?? 0);
 		$open_count = (int) ($data['open_count'] ?? 0);
-		$list_url = (string) ($data['list_url'] ?? \admin_url('edit.php?post_type=carent'));
 
 		echo '<style>
 			#cmx_carent_widget .cmx-carent-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:2px 0 14px}
@@ -176,7 +178,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_widget')) {
 			#cmx_carent_widget .cmx-carent-status-badge.is-closed{background:#e8f7ee;color:#067647}
 			#cmx_carent_widget .cmx-carent-date{text-align:right;white-space:nowrap;color:#667085}
 			#cmx_carent_widget .cmx-carent-empty{margin:0;color:#667085}
-			#cmx_carent_widget .cmx-carent-footer{margin-top:10px;text-align:right}
+			#cmx_carent_widget .postbox-header .cmx-carent-widget-heading{display:inline;color:inherit;text-decoration:none;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit}
+			#cmx_carent_widget .postbox-header .cmx-carent-widget-heading:hover{color:inherit;text-decoration:none}
 		</style>';
 
 		echo '<div class="cmx-carent-cards">';
@@ -220,7 +223,5 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_widget')) {
 
 			echo '</tbody></table>';
 		}
-
-		echo '<div class="cmx-carent-footer"><a href="' . \esc_url($list_url) . '">' . \esc_html__('Alle Verträge anzeigen', 'cmx-misbuero') . '</a></div>';
 	}
 }
