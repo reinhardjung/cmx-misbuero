@@ -424,13 +424,33 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 	#' . $ui_id_attr . ' .cmx-scanner-rel-selected-main{min-width:0;flex:1 1 auto}
 	#' . $ui_id_attr . ' .cmx-scanner-rel-selected-main a{display:block;text-decoration:none}
 	#' . $ui_id_attr . ' .cmx-scanner-rel-remove{line-height:1}
-	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-results,
-	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected-main a{
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-results{
 		font-family:Consolas,Monaco,Courier,monospace;
 		font-size:12px;
 		white-space:pre;
 		font-variant-numeric:tabular-nums;
 		letter-spacing:0;
+	}
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected li{align-items:center;gap:10px}
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected-main{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected-main a{
+		min-width:0;
+		flex:1 1 auto;
+		overflow:hidden;
+		text-overflow:ellipsis;
+		white-space:nowrap;
+		font-family:inherit;
+		font-size:13px;
+		font-weight:400;
+		color:#1d2327;
+	}
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected-main a:hover{color:#135e96}
+	#' . $ui_id_attr . '.cmx-scanner-rel-ui--belege .cmx-scanner-rel-selected-amount{
+		flex:0 0 auto;
+		white-space:nowrap;
+		font-size:13px;
+		font-weight:600;
+		color:#1d2327;
 	}
 	</style>';
 	echo '<input type="hidden" id="' . \esc_attr($touched_id) . '" name="' . \esc_attr($touched_name) . '" value="0" />';
@@ -495,6 +515,17 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 			str = str.toLowerCase();
 			str = str.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 			return str;
+		}
+
+		function splitBelegLabel(label){
+			var raw = String(label || "");
+			var parts = raw.split("|");
+			var name = String(parts[0] || "").replace(/\u2007+/g, " ").trim();
+			var amount = String(parts[1] || "").replace(/\u2007+/g, " ").trim();
+			return {
+				name: name || raw.replace(/\u2007+/g, " ").trim(),
+				amount: amount
+			};
 		}
 
 		function tokenizeSearchText(str){
@@ -658,13 +689,20 @@ function cmx_scanner_render_relation_select_box(\WP_Post $post, string $target_t
 			if (!select || !list) return;
 			syncEmptyOption(select);
 			var items = getSelectedOptions(select);
+			var isBelege = root.classList.contains("cmx-scanner-rel-ui--belege");
 			if (!items.length) {
 				list.innerHTML = "";
 				return;
 			}
 			list.innerHTML = items.map(function(item){
 				var titleAttr = item.title ? ' title="' + escHtml(item.title) + '"' : "";
-				return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-scanner-rel-selected-main"><a href="' + escHtml(editPrefix + encodeURIComponent(item.postId || item.id) + "&action=edit") + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(item.label) + '</a></div><button type="button" class="button-link-delete cmx-scanner-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
+				var linkHref = escHtml(editPrefix + encodeURIComponent(item.postId || item.id) + "&action=edit");
+				if (isBelege) {
+					var beleg = splitBelegLabel(item.label);
+					var amountHtml = beleg.amount ? '<span class="cmx-scanner-rel-selected-amount">' + escHtml(beleg.amount) + '</span>' : "";
+					return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-scanner-rel-selected-main"><a href="' + linkHref + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(beleg.name) + '</a>' + amountHtml + '</div><button type="button" class="button-link-delete cmx-scanner-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
+				}
+				return '<li data-id="' + escHtml(item.id) + '"><div class="cmx-scanner-rel-selected-main"><a href="' + linkHref + '" target="_blank" rel="noopener noreferrer"' + titleAttr + '>' + escHtml(item.label) + '</a></div><button type="button" class="button-link-delete cmx-scanner-rel-remove" data-id="' + escHtml(item.id) + '" aria-label="Auswahl entfernen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button></li>';
 			}).join("");
 		}
 

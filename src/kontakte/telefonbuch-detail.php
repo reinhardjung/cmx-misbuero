@@ -80,6 +80,95 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_note_status')) {
+	function cmx_telefonbuch_detail_note_status(): string {
+		return isset($_GET['cmx_note_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_note_status'])) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_save_note')) {
+	function cmx_telefonbuch_detail_save_note(int $kontakt_id, string $text): bool {
+		if (
+			$kontakt_id <= 0
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_date')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_time')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_legacy_meta_keys')
+		) {
+			return false;
+		}
+
+		$rows = (array) cmx_notizen_load_rows($kontakt_id, 'kontakte');
+		$row = cmx_notizen_normalize_row([
+			'betreff' => '',
+			'datum'   => cmx_notizen_now_date(),
+			'zeit'    => cmx_notizen_now_time(),
+			'text'    => $text,
+			'quelle'  => '',
+		]);
+		if (!\is_array($row) || $row === []) {
+			return false;
+		}
+
+		\array_unshift($rows, $row);
+
+		$meta_key = (string) cmx_notizen_meta_key_for_post_type('kontakte');
+		\update_post_meta($kontakt_id, $meta_key, $rows);
+		foreach ((array) cmx_notizen_legacy_meta_keys('kontakte') as $legacy_key) {
+			\delete_post_meta($kontakt_id, (string) $legacy_key);
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_telefonbuch_detail_post_actions')) {
+	function cmx_handle_telefonbuch_detail_post_actions(): void {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_is_telefonbuch_request') || !cmx_is_telefonbuch_request()) {
+			return;
+		}
+
+		if (\strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+			return;
+		}
+
+		$kontakt_id = cmx_telefonbuch_detail_contact_id();
+		if ($kontakt_id <= 0) {
+			return;
+		}
+
+		$action = isset($_POST['cmx_telefonbuch_detail_action']) ? \sanitize_key((string) \wp_unslash($_POST['cmx_telefonbuch_detail_action'])) : '';
+		if ($action !== 'add_note') {
+			return;
+		}
+
+		$redirect_url = cmx_telefonbuch_detail_url($kontakt_id);
+		if (!\current_user_can('edit_post', $kontakt_id)) {
+			\wp_safe_redirect((string) \add_query_arg('cmx_note_status', 'denied', $redirect_url), 303);
+			exit;
+		}
+
+		$nonce = isset($_POST['cmx_telefonbuch_note_nonce']) ? (string) \wp_unslash($_POST['cmx_telefonbuch_note_nonce']) : '';
+		if (!\wp_verify_nonce($nonce, 'cmx_telefonbuch_add_note_' . $kontakt_id)) {
+			\wp_safe_redirect((string) \add_query_arg('cmx_note_status', 'invalid', $redirect_url), 303);
+			exit;
+		}
+
+		$text = isset($_POST['cmx_telefonbuch_note_text']) ? (string) \wp_unslash($_POST['cmx_telefonbuch_note_text']) : '';
+		$text = \trim($text);
+		if ($text === '') {
+			\wp_safe_redirect((string) \add_query_arg('cmx_note_status', 'empty', $redirect_url), 303);
+			exit;
+		}
+
+		$status = cmx_telefonbuch_detail_save_note($kontakt_id, $text) ? 'saved' : 'error';
+		\wp_safe_redirect((string) \add_query_arg('cmx_note_status', $status, $redirect_url), 303);
+		exit;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_format_date')) {
 	function cmx_telefonbuch_detail_format_date(string $date): string {
 		$date = \trim($date);
@@ -248,17 +337,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_note')) {
 		}
 
 		$rows = (array) cmx_notizen_load_rows($post_id, 'kontakte');
-		$row = \is_array($rows[0] ?? null) ? (array) $rows[0] : [];
-		if ($row === []) {
+		if ($rows === []) {
 			return [];
 		}
 
-		return [
-			'betreff' => \trim((string) ($row['betreff'] ?? '')),
-			'datum' => cmx_telefonbuch_detail_format_date((string) ($row['datum'] ?? '')),
-			'zeit' => \trim((string) ($row['zeit'] ?? '')),
-			'text' => \trim((string) ($row['text'] ?? '')),
-		];
+		$items = [];
+		foreach (\array_slice($rows, 0, 3) as $row) {
+			$row = \is_array($row) ? (array) $row : [];
+			if ($row === []) {
+				continue;
+			}
+
+			$item = [
+				'betreff' => \trim((string) ($row['betreff'] ?? '')),
+				'datum' => cmx_telefonbuch_detail_format_date((string) ($row['datum'] ?? '')),
+				'zeit' => \trim((string) ($row['zeit'] ?? '')),
+				'text' => \trim((string) ($row['text'] ?? '')),
+			];
+
+			if ($item['betreff'] === '' && $item['datum'] === '' && $item['zeit'] === '' && $item['text'] === '') {
+				continue;
+			}
+
+			$items[] = $item;
+		}
+
+		return $items;
 	}
 }
 
@@ -312,7 +416,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_task')) {
 			return ((int) ($a['index'] ?? 0)) <=> ((int) ($b['index'] ?? 0));
 		});
 
-		return (array) ($normalized[0] ?? []);
+		return \array_slice($normalized, 0, 3);
 	}
 }
 
@@ -499,11 +603,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		$stufen = cmx_telefonbuch_detail_term_names($kontakt_id, cmx_telefonbuch_detail_stufe_taxonomy());
 		$kategorien = cmx_telefonbuch_detail_term_names($kontakt_id, cmx_telefonbuch_detail_categories_taxonomy());
 		$people = cmx_telefonbuch_detail_people($kontakt_id);
-		$latest_note = cmx_telefonbuch_detail_latest_note($kontakt_id);
-		$latest_task = cmx_telefonbuch_detail_latest_task($kontakt_id);
+		$latest_notes = cmx_telefonbuch_detail_latest_note($kontakt_id);
+		$latest_tasks = cmx_telefonbuch_detail_latest_task($kontakt_id);
 		$latest_belege = cmx_telefonbuch_detail_latest_belege($kontakt_id);
 		$back_url = (string) \home_url('/telefonbuch/');
 		$edit_url = (string) \get_edit_post_link($kontakt_id, '');
+		$can_add_note = \current_user_can('edit_post', $kontakt_id);
+		$note_status = cmx_telefonbuch_detail_note_status();
 		$maps_address = \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')
 			? (string) cmx_telefonbuch_address_string($kontakt_id)
 			: '';
@@ -548,10 +654,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
 			.cmx-telefonbuch-detail-box{border:1px solid #e8ecef;border-radius:12px;background:#fafbfc;padding:16px}
 			.cmx-telefonbuch-detail-box h3{margin:0 0 10px;font-size:15px}
+			.cmx-telefonbuch-detail-box-title-button{appearance:none;border:0;background:none;padding:0;margin:0;font:inherit;font-weight:inherit;color:inherit;cursor:pointer}
+			.cmx-telefonbuch-detail-box-title-button:hover{text-decoration:underline}
 			.cmx-telefonbuch-detail-box-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 10px}
 			.cmx-telefonbuch-detail-box-head-note{margin-bottom:2px}
 			.cmx-telefonbuch-detail-box-head h3{margin:0;font-size:15px}
 			.cmx-telefonbuch-detail-empty{color:#6b7280}
+			.cmx-telefonbuch-detail-notice{padding:12px 14px;border-radius:10px;border:1px solid #dbe6d2;background:#f3fbef;color:#137333;font-weight:600}
+			.cmx-telefonbuch-detail-notice.is-error{border-color:#f2d1d1;background:#fff5f5;color:#c62828}
 			.cmx-telefonbuch-detail-people{margin:0;padding:0;list-style:none;display:grid;gap:8px}
 			.cmx-telefonbuch-detail-people li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 10px;border-radius:10px;background:#fff;border:1px solid #e9edf0}
 			.cmx-telefonbuch-detail-people li.is-current{background:#f5ebe1;border-color:#ead9c7}
@@ -560,6 +670,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-people strong{font-weight:700}
 			.cmx-telefonbuch-detail-date{color:#667085;white-space:nowrap}
 			.cmx-telefonbuch-detail-text{color:#344054;line-height:1.55}
+			.cmx-telefonbuch-detail-entry-list{display:grid;gap:12px}
+			.cmx-telefonbuch-detail-entry + .cmx-telefonbuch-detail-entry{padding-top:12px;border-top:1px solid #e8ecef}
+			.cmx-telefonbuch-detail-entry-date{display:block;text-align:right;margin-bottom:6px}
 			.cmx-telefonbuch-detail-line{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 			.cmx-telefonbuch-detail-task-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 			.cmx-telefonbuch-detail-task-info{color:#344054;line-height:1.55;min-width:0;padding-right:12px}
@@ -584,6 +697,51 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-beleg-feedback.is-success{color:#137333}
 			.cmx-telefonbuch-detail-beleg-feedback.is-error{color:#c62828}
 			.cmx-telefonbuch-detail-beleg-feedback a{color:inherit;text-decoration:underline;font-weight:700}
+			.cmx-telefonbuch-detail-note-modal[hidden]{display:none !important}
+			.cmx-telefonbuch-detail-note-modal{position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px}
+			.cmx-telefonbuch-detail-note-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.46)}
+			.cmx-telefonbuch-detail-note-dialog{position:relative;width:min(560px,100%);background:#fff;border:1px solid #d0d7de;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.22);padding:18px}
+			.cmx-telefonbuch-detail-note-dialog h3{margin:0 0 12px;font-size:18px}
+			.cmx-telefonbuch-detail-note-dialog textarea{width:100%;min-height:180px;padding:12px;border:1px solid #c8c8c8;border-radius:10px;font:inherit;resize:vertical}
+			.cmx-telefonbuch-detail-note-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+			.cmx-telefonbuch-detail-note-actions .button{
+				display:inline-flex;
+				align-items:center;
+				justify-content:center;
+				min-height:36px;
+				padding:0 14px;
+				border-radius:8px;
+				border:1px solid #c3c4c7;
+				background:#f6f7f7;
+				color:#1d2327;
+				box-shadow:none;
+				font:inherit;
+				font-size:14px;
+				font-weight:500;
+				line-height:1;
+				text-decoration:none;
+				cursor:pointer;
+				transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+			}
+			.cmx-telefonbuch-detail-note-actions .button:hover,
+			.cmx-telefonbuch-detail-note-actions .button:focus{
+				background:#fff;
+				border-color:#8c8f94;
+				color:#1d2327;
+				outline:none;
+			}
+			.cmx-telefonbuch-detail-note-actions .button.button-primary{
+				padding:0 16px;
+				border-color:#a42c24;
+				background:#a42c24;
+				color:#fff;
+			}
+			.cmx-telefonbuch-detail-note-actions .button.button-primary:hover,
+			.cmx-telefonbuch-detail-note-actions .button.button-primary:focus{
+				background:#8f2420;
+				border-color:#8f2420;
+				color:#fff;
+			}
 			@media (max-width:820px){
 				.cmx-telefonbuch-detail-page{padding:18px 12px 24px}
 				.cmx-telefonbuch-detail-head{padding:18px 16px;align-items:flex-start}
@@ -630,6 +788,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			echo '<span class="cmx-telefonbuch-detail-empty">Keine Stufe oder Kategorien hinterlegt.</span>';
 		}
 		echo '</div>';
+
+		if ($note_status !== '') {
+			$is_note_error = \in_array($note_status, ['denied', 'invalid', 'empty', 'error'], true);
+			$note_notice_text = 'Interne Notiz wurde gespeichert.';
+			if ($note_status === 'empty') {
+				$note_notice_text = 'Bitte gib zuerst einen Text fuer die interne Notiz ein.';
+			} elseif ($note_status === 'denied') {
+				$note_notice_text = 'Du darfst diesen Kontakt nicht bearbeiten.';
+			} elseif ($note_status === 'invalid') {
+				$note_notice_text = 'Die Notiz konnte wegen einer ungueltigen Anfrage nicht gespeichert werden.';
+			} elseif ($note_status === 'error') {
+				$note_notice_text = 'Die interne Notiz konnte nicht gespeichert werden.';
+			}
+			echo '<div class="cmx-telefonbuch-detail-notice' . ($is_note_error ? ' is-error' : '') . '">' . \esc_html($note_notice_text) . '</div>';
+		}
 
 		echo '<div class="cmx-telefonbuch-detail-grid">';
 
@@ -704,49 +877,84 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		echo '</div>';
 
 		echo '<div class="cmx-telefonbuch-detail-box">';
-		$latest_note_date = \trim((string) (($latest_note['datum'] ?? '') . ' ' . ($latest_note['zeit'] ?? '')));
-		echo '<div class="cmx-telefonbuch-detail-box-head cmx-telefonbuch-detail-box-head-note"><h3>Neueste Interne Notiz</h3>';
-		if ($latest_note_date !== '') {
-			echo '<div class="cmx-telefonbuch-detail-date">' . \esc_html($latest_note_date) . '</div>';
+		if ($can_add_note) {
+			echo '<h3><button type="button" class="cmx-telefonbuch-detail-box-title-button" data-cmx-note-open="1">Neueste Interne Notiz</button></h3>';
+		} else {
+			echo '<h3>Neueste Interne Notiz</h3>';
 		}
-		echo '</div>';
-		if ($latest_note === []) {
+		if ($latest_notes === []) {
 			echo '<p class="cmx-telefonbuch-detail-empty">Keine interne Notiz vorhanden.</p>';
 		} else {
-			echo '<div class="cmx-telefonbuch-detail-text">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_note['text'] ?? '')) . '</div>';
+			echo '<div class="cmx-telefonbuch-detail-entry-list">';
+			foreach ($latest_notes as $latest_note) {
+				$latest_note_date = \trim((string) (($latest_note['datum'] ?? '') . ' ' . ($latest_note['zeit'] ?? '')));
+				echo '<div class="cmx-telefonbuch-detail-entry">';
+				if ($latest_note_date !== '') {
+					echo '<div class="cmx-telefonbuch-detail-date cmx-telefonbuch-detail-entry-date">' . \esc_html($latest_note_date) . '</div>';
+				}
+				echo '<div class="cmx-telefonbuch-detail-text">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_note['text'] ?? '')) . '</div>';
+				echo '</div>';
+			}
+			echo '</div>';
 		}
 		echo '</div>';
 
 		echo '<div class="cmx-telefonbuch-detail-box">';
-		$latest_task_date = \trim((string) (($latest_task['datum'] ?? '') . ' ' . ($latest_task['zeit'] ?? '')));
-		echo '<div class="cmx-telefonbuch-detail-box-head"><h3>Neueste Tätigkeit</h3>';
-		if ($latest_task_date !== '') {
-			echo '<div class="cmx-telefonbuch-detail-date">' . \esc_html($latest_task_date) . '</div>';
-		}
-		echo '</div>';
-		if ($latest_task === []) {
+		echo '<h3>Neueste Tätigkeit</h3>';
+		if ($latest_tasks === []) {
 			echo '<p class="cmx-telefonbuch-detail-empty">Keine Tätigkeit vorhanden.</p>';
 		} else {
-			$task_meta = [];
-			if (\trim((string) ($latest_task['artikel'] ?? '')) !== '') {
-				$task_meta[] = (string) $latest_task['artikel'];
+			echo '<div class="cmx-telefonbuch-detail-entry-list">';
+			foreach ($latest_tasks as $latest_task) {
+				$latest_task_date = \trim((string) (($latest_task['datum'] ?? '') . ' ' . ($latest_task['zeit'] ?? '')));
+				$task_meta = [];
+				if (\trim((string) ($latest_task['artikel'] ?? '')) !== '') {
+					$task_meta[] = (string) $latest_task['artikel'];
+				}
+				if (\trim((string) ($latest_task['produkt'] ?? '')) !== '') {
+					$task_meta[] = (string) $latest_task['produkt'];
+				}
+				if (\trim((string) ($latest_task['dauer'] ?? '')) !== '') {
+					$task_meta[] = 'Dauer: ' . (string) $latest_task['dauer'] . ' h';
+				}
+				echo '<div class="cmx-telefonbuch-detail-entry">';
+				if ($task_meta !== [] || $latest_task_date !== '') {
+					echo '<div class="cmx-telefonbuch-detail-task-row">';
+					echo '<div>';
+					if ($task_meta !== []) {
+						echo '<div>' . \esc_html(\implode(' · ', $task_meta)) . '</div>';
+					}
+					echo '</div>';
+					if ($latest_task_date !== '') {
+						echo '<div class="cmx-telefonbuch-detail-date">' . \esc_html($latest_task_date) . '</div>';
+					}
+					echo '</div>';
+				}
+				echo '<div class="cmx-telefonbuch-detail-task-info">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_task['info'] ?? '')) . '</div>';
+				echo '</div>';
 			}
-			if (\trim((string) ($latest_task['produkt'] ?? '')) !== '') {
-				$task_meta[] = (string) $latest_task['produkt'];
-			}
-			if (\trim((string) ($latest_task['dauer'] ?? '')) !== '') {
-				$task_meta[] = 'Dauer: ' . (string) $latest_task['dauer'] . ' h';
-			}
-			echo '<div class="cmx-telefonbuch-detail-line"><div>';
-			if ($task_meta !== []) {
-				echo '<div>' . \esc_html(\implode(' · ', $task_meta)) . '</div>';
-			}
-			echo '</div></div>';
-			echo '<div class="cmx-telefonbuch-detail-task-info">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_task['info'] ?? '')) . '</div>';
+			echo '</div>';
 		}
 		echo '</div>';
 
 		echo '</div>';
+		if ($can_add_note) {
+			echo '<div class="cmx-telefonbuch-detail-note-modal" data-cmx-note-modal="1" hidden>';
+			echo '<div class="cmx-telefonbuch-detail-note-backdrop" data-cmx-note-close="1"></div>';
+			echo '<div class="cmx-telefonbuch-detail-note-dialog" role="dialog" aria-modal="true" aria-labelledby="cmx-telefonbuch-note-title">';
+			echo '<form method="post" action="' . \esc_url(cmx_telefonbuch_detail_url($kontakt_id)) . '">';
+			echo '<h3 id="cmx-telefonbuch-note-title">Neue Interne Notiz</h3>';
+			echo '<input type="hidden" name="cmx_telefonbuch_detail_action" value="add_note">';
+			echo '<textarea name="cmx_telefonbuch_note_text" data-cmx-note-text="1" placeholder="Text eingeben ..." required></textarea>';
+			echo '<div class="cmx-telefonbuch-detail-note-actions">';
+			echo '<button type="button" class="button button-secondary" data-cmx-note-close="1">Abbrechen</button>';
+			\wp_nonce_field('cmx_telefonbuch_add_note_' . $kontakt_id, 'cmx_telefonbuch_note_nonce');
+			echo '<button type="submit" class="button button-primary">Speichern</button>';
+			echo '</div>';
+			echo '</form>';
+			echo '</div>';
+			echo '</div>';
+		}
 		echo '</div></div></div>';
 		echo '<script>
 			document.addEventListener("click", function(event) {
@@ -853,10 +1061,55 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 				});
 			});
 		</script>';
+		if ($can_add_note) {
+			echo '<script>
+				(function() {
+					const modal = document.querySelector("[data-cmx-note-modal]");
+					if (!modal) {
+						return;
+					}
+					const textarea = modal.querySelector("[data-cmx-note-text]");
+					const openModal = function() {
+						modal.hidden = false;
+						document.body.style.overflow = "hidden";
+						window.setTimeout(function() {
+							if (textarea) {
+								textarea.focus();
+								textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+							}
+						}, 10);
+					};
+					const closeModal = function() {
+						modal.hidden = true;
+						document.body.style.overflow = "";
+					};
+					document.addEventListener("click", function(event) {
+						const openTrigger = event.target.closest("[data-cmx-note-open]");
+						if (openTrigger) {
+							event.preventDefault();
+							openModal();
+							return;
+						}
+						const closeTrigger = event.target.closest("[data-cmx-note-close]");
+						if (closeTrigger) {
+							event.preventDefault();
+							closeModal();
+						}
+					});
+					document.addEventListener("keydown", function(event) {
+						if (event.key === "Escape" && !modal.hidden) {
+							event.preventDefault();
+							closeModal();
+						}
+					});
+				})();
+			</script>';
+		}
 		echo '</body></html>';
 		exit;
 	}
 }
 
 \add_action('template_redirect', __NAMESPACE__ . '\\cmx_redirect_telefonbuch_legacy_detail_url', 0);
+\add_action('template_redirect', __NAMESPACE__ . '\\cmx_handle_telefonbuch_detail_post_actions', 2);
 \add_action('template_redirect', __NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page', 4);
