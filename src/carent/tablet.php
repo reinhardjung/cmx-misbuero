@@ -868,6 +868,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-head-logo{display:block;max-width:190px;max-height:84px;width:auto;height:auto;object-fit:contain;object-position:right top}
 			.cmx-vermietung-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
 			.cmx-vermietung-title{margin:0;font-size:30px;line-height:1.1}
+			.cmx-vermietung-title-link{color:inherit;text-decoration:none}
+			.cmx-vermietung-title-link:hover{text-decoration:none}
 			.cmx-vermietung-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
 			.cmx-vermietung-body{position:relative;padding:22px 28px 28px;overflow:visible}
 			.cmx-vermietung-notice{margin:0 0 18px;padding:12px 14px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-weight:600}
@@ -961,7 +963,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<div class="cmx-vermietung-head"><div class="cmx-vermietung-head-inner">';
 		echo '<div class="cmx-vermietung-head-copy">';
 		echo '<p class="cmx-vermietung-kicker">CaRent</p>';
-		echo '<h1 class="cmx-vermietung-title">Vermietung</h1>';
+		echo '<h1 class="cmx-vermietung-title"><a class="cmx-vermietung-title-link" href="' . \esc_url(cmx_vermietung_url()) . '">Vermietung</a></h1>';
 		echo '<p class="cmx-vermietung-sub">Kontakt und Fahrzeug auswählen, danach direkt einen neuen CaRent-Datensatz öffnen.</p>';
 		echo '</div>';
 		if ($self_logo_url !== '') {
