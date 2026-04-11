@@ -840,6 +840,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		}
 		$selected_contract_title = (string) ($selected_contract_row['title'] ?? '');
 		$submit_label = $current_post_id > 0 ? 'aktualisieren' : 'anlegen';
+		$current_contract_edit_url = $current_post_id > 0 ? (string) \admin_url('post.php?post=' . $current_post_id . '&action=edit') : '';
 		$license_required = $license_attachment_id <= 0;
 
 		while (\ob_get_level()) {
@@ -880,12 +881,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-summary-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
 			.cmx-vermietung-summary-value{font-size:15px;font-weight:700;color:#1d2327}
 			.cmx-vermietung-summary-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0}
-			.cmx-vermietung-summary-picker{position:relative;flex:0 1 360px;min-width:280px;z-index:30}
+			.cmx-vermietung-summary-picker{position:relative;flex:0 1 468px;min-width:364px;z-index:30}
 			.cmx-vermietung-summary-search{width:100%;min-height:42px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit}
 			.cmx-vermietung-summary-results{z-index:9200}
 			.cmx-vermietung-submit{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border:0;border-radius:10px;background:#a42c24;color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
 			.cmx-vermietung-submit:hover{background:#8f211b}
 			.cmx-vermietung-submit:disabled{background:#d0d5dd;color:#fff;cursor:not-allowed}
+			.cmx-vermietung-icon-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#135e96;text-decoration:none}
+			.cmx-vermietung-icon-button:hover{background:#eef6ff;border-color:#135e96}
+			.cmx-vermietung-icon-button.is-disabled{background:#f8fafc;border-color:#d0d5dd;color:#98a2b3;pointer-events:none}
+			.cmx-vermietung-icon-button .dashicons{width:20px;height:20px;font-size:20px;line-height:20px}
 			.cmx-vermietung-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;overflow:visible;z-index:2;isolation:isolate}
 			.cmx-vermietung-panel{position:relative;min-width:0;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:visible;z-index:1}
 			.cmx-vermietung-panel.is-locked{background:#fbfcfe}
@@ -1023,6 +1028,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '</div>';
 		echo '<button type="submit" class="cmx-vermietung-submit" id="cmx-vermietung-submit"' . (($selected_contact_id > 0 && $selected_vehicle_id > 0) ? '' : ' disabled') . '>' . \esc_html($submit_label) . '</button>';
+		echo '<a class="cmx-vermietung-icon-button' . ($current_contract_edit_url === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contract-edit" href="' . \esc_url($current_contract_edit_url !== '' ? $current_contract_edit_url : '#') . '"' . ($current_contract_edit_url !== '' ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') . ' title="Vertrag im WP-Admin öffnen"><span class="dashicons dashicons-media-spreadsheet" aria-hidden="true"></span></a>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-grid">';
