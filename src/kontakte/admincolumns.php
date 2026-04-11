@@ -742,7 +742,11 @@ function cmx_kontakte_apply_tax_filters($query) {
 		}
 		.column-cmx_gmaps,
 		.column-cmx_hersteller_url,
+		.column-cmx_telefonbuch_detail,
 		.column-cmx_kontakt_belege { width:56px; text-align:center; padding-left:0 !important; padding-right:0 !important; }
+		th#cmx_gmaps,
+		th#cmx_hersteller_url,
+		th#cmx_telefonbuch_detail { text-indent:1ch; }
 		th#cmx_kontakt_belege { text-indent:2ch; }
 		th#cmx_geburtsdatum { text-indent:1ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
@@ -750,6 +754,8 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_status { width:54px; overflow:visible; text-align:center; padding-left:0 !important; padding-right:0 !important; }
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
+		.column-cmx_telefonbuch_detail a { display:inline-block; padding:2px; color:#b45309; }
+		.column-cmx_telefonbuch_detail .dashicons { width:16px; height:16px; font-size:16px; line-height:16px; }
 		.column-cmx_hersteller_url a,
 		.column-cmx_kontakt_belege a { display:inline-block; padding:2px; }
 	</style>';
@@ -815,6 +821,7 @@ function cmx_kontakte_add_columns(array $columns): array {
 	if (!isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
 	}
+	if (!isset($new['cmx_telefonbuch_detail'])) $new['cmx_telefonbuch_detail'] = 'Muh';
 	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = 'P';
 	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Gründung';
 	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburt';
@@ -846,8 +853,23 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 		if ($raw === '') { echo ''; return; }
 
 		$href = cmx_normalize_url_for_href($raw);
-		$disp = cmx_domain_core_from_url($raw);
 		echo '<a href="' . \esc_url($href) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr($href) . '"><span class="dashicons dashicons-admin-site" style="font-size:14px;opacity:0.8;position:relative;top:7px;"></span></a>';
+		return;
+	}
+
+	if ($column === 'cmx_telefonbuch_detail') {
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_url')) {
+			echo '';
+			return;
+		}
+
+		$url = (string) cmx_telefonbuch_detail_url($post_id);
+		if ($url === '') {
+			echo '';
+			return;
+		}
+
+		echo '<a href="' . \esc_url($url) . '" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-carrot" aria-hidden="true"></span></a>';
 		return;
 	}
 

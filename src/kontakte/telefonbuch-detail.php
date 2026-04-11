@@ -92,6 +92,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_format_date')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_render_html_text')) {
+	function cmx_telefonbuch_detail_render_html_text(string $text): string {
+		$text = \trim($text);
+		if ($text === '') {
+			return '';
+		}
+
+		$allowed = [
+			'a' => [
+				'href' => true,
+				'title' => true,
+				'target' => true,
+				'rel' => true,
+			],
+			'br' => [],
+			'strong' => [],
+			'em' => [],
+			'b' => [],
+			'i' => [],
+			'u' => [],
+		];
+
+		return \nl2br(\wp_kses($text, $allowed));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_categories_taxonomy')) {
 	function cmx_telefonbuch_detail_categories_taxonomy(): string {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_kundenkategorie_tax')) {
@@ -201,6 +227,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_people')) {
 			$people[] = [
 				'name' => $name !== '' ? $name : '(ohne Namen)',
 				'birthdate' => $birthdate,
+				'phone_href' => $phone !== '' ? 'tel:' . \preg_replace('/\s+/', '', $phone) : '',
 				'is_primary' => $is_primary,
 				'index' => (int) $index,
 			];
@@ -476,6 +503,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		$latest_task = cmx_telefonbuch_detail_latest_task($kontakt_id);
 		$latest_belege = cmx_telefonbuch_detail_latest_belege($kontakt_id);
 		$back_url = (string) \home_url('/telefonbuch/');
+		$edit_url = (string) \get_edit_post_link($kontakt_id, '');
 		$maps_address = \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')
 			? (string) cmx_telefonbuch_address_string($kontakt_id)
 			: '';
@@ -507,6 +535,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-kicker{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280}
 			.cmx-telefonbuch-detail-kicker a{color:inherit;text-decoration:none}
 			.cmx-telefonbuch-detail-title{margin:0;font-size:30px;line-height:1.1}
+			.cmx-telefonbuch-detail-title a{color:inherit;text-decoration:none}
+			.cmx-telefonbuch-detail-title a:hover{text-decoration:underline}
 			.cmx-telefonbuch-detail-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
 			.cmx-telefonbuch-detail-head-actions{display:flex;align-items:flex-start;justify-content:flex-end;flex:0 0 auto}
 			.cmx-telefonbuch-map-link{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:999px;border:1px solid #d7e3ee;background:#f7fbff;color:#135e96;text-decoration:none;flex:0 0 auto}
@@ -523,8 +553,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-box-head h3{margin:0;font-size:15px}
 			.cmx-telefonbuch-detail-empty{color:#6b7280}
 			.cmx-telefonbuch-detail-people{margin:0;padding:0;list-style:none;display:grid;gap:8px}
-			.cmx-telefonbuch-detail-people li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:10px;background:#fff;border:1px solid #e9edf0}
+			.cmx-telefonbuch-detail-people li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 10px;border-radius:10px;background:#fff;border:1px solid #e9edf0}
 			.cmx-telefonbuch-detail-people li.is-current{background:#f5ebe1;border-color:#ead9c7}
+			.cmx-telefonbuch-detail-people a{color:inherit;text-decoration:none}
+			.cmx-telefonbuch-detail-people a:hover{text-decoration:underline}
 			.cmx-telefonbuch-detail-people strong{font-weight:700}
 			.cmx-telefonbuch-detail-date{color:#667085;white-space:nowrap}
 			.cmx-telefonbuch-detail-text{color:#344054;line-height:1.55}
@@ -554,11 +586,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-beleg-feedback a{color:inherit;text-decoration:underline;font-weight:700}
 			@media (max-width:820px){
 				.cmx-telefonbuch-detail-page{padding:18px 12px 24px}
-				.cmx-telefonbuch-detail-head{padding:18px 16px;flex-direction:column}
+				.cmx-telefonbuch-detail-head{padding:18px 16px;align-items:flex-start}
+				.cmx-telefonbuch-detail-head-actions{margin-left:auto;align-self:flex-start}
 				.cmx-telefonbuch-detail-body{padding:16px}
 				.cmx-telefonbuch-detail-grid{grid-template-columns:1fr}
 				.cmx-telefonbuch-detail-title{font-size:24px}
-				.cmx-telefonbuch-detail-people li,.cmx-telefonbuch-detail-line,.cmx-telefonbuch-detail-beleg-row,.cmx-telefonbuch-detail-task-row,.cmx-telefonbuch-detail-box-head{flex-direction:column;align-items:flex-start}
+				.cmx-telefonbuch-detail-line,.cmx-telefonbuch-detail-beleg-row,.cmx-telefonbuch-detail-task-row,.cmx-telefonbuch-detail-box-head{flex-direction:column;align-items:flex-start}
 				.cmx-telefonbuch-detail-beleg-actions{margin-left:0;width:100%;justify-content:flex-end}
 			}
 		</style>';
@@ -566,8 +599,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		echo '<div class="cmx-telefonbuch-detail-page"><div class="cmx-telefonbuch-detail-card">';
 		echo '<div class="cmx-telefonbuch-detail-head">';
 		echo '<div>';
-		echo '<p class="cmx-telefonbuch-detail-kicker"><a href="' . \esc_url($back_url) . '">Zurück zum Telefonbuch</a></p>';
-		echo '<h1 class="cmx-telefonbuch-detail-title">' . \esc_html($title) . '</h1>';
+		echo '<p class="cmx-telefonbuch-detail-kicker"><a href="' . \esc_url($back_url) . '">Telefonbuch</a></p>';
+		if ($edit_url !== '') {
+			echo '<h1 class="cmx-telefonbuch-detail-title"><a href="' . \esc_url($edit_url) . '">' . \esc_html($title) . '</a></h1>';
+		} else {
+			echo '<h1 class="cmx-telefonbuch-detail-title">' . \esc_html($title) . '</h1>';
+		}
 		if ($firmengruendung !== '') {
 			echo '<p class="cmx-telefonbuch-detail-sub">Firmengründung: ' . \esc_html($firmengruendung) . '</p>';
 		}
@@ -604,11 +641,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			echo '<ul class="cmx-telefonbuch-detail-people">';
 			foreach ($people as $person) {
 				$item_class = !empty($person['is_primary']) ? ' class="is-current"' : '';
+				$name = (string) ($person['name'] ?? '');
+				$phone_href = \trim((string) ($person['phone_href'] ?? ''));
+				if ($phone_href !== '') {
+					$name_html = '<a href="' . \esc_url($phone_href) . '">' . \esc_html($name) . '</a>';
+				} else {
+					$name_html = \esc_html($name);
+				}
 				echo '<li' . $item_class . '>';
 				if (!empty($person['is_primary'])) {
-					echo '<strong>' . \esc_html((string) ($person['name'] ?? '')) . '</strong>';
+					echo '<strong>' . $name_html . '</strong>';
 				} else {
-					echo '<span>' . \esc_html((string) ($person['name'] ?? '')) . '</span>';
+					echo '<span>' . $name_html . '</span>';
 				}
 				$birthdate = \trim((string) ($person['birthdate'] ?? ''));
 				if ($birthdate !== '') {
@@ -630,7 +674,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		if ($latest_note === []) {
 			echo '<p class="cmx-telefonbuch-detail-empty">Keine interne Notiz vorhanden.</p>';
 		} else {
-			echo '<div class="cmx-telefonbuch-detail-text">' . \nl2br(\esc_html((string) ($latest_note['text'] ?? ''))) . '</div>';
+			echo '<div class="cmx-telefonbuch-detail-text">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_note['text'] ?? '')) . '</div>';
 		}
 		echo '</div>';
 
@@ -659,7 +703,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 				echo '<div>' . \esc_html(\implode(' · ', $task_meta)) . '</div>';
 			}
 			echo '</div></div>';
-			echo '<div class="cmx-telefonbuch-detail-task-info">' . \nl2br(\esc_html((string) ($latest_task['info'] ?? ''))) . '</div>';
+			echo '<div class="cmx-telefonbuch-detail-task-info">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_task['info'] ?? '')) . '</div>';
 		}
 		echo '</div>';
 

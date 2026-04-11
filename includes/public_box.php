@@ -491,6 +491,7 @@ add_action('add_meta_boxes', function() {
 			$send_href = '';
 			$download_url = '';
 			$kontakt_belege_url = '';
+			$kontakt_telefonbuch_url = '';
 			$has_pdf = false;
 			$send_tooltip = 'PDF-Link per Mail versendern';
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
@@ -519,6 +520,9 @@ add_action('add_meta_boxes', function() {
 			}
 			if ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_share_url')) {
 				$kontakt_belege_url = (string) cmx_kontakt_belege_share_url((int) $post->ID);
+			}
+			if ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_url')) {
+				$kontakt_telefonbuch_url = (string) cmx_telefonbuch_detail_url((int) $post->ID);
 			}
 				$new_beleg_url = ($is_kontakte && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kontakt_create_beleg_action_url'))
 					? (string) cmx_kontakt_create_beleg_action_url((int) $post->ID)
@@ -789,7 +793,7 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
-					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $kontakt_belege_url !== '') {
+					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $kontakt_belege_url !== '' || $kontakt_telefonbuch_url !== '') {
 						$justify = $is_belege ? 'space-between' : 'flex-start';
 							echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 						if ($dup_link !== '') {
@@ -806,6 +810,9 @@ add_action('add_meta_boxes', function() {
 						}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
+					}
+					if ($kontakt_telefonbuch_url !== '') {
+						echo '<a href="' . esc_url($kontakt_telefonbuch_url) . '" class="cmx-kontakt-telefonbuch-link dashicons dashicons-carrot" style="text-decoration:none;color:#b45309;" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer"><span class="screen-reader-text">Telefonbuch-Detailansicht öffnen</span></a>';
 					}
 						if ($show_pdf_icons) {
 							echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Anzeigen als PDF (DL/C5/C4)" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';

@@ -447,7 +447,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			@media (max-width:720px){
 				.cmx-telefonbuch-page{padding:18px 12px 24px}
 				.cmx-telefonbuch-head-inner{flex-direction:column}
-				.cmx-telefonbuch-head-brand{justify-content:flex-start;min-height:0}
+				.cmx-telefonbuch-head-brand{display:none}
 				.cmx-telefonbuch-head,.cmx-telefonbuch-tools,.cmx-telefonbuch-table-wrap{padding-left:16px;padding-right:16px}
 				.cmx-telefonbuch-title{font-size:24px}
 				.cmx-telefonbuch-thumb-wrap{width:72px}
