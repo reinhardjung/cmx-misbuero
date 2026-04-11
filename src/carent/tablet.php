@@ -969,7 +969,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<div class="cmx-vermietung-head-copy">';
 		echo '<p class="cmx-vermietung-kicker">CaRent</p>';
 		echo '<h1 class="cmx-vermietung-title"><a class="cmx-vermietung-title-link" href="' . \esc_url(cmx_vermietung_url()) . '">Vermietung</a></h1>';
-		echo '<p class="cmx-vermietung-sub">Kontakt und Fahrzeug auswählen, danach direkt einen neuen CaRent-Datensatz öffnen.</p>';
+		echo '<p class="cmx-vermietung-sub">Fahr vorsichtig und chumm gsund zrugg!</p>';
 		echo '</div>';
 		if ($self_logo_url !== '') {
 			echo '<div class="cmx-vermietung-head-brand">';
