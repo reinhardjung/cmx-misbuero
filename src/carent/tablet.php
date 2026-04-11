@@ -920,6 +920,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
 			.cmx-vermietung-info-item{min-width:0;padding:12px 14px;border:1px solid #e4e7ec;border-radius:12px;background:#fafafa}
 			.cmx-vermietung-info-label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
+			.cmx-vermietung-info-label.is-actionable{cursor:pointer;text-decoration:underline dotted}
 			.cmx-vermietung-info-value{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;font-weight:700;color:#1d2327}
 			.cmx-vermietung-info-value:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
 			.cmx-vermietung-upload-panel{margin-top:18px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
@@ -1135,8 +1136,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		];
 		foreach ($uebernahme_fields as $field_key => $field_config) {
 			$field_value = \trim((string) ($selected_uebernahme_values[$field_key] ?? ''));
+			$label_id = 'cmx-vermietung-uebernahme-label-' . $field_key;
+			$is_actionable_label = \in_array($field_key, ['ort', 'datum', 'uhrzeit'], true);
 			echo '<div class="cmx-vermietung-info-item">';
-			echo '<label class="cmx-vermietung-info-label" for="cmx-vermietung-uebernahme-' . \esc_attr($field_key) . '">' . \esc_html((string) $field_config['label']) . '</label>';
+			echo '<label class="cmx-vermietung-info-label' . ($is_actionable_label ? ' is-actionable' : '') . '" id="' . \esc_attr($label_id) . '" for="cmx-vermietung-uebernahme-' . \esc_attr($field_key) . '"' . ($is_actionable_label ? ' title="' . \esc_attr((string) $field_config['label'] . ' automatisch einsetzen') . '"' : '') . '>' . \esc_html((string) $field_config['label']) . '</label>';
 			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-uebernahme-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
 			echo '</div>';
 		}
@@ -1217,8 +1220,75 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-uhrzeit"),
 					km_stand:document.getElementById("cmx-vermietung-uebernahme-km_stand")
 				};
+				var transferLabels={
+					ort:document.getElementById("cmx-vermietung-uebernahme-label-ort"),
+					datum:document.getElementById("cmx-vermietung-uebernahme-label-datum"),
+					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-label-uhrzeit")
+				};
 				var pickers={};
 				function normalize(value){return String(value||"").toLowerCase().trim();}
+				function getTodayValue(){
+					var now=new Date();
+					var local=new Date(now.getTime()-(now.getTimezoneOffset()*60000));
+					return local.toISOString().slice(0,10);
+				}
+				function getCurrentTimeValue(){
+					var now=new Date();
+					var hours=String(now.getHours()).padStart(2,"0");
+					var minutes=String(now.getMinutes()).padStart(2,"0");
+					return hours+":"+minutes;
+				}
+				function triggerInputEvents(input){
+					if(!input){return;}
+					try{
+						input.dispatchEvent(new Event("input",{bubbles:true}));
+						input.dispatchEvent(new Event("change",{bubbles:true}));
+					}catch(err){}
+				}
+				function getCurrentLocation(callback){
+					if(typeof callback!=="function" || !navigator.geolocation){return;}
+					function formatAddress(payload){
+						var address=payload && payload.address ? payload.address : {};
+						var street=[address.road || address.pedestrian || address.footway || address.cycleway || "", address.house_number || ""].join(" ").trim();
+						var locality=address.city || address.town || address.village || address.hamlet || address.municipality || "";
+						var postal=address.postcode || "";
+						var region=address.state || address.county || "";
+						var parts=[];
+						if(street){parts.push(street);}
+						if(postal || locality){parts.push([postal,locality].join(" ").trim());}
+						if(region && parts.indexOf(region)===-1){parts.push(region);}
+						return parts.join(", ").trim();
+					}
+					navigator.geolocation.getCurrentPosition(function(pos){
+						var result={
+							lat:pos.coords.latitude,
+							lon:pos.coords.longitude,
+							address:""
+						};
+						if(typeof fetch!=="function"){
+							callback(result);
+							return;
+						}
+						var url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat="
+							+ encodeURIComponent(String(result.lat))
+							+ "&lon="
+							+ encodeURIComponent(String(result.lon));
+						fetch(url,{headers:{"Accept":"application/json"}}).then(function(response){
+							return response.ok ? response.json() : null;
+						}).then(function(payload){
+							result.address=formatAddress(payload) || String((payload && payload.display_name) || "").trim();
+							callback(result);
+						}).catch(function(){
+							callback(result);
+						});
+					}, function(){
+						callback(null);
+					}, {
+						enableHighAccuracy:true,
+						timeout:10000,
+						maximumAge:0
+					});
+				}
 				function updateSubmit(){
 					var enabled=Number(kontaktInput.value||0)>0 && Number(artikelInput.value||0)>0;
 					submit.disabled=!enabled;
@@ -1521,6 +1591,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				if(identityFile){
 					identityFile.addEventListener("change", function(){
 						updateUploadPreview(identityFile.files && identityFile.files[0] ? identityFile.files[0] : null, identityPreview, identityMeta);
+					});
+				}
+				if(transferNodes.ort && transferLabels.ort){
+					transferLabels.ort.addEventListener("click", function(event){
+						if(transferNodes.ort.disabled){return;}
+						event.preventDefault();
+						getCurrentLocation(function(location){
+							if(!location){return;}
+							var value=String(location.address || "").trim();
+							if(!value && location.lat && location.lon){
+								value=String(location.lat)+", "+String(location.lon);
+							}
+							if(!value){return;}
+							transferNodes.ort.value=value;
+							triggerInputEvents(transferNodes.ort);
+							transferNodes.ort.focus();
+						});
+					});
+				}
+				if(transferNodes.datum && transferLabels.datum){
+					transferLabels.datum.addEventListener("click", function(event){
+						if(transferNodes.datum.disabled){return;}
+						event.preventDefault();
+						transferNodes.datum.value=getTodayValue();
+						triggerInputEvents(transferNodes.datum);
+						transferNodes.datum.focus();
+					});
+				}
+				if(transferNodes.uhrzeit && transferLabels.uhrzeit){
+					transferLabels.uhrzeit.addEventListener("click", function(event){
+						if(transferNodes.uhrzeit.disabled){return;}
+						event.preventDefault();
+						transferNodes.uhrzeit.value=getCurrentTimeValue();
+						triggerInputEvents(transferNodes.uhrzeit);
+						transferNodes.uhrzeit.focus();
 					});
 				}
 				document.addEventListener("click", function(event){
