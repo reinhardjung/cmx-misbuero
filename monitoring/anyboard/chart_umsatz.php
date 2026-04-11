@@ -1,6 +1,6 @@
-<?php
-namespace CLOUDMEISTER\CMX\Buero;
-defined('ABSPATH') || die('Oxytocin!');
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+// $item['value_formatted'] = number_format((float) $item['value'], 2, '.', "'");
 
 return [
     'type' => 'chart',
@@ -30,10 +30,12 @@ return [
     ],
     'source' => [
         'endpoint' => 'stats',
-        'mapping' => [
-            'data[].x' => 'data.umsatz[].month',
-            'data[].umsatz' => 'data.umsatz[].value',
-            'data[].label' => 'data.umsatz[].label',
-        ],
+		'mapping' => [
+			'data[].x' => 'data.umsatz[].month',
+			'data[].umsatz' => 'data.umsatz[].value',
+			'data[].label' => function($item) {
+				return number_format((float) $item['value'], 2, '.', "'");
+			},
+		],
     ],
 ];

@@ -11,16 +11,15 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		const META_BIRTHDAY_PREFIX = '_cmx_kontakt_auto_mail_geburtstag_';
 		const META_JUBILEE_LAST = '_cmx_kontakt_auto_mail_firmenjubilaeum_last';
 		const MORNING_HOUR = 9;
+		const QUERY_BATCH_SIZE = 200;
 
 		public static function init(): void {
 			\add_action(self::CRON_HOOK, [__CLASS__, 'process_due_mails']);
 
 			if (\did_action('init')) {
 				self::ensure_cron_event();
-				self::maybe_process_due_on_request();
 			} else {
 				\add_action('init', [__CLASS__, 'ensure_cron_event'], 30);
-				\add_action('init', [__CLASS__, 'maybe_process_due_on_request'], 31);
 			}
 		}
 
@@ -40,15 +39,8 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		}
 
 		public static function maybe_process_due_on_request(): void {
-			if ((\function_exists('wp_doing_cron') && \wp_doing_cron()) || (\defined('DOING_AJAX') && DOING_AJAX)) {
-				return;
-			}
-
-			if (!self::is_after_cutoff() || self::last_run_date() === self::today_date()) {
-				return;
-			}
-
-			self::process_due_mails();
+			// Disabled intentionally: auto-mails must only run via the scheduled cron hook.
+			return;
 		}
 
 		public static function process_due_mails(): void {
@@ -124,58 +116,44 @@ if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
 		}
 
 		private static function process_contacts(string $today): void {
-			$query = new \WP_Query(self::query_args());
+			$page = 1;
 
-			foreach ((array) $query->posts as $post_id) {
-				$post_id = (int) $post_id;
-				if ($post_id <= 0) {
-					continue;
+			while (true) {
+				$query = new \WP_Query(self::query_args($page));
+				$post_ids = \array_values(\array_filter(\array_map('intval', (array) $query->posts), static function (int $post_id): bool {
+					return $post_id > 0;
+				}));
+
+				if ($post_ids === []) {
+					break;
 				}
 
-				self::process_birthdays_for_contact($post_id, $today);
-				self::process_company_anniversary_for_contact($post_id, $today);
+				foreach ($post_ids as $post_id) {
+					self::process_birthdays_for_contact($post_id, $today);
+					self::process_company_anniversary_for_contact($post_id, $today);
+				}
+
+				if (\count($post_ids) < self::QUERY_BATCH_SIZE) {
+					break;
+				}
+
+				$page++;
 			}
 		}
 
-		private static function query_args(): array {
-			$meta_query = [
-				'relation' => 'OR',
-				[
-					'key' => \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')
-						? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG')
-						: '_cmx_kontakte_firmengruendung',
-					'compare' => 'EXISTS',
-				],
-				[
-					'key' => \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
-						? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
-						: '_cmx_kontakte_geburtsdatum',
-					'compare' => 'EXISTS',
-				],
-			];
-
-			if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
-				foreach ((array) cmx_kommunikation_flat_field_meta_keys('geburtsdatum', 10) as $meta_key) {
-					$meta_key = (string) $meta_key;
-					if ($meta_key === '') {
-						continue;
-					}
-					$meta_query[] = [
-						'key' => $meta_key,
-						'compare' => 'EXISTS',
-					];
-				}
-			}
-
+		private static function query_args(int $page = 1): array {
 			return [
 				'post_type' => 'kontakte',
 				'post_status' => ['publish', 'private'],
-				'posts_per_page' => -1,
+				'posts_per_page' => self::QUERY_BATCH_SIZE,
+				'paged' => \max(1, $page),
 				'fields' => 'ids',
 				'no_found_rows' => true,
+				'update_post_meta_cache' => true,
 				'update_post_term_cache' => false,
 				'suppress_filters' => true,
-				'meta_query' => $meta_query,
+				'orderby' => 'ID',
+				'order' => 'ASC',
 			];
 		}
 
