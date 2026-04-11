@@ -981,6 +981,7 @@ function cmx65_render_front_quicklinks(): void {
 		['label' => 'Katalog', 'href' => cmx65_adminbar_katalog_focus_url(), 'target' => '_blank'],
 		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/'), 'target' => '_blank'],
 	];
+	$pages_links = (array) \apply_filters('cmx65_front_pages_links', $pages_links);
 
 	$apps_links = [];
 
@@ -1300,6 +1301,7 @@ function cmx65_adminbar($wp_admin_bar) {
 			'target' => '_blank',
 		],
 	]);
+	\do_action('cmx65_adminbar_pages_menu', $wp_admin_bar);
 
 	// $wp_admin_bar->add_menu([
 	// 	'id'    => 'cmx65_archiv_id',
