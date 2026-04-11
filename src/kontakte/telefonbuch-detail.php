@@ -665,6 +665,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		echo '</div>';
 
 		echo '<div class="cmx-telefonbuch-detail-box">';
+		echo '<h3>Letzte Belege</h3>';
+		if ($latest_belege === []) {
+			echo '<p class="cmx-telefonbuch-detail-empty">Kein Beleg verknüpft.</p>';
+		} else {
+			echo '<div class="cmx-telefonbuch-detail-belege-list">';
+			foreach ($latest_belege as $latest_beleg) {
+				$url = \trim((string) ($latest_beleg['url'] ?? ''));
+				$title_html = \esc_html((string) ($latest_beleg['title'] ?? ''));
+				if ($url !== '') {
+					$title_html = '<a href="' . \esc_url($url) . '">' . $title_html . '</a>';
+				}
+				$amount = \trim((string) ($latest_beleg['amount'] ?? ''));
+				$send_url = \trim((string) ($latest_beleg['send_url'] ?? ''));
+				$state_class = !empty($latest_beleg['is_paid']) ? 'cmx-telefonbuch-detail-state-paid' : 'cmx-telefonbuch-detail-state-open';
+				echo '<div class="cmx-telefonbuch-detail-beleg-row ' . \esc_attr($state_class) . '">';
+				echo '<div class="cmx-telefonbuch-detail-beleg-meta">';
+				echo '<span class="cmx-telefonbuch-detail-beleg-id">' . $title_html . '</span>';
+				echo '<span class="cmx-telefonbuch-detail-beleg-date">' . \esc_html((string) ($latest_beleg['date'] ?? '')) . '</span>';
+				echo '</div>';
+				if ($amount !== '' || $send_url !== '') {
+					echo '<div class="cmx-telefonbuch-detail-beleg-actions">';
+					if ($amount !== '') {
+						echo '<span class="cmx-telefonbuch-detail-beleg-amount">' . \esc_html($amount) . '</span>';
+					}
+					if ($send_url !== '') {
+						echo '<a class="cmx-telefonbuch-detail-beleg-send" data-cmx-beleg-send="1" href="' . \esc_url($send_url) . '" title="Beleg erneut per E-Mail senden" aria-label="Beleg erneut per E-Mail senden">';
+						echo '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm0 2v.2l8 5.2 8-5.2V8H4zm16 8V10.6l-7.5 4.9a1 1 0 0 1-1 0L4 10.6V16h16z"/></svg>';
+						echo '</a>';
+					}
+					echo '</div>';
+				}
+				echo '</div>';
+			}
+			echo '</div>';
+			echo '<div class="cmx-telefonbuch-detail-beleg-feedback" data-cmx-beleg-feedback="1"></div>';
+		}
+		echo '</div>';
+
+		echo '<div class="cmx-telefonbuch-detail-box">';
 		$latest_note_date = \trim((string) (($latest_note['datum'] ?? '') . ' ' . ($latest_note['zeit'] ?? '')));
 		echo '<div class="cmx-telefonbuch-detail-box-head cmx-telefonbuch-detail-box-head-note"><h3>Neueste Interne Notiz</h3>';
 		if ($latest_note_date !== '') {
@@ -704,45 +743,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			}
 			echo '</div></div>';
 			echo '<div class="cmx-telefonbuch-detail-task-info">' . cmx_telefonbuch_detail_render_html_text((string) ($latest_task['info'] ?? '')) . '</div>';
-		}
-		echo '</div>';
-
-		echo '<div class="cmx-telefonbuch-detail-box">';
-		echo '<h3>Letzte Belege</h3>';
-		if ($latest_belege === []) {
-			echo '<p class="cmx-telefonbuch-detail-empty">Kein Beleg verknüpft.</p>';
-		} else {
-			echo '<div class="cmx-telefonbuch-detail-belege-list">';
-			foreach ($latest_belege as $latest_beleg) {
-				$url = \trim((string) ($latest_beleg['url'] ?? ''));
-				$title_html = \esc_html((string) ($latest_beleg['title'] ?? ''));
-				if ($url !== '') {
-					$title_html = '<a href="' . \esc_url($url) . '">' . $title_html . '</a>';
-				}
-				$amount = \trim((string) ($latest_beleg['amount'] ?? ''));
-				$send_url = \trim((string) ($latest_beleg['send_url'] ?? ''));
-				$state_class = !empty($latest_beleg['is_paid']) ? 'cmx-telefonbuch-detail-state-paid' : 'cmx-telefonbuch-detail-state-open';
-				echo '<div class="cmx-telefonbuch-detail-beleg-row ' . \esc_attr($state_class) . '">';
-				echo '<div class="cmx-telefonbuch-detail-beleg-meta">';
-				echo '<span class="cmx-telefonbuch-detail-beleg-id">' . $title_html . '</span>';
-				echo '<span class="cmx-telefonbuch-detail-beleg-date">' . \esc_html((string) ($latest_beleg['date'] ?? '')) . '</span>';
-				echo '</div>';
-				if ($amount !== '' || $send_url !== '') {
-					echo '<div class="cmx-telefonbuch-detail-beleg-actions">';
-					if ($amount !== '') {
-						echo '<span class="cmx-telefonbuch-detail-beleg-amount">' . \esc_html($amount) . '</span>';
-					}
-					if ($send_url !== '') {
-						echo '<a class="cmx-telefonbuch-detail-beleg-send" data-cmx-beleg-send="1" href="' . \esc_url($send_url) . '" title="Beleg erneut per E-Mail senden" aria-label="Beleg erneut per E-Mail senden">';
-						echo '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm0 2v.2l8 5.2 8-5.2V8H4zm16 8V10.6l-7.5 4.9a1 1 0 0 1-1 0L4 10.6V16h16z"/></svg>';
-						echo '</a>';
-					}
-					echo '</div>';
-				}
-				echo '</div>';
-			}
-			echo '</div>';
-			echo '<div class="cmx-telefonbuch-detail-beleg-feedback" data-cmx-beleg-feedback="1"></div>';
 		}
 		echo '</div>';
 
