@@ -6,7 +6,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_bulk_delete_notice_base_url'
 			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 			: 'cmx-einstellungen';
 
-		return (string) \admin_url('admin.php?page=' . \rawurlencode($page) . '&tab=system');
+		return (string) \admin_url('admin.php?page=' . \rawurlencode($page) . '&tab=system&sub=general');
 	}
 }
 
@@ -583,11 +583,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_render_copyable_instance_lin
 
 \add_action('admin_init', __NAMESPACE__ . '\\cmx_register_system_tab');
 function cmx_register_system_tab(): void {
+	$general_page = 'cmx_tab_system__general';
+
 	\add_settings_section(
 		'cmx_sec_system',
 		__('System', 'default'),
 		'__return_false',
-		'cmx_tab_system'
+		$general_page
 	);
 
 	\add_settings_field(
@@ -600,7 +602,7 @@ function cmx_register_system_tab(): void {
 				'DokuScan in neuem Tab öffnen und Link kopieren'
 			);
 		},
-		'cmx_tab_system',
+		$general_page,
 		'cmx_sec_system'
 	);
 
@@ -614,7 +616,7 @@ function cmx_register_system_tab(): void {
 				'Archiv in neuem Tab öffnen und Link kopieren'
 			);
 		},
-		'cmx_tab_system',
+		$general_page,
 		'cmx_sec_system'
 	);
 
@@ -640,7 +642,7 @@ function cmx_register_system_tab(): void {
 			echo '<input type="text" name="mis_buero_openai_key" class="regular-text" value="' . \esc_attr($val) . '">';
 			echo '<p class="description">Wird für OCR und Produkttexte verwendet</p>';
 		},
-		'cmx_tab_system',
+		$general_page,
 		'cmx_sec_system'
 	);
 
@@ -648,7 +650,7 @@ function cmx_register_system_tab(): void {
 		'cmx_system_debug_mode',
 		'Debug-Mode',
 		__NAMESPACE__ . '\\cmx_field_checkbox',
-		'cmx_tab_system',
+		$general_page,
 		'cmx_sec_system',
 		[
 			'key'   => \defined(__NAMESPACE__ . '\\CMX_SYSTEM_DEBUG_MODE_KEY')
@@ -663,7 +665,7 @@ function cmx_register_system_tab(): void {
 			'cmx_sec_modules',
 			'Module',
 			'__return_false',
-			'cmx_tab_system'
+			$general_page
 		);
 
 		\add_settings_field(
@@ -685,7 +687,7 @@ function cmx_register_system_tab(): void {
 				echo 'E-Mail Client, Termine, VideoCalls';
 				echo '</label>';
 			},
-			'cmx_tab_system',
+			$general_page,
 			'cmx_sec_system'
 		);
 
@@ -708,7 +710,7 @@ function cmx_register_system_tab(): void {
 				echo \esc_html__('CaRent aktivieren', 'cmx-misbuero');
 				echo '</label>';
 			},
-			'cmx_tab_system',
+			$general_page,
 			'cmx_sec_modules'
 		);
 
@@ -729,7 +731,7 @@ function cmx_register_system_tab(): void {
 				}
 				echo '<input type="number" min="1" step="1" name="' . \esc_attr($option_name) . '[' . \esc_attr($key) . ']" value="' . \esc_attr((string) $value) . '" class="small-text">';
 			},
-			'cmx_tab_system',
+			$general_page,
 			'cmx_sec_system'
 		);
 	}

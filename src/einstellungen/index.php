@@ -224,6 +224,13 @@ function cmx_get_subtabs(string $tab): array {
 		];
 	}
 
+	if ($tab === 'system') {
+		return [
+			'general' => 'Allgemein',
+			'storage' => 'Speicherplatz',
+		];
+	}
+
 	return [];
 }
 
@@ -371,9 +378,11 @@ function cmx_render_settings_page(): void {
 		echo '<input type="hidden" name="mis_buero_openai_key" value="' . \esc_attr($openai_key) . '">';
 	}
 	do_settings_sections($page_id);
-	submit_button();
+	if (!($tab === 'system' && $sub === 'storage')) {
+		submit_button();
+	}
 	echo '</form>';
-	if ($tab === 'system' && \function_exists(__NAMESPACE__ . '\\cmx_render_system_bulk_delete_panel')) {
+	if ($tab === 'system' && $sub === 'general' && \function_exists(__NAMESPACE__ . '\\cmx_render_system_bulk_delete_panel')) {
 		cmx_render_system_bulk_delete_panel();
 	}
 
