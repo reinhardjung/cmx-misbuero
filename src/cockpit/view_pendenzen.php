@@ -865,7 +865,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_cockpit_pendenzen_css')) {
 				.cmx-pend-board-select select{width:auto;max-width:100%;align-self:flex-start}
 				.cmx-pend-field--right select{align-self:flex-end}
 				.cmx-pend-toolbar-today{align-self:center;justify-self:center;color:#1d2327;font-size:28px;line-height:1.2;font-weight:600;text-align:center;white-space:nowrap}
-				.cmx-pend-postbox--range .cmx-pend-toolbar-today{font-size:13px;line-height:1}
+				.cmx-pend-postbox--range .cmx-pend-toolbar-today{font-size:28px;line-height:1.2}
 			.cmx-pend-field--right{align-items:flex-end}
 			.cmx-pend-card-list{display:flex;flex-direction:column}
 				.cmx-pend-card{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;padding:8px 0;border:0;border-bottom:1px solid #edf0f3;background:transparent;box-shadow:none;border-radius:0}
