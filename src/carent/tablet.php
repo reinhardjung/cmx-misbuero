@@ -593,8 +593,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 			'invalid_vehicle' => 'Das gewählte Fahrzeug ist nicht gültig.',
 			'invalid_license_photo' => 'Bitte nur Bilddateien für den Führerausweis hochladen.',
 			'invalid_identity_photo' => 'Bitte nur Bilddateien für die Identitätskarte hochladen.',
+			'invalid_inventory_video' => 'Bitte nur Videodateien für die Bestandsaufnahme hochladen.',
 			'upload_failed'   => 'Der Führerausweis konnte nicht hochgeladen werden.',
 			'identity_upload_failed' => 'Die Identitätskarte konnte nicht hochgeladen werden.',
+			'inventory_upload_failed' => 'Die Bestandsaufnahme konnte nicht hochgeladen werden.',
 			'create_failed'   => 'Die Vermietung konnte nicht angelegt werden.',
 			default           => '',
 		};
@@ -652,8 +654,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		$license_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
 			: '_cmx_carent_fuehrerausweis_attachment_id';
+		$inventory_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META')
+			: '_cmx_carent_bestandsaufnahme_attachment_id';
 		$license_upload = $_FILES['cmx_vermietung_fuehrerausweis_file'] ?? null;
 		$identity_upload = $_FILES['cmx_vermietung_identitaetskarte_file'] ?? null;
+		$inventory_upload = $_FILES['cmx_vermietung_bestandsaufnahme_file'] ?? null;
 		$has_license_upload = \is_array($license_upload)
 			&& isset($license_upload['error'], $license_upload['name'])
 			&& (int) $license_upload['error'] !== \UPLOAD_ERR_NO_FILE
@@ -665,6 +671,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 			&& isset($identity_upload['error'], $identity_upload['name'])
 			&& (int) $identity_upload['error'] !== \UPLOAD_ERR_NO_FILE
 			&& \trim((string) $identity_upload['name']) !== '';
+		$has_inventory_upload = \is_array($inventory_upload)
+			&& isset($inventory_upload['error'], $inventory_upload['name'])
+			&& (int) $inventory_upload['error'] !== \UPLOAD_ERR_NO_FILE
+			&& \trim((string) $inventory_upload['name']) !== '';
 		$redirect_post_id = $current_post_id > 0 ? $current_post_id : 0;
 		if ($kontakt_id <= 0) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_contact']));
@@ -722,6 +732,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 				exit;
 			}
 		}
+		if ($has_inventory_upload) {
+			$inventory_error = (int) ($inventory_upload['error'] ?? \UPLOAD_ERR_NO_FILE);
+			if ($inventory_error !== \UPLOAD_ERR_OK) {
+				\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'inventory_upload_failed']));
+				exit;
+			}
+
+			$file_type = \wp_check_filetype_and_ext((string) ($inventory_upload['tmp_name'] ?? ''), (string) ($inventory_upload['name'] ?? ''));
+			$mime_type = (string) ($file_type['type'] ?? '');
+			if (!\str_starts_with($mime_type, 'video/')) {
+				\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'invalid_inventory_video']));
+				exit;
+			}
+		}
 
 		if ($current_post_id > 0) {
 			$post_id = $current_post_id;
@@ -775,6 +799,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 				: '_cmx_carent_identitaetskarte_attachment_id';
 			\update_post_meta($post_id, $identity_meta_key, (int) $attachment_id);
 		}
+		if ($has_inventory_upload) {
+			require_once \ABSPATH . 'wp-admin/includes/file.php';
+			require_once \ABSPATH . 'wp-admin/includes/media.php';
+			require_once \ABSPATH . 'wp-admin/includes/image.php';
+
+			$attachment_id = \media_handle_upload('cmx_vermietung_bestandsaufnahme_file', $post_id);
+			if (\is_wp_error($attachment_id) || (int) $attachment_id <= 0) {
+				\wp_safe_redirect(cmx_vermietung_manage_url($post_id, ['cmx_vermietung_error' => 'inventory_upload_failed']));
+				exit;
+			}
+
+			\update_post_meta($post_id, $inventory_meta_key, (int) $attachment_id);
+		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
 			$title = \trim((string) cmx_carent_composed_title($post_id));
@@ -822,10 +859,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$identity_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
 			: '_cmx_carent_identitaetskarte_attachment_id';
+		$inventory_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META')
+			: '_cmx_carent_bestandsaufnahme_attachment_id';
 		$selected_contact_id = $current_post_id > 0 ? (int) \get_post_meta($current_post_id, CMX_CARENT_KONTAKT_META, true) : 0;
 		$selected_vehicle_id = $current_post_id > 0 ? (int) \get_post_meta($current_post_id, CMX_CARENT_FAHRZEUG_META, true) : 0;
 		$license_attachment_id = $current_post_id > 0 ? (int) \get_post_meta($current_post_id, $license_meta_key, true) : 0;
 		$identity_attachment_id = $current_post_id > 0 ? (int) \get_post_meta($current_post_id, $identity_meta_key, true) : 0;
+		$inventory_attachment_id = $current_post_id > 0 ? (int) \get_post_meta($current_post_id, $inventory_meta_key, true) : 0;
 		$license_image_url = $license_attachment_id > 0 ? (string) \wp_get_attachment_image_url($license_attachment_id, 'medium') : '';
 		if ($license_attachment_id > 0 && $license_image_url === '') {
 			$license_image_url = (string) \wp_get_attachment_url($license_attachment_id);
@@ -836,6 +877,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			$identity_image_url = (string) \wp_get_attachment_url($identity_attachment_id);
 		}
 		$identity_filename = $identity_attachment_id > 0 ? (string) \basename((string) \get_attached_file($identity_attachment_id)) : '';
+		$inventory_video_url = $inventory_attachment_id > 0 ? (string) \wp_get_attachment_url($inventory_attachment_id) : '';
+		$inventory_filename = $inventory_attachment_id > 0 ? (string) \basename((string) \get_attached_file($inventory_attachment_id)) : '';
 		$selected_contact_row = null;
 		foreach ($contacts as $row) {
 			if ((int) ($row['id'] ?? 0) === $selected_contact_id) {
@@ -991,9 +1034,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-icon-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#135e96;text-decoration:none}
 			.cmx-vermietung-icon-button:hover{background:#eef6ff;border-color:#135e96}
 			.cmx-vermietung-icon-button.is-disabled{background:#f8fafc;border-color:#d0d5dd;color:#98a2b3;pointer-events:none}
-			.cmx-vermietung-icon-button .dashicons{width:20px;height:20px;font-size:20px;line-height:20px}
-			.cmx-vermietung-icon-button .dashicons:before{color:#135e96}
-			.cmx-vermietung-icon-button.is-disabled .dashicons:before{color:#98a2b3}
+			.cmx-vermietung-icon-button svg{display:block;width:20px;height:20px;color:currentColor}
 			.cmx-vermietung-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;overflow:visible;z-index:2;isolation:isolate}
 			.cmx-vermietung-panel{position:relative;min-width:0;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:visible;z-index:1}
 			.cmx-vermietung-panel.is-locked{background:#fbfcfe}
@@ -1038,8 +1079,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-upload-dropzone{display:flex;align-items:center;gap:16px;min-height:168px;padding:16px;border:1px dashed #c8d1dc;border-radius:14px;background:#f8fafc;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
 			.cmx-vermietung-upload-dropzone:hover{border-color:#135e96;background:#eef6ff}
 			.cmx-vermietung-upload-input{display:none}
-			.cmx-vermietung-upload-preview{display:none;flex:0 0 180px;max-width:180px;width:100%;height:132px;border:1px solid #d0d5dd;border-radius:12px;object-fit:cover;background:#fff}
-			.cmx-vermietung-upload-preview.is-active{display:block}
+			.cmx-vermietung-upload-preview,.cmx-vermietung-upload-video{display:none;flex:0 0 180px;max-width:180px;width:100%;height:132px;border:1px solid #d0d5dd;border-radius:12px;object-fit:cover;background:#fff}
+			.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video.is-active{display:block}
 			.cmx-vermietung-upload-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
 			.cmx-vermietung-upload-title{font-size:18px;font-weight:700;color:#1d2327}
 			.cmx-vermietung-upload-hint{font-size:14px;color:#667085}
@@ -1063,7 +1104,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-info-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-transfer-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-upload-dropzone{flex-direction:column;align-items:flex-start}
-				.cmx-vermietung-upload-preview,.cmx-vermietung-upload-preview.is-active{max-width:100%;width:100%;height:auto}
+				.cmx-vermietung-upload-preview,.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video,.cmx-vermietung-upload-video.is-active{max-width:100%;width:100%;height:auto}
 			}
 		</style>';
 		echo '</head><body>';
@@ -1131,7 +1172,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '</div>';
 		echo '<button type="submit" class="cmx-vermietung-submit" id="cmx-vermietung-submit"' . (($selected_contact_id > 0 && $selected_vehicle_id > 0) ? '' : ' disabled') . '>' . \esc_html($submit_label) . '</button>';
-		echo '<a class="cmx-vermietung-icon-button' . ($current_contract_edit_url === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contract-edit" href="' . \esc_url($current_contract_edit_url !== '' ? $current_contract_edit_url : '#') . '"' . ($current_contract_edit_url !== '' ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') . ' title="Vertrag im WP-Admin öffnen"><span class="dashicons dashicons-media-spreadsheet" aria-hidden="true"></span></a>';
+		echo '<a class="cmx-vermietung-icon-button' . ($current_contract_edit_url === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contract-edit" href="' . \esc_url($current_contract_edit_url !== '' ? $current_contract_edit_url : '#') . '"' . ($current_contract_edit_url !== '' ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') . ' title="Vertrag im WP-Admin öffnen" style="color:' . \esc_attr($current_contract_edit_url === '' ? '#98a2b3' : '#135e96') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 2v3h14V5H5Zm0 5v3h4v-3H5Zm6 0v3h3v-3h-3Zm5 0v3h3v-3h-3ZM5 15v4h4v-4H5Zm6 0v4h3v-4h-3Zm5 0v4h3v-4h-3Z"/></svg></a>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-grid">';
@@ -1313,6 +1354,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<p class="cmx-vermietung-upload-meta" id="cmx-vermietung-identitaetskarte-meta">' . \esc_html($identity_filename !== '' ? $identity_filename : '') . '</p>'; // Noch kein Foto gewählt.
 		echo '</div>';
 		echo '</section>';
+		echo '<section class="cmx-vermietung-upload-panel">';
+		echo '<div class="cmx-vermietung-panel-head">';
+		echo '<h2 class="cmx-vermietung-panel-title">Bestandsaufnahme</h2>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-upload-body">';
+		echo '<label class="cmx-vermietung-upload-dropzone" for="cmx-vermietung-bestandsaufnahme-file" id="cmx-vermietung-bestandsaufnahme-dropzone">';
+		echo '<input type="file" class="cmx-vermietung-upload-input" name="cmx_vermietung_bestandsaufnahme_file" id="cmx-vermietung-bestandsaufnahme-file" accept="video/*">';
+		echo '<video class="cmx-vermietung-upload-video' . ($inventory_video_url !== '' ? ' is-active' : '') . '" id="cmx-vermietung-bestandsaufnahme-preview" controls preload="metadata"' . ($inventory_video_url !== '' ? ' src="' . \esc_url($inventory_video_url) . '"' : '') . '></video>';
+		echo '<span class="cmx-vermietung-upload-copy">';
+		echo '<span class="cmx-vermietung-upload-title">' . \esc_html($inventory_video_url !== '' ? 'Bestandsaufnahme ersetzen' : 'Bestandsaufnahme wählen') . '</span>';
+		echo '<span class="cmx-vermietung-upload-hint">MP4, MOV, WebM oder anderes Video hochladen.</span>';
+		echo '</span>';
+		echo '</label>';
+		echo '<p class="cmx-vermietung-upload-meta" id="cmx-vermietung-bestandsaufnahme-meta">' . \esc_html($inventory_filename !== '' ? $inventory_filename : '') . '</p>';
+		echo '</div>';
+		echo '</section>';
 		echo '</form></div></div></div>';
 		echo '<script>
 			(function(){
@@ -1334,6 +1391,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var identityFile=document.getElementById("cmx-vermietung-identitaetskarte-file");
 				var identityPreview=document.getElementById("cmx-vermietung-identitaetskarte-preview");
 				var identityMeta=document.getElementById("cmx-vermietung-identitaetskarte-meta");
+				var inventoryFile=document.getElementById("cmx-vermietung-bestandsaufnahme-file");
+				var inventoryPreview=document.getElementById("cmx-vermietung-bestandsaufnahme-preview");
+				var inventoryMeta=document.getElementById("cmx-vermietung-bestandsaufnahme-meta");
 				var contractPicker=document.getElementById("cmx-vermietung-vertrag-picker");
 				var contractSearch=document.getElementById("cmx-vermietung-vertrag-search");
 				var contractResults=document.getElementById("cmx-vermietung-vertrag-results");
@@ -1456,10 +1516,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(!file){
 						previewNode.classList.remove("is-active");
 						previewNode.removeAttribute("src");
+						if(previewNode.tagName==="VIDEO"){
+							try{previewNode.load();}catch(err){}
+						}
 						metaNode.textContent="Noch kein Foto gewählt.";
 						return;
 					}
 					metaNode.textContent=String(file.name||"");
+					if(previewNode.tagName==="VIDEO"){
+						if(String(file.type||"").indexOf("video/")!==0){
+							previewNode.classList.remove("is-active");
+							previewNode.removeAttribute("src");
+							try{previewNode.load();}catch(err){}
+							return;
+						}
+						previewNode.src=URL.createObjectURL(file);
+						previewNode.classList.add("is-active");
+						try{previewNode.load();}catch(err){}
+						return;
+					}
 					if(String(file.type||"").indexOf("image/")!==0){
 						previewNode.classList.remove("is-active");
 						previewNode.removeAttribute("src");
@@ -1760,6 +1835,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				if(identityFile){
 					identityFile.addEventListener("change", function(){
 						updateUploadPreview(identityFile.files && identityFile.files[0] ? identityFile.files[0] : null, identityPreview, identityMeta);
+					});
+				}
+				if(inventoryFile){
+					inventoryFile.addEventListener("change", function(){
+						updateUploadPreview(inventoryFile.files && inventoryFile.files[0] ? inventoryFile.files[0] : null, inventoryPreview, inventoryMeta);
 					});
 				}
 				if(transferNodes.ort && transferLabels.ort){
