@@ -1,5 +1,7 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
+require_once __DIR__ . '/telefonbuch-detail.php';
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_is_telefonbuch_request')) {
 	function cmx_is_telefonbuch_request(): bool {
 		if (\is_admin()) {
@@ -311,6 +313,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_contact_row')) {
 			'website_label' => $website_label,
 			'maps_address' => $maps_address,
 			'maps_url' => $maps_url,
+			'detail_url' => \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_url')
+				? (string) cmx_telefonbuch_detail_url($post_id)
+				: '',
 			'image_url' => \function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')
 				? (string) cmx_contact_logo_url($post_id)
 				: '',
@@ -394,6 +399,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 		echo '<!doctype html><html lang="de"><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
 		echo '<title>Telefonbuch</title>';
+		echo '<link rel="stylesheet" href="' . \esc_url(\includes_url('css/dashicons.min.css')) . '">';
 		echo '<style>
 			:root{color-scheme:light}
 			*{box-sizing:border-box}
@@ -418,6 +424,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			.cmx-telefonbuch-table th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;background:#fafafa}
 			.cmx-telefonbuch-table tbody tr:nth-child(even){background:#fcfcfc}
 			.cmx-telefonbuch-table tbody tr:hover{background:#eaf5ff}
+			.cmx-telefonbuch-row-active,.cmx-telefonbuch-row-active:hover{background:#dfefff !important}
 			.cmx-telefonbuch-thumb-wrap{width:86px}
 			.cmx-telefonbuch-thumb{display:block;width:64px;height:64px;object-fit:contain;border-radius:12px;border:1px solid #e0e0e0;background:#fff;padding:4px}
 			.cmx-telefonbuch-thumb-placeholder{display:block;width:64px;height:64px;border-radius:12px;border:1px dashed #d4d4d4;background:#f4f4f4}
@@ -427,6 +434,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			.cmx-telefonbuch-map-link{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:1px solid #d7e3ee;background:#f7fbff;color:#135e96;text-decoration:none;flex:0 0 auto}
 			.cmx-telefonbuch-map-link:hover{background:#e9f4ff;color:#0a4b79;border-color:#bdd7ee}
 			.cmx-telefonbuch-map-icon{display:block;width:15px;height:15px;fill:currentColor}
+			.cmx-telefonbuch-detail-link{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:1px solid #d7e3ee;background:#fff6eb;color:#b45309;text-decoration:none;flex:0 0 auto}
+			.cmx-telefonbuch-detail-link:hover{background:#ffedd5;color:#92400e;border-color:#fdba74}
+			.cmx-telefonbuch-detail-link .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
 			.cmx-telefonbuch-subtitle{display:block;margin-top:3px;color:#667085;font-size:13px}
 			.cmx-telefonbuch-list{display:flex;flex-direction:column;gap:8px}
 			.cmx-telefonbuch-item{display:flex;flex-direction:column;gap:2px}
@@ -492,6 +502,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			$website_label = (string) ($row['website_label'] ?? '');
 			$maps_address = (string) ($row['maps_address'] ?? '');
 			$maps_url = (string) ($row['maps_url'] ?? '');
+			$detail_url = (string) ($row['detail_url'] ?? '');
 			$search = (string) ($row['search'] ?? '');
 			$phones = (array) ($row['phones'] ?? []);
 			$emails = (array) ($row['emails'] ?? []);
@@ -510,6 +521,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			if ($maps_url !== '') {
 				echo '<a class="cmx-telefonbuch-map-link" href="' . \esc_url($maps_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr('In Google Maps öffnen: ' . $maps_address) . '" aria-label="' . \esc_attr('Adresse in Google Maps öffnen') . '">';
 				echo '<svg class="cmx-telefonbuch-map-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.34 6.1 12.15 6.36 12.44a.86.86 0 0 0 1.28 0C12.9 21.15 19 14.34 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>';
+				echo '</a>';
+			}
+			if ($detail_url !== '') {
+				echo '<a class="cmx-telefonbuch-detail-link" href="' . \esc_url($detail_url) . '" data-detail-url="' . \esc_url($detail_url) . '" title="Kontaktdetails öffnen" aria-label="Kontaktdetails öffnen">';
+				echo '<span class="dashicons dashicons-carrot" aria-hidden="true"></span>';
 				echo '</a>';
 			}
 			if ($edit_url !== '') {
@@ -587,25 +603,116 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 				var input=document.getElementById("cmx-telefonbuch-search");
 				var body=document.getElementById("cmx-telefonbuch-table-body");
 				var countNode=document.getElementById("cmx-telefonbuch-count");
+				var activeRow=null;
 				if(!input||!body){return;}
-				var rows=[].slice.call(body.querySelectorAll("tr"));
+				function getRows(){return [].slice.call(body.querySelectorAll("tr[data-search]"));}
+				function getVisibleRows(){return getRows().filter(function(row){return row.style.display!=="none";});}
+				function getDetailLink(row){return row ? row.querySelector("a[data-detail-url]") : null;}
+				function getSelectableRows(){return getVisibleRows().filter(function(row){return !!getDetailLink(row);});}
 				function normalize(txt){return String(txt||"").toLowerCase().trim();}
 				function updateCount(visible){
 					if(!countNode){return;}
 					countNode.textContent=visible + " Kontakte";
 				}
+				function setActiveRow(row, scrollIntoView){
+					if(activeRow && activeRow!==row){
+						activeRow.classList.remove("cmx-telefonbuch-row-active");
+						activeRow.removeAttribute("aria-selected");
+					}
+					activeRow=row||null;
+					if(!activeRow){return;}
+					activeRow.classList.add("cmx-telefonbuch-row-active");
+					activeRow.setAttribute("aria-selected","true");
+					if(scrollIntoView!==false){
+						try{
+							activeRow.scrollIntoView({block:"nearest",inline:"nearest"});
+						}catch(e){
+							activeRow.scrollIntoView(false);
+						}
+					}
+				}
+				function syncActiveRow(){
+					var rows=getSelectableRows();
+					if(!rows.length){
+						setActiveRow(null,false);
+						return;
+					}
+					if(activeRow && rows.indexOf(activeRow)!==-1){
+						return;
+					}
+					if(normalize(input.value)!==""){
+						setActiveRow(rows[0],false);
+						return;
+					}
+					setActiveRow(null,false);
+				}
+				function moveActiveRow(delta){
+					var rows=getSelectableRows();
+					var nextIndex;
+					if(!rows.length){return;}
+					nextIndex=rows.indexOf(activeRow);
+					if(nextIndex===-1){
+						setActiveRow(delta<0 ? rows[rows.length-1] : rows[0]);
+						return;
+					}
+					nextIndex+=delta;
+					if(nextIndex<0){nextIndex=0;}
+					if(nextIndex>=rows.length){nextIndex=rows.length-1;}
+					setActiveRow(rows[nextIndex]);
+				}
+				function openActiveRow(){
+					var row=activeRow;
+					var link;
+					if(!row){
+						var rows=getSelectableRows();
+						if(!rows.length){return;}
+						if(rows.length===1 || normalize(input.value)!==""){
+							row=rows[0];
+						}
+					}
+					link=getDetailLink(row);
+					if(link && link.href){
+						window.location.href=link.href;
+					}
+				}
 				function filterRows(){
 					var term=normalize(input.value);
 					var visible=0;
-					rows.forEach(function(row){
+					getRows().forEach(function(row){
 						var haystack=normalize(row.getAttribute("data-search")||"");
 						var match=term==="" || haystack.indexOf(term)!==-1;
 						row.style.display=match ? "" : "none";
 						if(match){visible++;}
 					});
+					syncActiveRow();
 					updateCount(visible);
 				}
 				input.addEventListener("input", filterRows);
+				input.addEventListener("keydown", function(event){
+					if(event.key==="ArrowDown"){
+						event.preventDefault();
+						moveActiveRow(1);
+						return;
+					}
+					if(event.key==="ArrowUp"){
+						event.preventDefault();
+						moveActiveRow(-1);
+						return;
+					}
+					if(event.key==="Enter"){
+						if(activeRow || getSelectableRows().length===1 || normalize(input.value)!==""){
+							event.preventDefault();
+							openActiveRow();
+						}
+						return;
+					}
+					if(event.key==="Escape"){
+						event.preventDefault();
+						input.value="";
+						filterRows();
+						input.focus();
+					}
+				});
 				filterRows();
 			})();
 		</script>';
