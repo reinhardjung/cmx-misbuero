@@ -230,7 +230,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_note')) {
 			'betreff' => \trim((string) ($row['betreff'] ?? '')),
 			'datum' => cmx_telefonbuch_detail_format_date((string) ($row['datum'] ?? '')),
 			'zeit' => \trim((string) ($row['zeit'] ?? '')),
-			'text' => (string) ($row['text'] ?? ''),
+			'text' => \trim((string) ($row['text'] ?? '')),
 		];
 	}
 }
@@ -480,6 +480,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-box{border:1px solid #e8ecef;border-radius:12px;background:#fafbfc;padding:16px}
 			.cmx-telefonbuch-detail-box h3{margin:0 0 10px;font-size:15px}
 			.cmx-telefonbuch-detail-box-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:0 0 10px}
+			.cmx-telefonbuch-detail-box-head-note{margin-bottom:2px}
 			.cmx-telefonbuch-detail-box-head h3{margin:0;font-size:15px}
 			.cmx-telefonbuch-detail-empty{color:#6b7280}
 			.cmx-telefonbuch-detail-people{margin:0;padding:0;list-style:none;display:grid;gap:8px}
@@ -566,7 +567,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 
 		echo '<div class="cmx-telefonbuch-detail-box">';
 		$latest_note_date = \trim((string) (($latest_note['datum'] ?? '') . ' ' . ($latest_note['zeit'] ?? '')));
-		echo '<div class="cmx-telefonbuch-detail-box-head"><h3>Neueste Interne Notiz</h3>';
+		echo '<div class="cmx-telefonbuch-detail-box-head cmx-telefonbuch-detail-box-head-note"><h3>Neueste Interne Notiz</h3>';
 		if ($latest_note_date !== '') {
 			echo '<div class="cmx-telefonbuch-detail-date">' . \esc_html($latest_note_date) . '</div>';
 		}
