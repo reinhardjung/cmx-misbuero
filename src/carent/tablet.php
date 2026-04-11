@@ -973,8 +973,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-title-link:hover{text-decoration:none}
 			.cmx-vermietung-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
 			.cmx-vermietung-body{position:relative;padding:22px 28px 28px;overflow:visible}
-			.cmx-vermietung-notice{margin:0 0 18px;padding:12px 14px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-weight:600}
+			.cmx-vermietung-notice{margin:0 0 18px;padding:12px 14px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-weight:600;transition:opacity .28s ease,transform .28s ease}
 			.cmx-vermietung-notice.is-success{background:#ecfdf3;border-color:#abefc6;color:#027a48}
+			.cmx-vermietung-notice.is-hidden{opacity:0;transform:translateY(-6px);pointer-events:none}
 			.cmx-vermietung-summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 18px;border:1px solid #e4e7ec;border-radius:14px;background:#fafafa;margin-bottom:18px}
 			.cmx-vermietung-summary-copy{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:center;color:#667085}
 			.cmx-vermietung-summary-pill{display:inline-flex;align-items:center;gap:6px}
@@ -991,6 +992,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-icon-button:hover{background:#eef6ff;border-color:#135e96}
 			.cmx-vermietung-icon-button.is-disabled{background:#f8fafc;border-color:#d0d5dd;color:#98a2b3;pointer-events:none}
 			.cmx-vermietung-icon-button .dashicons{width:20px;height:20px;font-size:20px;line-height:20px}
+			.cmx-vermietung-icon-button .dashicons:before{color:#135e96}
+			.cmx-vermietung-icon-button.is-disabled .dashicons:before{color:#98a2b3}
 			.cmx-vermietung-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;overflow:visible;z-index:2;isolation:isolate}
 			.cmx-vermietung-panel{position:relative;min-width:0;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:visible;z-index:1}
 			.cmx-vermietung-panel.is-locked{background:#fbfcfe}
@@ -1085,7 +1088,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div></div>';
 		echo '<div class="cmx-vermietung-body">';
 		if ($status_message !== '') {
-			echo '<div class="cmx-vermietung-notice is-success">' . \esc_html($status_message) . '</div>';
+			echo '<div class="cmx-vermietung-notice is-success" id="cmx-vermietung-status-notice">' . \esc_html($status_message) . '</div>';
 		}
 		if ($error_message !== '') {
 			echo '<div class="cmx-vermietung-notice">' . \esc_html($error_message) . '</div>';
@@ -1326,6 +1329,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var licenseFile=document.getElementById("cmx-vermietung-fuehrerausweis-file");
 				var licensePreview=document.getElementById("cmx-vermietung-fuehrerausweis-preview");
 				var licenseMeta=document.getElementById("cmx-vermietung-fuehrerausweis-meta");
+				var statusNotice=document.getElementById("cmx-vermietung-status-notice");
 				var licenseRequired=licenseFile && String(licenseFile.getAttribute("data-required")||"0")==="1";
 				var identityFile=document.getElementById("cmx-vermietung-identitaetskarte-file");
 				var identityPreview=document.getElementById("cmx-vermietung-identitaetskarte-preview");
@@ -1435,6 +1439,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				function updateSubmit(){
 					var enabled=Number(kontaktInput.value||0)>0 && Number(artikelInput.value||0)>0;
 					submit.disabled=!enabled;
+				}
+				function initStatusNotice(){
+					if(!statusNotice){return;}
+					window.setTimeout(function(){
+						statusNotice.classList.add("is-hidden");
+						window.setTimeout(function(){
+							if(statusNotice && statusNotice.parentNode){
+								statusNotice.parentNode.removeChild(statusNotice);
+							}
+						}, 320);
+					}, 5000);
 				}
 				function updateUploadPreview(file, previewNode, metaNode){
 					if(!previewNode || !metaNode){return;}
@@ -1834,6 +1849,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						window.alert("Bitte zuerst einen Führerausweis hochladen.");
 					}
 				});
+				initStatusNotice();
 				updateSubmit();
 			})();
 		</script>';
