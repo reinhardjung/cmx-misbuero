@@ -359,8 +359,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_beleg_amount_lab
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_beleg')) {
-	function cmx_telefonbuch_detail_latest_beleg(int $post_id): array {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_beleg_send_url')) {
+	function cmx_telefonbuch_detail_beleg_send_url(int $beleg_id): string {
+		$beleg_id = (int) $beleg_id;
+		if ($beleg_id <= 0) {
+			return '';
+		}
+
+		return (string) \add_query_arg(
+			[
+				'action' => 'cmxbu_beleg_send',
+				'post_id' => $beleg_id,
+			],
+			\admin_url('admin-post.php')
+		);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_belege')) {
+	function cmx_telefonbuch_detail_latest_belege(int $post_id): array {
 		if (!\class_exists('\\WP_Query') || $post_id <= 0) {
 			return [];
 		}
@@ -387,7 +404,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_beleg')) 
 		$query = new \WP_Query([
 			'post_type' => \defined(__NAMESPACE__ . '\\CMX_PT_BELEGE') ? (string) \constant(__NAMESPACE__ . '\\CMX_PT_BELEGE') : 'belege',
 			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
-			'posts_per_page' => 1,
+			'posts_per_page' => 5,
 			'fields' => 'ids',
 			'no_found_rows' => true,
 			'orderby' => 'date',
@@ -395,28 +412,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_detail_latest_beleg')) 
 			'meta_query' => [$meta_or],
 		]);
 
-		$beleg_id = (int) ($query->posts[0] ?? 0);
-		if ($beleg_id <= 0) {
+		$beleg_ids = \array_values(\array_filter(\array_map('intval', (array) ($query->posts ?? []))));
+		if ($beleg_ids === []) {
 			return [];
 		}
 
 		$paid_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
 			: '_cmx_beleg_bezahlt_am';
-		$paid_raw = \trim((string) \get_post_meta($beleg_id, $paid_key, true));
-		if ($paid_raw === '' && $paid_key !== '_cmx_beleg_bezahlt_am') {
-			$paid_raw = \trim((string) \get_post_meta($beleg_id, '_cmx_beleg_bezahlt_am', true));
+
+		$items = [];
+		foreach ($beleg_ids as $beleg_id) {
+			$paid_raw = \trim((string) \get_post_meta($beleg_id, $paid_key, true));
+			if ($paid_raw === '' && $paid_key !== '_cmx_beleg_bezahlt_am') {
+				$paid_raw = \trim((string) \get_post_meta($beleg_id, '_cmx_beleg_bezahlt_am', true));
+			}
+
+			$items[] = [
+				'id' => $beleg_id,
+				'title' => \trim((string) \get_the_title($beleg_id)) ?: ('#' . $beleg_id),
+				'url' => (string) \get_edit_post_link($beleg_id, ''),
+				'send_url' => cmx_telefonbuch_detail_beleg_send_url($beleg_id),
+				'date' => cmx_telefonbuch_detail_format_date((string) \get_the_date('Y-m-d', $beleg_id)),
+				'amount' => cmx_telefonbuch_detail_beleg_amount_label($beleg_id),
+				'is_paid' => $paid_raw !== '',
+			];
 		}
 
-		return [
-			'id' => $beleg_id,
-			'title' => \trim((string) \get_the_title($beleg_id)) ?: ('#' . $beleg_id),
-			'url' => (string) \get_edit_post_link($beleg_id, ''),
-			'date' => cmx_telefonbuch_detail_format_date((string) \get_the_date('Y-m-d', $beleg_id)),
-			'amount' => cmx_telefonbuch_detail_beleg_amount_label($beleg_id),
-			'is_paid' => $paid_raw !== '',
-			'paid_label' => $paid_raw !== '' ? ('Bezahlt am ' . cmx_telefonbuch_detail_format_date($paid_raw)) : 'Noch nicht bezahlt',
-		];
+		$open_items = [];
+		$paid_items = [];
+		foreach ($items as $item) {
+			if (!empty($item['is_paid'])) {
+				$paid_items[] = $item;
+				continue;
+			}
+			$open_items[] = $item;
+		}
+
+		return \array_merge($open_items, $paid_items);
 	}
 }
 
@@ -441,10 +474,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		$people = cmx_telefonbuch_detail_people($kontakt_id);
 		$latest_note = cmx_telefonbuch_detail_latest_note($kontakt_id);
 		$latest_task = cmx_telefonbuch_detail_latest_task($kontakt_id);
-		$latest_beleg = cmx_telefonbuch_detail_latest_beleg($kontakt_id);
+		$latest_belege = cmx_telefonbuch_detail_latest_belege($kontakt_id);
 		$back_url = (string) \home_url('/telefonbuch/');
-		$contact_logo = \function_exists(__NAMESPACE__ . '\\cmx_contact_logo_url')
-			? (string) cmx_contact_logo_url($kontakt_id)
+		$maps_address = \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')
+			? (string) cmx_telefonbuch_address_string($kontakt_id)
+			: '';
+		$maps_url = \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_maps_url')
+			? (string) cmx_telefonbuch_maps_url($maps_address)
 			: '';
 
 		while (\ob_get_level()) {
@@ -472,7 +508,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-kicker a{color:inherit;text-decoration:none}
 			.cmx-telefonbuch-detail-title{margin:0;font-size:30px;line-height:1.1}
 			.cmx-telefonbuch-detail-sub{margin:8px 0 0;color:#6b7280;font-size:14px}
-			.cmx-telefonbuch-detail-logo{display:block;max-width:110px;max-height:110px;border-radius:14px;border:1px solid #e0e0e0;background:#fff;padding:6px;object-fit:contain}
+			.cmx-telefonbuch-detail-head-actions{display:flex;align-items:flex-start;justify-content:flex-end;flex:0 0 auto}
+			.cmx-telefonbuch-map-link{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:999px;border:1px solid #d7e3ee;background:#f7fbff;color:#135e96;text-decoration:none;flex:0 0 auto}
+			.cmx-telefonbuch-map-link:hover{background:#e9f4ff;color:#0a4b79;border-color:#bdd7ee}
+			.cmx-telefonbuch-map-icon{display:block;width:30px;height:30px;fill:currentColor}
 			.cmx-telefonbuch-detail-body{padding:22px 28px 28px;display:grid;gap:18px}
 			.cmx-telefonbuch-detail-meta{display:flex;flex-wrap:wrap;gap:10px}
 			.cmx-telefonbuch-detail-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:#f4f6f8;border:1px solid #dde3e8;font-size:13px}
@@ -496,12 +535,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			.cmx-telefonbuch-detail-label{color:#667085;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 			.cmx-telefonbuch-detail-state-paid{color:#137333;font-weight:700}
 			.cmx-telefonbuch-detail-state-open{color:#c62828;font-weight:700}
+			.cmx-telefonbuch-detail-belege-list{display:grid;gap:10px}
 			.cmx-telefonbuch-detail-beleg-row{display:flex;justify-content:space-between;gap:14px;align-items:center;font-weight:700}
 			.cmx-telefonbuch-detail-beleg-meta{display:flex;flex-wrap:wrap;gap:12px;align-items:center;min-width:0}
 			.cmx-telefonbuch-detail-beleg-id{min-width:0}
 			.cmx-telefonbuch-detail-beleg-id a{font-weight:700;text-decoration:none}
 			.cmx-telefonbuch-detail-beleg-date{white-space:nowrap}
-			.cmx-telefonbuch-detail-beleg-amount{white-space:nowrap;margin-left:auto;text-align:right}
+			.cmx-telefonbuch-detail-beleg-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+			.cmx-telefonbuch-detail-beleg-amount{white-space:nowrap;text-align:right}
+			.cmx-telefonbuch-detail-beleg-send{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:1px solid #135e96;color:#135e96;background:#fff;text-decoration:none;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease}
+			.cmx-telefonbuch-detail-beleg-send:hover{background:#eef5fb;border-color:#0f4d7d;color:#0f4d7d}
+			.cmx-telefonbuch-detail-beleg-send.is-sending{opacity:.45;pointer-events:none}
+			.cmx-telefonbuch-detail-beleg-send svg{display:block;width:15px;height:15px;fill:currentColor}
+			.cmx-telefonbuch-detail-beleg-feedback{display:none;margin-top:10px;font-size:13px;font-weight:600}
+			.cmx-telefonbuch-detail-beleg-feedback.is-visible{display:block}
+			.cmx-telefonbuch-detail-beleg-feedback.is-success{color:#137333}
+			.cmx-telefonbuch-detail-beleg-feedback.is-error{color:#c62828}
+			.cmx-telefonbuch-detail-beleg-feedback a{color:inherit;text-decoration:underline;font-weight:700}
 			@media (max-width:820px){
 				.cmx-telefonbuch-detail-page{padding:18px 12px 24px}
 				.cmx-telefonbuch-detail-head{padding:18px 16px;flex-direction:column}
@@ -509,6 +559,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 				.cmx-telefonbuch-detail-grid{grid-template-columns:1fr}
 				.cmx-telefonbuch-detail-title{font-size:24px}
 				.cmx-telefonbuch-detail-people li,.cmx-telefonbuch-detail-line,.cmx-telefonbuch-detail-beleg-row,.cmx-telefonbuch-detail-task-row,.cmx-telefonbuch-detail-box-head{flex-direction:column;align-items:flex-start}
+				.cmx-telefonbuch-detail-beleg-actions{margin-left:0;width:100%;justify-content:flex-end}
 			}
 		</style>';
 		echo '</head><body>';
@@ -521,8 +572,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 			echo '<p class="cmx-telefonbuch-detail-sub">Firmengründung: ' . \esc_html($firmengruendung) . '</p>';
 		}
 		echo '</div>';
-		if ($contact_logo !== '') {
-			echo '<img class="cmx-telefonbuch-detail-logo" src="' . \esc_url($contact_logo) . '" alt="' . \esc_attr($title) . '">';
+		if ($maps_url !== '') {
+			echo '<div class="cmx-telefonbuch-detail-head-actions">';
+			echo '<a class="cmx-telefonbuch-map-link" href="' . \esc_url($maps_url) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr('In Google Maps öffnen: ' . $maps_address) . '" aria-label="' . \esc_attr('Adresse in Google Maps öffnen') . '">';
+			echo '<svg class="cmx-telefonbuch-map-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.34 6.1 12.15 6.36 12.44a.86.86 0 0 0 1.28 0C12.9 21.15 19 14.34 19 9a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>';
+			echo '</a>';
+			echo '</div>';
 		}
 		echo '</div>';
 		echo '<div class="cmx-telefonbuch-detail-body">';
@@ -609,31 +664,151 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_detail_page')) {
 		echo '</div>';
 
 		echo '<div class="cmx-telefonbuch-detail-box">';
-		echo '<h3>Letzter Beleg</h3>';
-		if ($latest_beleg === []) {
+		echo '<h3>Letzte Belege</h3>';
+		if ($latest_belege === []) {
 			echo '<p class="cmx-telefonbuch-detail-empty">Kein Beleg verknüpft.</p>';
 		} else {
-			$url = \trim((string) ($latest_beleg['url'] ?? ''));
-			$title_html = \esc_html((string) ($latest_beleg['title'] ?? ''));
-			if ($url !== '') {
-				$title_html = '<a href="' . \esc_url($url) . '">' . $title_html . '</a>';
+			echo '<div class="cmx-telefonbuch-detail-belege-list">';
+			foreach ($latest_belege as $latest_beleg) {
+				$url = \trim((string) ($latest_beleg['url'] ?? ''));
+				$title_html = \esc_html((string) ($latest_beleg['title'] ?? ''));
+				if ($url !== '') {
+					$title_html = '<a href="' . \esc_url($url) . '">' . $title_html . '</a>';
+				}
+				$amount = \trim((string) ($latest_beleg['amount'] ?? ''));
+				$send_url = \trim((string) ($latest_beleg['send_url'] ?? ''));
+				$state_class = !empty($latest_beleg['is_paid']) ? 'cmx-telefonbuch-detail-state-paid' : 'cmx-telefonbuch-detail-state-open';
+				echo '<div class="cmx-telefonbuch-detail-beleg-row ' . \esc_attr($state_class) . '">';
+				echo '<div class="cmx-telefonbuch-detail-beleg-meta">';
+				echo '<span class="cmx-telefonbuch-detail-beleg-id">' . $title_html . '</span>';
+				echo '<span class="cmx-telefonbuch-detail-beleg-date">' . \esc_html((string) ($latest_beleg['date'] ?? '')) . '</span>';
+				echo '</div>';
+				if ($amount !== '' || $send_url !== '') {
+					echo '<div class="cmx-telefonbuch-detail-beleg-actions">';
+					if ($amount !== '') {
+						echo '<span class="cmx-telefonbuch-detail-beleg-amount">' . \esc_html($amount) . '</span>';
+					}
+					if ($send_url !== '') {
+						echo '<a class="cmx-telefonbuch-detail-beleg-send" data-cmx-beleg-send="1" href="' . \esc_url($send_url) . '" title="Beleg erneut per E-Mail senden" aria-label="Beleg erneut per E-Mail senden">';
+						echo '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm0 2v.2l8 5.2 8-5.2V8H4zm16 8V10.6l-7.5 4.9a1 1 0 0 1-1 0L4 10.6V16h16z"/></svg>';
+						echo '</a>';
+					}
+					echo '</div>';
+				}
+				echo '</div>';
 			}
-			$amount = \trim((string) ($latest_beleg['amount'] ?? ''));
-			$state_class = !empty($latest_beleg['is_paid']) ? 'cmx-telefonbuch-detail-state-paid' : 'cmx-telefonbuch-detail-state-open';
-			echo '<div class="cmx-telefonbuch-detail-beleg-row ' . \esc_attr($state_class) . '">';
-			echo '<div class="cmx-telefonbuch-detail-beleg-meta">';
-			echo '<span class="cmx-telefonbuch-detail-beleg-id">' . $title_html . '</span>';
-			echo '<span class="cmx-telefonbuch-detail-beleg-date">' . \esc_html((string) ($latest_beleg['date'] ?? '')) . '</span>';
 			echo '</div>';
-			if ($amount !== '') {
-				echo '<span class="cmx-telefonbuch-detail-beleg-amount">' . \esc_html($amount) . '</span>';
-			}
-			echo '</div>';
+			echo '<div class="cmx-telefonbuch-detail-beleg-feedback" data-cmx-beleg-feedback="1"></div>';
 		}
 		echo '</div>';
 
 		echo '</div>';
 		echo '</div></div></div>';
+		echo '<script>
+			document.addEventListener("click", function(event) {
+				const belegeSettingsUrl = ' . \wp_json_encode((string) \admin_url('admin.php?page=cmx-einstellungen&tab=belege')) . ';
+				const trigger = event.target.closest("[data-cmx-beleg-send]");
+				if (!trigger) {
+					return;
+				}
+				const url = trigger.getAttribute("href") || "";
+				if (!url || trigger.classList.contains("is-sending")) {
+					return;
+				}
+				event.preventDefault();
+				const box = trigger.closest(".cmx-telefonbuch-detail-box");
+				const feedback = box ? box.querySelector("[data-cmx-beleg-feedback]") : null;
+				const setFeedback = function(text, type, allowHtml) {
+					if (!feedback) {
+						return;
+					}
+					if (allowHtml) {
+						feedback.innerHTML = text;
+					} else {
+						feedback.textContent = text;
+					}
+					feedback.className = "cmx-telefonbuch-detail-beleg-feedback is-visible";
+					if (type === "success") {
+						feedback.classList.add("is-success");
+					} else if (type === "error") {
+						feedback.classList.add("is-error");
+					}
+				};
+				const normalizeText = function(text) {
+					return (text || "").replace(/\\s+/g, " ").trim();
+				};
+				const escapeHtml = function(value) {
+					return String(value || "")
+						.replace(/&/g, "&amp;")
+						.replace(/</g, "&lt;")
+						.replace(/>/g, "&gt;")
+						.replace(/"/g, "&quot;")
+						.split(String.fromCharCode(39)).join("&#039;");
+				};
+				const linkifyErrorText = function(text) {
+					let html = escapeHtml(normalizeText(text));
+					html = html.replace(
+						/Einstellungen &gt; Belege/g,
+						"<a href=\\"" + belegeSettingsUrl + "\\" target=\\"_blank\\" rel=\\"noopener noreferrer\\">Einstellungen &gt; Belege</a>"
+					);
+					return html;
+				};
+				const extractNoticeText = function(html, selector) {
+					if (!html) {
+						return "";
+					}
+					const parser = new window.DOMParser();
+					const doc = parser.parseFromString(html, "text/html");
+					const node = doc.querySelector(selector);
+					if (!node) {
+						return "";
+					}
+					const clone = node.cloneNode(true);
+					clone.querySelectorAll("a,button,script,style").forEach(function(child) {
+						child.remove();
+					});
+					return normalizeText(clone.textContent || "");
+				};
+				trigger.classList.add("is-sending");
+				setFeedback("Beleg wird versendet ...", "");
+				window.fetch(url, {
+					credentials: "same-origin",
+					redirect: "follow"
+				}).then(function(response) {
+					const finalUrl = response.url || url;
+					const params = new URL(finalUrl, window.location.origin).searchParams;
+					return response.text().then(function(html) {
+						if (params.get("cmx_beleg_mail_sent") === "1") {
+							const successText = extractNoticeText(html, ".notice-success p");
+							setFeedback(successText || "Beleg per E-Mail versendet.", "success");
+							return;
+						}
+						if (params.get("cmx_beleg_mail_missing_sender") === "1") {
+							setFeedback("Bitte hinterlege zuerst Deine E-Mail-Adresse.", "error");
+							return;
+						}
+						if (params.get("cmx_beleg_mail_error") === "1") {
+							const errorText = extractNoticeText(html, ".notice-error p");
+							setFeedback(
+								linkifyErrorText(errorText || "E-Mail konnte nicht vorbereitet oder gesendet werden. Bitte prüfe Deine Vorlagen sowie Deine SMTP-/Alias-Einstellungen."),
+								"error",
+								true
+							);
+							return;
+						}
+						if (!response.ok) {
+							throw new Error("send_failed");
+						}
+						const successText = extractNoticeText(html, ".notice-success p");
+						setFeedback(successText || "Versand ausgelöst.", "success");
+					});
+				}).catch(function() {
+					setFeedback("E-Mail konnte nicht vorbereitet oder gesendet werden.", "error");
+				}).finally(function() {
+					trigger.classList.remove("is-sending");
+				});
+			});
+		</script>';
 		echo '</body></html>';
 		exit;
 	}

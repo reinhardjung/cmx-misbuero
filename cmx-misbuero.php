@@ -33,7 +33,6 @@ require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/notizen.php';
 require_once __DIR__ . '/includes/projekte.php';
 require_once __DIR__ . '/includes/katalog_access.php';
-require_once __DIR__ . '/includes/telefonbuch.php';
 require_once __DIR__ . '/includes/webdav.php';
 require_once __DIR__ . '/includes/featured_images.php';
 require_once __DIR__ . '/includes/dokumente.php';

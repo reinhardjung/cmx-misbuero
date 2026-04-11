@@ -199,6 +199,13 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_tooltip')) {
 	}
 }
 
+if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_belege_settings_link_html')) {
+	function cmx_cockpit_belege_settings_link_html(): string {
+		$url = (string) \admin_url('admin.php?page=cmx-einstellungen&tab=belege');
+		return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer">Einstellungen &gt; Belege</a>';
+	}
+}
+
 if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_type_label')) {
 	function cmx_cockpit_beleg_type_label(int $post_id): string {
 		$type_label = '';
@@ -485,7 +492,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 				? (string) cmx_get_belegmail('mahnung', $kontakt_id, $mail_mode, $to)
 				: '';
 			if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
-				return new \WP_Error('missing_mail_template', 'Fuer Mahnung fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+				return new \WP_Error('missing_mail_template', 'Für Mahnung fehlt die Du-E-Mail-Vorlage unter ' . cmx_cockpit_belege_settings_link_html() . '.');
 			}
 			$custom_has_anrede_token = $custom_message !== ''
 				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
@@ -503,7 +510,7 @@ if (!function_exists(__NAMESPACE__ . '\\cmx_cockpit_mahnwesen_send_mail')) {
 				? (string) cmx_get_belegmail('rechnung', $kontakt_id, $mail_mode, $to)
 				: '';
 			if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
-				return new \WP_Error('missing_mail_template', 'Fuer Rechnung fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+				return new \WP_Error('missing_mail_template', 'Für Rechnung fehlt die Du-E-Mail-Vorlage unter ' . cmx_cockpit_belege_settings_link_html() . '.');
 			}
 			$custom_has_anrede_token = $custom_message !== ''
 				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')
@@ -1046,7 +1053,12 @@ function cmx_render_rechnungen_faellig_widget(): void {
 					}
 					throw new Error(resp && resp.data ? String(resp.data) : 'E-Mail konnte nicht gesendet werden.');
 				}).catch(function(err){
-					window.alert(err && err.message ? err.message : 'E-Mail konnte nicht gesendet werden.');
+					var errorMessage = err && err.message ? String(err.message) : 'E-Mail konnte nicht gesendet werden.';
+					if (errorMessage.indexOf('<a ') !== -1) {
+						showAdminNotice(errorMessage, 'error', true);
+					} else {
+						window.alert(errorMessage);
+					}
 					btn.disabled = false;
 					btn.dataset.loading = '';
 				});
