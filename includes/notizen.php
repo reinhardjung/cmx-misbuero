@@ -44,7 +44,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_time')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_notizen_betreff_options')) {
 	function cmx_notizen_betreff_options(): array {
-		return ['Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'];
+		return ['Allgemein', 'Meeting', 'E-Mail', 'Telefonat', 'Vor Ort', 'Remote'];
 	}
 }
 
