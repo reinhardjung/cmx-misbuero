@@ -271,6 +271,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_rows')) {
 				'search'    => \function_exists('mb_strtolower') ? \mb_strtolower($search_text, 'UTF-8') : \strtolower($search_text),
 				'kennzeichen'          => \trim((string) ($details['kennzeichen'] ?? $kennzeichen)),
 				'km_stand_uebernahme'  => \trim((string) ($details['km_stand_uebernahme'] ?? '')),
+				'km_stand_rueckgabe'   => \trim((string) ($details['km_stand_rueckgabe'] ?? '')),
 				'begrenzung'           => \trim((string) ($details['begrenzung'] ?? '')),
 				'mehrpreis'            => \trim((string) ($details['mehrpreis'] ?? '')),
 				'kasko_min'            => \trim((string) ($details['kasko_min'] ?? '')),
@@ -293,6 +294,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_detail_values'))
 			: [
 				'kennzeichen'         => '',
 				'km_stand_uebernahme' => '',
+				'km_stand_rueckgabe'  => '',
 				'begrenzung'          => '',
 				'mehrpreis'           => '',
 				'kasko_min'           => '',
@@ -308,6 +310,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_detail_values'))
 		$values = [
 			'kennzeichen'         => \trim((string) ($defaults['kennzeichen'] ?? '')),
 			'km_stand_uebernahme' => \trim((string) ($defaults['km_stand_uebernahme'] ?? '')),
+			'km_stand_rueckgabe'  => \trim((string) ($defaults['km_stand_rueckgabe'] ?? '')),
 			'begrenzung'          => \trim((string) ($defaults['begrenzung'] ?? '')),
 			'mehrpreis'           => \trim((string) ($defaults['mehrpreis'] ?? '')),
 			'kasko_min'           => \trim((string) ($defaults['kasko_min'] ?? '')),
@@ -321,6 +324,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_detail_values'))
 				'km_stand_uebernahme' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 					: '_cmx_carent_fahrzeug_km_stand_uebernahme',
+				'km_stand_rueckgabe' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+					: '_cmx_carent_fahrzeug_km_stand_rueckgabe',
 				'begrenzung' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META')
 					: '_cmx_carent_fahrzeug_km_begrenzung',
@@ -430,6 +436,60 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			: '';
 		$km_stand = isset($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme'])
 			? cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme']))
+			: '';
+
+		if ($ort === '') {
+			\delete_post_meta($post_id, $ort_meta_key);
+		} else {
+			\update_post_meta($post_id, $ort_meta_key, $ort);
+		}
+
+		if ($datum === '' || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) {
+			\delete_post_meta($post_id, $datum_meta_key);
+		} else {
+			\update_post_meta($post_id, $datum_meta_key, $datum);
+		}
+
+		if ($uhrzeit === '' || !\preg_match('/^\d{2}:\d{2}$/', $uhrzeit)) {
+			\delete_post_meta($post_id, $uhrzeit_meta_key);
+		} else {
+			\update_post_meta($post_id, $uhrzeit_meta_key, $uhrzeit);
+		}
+
+		if ($km_stand === '') {
+			\delete_post_meta($post_id, $km_meta_key);
+		} else {
+			\update_post_meta($post_id, $km_meta_key, $km_stand);
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_rueckgabe_values')) {
+	function cmx_vermietung_save_rueckgabe_values(int $post_id): void {
+		$ort_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')
+			: '_cmx_carent_rueckgabe_ort';
+		$datum_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+			: '_cmx_carent_rueckgabe_datum';
+		$uhrzeit_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META')
+			: '_cmx_carent_rueckgabe_uhrzeit';
+		$km_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+			: '_cmx_carent_fahrzeug_km_stand_rueckgabe';
+
+		$ort = isset($_POST['cmx_vermietung_rueckgabe_ort'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_rueckgabe_ort']))
+			: '';
+		$datum = isset($_POST['cmx_vermietung_rueckgabe_datum'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_rueckgabe_datum']))
+			: '';
+		$uhrzeit = isset($_POST['cmx_vermietung_rueckgabe_uhrzeit'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_rueckgabe_uhrzeit']))
+			: '';
+		$km_stand = isset($_POST['cmx_vermietung_fahrzeug_km_stand_rueckgabe'])
+			? cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_vermietung_fahrzeug_km_stand_rueckgabe']))
 			: '';
 
 		if ($ort === '') {
@@ -685,6 +745,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_META, $artikel_id);
 		cmx_vermietung_save_vehicle_detail_values($post_id);
 		cmx_vermietung_save_uebernahme_values($post_id);
+		cmx_vermietung_save_rueckgabe_values($post_id);
 		if ($has_license_upload) {
 			require_once \ABSPATH . 'wp-admin/includes/file.php';
 			require_once \ABSPATH . 'wp-admin/includes/media.php';
@@ -829,6 +890,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			));
 			if ($stored_km_stand !== '') {
 				$selected_uebernahme_values['km_stand'] = $stored_km_stand;
+			}
+		}
+		$selected_rueckgabe_values = [
+			'ort'      => '',
+			'datum'    => '',
+			'uhrzeit'  => '',
+			'km_stand' => \trim((string) ($selected_vehicle_details['km_stand_rueckgabe'] ?? '')),
+		];
+		if ($current_post_id > 0) {
+			$selected_rueckgabe_values['ort'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')
+					: '_cmx_carent_rueckgabe_ort',
+				true
+			));
+			$selected_rueckgabe_values['datum'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+					: '_cmx_carent_rueckgabe_datum',
+				true
+			));
+			$selected_rueckgabe_values['uhrzeit'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_UHRZEIT_META')
+					: '_cmx_carent_rueckgabe_uhrzeit',
+				true
+			));
+			$stored_km_stand_rueckgabe = \trim((string) \get_post_meta(
+				$current_post_id,
+				\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META')
+					: '_cmx_carent_fahrzeug_km_stand_rueckgabe',
+				true
+			));
+			if ($stored_km_stand_rueckgabe !== '') {
+				$selected_rueckgabe_values['km_stand'] = $stored_km_stand_rueckgabe;
 			}
 		}
 		$selected_contract_row = null;
@@ -1075,7 +1175,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					$search = (string) ($row['search'] ?? '');
 					$details_source = ($key === 'artikel' && $id === $selected_vehicle_id) ? $selected_vehicle_details : $row;
 
-					echo '<button type="button" class="cmx-vermietung-item" data-id="' . $id . '" data-title="' . \esc_attr($row_title) . '" data-search="' . \esc_attr($search) . '" data-kennzeichen="' . \esc_attr((string) ($details_source['kennzeichen'] ?? '')) . '" data-km-stand-uebernahme="' . \esc_attr((string) ($details_source['km_stand_uebernahme'] ?? '')) . '" data-begrenzung="' . \esc_attr((string) ($details_source['begrenzung'] ?? '')) . '" data-mehrpreis="' . \esc_attr((string) ($details_source['mehrpreis'] ?? '')) . '" data-kasko-min="' . \esc_attr((string) ($details_source['kasko_min'] ?? '')) . '" data-kasko-max="' . \esc_attr((string) ($details_source['kasko_max'] ?? '')) . '" data-mietpreis="' . \esc_attr((string) ($details_source['mietpreis'] ?? '')) . '">';
+					echo '<button type="button" class="cmx-vermietung-item" data-id="' . $id . '" data-title="' . \esc_attr($row_title) . '" data-search="' . \esc_attr($search) . '" data-kennzeichen="' . \esc_attr((string) ($details_source['kennzeichen'] ?? '')) . '" data-km-stand-uebernahme="' . \esc_attr((string) ($details_source['km_stand_uebernahme'] ?? '')) . '" data-km-stand-rueckgabe="' . \esc_attr((string) ($details_source['km_stand_rueckgabe'] ?? '')) . '" data-begrenzung="' . \esc_attr((string) ($details_source['begrenzung'] ?? '')) . '" data-mehrpreis="' . \esc_attr((string) ($details_source['mehrpreis'] ?? '')) . '" data-kasko-min="' . \esc_attr((string) ($details_source['kasko_min'] ?? '')) . '" data-kasko-max="' . \esc_attr((string) ($details_source['kasko_max'] ?? '')) . '" data-mietpreis="' . \esc_attr((string) ($details_source['mietpreis'] ?? '')) . '">';
 					echo '<span class="cmx-vermietung-thumb">';
 					if ($image_url !== '') {
 						echo '<img src="' . \esc_url($image_url) . '" alt="">';
@@ -1153,6 +1253,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		}
 		echo '</div>';
 		echo '</section>';
+		echo '<section class="cmx-vermietung-transfer-panel' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-rueckgabe-panel">';
+		echo '<div class="cmx-vermietung-panel-head">';
+		echo '<h2 class="cmx-vermietung-panel-title">Rückgabe</h2>';
+		echo '<p class="cmx-vermietung-panel-sub">Daten für die Rückgabe des gewählten Fahrzeugs.</p>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-transfer-grid">';
+		$rueckgabe_fields = [
+			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_rueckgabe_ort', 'type' => 'text', 'step' => ''],
+			'datum' => ['label' => 'Datum', 'name' => 'cmx_vermietung_rueckgabe_datum', 'type' => 'date', 'step' => ''],
+			'uhrzeit' => ['label' => 'Uhrzeit', 'name' => 'cmx_vermietung_rueckgabe_uhrzeit', 'type' => 'time', 'step' => ''],
+			'km_stand' => ['label' => 'KM-Stand', 'name' => 'cmx_vermietung_fahrzeug_km_stand_rueckgabe', 'type' => 'number', 'step' => '1'],
+		];
+		foreach ($rueckgabe_fields as $field_key => $field_config) {
+			$field_value = \trim((string) ($selected_rueckgabe_values[$field_key] ?? ''));
+			$label_id = 'cmx-vermietung-rueckgabe-label-' . $field_key;
+			$is_actionable_label = \in_array($field_key, ['ort', 'datum', 'uhrzeit'], true);
+			echo '<div class="cmx-vermietung-info-item">';
+			echo '<label class="cmx-vermietung-info-label' . ($is_actionable_label ? ' is-actionable' : '') . '" id="' . \esc_attr($label_id) . '" for="cmx-vermietung-rueckgabe-' . \esc_attr($field_key) . '"' . ($is_actionable_label ? ' title="' . \esc_attr((string) $field_config['label'] . ' automatisch einsetzen') . '"' : '') . '>' . \esc_html((string) $field_config['label']) . '</label>';
+			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-rueckgabe-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
+			echo '</div>';
+		}
+		echo '</div>';
+		echo '</section>';
 		echo '<section class="cmx-vermietung-upload-panel">';
 		echo '<div class="cmx-vermietung-panel-head">';
 		echo '<h2 class="cmx-vermietung-panel-title">Führerausweis</h2>';
@@ -1214,6 +1337,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var contractActive=null;
 				var vehicleInfoPanel=document.getElementById("cmx-vermietung-info-panel");
 				var transferPanel=document.getElementById("cmx-vermietung-uebernahme-panel");
+				var returnPanel=document.getElementById("cmx-vermietung-rueckgabe-panel");
 				var vehicleInfoNodes={
 					kennzeichen:document.getElementById("cmx-vermietung-info-kennzeichen"),
 					begrenzung:document.getElementById("cmx-vermietung-info-begrenzung"),
@@ -1228,10 +1352,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-uhrzeit"),
 					km_stand:document.getElementById("cmx-vermietung-uebernahme-km_stand")
 				};
+				var returnNodes={
+					ort:document.getElementById("cmx-vermietung-rueckgabe-ort"),
+					datum:document.getElementById("cmx-vermietung-rueckgabe-datum"),
+					uhrzeit:document.getElementById("cmx-vermietung-rueckgabe-uhrzeit"),
+					km_stand:document.getElementById("cmx-vermietung-rueckgabe-km_stand")
+				};
 				var transferLabels={
 					ort:document.getElementById("cmx-vermietung-uebernahme-label-ort"),
 					datum:document.getElementById("cmx-vermietung-uebernahme-label-datum"),
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-label-uhrzeit")
+				};
+				var returnLabels={
+					ort:document.getElementById("cmx-vermietung-rueckgabe-label-ort"),
+					datum:document.getElementById("cmx-vermietung-rueckgabe-label-datum"),
+					uhrzeit:document.getElementById("cmx-vermietung-rueckgabe-label-uhrzeit")
 				};
 				var pickers={};
 				function normalize(value){return String(value||"").toLowerCase().trim();}
@@ -1323,6 +1458,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var values=item ? {
 						kennzeichen:String(item.getAttribute("data-kennzeichen")||"").trim(),
 						km_stand_uebernahme:String(item.getAttribute("data-km-stand-uebernahme")||"").trim(),
+						km_stand_rueckgabe:String(item.getAttribute("data-km-stand-rueckgabe")||"").trim(),
 						begrenzung:String(item.getAttribute("data-begrenzung")||"").trim(),
 						mehrpreis:String(item.getAttribute("data-mehrpreis")||"").trim(),
 						kasko_min:String(item.getAttribute("data-kasko-min")||"").trim(),
@@ -1343,6 +1479,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(transferPanel){
 						transferPanel.classList.toggle("is-hidden", !hasVehicle);
 					}
+					if(returnPanel){
+						returnPanel.classList.toggle("is-hidden", !hasVehicle);
+					}
 					Object.keys(vehicleInfoNodes).forEach(function(key){
 						if(!vehicleInfoNodes[key]){return;}
 						vehicleInfoNodes[key].value=values[key];
@@ -1354,6 +1493,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					});
 					if(transferNodes.km_stand){
 						transferNodes.km_stand.value=hasVehicle ? values.km_stand_uebernahme : "";
+					}
+					Object.keys(returnNodes).forEach(function(key){
+						if(!returnNodes[key]){return;}
+						returnNodes[key].disabled=!hasVehicle;
+					});
+					if(returnNodes.km_stand){
+						returnNodes.km_stand.value=hasVehicle ? values.km_stand_rueckgabe : "";
 					}
 				}
 				function setArtikelLocked(locked){
@@ -1634,6 +1780,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						transferNodes.uhrzeit.value=getCurrentTimeValue();
 						triggerInputEvents(transferNodes.uhrzeit);
 						transferNodes.uhrzeit.focus();
+					});
+				}
+				if(returnNodes.ort && returnLabels.ort){
+					returnLabels.ort.addEventListener("click", function(event){
+						if(returnNodes.ort.disabled){return;}
+						event.preventDefault();
+						getCurrentLocation(function(location){
+							if(!location){return;}
+							var value=String(location.address || "").trim();
+							if(!value && location.lat && location.lon){
+								value=String(location.lat)+", "+String(location.lon);
+							}
+							if(!value){return;}
+							returnNodes.ort.value=value;
+							triggerInputEvents(returnNodes.ort);
+							returnNodes.ort.focus();
+						});
+					});
+				}
+				if(returnNodes.datum && returnLabels.datum){
+					returnLabels.datum.addEventListener("click", function(event){
+						if(returnNodes.datum.disabled){return;}
+						event.preventDefault();
+						returnNodes.datum.value=getTodayValue();
+						triggerInputEvents(returnNodes.datum);
+						returnNodes.datum.focus();
+					});
+				}
+				if(returnNodes.uhrzeit && returnLabels.uhrzeit){
+					returnLabels.uhrzeit.addEventListener("click", function(event){
+						if(returnNodes.uhrzeit.disabled){return;}
+						event.preventDefault();
+						returnNodes.uhrzeit.value=getCurrentTimeValue();
+						triggerInputEvents(returnNodes.uhrzeit);
+						returnNodes.uhrzeit.focus();
 					});
 				}
 				document.addEventListener("click", function(event){
