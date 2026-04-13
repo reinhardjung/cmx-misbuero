@@ -2016,8 +2016,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<section class="cmx-vermietung-transfer-panel' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-uebernahme-panel">';
 		echo '<div class="cmx-vermietung-panel-head">';
 		echo '<h2 class="cmx-vermietung-panel-title">Übernahme</h2>';
-		echo '<p class="cmx-vermietung-panel-sub">Daten für die Übergabe des gewählten Fahrzeugs.</p>';
+		echo '<p class="cmx-vermietung-panel-sub" style="padding-bottom:20px;">Daten für die Übergabe des gewählten Fahrzeugs.</p>';
 		echo '</div>';
+		cmx_vermietung_render_fotos_section('uebernahme', $current_post_id, $selected_vehicle_id > 0);
+		cmx_vermietung_render_transfer_video_field('uebernahme', $uebernahme_video_attachment_id, $selected_vehicle_id > 0);
 		echo '<div class="cmx-vermietung-transfer-grid">';
 		$uebernahme_fields = [
 			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_uebernahme_ort', 'type' => 'text', 'step' => ''],
@@ -2039,8 +2041,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		cmx_vermietung_render_signature_pad('uebernahme', 'vermieter', (int) ($selected_uebernahme_signatures['vermieter'] ?? 0), $selected_vehicle_id > 0);
 		cmx_vermietung_render_signature_pad('uebernahme', 'mieter', (int) ($selected_uebernahme_signatures['mieter'] ?? 0), $selected_vehicle_id > 0);
 		echo '</div>';
-		cmx_vermietung_render_fotos_section('uebernahme', $current_post_id, $selected_vehicle_id > 0);
-		cmx_vermietung_render_transfer_video_field('uebernahme', $uebernahme_video_attachment_id, $selected_vehicle_id > 0);
 		echo '</section>';
 		echo '<section class="cmx-vermietung-upload-panel' . ($selected_contact_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-fuehrerausweis-panel">';
 		echo '<div class="cmx-vermietung-panel-head">';
@@ -2093,10 +2093,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<span class="cmx-vermietung-panel-toggle-icon" aria-hidden="true">&#9662;</span>';
 		echo '</button>';
 		echo '</h2>';
-		echo '<p class="cmx-vermietung-panel-sub">Daten für die Rückgabe des gewählten Fahrzeugs.</p>';
+		echo '<p class="cmx-vermietung-panel-sub" style="padding-bottom:20px;">Daten für die Rückgabe des gewählten Fahrzeugs.</p>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-collapsible-body" id="cmx-vermietung-rueckgabe-body">';
+		cmx_vermietung_render_fotos_section('rueckgabe', $current_post_id, $selected_vehicle_id > 0);
+		cmx_vermietung_render_transfer_video_field('rueckgabe', $rueckgabe_video_attachment_id, $selected_vehicle_id > 0);
 		echo '<div class="cmx-vermietung-transfer-grid">';
 		$rueckgabe_fields = [
 			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_rueckgabe_ort', 'type' => 'text', 'step' => ''],
@@ -2118,8 +2120,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		cmx_vermietung_render_signature_pad('rueckgabe', 'vermieter', (int) ($selected_rueckgabe_signatures['vermieter'] ?? 0), $selected_vehicle_id > 0);
 		cmx_vermietung_render_signature_pad('rueckgabe', 'mieter', (int) ($selected_rueckgabe_signatures['mieter'] ?? 0), $selected_vehicle_id > 0);
 		echo '</div>';
-		cmx_vermietung_render_fotos_section('rueckgabe', $current_post_id, $selected_vehicle_id > 0);
-		cmx_vermietung_render_transfer_video_field('rueckgabe', $rueckgabe_video_attachment_id, $selected_vehicle_id > 0);
 		echo '</div>';
 		echo '</section>';
 		echo '</form></div></div></div>';
