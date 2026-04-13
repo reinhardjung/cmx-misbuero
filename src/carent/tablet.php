@@ -410,6 +410,167 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_vehicle_detail_valu
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_signature_meta_key')) {
+	function cmx_vermietung_signature_meta_key(string $transfer_key, string $role): string {
+		$transfer_key = \sanitize_key($transfer_key);
+		$role = \sanitize_key($role);
+
+		if ($transfer_key === 'rueckgabe') {
+			return $role === 'mieter'
+				? (\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_MIETER_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_MIETER_META')
+					: '_cmx_carent_rueckgabe_mieter_attachment_id')
+				: (\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_VERMIETER_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_VERMIETER_META')
+					: '_cmx_carent_rueckgabe_vermieter_attachment_id');
+		}
+
+		return $role === 'mieter'
+			? (\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_META')
+				: '_cmx_carent_uebernahme_mieter_attachment_id')
+			: (\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_VERMIETER_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_VERMIETER_META')
+				: '_cmx_carent_uebernahme_vermieter_attachment_id');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_signature_attachment_url')) {
+	function cmx_vermietung_signature_attachment_url(int $attachment_id): string {
+		if ($attachment_id <= 0) {
+			return '';
+		}
+
+		$url = (string) \wp_get_attachment_image_url($attachment_id, 'large');
+		if ($url === '') {
+			$url = (string) \wp_get_attachment_url($attachment_id);
+		}
+
+		return $url;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_store_signature_attachment')) {
+	function cmx_vermietung_store_signature_attachment(int $post_id, string $transfer_key, string $role, string $data_url, int $existing_attachment_id = 0) {
+		$data_url = \trim($data_url);
+		if ($post_id <= 0 || $data_url === '') {
+			return 0;
+		}
+
+		if (!\preg_match('#^data:image/png;base64,(.+)$#', $data_url, $matches)) {
+			return new \WP_Error('invalid_signature_data', 'Ungültige Signaturdaten.');
+		}
+
+		$raw = \str_replace(' ', '+', (string) ($matches[1] ?? ''));
+		$binary = \base64_decode($raw, true);
+		if (!\is_string($binary) || $binary === '') {
+			return new \WP_Error('invalid_signature_data', 'Signatur konnte nicht dekodiert werden.');
+		}
+
+		require_once \ABSPATH . 'wp-admin/includes/file.php';
+		require_once \ABSPATH . 'wp-admin/includes/media.php';
+		require_once \ABSPATH . 'wp-admin/includes/image.php';
+
+		$filename = 'carent-' . $post_id . '-' . \sanitize_file_name($transfer_key . '-' . $role . '-signature') . '-' . \gmdate('YmdHis') . '.png';
+		$upload = \wp_upload_bits($filename, null, $binary);
+		if (!empty($upload['error'])) {
+			return new \WP_Error('signature_upload_failed', (string) $upload['error']);
+		}
+
+		$file = (string) ($upload['file'] ?? '');
+		$url = (string) ($upload['url'] ?? '');
+		if ($file === '' || $url === '') {
+			return new \WP_Error('signature_upload_failed', 'Datei konnte nicht geschrieben werden.');
+		}
+
+		$attachment = [
+			'post_mime_type' => 'image/png',
+			'post_title'     => 'Unterschrift ' . \ucfirst($transfer_key) . ' ' . \ucfirst($role) . ' #' . $post_id,
+			'post_status'    => 'inherit',
+			'post_parent'    => $post_id,
+			'guid'           => $url,
+		];
+		$attachment_id = \wp_insert_attachment($attachment, $file, $post_id, true);
+		if (\is_wp_error($attachment_id) || (int) $attachment_id <= 0) {
+			return new \WP_Error('signature_upload_failed', 'Anhang konnte nicht angelegt werden.');
+		}
+
+		$attachment_id = (int) $attachment_id;
+		$metadata = \wp_generate_attachment_metadata($attachment_id, $file);
+		if (!\is_wp_error($metadata) && \is_array($metadata)) {
+			\wp_update_attachment_metadata($attachment_id, $metadata);
+		}
+
+		if ($existing_attachment_id > 0 && $existing_attachment_id !== $attachment_id) {
+			\wp_delete_attachment($existing_attachment_id, true);
+		}
+
+		return $attachment_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_transfer_signature_values')) {
+	function cmx_vermietung_save_transfer_signature_values(int $post_id, string $transfer_key): bool {
+		$transfer_key = \sanitize_key($transfer_key);
+		if ($post_id <= 0 || !\in_array($transfer_key, ['uebernahme', 'rueckgabe'], true)) {
+			return true;
+		}
+
+		foreach (['vermieter', 'mieter'] as $role) {
+			$meta_key = cmx_vermietung_signature_meta_key($transfer_key, $role);
+			$existing_attachment_id = (int) \get_post_meta($post_id, $meta_key, true);
+			$data_field = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature';
+			$clear_field = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature_clear';
+			$data_url = isset($_POST[$data_field]) ? \trim((string) \wp_unslash($_POST[$data_field])) : '';
+			$clear_requested = isset($_POST[$clear_field]) && (string) \wp_unslash($_POST[$clear_field]) === '1';
+
+			if ($data_url !== '') {
+				$attachment_id = cmx_vermietung_store_signature_attachment($post_id, $transfer_key, $role, $data_url, $existing_attachment_id);
+				if (\is_wp_error($attachment_id) || (int) $attachment_id <= 0) {
+					return false;
+				}
+				\update_post_meta($post_id, $meta_key, (int) $attachment_id);
+				continue;
+			}
+
+			if ($clear_requested) {
+				if ($existing_attachment_id > 0) {
+					\wp_delete_attachment($existing_attachment_id, true);
+				}
+				\delete_post_meta($post_id, $meta_key);
+			}
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) {
+	function cmx_vermietung_render_signature_pad(string $transfer_key, string $role, int $attachment_id, bool $enabled): void {
+		$transfer_key = \sanitize_key($transfer_key);
+		$role = \sanitize_key($role);
+		$prefix = 'cmx-vermietung-signature-' . $transfer_key . '-' . $role;
+		$input_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature';
+		$clear_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature_clear';
+		$label = $role === 'mieter' ? 'Mieter' : 'Vermieter';
+		$image_url = cmx_vermietung_signature_attachment_url($attachment_id);
+		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+
+		echo '<div class="cmx-vermietung-signature-item' . ($enabled ? '' : ' is-disabled') . '" data-signature-item="' . \esc_attr($prefix) . '">';
+		echo '<div class="cmx-vermietung-signature-head">';
+		echo '<h3 class="cmx-vermietung-signature-title">' . \esc_html($label) . '</h3>';
+		echo '<button type="button" class="cmx-vermietung-signature-clear" data-signature-clear="' . \esc_attr($prefix) . '"' . ($enabled ? '' : ' disabled') . '>Leeren</button>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-signature-pad">';
+		echo '<canvas class="cmx-vermietung-signature-canvas" id="' . \esc_attr($prefix . '-canvas') . '" width="640" height="220" data-signature-canvas="' . \esc_attr($prefix) . '" data-existing-src="' . \esc_url($image_url) . '"' . ($enabled ? '' : ' data-disabled="1"') . '></canvas>';
+		echo '</div>';
+		echo '<input type="hidden" name="' . \esc_attr($input_name) . '" id="' . \esc_attr($prefix . '-input') . '" value="">';
+		echo '<input type="hidden" name="' . \esc_attr($clear_name) . '" id="' . \esc_attr($prefix . '-clear') . '" value="0">';
+		echo '<p class="cmx-vermietung-signature-meta" id="' . \esc_attr($prefix . '-meta') . '">' . \esc_html($filename !== '' ? $filename : 'Mit Finger oder Maus unterschreiben.') . '</p>';
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')) {
 	function cmx_vermietung_save_uebernahme_values(int $post_id): void {
 		$ort_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_ORT_META')
@@ -597,6 +758,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 			'upload_failed'   => 'Der Führerausweis konnte nicht hochgeladen werden.',
 			'identity_upload_failed' => 'Die Identitätskarte konnte nicht hochgeladen werden.',
 			'inventory_upload_failed' => 'Die Bestandsaufnahme konnte nicht hochgeladen werden.',
+			'signature_upload_failed' => 'Die Unterschrift konnte nicht gespeichert werden.',
 			'create_failed'   => 'Die Vermietung konnte nicht angelegt werden.',
 			default           => '',
 		};
@@ -770,6 +932,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		cmx_vermietung_save_vehicle_detail_values($post_id);
 		cmx_vermietung_save_uebernahme_values($post_id);
 		cmx_vermietung_save_rueckgabe_values($post_id);
+		if (!cmx_vermietung_save_transfer_signature_values($post_id, 'uebernahme')) {
+			\wp_safe_redirect(cmx_vermietung_manage_url($post_id, ['cmx_vermietung_error' => 'signature_upload_failed']));
+			exit;
+		}
+		if (!cmx_vermietung_save_transfer_signature_values($post_id, 'rueckgabe')) {
+			\wp_safe_redirect(cmx_vermietung_manage_url($post_id, ['cmx_vermietung_error' => 'signature_upload_failed']));
+			exit;
+		}
 		if ($has_license_upload) {
 			require_once \ABSPATH . 'wp-admin/includes/file.php';
 			require_once \ABSPATH . 'wp-admin/includes/media.php';
@@ -905,6 +1075,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			'uhrzeit'  => '',
 			'km_stand' => \trim((string) ($selected_vehicle_details['km_stand_uebernahme'] ?? '')),
 		];
+		$selected_uebernahme_signatures = [
+			'vermieter' => $current_post_id > 0 ? (int) \get_post_meta($current_post_id, cmx_vermietung_signature_meta_key('uebernahme', 'vermieter'), true) : 0,
+			'mieter'    => $current_post_id > 0 ? (int) \get_post_meta($current_post_id, cmx_vermietung_signature_meta_key('uebernahme', 'mieter'), true) : 0,
+		];
 		if ($current_post_id > 0) {
 			$selected_uebernahme_values['ort'] = \trim((string) \get_post_meta(
 				$current_post_id,
@@ -943,6 +1117,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			'datum'    => '',
 			'uhrzeit'  => '',
 			'km_stand' => \trim((string) ($selected_vehicle_details['km_stand_rueckgabe'] ?? '')),
+		];
+		$selected_rueckgabe_signatures = [
+			'vermieter' => $current_post_id > 0 ? (int) \get_post_meta($current_post_id, cmx_vermietung_signature_meta_key('rueckgabe', 'vermieter'), true) : 0,
+			'mieter'    => $current_post_id > 0 ? (int) \get_post_meta($current_post_id, cmx_vermietung_signature_meta_key('rueckgabe', 'mieter'), true) : 0,
 		];
 		if ($current_post_id > 0) {
 			$selected_rueckgabe_values['ort'] = \trim((string) \get_post_meta(
@@ -1043,7 +1221,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-panel.is-locked{background:#fbfcfe}
 			.cmx-vermietung-panel.is-open{z-index:9000}
 			.cmx-vermietung-panel-head{padding:16px 18px 0}
+			.cmx-vermietung-panel-head.is-collapsible{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 			.cmx-vermietung-panel-title{margin:0;font-size:20px;line-height:1.2}
+			.cmx-vermietung-panel-toggle{display:inline-flex;align-items:center;gap:10px;margin:0;padding:0;border:0;background:transparent;color:#1d2327;font:inherit;text-align:left;cursor:pointer}
+			.cmx-vermietung-panel-toggle:hover{color:#135e96}
+			.cmx-vermietung-panel-toggle-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;height:24px;border-radius:999px;border:1px solid #d0d5dd;background:#fff;color:#667085;font-size:12px;line-height:1;transition:transform .18s ease,color .18s ease,border-color .18s ease}
+			.cmx-vermietung-panel-toggle:hover .cmx-vermietung-panel-toggle-icon{color:#135e96;border-color:#135e96}
 			.cmx-vermietung-panel-sub{margin:6px 0 0;font-size:13px;color:#667085}
 			.cmx-vermietung-panel-tools{padding:16px 18px 18px}
 			.cmx-vermietung-picker{position:relative;z-index:1}
@@ -1062,8 +1245,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-item-meta{display:block;margin-top:4px;font-size:13px;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 			.cmx-vermietung-selected{display:none;margin-top:12px;padding:12px 14px;border:1px solid #e4e7ec;border-radius:12px;background:#fafafa}
 			.cmx-vermietung-selected.is-active{display:block}
+			.cmx-vermietung-selected-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+			.cmx-vermietung-selected-copy{min-width:0;flex:1 1 auto}
 			.cmx-vermietung-selected-label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
-			.cmx-vermietung-selected-title{display:block;margin-top:4px;font-size:15px;font-weight:700;color:#1d2327}
+			.cmx-vermietung-selected-title{display:block;margin-top:4px;font-size:15px;font-weight:700;color:#1d2327;word-break:break-word}
+			.cmx-vermietung-selected-clear{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;margin:0;padding:0;border:1px solid #d0d5dd;border-radius:999px;background:#fff;color:#667085;font-size:18px;line-height:1;cursor:pointer}
+			.cmx-vermietung-selected-clear:hover{border-color:#b42318;color:#b42318;background:#fef3f2}
 			.cmx-vermietung-lock{margin-top:12px;color:#667085;font-size:13px}
 			.cmx-vermietung-empty{padding:8px 10px;color:#667085}
 			.cmx-vermietung-info-panel{margin-top:18px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
@@ -1071,7 +1258,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-info-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
 			.cmx-vermietung-transfer-panel{margin-top:18px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
 			.cmx-vermietung-transfer-panel.is-hidden{display:none}
+			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-collapsible-body{display:none}
+			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-toggle-icon{transform:rotate(-90deg)}
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
+			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
+			.cmx-vermietung-signature-item{min-width:0;padding:12px 14px;border:1px solid #e4e7ec;border-radius:12px;background:#fafafa}
+			.cmx-vermietung-signature-item.is-disabled{opacity:.6}
+			.cmx-vermietung-signature-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+			.cmx-vermietung-signature-title{margin:0;font-size:15px;line-height:1.2}
+			.cmx-vermietung-signature-clear{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#475467;font:inherit;cursor:pointer}
+			.cmx-vermietung-signature-clear:disabled{opacity:.5;cursor:not-allowed}
+			.cmx-vermietung-signature-pad{border:1px dashed #c8d1dc;border-radius:12px;background:#fff;overflow:hidden}
+			.cmx-vermietung-signature-canvas{display:block;width:100%;height:220px;touch-action:none;background:#fff;cursor:crosshair}
+			.cmx-vermietung-signature-item.is-disabled .cmx-vermietung-signature-canvas{cursor:not-allowed;background:#f8fafc}
+			.cmx-vermietung-signature-meta{margin:10px 0 0;font-size:13px;color:#667085}
 			.cmx-vermietung-info-item{min-width:0;padding:12px 14px;border:1px solid #e4e7ec;border-radius:12px;background:#fafafa}
 			.cmx-vermietung-info-label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
 			.cmx-vermietung-info-label.is-actionable{cursor:pointer;text-decoration:underline dotted}
@@ -1092,6 +1292,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-info-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.cmx-vermietung-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 			}
 			@media (max-width:720px){
 				.cmx-vermietung-page{padding:18px 12px 24px}
@@ -1106,6 +1307,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-results{max-height:320px}
 				.cmx-vermietung-info-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-transfer-grid{grid-template-columns:minmax(0,1fr)}
+				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-upload-dropzone{flex-direction:column;align-items:flex-start}
 				.cmx-vermietung-upload-preview,.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video,.cmx-vermietung-upload-video.is-active{max-width:100%;width:100%;height:auto}
 			}
@@ -1243,8 +1445,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			echo '</div>';
 			echo '</div>';
 			echo '<div class="cmx-vermietung-selected' . ($selected_title !== '' ? ' is-active' : '') . '" id="cmx-vermietung-selected-' . \esc_attr($key) . '">';
+			echo '<div class="cmx-vermietung-selected-head">';
+			echo '<div class="cmx-vermietung-selected-copy">';
 			echo '<span class="cmx-vermietung-selected-label">Gewählt</span>';
 			echo '<span class="cmx-vermietung-selected-title" id="cmx-vermietung-selected-title-' . \esc_attr($key) . '">' . \esc_html($selected_title) . '</span>';
+			echo '</div>';
+			echo '<button type="button" class="cmx-vermietung-selected-clear" id="cmx-vermietung-selected-clear-' . \esc_attr($key) . '" aria-label="' . \esc_attr($title . '-Auswahl entfernen') . '" title="' . \esc_attr($title . '-Auswahl entfernen') . '">&times;</button>';
+			echo '</div>';
 			echo '</div>';
 			if ($key === 'artikel') {
 				echo '<div class="cmx-vermietung-lock" id="cmx-vermietung-lock-' . \esc_attr($key) . '"' . ($is_locked ? '' : ' style="display:none"') . '>Bitte zuerst einen Kontakt auswählen.</div>';
@@ -1299,12 +1506,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			echo '</div>';
 		}
 		echo '</div>';
+		echo '<div class="cmx-vermietung-signature-grid">';
+		cmx_vermietung_render_signature_pad('uebernahme', 'vermieter', (int) ($selected_uebernahme_signatures['vermieter'] ?? 0), $selected_vehicle_id > 0);
+		cmx_vermietung_render_signature_pad('uebernahme', 'mieter', (int) ($selected_uebernahme_signatures['mieter'] ?? 0), $selected_vehicle_id > 0);
+		echo '</div>';
 		echo '</section>';
-		echo '<section class="cmx-vermietung-transfer-panel' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-rueckgabe-panel">';
-		echo '<div class="cmx-vermietung-panel-head">';
-		echo '<h2 class="cmx-vermietung-panel-title">Rückgabe</h2>';
+		echo '<section class="cmx-vermietung-transfer-panel is-collapsed' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-rueckgabe-panel">';
+		echo '<div class="cmx-vermietung-panel-head is-collapsible">';
+		echo '<div class="cmx-vermietung-panel-copy">';
+		echo '<h2 class="cmx-vermietung-panel-title">';
+		echo '<button type="button" class="cmx-vermietung-panel-toggle" id="cmx-vermietung-rueckgabe-toggle" aria-expanded="false" aria-controls="cmx-vermietung-rueckgabe-body">';
+		echo '<span class="cmx-vermietung-panel-toggle-label">Rückgabe</span>';
+		echo '<span class="cmx-vermietung-panel-toggle-icon" aria-hidden="true">&#9662;</span>';
+		echo '</button>';
+		echo '</h2>';
 		echo '<p class="cmx-vermietung-panel-sub">Daten für die Rückgabe des gewählten Fahrzeugs.</p>';
 		echo '</div>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-collapsible-body" id="cmx-vermietung-rueckgabe-body">';
 		echo '<div class="cmx-vermietung-transfer-grid">';
 		$rueckgabe_fields = [
 			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_rueckgabe_ort', 'type' => 'text', 'step' => ''],
@@ -1321,6 +1540,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-rueckgabe-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
 			echo '</div>';
 		}
+		echo '</div>';
+		echo '<div class="cmx-vermietung-signature-grid">';
+		cmx_vermietung_render_signature_pad('rueckgabe', 'vermieter', (int) ($selected_rueckgabe_signatures['vermieter'] ?? 0), $selected_vehicle_id > 0);
+		cmx_vermietung_render_signature_pad('rueckgabe', 'mieter', (int) ($selected_rueckgabe_signatures['mieter'] ?? 0), $selected_vehicle_id > 0);
+		echo '</div>';
 		echo '</div>';
 		echo '</section>';
 		echo '<section class="cmx-vermietung-upload-panel">';
@@ -1405,6 +1629,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var vehicleInfoPanel=document.getElementById("cmx-vermietung-info-panel");
 				var transferPanel=document.getElementById("cmx-vermietung-uebernahme-panel");
 				var returnPanel=document.getElementById("cmx-vermietung-rueckgabe-panel");
+				var returnToggle=document.getElementById("cmx-vermietung-rueckgabe-toggle");
 				var vehicleInfoNodes={
 					kennzeichen:document.getElementById("cmx-vermietung-info-kennzeichen"),
 					begrenzung:document.getElementById("cmx-vermietung-info-begrenzung"),
@@ -1435,6 +1660,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					datum:document.getElementById("cmx-vermietung-rueckgabe-label-datum"),
 					uhrzeit:document.getElementById("cmx-vermietung-rueckgabe-label-uhrzeit")
 				};
+				var signaturePads=[];
 				var pickers={};
 				function normalize(value){return String(value||"").toLowerCase().trim();}
 				function getTodayValue(){
@@ -1503,6 +1729,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var enabled=Number(kontaktInput.value||0)>0 && Number(artikelInput.value||0)>0;
 					submit.disabled=!enabled;
 				}
+				function syncReturnPanelState(){
+					if(!returnPanel || !returnToggle){return;}
+					returnToggle.setAttribute("aria-expanded", returnPanel.classList.contains("is-collapsed") ? "false" : "true");
+				}
 				function initStatusNotice(){
 					if(!statusNotice){return;}
 					window.setTimeout(function(){
@@ -1546,6 +1776,138 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					previewNode.src=URL.createObjectURL(file);
 					previewNode.classList.add("is-active");
 				}
+				function resetSignatureSurface(pad, dropExisting){
+					if(!pad || !pad.ctx || !pad.canvas){return;}
+					pad.ctx.setTransform(1,0,0,1,0,0);
+					pad.ctx.clearRect(0,0,pad.canvas.width,pad.canvas.height);
+					pad.ctx.fillStyle="#ffffff";
+					pad.ctx.fillRect(0,0,pad.canvas.width,pad.canvas.height);
+					pad.ctx.strokeStyle="#1d2327";
+					pad.ctx.lineWidth=2.5;
+					pad.ctx.lineCap="round";
+					pad.ctx.lineJoin="round";
+					pad.drawing=false;
+					pad.dirty=false;
+					if(dropExisting){
+						pad.hasExistingImage=false;
+						pad.existingSrc="";
+					}
+				}
+				function drawExistingSignature(pad, src){
+					if(!pad || !src){return;}
+					var image=new Image();
+					image.onload=function(){
+						resetSignatureSurface(pad, false);
+						var scale=Math.min(pad.canvas.width / image.width, pad.canvas.height / image.height);
+						var drawWidth=image.width * scale;
+						var drawHeight=image.height * scale;
+						var offsetX=(pad.canvas.width - drawWidth) / 2;
+						var offsetY=(pad.canvas.height - drawHeight) / 2;
+						pad.ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+						pad.hasExistingImage=true;
+					};
+					image.src=src;
+				}
+				function getSignaturePoint(canvas, event){
+					var rect=canvas.getBoundingClientRect();
+					if(!rect.width || !rect.height){return {x:0,y:0};}
+					return {
+						x:(event.clientX - rect.left) * (canvas.width / rect.width),
+						y:(event.clientY - rect.top) * (canvas.height / rect.height)
+					};
+				}
+				function setSignaturePadEnabled(enabled){
+					signaturePads.forEach(function(pad){
+						pad.disabled=!enabled;
+						pad.item.classList.toggle("is-disabled", !enabled);
+						if(pad.clearButton){
+							pad.clearButton.disabled=!enabled;
+						}
+						if(!enabled){
+							pad.canvas.setAttribute("data-disabled","1");
+						}else{
+							pad.canvas.removeAttribute("data-disabled");
+						}
+					});
+				}
+				function initSignaturePad(item){
+					if(!item){return;}
+					var prefix=String(item.getAttribute("data-signature-item")||"");
+					if(prefix===""){return;}
+					var canvas=document.getElementById(prefix+"-canvas");
+					if(!canvas || typeof canvas.getContext!=="function"){return;}
+					var ctx=canvas.getContext("2d");
+					if(!ctx){return;}
+					var clearButton=item.querySelector("[data-signature-clear]");
+					var hiddenInput=document.getElementById(prefix+"-input");
+					var clearInput=document.getElementById(prefix+"-clear");
+					var metaNode=document.getElementById(prefix+"-meta");
+					var existingSrc=String(canvas.getAttribute("data-existing-src")||"").trim();
+					var pad={
+						item:item,
+						prefix:prefix,
+						canvas:canvas,
+						ctx:ctx,
+						hiddenInput:hiddenInput,
+						clearInput:clearInput,
+						clearButton:clearButton,
+						metaNode:metaNode,
+						existingSrc:existingSrc,
+						hasExistingImage:false,
+						dirty:false,
+						drawing:false,
+						disabled:String(canvas.getAttribute("data-disabled")||"0")==="1"
+					};
+					resetSignatureSurface(pad, false);
+					if(existingSrc!==""){
+						drawExistingSignature(pad, existingSrc);
+					}
+					canvas.addEventListener("pointerdown", function(event){
+						if(pad.disabled){return;}
+						event.preventDefault();
+						if(pad.hasExistingImage && !pad.dirty){
+							resetSignatureSurface(pad, true);
+							if(pad.clearInput){pad.clearInput.value="1";}
+						}
+						var point=getSignaturePoint(canvas, event);
+						pad.drawing=true;
+						pad.dirty=true;
+						if(pad.clearInput){pad.clearInput.value="0";}
+						pad.ctx.beginPath();
+						pad.ctx.moveTo(point.x, point.y);
+						if(typeof canvas.setPointerCapture==="function"){
+							try{canvas.setPointerCapture(event.pointerId);}catch(err){}
+						}
+					});
+					canvas.addEventListener("pointermove", function(event){
+						if(!pad.drawing || pad.disabled){return;}
+						event.preventDefault();
+						var point=getSignaturePoint(canvas, event);
+						pad.ctx.lineTo(point.x, point.y);
+						pad.ctx.stroke();
+					});
+					["pointerup","pointerleave","pointercancel"].forEach(function(eventName){
+						canvas.addEventListener(eventName, function(event){
+							if(!pad.drawing){return;}
+							event.preventDefault();
+							pad.drawing=false;
+							pad.ctx.beginPath();
+							if(typeof canvas.releasePointerCapture==="function" && event.pointerId !== undefined){
+								try{canvas.releasePointerCapture(event.pointerId);}catch(err){}
+							}
+						});
+					});
+					if(clearButton){
+						clearButton.addEventListener("click", function(event){
+							event.preventDefault();
+							resetSignatureSurface(pad, true);
+							if(pad.hiddenInput){pad.hiddenInput.value="";}
+							if(pad.clearInput){pad.clearInput.value="1";}
+							if(pad.metaNode){pad.metaNode.textContent="Unterschrift geleert.";}
+						});
+					}
+					signaturePads.push(pad);
+				}
 				function updateVehicleInfo(item){
 					var hasVehicle=!!item;
 					var values=item ? {
@@ -1574,7 +1936,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					}
 					if(returnPanel){
 						returnPanel.classList.toggle("is-hidden", !hasVehicle);
+						if(!hasVehicle){
+							returnPanel.classList.add("is-collapsed");
+						}
 					}
+					syncReturnPanelState();
+					setSignaturePadEnabled(hasVehicle);
 					Object.keys(vehicleInfoNodes).forEach(function(key){
 						if(!vehicleInfoNodes[key]){return;}
 						vehicleInfoNodes[key].value=values[key];
@@ -1672,6 +2039,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(url===""){return;}
 					window.location.href=url;
 				}
+				if(returnToggle && returnPanel){
+					returnToggle.addEventListener("click", function(){
+						if(returnPanel.classList.contains("is-hidden")){return;}
+						returnPanel.classList.toggle("is-collapsed");
+						syncReturnPanelState();
+					});
+					syncReturnPanelState();
+				}
 				function bindPicker(key){
 					var panel=document.querySelector(\'[data-picker="\'+key+\'"]\');
 					var input=document.getElementById("cmx-vermietung-search-"+key);
@@ -1681,6 +2056,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var valueNode=(key==="kontakt") ? kontaktValue : artikelValue;
 					var selectedNode=document.getElementById("cmx-vermietung-selected-"+key);
 					var selectedTitle=document.getElementById("cmx-vermietung-selected-title-"+key);
+					var selectedClear=document.getElementById("cmx-vermietung-selected-clear-"+key);
 					var active=null;
 					if(!input||!list||!panel){return;}
 					function items(){
@@ -1705,7 +2081,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						list.style.display="block";
 						panel.classList.add("is-open");
 					}
-					function clear(keepInput){
+					function clear(keepInput, focusAfter){
 						hidden.value="";
 						valueNode.textContent=(key==="kontakt") ? "Noch keiner gewählt" : "Noch keines gewählt";
 						if(selectedNode){selectedNode.classList.remove("is-active");}
@@ -1714,10 +2090,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 							input.value="";
 						}
 						markActive(null);
+						close();
+						if(key==="kontakt"){
+							setArtikelLocked(true);
+						}
 						if(key==="artikel"){
 							updateVehicleInfo(null);
 						}
 						updateSubmit();
+						if(focusAfter===true && !input.disabled){
+							window.setTimeout(function(){
+								input.focus();
+								try{input.select();}catch(err){}
+								open();
+							}, 30);
+						}
 					}
 					function filter(){
 						var term=normalize(input.value);
@@ -1779,10 +2166,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						try{rows[index].scrollIntoView({block:"nearest"});}catch(e){}
 					}
 					input.addEventListener("input", function(){
+						if(input.value==="" && hidden.value!==""){
+							clear(true, true);
+							return;
+						}
+						open();
+					});
+					input.addEventListener("search", function(){
+						if(input.value==="" && hidden.value!==""){
+							clear(true, true);
+							return;
+						}
 						open();
 					});
 					input.addEventListener("focus", open);
 					input.addEventListener("click", open);
+					function closeWhenPickerFocusLeaves(){
+						window.setTimeout(function(){
+							if(panel.contains(document.activeElement)){return;}
+							close();
+						}, 120);
+					}
+					input.addEventListener("blur", closeWhenPickerFocusLeaves);
+					panel.addEventListener("focusout", closeWhenPickerFocusLeaves);
 					input.addEventListener("keydown", function(event){
 						if(event.key==="ArrowDown"){event.preventDefault();move(1);return;}
 						if(event.key==="ArrowUp"){event.preventDefault();move(-1);return;}
@@ -1800,6 +2206,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						item.addEventListener("click", function(){choose(item);});
 						item.addEventListener("dblclick", function(){choose(item);});
 					});
+					if(selectedClear){
+						selectedClear.addEventListener("click", function(event){
+							event.preventDefault();
+							clear(false, true);
+						});
+					}
 					pickers[key]={
 						close: close,
 						clear: clear
@@ -1807,7 +2219,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				}
 				bindPicker("kontakt");
 				bindPicker("artikel");
+				Array.prototype.slice.call(document.querySelectorAll("[data-signature-item]")).forEach(initSignaturePad);
 				setArtikelLocked(String(kontaktInput.value||"")==="");
+				setSignaturePadEnabled(Number(artikelInput.value||0)>0);
 				if(contractSearch && contractResults){
 					contractSearch.addEventListener("input", openContractPicker);
 					contractSearch.addEventListener("focus", openContractPicker);
@@ -1930,7 +2344,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(licenseRequired && !hasLicenseFile){
 						event.preventDefault();
 						window.alert("Bitte zuerst einen Führerausweis hochladen.");
+						return;
 					}
+					signaturePads.forEach(function(pad){
+						if(!pad.hiddenInput){return;}
+						if(pad.dirty){
+							pad.hiddenInput.value=pad.canvas.toDataURL("image/png");
+							if(pad.clearInput){pad.clearInput.value="0";}
+						}else{
+							pad.hiddenInput.value="";
+						}
+					});
 				});
 				initStatusNotice();
 				updateSubmit();
