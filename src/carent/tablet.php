@@ -779,6 +779,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 		$uhrzeit_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META')
 			: '_cmx_carent_uebernahme_uhrzeit';
+		$besondere_abmachungen_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META')
+			: '_cmx_carent_uebernahme_besondere_abmachungen';
 		$km_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 			: '_cmx_carent_fahrzeug_km_stand_uebernahme';
@@ -791,6 +794,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			: '';
 		$uhrzeit = isset($_POST['cmx_vermietung_uebernahme_uhrzeit'])
 			? \trim((string) \wp_unslash($_POST['cmx_vermietung_uebernahme_uhrzeit']))
+			: '';
+		$besondere_abmachungen = isset($_POST['cmx_vermietung_uebernahme_besondere_abmachungen'])
+			? \trim((string) \sanitize_textarea_field(\wp_unslash($_POST['cmx_vermietung_uebernahme_besondere_abmachungen'])))
 			: '';
 		$km_stand = isset($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme'])
 			? cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme']))
@@ -812,6 +818,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			\delete_post_meta($post_id, $uhrzeit_meta_key);
 		} else {
 			\update_post_meta($post_id, $uhrzeit_meta_key, $uhrzeit);
+		}
+
+		if ($besondere_abmachungen === '') {
+			\delete_post_meta($post_id, $besondere_abmachungen_meta_key);
+		} else {
+			\update_post_meta($post_id, $besondere_abmachungen_meta_key, $besondere_abmachungen);
 		}
 
 		if ($km_stand === '') {
@@ -1597,10 +1609,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$selected_vehicle_title = (string) ($selected_vehicle_row['title'] ?? '');
 		$selected_vehicle_details = cmx_vermietung_vehicle_detail_values($selected_vehicle_id, $current_post_id, $selected_vehicle_variant_index);
 		$selected_uebernahme_values = [
-			'ort'      => '',
-			'datum'    => '',
-			'uhrzeit'  => '',
-			'km_stand' => \trim((string) ($selected_vehicle_details['km_stand_uebernahme'] ?? '')),
+			'ort'                   => '',
+			'datum'                 => '',
+			'uhrzeit'               => '',
+			'besondere_abmachungen' => '',
+			'km_stand'              => \trim((string) ($selected_vehicle_details['km_stand_uebernahme'] ?? '')),
 		];
 		$selected_uebernahme_signatures = [
 			'vermieter' => $current_post_id > 0 ? (int) \get_post_meta($current_post_id, cmx_vermietung_signature_meta_key('uebernahme', 'vermieter'), true) : 0,
@@ -1626,6 +1639,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_UHRZEIT_META')
 					: '_cmx_carent_uebernahme_uhrzeit',
+				true
+			));
+			$selected_uebernahme_values['besondere_abmachungen'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META')
+					: '_cmx_carent_uebernahme_besondere_abmachungen',
 				true
 			));
 			$stored_km_stand = \trim((string) \get_post_meta(
@@ -1796,6 +1816,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
 			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
 			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap{padding:0 18px 18px}
+			.cmx-vermietung-transfer-textarea-wrap{padding:0 18px 18px}
 			.cmx-vermietung-transfer-section-title{margin:0;font-size:18px;line-height:1.25}
 			.cmx-vermietung-transfer-section-sub{margin:6px 0 0;font-size:13px;color:#667085}
 			.cmx-vermietung-fotos-rows{display:grid;gap:14px;margin-top:12px}
@@ -1842,7 +1863,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-info-label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
 			.cmx-vermietung-info-label.is-actionable{cursor:pointer;text-decoration:underline dotted}
 			.cmx-vermietung-info-value{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;font-weight:700;color:#1d2327}
+			.cmx-vermietung-info-textarea{display:block;width:100%;min-height:118px;margin-top:6px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;line-height:1.5;color:#1d2327;resize:vertical}
 			.cmx-vermietung-info-value:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
+			.cmx-vermietung-info-textarea:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
 			.cmx-vermietung-upload-panel{margin-top:18px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
 			.cmx-vermietung-upload-panel.is-hidden{display:none}
 			.cmx-vermietung-upload-body{padding:0 18px 18px}
@@ -2082,6 +2105,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		cmx_vermietung_render_fotos_section('uebernahme', $current_post_id, $selected_vehicle_id > 0);
 		cmx_vermietung_render_transfer_video_field('uebernahme', $uebernahme_video_attachment_id, $selected_vehicle_id > 0);
+		echo '<div class="cmx-vermietung-transfer-textarea-wrap">';
+		echo '<div class="cmx-vermietung-info-item">';
+		echo '<label class="cmx-vermietung-info-label" for="cmx-vermietung-uebernahme-besondere-abmachungen">Besondere Abmachungen</label>';
+		echo '<textarea class="cmx-vermietung-info-textarea" id="cmx-vermietung-uebernahme-besondere-abmachungen" name="cmx_vermietung_uebernahme_besondere_abmachungen" rows="4"' . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>' . \esc_textarea((string) ($selected_uebernahme_values['besondere_abmachungen'] ?? '')) . '</textarea>';
+		echo '</div>';
+		echo '</div>';
 		echo '<div class="cmx-vermietung-transfer-grid">';
 		$uebernahme_fields = [
 			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_uebernahme_ort', 'type' => 'text', 'step' => ''],
