@@ -2,7 +2,7 @@
 
 Ja — grundsätzlich JA, aber nur unter bestimmten Voraussetzungen.
 
-🧾 Was passiert mit einer PAIN.001 Datei?
+🧾 Was passiert mit einer PAIN.001   Datei?
 
 Die PAIN.001 ist eine standardisierte XML-Datei für Zahlungsaufträge (SEPA / ISO 20022).
 Du erzeugst damit keine Zahlung direkt, sondern einen Zahlungsauftrag, den Du Deiner Bank übergibst.
