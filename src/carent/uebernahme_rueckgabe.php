@@ -33,6 +33,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_VERMIETER_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_MIETER_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_MIETER_META', '_cmx_carent_rueckgabe_mieter_attachment_id');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_BESTANDSAUFNAHME_META', '_cmx_carent_bestandsaufnahme_attachment_id');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_box_configs')) {
 	function cmx_carent_transfer_box_configs(): array {
@@ -80,6 +83,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_upload_empty_markup
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_empty_markup')) {
+	function cmx_carent_transfer_video_empty_markup(string $preview_id): string {
+		return '<div id="' . \esc_attr($preview_id) . '" style="display:flex;align-items:center;justify-content:center;min-height:180px;padding:12px;text-align:center;border:1px dashed #c3c4c7;border-radius:6px;color:#646970;background:#f6f7f7;">' . \esc_html__('Video hier ablegen oder anklicken.', 'cmx-misbuero') . '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_upload_field')) {
 	function cmx_carent_render_transfer_upload_field(string $prefix, string $label, int $attachment_id): void {
 		$image_url = $attachment_id > 0 ? (string) \wp_get_attachment_image_url($attachment_id, 'medium') : '';
@@ -105,12 +114,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_upload_field
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_video_field')) {
+	function cmx_carent_render_transfer_video_field(string $prefix, string $label, int $attachment_id): void {
+		$video_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
+		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+		$preview_id = $prefix . '_preview';
+
+		echo '<div class="cmx-carent-transfer-video" data-prefix="' . \esc_attr($prefix) . '">';
+		echo '<label for="' . \esc_attr($prefix . '_file') . '" style="display:block;margin:0 0 6px;font-weight:600;">' . \esc_html($label) . '</label>';
+		echo '<input type="hidden" name="' . \esc_attr($prefix . '_attachment_id') . '" id="' . \esc_attr($prefix . '_attachment_id') . '" value="' . \esc_attr((string) $attachment_id) . '">';
+		echo '<input type="file" id="' . \esc_attr($prefix . '_file') . '" accept="video/*" style="display:none;">';
+		echo '<div id="' . \esc_attr($prefix . '_dropzone') . '" style="display:block;width:100%;cursor:pointer;">';
+		if ($video_url !== '') {
+			echo '<video id="' . \esc_attr($preview_id) . '" controls preload="metadata" src="' . \esc_url($video_url) . '" style="display:block;width:100%;max-width:100%;height:auto;min-height:180px;border:1px solid #dcdcde;border-radius:6px;background:#000;"></video>';
+		} else {
+			echo cmx_carent_transfer_video_empty_markup($preview_id);
+		}
+		echo '</div>';
+		echo '<p id="' . \esc_attr($prefix . '_status') . '" style="margin:8px 0 0;color:#50575e;min-height:18px;">';
+		if ($filename !== '' && $video_url !== '') {
+			echo '<a href="' . \esc_url($video_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($filename) . '</a>';
+		} elseif ($filename !== '') {
+			echo \esc_html($filename);
+		}
+		echo '</p>';
+		echo '<p style="margin:8px 0 0;">';
+		echo '<button type="button" class="button button-link-delete" id="' . \esc_attr($prefix . '_remove') . '"' . ($attachment_id > 0 ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
+		echo '</p>';
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 	function cmx_render_carent_transfer_metabox(\WP_Post $post, array $config): void {
 		$box_key = (string) ($config['box_key'] ?? '');
 		if ($box_key === '') {
 			return;
 		}
+		$is_uebernahme = $box_key === 'uebernahme';
 
 		$box_id = 'cmx-carent-transfer-box-' . $box_key . '-' . (int) $post->ID;
 		$datum_name = 'cmx_carent_' . $box_key . '_datum';
@@ -121,6 +162,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		$ort_label_id = $ort_name . '_label';
 		$vermieter_prefix = 'cmx_carent_' . $box_key . '_vermieter';
 		$mieter_prefix = 'cmx_carent_' . $box_key . '_mieter';
+		$inventory_prefix = 'cmx_carent_' . $box_key . '_bestandsaufnahme';
 		$km_stand_uebernahme_id = 'cmx_carent_fahrzeug_km_stand_uebernahme_' . (int) $post->ID;
 		$km_stand_rueckgabe_id = 'cmx_carent_fahrzeug_km_stand_rueckgabe_' . (int) $post->ID;
 		$km_stand_sync_id = 'cmx_carent_fahrzeug_km_stand_sync_' . (int) $post->ID;
@@ -130,6 +172,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		$ort = (string) \get_post_meta($post->ID, (string) $config['ort_meta'], true);
 		$vermieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['vermieter_meta'], true);
 		$mieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['mieter_meta'], true);
+		$inventory_attachment_id = $is_uebernahme ? (int) \get_post_meta($post->ID, CMX_CARENT_BESTANDSAUFNAHME_META, true) : 0;
 		$artikel_id = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
 			? (int) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_META, true)
 			: 0;
@@ -149,6 +192,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			$km_stand_rueckgabe = (string) ($artikel_defaults['km_stand_rueckgabe'] ?? '');
 		}
 		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_transfer_upload');
+		$ajax_video_nonce = (string) \wp_create_nonce('cmx_carent_transfer_video_upload');
 		$ajax_url = (string) \admin_url('admin-ajax.php');
 
 		\wp_nonce_field('cmx_carent_transfer_save', 'cmx_carent_transfer_nonce');
@@ -156,6 +200,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		echo '<style>
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-stack{display:grid;gap:14px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-number label{display:block;margin:0 0 6px;font-weight:600}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-top-row{display:grid;gap:10px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload-row{display:grid;gap:14px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(88px,104px);gap:8px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row .cmx-carent-transfer-number{min-width:0}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-datetime-row input{width:100%;min-width:0}
@@ -164,31 +210,74 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row .button{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;padding:0 8px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-inline-row .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
 		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload p{font-size:12px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-video p{font-size:12px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-fotos-wrap{display:grid;gap:8px}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-fotos-wrap > label{display:block;margin:0;font-weight:600}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-video-wrap{display:grid;gap:8px}
+		' . ($is_uebernahme ? '
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-top-row{grid-template-columns:minmax(220px,1.8fr) minmax(150px,1fr) minmax(120px,.8fr) minmax(160px,1fr);align-items:end}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+		#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload .cmx-carent-transfer-upload{display:block}
+		' : '') . '
+		@media (max-width: 1080px){
+			#' . \esc_attr($box_id) . ' .cmx-carent-transfer-top-row{grid-template-columns:1fr 1fr}
+		}
+		@media (max-width: 782px){
+			#' . \esc_attr($box_id) . ' .cmx-carent-transfer-top-row,
+			#' . \esc_attr($box_id) . ' .cmx-carent-transfer-upload-row{grid-template-columns:1fr}
+		}
 		</style>';
 
 		echo '<div id="' . \esc_attr($box_id) . '" class="cmx-carent-transfer-box">';
 		echo '<div class="cmx-carent-transfer-stack">';
-		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label id="' . \esc_attr($ort_label_id) . '" for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
-		echo '<input type="text" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
-		echo '</div>';
-		echo '<div class="cmx-carent-transfer-datetime-row">';
-		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label id="' . \esc_attr($datum_label_id) . '" for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
-		echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
-		echo '</div>';
-		echo '<div class="cmx-carent-transfer-number">';
-		echo '<label id="' . \esc_attr($uhrzeit_label_id) . '" for="' . \esc_attr($uhrzeit_name) . '">' . \esc_html__('Uhrzeit', 'cmx-misbuero') . '</label>';
-		echo '<input type="time" class="widefat" name="' . \esc_attr($uhrzeit_name) . '" id="' . \esc_attr($uhrzeit_name) . '" value="' . \esc_attr($uhrzeit) . '">';
-		echo '</div>';
-		echo '</div>';
-		if ($box_key === 'uebernahme') {
+
+		if ($is_uebernahme) {
+			echo '<div class="cmx-carent-transfer-top-row">';
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($ort_label_id) . '" for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
+			echo '<input type="text" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
+			echo '</div>';
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($datum_label_id) . '" for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
+			echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
+			echo '</div>';
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($uhrzeit_label_id) . '" for="' . \esc_attr($uhrzeit_name) . '">' . \esc_html__('Uhrzeit', 'cmx-misbuero') . '</label>';
+			echo '<input type="time" class="widefat" name="' . \esc_attr($uhrzeit_name) . '" id="' . \esc_attr($uhrzeit_name) . '" value="' . \esc_attr($uhrzeit) . '">';
+			echo '</div>';
 			echo '<div class="cmx-carent-transfer-number">';
 			echo '<label for="' . \esc_attr($km_stand_uebernahme_id) . '">KM-Stand Übernahme</label>';
 			echo '<input type="number" min="0" step="1" id="' . \esc_attr($km_stand_uebernahme_id) . '" name="cmx_carent_fahrzeug_km_stand_uebernahme" class="widefat" value="' . \esc_attr($km_stand_uebernahme) . '">';
 			echo '</div>';
-		}
-		if ($box_key === 'rueckgabe') {
+			echo '</div>';
+			echo '<div class="cmx-carent-transfer-upload-row">';
+			cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
+			cmx_carent_render_transfer_upload_field($mieter_prefix, (string) \__('Mieter', 'cmx-misbuero'), $mieter_attachment_id);
+			echo '</div>';
+			if (\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
+				echo '<div class="cmx-carent-transfer-fotos-wrap">';
+				echo '<label>' . \esc_html__('Fotos', 'cmx-misbuero') . '</label>';
+				cmx_render_carent_fotos_section($post, 'cmx-carent-transfer-fotos-' . (int) $post->ID, false);
+				echo '</div>';
+			}
+			echo '<div class="cmx-carent-transfer-video-wrap">';
+			cmx_carent_render_transfer_video_field($inventory_prefix, (string) \__('Bestandsaufnahme', 'cmx-misbuero'), $inventory_attachment_id);
+			echo '</div>';
+		} else {
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($ort_label_id) . '" for="' . \esc_attr($ort_name) . '">' . \esc_html__('Ort', 'cmx-misbuero') . '</label>';
+			echo '<input type="text" class="widefat" name="' . \esc_attr($ort_name) . '" id="' . \esc_attr($ort_name) . '" value="' . \esc_attr($ort) . '">';
+			echo '</div>';
+			echo '<div class="cmx-carent-transfer-datetime-row">';
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($datum_label_id) . '" for="' . \esc_attr($datum_name) . '">' . \esc_html__('Datum', 'cmx-misbuero') . '</label>';
+			echo '<input type="date" class="widefat" name="' . \esc_attr($datum_name) . '" id="' . \esc_attr($datum_name) . '" value="' . \esc_attr($datum) . '">';
+			echo '</div>';
+			echo '<div class="cmx-carent-transfer-number">';
+			echo '<label id="' . \esc_attr($uhrzeit_label_id) . '" for="' . \esc_attr($uhrzeit_name) . '">' . \esc_html__('Uhrzeit', 'cmx-misbuero') . '</label>';
+			echo '<input type="time" class="widefat" name="' . \esc_attr($uhrzeit_name) . '" id="' . \esc_attr($uhrzeit_name) . '" value="' . \esc_attr($uhrzeit) . '">';
+			echo '</div>';
+			echo '</div>';
 			echo '<div class="cmx-carent-transfer-number">';
 			echo '<label for="' . \esc_attr($km_stand_rueckgabe_id) . '">KM-Stand Rückgabe</label>';
 			echo '<div class="cmx-carent-transfer-inline-row">';
@@ -196,15 +285,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			echo '<button type="button" class="button" id="' . \esc_attr($km_stand_sync_id) . '" title="KM-Stand in Artikel übertragen" aria-label="KM-Stand in Artikel übertragen"' . ($artikel_id > 0 && $km_stand_rueckgabe !== '' ? '' : ' disabled') . '><span class="dashicons dashicons-dashboard" aria-hidden="true"></span></button>';
 			echo '</div>';
 			echo '</div>';
-		}
-
-		cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
-		cmx_carent_render_transfer_upload_field($mieter_prefix, (string) \__('Mieter', 'cmx-misbuero'), $mieter_attachment_id);
-		if ($box_key === 'uebernahme' && \function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
-			echo '<div class="cmx-carent-transfer-fotos-wrap">';
-			echo '<label style="display:block;margin:0 0 6px;font-weight:600;">' . \esc_html__('Fotos', 'cmx-misbuero') . '</label>';
-			cmx_render_carent_fotos_section($post, 'cmx-carent-transfer-fotos-' . (int) $post->ID, true);
-			echo '</div>';
+			cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
+			cmx_carent_render_transfer_upload_field($mieter_prefix, (string) \__('Mieter', 'cmx-misbuero'), $mieter_attachment_id);
 		}
 
 		echo '</div>';
@@ -218,8 +300,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 			var ajaxUrl = ' . \wp_json_encode($ajax_url) . ';
 			var ajaxNonce = ' . \wp_json_encode($ajax_nonce) . ';
+			var ajaxVideoNonce = ' . \wp_json_encode($ajax_video_nonce) . ';
 			var postId = ' . (int) $post->ID . ';
 			var emptyText = ' . \wp_json_encode((string) \__('Foto hier ablegen oder anklicken.', 'cmx-misbuero')) . ';
+			var emptyVideoText = ' . \wp_json_encode((string) \__('Video hier ablegen oder anklicken.', 'cmx-misbuero')) . ';
 			var ortInput = document.getElementById(' . \wp_json_encode($ort_name) . ');
 			var ortLabel = document.getElementById(' . \wp_json_encode($ort_label_id) . ');
 			var dateInput = document.getElementById(' . \wp_json_encode($datum_name) . ');
@@ -357,8 +441,138 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 				});
 			}
 
+			function initVideoUpload(prefix){
+				var attachmentInput = document.getElementById(prefix + "_attachment_id");
+				var fileInput = document.getElementById(prefix + "_file");
+				var dropzone = document.getElementById(prefix + "_dropzone");
+				var preview = document.getElementById(prefix + "_preview");
+				var status = document.getElementById(prefix + "_status");
+				var removeButton = document.getElementById(prefix + "_remove");
+				if (!attachmentInput || !fileInput || !dropzone || !preview || !status || !removeButton) return;
+
+				function setIdle(){
+					dropzone.style.opacity = "1";
+				}
+
+				function setBusy(text){
+					status.textContent = text || "Upload läuft...";
+					dropzone.style.opacity = ".6";
+				}
+
+				function renderStatus(label, fileUrl){
+					var safeLabel = String(label || "");
+					var safeUrl = String(fileUrl || "");
+					if (!safeLabel) {
+						status.textContent = "";
+						return;
+					}
+					if (!safeUrl) {
+						status.textContent = safeLabel;
+						return;
+					}
+					status.innerHTML = "";
+					var link = document.createElement("a");
+					link.href = safeUrl;
+					link.target = "_blank";
+					link.rel = "noopener noreferrer";
+					link.textContent = safeLabel;
+					status.appendChild(link);
+				}
+
+				function renderEmpty(){
+					attachmentInput.value = "";
+					preview.outerHTML = "<div id=\"" + prefix + "_preview\" style=\"display:flex;align-items:center;justify-content:center;min-height:180px;padding:12px;text-align:center;border:1px dashed #c3c4c7;border-radius:6px;color:#646970;background:#f6f7f7;\">" + emptyVideoText + "</div>";
+					preview = document.getElementById(prefix + "_preview");
+					status.textContent = "";
+					removeButton.style.display = "none";
+					setIdle();
+				}
+
+				function renderVideo(id, url, label, fileUrl){
+					attachmentInput.value = String(id || "");
+					preview.outerHTML = "<video id=\"" + prefix + "_preview\" controls preload=\"metadata\" src=\"" + String(url || "").replace(/\"/g, "&quot;") + "\" style=\"display:block;width:100%;max-width:100%;height:auto;min-height:180px;border:1px solid #dcdcde;border-radius:6px;background:#000;\"></video>";
+					preview = document.getElementById(prefix + "_preview");
+					renderStatus(label, fileUrl);
+					removeButton.style.display = "";
+					setIdle();
+				}
+
+				function uploadFile(file){
+					if (!file) return;
+					if (String(file.type || "").indexOf("video/") !== 0) {
+						status.textContent = "Bitte nur Videodateien hochladen.";
+						return;
+					}
+
+					var data = new FormData();
+					data.append("action", "cmx_carent_transfer_video_upload");
+					data.append("nonce", ajaxVideoNonce);
+					data.append("post_id", String(postId || 0));
+					data.append("file", file);
+
+					setBusy("Upload läuft: " + (file.name || ""));
+
+					fetch(ajaxUrl, {
+						method: "POST",
+						credentials: "same-origin",
+						body: data
+					}).then(function(r){
+						return r.json();
+					}).then(function(json){
+						if (!json || !json.success || !json.data) {
+							var msg = (json && json.data && json.data.message) ? String(json.data.message) : "Upload fehlgeschlagen.";
+							status.textContent = msg;
+							setIdle();
+							return;
+						}
+						renderVideo(json.data.id || "", json.data.url || "", json.data.label || "", json.data.file_url || "");
+					}).catch(function(){
+						status.textContent = "Upload fehlgeschlagen.";
+						setIdle();
+					});
+				}
+
+				dropzone.addEventListener("click", function(e){
+					if (e.target && e.target.id === prefix + "_remove") return;
+					fileInput.click();
+				});
+
+				fileInput.addEventListener("change", function(){
+					if (fileInput.files && fileInput.files[0]) {
+						uploadFile(fileInput.files[0]);
+					}
+					fileInput.value = "";
+				});
+
+				dropzone.addEventListener("dragover", function(e){
+					e.preventDefault();
+					dropzone.style.opacity = ".75";
+				});
+
+				dropzone.addEventListener("dragleave", function(e){
+					e.preventDefault();
+					setIdle();
+				});
+
+				dropzone.addEventListener("drop", function(e){
+					e.preventDefault();
+					setIdle();
+					var files = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : [];
+					if (files.length) {
+						uploadFile(files[0]);
+					}
+				});
+
+				removeButton.addEventListener("click", function(e){
+					e.preventDefault();
+					e.stopPropagation();
+					renderEmpty();
+				});
+			}
+
 			initUpload(' . \wp_json_encode($vermieter_prefix) . ');
 			initUpload(' . \wp_json_encode($mieter_prefix) . ');
+			' . ($is_uebernahme ? 'initVideoUpload(' . \wp_json_encode($inventory_prefix) . ');' : '') . '
 			if (ortInput && ortLabel) {
 				ortLabel.addEventListener("click", function(e){
 					if (typeof window.cmxGetLocation !== "function") return;
@@ -399,6 +613,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 \add_action('add_meta_boxes', function (): void {
 	foreach (cmx_carent_transfer_box_configs() as $config) {
+		$box_key = (string) ($config['box_key'] ?? '');
+		$context = $box_key === 'uebernahme' ? 'normal' : 'side';
+		$priority = $box_key === 'uebernahme' ? 'high' : 'default';
+
 		\add_meta_box(
 			(string) $config['id'],
 			(string) $config['title'],
@@ -406,8 +624,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 				cmx_render_carent_transfer_metabox($post, $config);
 			},
 			'carent',
-			'side',
-			'default'
+			$context,
+			$priority
 		);
 	}
 });
@@ -454,6 +672,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 	\wp_send_json_success([
 		'id' => (int) $attachment_id,
 		'url' => $image_url,
+		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+	]);
+});
+
+\add_action('wp_ajax_cmx_carent_transfer_video_upload', function (): void {
+	if (!\current_user_can('upload_files')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+
+	$nonce = isset($_POST['nonce']) ? (string) \wp_unslash($_POST['nonce']) : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_carent_transfer_video_upload')) {
+		\wp_send_json_error(['message' => 'Sicherheitsprüfung fehlgeschlagen.'], 403);
+	}
+
+	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+	if ($post_id > 0 && \get_post_type($post_id) !== 'carent') {
+		\wp_send_json_error(['message' => 'Ungültiger Eintrag.'], 400);
+	}
+
+	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
+		\wp_send_json_error(['message' => 'Keine Datei empfangen.'], 400);
+	}
+
+	$file_type = \wp_check_filetype_and_ext((string) $_FILES['file']['tmp_name'], (string) $_FILES['file']['name']);
+	$mime_type = (string) ($file_type['type'] ?? '');
+	if (!\str_starts_with($mime_type, 'video/')) {
+		\wp_send_json_error(['message' => 'Bitte nur Videodateien hochladen.'], 400);
+	}
+
+	require_once \ABSPATH . 'wp-admin/includes/file.php';
+	require_once \ABSPATH . 'wp-admin/includes/media.php';
+	require_once \ABSPATH . 'wp-admin/includes/image.php';
+
+	$attachment_id = \media_handle_upload('file', $post_id > 0 ? $post_id : 0);
+	if (\is_wp_error($attachment_id)) {
+		\wp_send_json_error(['message' => (string) $attachment_id->get_error_message()], 500);
+	}
+
+	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
+
+	\wp_send_json_success([
+		'id' => (int) $attachment_id,
+		'url' => $file_url,
+		'file_url' => $file_url,
 		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
 	]);
 });
@@ -523,6 +785,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			}
 
 			\update_post_meta($post_id, $meta_key, $attachment_id);
+		}
+
+		if ($box_key === 'uebernahme') {
+			$inventory_field = 'cmx_carent_' . $box_key . '_bestandsaufnahme_attachment_id';
+			$inventory_attachment_id = isset($_POST[$inventory_field]) ? (int) \wp_unslash($_POST[$inventory_field]) : 0;
+			if ($inventory_attachment_id <= 0) {
+				\delete_post_meta($post_id, CMX_CARENT_BESTANDSAUFNAHME_META);
+			} else {
+				$mime = (string) \get_post_mime_type($inventory_attachment_id);
+				if (\str_starts_with($mime, 'video/')) {
+					\update_post_meta($post_id, CMX_CARENT_BESTANDSAUFNAHME_META, $inventory_attachment_id);
+				}
+			}
 		}
 	}
 }, 10, 2);
