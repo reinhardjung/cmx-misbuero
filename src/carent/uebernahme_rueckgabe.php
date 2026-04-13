@@ -269,7 +269,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 			echo '</div>';
 		}
 		echo '<div class="cmx-carent-transfer-video-wrap">';
-		cmx_carent_render_transfer_video_field($inventory_prefix, (string) \__('Bestandsaufnahme', 'cmx-misbuero'), $inventory_attachment_id);
+		cmx_carent_render_transfer_video_field(
+			$inventory_prefix,
+			(string) ($is_uebernahme ? \__('Übernahmevideo', 'cmx-misbuero') : \__('Rückgabevideos', 'cmx-misbuero')),
+			$inventory_attachment_id
+		);
 		echo '</div>';
 
 		echo '</div>';

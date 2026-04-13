@@ -754,10 +754,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 			'invalid_vehicle' => 'Das gewählte Fahrzeug ist nicht gültig.',
 			'invalid_license_photo' => 'Bitte nur Bilddateien für den Führerausweis hochladen.',
 			'invalid_identity_photo' => 'Bitte nur Bilddateien für die Identitätskarte hochladen.',
-			'invalid_inventory_video' => 'Bitte nur Videodateien für die Bestandsaufnahme hochladen.',
+			'invalid_inventory_video' => 'Bitte nur Videodateien für das Übernahmevideo hochladen.',
 			'upload_failed'   => 'Der Führerausweis konnte nicht hochgeladen werden.',
 			'identity_upload_failed' => 'Die Identitätskarte konnte nicht hochgeladen werden.',
-			'inventory_upload_failed' => 'Die Bestandsaufnahme konnte nicht hochgeladen werden.',
+			'inventory_upload_failed' => 'Das Übernahmevideo konnte nicht hochgeladen werden.',
 			'signature_upload_failed' => 'Die Unterschrift konnte nicht gespeichert werden.',
 			'create_failed'   => 'Die Vermietung konnte nicht angelegt werden.',
 			default           => '',
@@ -1597,14 +1597,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</section>';
 		echo '<section class="cmx-vermietung-upload-panel">';
 		echo '<div class="cmx-vermietung-panel-head">';
-		echo '<h2 class="cmx-vermietung-panel-title">Bestandsaufnahme</h2>';
+		echo '<h2 class="cmx-vermietung-panel-title">Übernahmevideo</h2>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-upload-body">';
 		echo '<label class="cmx-vermietung-upload-dropzone" for="cmx-vermietung-bestandsaufnahme-file" id="cmx-vermietung-bestandsaufnahme-dropzone">';
 		echo '<input type="file" class="cmx-vermietung-upload-input" name="cmx_vermietung_bestandsaufnahme_file" id="cmx-vermietung-bestandsaufnahme-file" accept="video/*">';
 		echo '<video class="cmx-vermietung-upload-video' . ($inventory_video_url !== '' ? ' is-active' : '') . '" id="cmx-vermietung-bestandsaufnahme-preview" controls preload="metadata"' . ($inventory_video_url !== '' ? ' src="' . \esc_url($inventory_video_url) . '"' : '') . '></video>';
 		echo '<span class="cmx-vermietung-upload-copy">';
-		echo '<span class="cmx-vermietung-upload-title">' . \esc_html($inventory_video_url !== '' ? 'Bestandsaufnahme ersetzen' : 'Bestandsaufnahme wählen') . '</span>';
+		echo '<span class="cmx-vermietung-upload-title">' . \esc_html($inventory_video_url !== '' ? 'Übernahmevideo ersetzen' : 'Übernahmevideo wählen') . '</span>';
 		echo '<span class="cmx-vermietung-upload-hint">MP4, MOV, WebM oder anderes Video hochladen.</span>';
 		echo '</span>';
 		echo '</label>';
