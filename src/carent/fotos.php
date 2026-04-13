@@ -6,6 +6,41 @@ defined('ABSPATH') || exit;
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FOTOS_ROWS_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_FOTOS_ROWS_META', '_cmx_carent_fotos_rows');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META', '_cmx_carent_uebernahme_fotos_rows');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_FOTOS_ROWS_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_FOTOS_ROWS_META', '_cmx_carent_rueckgabe_fotos_rows');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_sections_config')) {
+	function cmx_carent_fotos_sections_config(): array {
+		return [
+			'uebernahme' => [
+				'meta_key' => CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META,
+				'legacy_meta_key' => CMX_CARENT_FOTOS_ROWS_META,
+				'field_name' => 'cmx_carent_uebernahme_fotos_rows',
+				'nonce_action' => 'cmx_carent_uebernahme_fotos_rows_save',
+				'nonce_field' => 'cmx_carent_uebernahme_fotos_rows_nonce',
+			],
+			'rueckgabe' => [
+				'meta_key' => CMX_CARENT_RUECKGABE_FOTOS_ROWS_META,
+				'legacy_meta_key' => '',
+				'field_name' => 'cmx_carent_rueckgabe_fotos_rows',
+				'nonce_action' => 'cmx_carent_rueckgabe_fotos_rows_save',
+				'nonce_field' => 'cmx_carent_rueckgabe_fotos_rows_nonce',
+			],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_section_config')) {
+	function cmx_carent_fotos_section_config(string $section = 'uebernahme'): array {
+		$configs = cmx_carent_fotos_sections_config();
+
+		return $configs[$section] ?? $configs['uebernahme'];
+	}
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_taxonomy')) {
 	function cmx_carent_fotos_taxonomy(): string {
@@ -76,10 +111,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_normalize_rows')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows')) {
-	function cmx_carent_fotos_rows(int $post_id): array {
-		$rows = cmx_carent_fotos_normalize_rows(\get_post_meta($post_id, CMX_CARENT_FOTOS_ROWS_META, true));
+	function cmx_carent_fotos_rows(int $post_id, ?string $meta_key = null, string $legacy_meta_key = ''): array {
+		$resolved_meta_key = $meta_key ?: CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META;
+		$rows = cmx_carent_fotos_normalize_rows(\get_post_meta($post_id, $resolved_meta_key, true));
 		if ($rows !== []) {
 			return $rows;
+		}
+
+		if ($legacy_meta_key !== '') {
+			$legacy_rows = cmx_carent_fotos_normalize_rows(\get_post_meta($post_id, $legacy_meta_key, true));
+			if ($legacy_rows !== []) {
+				return $legacy_rows;
+			}
 		}
 
 		$taxonomy = cmx_carent_fotos_taxonomy();
@@ -139,7 +182,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_empty_markup')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
-	function cmx_carent_fotos_row_markup(string $index, array $row, array $term_options): string {
+	function cmx_carent_fotos_row_markup(string $index, array $row, array $term_options, string $field_name = 'cmx_carent_uebernahme_fotos_rows'): string {
 		$term_id = isset($row['term_id']) ? (int) $row['term_id'] : 0;
 		$attachment_id = isset($row['attachment_id']) ? (int) $row['attachment_id'] : 0;
 		$attachment = cmx_carent_fotos_attachment_payload($attachment_id);
@@ -156,7 +199,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 			<div class="cmx-carent-fotos-row-grid">
 				<div class="cmx-carent-fotos-field">
 					<!-- <label><?php echo \esc_html__('Foto-Taxonomie', 'cmx-misbuero'); ?></label> -->
-					<select class="widefat" name="cmx_carent_fotos_rows[<?php echo \esc_attr($index); ?>][term_id]">
+					<select class="widefat" name="<?php echo \esc_attr($field_name); ?>[<?php echo \esc_attr($index); ?>][term_id]">
 						<option value="0"><?php echo \esc_html__('Typ wählen', 'cmx-misbuero'); ?></option>
 						<?php foreach ($term_options as $option) : ?>
 							<option value="<?php echo (int) $option['id']; ?>"<?php selected($term_id, (int) $option['id']); ?>>
@@ -167,7 +210,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 				</div>
 				<div class="cmx-carent-fotos-field">
 					<!-- <label><?php echo \esc_html__('Bild', 'cmx-misbuero'); ?></label> -->
-					<input type="hidden" class="cmx-carent-fotos-attachment-id" name="cmx_carent_fotos_rows[<?php echo \esc_attr($index); ?>][attachment_id]" value="<?php echo \esc_attr((string) $attachment['id']); ?>">
+					<input type="hidden" class="cmx-carent-fotos-attachment-id" name="<?php echo \esc_attr($field_name); ?>[<?php echo \esc_attr($index); ?>][attachment_id]" value="<?php echo \esc_attr((string) $attachment['id']); ?>">
 					<input type="file" class="cmx-carent-fotos-file-input" accept="image/*" style="display:none;">
 					<div class="cmx-carent-fotos-media">
 						<div class="cmx-carent-fotos-preview" role="button" tabindex="0" aria-label="<?php echo \esc_attr__('Foto hochladen', 'cmx-misbuero'); ?>">
@@ -213,17 +256,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 });
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
-	function cmx_render_carent_fotos_section(\WP_Post $post, string $host_id = 'cmx_carent_fotos_rows_box', bool $compact = false): void {
-		$rows = cmx_carent_fotos_rows((int) $post->ID);
+	function cmx_render_carent_fotos_section(\WP_Post $post, string $host_id = 'cmx_carent_fotos_rows_box', bool $compact = false, array $args = []): void {
+		$section = (string) ($args['section'] ?? 'uebernahme');
+		$config = cmx_carent_fotos_section_config($section);
+		$field_name = (string) ($config['field_name'] ?? 'cmx_carent_uebernahme_fotos_rows');
+		$rows = cmx_carent_fotos_rows((int) $post->ID, (string) ($config['meta_key'] ?? ''), (string) ($config['legacy_meta_key'] ?? ''));
 		if ($rows === []) {
 			$rows = [['term_id' => 0, 'attachment_id' => 0]];
 		}
 		$term_options = cmx_carent_fotos_term_options();
 		$empty_attachment = cmx_carent_fotos_attachment_payload(0);
 		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_fotos_upload');
-		$template_markup = cmx_carent_fotos_row_markup('__INDEX__', ['term_id' => 0, 'attachment_id' => 0], $term_options);
+		$template_markup = cmx_carent_fotos_row_markup('__INDEX__', ['term_id' => 0, 'attachment_id' => 0], $term_options, $field_name);
 
-		\wp_nonce_field('cmx_carent_fotos_rows_save', 'cmx_carent_fotos_rows_nonce');
+		\wp_nonce_field((string) ($config['nonce_action'] ?? 'cmx_carent_uebernahme_fotos_rows_save'), (string) ($config['nonce_field'] ?? 'cmx_carent_uebernahme_fotos_rows_nonce'));
 
 		$host_selector = '#' . \esc_attr($host_id);
 		$row_grid_columns = $compact ? '1fr' : 'minmax(240px,320px) minmax(0,1fr)';
@@ -258,7 +304,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
 		echo '<p class="cmx-carent-fotos-help">' . \esc_html__('Beliebige Fotos hinzufügen. Pro Zeile ein Typ und dann das passende Bild wählen.', 'cmx-misbuero') . '</p>';
 		echo '<div id="' . \esc_attr($host_id) . '_rows" class="cmx-carent-fotos-rows">';
 		foreach ($rows as $index => $row) {
-			echo cmx_carent_fotos_row_markup((string) $index, $row, $term_options); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo cmx_carent_fotos_row_markup((string) $index, $row, $term_options, $field_name); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
 		echo '</div>';
 		echo '<div class="cmx-carent-fotos-footer"><button type="button" class="button button-primary" id="' . \esc_attr($host_id) . '_add_row">' . \esc_html__('Weitere Fotos hinzufügen', 'cmx-misbuero') . '</button></div>';
@@ -481,7 +527,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 	function cmx_render_carent_fotos_metabox(\WP_Post $post): void {
-		cmx_render_carent_fotos_section($post, 'cmx_carent_fotos_rows_box', false);
+		cmx_render_carent_fotos_section($post, 'cmx_carent_fotos_rows_box', false, ['section' => 'uebernahme']);
 	}
 }
 
@@ -494,59 +540,82 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 		return;
 	}
 
-	if (!isset($_POST['cmx_carent_fotos_rows_nonce']) || !\wp_verify_nonce((string) \wp_unslash($_POST['cmx_carent_fotos_rows_nonce']), 'cmx_carent_fotos_rows_save')) {
-		return;
-	}
-
 	if (!\current_user_can('edit_post', $post_id)) {
 		return;
 	}
 
 	$taxonomy = cmx_carent_fotos_taxonomy();
-	$raw_rows = isset($_POST['cmx_carent_fotos_rows']) ? \wp_unslash($_POST['cmx_carent_fotos_rows']) : [];
-	$rows = [];
 	$term_ids = [];
+	$has_valid_section = false;
 
-	foreach ((array) $raw_rows as $raw_row) {
-		if (!\is_array($raw_row)) {
+	foreach (cmx_carent_fotos_sections_config() as $config) {
+		$nonce_field = (string) ($config['nonce_field'] ?? '');
+		$nonce_action = (string) ($config['nonce_action'] ?? '');
+		$field_name = (string) ($config['field_name'] ?? '');
+		$meta_key = (string) ($config['meta_key'] ?? '');
+		$legacy_meta_key = (string) ($config['legacy_meta_key'] ?? '');
+
+		if ($nonce_field === '' || $nonce_action === '' || $field_name === '' || $meta_key === '') {
 			continue;
 		}
 
-		$term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
-		$attachment_id = isset($raw_row['attachment_id']) ? (int) $raw_row['attachment_id'] : 0;
-
-		if ($term_id > 0) {
-			$term = \get_term($term_id, $taxonomy);
-			if (!$term || \is_wp_error($term)) {
-				$term_id = 0;
-			}
-		}
-
-		if ($attachment_id > 0) {
-			$mime = (string) \get_post_mime_type($attachment_id);
-			if (\strpos($mime, 'image/') !== 0) {
-				$attachment_id = 0;
-			}
-		}
-
-		if ($term_id <= 0 && $attachment_id <= 0) {
+		if (!isset($_POST[$nonce_field]) || !\wp_verify_nonce((string) \wp_unslash($_POST[$nonce_field]), $nonce_action)) {
 			continue;
 		}
 
-		$rows[] = [
-			'term_id' => $term_id,
-			'attachment_id' => $attachment_id,
-		];
+		$has_valid_section = true;
+		$raw_rows = isset($_POST[$field_name]) ? \wp_unslash($_POST[$field_name]) : [];
+		$rows = [];
 
-		if ($term_id > 0) {
-			$term_ids[] = $term_id;
+		foreach ((array) $raw_rows as $raw_row) {
+			if (!\is_array($raw_row)) {
+				continue;
+			}
+
+			$term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
+			$attachment_id = isset($raw_row['attachment_id']) ? (int) $raw_row['attachment_id'] : 0;
+
+			if ($term_id > 0) {
+				$term = \get_term($term_id, $taxonomy);
+				if (!$term || \is_wp_error($term)) {
+					$term_id = 0;
+				}
+			}
+
+			if ($attachment_id > 0) {
+				$mime = (string) \get_post_mime_type($attachment_id);
+				if (\strpos($mime, 'image/') !== 0) {
+					$attachment_id = 0;
+				}
+			}
+
+			if ($term_id <= 0 && $attachment_id <= 0) {
+				continue;
+			}
+
+			$rows[] = [
+				'term_id' => $term_id,
+				'attachment_id' => $attachment_id,
+			];
+
+			if ($term_id > 0) {
+				$term_ids[] = $term_id;
+			}
+		}
+
+		if ($rows === []) {
+			\delete_post_meta($post_id, $meta_key);
+		} else {
+			\update_post_meta($post_id, $meta_key, $rows);
+		}
+
+		if ($legacy_meta_key !== '') {
+			\delete_post_meta($post_id, $legacy_meta_key);
 		}
 	}
 
-	if ($rows === []) {
-		\delete_post_meta($post_id, CMX_CARENT_FOTOS_ROWS_META);
-	} else {
-		\update_post_meta($post_id, CMX_CARENT_FOTOS_ROWS_META, $rows);
+	if (!$has_valid_section) {
+		return;
 	}
 
 	$term_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $term_ids))));
