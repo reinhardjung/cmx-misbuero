@@ -701,12 +701,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		$input_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature';
 		$clear_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature_clear';
 		$label = $role === 'mieter' ? 'Mieter' : 'Vermieter';
+		$acceptance_note = ($transfer_key === 'uebernahme' && $role === 'mieter')
+			? 'Ich habe die AGBs gelesen, verstanden und akzeptiert.'
+			: '';
 		$image_url = cmx_vermietung_signature_attachment_url($attachment_id);
 		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
 
 		echo '<div class="cmx-vermietung-signature-item' . ($enabled ? '' : ' is-disabled') . '" data-signature-item="' . \esc_attr($prefix) . '">';
 		echo '<div class="cmx-vermietung-signature-head">';
+		echo '<div class="cmx-vermietung-signature-copy">';
 		echo '<h3 class="cmx-vermietung-signature-title">' . \esc_html($label) . '</h3>';
+		if ($acceptance_note !== '') {
+			echo '<span class="cmx-vermietung-signature-note">' . \esc_html($acceptance_note) . '</span>';
+		}
+		echo '</div>';
 		echo '<button type="button" class="cmx-vermietung-signature-clear" data-signature-clear="' . \esc_attr($prefix) . '"' . ($enabled ? '' : ' disabled') . '>Leeren</button>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-signature-pad">';
@@ -1128,8 +1136,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_transfer_video_fi
 		echo '<h3 class="cmx-vermietung-transfer-section-title">' . \esc_html($title) . '</h3>';
 		echo '<div class="cmx-vermietung-upload-body cmx-vermietung-upload-body--embedded">';
 		echo '<input type="hidden" name="' . \esc_attr($field_name) . '" id="' . \esc_attr($prefix . '-attachment-id') . '" value="' . (int) $attachment_id . '">';
-		echo '<label class="cmx-vermietung-upload-dropzone" for="' . \esc_attr($prefix . '-file') . '" id="' . \esc_attr($prefix . '-dropzone') . '">';
 		echo '<input type="file" class="cmx-vermietung-upload-input" id="' . \esc_attr($prefix . '-file') . '" accept="video/*"' . $disabled_attr . '>';
+		echo '<div class="cmx-vermietung-upload-dropzone" id="' . \esc_attr($prefix . '-dropzone') . '" role="button" tabindex="' . ($enabled ? '0' : '-1') . '" aria-disabled="' . ($enabled ? 'false' : 'true') . '">';
 		echo '<button type="button" class="cmx-vermietung-upload-remove"' . ($attachment_id > 0 ? '' : ' style="display:none;"') . $disabled_attr . ' id="' . \esc_attr($prefix . '-remove') . '" aria-label="' . \esc_attr__('Video entfernen', 'cmx-misbuero') . '">';
 		echo $remove_icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo '</button>';
@@ -1138,7 +1146,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_transfer_video_fi
 		echo '<span class="cmx-vermietung-upload-title">' . \esc_html($video_url !== '' ? $replace_label : $choose_label) . '</span>';
 		echo '<span class="cmx-vermietung-upload-hint">MP4, MOV, WebM oder anderes Video hochladen.</span>';
 		echo '</span>';
-		echo '</label>';
+		echo '</div>';
 		echo '<p class="cmx-vermietung-upload-meta" id="' . \esc_attr($prefix . '-meta') . '">';
 		if ($filename !== '' && $video_url !== '') {
 			echo '<a href="' . \esc_url($video_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($filename) . '</a>';
@@ -1777,8 +1785,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-upload-body--embedded{padding:0;margin-top:12px}
 			.cmx-vermietung-signature-item{min-width:0;padding:12px 14px;border:1px solid #e4e7ec;border-radius:12px;background:#fafafa}
 			.cmx-vermietung-signature-item.is-disabled{opacity:.6}
-			.cmx-vermietung-signature-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+			.cmx-vermietung-signature-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+			.cmx-vermietung-signature-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;flex-wrap:wrap}
 			.cmx-vermietung-signature-title{margin:0;font-size:15px;line-height:1.2}
+			.cmx-vermietung-signature-note{font-size:13px;line-height:1.35;color:#667085}
 			.cmx-vermietung-signature-clear{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#475467;font:inherit;cursor:pointer}
 			.cmx-vermietung-signature-clear:disabled{opacity:.5;cursor:not-allowed}
 			.cmx-vermietung-signature-pad{border:1px dashed #c8d1dc;border-radius:12px;background:#fff;overflow:hidden}
@@ -2601,6 +2611,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						fileInput.disabled=!enabled;
 						removeButton.disabled=!enabled;
 						dropzone.classList.toggle("is-disabled", !enabled);
+						dropzone.setAttribute("tabindex", enabled ? "0" : "-1");
+						dropzone.setAttribute("aria-disabled", enabled ? "false" : "true");
 					}
 					function renderStatus(label, fileUrl){
 						var safeLabel=String(label||"");
@@ -2680,6 +2692,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					dropzone.addEventListener("click", function(event){
 						if(!enabled){return;}
 						if(event.target && event.target.closest && event.target.closest("#" + prefix + "-remove")){return;}
+						fileInput.click();
+					});
+					dropzone.addEventListener("keydown", function(event){
+						if(!enabled){return;}
+						if(event.key!=="Enter" && event.key!==" "){return;}
+						event.preventDefault();
 						fileInput.click();
 					});
 					fileInput.addEventListener("change", function(){
