@@ -2263,6 +2263,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					summe:document.getElementById("cmx-vermietung-info-summe")
 				};
 				var transferNodes={
+					besondere_abmachungen:document.getElementById("cmx-vermietung-uebernahme-besondere-abmachungen"),
 					ort:document.getElementById("cmx-vermietung-uebernahme-ort"),
 					datum:document.getElementById("cmx-vermietung-uebernahme-datum"),
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-uhrzeit"),
