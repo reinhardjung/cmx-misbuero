@@ -22,6 +22,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 	function cmx_render_carent_fuehrerausweis_metabox(\WP_Post $post): void {
 		$attachment_id = (int) \get_post_meta($post->ID, CMX_CARENT_FUEHRERAUSWEIS_META, true);
 		$image_url = $attachment_id > 0 ? (string) \wp_get_attachment_image_url($attachment_id, 'medium') : '';
+		$attachment_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
 		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
 		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_fuehrerausweis_upload');
 
@@ -38,7 +39,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 		}
 		echo '</div>';
 		echo '<p id="cmx_carent_fuehrerausweis_status" style="margin:10px 0 0;color:#50575e;">';
-		if ($filename !== '') {
+		if ($filename !== '' && $attachment_url !== '') {
+			echo '<a href="' . \esc_url($attachment_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($filename) . '</a>';
+		} elseif ($filename !== '') {
 			echo \esc_html($filename);
 		}
 		echo '</p>';
@@ -71,6 +74,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 				dropzone.style.opacity = ".6";
 			}
 
+			function renderStatus(label, fileUrl){
+				var safeLabel = String(label || "");
+				var safeUrl = String(fileUrl || "");
+				if (!safeLabel) {
+					status.textContent = "";
+					return;
+				}
+				if (!safeUrl) {
+					status.textContent = safeLabel;
+					return;
+				}
+				status.innerHTML = "";
+				var link = document.createElement("a");
+				link.href = safeUrl;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
+				link.textContent = safeLabel;
+				status.appendChild(link);
+			}
+
 			function renderEmpty(){
 				attachmentInput.value = "";
 				preview.outerHTML = "<div id=\"cmx_carent_fuehrerausweis_preview\" style=\"display:flex;align-items:center;justify-content:center;min-height:140px;padding:12px;text-align:center;border:1px dashed #c3c4c7;border-radius:6px;color:#646970;background:#f6f7f7;\">" + emptyText + "</div>";
@@ -80,11 +103,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 				setIdle();
 			}
 
-			function renderImage(id, url, label){
+			function renderImage(id, url, label, fileUrl){
 				attachmentInput.value = String(id || "");
 				preview.outerHTML = "<img id=\"cmx_carent_fuehrerausweis_preview\" src=\"" + String(url || "").replace(/\"/g, "&quot;") + "\" alt=\"\" style=\"display:block;width:100%;height:auto;border:1px solid #dcdcde;border-radius:6px;\">";
 				preview = document.getElementById("cmx_carent_fuehrerausweis_preview");
-				status.textContent = String(label || "");
+				renderStatus(label, fileUrl);
 				removeButton.style.display = "";
 				setIdle();
 			}
@@ -117,7 +140,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 						setIdle();
 						return;
 					}
-					renderImage(json.data.id || "", json.data.url || "", json.data.label || "");
+					renderImage(json.data.id || "", json.data.url || "", json.data.label || "", json.data.file_url || "");
 				}).catch(function(){
 					status.textContent = "Upload fehlgeschlagen.";
 					setIdle();
@@ -203,10 +226,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 	if ($image_url === '') {
 		$image_url = (string) \wp_get_attachment_url((int) $attachment_id);
 	}
+	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
 
 	\wp_send_json_success([
 		'id' => (int) $attachment_id,
 		'url' => $image_url,
+		'file_url' => $file_url,
 		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
 	]);
 });
