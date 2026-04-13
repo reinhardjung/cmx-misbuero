@@ -200,6 +200,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 
 		cmx_carent_render_transfer_upload_field($vermieter_prefix, (string) \__('Vermieter', 'cmx-misbuero'), $vermieter_attachment_id);
 		cmx_carent_render_transfer_upload_field($mieter_prefix, (string) \__('Mieter', 'cmx-misbuero'), $mieter_attachment_id);
+		if ($box_key === 'uebernahme' && \function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
+			echo '<div class="cmx-carent-transfer-fotos-wrap">';
+			echo '<label style="display:block;margin:0 0 6px;font-weight:600;">' . \esc_html__('Fotos', 'cmx-misbuero') . '</label>';
+			cmx_render_carent_fotos_section($post, 'cmx-carent-transfer-fotos-' . (int) $post->ID, true);
+			echo '</div>';
+		}
 
 		echo '</div>';
 		echo '</div>';

@@ -104,7 +104,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows')) {
 	}
 }
 
-	if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_attachment_payload')) {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_attachment_payload')) {
 	function cmx_carent_fotos_attachment_payload(int $attachment_id): array {
 		if ($attachment_id <= 0 || \get_post_type($attachment_id) !== 'attachment') {
 			return [
@@ -195,31 +195,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 	}
 }
 
-	\add_action('admin_enqueue_scripts', function (): void {
+\add_action('admin_enqueue_scripts', function (): void {
 	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
 	if (!$screen || (string) ($screen->post_type ?? '') !== 'carent') {
 		return;
 	}
 });
-
-\add_action('add_meta_boxes_carent', function (): void {
-	$taxonomy = cmx_carent_fotos_taxonomy();
-	\remove_meta_box($taxonomy . 'div', 'carent', 'side');
-	\remove_meta_box($taxonomy . 'div', 'carent', 'normal');
-	\remove_meta_box($taxonomy . 'div', 'carent', 'advanced');
-	\remove_meta_box('tagsdiv-' . $taxonomy, 'carent', 'side');
-	\remove_meta_box('tagsdiv-' . $taxonomy, 'carent', 'normal');
-	\remove_meta_box('tagsdiv-' . $taxonomy, 'carent', 'advanced');
-
-	\add_meta_box(
-		'cmx_carent_fotos_rows_box',
-		\__('Fotos', 'cmx-misbuero'),
-		__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox',
-		'carent',
-		'normal',
-		'high'
-	);
-}, 100);
 
 \add_action('admin_head', function (): void {
 	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
@@ -231,8 +212,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 	echo '<style>#' . \esc_html($taxonomy . 'div') . ',#' . \esc_html('tagsdiv-' . $taxonomy) . '{display:none !important;}</style>';
 });
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
-	function cmx_render_carent_fotos_metabox(\WP_Post $post): void {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_section')) {
+	function cmx_render_carent_fotos_section(\WP_Post $post, string $host_id = 'cmx_carent_fotos_rows_box', bool $compact = false): void {
 		$rows = cmx_carent_fotos_rows((int) $post->ID);
 		if ($rows === []) {
 			$rows = [['term_id' => 0, 'attachment_id' => 0]];
@@ -244,18 +225,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 
 		\wp_nonce_field('cmx_carent_fotos_rows_save', 'cmx_carent_fotos_rows_nonce');
 
+		$host_selector = '#' . \esc_attr($host_id);
+		$row_grid_columns = $compact ? '1fr' : 'minmax(240px,320px) minmax(0,1fr)';
+		$preview_min_height = $compact ? '140px' : '180px';
+
 		echo '<style>
-		#cmx_carent_fotos_rows_box .inside{margin:0;padding:14px}
-		.cmx-carent-fotos-box{display:grid;gap:14px}
+		' . $host_selector . ' .cmx-carent-fotos-box{display:grid;gap:14px}
 		.cmx-carent-fotos-help{margin:0;color:#646970}
 		.cmx-carent-fotos-rows{display:grid;gap:14px}
 		.cmx-carent-fotos-row{border:1px solid #dcdcde;border-radius:10px;background:#fff;padding:14px}
 		.cmx-carent-fotos-row-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 		.cmx-carent-fotos-row-title{font-weight:600}
-		.cmx-carent-fotos-row-grid{display:grid;gap:14px;grid-template-columns:minmax(240px,320px) minmax(0,1fr)}
+		.cmx-carent-fotos-row-grid{display:grid;gap:14px;grid-template-columns:' . $row_grid_columns . '}
 		.cmx-carent-fotos-field label{display:block;margin:0 0 6px;font-weight:600}
 		.cmx-carent-fotos-media{display:grid;gap:10px}
-		.cmx-carent-fotos-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:180px;padding:12px;border:1px dashed #c3c4c7;border-radius:8px;background:#f6f7f7;cursor:pointer}
+		.cmx-carent-fotos-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:' . $preview_min_height . ';padding:12px;border:1px dashed #c3c4c7;border-radius:8px;background:#f6f7f7;cursor:pointer}
 		.cmx-carent-fotos-preview.is-busy{opacity:.65}
 		.cmx-carent-fotos-preview.is-dragover{border-color:#2271b1;background:#eef6ff}
 		.cmx-carent-fotos-preview-image{display:block;max-width:100%;max-height:240px;height:auto;border-radius:6px}
@@ -270,22 +254,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 		}
 		</style>';
 
-		echo '<div class="cmx-carent-fotos-box">';
-		echo '<p class="cmx-carent-fotos-help">' . \esc_html__('Mehrere Fotos anlegen. Pro Zeile ein Typ und dann das passende Bild wählen.', 'cmx-misbuero') . '</p>';
-		echo '<div id="cmx-carent-fotos-rows" class="cmx-carent-fotos-rows">';
+		echo '<div id="' . \esc_attr($host_id) . '" class="cmx-carent-fotos-box">';
+		echo '<p class="cmx-carent-fotos-help">' . \esc_html__('Beliebige Fotos hinzufügen. Pro Zeile ein Typ und dann das passende Bild wählen.', 'cmx-misbuero') . '</p>';
+		echo '<div id="' . \esc_attr($host_id) . '_rows" class="cmx-carent-fotos-rows">';
 		foreach ($rows as $index => $row) {
 			echo cmx_carent_fotos_row_markup((string) $index, $row, $term_options); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
 		echo '</div>';
-		echo '<div class="cmx-carent-fotos-footer"><button type="button" class="button button-primary" id="cmx-carent-fotos-add-row">' . \esc_html__('Weitere Fotos hinzufügen', 'cmx-misbuero') . '</button></div>';
-		echo '<template id="cmx-carent-fotos-row-template">' . $template_markup . '</template>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '<div class="cmx-carent-fotos-footer"><button type="button" class="button button-primary" id="' . \esc_attr($host_id) . '_add_row">' . \esc_html__('Weitere Fotos hinzufügen', 'cmx-misbuero') . '</button></div>';
+		echo '<template id="' . \esc_attr($host_id) . '_row_template">' . $template_markup . '</template>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo '</div>';
 
 		echo '<script>
 		(function(){
-			var root = document.getElementById("cmx-carent-fotos-rows");
-			var addButton = document.getElementById("cmx-carent-fotos-add-row");
-			var template = document.getElementById("cmx-carent-fotos-row-template");
+			var root = document.getElementById(' . \wp_json_encode($host_id . '_rows') . ');
+			var addButton = document.getElementById(' . \wp_json_encode($host_id . '_add_row') . ');
+			var template = document.getElementById(' . \wp_json_encode($host_id . '_row_template') . ');
 			if (!root || !addButton || !template || root.dataset.cmxFotosBound === "1") return;
 			root.dataset.cmxFotosBound = "1";
 
@@ -492,6 +476,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 			});
 		})();
 		</script>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
+	function cmx_render_carent_fotos_metabox(\WP_Post $post): void {
+		cmx_render_carent_fotos_section($post, 'cmx_carent_fotos_rows_box', false);
 	}
 }
 
