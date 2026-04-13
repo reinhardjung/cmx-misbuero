@@ -701,8 +701,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		$input_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature';
 		$clear_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature_clear';
 		$label = $role === 'mieter' ? 'Mieter' : 'Vermieter';
-		$acceptance_note = ($transfer_key === 'uebernahme' && $role === 'mieter')
-			? 'Ich habe die AGBs gelesen, verstanden und akzeptiert.'
+		$show_acceptance_note = ($transfer_key === 'uebernahme' && $role === 'mieter');
+		$agb_link = $show_acceptance_note && \function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')
+			? \trim((string) cmx_email_agb_link())
 			: '';
 		$image_url = cmx_vermietung_signature_attachment_url($attachment_id);
 		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
@@ -711,8 +712,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		echo '<div class="cmx-vermietung-signature-head">';
 		echo '<div class="cmx-vermietung-signature-copy">';
 		echo '<h3 class="cmx-vermietung-signature-title">' . \esc_html($label) . '</h3>';
-		if ($acceptance_note !== '') {
-			echo '<span class="cmx-vermietung-signature-note">' . \esc_html($acceptance_note) . '</span>';
+		if ($show_acceptance_note) {
+			echo '<span class="cmx-vermietung-signature-note">';
+			echo 'Ich habe die ';
+			if ($agb_link !== '') {
+				echo '<a href="' . \esc_url($agb_link) . '" target="_blank" rel="noopener noreferrer">AGBs gelesen</a>';
+			} else {
+				echo 'AGBs gelesen';
+			}
+			echo ', verstanden und akzeptiert.';
+			echo '</span>';
 		}
 		echo '</div>';
 		echo '<button type="button" class="cmx-vermietung-signature-clear" data-signature-clear="' . \esc_attr($prefix) . '"' . ($enabled ? '' : ' disabled') . '>Leeren</button>';
@@ -1789,6 +1798,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-signature-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;flex-wrap:wrap}
 			.cmx-vermietung-signature-title{margin:0;font-size:15px;line-height:1.2}
 			.cmx-vermietung-signature-note{font-size:13px;line-height:1.35;color:#667085}
+			.cmx-vermietung-signature-note a{color:#135e96;text-decoration:underline}
+			.cmx-vermietung-signature-note a:hover,.cmx-vermietung-signature-note a:focus{color:#0f4c7a}
 			.cmx-vermietung-signature-clear{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#475467;font:inherit;cursor:pointer}
 			.cmx-vermietung-signature-clear:disabled{opacity:.5;cursor:not-allowed}
 			.cmx-vermietung-signature-pad{border:1px dashed #c8d1dc;border-radius:12px;background:#fff;overflow:hidden}
