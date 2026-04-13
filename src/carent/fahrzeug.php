@@ -6,6 +6,9 @@ defined('ABSPATH') || exit;
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META', '_cmx_carent_fahrzeug_id');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META', '_cmx_carent_fahrzeug_variant_index');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META', '_cmx_carent_fahrzeug_km_stand_uebernahme');
 }
@@ -52,6 +55,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
 			: '';
 
 		return \trim(($nr !== '' ? $nr . ' – ' : '') . $title);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_entries')) {
+	function cmx_carent_fahrzeug_variant_entries(int $artikel_id): array {
+		if ($artikel_id <= 0 || !\get_post_status($artikel_id) || (string) \get_post_type($artikel_id) !== cmx_carent_fahrzeug_post_type()) {
+			return [];
+		}
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_variant_entries')) {
+			return [];
+		}
+
+		$entries = (array) cmx_artikel_admin_variant_entries($artikel_id);
+		return \array_values(\array_filter($entries, static function ($entry): bool {
+			return \is_array($entry);
+		}));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_entry')) {
+	function cmx_carent_fahrzeug_variant_entry(int $artikel_id, int $variant_index): array {
+		foreach (cmx_carent_fahrzeug_variant_entries($artikel_id) as $entry) {
+			if ((int) ($entry['index'] ?? -1) === $variant_index) {
+				return (array) $entry;
+			}
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_label')) {
+	function cmx_carent_fahrzeug_variant_label(int $artikel_id, int $variant_index, bool $fallback_to_article = true): string {
+		$entry = cmx_carent_fahrzeug_variant_entry($artikel_id, $variant_index);
+		if ($entry !== []) {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_label')) {
+				$label = \trim((string) cmx_artikel_search_variant_label($entry));
+				if ($label !== '') {
+					return $label;
+				}
+			}
+
+			$label = \trim((string) ($entry['title'] ?? ''));
+			if ($label !== '') {
+				return $label;
+			}
+		}
+
+		return $fallback_to_article ? cmx_carent_fahrzeug_display_label($artikel_id) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_selection_label')) {
+	function cmx_carent_fahrzeug_selection_label(int $artikel_id, $variant_index = null): string {
+		if ($variant_index !== null && $variant_index !== '' && \is_numeric((string) $variant_index)) {
+			return cmx_carent_fahrzeug_variant_label($artikel_id, (int) $variant_index, true);
+		}
+
+		return cmx_carent_fahrzeug_display_label($artikel_id);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_post_selection_label')) {
+	function cmx_carent_fahrzeug_post_selection_label(int $carent_id): string {
+		if ($carent_id <= 0 || !\get_post_status($carent_id)) {
+			return '';
+		}
+
+		$artikel_id = (int) \get_post_meta($carent_id, CMX_CARENT_FAHRZEUG_META, true);
+		if ($artikel_id <= 0) {
+			return '';
+		}
+
+		$variant_index = \get_post_meta($carent_id, CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META, true);
+		return cmx_carent_fahrzeug_selection_label($artikel_id, $variant_index);
 	}
 }
 
@@ -187,7 +265,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_normalize_decimal')
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 	function cmx_render_carent_fahrzeug_metabox(\WP_Post $post): void {
 		$selected = (int) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_META, true);
-		$selected_label = $selected > 0 ? cmx_carent_fahrzeug_display_label($selected) : '';
+		$selected_label = $selected > 0 ? cmx_carent_fahrzeug_post_selection_label($post->ID) : '';
 		$artikel_defaults = cmx_carent_fahrzeug_article_meta_defaults($selected);
 		$kennzeichen = (string) ($artikel_defaults['kennzeichen'] ?? '');
 		$begrenzung = cmx_carent_fahrzeug_meta_value($post->ID, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
@@ -694,9 +772,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 		return;
 	}
 
+	$previous_artikel_id = (int) \get_post_meta($post_id, CMX_CARENT_FAHRZEUG_META, true);
 	$artikel_id = isset($_POST['cmx_carent_fahrzeug_id']) ? (int) \wp_unslash($_POST['cmx_carent_fahrzeug_id']) : 0;
 	if ($artikel_id <= 0 || (string) \get_post_type($artikel_id) !== cmx_carent_fahrzeug_post_type() || !\get_post_status($artikel_id)) {
 		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_META);
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META);
 		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META);
 		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_STAND_RUECKGABE_META);
 		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_KM_BEGRENZUNG_META);
@@ -707,6 +787,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fahrzeug_metabox')) {
 	}
 
 	\update_post_meta($post_id, CMX_CARENT_FAHRZEUG_META, $artikel_id);
+	if ($previous_artikel_id > 0 && $previous_artikel_id !== $artikel_id) {
+		\delete_post_meta($post_id, CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META);
+	}
 
 	$km_stand_uebernahme = cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_carent_fahrzeug_km_stand_uebernahme'] ?? ''));
 	$km_stand_rueckgabe = cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_carent_fahrzeug_km_stand_rueckgabe'] ?? ''));

@@ -53,9 +53,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_linked_contact_id')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_article_label')) {
-	function cmx_carent_admin_article_label(int $artikel_id): string {
+	function cmx_carent_admin_article_label(int $artikel_id, int $carent_id = 0): string {
 		if ($artikel_id <= 0 || !\get_post_status($artikel_id)) {
 			return '';
+		}
+
+		$variant_index = null;
+		if ($carent_id > 0) {
+			$variant_index = \get_post_meta($carent_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META')
+				: '_cmx_carent_fahrzeug_variant_index', true);
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_selection_label')) {
+			$label = (string) cmx_carent_fahrzeug_selection_label($artikel_id, $variant_index);
+			if ($label !== '') {
+				return $label;
+			}
 		}
 
 		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
@@ -147,7 +161,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 \add_action('manage_carent_posts_custom_column', function (string $column, int $post_id): void {
 	if ($column === 'cmx_carent_artikel') {
 		$artikel_id = cmx_carent_admin_linked_article_id($post_id);
-		$label = cmx_carent_admin_article_label($artikel_id);
+		$label = cmx_carent_admin_article_label($artikel_id, $post_id);
 		echo cmx_carent_admin_edit_link($artikel_id, $label); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		return;
 	}

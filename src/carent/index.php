@@ -310,7 +310,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
 		$artikel_id = (int) \get_post_meta($post_id, $artikel_meta_key, true);
 		if ($artikel_id > 0 && \get_post_status($artikel_id)) {
 			$artikel_title = '';
-			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_post_selection_label')) {
+				$artikel_title = \trim((string) cmx_carent_fahrzeug_post_selection_label($post_id));
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
 				$artikel_title = \trim((string) cmx_carent_fahrzeug_display_label($artikel_id));
 			}
 			if ($artikel_title === '') {
@@ -376,20 +378,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_auto_title_suffix_parts')) {
 			: '_cmx_carent_fahrzeug_id';
 		$artikel_id = (int) \get_post_meta($post_id, $artikel_meta_key, true);
 		if ($artikel_id > 0 && \get_post_status($artikel_id)) {
-			$artikel_nr = '';
-			if (\function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')) {
-				$artikel_nr = \trim((string) cmx_get_artikel_nr($artikel_id));
+			$artikel_label = '';
+			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_post_selection_label')) {
+				$artikel_label = \trim((string) cmx_carent_fahrzeug_post_selection_label($post_id));
 			}
-			if ($artikel_nr === '') {
+			if ($artikel_label === '' && \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')) {
+				$artikel_label = \trim((string) cmx_carent_fahrzeug_display_label($artikel_id));
+			}
+			if ($artikel_label === '' && \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')) {
+				$artikel_label = \trim((string) cmx_get_artikel_nr($artikel_id));
+			}
+			if ($artikel_label === '') {
 				foreach (['_cmx_artikel_sku', 'cmx_artikel_sku', '_cmx_artikel_nr', '_sku'] as $meta_key) {
-					$artikel_nr = \trim((string) \get_post_meta($artikel_id, $meta_key, true));
-					if ($artikel_nr !== '') {
+					$artikel_label = \trim((string) \get_post_meta($artikel_id, $meta_key, true));
+					if ($artikel_label !== '') {
 						break;
 					}
 				}
 			}
-			if ($artikel_nr !== '') {
-				$parts[] = $artikel_nr;
+			if ($artikel_label !== '') {
+				$parts[] = $artikel_label;
 			}
 		}
 
