@@ -620,6 +620,20 @@ function cmx_register_system_tab(): void {
 		'cmx_sec_system'
 	);
 
+	\add_settings_field(
+		'cmx_system_nachweise',
+		'Nachweise',
+		function (): void {
+			cmx_system_render_copyable_instance_link(
+				'cmx-system-nachweise',
+				(string) \home_url('/nachweise/'),
+				'Nachweise in neuem Tab öffnen und Link kopieren'
+			);
+		},
+		$general_page,
+		'cmx_sec_system'
+	);
+
 	\register_setting(
 		'cmx_einstellungen',
 		'mis_buero_openai_key',

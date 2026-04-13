@@ -367,6 +367,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_display_title')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_auto_title_suffix_parts')) {
+	function cmx_carent_auto_title_suffix_parts(int $post_id): array {
+		$parts = [];
+
+		$artikel_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			: '_cmx_carent_fahrzeug_id';
+		$artikel_id = (int) \get_post_meta($post_id, $artikel_meta_key, true);
+		if ($artikel_id > 0 && \get_post_status($artikel_id)) {
+			$artikel_nr = '';
+			if (\function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')) {
+				$artikel_nr = \trim((string) cmx_get_artikel_nr($artikel_id));
+			}
+			if ($artikel_nr === '') {
+				foreach (['_cmx_artikel_sku', 'cmx_artikel_sku', '_cmx_artikel_nr', '_sku'] as $meta_key) {
+					$artikel_nr = \trim((string) \get_post_meta($artikel_id, $meta_key, true));
+					if ($artikel_nr !== '') {
+						break;
+					}
+				}
+			}
+			if ($artikel_nr !== '') {
+				$parts[] = $artikel_nr;
+			}
+		}
+
+		$kontakt_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META')
+			: '_cmx_carent_kontakt_id';
+		$kontakt_id = (int) \get_post_meta($post_id, $kontakt_meta_key, true);
+		if ($kontakt_id > 0 && \get_post_status($kontakt_id)) {
+			$kontakt_title = \trim((string) \get_the_title($kontakt_id));
+			if ($kontakt_title !== '' && \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+				$kontakt_title = (string) cmx_normalize_minus_sign($kontakt_title);
+			}
+			if ($kontakt_title !== '') {
+				$parts[] = $kontakt_title;
+			}
+		}
+
+		return \array_values(\array_filter($parts, static fn($value): bool => \trim((string) $value) !== ''));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_generate_nummer')) {
 	function cmx_carent_generate_nummer(): string {
 		$beleg_generator = __NAMESPACE__ . '\\cmx_generate_rechnungsnummer';
@@ -403,6 +447,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
 		}
 
 		$new_title = \trim((string) cmx_carent_ensure_nummer($post_id));
+		$suffix_parts = cmx_carent_auto_title_suffix_parts($post_id);
+		if ($suffix_parts !== []) {
+			$new_title .= ' - ' . \implode(' - ', $suffix_parts);
+		}
 		if ($new_title === '') {
 			return;
 		}
@@ -410,24 +458,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
 		$current_title = \trim((string) $post->post_title);
 		$current_slug = \trim((string) $post->post_name);
 		$new_slug = \sanitize_title($new_title);
-		$old_composed_title = \trim((string) cmx_carent_composed_title($post_id));
-		$should_set_title = $current_title === ''
-			|| $current_title === 'Vermietung'
-			|| $current_title === $old_composed_title
-			|| ((int) \get_post_meta($post_id, '_cmx_title_auto', true) === 1);
-
-		if (!$should_set_title) {
-			\delete_post_meta($post_id, '_cmx_title_auto');
-			return;
-		}
 
 		if ($current_title !== $new_title || $current_slug !== $new_slug) {
 			$GLOBALS['cmx_carent_title_updating'] = true;
+			\remove_action('save_post_carent', __NAMESPACE__ . '\\cmx_carent_sync_post_title', 999);
 			\wp_update_post([
 				'ID'         => $post_id,
 				'post_title' => $new_title,
 				'post_name'  => $new_slug,
 			]);
+			\add_action('save_post_carent', __NAMESPACE__ . '\\cmx_carent_sync_post_title', 999, 3);
 			unset($GLOBALS['cmx_carent_title_updating']);
 		}
 
