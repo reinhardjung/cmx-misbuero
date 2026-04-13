@@ -351,6 +351,90 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_display_title')) {
+	function cmx_carent_display_title(int $post_id): string {
+		$title = \trim((string) cmx_carent_composed_title($post_id));
+		if ($title !== '') {
+			return $title;
+		}
+
+		$title = \trim((string) \get_the_title($post_id));
+		if ($title !== '') {
+			return $title;
+		}
+
+		return 'Vertrag #' . $post_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_generate_nummer')) {
+	function cmx_carent_generate_nummer(): string {
+		$beleg_generator = __NAMESPACE__ . '\\cmx_generate_rechnungsnummer';
+		if (\function_exists($beleg_generator)) {
+			return \trim((string) \call_user_func($beleg_generator));
+		}
+
+		$format = \trim((string) cmx_ini_get_value('Belege', 'Format'));
+		if ($format === '') {
+			$format = 'ymd-His';
+		}
+
+		return \wp_date($format);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_ensure_nummer')) {
+	function cmx_carent_ensure_nummer(int $post_id): string {
+		$nummer = \trim((string) \get_post_meta($post_id, '_cmx_carent_nummer', true));
+		if ($nummer === '') {
+			$nummer = cmx_carent_generate_nummer();
+			\update_post_meta($post_id, '_cmx_carent_nummer', $nummer);
+		}
+
+		return $nummer;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
+	function cmx_carent_apply_auto_title(int $post_id): void {
+		$post = \get_post($post_id);
+		if (!$post || (string) $post->post_type !== 'carent') {
+			return;
+		}
+
+		$new_title = \trim((string) cmx_carent_ensure_nummer($post_id));
+		if ($new_title === '') {
+			return;
+		}
+
+		$current_title = \trim((string) $post->post_title);
+		$current_slug = \trim((string) $post->post_name);
+		$new_slug = \sanitize_title($new_title);
+		$old_composed_title = \trim((string) cmx_carent_composed_title($post_id));
+		$should_set_title = $current_title === ''
+			|| $current_title === 'Vermietung'
+			|| $current_title === $old_composed_title
+			|| ((int) \get_post_meta($post_id, '_cmx_title_auto', true) === 1);
+
+		if (!$should_set_title) {
+			\delete_post_meta($post_id, '_cmx_title_auto');
+			return;
+		}
+
+		if ($current_title !== $new_title || $current_slug !== $new_slug) {
+			$GLOBALS['cmx_carent_title_updating'] = true;
+			\wp_update_post([
+				'ID'         => $post_id,
+				'post_title' => $new_title,
+				'post_name'  => $new_slug,
+			]);
+			unset($GLOBALS['cmx_carent_title_updating']);
+		}
+
+		\update_post_meta($post_id, '_cmx_title_auto', 1);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_sync_post_title')) {
 	function cmx_carent_sync_post_title(int $post_id, \WP_Post $post, bool $update): void {
 		unset($update);
@@ -370,17 +454,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_sync_post_title')) {
 		if (!\current_user_can('edit_post', $post_id)) {
 			return;
 		}
-
-		$title = \trim((string) cmx_carent_composed_title($post_id));
-		if ($title === '' || $title === \trim((string) $post->post_title)) {
+		if (!empty($GLOBALS['cmx_carent_title_updating'])) {
 			return;
 		}
 
 		$running = true;
-		\wp_update_post([
-			'ID'         => $post_id,
-			'post_title' => $title,
-		]);
+		cmx_carent_apply_auto_title($post_id);
 		$running = false;
 	}
 }

@@ -543,9 +543,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contract_rows')) {
 				continue;
 			}
 
-			$title = \trim((string) \get_the_title($post_id));
+			$post_title = \trim((string) \get_the_title($post_id));
+			$title = \function_exists(__NAMESPACE__ . '\\cmx_carent_display_title')
+				? \trim((string) cmx_carent_display_title($post_id))
+				: $post_title;
 			if ($title === '') {
-				$title = 'Vertrag #' . $post_id;
+				$title = $post_title !== '' ? $post_title : 'Vertrag #' . $post_id;
 			}
 
 			$contact_id = (int) \get_post_meta($post_id, CMX_CARENT_KONTAKT_META, true);
@@ -559,14 +562,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contract_rows')) {
 			}
 
 			$meta_parts = [];
-			if ($contact_title !== '') {
-				$meta_parts[] = $contact_title;
-			}
-			if ($vehicle_title !== '') {
-				$meta_parts[] = $vehicle_title;
+			if ($post_title !== '' && $post_title !== $title) {
+				$meta_parts[] = $post_title;
 			}
 
-			$search_text = \implode(' ', \array_filter([$title, $contact_title, $vehicle_title, (string) $post_id], static fn(string $value): bool => \trim($value) !== ''));
+			$search_text = \implode(' ', \array_filter([$title, $post_title, $contact_title, $vehicle_title, (string) $post_id], static fn(string $value): bool => \trim($value) !== ''));
 
 			$rows[] = [
 				'id'     => $post_id,
@@ -813,12 +813,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 			\update_post_meta($post_id, $inventory_meta_key, (int) $attachment_id);
 		}
 
-		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
+			cmx_carent_apply_auto_title($post_id);
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
 			$title = \trim((string) cmx_carent_composed_title($post_id));
 			if ($title !== '') {
 				\wp_update_post([
 					'ID'         => $post_id,
 					'post_title' => $title,
+					'post_name'  => \sanitize_title($title),
 				]);
 			}
 		}
