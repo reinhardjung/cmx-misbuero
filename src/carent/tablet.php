@@ -619,6 +619,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_signature_meta_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_uebernahme_agb_acceptance_meta_key')) {
+	function cmx_vermietung_uebernahme_agb_acceptance_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_AGB_AKZEPTIERT_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_AGB_AKZEPTIERT_META')
+			: '_cmx_carent_uebernahme_mieter_agb_akzeptiert';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_signature_attachment_url')) {
 	function cmx_vermietung_signature_attachment_url(int $attachment_id): string {
 		if ($attachment_id <= 0) {
@@ -730,7 +738,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_transfer_signature_
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) {
-	function cmx_vermietung_render_signature_pad(string $transfer_key, string $role, int $attachment_id, bool $enabled): void {
+	function cmx_vermietung_render_signature_pad(string $transfer_key, string $role, int $attachment_id, bool $enabled, bool $acceptance_checked = false): void {
 		$transfer_key = \sanitize_key($transfer_key);
 		$role = \sanitize_key($role);
 		$prefix = 'cmx-vermietung-signature-' . $transfer_key . '-' . $role;
@@ -741,6 +749,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		$agb_link = $show_acceptance_note && \function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')
 			? \trim((string) cmx_email_agb_link())
 			: '';
+		$acceptance_input_id = $prefix . '-agb-accepted';
+		$acceptance_copy_id = $acceptance_input_id . '-copy';
 		$image_url = cmx_vermietung_signature_attachment_url($attachment_id);
 		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
 
@@ -749,7 +759,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		echo '<div class="cmx-vermietung-signature-copy">';
 		echo '<h3 class="cmx-vermietung-signature-title">' . \esc_html($label) . '</h3>';
 		if ($show_acceptance_note) {
-			echo '<span class="cmx-vermietung-signature-note">';
+			echo '<span class="cmx-vermietung-signature-acceptance' . ($enabled ? '' : ' is-disabled') . '">';
+			echo '<input type="checkbox" class="cmx-vermietung-signature-acceptance-input" id="' . \esc_attr($acceptance_input_id) . '" name="cmx_vermietung_uebernahme_mieter_agb_accepted" value="1" aria-describedby="' . \esc_attr($acceptance_copy_id) . '" data-signature-dependent data-required-when-enabled="1"' . checked($acceptance_checked, true, false) . ($enabled ? ' required' : ' disabled') . '>';
+			echo '<span class="cmx-vermietung-signature-note" id="' . \esc_attr($acceptance_copy_id) . '">';
 			echo 'Ich habe die ';
 			if ($agb_link !== '') {
 				echo '<a href="' . \esc_url($agb_link) . '" target="_blank" rel="noopener noreferrer">AGBs gelesen</a>';
@@ -757,6 +769,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 				echo 'AGBs gelesen';
 			}
 			echo ', verstanden und akzeptiert.';
+			echo '</span>';
 			echo '</span>';
 		}
 		echo '</div>';
@@ -789,6 +802,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 		$km_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 			: '_cmx_carent_fahrzeug_km_stand_uebernahme';
+		$agb_acceptance_meta_key = cmx_vermietung_uebernahme_agb_acceptance_meta_key();
 
 		$ort = isset($_POST['cmx_vermietung_uebernahme_ort'])
 			? \trim((string) \wp_unslash($_POST['cmx_vermietung_uebernahme_ort']))
@@ -805,6 +819,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 		$km_stand = isset($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme'])
 			? cmx_carent_fahrzeug_normalize_int(\wp_unslash($_POST['cmx_vermietung_fahrzeug_km_stand_uebernahme']))
 			: '';
+		$agb_acceptance = isset($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted'])
+			&& (string) \wp_unslash($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted']) === '1';
 
 		if ($ort === '') {
 			\delete_post_meta($post_id, $ort_meta_key);
@@ -834,6 +850,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			\delete_post_meta($post_id, $km_meta_key);
 		} else {
 			\update_post_meta($post_id, $km_meta_key, $km_stand);
+		}
+
+		if ($agb_acceptance) {
+			\update_post_meta($post_id, $agb_acceptance_meta_key, '1');
+		} else {
+			\delete_post_meta($post_id, $agb_acceptance_meta_key);
 		}
 	}
 }
@@ -964,6 +986,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 			'invalid_nonce'   => 'Die Vermietung konnte nicht gestartet werden. Bitte die Seite neu laden.',
 			'missing_contact' => 'Bitte zuerst einen Kontakt auswählen.',
 			'missing_vehicle' => 'Bitte zuerst ein Fahrzeug auswählen.',
+			'missing_agb_acceptance' => 'Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren.',
 			'missing_license_photo' => 'Bitte den Führerausweis hochladen.',
 			'invalid_contact' => 'Der gewählte Kontakt ist nicht gültig.',
 			'invalid_vehicle' => 'Das gewählte Fahrzeug ist nicht gültig.',
@@ -1764,6 +1787,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 				exit;
 			}
 		}
+		$agb_acceptance = isset($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted'])
+			&& (string) \wp_unslash($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted']) === '1';
+		if (!$agb_acceptance) {
+			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_agb_acceptance']));
+			exit;
+		}
 		if (!$has_license_upload && $existing_license_attachment_id <= 0) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_license_photo']));
 			exit;
@@ -1968,6 +1997,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			'datum'                 => '',
 			'uhrzeit'               => '',
 			'besondere_abmachungen' => '',
+			'agb_akzeptiert'        => false,
 			'km_stand'              => \trim((string) ($selected_vehicle_details['km_stand_uebernahme'] ?? '')),
 		];
 		$selected_uebernahme_signatures = [
@@ -2003,6 +2033,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					: '_cmx_carent_uebernahme_besondere_abmachungen',
 				true
 			));
+			$selected_uebernahme_values['agb_akzeptiert'] = (bool) \get_post_meta(
+				$current_post_id,
+				cmx_vermietung_uebernahme_agb_acceptance_meta_key(),
+				true
+			);
 			$stored_km_stand = \trim((string) \get_post_meta(
 				$current_post_id,
 				\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
@@ -2284,6 +2319,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-signature-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
 			.cmx-vermietung-signature-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;flex-wrap:wrap}
 			.cmx-vermietung-signature-title{margin:0;font-size:15px;line-height:1.2}
+			.cmx-vermietung-signature-acceptance{display:inline-flex;align-items:center;gap:10px;min-width:0}
+			.cmx-vermietung-signature-acceptance.is-disabled{opacity:.72}
+			.cmx-vermietung-signature-acceptance-input{flex:0 0 auto;width:18px;height:18px;margin:0}
+			.cmx-vermietung-signature-acceptance-input:disabled{cursor:not-allowed}
 			.cmx-vermietung-signature-note{font-size:13px;line-height:1.35;color:#667085}
 			.cmx-vermietung-signature-note a{color:#135e96;text-decoration:underline}
 			.cmx-vermietung-signature-note a:hover,.cmx-vermietung-signature-note a:focus{color:#0f4c7a}
@@ -2576,7 +2615,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '<div class="cmx-vermietung-signature-grid">';
 		cmx_vermietung_render_signature_pad('uebernahme', 'vermieter', (int) ($selected_uebernahme_signatures['vermieter'] ?? 0), $selected_vehicle_id > 0);
-		cmx_vermietung_render_signature_pad('uebernahme', 'mieter', (int) ($selected_uebernahme_signatures['mieter'] ?? 0), $selected_vehicle_id > 0);
+		cmx_vermietung_render_signature_pad('uebernahme', 'mieter', (int) ($selected_uebernahme_signatures['mieter'] ?? 0), $selected_vehicle_id > 0, !empty($selected_uebernahme_values['agb_akzeptiert']));
 		echo '</div>';
 		echo '</section>';
 		echo '<section class="cmx-vermietung-upload-panel' . ($selected_contact_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-fuehrerausweis-panel">';
@@ -2730,6 +2769,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var artikelValue=document.getElementById("cmx-vermietung-artikel-value");
 				var submit=document.getElementById("cmx-vermietung-submit");
 				var contactEmailButton=document.getElementById("cmx-vermietung-contact-email");
+				var uebernahmeMieterAgbAccepted=document.getElementById("cmx-vermietung-signature-uebernahme-mieter-agb-accepted");
 				var artikelPanel=document.querySelector(\'[data-picker="artikel"]\');
 				var artikelSearch=document.getElementById("cmx-vermietung-search-artikel");
 				var artikelLock=document.getElementById("cmx-vermietung-lock-artikel");
@@ -2866,13 +2906,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var minutes=String(now.getMinutes()).padStart(2,"0");
 					return hours+":"+minutes;
 				}
+				function hasRequiredAgbAcceptance(){
+					if(!uebernahmeMieterAgbAccepted){return true;}
+					return !uebernahmeMieterAgbAccepted.disabled && uebernahmeMieterAgbAccepted.checked;
+				}
 				function setContactEmailAction(href){
-					var value=String(href||"").trim();
-					var enabled=value!=="";
+					var value;
+					var hasEmail;
+					var hasAcceptance;
+					var enabled;
 					if(!contactEmailButton){return;}
+					if(typeof href==="string"){
+						contactEmailButton.setAttribute("data-email-href", href);
+					}
+					value=String(contactEmailButton.getAttribute("data-email-href")||"").trim();
+					hasEmail=value!=="";
+					hasAcceptance=hasRequiredAgbAcceptance();
+					enabled=hasEmail && hasAcceptance;
 					contactEmailButton.setAttribute("href", enabled ? value : "#");
 					contactEmailButton.classList.toggle("is-disabled", !enabled);
-					contactEmailButton.setAttribute("title", enabled ? "E-Mail an Kontakt senden" : "Keine E-Mail-Adresse beim Kontakt hinterlegt");
+					if(enabled){
+						contactEmailButton.setAttribute("title", "E-Mail an Kontakt senden");
+					}else if(!hasEmail){
+						contactEmailButton.setAttribute("title", "Keine E-Mail-Adresse beim Kontakt hinterlegt");
+					}else{
+						contactEmailButton.setAttribute("title", "Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren");
+					}
 					if(enabled){
 						contactEmailButton.removeAttribute("aria-disabled");
 						contactEmailButton.removeAttribute("tabindex");
@@ -3527,12 +3586,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						if(pad.clearButton){
 							pad.clearButton.disabled=!enabled;
 						}
+						Array.prototype.slice.call(pad.item.querySelectorAll("[data-signature-dependent]")).forEach(function(input){
+							input.disabled=!enabled;
+							if(input.hasAttribute("data-required-when-enabled")){
+								if(enabled){
+									input.setAttribute("required","required");
+								}else{
+									input.removeAttribute("required");
+								}
+							}
+						});
 						if(!enabled){
 							pad.canvas.setAttribute("data-disabled","1");
 						}else{
 							pad.canvas.removeAttribute("data-disabled");
 						}
 					});
+					if(uebernahmeMieterAgbAccepted && typeof uebernahmeMieterAgbAccepted.setCustomValidity==="function"){
+						uebernahmeMieterAgbAccepted.setCustomValidity(!uebernahmeMieterAgbAccepted.disabled && !uebernahmeMieterAgbAccepted.checked ? "Bitte die AGB bestätigen." : "");
+					}
+					setContactEmailAction();
 				}
 				function initSignaturePad(item){
 					if(!item){return;}
@@ -4009,6 +4082,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						syncDamageFormState();
 					});
 				}
+				if(uebernahmeMieterAgbAccepted){
+					uebernahmeMieterAgbAccepted.addEventListener("change", function(){
+						if(typeof uebernahmeMieterAgbAccepted.setCustomValidity==="function"){
+							uebernahmeMieterAgbAccepted.setCustomValidity(!uebernahmeMieterAgbAccepted.disabled && !uebernahmeMieterAgbAccepted.checked ? "Bitte die AGB bestätigen." : "");
+						}
+						setContactEmailAction();
+					});
+				}
+				if(contactEmailButton){
+					contactEmailButton.addEventListener("click", function(event){
+						if(String(contactEmailButton.getAttribute("aria-disabled") || "false") !== "true"){return;}
+						event.preventDefault();
+					});
+				}
 				Array.prototype.slice.call(document.querySelectorAll(".cmx-vermietung-choice-option input")).forEach(function(input){
 					input.addEventListener("change", syncChoiceSelectionState);
 				});
@@ -4138,6 +4225,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(licenseRequired && !hasLicenseFile){
 						event.preventDefault();
 						window.alert("Bitte zuerst einen Führerausweis hochladen.");
+						return;
+					}
+					if(uebernahmeMieterAgbAccepted && !uebernahmeMieterAgbAccepted.disabled && !uebernahmeMieterAgbAccepted.checked){
+						event.preventDefault();
+						if(typeof uebernahmeMieterAgbAccepted.setCustomValidity==="function"){
+							uebernahmeMieterAgbAccepted.setCustomValidity("Bitte die AGB bestätigen.");
+						}
+						if(typeof uebernahmeMieterAgbAccepted.reportValidity==="function"){
+							uebernahmeMieterAgbAccepted.reportValidity();
+						}else{
+							window.alert("Bitte zuerst die AGB bestätigen.");
+						}
+						try{uebernahmeMieterAgbAccepted.focus();}catch(err){}
 						return;
 					}
 					signaturePads.forEach(function(pad){
