@@ -1019,8 +1019,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_status_message')) {
 	function cmx_vermietung_status_message(string $code): string {
 		return match ($code) {
-			'saved'   => 'Vermietung wurde gespeichert.',
-			'updated' => 'Vermietung wurde aktualisiert.',
+			'saved'   => 'Mietvertrag wurde gespeichert.',
+			'updated' => 'Mietvertrag wurde aktualisiert.',
 			default   => '',
 		};
 	}
