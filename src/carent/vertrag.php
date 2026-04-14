@@ -986,6 +986,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 			$contact_phone = \trim((string) cmx_kommunikation_primary_phone($contact_id));
 		}
 		$self_party_text = cmx_carent_vertrag_party_cell_text($self_address_lines);
+		if ($self_title !== '') {
+			$self_party_text = \trim($self_title . ($self_party_text !== '' ? ' · ' . $self_party_text : ''));
+		}
 		$contact_party_text = cmx_carent_vertrag_party_cell_text($contact_address_lines, $contact_phone, $contact_email);
 		\ob_start();
 		?>
@@ -1008,8 +1011,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-link{color:#222;text-decoration:none}
-				.contract-party-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:fixed}
-				.contract-party-label{width:300px;padding:7px 10px 7px 0;vertical-align:top;font-size:11px;font-weight:700;line-height:1.25;color:#111}
+				.contract-party-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:auto}
+				.contract-party-label{width:100px;min-width:100px;max-width:100px;padding:7px 10px 7px 0;vertical-align:top;font-size:11px;font-weight:700;line-height:1.25;color:#111;white-space:nowrap}
 				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
 				.contract-party-table tr+tr .contract-party-label,
 				.contract-party-table tr+tr .contract-party-value{border-top:1px solid #d8dbe2}
@@ -1057,13 +1060,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</table>
 				<table class="contract-party-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<tr>
-						<td class="contract-party-label">Vermieter</td>
+						<td class="contract-party-label" width="100" style="width:100px;">Vermieter</td>
 						<td class="contract-party-value">
 							<?php echo \esc_html($self_party_text); ?>
 						</td>
 					</tr>
 					<tr>
-						<td class="contract-party-label">Mieter</td>
+						<td class="contract-party-label" width="100" style="width:100px;">Mieter</td>
 						<td class="contract-party-value">
 							<?php echo \esc_html($contact_party_text); ?>
 						</td>
