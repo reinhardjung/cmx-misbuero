@@ -2830,6 +2830,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var artikelValue=document.getElementById("cmx-vermietung-artikel-value");
 				var submit=document.getElementById("cmx-vermietung-submit");
 				var contractPdfButton=document.getElementById("cmx-vermietung-contract-pdf");
+				var contractPdfButtonDefaultHtml=contractPdfButton ? String(contractPdfButton.innerHTML || "") : "";
 				var contactEmailButton=document.getElementById("cmx-vermietung-contact-email");
 				var uebernahmeMieterAgbAccepted=document.getElementById("cmx-vermietung-signature-uebernahme-mieter-agb-accepted");
 				var artikelPanel=document.querySelector(\'[data-picker="artikel"]\');
@@ -3141,12 +3142,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(busy){
 						contractPdfButton.classList.remove("is-success");
 						contractPdfButton.setAttribute("aria-busy","true");
-						contractPdfButton.textContent="PDF...";
 						contractPdfButton.setAttribute("title","PDF wird erstellt...");
 						return;
 					}
 					contractPdfButton.removeAttribute("aria-busy");
-					contractPdfButton.textContent="PDF";
+					if(contractPdfButtonDefaultHtml !== "" && String(contractPdfButton.innerHTML || "") !== contractPdfButtonDefaultHtml){
+						contractPdfButton.innerHTML=contractPdfButtonDefaultHtml;
+					}
 					setContractPdfAction();
 				}
 				function flashContractPdfSuccess(){

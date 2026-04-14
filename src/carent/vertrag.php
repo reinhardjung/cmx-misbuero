@@ -1007,7 +1007,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-company{font-size:13px;font-weight:700;line-height:1.15;color:#111}
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
-				.header-contact-link{color:#222;text-decoration:underline}
+				.header-contact-link{color:#222;text-decoration:none}
 				.contract-party-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:fixed}
 				.contract-party-label{width:300px;padding:7px 10px 7px 0;vertical-align:top;font-size:11px;font-weight:700;line-height:1.25;color:#111}
 				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
