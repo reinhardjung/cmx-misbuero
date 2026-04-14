@@ -1168,7 +1168,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$vehicle_article_text = \trim((string) ($vehicle_article_lines['primary'] ?? ''));
 		$vehicle_article_secondary_text = \trim((string) ($vehicle_article_lines['secondary'] ?? ''));
 		$vehicle_insurance_text = \trim((string) ($vehicle_article_lines['insurance'] ?? ''));
+		$vehicle_insurance_notice = 'Selbstbehalt im Schadenfall zu Lasten Kunde: Haftpflicht, Teil- oder Vollkasko wie oben angegeben.';
+		$vehicle_insurance_full_text = $vehicle_insurance_text;
+		if ($vehicle_insurance_notice !== '') {
+			$vehicle_insurance_full_text .= ($vehicle_insurance_full_text !== '' ? '' : '')
+				. '<div class="contract-inline-note">' . \esc_html($vehicle_insurance_notice) . '</div>';
+		}
 		$vehicle_variant_text = cmx_carent_vertrag_vehicle_variant_text($vehicle);
+		$transfer = (array) ($data['transfer'] ?? []);
+		$uebernahme = (array) ($transfer['uebernahme'] ?? []);
+		$uebernahme_km_stand = \trim((string) ($uebernahme['km_stand'] ?? ''));
+		if ($uebernahme_km_stand === '') {
+			$uebernahme_km_stand = \trim((string) (($vehicle['article_meta']['km_stand'] ?? '')));
+		}
+		$uebernahme_km_stand = cmx_carent_vertrag_format_int($uebernahme_km_stand);
+		$uebernahme_datum = cmx_carent_vertrag_format_date(\trim((string) ($uebernahme['datum'] ?? '')));
+		$uebernahme_uhrzeit = \trim((string) ($uebernahme['uhrzeit'] ?? ''));
+		$rueckgabe = (array) ($transfer['rueckgabe'] ?? []);
+		$rueckgabe_km_stand = cmx_carent_vertrag_format_int(\trim((string) ($rueckgabe['km_stand'] ?? '')));
+		$rueckgabe_datum = cmx_carent_vertrag_format_date(\trim((string) ($rueckgabe['datum'] ?? '')));
+		$rueckgabe_uhrzeit = \trim((string) ($rueckgabe['uhrzeit'] ?? ''));
 		\ob_start();
 		?>
 		<!doctype html>
@@ -1190,15 +1209,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-link{color:#222;text-decoration:none}
-				.contract-party-table{width:100%;margin-top:36px;border-collapse:collapse;table-layout:auto}
+				.contract-section-title{margin:36px 0 8px;font-size:13px;font-weight:700;line-height:1.2;color:#111}
+				.contract-party-table{width:100%;margin-top:0;border-collapse:collapse;table-layout:auto}
 				.contract-party-label{width:95px;min-width:95px;max-width:95px;padding:7px 6px 7px 0;vertical-align:top;font-size:11px;font-weight:700;font-style:italic;line-height:1.25;color:#111;white-space:nowrap}
 				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
 				.contract-party-table tr+tr .contract-party-label,
 				.contract-party-table tr+tr .contract-party-value{border-top:1px solid #d8dbe2}
+				.contract-transfer-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:fixed}
+				.contract-transfer-table td{padding:7px 8px 7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;border-top:1px solid #d8dbe2;white-space:nowrap}
+				.contract-transfer-kind{width:24%;font-weight:700;font-style:italic;color:#111}
+				.contract-transfer-value{font-weight:700;color:#111}
 				.contract-inline-label{font-weight:400;color:#222}
 				.contract-inline-value{font-weight:700;color:#111}
 				.contract-inline-separator{color:#777}
+				.contract-inline-note{margin-top:4px;font-weight:400;color:#222;white-space:normal}
 				.contract-note{margin-top:14px;font-size:11px;line-height:1.35;color:#222}
+				.contract-note-text{margin:0}
 			</style>
 		</head>
 		<body>
@@ -1241,6 +1267,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 						</td>
 					</tr>
 				</table>
+				<div class="contract-section-title">Stammdaten</div>
 				<table class="contract-party-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<tr>
 						<td class="contract-party-label" width="95" style="width:95px;">Vermieter</td>
@@ -1275,14 +1302,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					<tr>
 						<td class="contract-party-label" width="95" style="width:95px;">Versicherung</td>
 						<td class="contract-party-value">
-							<?php echo $vehicle_insurance_text; ?>
+							<?php echo $vehicle_insurance_full_text; ?>
 						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label" width="95" style="width:95px;">Übernahme</td>
+						<td class="contract-party-value">Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</td>
 					</tr>
 				</table>
 				<div class="contract-note">
-					Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen m&uuml;ssen aufbewahrt werden. Das Fahrzeug ist vollgetankt zur&uuml;ckzugeben, andernfalls
-					werden Treibstoff kosten plus CHF 50.-Aufwandsentsch&auml;digung verrechnet.
+					<p class="contract-note-text">Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen m&uuml;ssen aufbewahrt werden. Das Fahrzeug ist vollgetankt zur&uuml;ckzugeben, andernfalls werden Treibstoff kosten plus CHF 50.-Aufwandsentsch&auml;digung verrechnet.</p>
 				</div>
+				<div class="contract-section-title">Abrechnung</div>
+				<table class="contract-transfer-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td class="contract-transfer-kind">Übernahme</td>
+						<td><span class="contract-inline-label">KM-Stand</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_km_stand !== '' ? $uebernahme_km_stand : '–'); ?></span></td>
+						<td><span class="contract-inline-label">Datum</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_datum !== '' ? $uebernahme_datum : '–'); ?></span></td>
+						<td><span class="contract-inline-label">Uhrzeit</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_uhrzeit !== '' ? $uebernahme_uhrzeit : '–'); ?></span></td>
+					</tr>
+					<tr>
+						<td class="contract-transfer-kind">Rückgabe</td>
+						<td><span class="contract-inline-label">KM-Stand</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_km_stand !== '' ? $rueckgabe_km_stand : '–'); ?></span></td>
+						<td><span class="contract-inline-label">Datum</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_datum !== '' ? $rueckgabe_datum : '–'); ?></span></td>
+						<td><span class="contract-inline-label">Uhrzeit</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_uhrzeit !== '' ? $rueckgabe_uhrzeit : '–'); ?></span></td>
+					</tr>
+				</table>
 			</div>
 		</body>
 		</html>
