@@ -1163,6 +1163,199 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_fotos_section')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_meta_key')) {
+	function cmx_vermietung_schaden_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_ROWS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_ROWS_META')
+			: '_cmx_carent_schadenprotokoll_rows';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_taxonomy')) {
+	function cmx_vermietung_schaden_taxonomy(): string {
+		if (\defined(__NAMESPACE__ . '\\TAX_CARENT_SCHADEN')) {
+			return (string) \constant(__NAMESPACE__ . '\\TAX_CARENT_SCHADEN');
+		}
+
+		return \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('carent', 'Schaden')
+			: '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_term_options')) {
+	function cmx_vermietung_schaden_term_options(): array {
+		$taxonomy = cmx_vermietung_schaden_taxonomy();
+		if ($taxonomy === '') {
+			return [];
+		}
+
+		$terms = \get_terms([
+			'taxonomy' => $taxonomy,
+			'hide_empty' => false,
+			'orderby' => 'name',
+			'order' => 'ASC',
+		]);
+
+		if (\is_wp_error($terms) || !\is_array($terms)) {
+			return [];
+		}
+
+		$options = [];
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term) {
+				continue;
+			}
+
+			$options[] = [
+				'id' => (int) $term->term_id,
+				'label' => (string) $term->name,
+			];
+		}
+
+		return $options;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_normalize_rows')) {
+	function cmx_vermietung_schaden_normalize_rows(mixed $raw_rows): array {
+		if (!\is_array($raw_rows)) {
+			return [];
+		}
+
+		$rows = [];
+		foreach ($raw_rows as $raw_row) {
+			if (!\is_array($raw_row)) {
+				continue;
+			}
+
+			$term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
+			$note = isset($raw_row['note']) ? \trim((string) $raw_row['note']) : '';
+			$fotos_gemacht = !empty($raw_row['fotos_gemacht']);
+			if ($term_id <= 0 && $note === '' && !$fotos_gemacht) {
+				continue;
+			}
+
+			$rows[] = [
+				'term_id' => $term_id > 0 ? $term_id : 0,
+				'note' => $note,
+				'fotos_gemacht' => $fotos_gemacht,
+			];
+		}
+
+		return $rows;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_rows')) {
+	function cmx_vermietung_schaden_rows(int $post_id): array {
+		if ($post_id <= 0) {
+			return [];
+		}
+
+		$rows = cmx_vermietung_schaden_normalize_rows(\get_post_meta($post_id, cmx_vermietung_schaden_meta_key(), true));
+		if ($rows !== []) {
+			return $rows;
+		}
+
+		$taxonomy = cmx_vermietung_schaden_taxonomy();
+		if ($taxonomy === '') {
+			return [];
+		}
+
+		$terms = \get_the_terms($post_id, $taxonomy);
+		if (\is_wp_error($terms) || !\is_array($terms)) {
+			return [];
+		}
+
+		$fallback_rows = [];
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term) {
+				continue;
+			}
+
+			$fallback_rows[] = [
+				'term_id' => (int) $term->term_id,
+				'note' => '',
+				'fotos_gemacht' => false,
+			];
+		}
+
+		return $fallback_rows;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_row_markup')) {
+	function cmx_vermietung_schaden_row_markup(string $index, array $row, array $term_options, string $field_name, bool $enabled): string {
+		$term_id = isset($row['term_id']) ? (int) $row['term_id'] : 0;
+		$note = \trim((string) ($row['note'] ?? ''));
+		$fotos_gemacht = !empty($row['fotos_gemacht']);
+		$disabled_attr = $enabled ? '' : ' disabled';
+		$select_id = 'cmx-vermietung-schaden-term-' . $index;
+		$note_id = 'cmx-vermietung-schaden-note-' . $index;
+		$checkbox_id = 'cmx-vermietung-schaden-fotos-gemacht-' . $index;
+
+		\ob_start();
+		?>
+		<div class="cmx-vermietung-schaden-row" data-index="<?php echo \esc_attr($index); ?>">
+			<div class="cmx-vermietung-schaden-row-head">
+				<div class="cmx-vermietung-schaden-row-title"><?php echo \esc_html__('Schaden', 'cmx-misbuero'); ?></div>
+				<button type="button" class="cmx-vermietung-schaden-row-remove"<?php echo $disabled_attr; ?>><?php echo \esc_html__('Entfernen', 'cmx-misbuero'); ?></button>
+			</div>
+			<div class="cmx-vermietung-schaden-row-grid">
+				<div class="cmx-vermietung-schaden-field">
+					<label class="cmx-vermietung-schaden-field-label" for="<?php echo \esc_attr($select_id); ?>"><?php echo \esc_html__('Kategorie', 'cmx-misbuero'); ?></label>
+					<select class="cmx-vermietung-schaden-select" id="<?php echo \esc_attr($select_id); ?>" name="<?php echo \esc_attr($field_name); ?>[<?php echo \esc_attr($index); ?>][term_id]"<?php echo $disabled_attr; ?>>
+						<option value="0"><?php echo \esc_html__('Schaden wählen', 'cmx-misbuero'); ?></option>
+						<?php foreach ($term_options as $option) : ?>
+							<option value="<?php echo (int) ($option['id'] ?? 0); ?>"<?php selected($term_id, (int) ($option['id'] ?? 0)); ?>>
+								<?php echo \esc_html((string) ($option['label'] ?? '')); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<label class="cmx-vermietung-schaden-checkbox" for="<?php echo \esc_attr($checkbox_id); ?>">
+						<input type="checkbox" id="<?php echo \esc_attr($checkbox_id); ?>" name="<?php echo \esc_attr($field_name); ?>[<?php echo \esc_attr($index); ?>][fotos_gemacht]" value="1"<?php checked($fotos_gemacht); ?><?php echo $disabled_attr; ?>>
+						<span><?php echo \esc_html__('Fotos gemacht/geschickt', 'cmx-misbuero'); ?></span>
+					</label>
+				</div>
+				<div class="cmx-vermietung-schaden-field">
+					<label class="cmx-vermietung-schaden-field-label" for="<?php echo \esc_attr($note_id); ?>"><?php echo \esc_html__('Beschreibung', 'cmx-misbuero'); ?></label>
+					<textarea class="cmx-vermietung-schaden-textarea" id="<?php echo \esc_attr($note_id); ?>" name="<?php echo \esc_attr($field_name); ?>[<?php echo \esc_attr($index); ?>][note]" rows="5"<?php echo $disabled_attr; ?>><?php echo \esc_textarea($note); ?></textarea>
+				</div>
+			</div>
+		</div>
+		<?php
+
+		return (string) \ob_get_clean();
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_schaden_section')) {
+	function cmx_vermietung_render_schaden_section(int $post_id, bool $enabled): void {
+		$field_name = 'cmx_carent_schadenprotokoll_rows';
+		$rows = cmx_vermietung_schaden_rows($post_id);
+		if ($rows === []) {
+			$rows = [['term_id' => 0, 'note' => '', 'fotos_gemacht' => false]];
+		}
+
+		$term_options = cmx_vermietung_schaden_term_options();
+		$host_id = 'cmx-vermietung-schadenprotokoll';
+		$template_markup = cmx_vermietung_schaden_row_markup('__INDEX__', ['term_id' => 0, 'note' => '', 'fotos_gemacht' => false], $term_options, $field_name, $enabled);
+
+		echo '<div class="cmx-vermietung-schaden-wrap" id="' . \esc_attr($host_id) . '" data-enabled="' . ($enabled ? '1' : '0') . '">';
+		// echo '<h3 class="cmx-vermietung-transfer-section-title">Schäden</h3>';
+		// echo '<p class="cmx-vermietung-transfer-section-sub">Pro Zeile eine Schadenskategorie auswählen und die Details notieren.</p>';
+		echo '<div class="cmx-vermietung-schaden-rows" id="' . \esc_attr($host_id . '-rows') . '">';
+		foreach ($rows as $index => $row) {
+			echo cmx_vermietung_schaden_row_markup((string) $index, (array) $row, $term_options, $field_name, $enabled); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+		echo '</div>';
+		echo '<div class="cmx-vermietung-schaden-footer"><button type="button" class="cmx-vermietung-schaden-add"' . ($enabled ? '' : ' disabled') . ' id="' . \esc_attr($host_id . '-add') . '">' . \esc_html__('Weitere Schäden hinzufügen', 'cmx-misbuero') . '</button></div>';
+		echo '<template id="' . \esc_attr($host_id . '-template') . '">' . $template_markup . '</template>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_transfer_video_meta_key')) {
 	function cmx_vermietung_transfer_video_meta_key(string $section): string {
 		if ($section === 'rueckgabe') {
@@ -1327,6 +1520,60 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_transfer_video_valu
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_schaden_rows_values')) {
+	function cmx_vermietung_save_schaden_rows_values(int $post_id): void {
+		$raw_rows = isset($_POST['cmx_carent_schadenprotokoll_rows']) ? \wp_unslash($_POST['cmx_carent_schadenprotokoll_rows']) : [];
+		$taxonomy = cmx_vermietung_schaden_taxonomy();
+		$rows = [];
+		$term_ids = [];
+
+		foreach ((array) $raw_rows as $raw_row) {
+			if (!\is_array($raw_row)) {
+				continue;
+			}
+
+			$current_term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
+			$current_note = isset($raw_row['note'])
+				? \trim((string) \sanitize_textarea_field($raw_row['note']))
+				: '';
+			$current_fotos_gemacht = !empty($raw_row['fotos_gemacht']);
+
+			if ($current_term_id > 0 && $taxonomy !== '') {
+				$term = \get_term($current_term_id, $taxonomy);
+				if (!$term || \is_wp_error($term)) {
+					$current_term_id = 0;
+				}
+			}
+
+			if ($current_term_id <= 0 && $current_note === '' && !$current_fotos_gemacht) {
+				continue;
+			}
+
+			$rows[] = [
+				'term_id' => $current_term_id,
+				'note' => $current_note,
+				'fotos_gemacht' => $current_fotos_gemacht,
+			];
+
+			if ($current_term_id > 0) {
+				$term_ids[] = $current_term_id;
+			}
+		}
+
+		$meta_key = cmx_vermietung_schaden_meta_key();
+		if ($rows === []) {
+			\delete_post_meta($post_id, $meta_key);
+		} else {
+			\update_post_meta($post_id, $meta_key, $rows);
+		}
+
+		if ($taxonomy !== '') {
+			$term_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $term_ids))));
+			\wp_set_post_terms($post_id, $term_ids, $taxonomy, false);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 	function cmx_handle_vermietung_create(): void {
 		if (!cmx_vermietung_feature_enabled()) {
@@ -1476,6 +1723,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		cmx_vermietung_save_rueckgabe_values($post_id);
 		cmx_vermietung_save_fotos_rows_values($post_id);
 		cmx_vermietung_save_transfer_video_values($post_id);
+		cmx_vermietung_save_schaden_rows_values($post_id);
 		if (!cmx_vermietung_save_transfer_signature_values($post_id, 'uebernahme')) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($post_id, ['cmx_vermietung_error' => 'signature_upload_failed']));
 			exit;
@@ -1820,7 +2068,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-head{padding-bottom:14px}
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
 			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
-			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap{padding:0 18px 18px}
+			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap,.cmx-vermietung-schaden-wrap{padding:0 18px 18px}
 			.cmx-vermietung-transfer-textarea-wrap{padding:0 18px 18px}
 			.cmx-vermietung-transfer-section-title{margin:0;font-size:18px;line-height:1.25}
 			.cmx-vermietung-transfer-section-sub{margin:6px 0 0;font-size:13px;color:#667085}
@@ -1828,14 +2076,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-fotos-row{border:1px solid #e4e7ec;border-radius:12px;background:#fafafa;padding:14px}
 			.cmx-vermietung-fotos-row-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 			.cmx-vermietung-fotos-row-title{font-size:14px;font-weight:700;color:#1d2327}
-			.cmx-vermietung-fotos-row-remove,.cmx-vermietung-fotos-add{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#b42318;font:inherit;cursor:pointer}
-			.cmx-vermietung-fotos-row-remove:hover,.cmx-vermietung-fotos-add:hover{background:#fff5f5;border-color:#f04438}
-			.cmx-vermietung-fotos-row-remove:disabled,.cmx-vermietung-fotos-add:disabled{opacity:.5;cursor:not-allowed}
-			.cmx-vermietung-fotos-add{margin-top:12px;background:#a42c24;border-color:#a42c24;color:#fff}
-			.cmx-vermietung-fotos-add:hover{background:#8f211b;border-color:#8f211b}
+			.cmx-vermietung-fotos-row-remove,.cmx-vermietung-fotos-add,.cmx-vermietung-schaden-row-remove,.cmx-vermietung-schaden-add{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#b42318;font:inherit;cursor:pointer}
+			.cmx-vermietung-fotos-row-remove:hover,.cmx-vermietung-fotos-add:hover,.cmx-vermietung-schaden-row-remove:hover,.cmx-vermietung-schaden-add:hover{background:#fff5f5;border-color:#f04438}
+			.cmx-vermietung-fotos-row-remove:disabled,.cmx-vermietung-fotos-add:disabled,.cmx-vermietung-schaden-row-remove:disabled,.cmx-vermietung-schaden-add:disabled{opacity:.5;cursor:not-allowed}
+			.cmx-vermietung-fotos-add,.cmx-vermietung-schaden-add{margin-top:12px;background:#a42c24;border-color:#a42c24;color:#fff}
+			.cmx-vermietung-fotos-add:hover,.cmx-vermietung-schaden-add:hover{background:#8f211b;border-color:#8f211b}
 			.cmx-vermietung-fotos-row-grid{display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:14px}
 			.cmx-vermietung-fotos-select{display:block;width:100%;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit}
 			.cmx-vermietung-fotos-select:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
+			.cmx-vermietung-schaden-rows{display:grid;gap:14px;margin-top:12px}
+			.cmx-vermietung-schaden-row{border:1px solid #e4e7ec;border-radius:12px;background:#fafafa;padding:14px}
+			.cmx-vermietung-schaden-row-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+			.cmx-vermietung-schaden-row-title{font-size:14px;font-weight:700;color:#1d2327}
+			.cmx-vermietung-schaden-row-grid{display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:14px;align-items:start}
+			.cmx-vermietung-schaden-field{display:flex;flex-direction:column;gap:8px;justify-content:flex-start}
+			.cmx-vermietung-schaden-field-label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
+			.cmx-vermietung-schaden-select,.cmx-vermietung-schaden-textarea{display:block;width:100%;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;color:#1d2327}
+			.cmx-vermietung-schaden-textarea{min-height:132px;line-height:1.5;resize:vertical}
+			.cmx-vermietung-schaden-checkbox{display:inline-flex;align-items:center;gap:10px;font-size:14px;color:#475467;cursor:pointer}
+			.cmx-vermietung-schaden-checkbox input{margin:0}
+			.cmx-vermietung-schaden-select:disabled,.cmx-vermietung-schaden-textarea:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
+			.cmx-vermietung-schaden-checkbox input:disabled{cursor:not-allowed}
 			.cmx-vermietung-fotos-media{display:grid;gap:10px}
 			.cmx-vermietung-fotos-preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:180px;padding:12px;border:1px dashed #c8d1dc;border-radius:12px;background:#f8fafc;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
 			.cmx-vermietung-fotos-preview:hover{border-color:#135e96;background:#eef6ff}
@@ -1892,6 +2153,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-fotos-row-grid{grid-template-columns:minmax(0,1fr)}
+				.cmx-vermietung-schaden-row-grid{grid-template-columns:minmax(0,1fr)}
 			}
 			@media (max-width:720px){
 				.cmx-vermietung-page{padding:18px 12px 24px}
@@ -2183,6 +2445,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '</div>';
 		echo '</section>';
+		echo '<section class="cmx-vermietung-transfer-panel is-collapsed' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-schadenprotokoll-panel">';
+		echo '<div class="cmx-vermietung-panel-head is-collapsible">';
+		echo '<div class="cmx-vermietung-panel-copy">';
+		echo '<h2 class="cmx-vermietung-panel-title">';
+		echo '<button type="button" class="cmx-vermietung-panel-toggle" id="cmx-vermietung-schadenprotokoll-toggle" aria-expanded="false" aria-controls="cmx-vermietung-schadenprotokoll-body">';
+		echo '<span class="cmx-vermietung-panel-toggle-label">Schadenprotokoll</span>';
+		echo '<span class="cmx-vermietung-panel-toggle-icon" aria-hidden="true">&#9662;</span>';
+		echo '</button>';
+		echo '</h2>';
+		echo '<p class="cmx-vermietung-panel-sub" style="padding-bottom:20px;">Schäden und Bemerkungen zum gewählten Fahrzeug.</p>';
+		echo '</div>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-collapsible-body" id="cmx-vermietung-schadenprotokoll-body">';
+		cmx_vermietung_render_schaden_section($current_post_id, $selected_vehicle_id > 0);
+		echo '</div>';
+		echo '</section>';
 		echo '<section class="cmx-vermietung-transfer-panel is-collapsed' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-rueckgabe-panel">';
 		echo '<div class="cmx-vermietung-panel-head is-collapsible">';
 		echo '<div class="cmx-vermietung-panel-copy">';
@@ -2247,6 +2525,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var identityMeta=document.getElementById("cmx-vermietung-identitaetskarte-meta");
 				var identityPanel=document.getElementById("cmx-vermietung-identitaetskarte-panel");
 				var identityToggle=document.getElementById("cmx-vermietung-identitaetskarte-toggle");
+				var damagePanel=document.getElementById("cmx-vermietung-schadenprotokoll-panel");
+				var damageToggle=document.getElementById("cmx-vermietung-schadenprotokoll-toggle");
 				var ajaxUrl=' . \wp_json_encode($ajax_url) . ';
 				var photoUploadNonce=' . \wp_json_encode($photo_upload_nonce) . ';
 				var videoUploadNonce=' . \wp_json_encode($video_upload_nonce) . ';
@@ -2297,6 +2577,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var signaturePads=[];
 				var transferPhotoSections={};
 				var transferVideoSections={};
+				var damageSections={};
 				var pickers={};
 				function normalize(value){return String(value||"").toLowerCase().trim();}
 				function escapeHtml(value){
@@ -2451,6 +2732,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				function syncReturnPanelState(){
 					if(!returnPanel || !returnToggle){return;}
 					returnToggle.setAttribute("aria-expanded", returnPanel.classList.contains("is-collapsed") ? "false" : "true");
+				}
+				function syncDamagePanelState(){
+					if(!damagePanel || !damageToggle){return;}
+					damageToggle.setAttribute("aria-expanded", damagePanel.classList.contains("is-collapsed") ? "false" : "true");
 				}
 				function syncIdentityPanelState(){
 					if(!identityPanel || !identityToggle){return;}
@@ -2721,6 +3006,73 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						renderAttachment(row, {id:0,preview_url:"",file_url:"",label:""});
 					}
 					rowsHost.querySelectorAll(".cmx-vermietung-fotos-row").forEach(function(row){
+						initRow(row);
+					});
+					addButton.addEventListener("click", function(event){
+						event.preventDefault();
+						if(!enabled){return;}
+						addRow();
+					});
+					setEnabled(enabled);
+					return {setEnabled:setEnabled};
+				}
+				function initDamageSection(sectionId){
+					var host=document.getElementById(sectionId);
+					var rowsHost=document.getElementById(sectionId+"-rows");
+					var addButton=document.getElementById(sectionId+"-add");
+					var template=document.getElementById(sectionId+"-template");
+					var enabled=host && String(host.getAttribute("data-enabled")||"0")==="1";
+					var rowIndex=rowsHost ? rowsHost.querySelectorAll(".cmx-vermietung-schaden-row").length : 0;
+					if(!host || !rowsHost || !addButton || !template){return null;}
+					if(host.dataset.cmxSchadenBound==="1"){
+						return {
+							setEnabled:function(nextEnabled){
+								host.setAttribute("data-enabled", nextEnabled ? "1" : "0");
+							}
+						};
+					}
+					host.dataset.cmxSchadenBound="1";
+					function updateRowEnabled(row){
+						var select=row.querySelector(".cmx-vermietung-schaden-select");
+						var textarea=row.querySelector(".cmx-vermietung-schaden-textarea");
+						var removeButton=row.querySelector(".cmx-vermietung-schaden-row-remove");
+						if(select){select.disabled=!enabled;}
+						if(textarea){textarea.disabled=!enabled;}
+						if(removeButton){removeButton.disabled=!enabled;}
+					}
+					function setEnabled(nextEnabled){
+						enabled=!!nextEnabled;
+						host.setAttribute("data-enabled", enabled ? "1" : "0");
+						addButton.disabled=!enabled;
+						rowsHost.querySelectorAll(".cmx-vermietung-schaden-row").forEach(updateRowEnabled);
+					}
+					function initRow(row){
+						if(!row || row.dataset.cmxSchadenRowBound==="1"){return;}
+						row.dataset.cmxSchadenRowBound="1";
+						var removeButton=row.querySelector(".cmx-vermietung-schaden-row-remove");
+						if(removeButton){
+							removeButton.addEventListener("click", function(event){
+								event.preventDefault();
+								if(!enabled){return;}
+								row.remove();
+								if(!rowsHost.querySelector(".cmx-vermietung-schaden-row")){
+									addRow();
+								}
+							});
+						}
+						updateRowEnabled(row);
+					}
+					function addRow(){
+						var html=String(template.innerHTML || "").replace(/__INDEX__/g, String(rowIndex));
+						rowIndex += 1;
+						var wrapper=document.createElement("div");
+						wrapper.innerHTML=html.trim();
+						var row=wrapper.firstElementChild;
+						if(!row){return;}
+						rowsHost.appendChild(row);
+						initRow(row);
+					}
+					rowsHost.querySelectorAll(".cmx-vermietung-schaden-row").forEach(function(row){
 						initRow(row);
 					});
 					addButton.addEventListener("click", function(event){
@@ -3036,12 +3388,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(transferPanel){
 						transferPanel.classList.toggle("is-hidden", !hasVehicle);
 					}
+					if(damagePanel){
+						damagePanel.classList.toggle("is-hidden", !hasVehicle);
+						if(!hasVehicle){
+							damagePanel.classList.add("is-collapsed");
+						}
+					}
 					if(returnPanel){
 						returnPanel.classList.toggle("is-hidden", !hasVehicle);
 						if(!hasVehicle){
 							returnPanel.classList.add("is-collapsed");
 						}
 					}
+					syncDamagePanelState();
 					syncReturnPanelState();
 					setSignaturePadEnabled(hasVehicle);
 					Object.keys(transferPhotoSections).forEach(function(key){
@@ -3052,6 +3411,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					Object.keys(transferVideoSections).forEach(function(key){
 						if(transferVideoSections[key] && typeof transferVideoSections[key].setEnabled==="function"){
 							transferVideoSections[key].setEnabled(hasVehicle);
+						}
+					});
+					Object.keys(damageSections).forEach(function(key){
+						if(damageSections[key] && typeof damageSections[key].setEnabled==="function"){
+							damageSections[key].setEnabled(hasVehicle);
 						}
 					});
 					Object.keys(vehicleInfoNodes).forEach(function(key){
@@ -3175,6 +3539,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						scrollPageToBottom();
 					});
 					syncIdentityPanelState();
+				}
+				if(damageToggle && damagePanel){
+					damageToggle.addEventListener("click", function(){
+						if(damagePanel.classList.contains("is-hidden")){return;}
+						damagePanel.classList.toggle("is-collapsed");
+						syncDamagePanelState();
+						scrollPageToBottom();
+					});
+					syncDamagePanelState();
 				}
 				function bindPicker(key){
 					var panel=document.querySelector(\'[data-picker="\'+key+\'"]\');
@@ -3369,6 +3742,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				transferPhotoSections.rueckgabe=initTransferPhotoSection("cmx-vermietung-fotos-rueckgabe");
 				transferVideoSections.uebernahme=initTransferVideoSection("cmx-vermietung-video-uebernahme");
 				transferVideoSections.rueckgabe=initTransferVideoSection("cmx-vermietung-video-rueckgabe");
+				damageSections.main=initDamageSection("cmx-vermietung-schadenprotokoll");
 				Array.prototype.slice.call(document.querySelectorAll("[data-signature-item]")).forEach(initSignaturePad);
 				setArtikelLocked(String(kontaktInput.value||"")==="");
 				setContactEmailAction(' . \wp_json_encode($selected_contact_email_href) . ');

@@ -272,7 +272,7 @@ register_post_type(basename(__DIR__), ['labels' => ['name' => 'CaRent', 'singula
 
 
 // Define: CONST 4 @ll Taxos
-define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Fotos'); // 'Kategorien,Fotos'
+define(__NAMESPACE__ . '\\CMX_TAX_'.strtoupper(basename(__DIR__)),'Fotos,Schaden'); // 'Kategorien,Fotos'
 
 
 // Define: CONST 4 each Taxo
@@ -282,7 +282,8 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_CARENT)
 
 // Create: @ll Taxos
 \add_action('init', function () {
-	cmx_create_taxo(basename(__DIR__), 'Kategorie', 'Fotos');
+	cmx_create_taxo(basename(__DIR__), 'Foto', 'Fotos');
+	cmx_create_taxo(basename(__DIR__), 'Schaden', 'Schaden');
 }, 15);
 
 
