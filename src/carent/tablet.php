@@ -2165,11 +2165,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$selected_contract_title = (string) ($selected_contract_row['title'] ?? '');
 		$submit_label = $current_post_id > 0 ? 'aktualisieren' : 'anlegen';
 		$current_contract_edit_url = $current_post_id > 0 ? (string) \admin_url('post.php?post=' . $current_post_id . '&action=edit') : '';
+		$contact_email_button_enabled = $current_post_id > 0 && $selected_contact_email_href !== '' && !empty($selected_uebernahme_values['agb_akzeptiert']);
+		$contact_email_button_title = $contact_email_button_enabled
+			? 'Vertrag per E-Mail versenden'
+			: ($selected_contact_email_href === ''
+				? 'Keine E-Mail-Adresse beim Kontakt hinterlegt'
+				: ($current_post_id <= 0
+					? 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen'
+					: 'Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren'));
 		$license_required = $license_attachment_id <= 0;
 		$ajax_url = (string) \admin_url('admin-ajax.php');
 		$photo_upload_nonce = (string) \wp_create_nonce('cmx_carent_fotos_upload');
 		$video_upload_nonce = (string) \wp_create_nonce('cmx_carent_transfer_video_upload');
 		$km_sync_nonce = (string) \wp_create_nonce('cmx_carent_fahrzeug_sync_km_stand');
+		$vertrag_pdf_nonce = (string) \wp_create_nonce('cmx_carent_preview_vertrag_pdf');
+		$vertrag_mail_nonce = (string) \wp_create_nonce('cmx_carent_send_vertrag_mail');
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -2221,6 +2231,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-icon-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#135e96;text-decoration:none}
 			.cmx-vermietung-icon-button:hover{background:#eef6ff;border-color:#135e96}
 			.cmx-vermietung-icon-button.is-disabled{background:#f8fafc;border-color:#d0d5dd;color:#98a2b3;pointer-events:none}
+			.cmx-vermietung-icon-button.is-busy{background:#eef6ff;border-color:#135e96;color:#135e96;pointer-events:none}
+			.cmx-vermietung-icon-button.is-busy svg{animation:cmx-vermietung-spin 1s linear infinite}
+			.cmx-vermietung-icon-button.is-success{background:#ecfdf3;border-color:#abefc6;color:#027a48}
 			.cmx-vermietung-icon-button svg{display:block;width:20px;height:20px;color:currentColor}
 			.cmx-vermietung-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;overflow:visible;z-index:2;isolation:isolate}
 			.cmx-vermietung-panel{position:relative;min-width:0;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:visible;z-index:1}
@@ -2403,12 +2416,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-head,.cmx-vermietung-body{padding-left:16px;padding-right:16px}
 				.cmx-vermietung-title{font-size:24px}
 				.cmx-vermietung-summary{flex-direction:column;align-items:stretch}
-				.cmx-vermietung-summary-actions{display:grid;grid-template-columns:minmax(0,1fr) 42px 42px;align-items:stretch}
+				.cmx-vermietung-summary-actions{display:grid;grid-template-columns:minmax(0,1fr) auto 42px 42px;align-items:stretch}
 				.cmx-vermietung-summary-picker{grid-column:1 / -1;flex-basis:auto;min-width:0}
 				.cmx-vermietung-submit{grid-column:1;width:100%}
+				#cmx-vermietung-contract-pdf{grid-column:2}
 				.cmx-vermietung-icon-button{justify-self:stretch;align-self:stretch}
-				#cmx-vermietung-contact-email{grid-column:2}
-				#cmx-vermietung-contract-edit{grid-column:3}
+				#cmx-vermietung-contact-email{grid-column:3}
+				#cmx-vermietung-contract-edit{grid-column:4}
 				.cmx-vermietung-results{max-height:320px}
 				.cmx-vermietung-info-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-transfer-grid{grid-template-columns:minmax(0,1fr)}
@@ -2489,7 +2503,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '</div>';
 		echo '<button type="submit" class="cmx-vermietung-submit" id="cmx-vermietung-submit"' . (($selected_contact_id > 0 && $selected_vehicle_id > 0) ? '' : ' disabled') . '>' . \esc_html($submit_label) . '</button>';
-		echo '<a class="cmx-vermietung-icon-button' . ($selected_contact_email_href === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contact-email" href="' . \esc_url($selected_contact_email_href !== '' ? $selected_contact_email_href : '#') . '"' . ($selected_contact_email_href !== '' ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($selected_contact_email_href !== '' ? 'E-Mail an Kontakt senden' : 'Keine E-Mail-Adresse beim Kontakt hinterlegt') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 2v.24l8 5.34 8-5.34V7H4Zm16 10V9.66l-7.45 4.97a1 1 0 0 1-1.1 0L4 9.66V17h16Z"/></svg></a>';
+		echo '<button type="button" class="cmx-vermietung-icon-button' . ($current_post_id > 0 ? '' : ' is-disabled') . '" id="cmx-vermietung-contract-pdf"' . ($current_post_id > 0 ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($current_post_id > 0 ? 'Vertrags-PDF öffnen' : 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen') . '" aria-label="' . \esc_attr($current_post_id > 0 ? 'Vertrags-PDF öffnen' : 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm6 1.5V8h4.5M8 13.25h8M8 16.25h8M8 10.25h3.5"/></svg></button>';
+		echo '<a class="cmx-vermietung-icon-button' . ($contact_email_button_enabled ? '' : ' is-disabled') . '" id="cmx-vermietung-contact-email" href="#" data-email-href="' . \esc_attr($selected_contact_email_href) . '"' . ($contact_email_button_enabled ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($contact_email_button_title) . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 2v.24l8 5.34 8-5.34V7H4Zm16 10V9.66l-7.45 4.97a1 1 0 0 1-1.1 0L4 9.66V17h16Z"/></svg></a>';
 		echo '<a class="cmx-vermietung-icon-button' . ($current_contract_edit_url === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contract-edit" href="' . \esc_url($current_contract_edit_url !== '' ? $current_contract_edit_url : '#') . '"' . ($current_contract_edit_url !== '' ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') . ' title="Vertrag im WP-Admin öffnen" style="color:' . \esc_attr($current_contract_edit_url === '' ? '#98a2b3' : '#135e96') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 2v3h14V5H5Zm0 5v3h4v-3H5Zm6 0v3h3v-3h-3Zm5 0v3h3v-3h-3ZM5 15v4h4v-4H5Zm6 0v4h3v-4h-3Zm5 0v4h3v-4h-3Z"/></svg></a>';
 		echo '</div>';
 		echo '</div>';
@@ -2814,6 +2829,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var kontaktValue=document.getElementById("cmx-vermietung-kontakt-value");
 				var artikelValue=document.getElementById("cmx-vermietung-artikel-value");
 				var submit=document.getElementById("cmx-vermietung-submit");
+				var contractPdfButton=document.getElementById("cmx-vermietung-contract-pdf");
 				var contactEmailButton=document.getElementById("cmx-vermietung-contact-email");
 				var uebernahmeMieterAgbAccepted=document.getElementById("cmx-vermietung-signature-uebernahme-mieter-agb-accepted");
 				var artikelPanel=document.querySelector(\'[data-picker="artikel"]\');
@@ -2832,10 +2848,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var identityToggle=document.getElementById("cmx-vermietung-identitaetskarte-toggle");
 				var damagePanel=document.getElementById("cmx-vermietung-schadenprotokoll-panel");
 				var damageToggle=document.getElementById("cmx-vermietung-schadenprotokoll-toggle");
+				var statusNoticeTimer=0;
 				var ajaxUrl=' . \wp_json_encode($ajax_url) . ';
 				var photoUploadNonce=' . \wp_json_encode($photo_upload_nonce) . ';
 				var videoUploadNonce=' . \wp_json_encode($video_upload_nonce) . ';
 				var kmSyncNonce=' . \wp_json_encode($km_sync_nonce) . ';
+				var vertragPdfNonce=' . \wp_json_encode($vertrag_pdf_nonce) . ';
+				var vertragMailNonce=' . \wp_json_encode($vertrag_mail_nonce) . ';
 				var emptyPhotoMarkup=' . \wp_json_encode(cmx_vermietung_fotos_empty_markup()) . ';
 				var removePhotoIcon=' . \wp_json_encode(cmx_vermietung_fotos_remove_icon()) . ';
 				var contractPicker=document.getElementById("cmx-vermietung-vertrag-picker");
@@ -2944,6 +2963,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var postField=document.getElementById("cmx-vermietung-post-id");
 					return postField ? Number(postField.value || 0) : 0;
 				}
+				function hasCurrentContract(){
+					return currentPostId() > 0;
+				}
+				function setContractPdfAction(){
+					var enabled;
+					if(!contractPdfButton){return;}
+					enabled=hasCurrentContract();
+					contractPdfButton.classList.toggle("is-disabled", !enabled);
+					contractPdfButton.disabled=!enabled;
+					if(enabled){
+						contractPdfButton.removeAttribute("aria-disabled");
+						contractPdfButton.removeAttribute("tabindex");
+						contractPdfButton.setAttribute("title","Vertrags-PDF öffnen");
+					}else{
+						contractPdfButton.setAttribute("aria-disabled","true");
+						contractPdfButton.setAttribute("tabindex","-1");
+						contractPdfButton.setAttribute("title","Bitte zuerst einen bestehenden Vertrag speichern oder auswählen");
+					}
+				}
 				function getTodayValue(){
 					var now=new Date();
 					var local=new Date(now.getTime()-(now.getTimezoneOffset()*60000));
@@ -2963,6 +3001,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var value;
 					var hasEmail;
 					var hasAcceptance;
+					var hasContract;
 					var enabled;
 					if(!contactEmailButton){return;}
 					if(typeof href==="string"){
@@ -2971,13 +3010,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					value=String(contactEmailButton.getAttribute("data-email-href")||"").trim();
 					hasEmail=value!=="";
 					hasAcceptance=hasRequiredAgbAcceptance();
-					enabled=hasEmail && hasAcceptance;
-					contactEmailButton.setAttribute("href", enabled ? value : "#");
+					hasContract=hasCurrentContract();
+					enabled=hasEmail && hasAcceptance && hasContract;
+					contactEmailButton.setAttribute("href", "#");
 					contactEmailButton.classList.toggle("is-disabled", !enabled);
 					if(enabled){
-						contactEmailButton.setAttribute("title", "E-Mail an Kontakt senden");
+						contactEmailButton.setAttribute("title", "Vertrag per E-Mail versenden");
 					}else if(!hasEmail){
 						contactEmailButton.setAttribute("title", "Keine E-Mail-Adresse beim Kontakt hinterlegt");
+					}else if(!hasContract){
+						contactEmailButton.setAttribute("title", "Bitte zuerst einen bestehenden Vertrag speichern oder auswählen");
 					}else{
 						contactEmailButton.setAttribute("title", "Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren");
 					}
@@ -2988,6 +3030,199 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						contactEmailButton.setAttribute("aria-disabled","true");
 						contactEmailButton.setAttribute("tabindex","-1");
 					}
+				}
+				function showStatusNotice(message, isSuccess){
+					if(!form){return;}
+					if(statusNoticeTimer){
+						window.clearTimeout(statusNoticeTimer);
+						statusNoticeTimer=0;
+					}
+					if(!statusNotice || !statusNotice.parentNode){
+						statusNotice=document.createElement("div");
+						statusNotice.id="cmx-vermietung-status-notice";
+						statusNotice.className="cmx-vermietung-notice";
+						if(form.parentNode){
+							form.parentNode.insertBefore(statusNotice, form);
+						}
+					}
+					statusNotice.textContent=String(message||"");
+					statusNotice.classList.toggle("is-success", !!isSuccess);
+					statusNotice.classList.remove("is-hidden");
+					statusNoticeTimer=window.setTimeout(function(){
+						if(!statusNotice){return;}
+						statusNotice.classList.add("is-hidden");
+						window.setTimeout(function(){
+							if(statusNotice && statusNotice.parentNode){
+								statusNotice.parentNode.removeChild(statusNotice);
+							}
+							statusNotice=null;
+						}, 320);
+					}, isSuccess ? 5000 : 6500);
+				}
+				function setContactMailBusy(busy){
+					if(!contactEmailButton){return;}
+					contactEmailButton.dataset.busy=busy ? "1" : "0";
+					contactEmailButton.classList.toggle("is-busy", !!busy);
+					if(busy){
+						contactEmailButton.classList.remove("is-success");
+						contactEmailButton.setAttribute("aria-busy","true");
+						contactEmailButton.setAttribute("title","Vertrag wird per E-Mail versendet...");
+						return;
+					}
+					contactEmailButton.removeAttribute("aria-busy");
+					setContactEmailAction();
+				}
+				function flashContactMailSuccess(){
+					if(!contactEmailButton){return;}
+					contactEmailButton.classList.add("is-success");
+					window.setTimeout(function(){
+						if(contactEmailButton){
+							contactEmailButton.classList.remove("is-success");
+						}
+					}, 2200);
+				}
+				function sendContractMail(){
+					var postId=currentPostId();
+					var data;
+					if(!contactEmailButton){return;}
+					if(String(contactEmailButton.dataset.busy || "0")==="1"){return;}
+					if(String(contactEmailButton.getAttribute("aria-disabled") || "false")==="true"){
+						if(!hasCurrentContract()){
+							showStatusNotice("Bitte zuerst einen bestehenden Vertrag speichern oder auswählen.", false);
+						}else if(!hasRequiredAgbAcceptance()){
+							showStatusNotice("Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren.", false);
+						}else{
+							showStatusNotice("Beim Kontakt ist keine E-Mail-Adresse hinterlegt.", false);
+						}
+						return;
+					}
+					if(postId <= 0){
+						showStatusNotice("Bitte zuerst einen bestehenden Vertrag speichern oder auswählen.", false);
+						return;
+					}
+					setContactMailBusy(true);
+					data=new FormData();
+					data.append("action", "cmx_carent_send_vertrag_mail");
+					data.append("_ajax_nonce", vertragMailNonce);
+					data.append("post_id", String(postId));
+					fetch(ajaxUrl, {
+						method:"POST",
+						credentials:"same-origin",
+						body:data
+					}).then(function(response){
+						return response.text().then(function(text){
+							var json=null;
+							try{
+								json=JSON.parse(text);
+							}catch(parseError){
+								throw new Error("Der Server hat keine gültige JSON-Antwort geliefert.");
+							}
+							if(!response.ok && (!json || !json.data || !json.data.message)){
+								throw new Error("Der Vertrag konnte nicht per E-Mail versendet werden.");
+							}
+							return json;
+						});
+					}).then(function(json){
+						if(!json || !json.success || !json.data){
+							throw new Error((json && json.data && json.data.message) ? String(json.data.message) : "Der Vertrag konnte nicht per E-Mail versendet werden.");
+						}
+						flashContactMailSuccess();
+						showStatusNotice(String(json.data.message || "Vertrag wurde per E-Mail versendet."), true);
+					}).catch(function(error){
+						showStatusNotice(error && error.message ? String(error.message) : "Der Vertrag konnte nicht per E-Mail versendet werden.", false);
+					}).finally(function(){
+						setContactMailBusy(false);
+					});
+				}
+				function setContractPdfBusy(busy){
+					if(!contractPdfButton){return;}
+					contractPdfButton.dataset.busy=busy ? "1" : "0";
+					contractPdfButton.classList.toggle("is-busy", !!busy);
+					if(busy){
+						contractPdfButton.classList.remove("is-success");
+						contractPdfButton.setAttribute("aria-busy","true");
+						contractPdfButton.textContent="PDF...";
+						contractPdfButton.setAttribute("title","PDF wird erstellt...");
+						return;
+					}
+					contractPdfButton.removeAttribute("aria-busy");
+					contractPdfButton.textContent="PDF";
+					setContractPdfAction();
+				}
+				function flashContractPdfSuccess(){
+					if(!contractPdfButton){return;}
+					contractPdfButton.classList.add("is-success");
+					window.setTimeout(function(){
+						if(contractPdfButton){
+							contractPdfButton.classList.remove("is-success");
+						}
+					}, 2200);
+				}
+				function openContractPdfPreview(){
+					var postId=currentPostId();
+					var data;
+					var previewWindow=null;
+					if(!contractPdfButton){return;}
+					if(String(contractPdfButton.dataset.busy || "0")==="1"){return;}
+					if(String(contractPdfButton.getAttribute("aria-disabled") || "false")==="true" || postId <= 0){
+						showStatusNotice("Bitte zuerst einen bestehenden Vertrag speichern oder auswählen.", false);
+						return;
+					}
+					try{
+						previewWindow=window.open("", "_blank");
+						if(previewWindow && previewWindow.document){
+							previewWindow.document.write("<!doctype html><title>PDF wird erstellt...</title><body style=\"font-family:Arial,sans-serif;padding:24px;color:#1d2327;\">PDF wird erstellt...</body>");
+							previewWindow.document.close();
+						}
+					}catch(err){
+						previewWindow=null;
+					}
+					setContractPdfBusy(true);
+					data=new FormData();
+					data.append("action", "cmx_carent_preview_vertrag_pdf");
+					data.append("_ajax_nonce", vertragPdfNonce);
+					data.append("post_id", String(postId));
+					fetch(ajaxUrl, {
+						method:"POST",
+						credentials:"same-origin",
+						body:data
+					}).then(function(response){
+						return response.text().then(function(text){
+							var json=null;
+							try{
+								json=JSON.parse(text);
+							}catch(parseError){
+								throw new Error("Der Server hat keine gültige JSON-Antwort geliefert.");
+							}
+							if(!response.ok && (!json || !json.data || !json.data.message)){
+								throw new Error("Das Vertrags-PDF konnte nicht erzeugt werden.");
+							}
+							return json;
+						});
+					}).then(function(json){
+						var pdfUrl;
+						if(!json || !json.success || !json.data){
+							throw new Error((json && json.data && json.data.message) ? String(json.data.message) : "Das Vertrags-PDF konnte nicht erzeugt werden.");
+						}
+						pdfUrl=String(json.data.url || "").trim();
+						if(pdfUrl===""){
+							throw new Error("Die PDF-URL fehlt.");
+						}
+						pdfUrl += (pdfUrl.indexOf("?")===-1 ? "?" : "&") + "v=" + encodeURIComponent(String(json.data.generated_at || Date.now()));
+						if(previewWindow && !previewWindow.closed){
+							previewWindow.location.href=pdfUrl;
+						}else{
+							window.location.href=pdfUrl;
+						}
+						flashContractPdfSuccess();
+					}).catch(function(error){
+						if(previewWindow && !previewWindow.closed){
+							try{previewWindow.close();}catch(closeError){}
+						}
+						showStatusNotice(error && error.message ? String(error.message) : "Das Vertrags-PDF konnte nicht erzeugt werden.", false);
+					}).finally(function(){
+						setContractPdfBusy(false);
+					});
 				}
 				function triggerInputEvents(input){
 					if(!input){return;}
@@ -4243,8 +4478,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				}
 				if(contactEmailButton){
 					contactEmailButton.addEventListener("click", function(event){
-						if(String(contactEmailButton.getAttribute("aria-disabled") || "false") !== "true"){return;}
 						event.preventDefault();
+						sendContractMail();
+					});
+				}
+				if(contractPdfButton){
+					contractPdfButton.addEventListener("click", function(event){
+						event.preventDefault();
+						openContractPdfPreview();
 					});
 				}
 				if(transferNodes.km_stand){
@@ -4274,6 +4515,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				});
 				Array.prototype.slice.call(document.querySelectorAll("[data-signature-item]")).forEach(initSignaturePad);
 				setArtikelLocked(String(kontaktInput.value||"")==="");
+				setContractPdfAction();
 				setContactEmailAction(' . \wp_json_encode($selected_contact_email_href) . ');
 				setSignaturePadEnabled(Number(artikelInput.value||0)>0);
 				updateVehicleInfo(findSelectedVehicleItem());
