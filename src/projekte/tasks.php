@@ -450,6 +450,35 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 				if (!actions) return;
 				actions.insertBefore(addButton, actions.firstChild || null);
 			}
+			function clearRow(row){
+				if (!row) return;
+				row.querySelectorAll('input[type="date"], input[type="time"], input[name*="[dauer]"], textarea[name*="[info]"]').forEach(function(field){
+					field.value = '';
+				});
+				row.querySelectorAll('.cmx-task-article-picker').forEach(function(picker){
+					const textInput = picker.querySelector('.cmx-task-artikel-search');
+					const hiddenInput = picker.querySelector('.cmx-task-artikel-id');
+					const suggestList = picker.querySelector('.cmx-artikel-suggest');
+					if (textInput) {
+						textInput.value = '';
+						textInput.dataset.selectedTitle = '';
+					}
+					if (hiddenInput) {
+						hiddenInput.value = '';
+						hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+					}
+					if (suggestList) {
+						suggestList.innerHTML = '';
+						suggestList.style.display = 'none';
+					}
+				});
+				row.querySelectorAll('input[type="checkbox"][name*="[abgerechnet]"]').forEach(function(field){
+					field.checked = false;
+				});
+				row.querySelectorAll('input[type="checkbox"][name*="[verrechenbar]"]').forEach(function(field){
+					field.checked = true;
+				});
+			}
 
 			container.querySelectorAll('input[name*="[uid]"]').forEach(function(el){
 				if (!el.value) el.value = newUid();
@@ -480,12 +509,17 @@ function cmx_render_projekt_tasks_box(\WP_Post $post): void {
 			});
 
 		container.addEventListener('click', function(e){
-				if (e.target.classList.contains('cmx-task-remove')) {
-					const row = e.target.closest('.cmx-task-row');
-					if (row && container.children.length > 1) {
+				const removeButton = e.target.closest('.cmx-task-remove');
+				if (removeButton) {
+					const row = removeButton.closest('.cmx-task-row');
+					if (!row) return;
+					if (container.children.length > 1) {
 						row.remove();
-						syncAddButtonPosition();
+					} else {
+						clearRow(row);
 					}
+					syncAddButtonPosition();
+					return;
 				}
 				if (e.target.classList.contains('cmx-task-today')) {
 					e.preventDefault();
