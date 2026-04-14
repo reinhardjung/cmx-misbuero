@@ -420,6 +420,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')) {
 		$vehicle_number = \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')
 			? \trim((string) cmx_get_artikel_nr($artikel_id))
 			: '';
+		$vehicle_article_meta = cmx_carent_vertrag_vehicle_article_data($artikel_id);
+		$vehicle_variant_meta = cmx_carent_vertrag_vehicle_variant_data($artikel_id, $variant_index);
 
 		$kennzeichen_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
@@ -543,6 +545,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')) {
 				'variant_index' => $variant_index,
 				'label' => \trim($vehicle_label),
 				'number' => $vehicle_number,
+				'article_meta' => $vehicle_article_meta,
+				'variant_meta' => $vehicle_variant_meta,
 				'kennzeichen' => \trim((string) \get_post_meta($post_id, $kennzeichen_key, true)),
 				'begrenzung' => \trim((string) \get_post_meta($post_id, $begrenzung_key, true)),
 				'mehrpreis' => \trim((string) \get_post_meta($post_id, $mehrpreis_key, true)),
@@ -677,6 +681,139 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_party_cell_text')) {
 		}
 
 		return \implode(' · ', $parts);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_join_text_parts')) {
+	function cmx_carent_vertrag_join_text_parts(array $parts, string $separator = ' · '): string {
+		$parts = \array_values(\array_filter(\array_map(static function ($value): string {
+			return \trim((string) $value);
+		}, $parts), static fn(string $value): bool => $value !== ''));
+
+		return \implode($separator, $parts);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_article_data')) {
+	function cmx_carent_vertrag_vehicle_article_data(int $artikel_id): array {
+		if ($artikel_id <= 0 || !\get_post_status($artikel_id)) {
+			return [];
+		}
+
+		$defaults = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_article_meta_defaults')
+			? (array) cmx_carent_fahrzeug_article_meta_defaults($artikel_id)
+			: [];
+		$chassi_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR')
+			: '_cmx_artikel_carent_chassi_nr';
+		$km_stand_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND')
+			: '_cmx_artikel_carent_km_stand';
+		$treibstoff = '';
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_fuel_term_id') && \function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_fuel_taxonomy')) {
+			$treibstoff_taxonomy = (string) cmx_artikel_carent_fuel_taxonomy();
+			$treibstoff_term_id = (int) cmx_artikel_carent_fuel_term_id($artikel_id);
+			if ($treibstoff_term_id <= 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_default_fuel_term_id')) {
+				$treibstoff_term_id = (int) cmx_artikel_carent_default_fuel_term_id();
+			}
+			$treibstoff = cmx_carent_vertrag_term_label($treibstoff_taxonomy, $treibstoff_term_id);
+		}
+		if ($treibstoff === '' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_default_fuel_label')) {
+			$treibstoff = \trim((string) cmx_artikel_carent_default_fuel_label());
+		}
+
+		return [
+			'chassi'      => \trim((string) \get_post_meta($artikel_id, $chassi_key, true)),
+			'kennzeichen' => \trim((string) ($defaults['kennzeichen'] ?? '')),
+			'treibstoff'  => $treibstoff,
+			'km_stand'    => \trim((string) (\get_post_meta($artikel_id, $km_stand_key, true) ?: ($defaults['km_stand_uebernahme'] ?? ''))),
+			'begrenzung'  => \trim((string) ($defaults['begrenzung'] ?? '')),
+			'mehrpreis'   => \trim((string) ($defaults['mehrpreis'] ?? '')),
+			'kasko_min'   => \trim((string) ($defaults['kasko_min'] ?? '')),
+			'kasko_max'   => \trim((string) ($defaults['kasko_max'] ?? '')),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_variant_data')) {
+	function cmx_carent_vertrag_vehicle_variant_data(int $artikel_id, $variant_index): array {
+		if ($artikel_id <= 0 || !\get_post_status($artikel_id) || $variant_index === '' || !\is_numeric((string) $variant_index)) {
+			return [];
+		}
+
+		$variant_index = (int) $variant_index;
+		$entry = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_entry')
+			? (array) cmx_carent_fahrzeug_variant_entry($artikel_id, $variant_index)
+			: [];
+		$raw_row = \function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_variant_raw_row')
+			? (array) cmx_vermietung_vehicle_variant_raw_row($artikel_id, $variant_index)
+			: [];
+		$label = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_label')
+			? \trim((string) cmx_carent_fahrzeug_variant_label($artikel_id, $variant_index, false))
+			: \trim((string) ($entry['title'] ?? ''));
+
+		return [
+			'label'         => $label,
+			'sku'           => \trim((string) ($entry['sku'] ?? ($raw_row['sku'] ?? ''))),
+			'groessen'      => \trim((string) ($entry['groessen'] ?? '')),
+			'ausfuehrungen' => \trim((string) ($entry['ausfuehrungen'] ?? '')),
+			'materialien'   => \trim((string) ($entry['materialien'] ?? '')),
+			'farben'        => \trim((string) ($entry['farben'] ?? '')),
+			'einheit'       => \trim((string) ($entry['einheit'] ?? '')),
+			'anzahl'        => \trim((string) ($raw_row['anzahl'] ?? '')),
+			'vk'            => \trim((string) ($entry['vk'] ?? ($raw_row['vk'] ?? ''))),
+			'belegtext'     => \trim((string) ($raw_row['belegtext'] ?? '')),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_article_lines')) {
+	function cmx_carent_vertrag_vehicle_article_lines(array $vehicle): array {
+		$article = (array) ($vehicle['article_meta'] ?? []);
+
+		$parts = [
+			!empty($article['kennzeichen']) ? 'Kennzeichen ' . (string) $article['kennzeichen'] : '',
+			!empty($article['chassi']) ? 'Chassi ' . (string) $article['chassi'] : '',
+			!empty($article['treibstoff']) ? 'Treibstoff ' . (string) $article['treibstoff'] : '',
+			!empty($article['km_stand']) ? 'KM-Stand ' . cmx_carent_vertrag_format_int((string) $article['km_stand']) : '',
+			!empty($article['begrenzung']) ? 'KM-Begrenzung ' . cmx_carent_vertrag_format_int((string) $article['begrenzung']) : '',
+			!empty($article['mehrpreis']) ? 'KM-Mehrpreis ' . cmx_carent_vertrag_format_money((string) $article['mehrpreis']) : '',
+			!empty($article['kasko_min']) ? 'Kasko min ' . cmx_carent_vertrag_format_money((string) $article['kasko_min']) : '',
+			!empty($article['kasko_max']) ? 'Kasko max ' . cmx_carent_vertrag_format_money((string) $article['kasko_max']) : '',
+		];
+		$parts = \array_values(\array_filter(\array_map(static function ($value): string {
+			return \trim((string) $value);
+		}, $parts), static fn(string $value): bool => $value !== ''));
+
+		return [
+			'primary' => cmx_carent_vertrag_join_text_parts(\array_slice($parts, 0, 6)),
+			'secondary' => cmx_carent_vertrag_join_text_parts(\array_slice($parts, 6)),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_variant_text')) {
+	function cmx_carent_vertrag_vehicle_variant_text(array $vehicle): string {
+		$variant = (array) ($vehicle['variant_meta'] ?? []);
+		$detail_parts = [
+			!empty($variant['sku']) ? 'Artikel-Nr. ' . (string) $variant['sku'] : '',
+			!empty($variant['groessen']) ? 'Grösse ' . (string) $variant['groessen'] : '',
+			!empty($variant['ausfuehrungen']) ? 'Ausführung ' . (string) $variant['ausfuehrungen'] : '',
+			!empty($variant['materialien']) ? 'Material ' . (string) $variant['materialien'] : '',
+			!empty($variant['farben']) ? 'Farbe ' . (string) $variant['farben'] : '',
+			!empty($variant['einheit']) ? 'Einheit ' . (string) $variant['einheit'] : '',
+			!empty($variant['anzahl']) ? 'Anzahl ' . cmx_carent_vertrag_format_int((string) $variant['anzahl']) : '',
+			!empty($variant['vk']) ? 'VK ' . cmx_carent_vertrag_format_money((string) $variant['vk']) : '',
+			!empty($variant['belegtext']) ? 'Text ' . (string) $variant['belegtext'] : '',
+		];
+		$details = cmx_carent_vertrag_join_text_parts($detail_parts);
+
+		if (!empty($variant['label'])) {
+			return \trim((string) $variant['label'] . ($details !== '' ? ' · ' . $details : ''));
+		}
+
+		return $details;
 	}
 }
 
@@ -930,6 +1067,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		}
 		$contact = (array) ($data['contact'] ?? []);
 		$self = (array) ($data['self'] ?? []);
+		$vehicle = (array) ($data['vehicle'] ?? []);
 		$self_id = isset($self['id']) ? (int) $self['id'] : 0;
 		$logo_src = \trim((string) ($self['logo_src'] ?? ''));
 		$self_title = \trim((string) (($self['branding'] ?? '') ?: ($self['title'] ?? '')));
@@ -990,6 +1128,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 			$self_party_text = \trim($self_title . ($self_party_text !== '' ? ' · ' . $self_party_text : ''));
 		}
 		$contact_party_text = cmx_carent_vertrag_party_cell_text($contact_address_lines, $contact_phone, $contact_email);
+		$vehicle_article_lines = cmx_carent_vertrag_vehicle_article_lines($vehicle);
+		$vehicle_article_text = \trim((string) ($vehicle_article_lines['primary'] ?? ''));
+		$vehicle_article_secondary_text = \trim((string) ($vehicle_article_lines['secondary'] ?? ''));
+		$vehicle_variant_text = cmx_carent_vertrag_vehicle_variant_text($vehicle);
 		\ob_start();
 		?>
 		<!doctype html>
@@ -1069,6 +1211,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 						<td class="contract-party-label" width="100" style="width:100px;">Mieter</td>
 						<td class="contract-party-value">
 							<?php echo \esc_html($contact_party_text); ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label" width="100" style="width:100px;">Fahrzeug</td>
+						<td class="contract-party-value">
+							<?php echo \esc_html($vehicle_article_text); ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label" width="100" style="width:100px;">&nbsp;</td>
+						<td class="contract-party-value">
+							<?php echo \esc_html($vehicle_article_secondary_text); ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label" width="100" style="width:100px;">&nbsp;</td>
+						<td class="contract-party-value">
+							<?php echo \esc_html($vehicle_variant_text); ?>
 						</td>
 					</tr>
 				</table>
