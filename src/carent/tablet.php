@@ -2066,6 +2066,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-collapsible-body,.cmx-vermietung-upload-panel.is-collapsed .cmx-vermietung-collapsible-body{display:none}
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-toggle-icon,.cmx-vermietung-upload-panel.is-collapsed .cmx-vermietung-panel-toggle-icon{transform:rotate(-90deg)}
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-head{padding-bottom:14px}
+			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-sub{padding-bottom:0 !important;margin-bottom:0}
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
 			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
 			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap,.cmx-vermietung-schaden-wrap{padding:0 18px 18px}
