@@ -98,6 +98,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_contact_label')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_kennzeichen_label')) {
 	function cmx_carent_admin_kennzeichen_label(int $post_id): string {
+		$saved_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+			: '_cmx_carent_fahrzeug_kennzeichen';
+		$saved = \trim((string) \get_post_meta($post_id, $saved_meta_key, true));
+		if ($saved !== '') {
+			return $saved;
+		}
+
 		$artikel_id = cmx_carent_admin_linked_article_id($post_id);
 		if ($artikel_id <= 0 || !\get_post_status($artikel_id)) {
 			return '';

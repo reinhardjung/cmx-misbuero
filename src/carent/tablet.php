@@ -497,7 +497,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_detail_values'))
 
 		if ($carent_id > 0 && (int) \get_post_meta($carent_id, CMX_CARENT_FAHRZEUG_META, true) === $vehicle_id) {
 			$meta_map = [
-				'kennzeichen' => '_cmx_carent_fahrzeug_kennzeichen',
+				'kennzeichen' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+					: '_cmx_carent_fahrzeug_kennzeichen',
 				'km_stand_uebernahme' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KM_STAND_UEBERNAHME_META')
 					: '_cmx_carent_fahrzeug_km_stand_uebernahme',
@@ -516,8 +518,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_vehicle_detail_values'))
 				'kasko_max' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META')
 					: '_cmx_carent_fahrzeug_kasko_max',
-				'anzahl' => '_cmx_carent_fahrzeug_anzahl',
-				'mietpreis' => '_cmx_carent_mietpreis',
+				'anzahl' => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_ANZAHL_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_ANZAHL_META')
+					: '_cmx_carent_fahrzeug_anzahl',
+				'mietpreis' => \defined(__NAMESPACE__ . '\\CMX_CARENT_MIETPREIS_META')
+					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_MIETPREIS_META')
+					: '_cmx_carent_mietpreis',
 			];
 
 			foreach ($meta_map as $key => $meta_key) {
@@ -542,10 +548,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_vehicle_detail_valu
 		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_carent_normalize_kennzeichen')) {
 			$kennzeichen = \trim((string) cmx_artikel_carent_normalize_kennzeichen($kennzeichen));
 		}
+		$kennzeichen_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KENNZEICHEN_META')
+			: '_cmx_carent_fahrzeug_kennzeichen';
 		if ($kennzeichen === '') {
-			\delete_post_meta($post_id, '_cmx_carent_fahrzeug_kennzeichen');
+			\delete_post_meta($post_id, $kennzeichen_meta_key);
 		} else {
-			\update_post_meta($post_id, '_cmx_carent_fahrzeug_kennzeichen', $kennzeichen);
+			\update_post_meta($post_id, $kennzeichen_meta_key, $kennzeichen);
 		}
 
 		$begrenzung = isset($_POST['cmx_vermietung_fahrzeug_begrenzung'])
@@ -580,8 +589,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_vehicle_detail_valu
 			(\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META')
 				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_KASKO_MAX_META')
 				: '_cmx_carent_fahrzeug_kasko_max') => $kasko_max,
-			'_cmx_carent_fahrzeug_anzahl' => $anzahl,
-			'_cmx_carent_mietpreis' => $mietpreis,
+			(\defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_ANZAHL_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_ANZAHL_META')
+				: '_cmx_carent_fahrzeug_anzahl') => $anzahl,
+			(\defined(__NAMESPACE__ . '\\CMX_CARENT_MIETPREIS_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_MIETPREIS_META')
+				: '_cmx_carent_mietpreis') => $mietpreis,
 		];
 
 		foreach ($meta_map as $meta_key => $value) {
@@ -1226,6 +1239,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_value_meta_key')
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_taxonomy')) {
 	function cmx_vermietung_schaden_taxonomy(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_schaden_taxonomy')) {
+			return (string) cmx_carent_schaden_taxonomy();
+		}
+
 		if (\defined(__NAMESPACE__ . '\\TAX_CARENT_SCHADEN')) {
 			return (string) \constant(__NAMESPACE__ . '\\TAX_CARENT_SCHADEN');
 		}
@@ -2152,6 +2169,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$ajax_url = (string) \admin_url('admin-ajax.php');
 		$photo_upload_nonce = (string) \wp_create_nonce('cmx_carent_fotos_upload');
 		$video_upload_nonce = (string) \wp_create_nonce('cmx_carent_transfer_video_upload');
+		$km_sync_nonce = (string) \wp_create_nonce('cmx_carent_fahrzeug_sync_km_stand');
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -2162,10 +2180,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		}
 		\nocache_headers();
 		\status_header(200);
+		\wp_enqueue_style('dashicons');
 
 		echo '<!doctype html><html lang="de"><head><meta charset="utf-8">';
 		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
 		echo '<title>Vermietung</title>';
+		\wp_print_styles(['dashicons']);
 			echo '<style>
 			:root{color-scheme:light}
 			*{box-sizing:border-box}
@@ -2337,6 +2357,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-info-label.is-actionable{cursor:pointer;text-decoration:underline dotted}
 			.cmx-vermietung-info-value{display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;font-weight:700;color:#1d2327}
 			.cmx-vermietung-info-textarea{display:block;width:100%;min-height:118px;margin-top:6px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;font-size:15px;line-height:1.5;color:#1d2327;resize:vertical}
+			.cmx-vermietung-info-input-group{display:flex;align-items:center;gap:8px;margin-top:6px}
+			.cmx-vermietung-info-input-group .cmx-vermietung-info-value{flex:1 1 auto;min-width:0;margin-top:0}
+			.cmx-vermietung-info-action-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;padding:0;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#135e96;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,color .15s ease}
+			.cmx-vermietung-info-action-button:hover{border-color:#135e96;background:#eef6ff}
+			.cmx-vermietung-info-action-button:disabled{background:#f8fafc;border-color:#d0d5dd;color:#98a2b3;cursor:not-allowed}
+			.cmx-vermietung-info-action-button.is-busy .dashicons{animation:cmx-vermietung-spin 1s linear infinite}
+			.cmx-vermietung-info-action-button.is-success{background:#ecfdf3;border-color:#abefc6;color:#027a48}
+			.cmx-vermietung-info-action-button .dashicons{width:18px;height:18px;font-size:18px}
 			.cmx-vermietung-info-value:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
 			.cmx-vermietung-info-textarea:disabled{background:#f8fafc;color:#98a2b3;cursor:not-allowed}
 			.cmx-vermietung-upload-panel{margin-top:18px;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:hidden}
@@ -2351,6 +2379,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-upload-title{font-size:18px;font-weight:700;color:#1d2327}
 			.cmx-vermietung-upload-hint{font-size:14px;color:#667085}
 			.cmx-vermietung-upload-meta{margin:10px 0 0;font-size:13px;color:#667085}
+			@keyframes cmx-vermietung-spin{
+				from{transform:rotate(0deg)}
+				to{transform:rotate(360deg)}
+			}
 			@media (max-width:1200px){
 				.cmx-vermietung-info-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 			}
@@ -2609,7 +2641,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			$is_actionable_label = \in_array($field_key, ['ort', 'datum', 'uhrzeit'], true);
 			echo '<div class="cmx-vermietung-info-item">';
 			echo '<label class="cmx-vermietung-info-label' . ($is_actionable_label ? ' is-actionable' : '') . '" id="' . \esc_attr($label_id) . '" for="cmx-vermietung-uebernahme-' . \esc_attr($field_key) . '"' . ($is_actionable_label ? ' title="' . \esc_attr((string) $field_config['label'] . ' automatisch einsetzen') . '"' : '') . '>' . \esc_html((string) $field_config['label']) . '</label>';
+			if ($field_key === 'km_stand') {
+				echo '<div class="cmx-vermietung-info-input-group">';
+			}
 			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-uebernahme-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
+			if ($field_key === 'km_stand') {
+				echo '<button type="button" class="cmx-vermietung-info-action-button" id="cmx-vermietung-uebernahme-km-sync" title="KM-Stand im Fahrzeug-Artikel aktualisieren"' . ($selected_vehicle_id > 0 && $field_value !== '' ? '' : ' disabled') . ' aria-label="KM-Stand im Fahrzeug-Artikel aktualisieren"><span class="dashicons dashicons-performance" aria-hidden="true"></span></button>';
+				echo '</div>';
+			}
 			echo '</div>';
 		}
 		echo '</div>';
@@ -2747,7 +2786,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			$is_actionable_label = \in_array($field_key, ['ort', 'datum', 'uhrzeit'], true);
 			echo '<div class="cmx-vermietung-info-item">';
 			echo '<label class="cmx-vermietung-info-label' . ($is_actionable_label ? ' is-actionable' : '') . '" id="' . \esc_attr($label_id) . '" for="cmx-vermietung-rueckgabe-' . \esc_attr($field_key) . '"' . ($is_actionable_label ? ' title="' . \esc_attr((string) $field_config['label'] . ' automatisch einsetzen') . '"' : '') . '>' . \esc_html((string) $field_config['label']) . '</label>';
+			if ($field_key === 'km_stand') {
+				echo '<div class="cmx-vermietung-info-input-group">';
+			}
 			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-rueckgabe-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
+			if ($field_key === 'km_stand') {
+				echo '<button type="button" class="cmx-vermietung-info-action-button" id="cmx-vermietung-rueckgabe-km-sync" title="KM-Stand im Fahrzeug-Artikel aktualisieren"' . ($selected_vehicle_id > 0 && $field_value !== '' ? '' : ' disabled') . ' aria-label="KM-Stand im Fahrzeug-Artikel aktualisieren"><span class="dashicons dashicons-performance" aria-hidden="true"></span></button>';
+				echo '</div>';
+			}
 			echo '</div>';
 		}
 		echo '</div>';
@@ -2789,6 +2835,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var ajaxUrl=' . \wp_json_encode($ajax_url) . ';
 				var photoUploadNonce=' . \wp_json_encode($photo_upload_nonce) . ';
 				var videoUploadNonce=' . \wp_json_encode($video_upload_nonce) . ';
+				var kmSyncNonce=' . \wp_json_encode($km_sync_nonce) . ';
 				var emptyPhotoMarkup=' . \wp_json_encode(cmx_vermietung_fotos_empty_markup()) . ';
 				var removePhotoIcon=' . \wp_json_encode(cmx_vermietung_fotos_remove_icon()) . ';
 				var contractPicker=document.getElementById("cmx-vermietung-vertrag-picker");
@@ -2817,6 +2864,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-uhrzeit"),
 					km_stand:document.getElementById("cmx-vermietung-uebernahme-km_stand")
 				};
+				var transferKmSyncButton=document.getElementById("cmx-vermietung-uebernahme-km-sync");
 				var damageConditionalWrap=document.getElementById("cmx-vermietung-schadenprotokoll-weitere-beteiligte-fields");
 				var damageNodes={
 					ort:document.getElementById("cmx-vermietung-schadenprotokoll-ort"),
@@ -2836,6 +2884,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					uhrzeit:document.getElementById("cmx-vermietung-rueckgabe-uhrzeit"),
 					km_stand:document.getElementById("cmx-vermietung-rueckgabe-km_stand")
 				};
+				var returnKmSyncButton=document.getElementById("cmx-vermietung-rueckgabe-km-sync");
 				var transferLabels={
 					ort:document.getElementById("cmx-vermietung-uebernahme-label-ort"),
 					datum:document.getElementById("cmx-vermietung-uebernahme-label-datum"),
@@ -2946,6 +2995,107 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						input.dispatchEvent(new Event("input",{bubbles:true}));
 						input.dispatchEvent(new Event("change",{bubbles:true}));
 					}catch(err){}
+				}
+				function normalizeIntegerInputValue(value){
+					var raw=String(value||"").trim();
+					var number;
+					if(raw===""){return "";}
+					raw=raw.replace(/\s/g,"").split("\'").join("").replace(/,/g,".");
+					number=Number(raw);
+					if(!isFinite(number)){return "";}
+					number=Math.round(number);
+					return String(number < 0 ? 0 : number);
+				}
+				function setKmSyncButtonBusy(button, busy){
+					if(!button){return;}
+					button.dataset.busy=busy ? "1" : "0";
+					button.classList.toggle("is-busy", !!busy);
+					if(!busy){
+						button.classList.remove("is-success");
+					}
+				}
+				function flashKmSyncSuccess(button){
+					if(!button){return;}
+					button.classList.remove("is-success");
+					window.setTimeout(function(){
+						button.classList.add("is-success");
+						window.setTimeout(function(){
+							button.classList.remove("is-success");
+						}, 1400);
+					}, 0);
+				}
+				function updateKmSyncButtonState(button, input){
+					var artikelId;
+					var hasKmStand;
+					var title;
+					var isBusy;
+					if(!button){return;}
+					artikelId=Number(artikelInput && artikelInput.value ? artikelInput.value : 0);
+					hasKmStand=normalizeIntegerInputValue(input && !input.disabled ? input.value : "") !== "";
+					isBusy=String(button.dataset.busy || "0") === "1";
+					button.disabled=isBusy || artikelId <= 0 || !input || !!input.disabled || !hasKmStand;
+					title=button.disabled
+						? (artikelId <= 0 ? "Bitte zuerst ein Fahrzeug wählen" : (!hasKmStand ? "Bitte zuerst einen KM-Stand eintragen" : "KM-Stand wird aktualisiert"))
+						: "KM-Stand im Fahrzeug-Artikel aktualisieren";
+					button.setAttribute("title", title);
+				}
+				function refreshKmSyncButtonStates(){
+					updateKmSyncButtonState(transferKmSyncButton, transferNodes.km_stand);
+					updateKmSyncButtonState(returnKmSyncButton, returnNodes.km_stand);
+				}
+				function updateSelectedVehicleKmStandData(kmStand, fieldType){
+					var artikelId=String(artikelInput && artikelInput.value ? artikelInput.value : "").trim();
+					var item=findSelectedVehicleItem();
+					if(artikelId!==""){
+						Array.prototype.slice.call(document.querySelectorAll(\'#cmx-vermietung-list-artikel .cmx-vermietung-item[data-id="\'+artikelId+\'"]\')).forEach(function(row){
+							row.setAttribute("data-km-stand-uebernahme", kmStand);
+						});
+					}
+					if(item && fieldType==="rueckgabe"){
+						item.setAttribute("data-km-stand-rueckgabe", kmStand);
+					}
+				}
+				function syncArtikelKmStand(input, button, fieldType){
+					var artikelId=Number(artikelInput && artikelInput.value ? artikelInput.value : 0);
+					var kmStand=normalizeIntegerInputValue(input ? input.value : "");
+					var data;
+					function finish(){
+						setKmSyncButtonBusy(button, false);
+						refreshKmSyncButtonStates();
+					}
+					if(!input || !button || artikelId <= 0 || kmStand===""){return;}
+					if(String(button.dataset.busy || "0") === "1"){return;}
+					setKmSyncButtonBusy(button, true);
+					refreshKmSyncButtonStates();
+					data=new FormData();
+					data.append("action", "cmx_carent_sync_artikel_km_stand");
+					data.append("_ajax_nonce", kmSyncNonce);
+					data.append("artikel_id", String(artikelId));
+					data.append("km_stand", kmStand);
+					fetch(ajaxUrl, {
+						method:"POST",
+						credentials:"same-origin",
+						body:data
+					}).then(function(response){
+						return response.json();
+					}).then(function(json){
+						var savedKmStand;
+						if(!json || !json.success || !json.data){
+							throw new Error((json && json.data && json.data.msg) ? String(json.data.msg) : "sync_failed");
+						}
+						savedKmStand=normalizeIntegerInputValue(json.data.km_stand || "");
+						if(savedKmStand===""){
+							throw new Error("empty_km_stand");
+						}
+						input.value=savedKmStand;
+						triggerInputEvents(input);
+						updateSelectedVehicleKmStandData(savedKmStand, fieldType);
+						flashKmSyncSuccess(button);
+						finish();
+					}).catch(function(){
+						finish();
+						window.alert("Der KM-Stand konnte nicht im Fahrzeug-Artikel aktualisiert werden.");
+					});
 				}
 				function getCurrentLocation(callback){
 					if(typeof callback!=="function" || !navigator.geolocation){return;}
@@ -3767,6 +3917,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(returnNodes.km_stand){
 						returnNodes.km_stand.value=hasVehicle ? values.km_stand_rueckgabe : "";
 					}
+					refreshKmSyncButtonStates();
 				}
 				if(vehicleInfoNodes.anzahl){
 					vehicleInfoNodes.anzahl.addEventListener("input", refreshVehicleAmountSummary);
@@ -4096,6 +4247,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						event.preventDefault();
 					});
 				}
+				if(transferNodes.km_stand){
+					["input","change"].forEach(function(eventName){
+						transferNodes.km_stand.addEventListener(eventName, refreshKmSyncButtonStates);
+					});
+				}
+				if(returnNodes.km_stand){
+					["input","change"].forEach(function(eventName){
+						returnNodes.km_stand.addEventListener(eventName, refreshKmSyncButtonStates);
+					});
+				}
+				if(transferKmSyncButton){
+					transferKmSyncButton.addEventListener("click", function(event){
+						event.preventDefault();
+						syncArtikelKmStand(transferNodes.km_stand, transferKmSyncButton, "uebernahme");
+					});
+				}
+				if(returnKmSyncButton){
+					returnKmSyncButton.addEventListener("click", function(event){
+						event.preventDefault();
+						syncArtikelKmStand(returnNodes.km_stand, returnKmSyncButton, "rueckgabe");
+					});
+				}
 				Array.prototype.slice.call(document.querySelectorAll(".cmx-vermietung-choice-option input")).forEach(function(input){
 					input.addEventListener("change", syncChoiceSelectionState);
 				});
@@ -4106,6 +4279,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				updateVehicleInfo(findSelectedVehicleItem());
 				syncDamageFormState(Number(artikelInput.value||0)>0);
 				syncChoiceSelectionState();
+				refreshKmSyncButtonStates();
 				updateContactUploadPanels();
 				syncIdentityPanelState();
 				if(contractSearch && contractResults){

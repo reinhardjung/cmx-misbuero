@@ -18,6 +18,12 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_VERMIETER_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_META', '_cmx_carent_uebernahme_mieter_attachment_id');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_BESONDERE_ABMACHUNGEN_META', '_cmx_carent_uebernahme_besondere_abmachungen');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_AGB_AKZEPTIERT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_MIETER_AGB_AKZEPTIERT_META', '_cmx_carent_uebernahme_mieter_agb_akzeptiert');
+}
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_ORT_META', '_cmx_carent_rueckgabe_ort');
 }

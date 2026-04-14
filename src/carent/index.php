@@ -298,7 +298,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_CARENT)
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt,status,fahrzeug,fotos,tablet,uebernahme_rueckgabe,ausweis_fahrer,ausweis_id');
+cmx_require_files(__DIR__,'stammdaten,admincolumns,kontakt,status,fahrzeug,fotos,schadenprotokoll,uebernahme_rueckgabe,tablet,ausweis_fahrer,ausweis_id');
 
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
