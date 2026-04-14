@@ -1171,6 +1171,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_meta_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_value_meta_key')) {
+	function cmx_vermietung_schaden_value_meta_key(string $field): string {
+		$field = \sanitize_key($field);
+
+		return match ($field) {
+			'datum' => \defined(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_DATUM_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_DATUM_META')
+				: '_cmx_carent_schadenprotokoll_datum',
+			'uhrzeit' => \defined(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_UHRZEIT_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_UHRZEIT_META')
+				: '_cmx_carent_schadenprotokoll_uhrzeit',
+			default => \defined(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_ORT_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_ORT_META')
+				: '_cmx_carent_schadenprotokoll_ort',
+		};
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_schaden_taxonomy')) {
 	function cmx_vermietung_schaden_taxonomy(): string {
 		if (\defined(__NAMESPACE__ . '\\TAX_CARENT_SCHADEN')) {
@@ -1574,6 +1592,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_schaden_rows_values
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_schaden_values')) {
+	function cmx_vermietung_save_schaden_values(int $post_id): void {
+		$ort = isset($_POST['cmx_vermietung_schadenprotokoll_ort'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_schadenprotokoll_ort']))
+			: '';
+		$datum = isset($_POST['cmx_vermietung_schadenprotokoll_datum'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_schadenprotokoll_datum']))
+			: '';
+		$uhrzeit = isset($_POST['cmx_vermietung_schadenprotokoll_uhrzeit'])
+			? \trim((string) \wp_unslash($_POST['cmx_vermietung_schadenprotokoll_uhrzeit']))
+			: '';
+
+		if ($ort === '') {
+			\delete_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('ort'));
+		} else {
+			\update_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('ort'), $ort);
+		}
+
+		if ($datum === '' || !\preg_match('/^\d{4}-\d{2}-\d{2}$/', $datum)) {
+			\delete_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('datum'));
+		} else {
+			\update_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('datum'), $datum);
+		}
+
+		if ($uhrzeit === '' || !\preg_match('/^\d{2}:\d{2}$/', $uhrzeit)) {
+			\delete_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('uhrzeit'));
+		} else {
+			\update_post_meta($post_id, cmx_vermietung_schaden_value_meta_key('uhrzeit'), $uhrzeit);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 	function cmx_handle_vermietung_create(): void {
 		if (!cmx_vermietung_feature_enabled()) {
@@ -1721,6 +1771,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		cmx_vermietung_save_vehicle_detail_values($post_id);
 		cmx_vermietung_save_uebernahme_values($post_id);
 		cmx_vermietung_save_rueckgabe_values($post_id);
+		cmx_vermietung_save_schaden_values($post_id);
 		cmx_vermietung_save_fotos_rows_values($post_id);
 		cmx_vermietung_save_transfer_video_values($post_id);
 		cmx_vermietung_save_schaden_rows_values($post_id);
@@ -1955,6 +2006,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				$selected_rueckgabe_values['km_stand'] = $stored_km_stand_rueckgabe;
 			}
 		}
+		$selected_schaden_values = [
+			'ort' => '',
+			'datum' => '',
+			'uhrzeit' => '',
+		];
+		if ($current_post_id > 0) {
+			$selected_schaden_values['ort'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				cmx_vermietung_schaden_value_meta_key('ort'),
+				true
+			));
+			$selected_schaden_values['datum'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				cmx_vermietung_schaden_value_meta_key('datum'),
+				true
+			));
+			$selected_schaden_values['uhrzeit'] = \trim((string) \get_post_meta(
+				$current_post_id,
+				cmx_vermietung_schaden_value_meta_key('uhrzeit'),
+				true
+			));
+		}
 		$selected_contract_row = null;
 		foreach ($contracts as $row) {
 			if ((int) ($row['id'] ?? 0) === $current_post_id) {
@@ -2068,6 +2141,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-head{padding-bottom:14px}
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-sub{padding-bottom:0 !important;margin-bottom:0}
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
+			.cmx-vermietung-damage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 18px 18px}
 			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
 			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap,.cmx-vermietung-schaden-wrap{padding:0 18px 18px}
 			.cmx-vermietung-transfer-textarea-wrap{padding:0 18px 18px}
@@ -2152,6 +2226,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-info-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.cmx-vermietung-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+				.cmx-vermietung-damage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-fotos-row-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-schaden-row-grid{grid-template-columns:minmax(0,1fr)}
@@ -2172,6 +2247,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-results{max-height:320px}
 				.cmx-vermietung-info-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-transfer-grid{grid-template-columns:minmax(0,1fr)}
+				.cmx-vermietung-damage-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-upload-dropzone{flex-direction:column;align-items:flex-start}
 				.cmx-vermietung-upload-preview,.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video,.cmx-vermietung-upload-video.is-active{max-width:100%;width:100%;height:auto}
@@ -2460,6 +2536,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '</div>';
 		echo '<div class="cmx-vermietung-collapsible-body" id="cmx-vermietung-schadenprotokoll-body">';
 		cmx_vermietung_render_schaden_section($current_post_id, $selected_vehicle_id > 0);
+		echo '<div class="cmx-vermietung-damage-grid">';
+		$schaden_fields = [
+			'ort' => ['label' => 'Ort', 'name' => 'cmx_vermietung_schadenprotokoll_ort', 'type' => 'text', 'step' => ''],
+			'datum' => ['label' => 'Datum', 'name' => 'cmx_vermietung_schadenprotokoll_datum', 'type' => 'date', 'step' => ''],
+			'uhrzeit' => ['label' => 'Uhrzeit', 'name' => 'cmx_vermietung_schadenprotokoll_uhrzeit', 'type' => 'time', 'step' => ''],
+		];
+		foreach ($schaden_fields as $field_key => $field_config) {
+			$field_value = \trim((string) ($selected_schaden_values[$field_key] ?? ''));
+			echo '<div class="cmx-vermietung-info-item">';
+			echo '<label class="cmx-vermietung-info-label" for="cmx-vermietung-schadenprotokoll-' . \esc_attr($field_key) . '">' . \esc_html((string) $field_config['label']) . '</label>';
+			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-schadenprotokoll-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
+			echo '</div>';
+		}
+		echo '</div>';
 		echo '</div>';
 		echo '</section>';
 		echo '<section class="cmx-vermietung-transfer-panel is-collapsed' . ($selected_vehicle_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-rueckgabe-panel">';
@@ -2558,6 +2648,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					datum:document.getElementById("cmx-vermietung-uebernahme-datum"),
 					uhrzeit:document.getElementById("cmx-vermietung-uebernahme-uhrzeit"),
 					km_stand:document.getElementById("cmx-vermietung-uebernahme-km_stand")
+				};
+				var damageNodes={
+					ort:document.getElementById("cmx-vermietung-schadenprotokoll-ort"),
+					datum:document.getElementById("cmx-vermietung-schadenprotokoll-datum"),
+					uhrzeit:document.getElementById("cmx-vermietung-schadenprotokoll-uhrzeit")
 				};
 				var returnNodes={
 					ort:document.getElementById("cmx-vermietung-rueckgabe-ort"),
@@ -3418,6 +3513,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						if(damageSections[key] && typeof damageSections[key].setEnabled==="function"){
 							damageSections[key].setEnabled(hasVehicle);
 						}
+					});
+					Object.keys(damageNodes).forEach(function(key){
+						if(!damageNodes[key]){return;}
+						damageNodes[key].disabled=!hasVehicle;
 					});
 					Object.keys(vehicleInfoNodes).forEach(function(key){
 						if(!vehicleInfoNodes[key]){return;}
