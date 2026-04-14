@@ -694,6 +694,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_join_text_parts')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_join_html_parts')) {
+	function cmx_carent_vertrag_join_html_parts(array $parts, string $separator = ' <span class="contract-inline-separator">·</span> '): string {
+		$parts = \array_values(\array_filter(\array_map(static function ($value): string {
+			return \trim((string) $value);
+		}, $parts), static fn(string $value): bool => $value !== ''));
+
+		return \implode($separator, $parts);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_inline_field_html')) {
+	function cmx_carent_vertrag_inline_field_html(string $label, string $value): string {
+		$label = \trim($label);
+		$value = \trim($value);
+		if ($value === '') {
+			return '';
+		}
+
+		return '<span class="contract-inline-label">' . \esc_html($label) . '</span> <strong class="contract-inline-value">' . \esc_html($value) . '</strong>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_bold_value_html')) {
+	function cmx_carent_vertrag_bold_value_html(string $value): string {
+		$value = \trim($value);
+		if ($value === '') {
+			return '';
+		}
+
+		return '<strong class="contract-inline-value">' . \esc_html($value) . '</strong>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_article_data')) {
 	function cmx_carent_vertrag_vehicle_article_data(int $artikel_id): array {
 		if ($artikel_id <= 0 || !\get_post_status($artikel_id)) {
@@ -771,24 +804,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_variant_data
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_article_lines')) {
 	function cmx_carent_vertrag_vehicle_article_lines(array $vehicle): array {
 		$article = (array) ($vehicle['article_meta'] ?? []);
+		$article_id = isset($vehicle['article_id']) ? (int) $vehicle['article_id'] : 0;
+		$article_title = $article_id > 0 ? \trim((string) \get_the_title($article_id)) : '';
+		if ($article_title !== '' && \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$article_title = (string) cmx_normalize_minus_sign($article_title);
+		}
+		$begrenzung_raw = \trim((string) ($article['begrenzung'] ?? ''));
+		$begrenzung_value = 'unbegrenzt';
+		if ($begrenzung_raw !== '' && cmx_carent_vertrag_parse_number($begrenzung_raw) > 0) {
+			$begrenzung_value = cmx_carent_vertrag_format_int($begrenzung_raw);
+		}
 
-		$parts = [
-			!empty($article['kennzeichen']) ? 'Kennzeichen ' . (string) $article['kennzeichen'] : '',
-			!empty($article['chassi']) ? 'Chassi ' . (string) $article['chassi'] : '',
-			!empty($article['treibstoff']) ? 'Treibstoff ' . (string) $article['treibstoff'] : '',
-			!empty($article['km_stand']) ? 'KM-Stand ' . cmx_carent_vertrag_format_int((string) $article['km_stand']) : '',
-			!empty($article['begrenzung']) ? 'KM-Begrenzung ' . cmx_carent_vertrag_format_int((string) $article['begrenzung']) : '',
-			!empty($article['mehrpreis']) ? 'KM-Mehrpreis ' . cmx_carent_vertrag_format_money((string) $article['mehrpreis']) : '',
-			!empty($article['kasko_min']) ? 'Kasko min ' . cmx_carent_vertrag_format_money((string) $article['kasko_min']) : '',
-			!empty($article['kasko_max']) ? 'Kasko max ' . cmx_carent_vertrag_format_money((string) $article['kasko_max']) : '',
+		$primary_parts = [
+			cmx_carent_vertrag_bold_value_html($article_title),
+			cmx_carent_vertrag_bold_value_html((string) ($article['kennzeichen'] ?? '')),
+			cmx_carent_vertrag_inline_field_html('Treibstoff', (string) ($article['treibstoff'] ?? '')),
 		];
-		$parts = \array_values(\array_filter(\array_map(static function ($value): string {
-			return \trim((string) $value);
-		}, $parts), static fn(string $value): bool => $value !== ''));
+		$secondary_parts = [
+			cmx_carent_vertrag_inline_field_html('KM-Stand', cmx_carent_vertrag_format_int((string) ($article['km_stand'] ?? ''))),
+			cmx_carent_vertrag_inline_field_html('KM-Begrenzung', $begrenzung_value),
+			cmx_carent_vertrag_inline_field_html('KM-Mehrpreis', cmx_carent_vertrag_format_money((string) ($article['mehrpreis'] ?? ''))),
+		];
+		$insurance_parts = [
+			cmx_carent_vertrag_inline_field_html('Kasko min', cmx_carent_vertrag_format_money((string) ($article['kasko_min'] ?? ''))),
+			cmx_carent_vertrag_inline_field_html('Kasko max', cmx_carent_vertrag_format_money((string) ($article['kasko_max'] ?? ''))),
+		];
 
 		return [
-			'primary' => cmx_carent_vertrag_join_text_parts(\array_slice($parts, 0, 6)),
-			'secondary' => cmx_carent_vertrag_join_text_parts(\array_slice($parts, 6)),
+			'primary' => cmx_carent_vertrag_join_html_parts($primary_parts),
+			'secondary' => cmx_carent_vertrag_join_html_parts($secondary_parts),
+			'insurance' => cmx_carent_vertrag_join_html_parts($insurance_parts),
 		];
 	}
 }
@@ -797,23 +842,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_vehicle_variant_text
 	function cmx_carent_vertrag_vehicle_variant_text(array $vehicle): string {
 		$variant = (array) ($vehicle['variant_meta'] ?? []);
 		$detail_parts = [
-			!empty($variant['sku']) ? 'Artikel-Nr. ' . (string) $variant['sku'] : '',
-			!empty($variant['groessen']) ? 'Grösse ' . (string) $variant['groessen'] : '',
-			!empty($variant['ausfuehrungen']) ? 'Ausführung ' . (string) $variant['ausfuehrungen'] : '',
-			!empty($variant['materialien']) ? 'Material ' . (string) $variant['materialien'] : '',
-			!empty($variant['farben']) ? 'Farbe ' . (string) $variant['farben'] : '',
-			!empty($variant['einheit']) ? 'Einheit ' . (string) $variant['einheit'] : '',
-			!empty($variant['anzahl']) ? 'Anzahl ' . cmx_carent_vertrag_format_int((string) $variant['anzahl']) : '',
-			!empty($variant['vk']) ? 'VK ' . cmx_carent_vertrag_format_money((string) $variant['vk']) : '',
-			!empty($variant['belegtext']) ? 'Text ' . (string) $variant['belegtext'] : '',
+			cmx_carent_vertrag_inline_field_html('ArtikelNr', (string) ($variant['sku'] ?? '')),
+			cmx_carent_vertrag_inline_field_html('Einheit', (string) ($variant['einheit'] ?? '')),
+			cmx_carent_vertrag_inline_field_html('Anzahl', cmx_carent_vertrag_format_int((string) ($variant['anzahl'] ?? ''))),
+			cmx_carent_vertrag_inline_field_html('VK', cmx_carent_vertrag_format_money((string) ($variant['vk'] ?? ''))),
 		];
-		$details = cmx_carent_vertrag_join_text_parts($detail_parts);
-
-		if (!empty($variant['label'])) {
-			return \trim((string) $variant['label'] . ($details !== '' ? ' · ' . $details : ''));
-		}
-
-		return $details;
+		return cmx_carent_vertrag_join_html_parts($detail_parts);
 	}
 }
 
@@ -1128,9 +1162,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 			$self_party_text = \trim($self_title . ($self_party_text !== '' ? ' · ' . $self_party_text : ''));
 		}
 		$contact_party_text = cmx_carent_vertrag_party_cell_text($contact_address_lines, $contact_phone, $contact_email);
+		$self_party_html = cmx_carent_vertrag_bold_value_html($self_party_text);
+		$contact_party_html = cmx_carent_vertrag_bold_value_html($contact_party_text);
 		$vehicle_article_lines = cmx_carent_vertrag_vehicle_article_lines($vehicle);
 		$vehicle_article_text = \trim((string) ($vehicle_article_lines['primary'] ?? ''));
 		$vehicle_article_secondary_text = \trim((string) ($vehicle_article_lines['secondary'] ?? ''));
+		$vehicle_insurance_text = \trim((string) ($vehicle_article_lines['insurance'] ?? ''));
 		$vehicle_variant_text = cmx_carent_vertrag_vehicle_variant_text($vehicle);
 		\ob_start();
 		?>
@@ -1153,11 +1190,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-link{color:#222;text-decoration:none}
-				.contract-party-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:auto}
-				.contract-party-label{width:100px;min-width:100px;max-width:100px;padding:7px 10px 7px 0;vertical-align:top;font-size:11px;font-weight:700;line-height:1.25;color:#111;white-space:nowrap}
+				.contract-party-table{width:100%;margin-top:36px;border-collapse:collapse;table-layout:auto}
+				.contract-party-label{width:95px;min-width:95px;max-width:95px;padding:7px 6px 7px 0;vertical-align:top;font-size:11px;font-weight:700;font-style:italic;line-height:1.25;color:#111;white-space:nowrap}
 				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
 				.contract-party-table tr+tr .contract-party-label,
 				.contract-party-table tr+tr .contract-party-value{border-top:1px solid #d8dbe2}
+				.contract-inline-label{font-weight:400;color:#222}
+				.contract-inline-value{font-weight:700;color:#111}
+				.contract-inline-separator{color:#777}
+				.contract-note{margin-top:14px;font-size:11px;line-height:1.35;color:#222}
 			</style>
 		</head>
 		<body>
@@ -1202,36 +1243,46 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</table>
 				<table class="contract-party-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<tr>
-						<td class="contract-party-label" width="100" style="width:100px;">Vermieter</td>
+						<td class="contract-party-label" width="95" style="width:95px;">Vermieter</td>
 						<td class="contract-party-value">
-							<?php echo \esc_html($self_party_text); ?>
+							<?php echo $self_party_html; ?>
 						</td>
 					</tr>
 					<tr>
-						<td class="contract-party-label" width="100" style="width:100px;">Mieter</td>
+						<td class="contract-party-label" width="95" style="width:95px;">Mieter</td>
 						<td class="contract-party-value">
-							<?php echo \esc_html($contact_party_text); ?>
+							<?php echo $contact_party_html; ?>
 						</td>
 					</tr>
 					<tr>
-						<td class="contract-party-label" width="100" style="width:100px;">Fahrzeug</td>
+						<td class="contract-party-label" width="95" style="width:95px;">Fahrzeug</td>
 						<td class="contract-party-value">
-							<?php echo \esc_html($vehicle_article_text); ?>
+							<?php echo $vehicle_article_text; ?>
 						</td>
 					</tr>
 					<tr>
-						<td class="contract-party-label" width="100" style="width:100px;">&nbsp;</td>
+						<td class="contract-party-label" width="95" style="width:95px;">&nbsp;</td>
 						<td class="contract-party-value">
-							<?php echo \esc_html($vehicle_article_secondary_text); ?>
+							<?php echo $vehicle_article_secondary_text; ?>
 						</td>
 					</tr>
 					<tr>
-						<td class="contract-party-label" width="100" style="width:100px;">&nbsp;</td>
+						<td class="contract-party-label" width="95" style="width:95px;">&nbsp;</td>
 						<td class="contract-party-value">
-							<?php echo \esc_html($vehicle_variant_text); ?>
+							<?php echo $vehicle_variant_text; ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label" width="95" style="width:95px;">Versicherung</td>
+						<td class="contract-party-value">
+							<?php echo $vehicle_insurance_text; ?>
 						</td>
 					</tr>
 				</table>
+				<div class="contract-note">
+					Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen m&uuml;ssen aufbewahrt werden. Das Fahrzeug ist vollgetankt zur&uuml;ckzugeben, andernfalls
+					werden Treibstoff kosten plus CHF 50.-Aufwandsentsch&auml;digung verrechnet.
+				</div>
 			</div>
 		</body>
 		</html>
