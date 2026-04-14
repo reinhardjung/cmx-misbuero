@@ -142,6 +142,204 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_date_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_normalize')) {
+	function cmx_carent_admin_search_normalize(string $value): string {
+		$value = \trim($value);
+		if ($value === '') {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$value = (string) cmx_normalize_minus_sign($value);
+		}
+
+		$value = \preg_replace('/\s+/u', ' ', $value);
+		$value = \is_string($value) ? $value : '';
+
+		return \function_exists('mb_strtolower')
+			? \mb_strtolower($value, 'UTF-8')
+			: \strtolower($value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_compact')) {
+	function cmx_carent_admin_search_compact(string $value): string {
+		$value = cmx_carent_admin_search_normalize($value);
+		if ($value === '') {
+			return '';
+		}
+
+		$compact = \preg_replace('/[^\p{L}\p{N}]+/u', '', $value);
+		return \is_string($compact) ? $compact : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_terms')) {
+	function cmx_carent_admin_search_terms(\WP_Query $query): array {
+		$terms = $query->query_vars['search_terms'] ?? [];
+		if (\is_array($terms) && $terms !== []) {
+			return \array_values(\array_filter(\array_map(static function ($value): string {
+				return \trim((string) $value);
+			}, $terms), static fn(string $value): bool => $value !== ''));
+		}
+
+		$raw = \trim((string) $query->get('s'));
+		return $raw !== '' ? [$raw] : [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_haystack')) {
+	function cmx_carent_admin_search_haystack(int $post_id): string {
+		if ($post_id <= 0 || !\get_post_status($post_id)) {
+			return '';
+		}
+
+		$parts = [];
+		$post_title = \trim((string) \get_the_title($post_id));
+		$display_title = \function_exists(__NAMESPACE__ . '\\cmx_carent_display_title')
+			? \trim((string) cmx_carent_display_title($post_id))
+			: $post_title;
+		$nummer = \trim((string) \get_post_meta($post_id, '_cmx_carent_nummer', true));
+
+		foreach ([$post_title, $display_title, $nummer, (string) $post_id] as $part) {
+			$part = \trim((string) $part);
+			if ($part !== '') {
+				$parts[] = $part;
+			}
+		}
+
+		$kontakt_id = cmx_carent_admin_linked_contact_id($post_id);
+		if ($kontakt_id > 0 && \get_post_status($kontakt_id)) {
+			$parts[] = cmx_carent_admin_contact_label($kontakt_id);
+
+			if (\function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_contact_row')) {
+				$row = (array) cmx_telefonbuch_contact_row($kontakt_id);
+				foreach (['title', 'subtitle', 'search'] as $field) {
+					$value = \trim((string) ($row[$field] ?? ''));
+					if ($value !== '') {
+						$parts[] = $value;
+					}
+				}
+			}
+
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
+				$email = \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id));
+				if ($email !== '') {
+					$parts[] = $email;
+				}
+			}
+
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')) {
+				$phone = \trim((string) cmx_kommunikation_primary_phone($kontakt_id));
+				if ($phone !== '') {
+					$parts[] = $phone;
+				}
+			}
+		}
+
+		$artikel_id = cmx_carent_admin_linked_article_id($post_id);
+		if ($artikel_id > 0 && \get_post_status($artikel_id)) {
+			$artikel_label = cmx_carent_admin_article_label($artikel_id, $post_id);
+			$artikel_title = \trim((string) \get_the_title($artikel_id));
+			$artikel_nr = \function_exists(__NAMESPACE__ . '\\cmx_get_artikel_nr')
+				? \trim((string) cmx_get_artikel_nr($artikel_id))
+				: '';
+			$kennzeichen = cmx_carent_admin_kennzeichen_label($post_id);
+
+			foreach ([$artikel_label, $artikel_title, $artikel_nr, $kennzeichen] as $part) {
+				$part = \trim((string) $part);
+				if ($part !== '') {
+					$parts[] = $part;
+				}
+			}
+		}
+
+		return \implode(' ', \array_values(\array_filter($parts, static fn(string $value): bool => \trim($value) !== '')));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_matches_terms')) {
+	function cmx_carent_admin_search_matches_terms(string $haystack, array $terms): bool {
+		$haystack = cmx_carent_admin_search_normalize($haystack);
+		if ($haystack === '') {
+			return false;
+		}
+
+		$haystack_compact = cmx_carent_admin_search_compact($haystack);
+		foreach ($terms as $term) {
+			$term = cmx_carent_admin_search_normalize((string) $term);
+			if ($term === '') {
+				continue;
+			}
+
+			if (\strpos($haystack, $term) !== false) {
+				continue;
+			}
+
+			$term_compact = cmx_carent_admin_search_compact($term);
+			if ($term_compact !== '' && $haystack_compact !== '' && \strpos($haystack_compact, $term_compact) !== false) {
+				continue;
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_is_search_query')) {
+	function cmx_carent_admin_is_search_query(\WP_Query $query): bool {
+		if (!\is_admin() || !$query->is_main_query() || (bool) $query->get('cmx_carent_admin_search_index_query')) {
+			return false;
+		}
+
+		$post_type = $query->get('post_type');
+		if (\is_array($post_type)) {
+			$post_type = (string) ($post_type[0] ?? '');
+		}
+
+		return (string) $post_type === 'carent' && \trim((string) $query->get('s')) !== '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_matching_ids')) {
+	function cmx_carent_admin_search_matching_ids(\WP_Query $query): array {
+		$terms = cmx_carent_admin_search_terms($query);
+		if ($terms === []) {
+			return [];
+		}
+
+		$carent_ids = \get_posts([
+			'post_type'              => 'carent',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'orderby'                => 'date',
+			'order'                  => 'DESC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+			'cmx_carent_admin_search_index_query' => true,
+		]);
+
+		$matched_ids = [];
+		foreach ((array) $carent_ids as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0) {
+				continue;
+			}
+
+			$haystack = cmx_carent_admin_search_haystack($post_id);
+			if (cmx_carent_admin_search_matches_terms($haystack, $terms)) {
+				$matched_ids[] = $post_id;
+			}
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('intval', $matched_ids))));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	function cmx_carent_admin_edit_link(int $post_id, string $label): string {
 		if ($post_id <= 0 || $label === '' || !\get_post_status($post_id)) {
@@ -219,3 +417,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 		.wp-list-table .column-cmx_carent_rueckgabe{width:100px;white-space:nowrap}
 	</style>';
 });
+
+\add_action('pre_get_posts', function (\WP_Query $query): void {
+	if (!cmx_carent_admin_is_search_query($query)) {
+		return;
+	}
+
+	$matching_ids = cmx_carent_admin_search_matching_ids($query);
+	$query->set('cmx_carent_admin_custom_search', true);
+	$query->set('post__in', $matching_ids !== [] ? $matching_ids : [0]);
+});
+
+\add_filter('posts_search', function (string $search, \WP_Query $query): string {
+	if (!(bool) $query->get('cmx_carent_admin_custom_search')) {
+		return $search;
+	}
+
+	return '';
+}, 10, 2);
