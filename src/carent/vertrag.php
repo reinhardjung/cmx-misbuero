@@ -630,6 +630,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_normalize_rel_path')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_address_lines_from_string')) {
+	function cmx_carent_vertrag_address_lines_from_string(string $address, string $country = ''): array {
+		$address = \trim($address);
+		if ($address === '') {
+			return [];
+		}
+
+		$country = \trim($country);
+		$lines = \preg_split('/\s*,\s*/u', $address) ?: [];
+		$lines = \array_values(\array_filter(\array_map(static function (string $value): string {
+			return \trim($value);
+		}, $lines), static function (string $value) use ($country): bool {
+			if ($value === '') {
+				return false;
+			}
+			if ($country !== '' && \strcasecmp($value, $country) === 0) {
+				return false;
+			}
+			return true;
+		}));
+
+		return $lines;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_party_cell_text')) {
+	function cmx_carent_vertrag_party_cell_text(array $address_lines, string $phone = '', string $email = ''): string {
+		$parts = [];
+
+		$address = \implode(', ', \array_values(\array_filter(\array_map(static function (string $value): string {
+			return \trim($value);
+		}, $address_lines), static fn(string $value): bool => $value !== '')));
+		if ($address !== '') {
+			$parts[] = $address;
+		}
+
+		$phone = \trim($phone);
+		if ($phone !== '') {
+			$parts[] = $phone;
+		}
+
+		$email = \trim($email);
+		if ($email !== '') {
+			$parts[] = $email;
+		}
+
+		return \implode(' · ', $parts);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_legacy_pdf_dir_prefix')) {
 	function cmx_carent_vertrag_legacy_pdf_dir_prefix(int $post_id): string {
 		return 'misbuero/carent/vertraege/' . $post_id . '/';
@@ -878,6 +928,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		if ($data === []) {
 			return '';
 		}
+		$contact = (array) ($data['contact'] ?? []);
 		$self = (array) ($data['self'] ?? []);
 		$self_id = isset($self['id']) ? (int) $self['id'] : 0;
 		$logo_src = \trim((string) ($self['logo_src'] ?? ''));
@@ -903,6 +954,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 			$self_website_href = \trim((string) cmx_email_self_contact_url());
 			$self_website = $self_website_href;
 		}
+		$self_website_link = $self_website_href;
+		if ($self_website_link !== '' && \preg_match('~^[a-z][a-z0-9+.-]*://~i', $self_website_link) !== 1) {
+			$self_website_link = 'https://' . \ltrim($self_website_link, '/');
+		}
 		if ($self_address === '' && $self_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')) {
 			$self_address = \trim((string) cmx_telefonbuch_address_string($self_id));
 		}
@@ -910,18 +965,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 			? (string) \constant(__NAMESPACE__ . '\\CMX_RECHNUNG_META_LAND')
 			: '_cmx_rechnung_land';
 		$self_country = $self_id > 0 ? \trim((string) \get_post_meta($self_id, $self_country_key, true)) : '';
-		$address_lines = \array_values(\array_filter(\array_map(
-			static fn(string $value): string => \trim($value),
-			\preg_split('/\s*,\s*/u', $self_address) ?: []
-		), static function (string $value) use ($self_country): bool {
-			if ($value === '') {
-				return false;
-			}
-			if ($self_country !== '' && \strcasecmp($value, $self_country) === 0) {
-				return false;
-			}
-			return true;
-		}));
+		$self_address_lines = cmx_carent_vertrag_address_lines_from_string($self_address, $self_country);
+		$contact_id = isset($contact['id']) ? (int) $contact['id'] : 0;
+		$contact_address = \trim((string) ($contact['address'] ?? ''));
+		if ($contact_address === '' && $contact_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')) {
+			$contact_address = \trim((string) cmx_telefonbuch_address_string($contact_id));
+		}
+		$contact_address_lines = cmx_carent_vertrag_address_lines_from_string($contact_address, '');
+		$contact_email = \sanitize_email((string) ($contact['email'] ?? ''));
+		if ($contact_email === '' && $contact_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
+			$contact_email = \sanitize_email((string) cmx_kommunikation_primary_email($contact_id));
+		}
+		$contact_phone = '';
+		$contact_phones = (array) ($contact['phones'] ?? []);
+		if (!empty($contact_phones[0]['display'])) {
+			$contact_phone = \trim((string) $contact_phones[0]['display']);
+		} elseif (!empty($contact_phones[0]['value'])) {
+			$contact_phone = \trim((string) $contact_phones[0]['value']);
+		} elseif ($contact_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')) {
+			$contact_phone = \trim((string) cmx_kommunikation_primary_phone($contact_id));
+		}
+		$self_party_text = cmx_carent_vertrag_party_cell_text($self_address_lines);
+		$contact_party_text = cmx_carent_vertrag_party_cell_text($contact_address_lines, $contact_phone, $contact_email);
 		\ob_start();
 		?>
 		<!doctype html>
@@ -942,6 +1007,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-company{font-size:13px;font-weight:700;line-height:1.15;color:#111}
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
+				.header-contact-link{color:#222;text-decoration:underline}
+				.contract-party-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:fixed}
+				.contract-party-label{width:300px;padding:7px 10px 7px 0;vertical-align:top;font-size:11px;font-weight:700;line-height:1.25;color:#111}
+				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
+				.contract-party-table tr+tr .contract-party-label,
+				.contract-party-table tr+tr .contract-party-value{border-top:1px solid #d8dbe2}
 			</style>
 		</head>
 		<body>
@@ -955,7 +1026,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 							<?php if ($self_subtitle !== '') : ?>
 								<div class="header-line"><?php echo \esc_html($self_subtitle); ?></div>
 							<?php endif; ?>
-							<?php foreach ($address_lines as $address_line) : ?>
+							<?php foreach ($self_address_lines as $address_line) : ?>
 								<div class="header-line"><?php echo \esc_html($address_line); ?></div>
 							<?php endforeach; ?>
 						</td>
@@ -973,8 +1044,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 								<div class="header-contact-line"><?php echo \esc_html($self_phone); ?></div>
 							<?php endif; ?>
 							<?php if ($self_website !== '') : ?>
-								<div class="header-contact-line"><?php echo \esc_html($self_website); ?></div>
+								<div class="header-contact-line">
+									<?php if ($self_website_link !== '') : ?>
+										<a href="<?php echo \esc_url($self_website_link); ?>" class="header-contact-link"><?php echo \esc_html($self_website); ?></a>
+									<?php else : ?>
+										<?php echo \esc_html($self_website); ?>
+									<?php endif; ?>
+								</div>
 							<?php endif; ?>
+						</td>
+					</tr>
+				</table>
+				<table class="contract-party-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td class="contract-party-label">Vermieter</td>
+						<td class="contract-party-value">
+							<?php echo \esc_html($self_party_text); ?>
+						</td>
+					</tr>
+					<tr>
+						<td class="contract-party-label">Mieter</td>
+						<td class="contract-party-value">
+							<?php echo \esc_html($contact_party_text); ?>
 						</td>
 					</tr>
 				</table>
