@@ -2216,14 +2216,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-head{padding-bottom:14px}
 			.cmx-vermietung-transfer-panel.is-collapsed .cmx-vermietung-panel-sub{padding-bottom:0 !important;margin-bottom:0}
 			.cmx-vermietung-transfer-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 18px 18px}
-			.cmx-vermietung-damage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 18px 18px}
+			.cmx-vermietung-damage-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(220px,1fr) minmax(180px,.75fr) minmax(200px,.9fr) minmax(300px,1.45fr);gap:12px;padding:0 18px 12px;align-items:stretch}
 			.cmx-vermietung-damage-stack{display:grid;gap:12px;padding:0 18px 18px}
-			.cmx-vermietung-damage-detail-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(320px,1fr);gap:12px}
+			.cmx-vermietung-damage-row{display:grid;gap:12px}
+			.cmx-vermietung-damage-row--split{grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);align-items:stretch}
+			.cmx-vermietung-damage-conditional{display:grid;gap:12px}
 			.cmx-vermietung-damage-conditional.is-hidden{display:none}
-			.cmx-vermietung-choice-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
-			.cmx-vermietung-choice-option{display:inline-flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#1d2327;font-size:14px;line-height:1.4;cursor:pointer}
+			.cmx-vermietung-damage-grid .cmx-vermietung-info-item,.cmx-vermietung-damage-row .cmx-vermietung-info-item{height:100%}
+			.cmx-vermietung-damage-grid .cmx-vermietung-info-label,.cmx-vermietung-damage-row .cmx-vermietung-info-label{display:block}
+			.cmx-vermietung-choice-group{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center}
+			.cmx-vermietung-choice-group--ack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+			.cmx-vermietung-choice-group--participants,.cmx-vermietung-choice-group--protocol{flex-wrap:nowrap}
+			.cmx-vermietung-choice-option{display:inline-flex;align-items:center;gap:10px;min-height:40px;padding:0 14px;border:1px solid #d0d5dd;border-radius:12px;background:#fff;color:#1d2327;font-size:15px;line-height:1.4;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease,color .15s ease}
+			.cmx-vermietung-choice-option:hover{border-color:#b9c7d8;background:#fcfdff}
+			.cmx-vermietung-choice-option.is-selected{border-color:#135e96;background:#eef6ff;box-shadow:inset 0 0 0 1px rgba(19,94,150,.14)}
+			.cmx-vermietung-choice-option.is-selected span{color:#0f4c7a}
 			.cmx-vermietung-choice-option input{margin:0}
+			.cmx-vermietung-choice-option span{display:block}
 			.cmx-vermietung-choice-option:has(input:disabled){background:#f8fafc;color:#98a2b3;cursor:not-allowed}
+			.cmx-vermietung-choice-group--ack .cmx-vermietung-choice-option{display:flex;align-items:flex-start;min-height:100%;padding:12px 14px}
 			.cmx-vermietung-signature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 18px 18px}
 			.cmx-vermietung-transfer-fotos-wrap,.cmx-vermietung-transfer-video-wrap,.cmx-vermietung-schaden-wrap{padding:0 18px 18px}
 			.cmx-vermietung-transfer-textarea-wrap{padding:0 18px 18px}
@@ -2308,7 +2319,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-info-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.cmx-vermietung-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-				.cmx-vermietung-damage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+				.cmx-vermietung-damage-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 				.cmx-vermietung-damage-detail-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-fotos-row-grid{grid-template-columns:minmax(0,1fr)}
@@ -2330,11 +2341,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				.cmx-vermietung-results{max-height:320px}
 				.cmx-vermietung-info-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-transfer-grid{grid-template-columns:minmax(0,1fr)}
-				.cmx-vermietung-damage-grid{grid-template-columns:minmax(0,1fr)}
+				.cmx-vermietung-damage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 				.cmx-vermietung-damage-detail-grid{grid-template-columns:minmax(0,1fr)}
+				.cmx-vermietung-choice-group--participants,.cmx-vermietung-choice-group--protocol{flex-wrap:wrap}
 				.cmx-vermietung-signature-grid{grid-template-columns:minmax(0,1fr)}
 				.cmx-vermietung-upload-dropzone{flex-direction:column;align-items:flex-start}
 				.cmx-vermietung-upload-preview,.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video,.cmx-vermietung-upload-video.is-active{max-width:100%;width:100%;height:auto}
+			}
+			@media (max-width:560px){
+				.cmx-vermietung-damage-grid{grid-template-columns:minmax(0,1fr)}
 			}
 		</style>';
 		echo '</head><body>';
@@ -2633,33 +2648,31 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			echo '<input class="cmx-vermietung-info-value" id="cmx-vermietung-schadenprotokoll-' . \esc_attr($field_key) . '" name="' . \esc_attr((string) $field_config['name']) . '" type="' . \esc_attr((string) $field_config['type']) . '" value="' . \esc_attr($field_value) . '"' . (((string) $field_config['step']) !== '' ? ' step="' . \esc_attr((string) $field_config['step']) . '"' : '') . ($selected_vehicle_id > 0 ? '' : ' disabled') . '>';
 			echo '</div>';
 		}
-		echo '</div>';
-		echo '<div class="cmx-vermietung-damage-stack">';
 		echo '<div class="cmx-vermietung-info-item">';
 		echo '<span class="cmx-vermietung-info-label" id="cmx-vermietung-schadenprotokoll-weitere-beteiligte-label">Weitere Beteiligte?</span>';
-		echo '<div class="cmx-vermietung-choice-group" role="radiogroup" aria-labelledby="cmx-vermietung-schadenprotokoll-weitere-beteiligte-label">';
+		echo '<div class="cmx-vermietung-choice-group cmx-vermietung-choice-group--participants" role="radiogroup" aria-labelledby="cmx-vermietung-schadenprotokoll-weitere-beteiligte-label">';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-weitere-beteiligte-nein" name="cmx_vermietung_schadenprotokoll_weitere_beteiligte" value="nein"' . checked((string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein'), 'nein', false) . ($selected_vehicle_id > 0 ? '' : ' disabled') . '> <span>Nein</span></label>';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-weitere-beteiligte-ja" name="cmx_vermietung_schadenprotokoll_weitere_beteiligte" value="ja"' . checked((string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein'), 'ja', false) . ($selected_vehicle_id > 0 ? '' : ' disabled') . '> <span>Ja</span></label>';
 		echo '</div>';
 		echo '</div>';
-		echo '<div class="cmx-vermietung-damage-conditional' . ((string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' is-hidden') . '" id="cmx-vermietung-schadenprotokoll-weitere-beteiligte-fields">';
-		echo '<div class="cmx-vermietung-damage-detail-grid">';
-		echo '<div class="cmx-vermietung-info-item">';
-		echo '<label class="cmx-vermietung-info-label" for="cmx-vermietung-schadenprotokoll-weitere-angaben">Weitere Angaben</label>';
-		echo '<textarea class="cmx-vermietung-info-textarea" id="cmx-vermietung-schadenprotokoll-weitere-angaben" name="cmx_vermietung_schadenprotokoll_weitere_angaben" rows="5"' . ($selected_vehicle_id > 0 && (string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' disabled') . '>' . \esc_textarea((string) ($selected_schaden_values['weitere_angaben'] ?? '')) . '</textarea>';
-		echo '</div>';
 		echo '<div class="cmx-vermietung-info-item">';
 		echo '<span class="cmx-vermietung-info-label">Unfallprotokoll vorhanden?</span>';
-		echo '<div class="cmx-vermietung-choice-group" role="radiogroup">';
+		echo '<div class="cmx-vermietung-choice-group cmx-vermietung-choice-group--protocol" role="radiogroup">';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-unfallprotokoll-ja" name="cmx_vermietung_schadenprotokoll_unfallprotokoll" value="ja"' . checked((string) ($selected_schaden_values['unfallprotokoll'] ?? ''), 'ja', false) . ($selected_vehicle_id > 0 && (string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' disabled') . '> <span>Ja (an Vermieter übergeben?)</span></label>';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-unfallprotokoll-nein" name="cmx_vermietung_schadenprotokoll_unfallprotokoll" value="nein"' . checked((string) ($selected_schaden_values['unfallprotokoll'] ?? ''), 'nein', false) . ($selected_vehicle_id > 0 && (string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' disabled') . '> <span>Nein</span></label>';
 		echo '</div>';
 		echo '</div>';
 		echo '</div>';
+		echo '<div class="cmx-vermietung-damage-stack">';
+		echo '<div class="cmx-vermietung-damage-conditional' . ((string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' is-hidden') . '" id="cmx-vermietung-schadenprotokoll-weitere-beteiligte-fields">';
+		echo '<div class="cmx-vermietung-info-item">';
+		echo '<label class="cmx-vermietung-info-label" for="cmx-vermietung-schadenprotokoll-weitere-angaben">Weitere Angaben</label>';
+		echo '<textarea class="cmx-vermietung-info-textarea" id="cmx-vermietung-schadenprotokoll-weitere-angaben" name="cmx_vermietung_schadenprotokoll_weitere_angaben" rows="5"' . ($selected_vehicle_id > 0 && (string) ($selected_schaden_values['weitere_beteiligte'] ?? 'nein') === 'ja' ? '' : ' disabled') . '>' . \esc_textarea((string) ($selected_schaden_values['weitere_angaben'] ?? '')) . '</textarea>';
+		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-info-item">';
 		echo '<span class="cmx-vermietung-info-label">Ich bestätige, dass ich den oben beschriebenen Schaden:</span>';
-		echo '<div class="cmx-vermietung-choice-group" role="radiogroup">';
+		echo '<div class="cmx-vermietung-choice-group cmx-vermietung-choice-group--ack" role="radiogroup">';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-anerkennung-ja" name="cmx_vermietung_schadenprotokoll_anerkennung" value="anerkenne"' . checked((string) ($selected_schaden_values['anerkennung'] ?? ''), 'anerkenne', false) . ($selected_vehicle_id > 0 ? '' : ' disabled') . '> <span>verursacht habe und diesen anerkenne.</span></label>';
 		echo '<label class="cmx-vermietung-choice-option"><input type="radio" id="cmx-vermietung-schadenprotokoll-anerkennung-nein" name="cmx_vermietung_schadenprotokoll_anerkennung" value="nicht_anerkenne"' . checked((string) ($selected_schaden_values['anerkennung'] ?? ''), 'nicht_anerkenne', false) . ($selected_vehicle_id > 0 ? '' : ' disabled') . '> <span>nicht verursacht habe / nicht anerkenne. (schriftliche Stellungnahme innerhalb 24h)</span></label>';
 		echo '</div>';
@@ -2956,6 +2969,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(!damagePanel || !damageToggle){return;}
 					damageToggle.setAttribute("aria-expanded", damagePanel.classList.contains("is-collapsed") ? "false" : "true");
 				}
+				function syncChoiceSelectionState(){
+					Array.prototype.slice.call(document.querySelectorAll(".cmx-vermietung-choice-option")).forEach(function(option){
+						var input=option.querySelector("input");
+						option.classList.toggle("is-selected", !!(input && input.checked));
+					});
+				}
 				function syncDamageFormState(hasVehicle){
 					var canUse=typeof hasVehicle==="boolean" ? hasVehicle : Number(artikelInput.value||0)>0;
 					var hasWeitereBeteiligte=!!(damageNodes.weitere_beteiligte_ja && damageNodes.weitere_beteiligte_ja.checked);
@@ -2971,6 +2990,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(damageConditionalWrap){
 						damageConditionalWrap.classList.toggle("is-hidden", !conditionalEnabled);
 					}
+					syncChoiceSelectionState();
 				}
 				function syncIdentityPanelState(){
 					if(!identityPanel || !identityToggle){return;}
@@ -3989,12 +4009,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						syncDamageFormState();
 					});
 				}
+				Array.prototype.slice.call(document.querySelectorAll(".cmx-vermietung-choice-option input")).forEach(function(input){
+					input.addEventListener("change", syncChoiceSelectionState);
+				});
 				Array.prototype.slice.call(document.querySelectorAll("[data-signature-item]")).forEach(initSignaturePad);
 				setArtikelLocked(String(kontaktInput.value||"")==="");
 				setContactEmailAction(' . \wp_json_encode($selected_contact_email_href) . ');
 				setSignaturePadEnabled(Number(artikelInput.value||0)>0);
 				updateVehicleInfo(findSelectedVehicleItem());
 				syncDamageFormState(Number(artikelInput.value||0)>0);
+				syncChoiceSelectionState();
 				updateContactUploadPanels();
 				syncIdentityPanelState();
 				if(contractSearch && contractResults){
