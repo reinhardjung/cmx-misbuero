@@ -70,9 +70,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_has_recurring_run')) {
 			return false;
 		}
 
+		$source_id = (int) \get_post_meta($post_id, '_cmx_abo_source_id', true);
+		if ($source_id > 0) {
+			return false;
+		}
+
+		$enabled = \get_post_meta($post_id, '_cmx_abo_enabled', true) === '1';
+		if (!$enabled) {
+			return false;
+		}
+
 		$frequency = \sanitize_key((string) \get_post_meta($post_id, '_cmx_abo_frequency', true));
 
-		return $frequency !== '' && $frequency !== 'never';
+		$allowed_frequencies = ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
+
+		return \in_array($frequency, $allowed_frequencies, true);
 	}
 }
 
