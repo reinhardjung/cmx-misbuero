@@ -12,6 +12,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_REL_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_GENERATED_AT_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_GENERATED_AT_META', '_cmx_carent_vertrag_pdf_generated_at');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_DOKUMENT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_DOKUMENT_META', '_cmx_carent_vertrag_pdf_dokument_id');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_parse_number')) {
 	function cmx_carent_vertrag_parse_number(mixed $value): float {
@@ -616,6 +619,214 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_storage')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_normalize_rel_path')) {
+	function cmx_carent_vertrag_normalize_rel_path(string $path): string {
+		return \ltrim(\str_replace('\\', '/', $path), '/');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_uploads_meta_key')) {
+	function cmx_carent_vertrag_dokument_uploads_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			: '_cmx_dokumente_uploads';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_self_meta_key')) {
+	function cmx_carent_vertrag_dokument_self_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_rel_meta_key')) {
+	function cmx_carent_vertrag_dokument_rel_meta_key(string $post_type = 'carent'): string {
+		$post_type = \sanitize_key($post_type);
+		$meta_key = 'cmx_dokumente_rel_' . $post_type;
+
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+			$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+			if (\is_array($map) && isset($map[$post_type]) && \is_string($map[$post_type]) && \trim($map[$post_type]) !== '') {
+				$meta_key = \trim($map[$post_type]);
+			}
+		}
+
+		return $meta_key;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_title')) {
+	function cmx_carent_vertrag_dokument_title(int $post_id, array $storage): string {
+		$title = \trim((string) \get_the_title($post_id));
+		if ($title !== '') {
+			return $title;
+		}
+
+		$file_name = \trim((string) ($storage['file_name'] ?? ''));
+		$base_name = $file_name !== '' ? (string) \pathinfo($file_name, \PATHINFO_FILENAME) : '';
+
+		return $base_name !== '' ? $base_name : ('Mietvertrag ' . $post_id);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_dokument_file_refs')) {
+	function cmx_carent_vertrag_collect_dokument_file_refs(int $doc_id): array {
+		if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+			return [];
+		}
+
+		$file_refs = [];
+		$primary = cmx_carent_vertrag_normalize_rel_path((string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true));
+		if ($primary !== '') {
+			$file_refs[] = $primary;
+		}
+
+		$self_meta_key = cmx_carent_vertrag_dokument_self_meta_key();
+		$self_files = (array) \get_post_meta($doc_id, $self_meta_key, true);
+		foreach ($self_files as $entry) {
+			$file_ref = '';
+			if (\is_numeric($entry)) {
+				$file_ref = (string) \get_post_meta((int) $entry, '_wp_attached_file', true);
+			} elseif (\is_string($entry)) {
+				$file_ref = $entry;
+			}
+
+			$file_ref = cmx_carent_vertrag_normalize_rel_path($file_ref);
+			if ($file_ref !== '') {
+				$file_refs[] = $file_ref;
+			}
+		}
+
+		return \array_values(\array_unique($file_refs));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_find_existing_dokument')) {
+	function cmx_carent_vertrag_find_existing_dokument(int $post_id, array $storage): int {
+		$stored_doc_id = (int) \get_post_meta($post_id, CMX_CARENT_VERTRAG_PDF_DOKUMENT_META, true);
+		if ($stored_doc_id > 0 && (string) \get_post_type($stored_doc_id) === 'dokumente') {
+			return $stored_doc_id;
+		}
+
+		$uploads_meta_key = cmx_carent_vertrag_dokument_uploads_meta_key();
+		$doc_ids = (array) \get_post_meta($post_id, $uploads_meta_key, true);
+		$doc_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $doc_ids))));
+		if (empty($doc_ids)) {
+			return 0;
+		}
+
+		$target_rel_path = cmx_carent_vertrag_normalize_rel_path((string) ($storage['rel_path'] ?? ''));
+		$contract_dir_prefix = 'misbuero/carent/vertraege/' . $post_id . '/';
+
+		for ($i = \count($doc_ids) - 1; $i >= 0; $i--) {
+			$doc_id = (int) $doc_ids[$i];
+			if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+				continue;
+			}
+
+			foreach (cmx_carent_vertrag_collect_dokument_file_refs($doc_id) as $file_ref) {
+				if ($file_ref === $target_rel_path) {
+					return $doc_id;
+				}
+				if ($file_ref !== '' && \str_starts_with($file_ref, $contract_dir_prefix)) {
+					return $doc_id;
+				}
+			}
+		}
+
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_unlink_upload_rel_path')) {
+	function cmx_carent_vertrag_unlink_upload_rel_path(string $rel_path, string $preserve_rel_path = ''): void {
+		$rel_path = cmx_carent_vertrag_normalize_rel_path($rel_path);
+		$preserve_rel_path = cmx_carent_vertrag_normalize_rel_path($preserve_rel_path);
+		if ($rel_path === '' || $rel_path === $preserve_rel_path) {
+			return;
+		}
+
+		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+		$absolute_path = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $rel_path));
+		if ($absolute_path === '' || !\str_starts_with($absolute_path, $uploads_root) || !\is_file($absolute_path)) {
+			return;
+		}
+
+		@unlink($absolute_path);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_sync_dokument')) {
+	function cmx_carent_vertrag_sync_dokument(int $post_id, array $storage) {
+		$rel_path = cmx_carent_vertrag_normalize_rel_path((string) ($storage['rel_path'] ?? ''));
+		if ($post_id <= 0 || $rel_path === '') {
+			return new \WP_Error('pdf_document_sync_invalid', 'PDF-Dokument konnte nicht verknuepft werden.');
+		}
+
+		$doc_id = cmx_carent_vertrag_find_existing_dokument($post_id, $storage);
+		$doc_title = cmx_carent_vertrag_dokument_title($post_id, $storage);
+
+		if ($doc_id <= 0) {
+			$doc_id = \wp_insert_post([
+				'post_type'   => 'dokumente',
+				'post_title'  => $doc_title,
+				'post_status' => 'publish',
+			], true);
+			if (\is_wp_error($doc_id) || !(int) $doc_id) {
+				return new \WP_Error('pdf_document_create_failed', 'PDF-Dokument konnte nicht angelegt werden.');
+			}
+			$doc_id = (int) $doc_id;
+		} else {
+			$post_update = ['ID' => $doc_id];
+			$existing_title = \trim((string) \get_the_title($doc_id));
+			$existing_status = (string) \get_post_status($doc_id);
+			$needs_update = false;
+
+			if ($existing_title !== $doc_title) {
+				$post_update['post_title'] = $doc_title;
+				$needs_update = true;
+			}
+			if ($existing_status !== 'publish') {
+				$post_update['post_status'] = 'publish';
+				$needs_update = true;
+			}
+
+			if ($needs_update) {
+				\wp_update_post($post_update);
+			}
+		}
+
+		$contract_dir_prefix = 'misbuero/carent/vertraege/' . $post_id . '/';
+		$old_file_refs = cmx_carent_vertrag_collect_dokument_file_refs($doc_id);
+
+		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel_path);
+		\update_post_meta($doc_id, cmx_carent_vertrag_dokument_self_meta_key(), [$rel_path]);
+		\update_post_meta($doc_id, cmx_carent_vertrag_dokument_rel_meta_key('carent'), [$post_id]);
+
+		$uploads_meta_key = cmx_carent_vertrag_dokument_uploads_meta_key();
+		$related_doc_ids = (array) \get_post_meta($post_id, $uploads_meta_key, true);
+		$related_doc_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $related_doc_ids))));
+		$related_doc_ids[] = $doc_id;
+		$related_doc_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $related_doc_ids))));
+		\update_post_meta($post_id, $uploads_meta_key, $related_doc_ids);
+		\update_post_meta($post_id, CMX_CARENT_VERTRAG_PDF_DOKUMENT_META, $doc_id);
+
+		foreach ($old_file_refs as $old_file_ref) {
+			if ($old_file_ref === '' || $old_file_ref === $rel_path) {
+				continue;
+			}
+			if (!\str_starts_with($old_file_ref, $contract_dir_prefix)) {
+				continue;
+			}
+			cmx_carent_vertrag_unlink_upload_rel_path($old_file_ref, $rel_path);
+		}
+
+		return $doc_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 	function cmx_carent_vertrag_render_pdf_html(array $data): string {
 		if ($data === []) {
@@ -681,6 +892,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.header-logo{width:32%;vertical-align:top;text-align:center;padding:0 12px}
 				.header-contact{width:34%;vertical-align:top;text-align:right;padding-top:2px}
 				.brand-logo{display:block;max-width:220px;max-height:90px;width:auto;height:auto;margin:0 auto}
+				.brand-contract-label{margin-top:6px;font-size:11px;line-height:1;color:#111;text-align:center}
 				.header-company{font-size:13px;font-weight:700;line-height:1.15;color:#111}
 				.header-line{font-size:12px;line-height:1.1;color:#222}
 				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
@@ -705,6 +917,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 							<?php if ($logo_src !== '') : ?>
 								<img src="<?php echo \esc_attr($logo_src); ?>" alt="Logo" class="brand-logo">
 							<?php endif; ?>
+							<div class="brand-contract-label">M I E T V E R T R A G</div>
 						</td>
 						<td class="header-contact">
 							<?php if ($self_email !== '') : ?>
@@ -785,8 +998,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_PDF_REL_META, (string) $storage['rel_path']);
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_PDF_GENERATED_AT_META, \current_time('mysql'));
 
+		$dokument_id = cmx_carent_vertrag_sync_dokument($post_id, $storage);
+		if (\is_wp_error($dokument_id)) {
+			return $dokument_id;
+		}
+
 		return [
 			'post_id' => $post_id,
+			'dokument_id' => (int) $dokument_id,
 			'file_name' => (string) $storage['file_name'],
 			'rel_path' => (string) $storage['rel_path'],
 			'abs_path' => (string) $storage['abs_path'],

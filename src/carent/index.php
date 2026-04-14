@@ -456,10 +456,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
 		}
 
 		$new_title = \trim((string) cmx_carent_ensure_nummer($post_id));
-		$suffix_parts = cmx_carent_auto_title_suffix_parts($post_id);
-		if ($suffix_parts !== []) {
-			$new_title .= ' - ' . \implode(' - ', $suffix_parts);
-		}
 		if ($new_title === '') {
 			return;
 		}
