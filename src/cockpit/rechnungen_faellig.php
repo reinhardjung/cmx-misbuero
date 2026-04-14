@@ -1206,15 +1206,15 @@ function cmx_render_rechnungen_faellig_widget(): void {
 				var input = wrap ? wrap.querySelector('.cmx-faellig-pay-date') : null;
 				if (!input) return;
 
-				var now = new Date();
-				var month = String(now.getMonth() + 1).padStart(2, '0');
-				var day = String(now.getDate()).padStart(2, '0');
-				input.value = input.value || (String(now.getFullYear()) + '-' + month + '-' + day);
-
 				if (typeof input.showPicker === 'function') {
 					input.showPicker();
 					return;
 				}
+
+				var now = new Date();
+				var month = String(now.getMonth() + 1).padStart(2, '0');
+				var day = String(now.getDate()).padStart(2, '0');
+				input.value = input.value || (String(now.getFullYear()) + '-' + month + '-' + day);
 
 				input.focus();
 				input.click();

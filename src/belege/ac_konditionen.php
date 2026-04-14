@@ -986,17 +986,17 @@ add_action('admin_footer-edit.php', function () {
 			var $input = $wrap.find('.cmx-admin-pay-date').first();
 			if (!$input.length) return;
 
+			var input = $input.get(0);
+			if (input && typeof input.showPicker === 'function') {
+				input.showPicker();
+				return;
+			}
+
 			if (!$input.val()) {
 				var now = new Date();
 				var month = String(now.getMonth() + 1).padStart(2, '0');
 				var day = String(now.getDate()).padStart(2, '0');
 				$input.val(String(now.getFullYear()) + '-' + month + '-' + day);
-			}
-
-			var input = $input.get(0);
-			if (input && typeof input.showPicker === 'function') {
-				input.showPicker();
-				return;
 			}
 
 			$input.trigger('focus').trigger('click');
