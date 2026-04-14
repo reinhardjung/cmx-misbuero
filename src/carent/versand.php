@@ -190,35 +190,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 			$contract_title = 'Vertrag #' . $post_id;
 		}
 
-		$summary_rows = [];
-		if ($contract_title !== '') {
-			$summary_rows[] = ['Vertrag', $contract_title];
-		}
-		if ($vehicle !== '') {
-			$summary_rows[] = ['Fahrzeug', $vehicle];
-		}
-		if ($kennzeichen !== '') {
-			$summary_rows[] = ['Kennzeichen', $kennzeichen];
-		}
-		if ($uebernahme_when !== '') {
-			$summary_rows[] = ['Uebernahme', $uebernahme_when];
-		}
-		if ($uebernahme_ort !== '') {
-			$summary_rows[] = ['Ort', $uebernahme_ort];
-		}
-
-		$summary_html = '';
-		if ($summary_rows !== []) {
-			$summary_html .= '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#f8fafc;border:1px solid #e4e7ec;border-radius:12px;overflow:hidden;">';
-			foreach ($summary_rows as [$label, $value]) {
-				$summary_html .= '<tr>';
-				$summary_html .= '<td style="padding:10px 14px;border-bottom:1px solid #e4e7ec;font-size:13px;font-weight:700;color:#667085;width:160px;">' . \esc_html((string) $label) . '</td>';
-				$summary_html .= '<td style="padding:10px 14px;border-bottom:1px solid #e4e7ec;font-size:14px;color:#1d2327;">' . \esc_html((string) $value) . '</td>';
-				$summary_html .= '</tr>';
-			}
-			$summary_html .= '</table>';
-		}
-
 		$message = '';
 		$message .= '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1d2327;">';
 		if ($logo_html !== '') {
@@ -226,10 +197,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 		}
 		$message .= '<p style="margin:0 0 14px;">' . \esc_html($greeting) . '</p>';
 		$message .= '<p style="margin:0 0 18px;">anbei erhalten Sie den aktuellen Mietvertrag als PDF im Anhang.</p>';
-		if ($summary_html !== '') {
-			$message .= '<div style="margin:0 0 18px;">' . $summary_html . '</div>';
-		}
-		$message .= '<p style="margin:0 0 6px;">Freundliche Gruesse</p>';
+		$message .= '<p style="margin:0 0 6px;">Sonnige Gr&uuml;sse</p>';
 		$message .= '<p style="margin:0;font-weight:700;">' . \esc_html($self_name !== '' ? $self_name : \get_bloginfo('name')) . '</p>';
 		$message .= '</div>';
 

@@ -921,6 +921,60 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_rel_meta_ke
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_category_taxonomy')) {
+	function cmx_carent_vertrag_dokument_category_taxonomy(): string {
+		if (\defined(__NAMESPACE__ . '\\TAX_DOKUMENTE_KATEGORIEN')) {
+			$taxonomy = (string) \constant(__NAMESPACE__ . '\\TAX_DOKUMENTE_KATEGORIEN');
+			if ($taxonomy !== '' && \taxonomy_exists($taxonomy)) {
+				return $taxonomy;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_tax_key')) {
+			$taxonomy = (string) cmx_tax_key('dokumente', 'Kategorien');
+			if ($taxonomy !== '' && \taxonomy_exists($taxonomy)) {
+				return $taxonomy;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_assign_dokument_category')) {
+	function cmx_carent_vertrag_assign_dokument_category(int $doc_id, string $term_name = 'Vertrag'): void {
+		if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+			return;
+		}
+
+		$taxonomy = cmx_carent_vertrag_dokument_category_taxonomy();
+		if ($taxonomy === '') {
+			return;
+		}
+
+		$term_name = \trim($term_name);
+		if ($term_name === '') {
+			return;
+		}
+
+		$term = \get_term_by('name', $term_name, $taxonomy);
+		if (!$term instanceof \WP_Term || \is_wp_error($term)) {
+			$term = \get_term_by('slug', \sanitize_title($term_name), $taxonomy);
+		}
+		if ((!$term instanceof \WP_Term || \is_wp_error($term)) && \taxonomy_exists($taxonomy)) {
+			$created = \wp_insert_term($term_name, $taxonomy, ['slug' => \sanitize_title($term_name)]);
+			if (!\is_wp_error($created) && !empty($created['term_id'])) {
+				$term = \get_term((int) $created['term_id'], $taxonomy);
+			}
+		}
+		if (!$term instanceof \WP_Term || \is_wp_error($term)) {
+			return;
+		}
+
+		\wp_set_post_terms($doc_id, [(int) $term->term_id], $taxonomy, false);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_dokument_title')) {
 	function cmx_carent_vertrag_dokument_title(int $post_id, array $storage): string {
 		$title = \trim((string) \get_the_title($post_id));
@@ -1071,6 +1125,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_sync_dokument')) {
 		\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel_path);
 		\update_post_meta($doc_id, cmx_carent_vertrag_dokument_self_meta_key(), [$rel_path]);
 		\update_post_meta($doc_id, cmx_carent_vertrag_dokument_rel_meta_key('carent'), [$post_id]);
+		cmx_carent_vertrag_assign_dokument_category($doc_id, 'Vertrag');
 
 		$uploads_meta_key = cmx_carent_vertrag_dokument_uploads_meta_key();
 		$related_doc_ids = (array) \get_post_meta($post_id, $uploads_meta_key, true);
