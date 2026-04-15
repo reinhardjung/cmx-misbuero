@@ -18,7 +18,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_view')) {
 		}
 
 		$view = isset($_GET['cmx_email_view']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_view'])) : 'all';
-		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed', 'trash'], true) ? $view : 'all';
+		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed', 'spam', 'trash'], true) ? $view : 'all';
 	}
 }
 
@@ -164,6 +164,65 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')) {
+	function cmx_emails_admin_search_matches_query(\WP_Query $query): bool {
+		if (!\is_admin() || !$query->is_main_query()) {
+			return false;
+		}
+
+		$post_type = $query->get('post_type');
+		return $post_type === CMX_EMAILS_CPT
+			|| (\is_array($post_type) && \in_array(CMX_EMAILS_CPT, $post_type, true))
+			|| ($post_type === null && cmx_emails_admin_list_active());
+	}
+}
+
+\add_filter('posts_search', function (string $search, \WP_Query $query): string {
+	if (!cmx_emails_admin_search_matches_query($query)) {
+		return $search;
+	}
+
+	$term = \trim((string) $query->get('s'));
+	if ($term === '') {
+		return $search;
+	}
+
+	$tax = cmx_emails_category_taxonomy();
+	if (!\taxonomy_exists($tax) || !\is_object_in_taxonomy(CMX_EMAILS_CPT, $tax)) {
+		return $search;
+	}
+
+	global $wpdb;
+	$like = '%' . $wpdb->esc_like($term) . '%';
+	$category_sql = $wpdb->prepare(
+		"EXISTS (
+			SELECT 1
+			FROM {$wpdb->term_relationships} AS cmx_email_search_tr
+			INNER JOIN {$wpdb->term_taxonomy} AS cmx_email_search_tt
+				ON cmx_email_search_tt.term_taxonomy_id = cmx_email_search_tr.term_taxonomy_id
+			INNER JOIN {$wpdb->terms} AS cmx_email_search_t
+				ON cmx_email_search_t.term_id = cmx_email_search_tt.term_id
+			WHERE cmx_email_search_tr.object_id = {$wpdb->posts}.ID
+				AND cmx_email_search_tt.taxonomy = %s
+				AND (
+					cmx_email_search_t.name LIKE %s
+					OR cmx_email_search_t.slug LIKE %s
+				)
+		)",
+		$tax,
+		$like,
+		$like
+	);
+
+	$search_sql = \trim((string) $search);
+	$search_sql = (string) \preg_replace('/^\s*AND\s*/i', '', $search_sql);
+	if ($search_sql === '') {
+		return ' AND (' . $category_sql . ')';
+	}
+
+	return ' AND ((' . $search_sql . ') OR (' . $category_sql . '))';
+}, 20, 2);
+
 \add_filter('the_title', function (string $title, $post_id = 0): string {
 	if (!cmx_emails_admin_list_active()) {
 		return $title;
@@ -188,6 +247,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$new['cmx_email_category'] = 'Kategorie';
 	$new['cmx_email_assignment'] = 'Zuordnung';
 	$new['cmx_email_date'] = 'Datum';
+	$new['cmx_email_actions'] = '';
 	return $new;
 });
 
@@ -271,6 +331,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			echo '<div class="cmx-email-admin-attachments">📎 ' . (int) $attachment_count . '</div>';
 		}
 		echo cmx_emails_admin_assignment_html($label);
+		return;
+	}
+
+	if ($column === 'cmx_email_actions') {
+		if ((string) \get_post_status($post_id) === 'trash') {
+			return;
+		}
+
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		if ($folder === 'spam') {
+			return;
+		}
+
+		$filters = cmx_emails_current_filters();
+		$spam_args = [
+			'action' => 'cmx_emails_spam',
+			'post_id' => $post_id,
+		];
+		if ((string) ($filters['account_id'] ?? '') !== '') {
+			$spam_args['account_id'] = (string) $filters['account_id'];
+		}
+		if ((string) ($filters['folder'] ?? '') !== '') {
+			$spam_args['folder'] = (string) $filters['folder'];
+		}
+		if ((string) ($filters['archive_year'] ?? '') !== '') {
+			$spam_args['archive_year'] = (string) $filters['archive_year'];
+		}
+		if ((string) ($filters['archive_month'] ?? '') !== '') {
+			$spam_args['archive_month'] = (string) $filters['archive_month'];
+		}
+
+		$spam_url = \wp_nonce_url(\add_query_arg($spam_args, \admin_url('admin-post.php')), 'cmx_emails_spam');
+		echo '<a class="cmx-email-admin-spam-link" href="' . \esc_url($spam_url) . '" title="In Spam verschieben" aria-label="In Spam verschieben"><span class="dashicons dashicons-trash" aria-hidden="true"></span></a>';
 	}
 }, 10, 2);
 
@@ -349,6 +442,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		'attachment' => ['label' => 'Mit Anhang', 'filters' => ['has_attachment' => true]],
 		'unassigned' => ['label' => 'Nicht zugeordnet', 'filters' => ['unassigned' => true]],
 		'processed' => ['label' => 'Verarbeitet', 'filters' => ['status' => 'processed']],
+		'spam' => ['label' => 'Spam', 'filters' => ['folder' => 'spam'], 'url_args' => ['cmx_email_folder' => 'spam']],
 	];
 	$trash_count = cmx_emails_count(\array_merge($base_filters, ['post_status' => 'trash']));
 	if ($trash_count > 0 || $view === 'trash') {
@@ -472,7 +566,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	}
 
 	$archive_sync_selected = $folder === 'archive' || $archive_year !== '' || $archive_month !== '';
-	$show_rebuild_button = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+	$show_reset_button = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
 		&& cmx_system_is_debug_mode_enabled();
 	echo '<span class="cmx-email-filter-actions">';
 	$sync_folder = $folder !== '' ? $folder : 'inbox';
@@ -496,39 +590,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$sync_args['archive_month'] = $archive_month;
 	}
 	$sync_url = \wp_nonce_url(\add_query_arg($sync_args, \admin_url('admin-post.php')), 'cmx_emails_sync');
-	echo '<a class="button" href="' . \esc_url($sync_url) . '">' . \esc_html($archive_sync_selected ? 'Synchronisieren' : 'Synchronisieren') . '</a>';
+	echo '<a class="button cmx-email-sync-button" href="' . \esc_url($sync_url) . '">' . \esc_html($archive_sync_selected ? 'Synchronisieren' : 'Synchronisieren') . '</a>';
 
-	if ($show_rebuild_button) {
-		$rebuild_folder = $folder !== '' ? $folder : 'inbox';
-		$rebuild_disabled_reason = '';
-		if ($view === 'trash') {
-			$rebuild_disabled_reason = 'Im Papierkorb ist kein IMAP-Neuaufbau moeglich.';
-		} elseif ($account === '') {
-			$rebuild_disabled_reason = 'Bitte zuerst ein Konto waehlen.';
-		} elseif ($rebuild_folder === 'spam') {
-			$rebuild_disabled_reason = 'Spam kann nicht direkt neu aus IMAP aufgebaut werden.';
-		} elseif ($rebuild_folder === 'archive' && (\strlen($archive_year) !== 4 || $archive_month === '')) {
-			$rebuild_disabled_reason = 'Bitte zuerst Archivjahr und Archivmonat waehlen.';
-		}
-
-		if ($rebuild_disabled_reason === '') {
-			$rebuild_args = [
-				'action' => 'cmx_emails_rebuild',
-				'account_id' => $account,
-				'folder' => $rebuild_folder,
-			];
-			if ($archive_year !== '') {
-				$rebuild_args['archive_year'] = $archive_year;
-			}
-			if ($archive_month !== '') {
-				$rebuild_args['archive_month'] = $archive_month;
-			}
-			$rebuild_url = \wp_nonce_url(\add_query_arg($rebuild_args, \admin_url('admin-post.php')), 'cmx_emails_rebuild');
-			$rebuild_confirm = 'Die lokal synchronisierten E-Mails dieses Bereichs werden dauerhaft geloescht und danach frisch aus IMAP eingelesen. Fortfahren?';
-			echo '<a class="button cmx-email-rebuild-button" href="' . \esc_url($rebuild_url) . '" onclick="return confirm(' . \wp_json_encode($rebuild_confirm) . ');">Neu aus IMAP</a>';
-		} else {
-			echo '<span class="button cmx-email-rebuild-button is-disabled" aria-disabled="true" title="' . \esc_attr($rebuild_disabled_reason) . '">Neu aus IMAP</span>';
-		}
+	if ($show_reset_button && \current_user_can('delete_posts')) {
+		$reset_url = \wp_nonce_url(\add_query_arg([
+			'action' => 'cmx_emails_reset_local',
+		], \admin_url('admin-post.php')), 'cmx_emails_reset_local');
+		$reset_confirm = 'Wirklich alle lokalen E-Mail-Posts loeschen? Die Mails im IMAP-Konto bleiben unveraendert und koennen danach wieder synchronisiert werden.';
+		echo '<a class="button cmx-email-reset-button" href="' . \esc_url($reset_url) . '" onclick="return confirm(' . \wp_json_encode($reset_confirm) . ');">Reset lokal</a>';
 	}
 
 	echo '<a class="button cmx-email-settings-button" href="' . \esc_url(cmx_emails_settings_url()) . '" aria-label="Einstellungen" title="Einstellungen"><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span></a>';
@@ -554,7 +623,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 	$filters = cmx_emails_current_filters();
 	$view = cmx_emails_current_view();
 	$query->set('post_status', 'publish');
-	$query->set('suppress_filters', true);
+	$query->set('suppress_filters', \trim((string) $query->get('s')) === '');
 
 	if ($view === 'new') {
 		$filters['status'] = 'new';
@@ -566,6 +635,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		$filters['has_attachment'] = true;
 	} elseif ($view === 'unassigned') {
 		$filters['unassigned'] = true;
+	} elseif ($view === 'spam') {
+		$filters['folder'] = 'spam';
 	} elseif ($view === 'trash') {
 		$filters['post_status'] = 'trash';
 		$query->set('post_status', 'trash');
@@ -614,6 +685,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-title {
 			width: 360px;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_actions {
+			width: 42px;
+			text-align: center;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-admin-spam-link {
+			color: #b42318;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			text-decoration: none;
+		}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-admin-spam-link:hover {
+			color: #8a1f17;
 		}
 		.cmx-email-admin-sender {
 			display: flex;
@@ -777,14 +862,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-search-tools .button {
 			border-radius: 8px;
 		}
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-rebuild-button {
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-reset-button {
 			border-color: #f1b8b5;
 			background: #fff7f7;
 			color: #b42318;
-		}
-		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-rebuild-button.is-disabled {
-			opacity: 0.6;
-			cursor: not-allowed;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-search-tools .cmx-email-settings-button {
 			display: inline-flex;
@@ -801,6 +882,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 				position: relative;
 				top: 0;
 			}
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?>.cmx-email-list-empty .cmx-email-settings-button .dashicons,
+		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?>:has(.wp-list-table .no-items) .cmx-email-settings-button .dashicons {
+			position: relative;
+			top: 4px;
+		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav .button,
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav input.button,
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .tablenav button.button,
@@ -825,6 +911,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 			const folderSelect = document.getElementById('cmx-email-folder-filter');
 			const yearSelect = document.getElementById('cmx-email-archive-year-filter');
 			const monthSelect = document.getElementById('cmx-email-archive-month-filter');
+			const emptyListRow = document.querySelector(
+				'.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .wp-list-table .no-items, ' +
+				'.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .wp-list-table td.colspanchange'
+			);
+			if (emptyListRow && /keine|keinen|not found|no items/i.test(emptyListRow.textContent || '')) {
+				document.body.classList.add('cmx-email-list-empty');
+			}
 			if (!mapNode || !accountSelect || !yearSelect || !monthSelect || !folderSelect) {
 				return;
 			}
@@ -920,12 +1013,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_category_taxonomy')) {
 				syncFolderWithArchiveSelection();
 			});
 
-			monthSelect.addEventListener('change', function () {
-				syncFolderWithArchiveSelection();
-			});
+				monthSelect.addEventListener('change', function () {
+					syncFolderWithArchiveSelection();
+				});
 
-			const actionBar = document.querySelector('.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .cmx-email-filter-actions');
-			const searchBox = document.querySelector('.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .search-box');
+				document.addEventListener('click', function (event) {
+					const syncButton = event.target && event.target.closest ? event.target.closest('.cmx-email-sync-button') : null;
+					if (!syncButton) {
+						return;
+					}
+
+					const accountId = String(accountSelect.value || '');
+					if (accountId === '') {
+						event.preventDefault();
+						window.alert('Bitte zuerst ein Konto auswaehlen. Es wird nicht mehr automatisch alles synchronisiert.');
+						return;
+					}
+
+					const url = new URL(syncButton.href, window.location.href);
+					const folder = String(folderSelect.value || '');
+					let syncFolder = folder !== '' ? folder : 'inbox';
+					if (syncFolder === 'spam') {
+						syncFolder = 'inbox';
+					}
+
+					url.searchParams.set('account_id', accountId);
+					url.searchParams.set('sync_folder', syncFolder);
+					if (folder !== '') {
+						url.searchParams.set('folder', folder);
+					} else {
+						url.searchParams.delete('folder');
+					}
+					if (String(yearSelect.value || '') !== '') {
+						url.searchParams.set('archive_year', String(yearSelect.value || ''));
+					} else {
+						url.searchParams.delete('archive_year');
+					}
+					if (String(monthSelect.value || '') !== '') {
+						url.searchParams.set('archive_month', String(monthSelect.value || ''));
+					} else {
+						url.searchParams.delete('archive_month');
+					}
+					syncButton.href = url.toString();
+				});
+
+				const actionBar = document.querySelector('.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .cmx-email-filter-actions');
+				const searchBox = document.querySelector('.post-type-<?php echo \esc_js(CMX_EMAILS_CPT); ?> .search-box');
 			if (actionBar && searchBox && searchBox.parentNode) {
 				let toolbar = searchBox.previousElementSibling;
 				if (!toolbar || !toolbar.classList.contains('cmx-email-search-tools')) {

@@ -32,7 +32,7 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_EMAILS)
 
 // Refill: Taxo with defaults if removed
 \add_action('admin_init', function () {
-	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'), CMX_TAX_EMAILS, 'Clients');
+	cmx_seed_taxo(cmx_sani_key(basename(__DIR__),'title'), CMX_TAX_EMAILS, 'E-Mails');
 });
 
 

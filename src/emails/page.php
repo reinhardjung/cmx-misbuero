@@ -206,9 +206,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	$account_id = isset($_REQUEST['account_id']) && !\is_array($_REQUEST['account_id'])
 		? \sanitize_key((string) \wp_unslash($_REQUEST['account_id']))
 		: '';
-		$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
-			? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
-			: '';
+	if ($account_id === '' && isset($_REQUEST['cmx_email_account']) && !\is_array($_REQUEST['cmx_email_account'])) {
+		$account_id = \sanitize_key((string) \wp_unslash($_REQUEST['cmx_email_account']));
+	}
+	$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
+		? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
+		: '';
+	if ($folder === '' && isset($_REQUEST['cmx_email_folder']) && !\is_array($_REQUEST['cmx_email_folder'])) {
+		$folder = \sanitize_key((string) \wp_unslash($_REQUEST['cmx_email_folder']));
+	}
 	$sync_folder = isset($_REQUEST['sync_folder']) && !\is_array($_REQUEST['sync_folder'])
 		? \sanitize_key((string) \wp_unslash($_REQUEST['sync_folder']))
 		: ($folder !== '' ? $folder : 'inbox');
@@ -230,6 +236,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			'archive_month' => $archive_month,
 			'email_id' => 0,
 		];
+	if ($account_id === '') {
+		cmx_emails_redirect_with_notice($context, 'Bitte zuerst ein E-Mail-Konto auswaehlen. Es werden nicht mehr automatisch alle Konten synchronisiert.', 'error');
+	}
 	$result = cmx_emails_sync_messages(
 		$account_id,
 		$sync_folder !== '' ? $sync_folder : (string) $context['folder'],
@@ -237,48 +246,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 		$archive_year,
 		$archive_month
 	);
-	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Synchronisierung beendet.'), !empty($result['ok']) ? 'success' : 'error');
+	cmx_emails_redirect_with_notice(
+		$context,
+		(string) ($result['message'] ?? 'Synchronisierung beendet.'),
+		!empty($result['ok']) ? 'success' : 'error',
+		['cmx_email_account' => $account_id]
+	);
 });
 
-\add_action('admin_post_cmx_emails_rebuild', function (): void {
+\add_action('admin_post_cmx_emails_reset_local', function (): void {
 	if (!\current_user_can('delete_posts')) {
 		\wp_die('Keine Berechtigung.');
 	}
-	\check_admin_referer('cmx_emails_rebuild');
+	\check_admin_referer('cmx_emails_reset_local');
 
-	$account_id = isset($_REQUEST['account_id']) && !\is_array($_REQUEST['account_id'])
-		? \sanitize_key((string) \wp_unslash($_REQUEST['account_id']))
-		: '';
-	$folder = isset($_REQUEST['folder']) && !\is_array($_REQUEST['folder'])
-		? \sanitize_key((string) \wp_unslash($_REQUEST['folder']))
-		: '';
-	$archive_year = isset($_REQUEST['archive_year']) && !\is_array($_REQUEST['archive_year'])
-		? \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_year']))
-		: '';
-	$archive_month = isset($_REQUEST['archive_month']) && !\is_array($_REQUEST['archive_month'])
-		? (\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_archive_month')
-			? cmx_emails_normalize_archive_month((string) \wp_unslash($_REQUEST['archive_month']))
-			: \preg_replace('/[^0-9]/', '', (string) \wp_unslash($_REQUEST['archive_month'])))
-		: '';
-	$rebuild_folder = $folder !== '' ? $folder : 'inbox';
+	$delete_result = \function_exists(__NAMESPACE__ . '\\cmx_emails_delete_scoped_posts')
+		? cmx_emails_delete_scoped_posts([])
+		: ['deleted' => 0];
+	$deleted = (int) ($delete_result['deleted'] ?? 0);
 
-	$context = [
-		'account_id' => $account_id,
-		'folder' => $rebuild_folder,
-		'archive_year' => $archive_year,
-		'archive_month' => $archive_month,
-		'email_id' => 0,
-	];
-
-	if (!\function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled') || !cmx_system_is_debug_mode_enabled()) {
-		cmx_emails_redirect_with_notice($context, 'Neu aus IMAP ist nur im Debug-Mode verfuegbar.', 'error');
-	}
-
-	$result = \function_exists(__NAMESPACE__ . '\\cmx_emails_rebuild_client_messages')
-		? cmx_emails_rebuild_client_messages($account_id, $rebuild_folder, 0, $archive_year, $archive_month)
-		: ['ok' => false, 'message' => 'Neuaufbau ist nicht verfuegbar.'];
-
-	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'Neuaufbau beendet.'), !empty($result['ok']) ? 'success' : 'error');
+	cmx_emails_redirect_with_notice(
+		['email_id' => 0, 'folder' => 'inbox', 'account_id' => ''],
+		$deleted . ' lokale E-Mail-Posts geloescht. IMAP wurde nicht veraendert.',
+		'success'
+	);
 });
 
 \add_action('admin_post_cmx_emails_delete', function (): void {
@@ -291,6 +282,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 	$result = cmx_emails_delete_message($post_id);
 	$context['email_id'] = 0;
 	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'E-Mail geloescht.'), !empty($result['ok']) ? 'success' : 'error');
+});
+
+\add_action('admin_post_cmx_emails_spam', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_die('Keine Berechtigung.');
+	}
+	\check_admin_referer('cmx_emails_spam');
+	$post_id = isset($_REQUEST['post_id']) ? (int) \wp_unslash($_REQUEST['post_id']) : 0;
+	$context = cmx_emails_action_context($post_id);
+	$result = \function_exists(__NAMESPACE__ . '\\cmx_emails_spam_message')
+		? cmx_emails_spam_message($post_id)
+		: ['ok' => false, 'message' => 'Spam-Aktion ist aktuell nicht verfuegbar.'];
+	$context['email_id'] = 0;
+	cmx_emails_redirect_with_notice($context, (string) ($result['message'] ?? 'E-Mail wurde in Spam verschoben.'), !empty($result['ok']) ? 'success' : 'error');
 });
 
 \add_action('admin_post_cmx_emails_import', function (): void {

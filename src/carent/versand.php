@@ -205,6 +205,78 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_append_contact_note')) {
+	function cmx_carent_versand_append_contact_note(int $post_id, array $data = []): bool {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return false;
+		}
+
+		$contact = (array) ($data['contact'] ?? []);
+		$kontakt_id = isset($contact['id']) ? (int) $contact['id'] : 0;
+		if ($kontakt_id <= 0 && \defined(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META')) {
+			$kontakt_id = (int) \get_post_meta($post_id, (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_KONTAKT_META'), true);
+		}
+		if ($kontakt_id <= 0 || (string) \get_post_type($kontakt_id) !== 'kontakte' || !\get_post_status($kontakt_id)) {
+			return false;
+		}
+
+		if (
+			(!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')
+				|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
+				|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row'))
+			&& \is_file(\dirname(__DIR__, 2) . '/includes/notizen.php')
+		) {
+			require_once \dirname(__DIR__, 2) . '/includes/notizen.php';
+		}
+
+		if (
+			!\function_exists(__NAMESPACE__ . '\\cmx_notizen_load_rows')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_meta_key_for_post_type')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_normalize_row')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_date')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_notizen_now_time')
+		) {
+			return false;
+		}
+
+		$contract_url = \function_exists(__NAMESPACE__ . '\\cmx_vermietung_manage_url')
+			? (string) cmx_vermietung_manage_url($post_id)
+			: '';
+		if ($contract_url === '') {
+			$contract_url = (string) \get_edit_post_link($post_id, 'raw');
+		}
+
+		$text = 'Autovermietung';
+		if ($contract_url !== '') {
+			$text = '<a href="' . \esc_url($contract_url) . '" target="_blank" rel="noopener noreferrer">Autovermietung</a>';
+		}
+
+		$row = cmx_notizen_normalize_row([
+			'betreff' => 'Allgemein',
+			'datum'   => cmx_notizen_now_date(),
+			'zeit'    => cmx_notizen_now_time(),
+			'text'    => $text,
+			'quelle'  => '',
+		]);
+		if (!\is_array($row) || $row === []) {
+			return false;
+		}
+
+		$rows = (array) cmx_notizen_load_rows($kontakt_id, 'kontakte');
+		\array_unshift($rows, $row);
+		\update_post_meta($kontakt_id, (string) cmx_notizen_meta_key_for_post_type('kontakte'), $rows);
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_notizen_legacy_meta_keys')) {
+			foreach ((array) cmx_notizen_legacy_meta_keys('kontakte') as $legacy_key) {
+				\delete_post_meta($kontakt_id, (string) $legacy_key);
+			}
+		}
+
+		return true;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 	function cmx_carent_send_vertrag_mail(int $post_id) {
 		$post_id = (int) $post_id;
@@ -345,6 +417,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SENT_TO_META, $to);
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SENT_CC_META, \implode(', ', $cc));
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SUBJECT_META, $subject);
+		$note_created = cmx_carent_versand_append_contact_note($post_id, $data);
 
 		return [
 			'post_id' => $post_id,
@@ -355,6 +428,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 			'subject' => $subject,
 			'pdf' => (array) $pdf,
 			'sent_at' => (string) \current_time('mysql'),
+			'note_created' => $note_created,
 		];
 	}
 }

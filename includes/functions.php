@@ -90,7 +90,7 @@ function cmx_seed_taxo(string $base = 'NameDesCPTs', string $myTaxos = '', strin
 
 	$constBase = cmx_sani_key($base,'upper');
 	$slugBase  = cmx_sani_key($base,'lower');
-	$iniBase   = $iniSection !== '' ? cmx_sani_key($iniSection, 'lower') : $slugBase;
+	$iniBase   = $iniSection !== '' ? $iniSection : $slugBase;
 	$iniAll = [];
 	$iniFile = __DIR__ . '/globales.ini';
 	if (\is_file($iniFile)) {
