@@ -3013,13 +3013,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$archived_message = false;
 		$sender_email = \sanitize_email((string) ($sender['email'] ?? ''));
 
-		if ($logical_folder !== 'spam' && cmx_emails_sender_is_blocked_by_spam($account_id, $sender_email)) {
-			return ['post_id' => 0, 'uid' => $uid, 'ignored_spam_sender' => true];
+		$existing_id = cmx_emails_find_post_id($account_id, $logical_folder, $uid, $logical_mailbox, $archive_year, $archive_month, true);
+		if ($existing_id <= 0 && $message_id !== '') {
+			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, true);
+		}
+		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
+			return ['post_id' => $existing_id, 'uid' => $uid, 'archived' => false, 'skipped' => true, 'trashed_existing' => true];
 		}
 
-		$existing_id = cmx_emails_find_post_id($account_id, $logical_folder, $uid, $logical_mailbox, $archive_year, $archive_month, false);
-		if ($existing_id <= 0 && $message_id !== '') {
-			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, false);
+		if ($logical_folder !== 'spam' && cmx_emails_sender_is_blocked_by_spam($account_id, $sender_email)) {
+			return ['post_id' => 0, 'uid' => $uid, 'ignored_spam_sender' => true];
 		}
 		if ($existing_id > 0) {
 			if ($logical_folder === 'inbox' && $ts > 0 && $ts < cmx_emails_archive_cutoff_timestamp()) {
@@ -3155,9 +3158,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 			}
 		}
 
-		$existing_id = cmx_emails_find_post_id($account_id, $logical_folder, $uid, $logical_mailbox, $archive_year, $archive_month, false);
+		$existing_id = cmx_emails_find_post_id($account_id, $logical_folder, $uid, $logical_mailbox, $archive_year, $archive_month, true);
 		if ($existing_id <= 0 && $message_id !== '') {
-			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, false);
+			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, true);
+		}
+		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
+			return ['post_id' => $existing_id, 'uid' => $uid, 'archived' => $archived_message, 'skipped' => true, 'trashed_existing' => true];
 		}
 		$existing_attachments = $existing_id > 0 ? cmx_emails_normalize_attachment_list(\get_post_meta($existing_id, cmx_emails_meta_key('attachments'), true)) : [];
 		$stored_attachments = $existing_attachments;
