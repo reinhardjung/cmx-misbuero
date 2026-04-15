@@ -4393,22 +4393,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_scoped_posts')) {
 
 		$post_ids = \get_posts($args);
 		$deleted = 0;
-		foreach ((array) $post_ids as $post_id) {
-			$post_id = (int) $post_id;
-			if ($post_id <= 0) {
-				continue;
-			}
+		cmx_emails_local_delete_without_imap(true);
+		try {
+			foreach ((array) $post_ids as $post_id) {
+				$post_id = (int) $post_id;
+				if ($post_id <= 0) {
+					continue;
+				}
 
-			$removed = \wp_delete_post($post_id, true);
-			if ($removed instanceof \WP_Post) {
-				$deleted++;
+				$removed = \wp_delete_post($post_id, true);
+				if ($removed instanceof \WP_Post) {
+					$deleted++;
+				}
 			}
+		} finally {
+			cmx_emails_local_delete_without_imap(false);
 		}
 
 		return [
 			'deleted' => $deleted,
 			'post_ids' => \array_values(\array_filter(\array_map('intval', (array) $post_ids))),
 		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_local_delete_without_imap')) {
+	function cmx_emails_local_delete_without_imap(?bool $active = null): bool {
+		static $is_active = false;
+
+		if ($active !== null) {
+			$is_active = $active;
+		}
+
+		return $is_active;
 	}
 }
 
@@ -4968,6 +4985,98 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mark_as_read')) {
 		}
 	}
 }
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_post_from_imap')) {
+	function cmx_emails_delete_post_from_imap(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_EMAILS_CPT) {
+			return ['ok' => false, 'message' => 'E-Mail wurde nicht gefunden.'];
+		}
+		if (!\function_exists('imap_delete') || !\function_exists('imap_open')) {
+			return ['ok' => false, 'message' => 'IMAP-Erweiterung ist nicht verfuegbar.'];
+		}
+
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		if ($account_id === '') {
+			return ['ok' => false, 'message' => 'Kein E-Mail-Konto hinterlegt.'];
+		}
+
+		$client = cmx_emails_get_client($account_id);
+		if ($client === []) {
+			return ['ok' => false, 'message' => 'E-Mail-Konto wurde nicht gefunden.'];
+		}
+
+		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
+		$message_id = \sanitize_text_field((string) \get_post_meta($post_id, cmx_emails_meta_key('message_id'), true));
+		if ($uid <= 0 && $message_id === '') {
+			return ['ok' => false, 'message' => 'Keine IMAP-UID oder Message-ID hinterlegt.'];
+		}
+
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		$mailbox = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true));
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+
+		$resolved_mailbox = '';
+		$imap = $mailbox !== '' ? cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox) : false;
+		if ($imap === false && $folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '') {
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+		}
+		if ($imap === false && $folder !== '') {
+			$imap = cmx_emails_open_client_folder($client, $folder, $resolved_mailbox);
+		}
+		if ($imap === false && $folder !== 'inbox') {
+			$imap = cmx_emails_open_client_folder($client, 'inbox', $resolved_mailbox);
+		}
+		if ($imap === false) {
+			return ['ok' => false, 'message' => 'IMAP-Ordner konnte nicht geoeffnet werden.'];
+		}
+
+		$resolved_uid = cmx_emails_resolve_uid_in_mailbox($imap, $uid, $message_id);
+		if ($resolved_uid <= 0) {
+			@\imap_close($imap);
+			return ['ok' => false, 'message' => 'E-Mail wurde im IMAP-Ordner nicht gefunden.'];
+		}
+
+		$flags = \defined('FT_UID') ? \FT_UID : 0;
+		$deleted = @\imap_delete($imap, (string) $resolved_uid, $flags);
+		if ($deleted && \function_exists('imap_expunge')) {
+			@\imap_expunge($imap);
+		}
+		@\imap_close($imap);
+
+		if (!$deleted) {
+			return ['ok' => false, 'message' => 'E-Mail konnte im IMAP-Konto nicht geloescht werden.'];
+		}
+
+		return ['ok' => true, 'message' => 'E-Mail wurde im IMAP-Konto geloescht.'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_from_imap_before_permanent_delete')) {
+	function cmx_emails_delete_from_imap_before_permanent_delete($post_id, $post = null): void {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || cmx_emails_local_delete_without_imap()) {
+			return;
+		}
+
+		if (!$post instanceof \WP_Post) {
+			$post = \get_post($post_id);
+		}
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== CMX_EMAILS_CPT) {
+			return;
+		}
+		if ((string) $post->post_status !== 'trash') {
+			return;
+		}
+
+		$result = cmx_emails_delete_post_from_imap($post_id);
+		if (empty($result['ok'])) {
+			\error_log('[cmx-emails] IMAP delete failed for email post ' . $post_id . ': ' . (string) ($result['message'] ?? 'Unbekannter Fehler.'));
+		}
+	}
+}
+\add_action('before_delete_post', __NAMESPACE__ . '\\cmx_emails_delete_from_imap_before_permanent_delete', 10, 2);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_message')) {
 	function cmx_emails_delete_message(int $post_id): array {
