@@ -1026,7 +1026,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')
 					const accountId = String(accountSelect.value || '');
 					if (accountId === '') {
 						event.preventDefault();
-						window.alert('Bitte zuerst ein Konto auswaehlen. Es wird nicht mehr automatisch alles synchronisiert.');
+						window.alert('Bitte zuerst ein Konto auswaehlen. Es werden nicht automatisch alles synchronisiert.');
 						return;
 					}
 
