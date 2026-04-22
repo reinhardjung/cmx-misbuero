@@ -284,6 +284,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_default_dates')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_type_options')) {
+	function cmx65_adminbar_beleg_type_options(): array {
+		return [
+			'rechnung'    => 'Rechnung',
+			'lieferschein'=> 'Lieferschein',
+			'quittung'    => 'Quittung',
+			'gutschrift'  => 'Gutschrift',
+			'offerte'     => 'Offerte',
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup')) {
 	function cmx65_adminbar_beleg_quickcreate_markup(): string {
 		if (!cmx65_adminbar_beleg_quickcreate_allowed()) {
@@ -313,7 +325,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup
 		$html .= '<input type="text" id="cmx65-adminbar-artikel-search" class="cmx-adminbar-search-input" autocomplete="off" spellcheck="false" placeholder="Artikel suchen...">';
 		$html .= '<ul id="cmx65-adminbar-artikel-suggest" class="cmx-adminbar-suggest" style="display:none"></ul>';
 		$html .= '</div>';
-		$html .= '<button type="submit" class="cmx-adminbar-create-btn" disabled>Beleg erstellen</button>';
+		$html .= '<div class="cmx-adminbar-create-wrap">';
+		$html .= '<button type="submit" class="cmx-adminbar-create-btn" disabled aria-haspopup="listbox" aria-expanded="false" aria-controls="cmx65-adminbar-beleg-type-list">Beleg erstellen</button>';
+		$html .= '<div id="cmx65-adminbar-beleg-type-picker" class="cmx-adminbar-type-picker" hidden>';
+		$html .= '<div id="cmx65-adminbar-beleg-type-list" class="cmx-adminbar-type-list" role="listbox" aria-label="Belegart auswählen">';
+		foreach (cmx65_adminbar_beleg_type_options() as $slug => $label) {
+			$html .= '<button type="submit" class="cmx-adminbar-type-option" role="option" name="beleg_typ" value="' . \esc_attr($slug) . '" data-value="' . \esc_attr($slug) . '">' . \esc_html($label) . '</button>';
+		}
+		$html .= '</div>';
+		$html .= '</div>';
+		$html .= '</div>';
 		$html .= '</form>';
 
 		return $html;
@@ -340,6 +361,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 		$artikel_id = isset($_POST['artikel_id']) ? (int) \wp_unslash($_POST['artikel_id']) : 0;
 		$artikel_name = isset($_POST['artikel_name']) ? (string) \wp_unslash($_POST['artikel_name']) : '';
 		$artikel_variant_index = isset($_POST['artikel_variant_index']) ? (string) \wp_unslash($_POST['artikel_variant_index']) : '';
+		$beleg_typ_optionen = cmx65_adminbar_beleg_type_options();
+		$beleg_typ = isset($_POST['beleg_typ']) ? \sanitize_key((string) \wp_unslash($_POST['beleg_typ'])) : 'rechnung';
+		$allowed_beleg_typen = \array_keys($beleg_typ_optionen);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_kategorie_allowed_slugs')) {
+			$allowed_beleg_typen = \array_values(\array_filter(\array_map(
+				static function ($slug): string {
+					return \sanitize_key((string) $slug);
+				},
+				(array) cmx_beleg_kategorie_allowed_slugs()
+			), static function (string $slug): bool {
+				return $slug !== '';
+			}));
+		}
+		if ($beleg_typ === '' || !\in_array($beleg_typ, $allowed_beleg_typen, true)) {
+			$beleg_typ = 'rechnung';
+		}
 
 		if ($kontakt_id <= 0 || $artikel_id <= 0) {
 			\wp_safe_redirect($redirect_url);
@@ -418,11 +455,32 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 					exit;
 				}
 			}
+			$richtung_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+				? CMX_BELEG_META_RICHTUNG
+				: '_cmx_beleg_richtung';
+			\update_post_meta($beleg_id, $richtung_meta_key, $beleg_typ === 'gutschrift' ? 'eingang' : 'ausgang');
+
+			$beleg_tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax')
+				? cmx_belege_tax()
+				: (\function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? cmx_belege_kategorie_taxonomy() : null);
+			if (\is_string($beleg_tax) && $beleg_tax !== '' && \taxonomy_exists($beleg_tax)) {
+				$term = \get_term_by('slug', $beleg_typ, $beleg_tax);
+				if ((!$term || \is_wp_error($term)) && isset($beleg_typ_optionen[$beleg_typ])) {
+					$inserted_term = \wp_insert_term($beleg_typ_optionen[$beleg_typ], $beleg_tax, ['slug' => $beleg_typ]);
+					if (!\is_wp_error($inserted_term) && !empty($inserted_term['term_id'])) {
+						$term = \get_term((int) $inserted_term['term_id'], $beleg_tax);
+					}
+				}
+				if ($term && !\is_wp_error($term) && !empty($term->term_id)) {
+					\wp_set_post_terms($beleg_id, [(int) $term->term_id], $beleg_tax, false);
+				}
+			}
 
 			$edit_url = (string) \get_edit_post_link($beleg_id, '');
 		if ($edit_url === '') {
 			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
 		}
+		$edit_url = (string) \add_query_arg('cmx_beleg_typ', $beleg_typ, $edit_url);
 
 		\wp_safe_redirect($edit_url);
 		exit;
@@ -442,6 +500,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_styles
 			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id>.ab-item:focus,'
 			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id.hover>.ab-item{background:transparent !important;color:inherit !important;}'
 			. '#wpadminbar .cmx-adminbar-beleg-create-form{display:flex;align-items:center;gap:8px;height:32px;margin:0;}'
+			. '#wpadminbar .cmx-adminbar-create-wrap{position:relative;display:flex;align-items:center;flex-shrink:0;}'
 			. '#wpadminbar .cmx-adminbar-pick{position:relative;display:flex;align-items:center;}'
 			. '#wpadminbar .cmx-adminbar-reset-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;min-height:26px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.45);font-size:18px;line-height:1;cursor:default;box-shadow:none;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease;}'
 			. '#wpadminbar .cmx-adminbar-reset-btn span{display:block;line-height:1;transform:translateY(-1px);}'
@@ -454,6 +513,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_styles
 			. '#wpadminbar .cmx-adminbar-create-btn{height:26px;min-height:26px;padding:0 12px;border:1px solid #7e1c16;border-radius:4px;background:#8f211b;color:#fff;font-size:12px;font-weight:700;line-height:24px;cursor:pointer;}'
 			. '#wpadminbar .cmx-adminbar-create-btn:hover,#wpadminbar .cmx-adminbar-create-btn:focus{background:#771813;color:#ffeb3b;}'
 			. '#wpadminbar .cmx-adminbar-create-btn[disabled]{opacity:.6;cursor:not-allowed;color:#fff;}'
+			. '#wpadminbar .cmx-adminbar-type-picker[hidden]{display:none !important;}'
+			. '#wpadminbar .cmx-adminbar-type-picker{position:absolute;top:calc(100% + 6px);right:0;min-width:180px;padding:6px;background:#fff;border:1px solid #ccd0d4;border-radius:8px;box-shadow:0 16px 30px rgba(0,0,0,.18);z-index:100004;}'
+			. '#wpadminbar .cmx-adminbar-type-list{display:block;margin:0;padding:0;outline:none;}'
+			. '#wpadminbar .cmx-adminbar-type-option{float:none;clear:both;display:block;width:100%;box-sizing:border-box;margin:0;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:#1d2327;font-size:13px;line-height:1.25;cursor:pointer;text-align:left;white-space:nowrap;box-shadow:none;}'
+			. '#wpadminbar .cmx-adminbar-type-option + .cmx-adminbar-type-option{margin-top:2px;}'
+			. '#wpadminbar .cmx-adminbar-type-option:hover,#wpadminbar .cmx-adminbar-type-option:focus,#wpadminbar .cmx-adminbar-type-option.active{background:#f5d6cf;color:#1d2327;outline:none;}'
 			. '#wpadminbar .cmx-adminbar-suggest{position:absolute;top:calc(100% + 4px);left:0;width:100%;min-width:240px;max-height:280px;margin:0;padding:4px 0;list-style:none;background:#fff;border:1px solid #ccd0d4;border-radius:6px;box-shadow:0 14px 28px rgba(0,0,0,.22);overflow:auto;z-index:100003;}'
 			. '#wpadminbar .cmx-adminbar-suggest li{display:block;width:100%;box-sizing:border-box;margin:0;padding:7px 10px;cursor:pointer;color:#1d2327;line-height:1.25;white-space:normal;}'
 			. '#wpadminbar .cmx-adminbar-suggest li:hover,#wpadminbar .cmx-adminbar-suggest li.active{background:#f5d6cf;color:#1d2327;}'
@@ -486,12 +551,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 			var artikelNameInput = document.getElementById('cmx65-adminbar-artikel-name');
 			var artikelVariantIndexInput = document.getElementById('cmx65-adminbar-artikel-variant-index');
 			var artikelList = document.getElementById('cmx65-adminbar-artikel-suggest');
+			var typePicker = document.getElementById('cmx65-adminbar-beleg-type-picker');
+			var typeList = document.getElementById('cmx65-adminbar-beleg-type-list');
 			var resetBtn = form.querySelector('.cmx-adminbar-reset-btn');
 			var submitBtn = form.querySelector('.cmx-adminbar-create-btn');
 			var kontaktTimer = null;
 			var artikelTimer = null;
+			var typeItems = typeList ? Array.prototype.slice.call(typeList.querySelectorAll('.cmx-adminbar-type-option[data-value]')) : [];
+			var typeActive = 0;
+			var typePickerOpen = false;
+			var lastTypeValue = typeItems.length ? String(typeItems[0].getAttribute('data-value') || 'rechnung') : 'rechnung';
 
-			if (!kontaktInput || !kontaktIdInput || !kontaktList || !artikelInput || !artikelIdInput || !artikelNameInput || !artikelVariantIndexInput || !artikelList || !resetBtn || !submitBtn) {
+			if (!kontaktInput || !kontaktIdInput || !kontaktList || !artikelInput || !artikelIdInput || !artikelNameInput || !artikelVariantIndexInput || !artikelList || !typePicker || !typeList || !typeItems.length || !resetBtn || !submitBtn) {
 				return;
 			}
 
@@ -523,6 +594,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 				var hasArtikel = toInt(artikelIdInput.value) > 0;
 				submitBtn.disabled = !(hasKontakt && hasArtikel);
 				resetBtn.disabled = !(hasKontakt || hasArtikel);
+				if (submitBtn.disabled) {
+					closeTypePicker(false);
+				}
 			}
 
 			function focusArtikelPicker(openList) {
@@ -539,6 +613,74 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 				window.setTimeout(function () {
 					submitBtn.focus();
 				}, 0);
+			}
+
+			function currentTypeIndex() {
+				var current = String(lastTypeValue || 'rechnung');
+				var found = typeItems.findIndex(function (item) {
+					return String(item.getAttribute('data-value') || '') === current;
+				});
+				return found > -1 ? found : 0;
+			}
+
+			function syncTypeActive() {
+				typeItems.forEach(function (item, index) {
+					var active = index === typeActive;
+					item.classList.toggle('active', active);
+					item.setAttribute('aria-selected', active ? 'true' : 'false');
+				});
+				var activeItem = typeItems[typeActive];
+				if (activeItem) {
+					typeList.setAttribute('aria-activedescendant', activeItem.id || '');
+					if (activeItem.scrollIntoView) {
+						activeItem.scrollIntoView({ block: 'nearest' });
+					}
+				}
+			}
+
+			function closeTypePicker(restoreFocus) {
+				typePicker.hidden = true;
+				typePickerOpen = false;
+				submitBtn.setAttribute('aria-expanded', 'false');
+				typeList.removeAttribute('aria-activedescendant');
+				if (restoreFocus) {
+					focusSubmitButton();
+				}
+			}
+
+			function openTypePicker() {
+				if (submitBtn.disabled) {
+					return;
+				}
+				typeActive = currentTypeIndex();
+				syncTypeActive();
+				typePicker.hidden = false;
+				typePickerOpen = true;
+				submitBtn.setAttribute('aria-expanded', 'true');
+				window.setTimeout(function () {
+					var activeItem = typeItems[typeActive];
+					if (activeItem) {
+						activeItem.focus();
+					}
+				}, 0);
+			}
+
+			function setActiveType(index, focusItem) {
+				if (!typeItems.length) {
+					return;
+				}
+				typeActive = (index + typeItems.length) % typeItems.length;
+				syncTypeActive();
+				if (focusItem) {
+					var activeItem = typeItems[typeActive];
+					if (activeItem) {
+						activeItem.focus();
+					}
+				}
+			}
+
+			function moveType(direction, focusItem) {
+				setActiveType(typeActive + direction, focusItem);
 			}
 
 			function buildUrl(params) {
@@ -711,8 +853,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 				artikelIdInput.value = '';
 				artikelNameInput.value = '';
 				artikelVariantIndexInput.value = '';
+				lastTypeValue = typeItems.length ? String(typeItems[0].getAttribute('data-value') || 'rechnung') : 'rechnung';
 				kontaktNav.reset();
 				artikelNav.reset();
+				closeTypePicker(false);
 				updateSubmit();
 			}
 
@@ -786,15 +930,78 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script
 				kontaktInput.focus();
 			});
 
+			typeItems.forEach(function (item, index) {
+				item.id = 'cmx65-adminbar-beleg-type-option-' + index;
+				item.addEventListener('mousedown', function (event) {
+					event.preventDefault();
+				});
+				item.addEventListener('mouseenter', function () {
+					setActiveType(index, false);
+				});
+				item.addEventListener('focus', function () {
+					setActiveType(index, false);
+				});
+				item.addEventListener('click', function (event) {
+					event.stopPropagation();
+					lastTypeValue = String(item.getAttribute('data-value') || 'rechnung');
+				});
+				item.addEventListener('keydown', function (event) {
+					if (!typePickerOpen) {
+						return;
+					}
+					if (event.key === 'ArrowDown') {
+						event.preventDefault();
+						moveType(1, true);
+						return;
+					}
+					if (event.key === 'ArrowUp') {
+						event.preventDefault();
+						moveType(-1, true);
+						return;
+					}
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						closeTypePicker(true);
+					}
+				});
+			});
+
+			document.addEventListener('click', function (event) {
+				if (!typePickerOpen) {
+					return;
+				}
+				if (!typePicker.contains(event.target) && event.target !== submitBtn) {
+					closeTypePicker(false);
+				}
+			});
+
 			form.addEventListener('submit', function (event) {
+				var submitter = event.submitter || null;
 				if (toInt(kontaktIdInput.value) > 0 && toInt(artikelIdInput.value) > 0) {
+					if (submitter && submitter.classList && submitter.classList.contains('cmx-adminbar-type-option')) {
+						lastTypeValue = String(submitter.getAttribute('data-value') || 'rechnung');
+						closeTypePicker(false);
+						return;
+					}
+					event.preventDefault();
+					if (typePickerOpen) {
+						var activeItem = typeItems[typeActive] || typeItems[0] || null;
+						if (activeItem) {
+							lastTypeValue = String(activeItem.getAttribute('data-value') || 'rechnung');
+							activeItem.click();
+						}
+						return;
+					}
+					openTypePicker();
 					return;
 				}
 				event.preventDefault();
 				if (toInt(kontaktIdInput.value) <= 0) {
+					closeTypePicker(false);
 					kontaktInput.focus();
 					return;
 				}
+				closeTypePicker(false);
 				artikelInput.focus();
 			});
 

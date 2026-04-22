@@ -597,6 +597,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_assignment_options'))
 			color: #233043;
 			white-space: normal;
 		}
+		.cmx-email-preview-canvas {
+			width: 100%;
+			max-width: 760px;
+			box-sizing: border-box;
+		}
+		.cmx-email-html-frame {
+			display: block;
+			width: 100%;
+			min-height: 320px;
+			border: 0;
+			background: #fff;
+		}
 		.cmx-email-side {
 			display: flex;
 			flex-direction: column;
@@ -920,13 +932,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_render_mailbox_page')) {
 			$body_plain = (string) ($body['plain'] ?? '');
 			$body_content = (string) ($body['content'] ?? '');
 			echo '<h3>Inhalt</h3>';
-			echo '<div class="cmx-email-body-copy">';
+			echo '<div class="cmx-email-body-copy"><div class="cmx-email-preview-canvas">';
 			if ($body_html !== '') {
-				echo \wp_kses_post($body_html);
+				$iframe_html = \function_exists(__NAMESPACE__ . '\\cmx_emails_body_iframe_html')
+					? cmx_emails_body_iframe_html((int) $selected->ID, $body_html, 'is-mailbox')
+					: '';
+				if ($iframe_html !== '') {
+					echo $iframe_html;
+				} else {
+					if (\function_exists(__NAMESPACE__ . '\\cmx_emails_prepare_body_html_for_display')) {
+						$body_html = cmx_emails_prepare_body_html_for_display((int) $selected->ID, $body_html);
+					}
+					echo \function_exists(__NAMESPACE__ . '\\cmx_emails_sanitize_body_html')
+						? cmx_emails_sanitize_body_html($body_html)
+						: \wp_kses_post($body_html);
+				}
 			} else {
 				echo \wpautop(\esc_html($body_plain !== '' ? $body_plain : $body_content));
 			}
-			echo '</div>';
+			echo '</div></div>';
 		} else {
 			echo '<div class="cmx-email-empty">Bitte zuerst synchronisieren oder eine E-Mail auswaehlen.</div>';
 		}

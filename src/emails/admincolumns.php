@@ -18,7 +18,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_current_view')) {
 		}
 
 		$view = isset($_GET['cmx_email_view']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_email_view'])) : 'all';
-		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed', 'spam', 'trash'], true) ? $view : 'all';
+		return \in_array($view, ['all', 'new', 'read', 'attachment', 'unassigned', 'processed', 'drafts', 'spam', 'trash'], true) ? $view : 'all';
 	}
 }
 
@@ -363,7 +363,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')
 		}
 
 		$spam_url = \wp_nonce_url(\add_query_arg($spam_args, \admin_url('admin-post.php')), 'cmx_emails_spam');
-		echo '<a class="cmx-email-admin-spam-link" href="' . \esc_url($spam_url) . '" title="In Spam verschieben" aria-label="In Spam verschieben"><span class="dashicons dashicons-trash" aria-hidden="true"></span></a>';
+		echo '<a class="cmx-email-admin-spam-link" href="' . \esc_url($spam_url) . '" title="In Spam verschieben" aria-label="In Spam verschieben">Spam</a>';
 	}
 }, 10, 2);
 
@@ -435,15 +435,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')
 		'archive_month' => (string) ($filters['archive_month'] ?? ''),
 	];
 	$view = cmx_emails_current_view();
-	$defs = [
-		'all' => ['label' => 'Alle', 'filters' => []],
-		'new' => ['label' => 'Neu', 'filters' => ['status' => 'new']],
-		'read' => ['label' => 'Gelesen', 'filters' => ['status' => 'read']],
-		'attachment' => ['label' => 'Mit Anhang', 'filters' => ['has_attachment' => true]],
-		'unassigned' => ['label' => 'Nicht zugeordnet', 'filters' => ['unassigned' => true]],
-		'processed' => ['label' => 'Verarbeitet', 'filters' => ['status' => 'processed']],
-		'spam' => ['label' => 'Spam', 'filters' => ['folder' => 'spam'], 'url_args' => ['cmx_email_folder' => 'spam']],
-	];
+		$defs = [
+			'all' => ['label' => 'Alle', 'filters' => []],
+			'new' => ['label' => 'Neu', 'filters' => ['status' => 'new']],
+			'read' => ['label' => 'Gelesen', 'filters' => ['status' => 'read']],
+			'attachment' => ['label' => 'Mit Anhang', 'filters' => ['has_attachment' => true]],
+			'unassigned' => ['label' => 'Nicht zugeordnet', 'filters' => ['unassigned' => true]],
+			'processed' => ['label' => 'Verarbeitet', 'filters' => ['status' => 'processed']],
+			'drafts' => ['label' => 'Entwürfe', 'filters' => ['folder' => 'drafts'], 'url_args' => ['cmx_email_folder' => 'drafts']],
+			'spam' => ['label' => 'Spam', 'filters' => ['folder' => 'spam'], 'url_args' => ['cmx_email_folder' => 'spam']],
+		];
 	$trash_count = cmx_emails_count(\array_merge($base_filters, ['post_status' => 'trash']));
 	if ($trash_count > 0 || $view === 'trash') {
 		$defs['trash'] = [
@@ -633,14 +634,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')
 		$filters['status'] = 'processed';
 	} elseif ($view === 'attachment') {
 		$filters['has_attachment'] = true;
-	} elseif ($view === 'unassigned') {
-		$filters['unassigned'] = true;
-	} elseif ($view === 'spam') {
-		$filters['folder'] = 'spam';
-	} elseif ($view === 'trash') {
-		$filters['post_status'] = 'trash';
-		$query->set('post_status', 'trash');
-	}
+		} elseif ($view === 'unassigned') {
+			$filters['unassigned'] = true;
+		} elseif ($view === 'spam') {
+			$filters['folder'] = 'spam';
+		} elseif ($view === 'drafts') {
+			$filters['folder'] = 'drafts';
+		} elseif ($view === 'trash') {
+			$filters['post_status'] = 'trash';
+			$query->set('post_status', 'trash');
+		}
 
 	$meta_query = cmx_emails_build_meta_query($filters);
 	if ($meta_query !== []) {
@@ -687,7 +690,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_admin_search_matches_query')
 			width: 360px;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .column-cmx_email_actions {
-			width: 42px;
+			width: 64px;
 			text-align: center;
 		}
 		.post-type-<?php echo \esc_html(CMX_EMAILS_CPT); ?> .cmx-email-admin-spam-link {

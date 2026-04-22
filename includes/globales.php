@@ -305,21 +305,37 @@ add_action('admin_footer', function() {
 		const title = document.querySelector('#title');
 		if (!title || title.value.trim() !== '') return;
 
-		document.querySelectorAll('label').forEach(label => {
-			if (label.textContent.trim().toLowerCase().includes('rechnung')) {
-				const input = label.querySelector('input[name="cmx_beleg_kategorie"]');
-				if (input) {
-					input.checked = true;
-					input.dispatchEvent(new Event('change', { bubbles: true }));
+		const radios = Array.from(document.querySelectorAll('input[name="cmx_beleg_kategorie"][data-slug]'));
+		if (!radios.length) return;
 
-					// Danach auf das Betreff-Feld springen
-					setTimeout(() => {
-						const betreff = document.querySelector('[name="cmx_beleg_betreff"]');
-						if (betreff) betreff.focus();
-					}, 150);
-				}
+		const requestedSlug = (() => {
+			try {
+				const params = new URLSearchParams(window.location.search || '');
+				return String(params.get('cmx_beleg_typ') || '').trim().toLowerCase();
+			} catch (err) {
+				return '';
 			}
-		});
+		})();
+
+		let target = radios.find(input => input.checked) || null;
+		if (!target && requestedSlug) {
+			target = radios.find(input => String(input.getAttribute('data-slug') || '').trim().toLowerCase() === requestedSlug) || null;
+		}
+		if (!target) {
+			target = radios.find(input => String(input.getAttribute('data-slug') || '').trim().toLowerCase() === 'rechnung') || null;
+		}
+		if (!target) return;
+
+		if (!target.checked) {
+			target.checked = true;
+		}
+		target.dispatchEvent(new Event('change', { bubbles: true }));
+
+		// Danach auf das Betreff-Feld springen
+		setTimeout(() => {
+			const betreff = document.querySelector('[name="cmx_beleg_betreff"]');
+			if (betreff) betreff.focus();
+		}, 150);
 	});
 	</script>
 	<?php

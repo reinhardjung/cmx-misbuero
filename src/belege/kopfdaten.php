@@ -39,6 +39,16 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kategorie_allowed_slugs')) {
 		return ['rechnung', 'gutschrift', 'quittung', 'offerte', 'lieferschein'];
 	}
 }
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_requested_type_slug')) {
+	function cmx_beleg_requested_type_slug(): string {
+		$requested = isset($_GET['cmx_beleg_typ']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_typ'])) : '';
+		if ($requested === '') {
+			return '';
+		}
+		$allowed = cmx_beleg_kategorie_allowed_slugs();
+		return \in_array($requested, $allowed, true) ? $requested : '';
+	}
+}
 if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
 	function cmx_beleg_richtung_options(): array {
 		return [
@@ -1202,7 +1212,17 @@ function cmx_render_beleg_metabox(\WP_Post $post): void {
 		$allowed_ids = array_map(function($term) { return (int) $term->term_id; }, $terms);
 		if (!in_array($current_id, $allowed_ids, true)) {
 			$default_term = null;
+			$requested_slug = cmx_beleg_requested_type_slug();
+			if ($requested_slug !== '') {
+				foreach ($terms as $term) {
+					if ((string) $term->slug === $requested_slug) {
+						$default_term = $term;
+						break;
+					}
+				}
+			}
 			foreach ($terms as $term) {
+				if ($default_term !== null) { break; }
 				if ($term->slug === 'rechnung') { $default_term = $term; break; }
 			}
 			if ($default_term === null) {

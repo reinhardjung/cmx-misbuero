@@ -209,6 +209,97 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_upload_url_from_rel')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_content_id')) {
+	function cmx_emails_normalize_content_id(string $value): string {
+		$value = \trim(\rawurldecode($value));
+		if ($value === '') {
+			return '';
+		}
+
+		if (\stripos($value, 'cid:') === 0) {
+			$value = (string) \substr($value, 4);
+		}
+
+		$value = \trim($value, " \t\n\r\0\x0B<>");
+		if ($value === '') {
+			return '';
+		}
+
+		return \function_exists('mb_strtolower')
+			? (string) \mb_strtolower($value, 'UTF-8')
+			: (string) \strtolower($value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_mime_extension')) {
+	function cmx_emails_mime_extension(string $mime): string {
+		$mime = \strtolower(\trim($mime));
+		if ($mime === '') {
+			return '';
+		}
+
+		foreach ((array) \wp_get_mime_types() as $extensions => $candidate_mime) {
+			if (!\is_string($extensions) || !\is_string($candidate_mime) || \strtolower($candidate_mime) !== $mime) {
+				continue;
+			}
+
+			$parts = \explode('|', $extensions);
+			$extension = \sanitize_key((string) ($parts[0] ?? ''));
+			if ($extension !== '') {
+				return $extension;
+			}
+		}
+
+		$subtype = '';
+		if (\str_contains($mime, '/')) {
+			[, $subtype] = \explode('/', $mime, 2);
+		}
+		$subtype = \strtolower(\trim((string) \preg_replace('/[^a-z0-9.+-]/i', '', $subtype)));
+		if ($subtype === '') {
+			return '';
+		}
+
+		if (\str_contains($subtype, '+')) {
+			$subtype = (string) \substr($subtype, 0, (int) \strpos($subtype, '+'));
+		}
+
+		return match ($subtype) {
+			'jpeg' => 'jpg',
+			'svg+xml' => 'svg',
+			default => $subtype,
+		};
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_storage_filename')) {
+	function cmx_emails_attachment_storage_filename(array $attachment): string {
+		$filename = \sanitize_file_name((string) ($attachment['filename'] ?? ''));
+		$mime = \sanitize_text_field((string) ($attachment['mime'] ?? 'application/octet-stream'));
+		$content_id = cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? ''));
+
+		if ($filename === '') {
+			$base = \sanitize_file_name($content_id);
+			if ($base === '' || \preg_match('/^[0-9]+$/', $base) === 1) {
+				$suffix = \preg_replace('/[^a-z0-9]+/i', '-', $content_id);
+				$suffix = \trim((string) $suffix, '-');
+				$base = $suffix !== '' ? ('inline-' . $suffix) : 'attachment';
+			}
+
+			$extension = cmx_emails_mime_extension($mime);
+			return $base . ($extension !== '' ? ('.' . $extension) : '.bin');
+		}
+
+		if ((string) \pathinfo($filename, \PATHINFO_EXTENSION) === '') {
+			$extension = cmx_emails_mime_extension($mime);
+			if ($extension !== '') {
+				$filename .= '.' . $extension;
+			}
+		}
+
+		return $filename !== '' ? $filename : 'anhang.bin';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_attachment')) {
 	function cmx_emails_store_attachment(string $client_id, int $uid, array $attachment): array {
 		$uploads = \wp_get_upload_dir();
@@ -230,10 +321,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_attachment')) {
 			return [];
 		}
 
-		$filename = \sanitize_file_name((string) ($attachment['filename'] ?? ''));
-		if ($filename === '') {
-			$filename = 'anhang.bin';
-		}
+		$filename = cmx_emails_attachment_storage_filename($attachment);
 		$filename = \wp_unique_filename($target_dir, $filename);
 		$target_abs = \wp_normalize_path($target_dir . '/' . $filename);
 		$content = (string) ($attachment['content'] ?? '');
@@ -247,6 +335,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_store_attachment')) {
 			'filename' => $filename,
 			'mime'     => \sanitize_text_field((string) ($attachment['mime'] ?? 'application/octet-stream')),
 			'size'     => (int) \filesize($target_abs),
+			'content_id' => cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? '')),
 			'rel'      => $rel,
 			'path'     => $target_abs,
 			'url'      => cmx_emails_upload_url_from_rel($rel),
@@ -285,6 +374,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_attachment_list'))
 			$mime = \sanitize_text_field((string) ($attachment['mime'] ?? 'application/octet-stream'));
 			$size = isset($attachment['size']) ? (int) $attachment['size'] : ($path !== '' && \is_file($path) ? (int) \filesize($path) : 0);
 			$url = (string) ($attachment['url'] ?? '');
+			$content_id = cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? ''));
 			if ($url === '' && $rel !== '') {
 				$url = cmx_emails_upload_url_from_rel($rel);
 			}
@@ -293,6 +383,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_normalize_attachment_list'))
 				'filename' => $filename,
 				'mime'     => $mime,
 				'size'     => $size,
+				'content_id' => $content_id,
 				'rel'      => $rel,
 				'path'     => $path,
 				'url'      => $url,
@@ -345,6 +436,284 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_binary')) {
 
 		$binary = @\file_get_contents($path);
 		return \is_string($binary) ? $binary : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_content_hash')) {
+	function cmx_emails_attachment_content_hash(array $attachment): string {
+		$content = isset($attachment['content']) ? (string) $attachment['content'] : '';
+		if ($content !== '') {
+			return \sha1($content);
+		}
+
+		$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+		$rel = \ltrim((string) ($attachment['rel'] ?? ''), '/');
+		if ($path === '' && $rel !== '') {
+			$uploads = \wp_get_upload_dir();
+			$basedir = \wp_normalize_path((string) ($uploads['basedir'] ?? ''));
+			if ($basedir !== '') {
+				$path = $basedir . '/' . $rel;
+			}
+		}
+
+		if ($path === '' || !\is_file($path) || !\is_readable($path)) {
+			return '';
+		}
+
+		$hash = @\sha1_file($path);
+		return \is_string($hash) ? $hash : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_match_keys')) {
+	function cmx_emails_attachment_match_keys(array $attachment): array {
+		$keys = [];
+		$content_id = cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? ''));
+		if ($content_id !== '') {
+			$keys[] = 'cid:' . $content_id;
+		}
+
+		$hash = cmx_emails_attachment_content_hash($attachment);
+		if ($hash !== '') {
+			$keys[] = 'hash:' . $hash;
+		}
+
+		$filename = \sanitize_file_name((string) ($attachment['filename'] ?? ''));
+		$mime = \strtolower(\trim((string) ($attachment['mime'] ?? '')));
+		$size = isset($attachment['size'])
+			? (int) $attachment['size']
+			: (isset($attachment['content']) ? \strlen((string) $attachment['content']) : 0);
+		if ($size <= 0) {
+			$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+			if ($path !== '' && \is_file($path)) {
+				$size = (int) \filesize($path);
+			}
+		}
+
+		if ($filename !== '' || $mime !== '' || $size > 0) {
+			$keys[] = 'file:' . \strtolower($filename) . '|' . $mime . '|' . $size;
+		}
+
+		return \array_values(\array_unique(\array_filter($keys, static function ($key): bool {
+			return \is_string($key) && $key !== '';
+		})));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_attachment_inline_source_map')) {
+	function cmx_emails_attachment_inline_source_map(array $attachments): array {
+		$map = [];
+		foreach ($attachments as $attachment) {
+			if (!\is_array($attachment)) {
+				continue;
+			}
+
+			$content_id = cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? ''));
+			if ($content_id === '') {
+				continue;
+			}
+
+			$url = \trim((string) ($attachment['url'] ?? ''));
+			if ($url === '') {
+				$rel = \ltrim((string) ($attachment['rel'] ?? ''), '/');
+				if ($rel !== '') {
+					$url = cmx_emails_upload_url_from_rel($rel);
+				}
+			}
+			$mime = \strtolower(\trim((string) ($attachment['mime'] ?? '')));
+			$extension = \strtolower((string) \pathinfo((string) ($attachment['filename'] ?? ''), \PATHINFO_EXTENSION));
+			if ($mime !== '' && \str_starts_with($mime, 'image/') && ($url === '' || $extension === 'bin' || $extension === '')) {
+				$binary = cmx_emails_attachment_binary($attachment);
+				if ($binary !== '') {
+					$url = 'data:' . $mime . ';base64,' . \base64_encode($binary);
+				}
+			}
+			if ($url === '') {
+				continue;
+			}
+
+			$map[$content_id] = $url;
+		}
+
+		return $map;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_display_url')) {
+	function cmx_emails_display_url(string $url): string {
+		$protocols = \array_values(\array_unique(\array_merge(\wp_allowed_protocols(), ['data'])));
+		return \esc_url($url, $protocols);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sanitize_body_html')) {
+	function cmx_emails_sanitize_body_html(string $html): string {
+		return \wp_kses($html, \wp_kses_allowed_html('post'), \array_values(\array_unique(\array_merge(\wp_allowed_protocols(), ['data']))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_body_html_fragment')) {
+	function cmx_emails_body_html_fragment(string $html): string {
+		$html = \trim($html);
+		if ($html === '') {
+			return '';
+		}
+
+		if (\preg_match('~<body\b[^>]*>(.*)</body>~is', $html, $matches) === 1) {
+			$html = (string) ($matches[1] ?? '');
+		}
+
+		$html = (string) \preg_replace('~<!DOCTYPE[^>]*>~i', '', $html);
+		$html = (string) \preg_replace('~</?(html|head|body)\b[^>]*>~i', '', $html);
+		return \trim($html);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_body_html_document')) {
+	function cmx_emails_body_html_document(string $html): string {
+		$html = \trim($html);
+		if ($html === '') {
+			return '';
+		}
+
+		$injected_head = '<meta charset="utf-8"><base target="_blank"><style>'
+			. 'html,body{margin:0;padding:0;background:#fff;}'
+			. 'body{padding:0;word-break:break-word;}'
+			. 'img{max-width:100%;height:auto;}'
+			. 'table{max-width:100%;}'
+			. '</style>';
+
+		if (\preg_match('~<html\b~i', $html) === 1) {
+			$html = (string) \preg_replace('~<!DOCTYPE[^>]*>~i', '', $html);
+			if (\preg_match('~<head\b[^>]*>~i', $html) === 1) {
+				$html = (string) \preg_replace('~<head\b[^>]*>~i', '$0' . $injected_head, $html, 1);
+			} elseif (\preg_match('~<html\b[^>]*>~i', $html) === 1) {
+				$html = (string) \preg_replace('~<html\b[^>]*>~i', '$0<head>' . $injected_head . '</head>', $html, 1);
+			} else {
+				$html = '<head>' . $injected_head . '</head>' . $html;
+			}
+
+			return '<!doctype html>' . $html;
+		}
+
+		$fragment = cmx_emails_body_html_fragment($html);
+		if ($fragment === '') {
+			return '';
+		}
+
+		return '<!doctype html><html><head>' . $injected_head . '</head><body>' . $fragment . '</body></html>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_body_iframe_html')) {
+	function cmx_emails_body_iframe_html(int $post_id, string $html, string $class_name = ''): string {
+		$post_id = (int) $post_id;
+		$html = \trim($html);
+		if ($post_id <= 0 || $html === '') {
+			return '';
+		}
+
+		$html = cmx_emails_prepare_body_html_for_display($post_id, $html);
+		$document = cmx_emails_body_html_document($html);
+		if ($document === '') {
+			return '';
+		}
+
+		$class_name = \trim($class_name);
+		$class_attr = 'cmx-email-html-frame' . ($class_name !== '' ? (' ' . $class_name) : '');
+		$onload = "try{var d=this.contentWindow.document.documentElement;var b=this.contentWindow.document.body;var h=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0,320);this.style.height=h+'px';}catch(e){this.style.height='480px';}";
+
+		return '<iframe class="' . \esc_attr($class_attr) . '"'
+			. ' srcdoc="' . \esc_attr($document) . '"'
+			. ' sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"'
+			. ' scrolling="no"'
+			. ' referrerpolicy="no-referrer"'
+			. ' onload="' . \esc_attr($onload) . '"></iframe>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_body_inline_source_ids')) {
+	function cmx_emails_body_inline_source_ids(string $html): array {
+		if (\stripos($html, 'cid:') === false) {
+			return [];
+		}
+
+		$matches = [];
+		@\preg_match_all('/cid:([^\\s"\'<>)]+)/i', $html, $matches);
+		$out = [];
+		foreach ((array) ($matches[1] ?? []) as $candidate) {
+			$content_id = cmx_emails_normalize_content_id((string) $candidate);
+			if ($content_id !== '') {
+				$out[$content_id] = true;
+			}
+		}
+
+		return \array_keys($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_body_has_unresolved_inline_sources')) {
+	function cmx_emails_body_has_unresolved_inline_sources(string $html, array $attachments): bool {
+		$required_ids = cmx_emails_body_inline_source_ids($html);
+		if ($required_ids === []) {
+			return false;
+		}
+
+		$map = cmx_emails_attachment_inline_source_map($attachments);
+		foreach ($required_ids as $content_id) {
+			if (!isset($map[$content_id]) || \trim((string) $map[$content_id]) === '') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_rewrite_inline_attachment_sources')) {
+	function cmx_emails_rewrite_inline_attachment_sources(string $html, array $attachments): string {
+		if ($html === '' || \stripos($html, 'cid:') === false) {
+			return $html;
+		}
+
+		$map = cmx_emails_attachment_inline_source_map($attachments);
+		if ($map === []) {
+			return $html;
+		}
+
+		$html = (string) \preg_replace_callback(
+			'/\\b(src|background|poster)\\s*=\\s*(["\'])([^"\']+)\\2/i',
+			static function (array $matches) use ($map): string {
+				$original = (string) ($matches[3] ?? '');
+				if (\stripos($original, 'cid:') !== 0) {
+					return (string) ($matches[0] ?? '');
+				}
+
+				$content_id = cmx_emails_normalize_content_id($original);
+				if ($content_id === '' || !isset($map[$content_id])) {
+					return (string) ($matches[0] ?? '');
+				}
+
+				return (string) ($matches[1] ?? 'src') . '=' . (string) ($matches[2] ?? '"') . cmx_emails_display_url((string) $map[$content_id]) . (string) ($matches[2] ?? '"');
+			},
+			$html
+		);
+
+		$html = (string) \preg_replace_callback(
+			'/url\\(\\s*(["\']?)(cid:[^)\\s"\']+)\\1\\s*\\)/i',
+			static function (array $matches) use ($map): string {
+				$content_id = cmx_emails_normalize_content_id((string) ($matches[2] ?? ''));
+				if ($content_id === '' || !isset($map[$content_id])) {
+					return (string) ($matches[0] ?? '');
+				}
+
+				$quote = (string) ($matches[1] ?? '');
+				return 'url(' . $quote . cmx_emails_display_url((string) $map[$content_id]) . $quote . ')';
+			},
+			$html
+		);
+
+		return $html;
 	}
 }
 
@@ -1149,6 +1518,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_part_filename')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_part_content_id')) {
+	function cmx_emails_part_content_id($part): string {
+		if (!\is_object($part)) {
+			return '';
+		}
+
+		$content_id = cmx_emails_normalize_content_id((string) ($part->id ?? ''));
+		if ($content_id !== '') {
+			return $content_id;
+		}
+
+		$params = [];
+		if (isset($part->parameters) && \is_array($part->parameters)) {
+			$params = \array_merge($params, $part->parameters);
+		}
+		if (isset($part->dparameters) && \is_array($part->dparameters)) {
+			$params = \array_merge($params, $part->dparameters);
+		}
+
+		foreach ($params as $param) {
+			if (!\is_object($param)) {
+				continue;
+			}
+
+			$attr = \strtolower((string) ($param->attribute ?? ''));
+			if (!\in_array($attr, ['content-id', 'content_id', 'contentid', 'x-attachment-id'], true)) {
+				continue;
+			}
+
+			$content_id = cmx_emails_normalize_content_id((string) ($param->value ?? ''));
+			if ($content_id !== '') {
+				return $content_id;
+			}
+		}
+
+		return '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_part_mime_type')) {
 	function cmx_emails_part_mime_type($part): string {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_mail_import_get_mime_type')) {
@@ -1286,6 +1694,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_collect_message_payload_walk
 
 		$mime = cmx_emails_part_mime_type($part);
 		$filename = cmx_emails_part_filename($part);
+		$content_id = cmx_emails_part_content_id($part);
 		$encoding = isset($part->encoding) ? (int) $part->encoding : 0;
 		$content = cmx_emails_decode_part_body($raw, $encoding);
 		if ($content === '') {
@@ -1297,11 +1706,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_collect_message_payload_walk
 		if (!$is_attachment && $disposition !== '' && \in_array($disposition, ['attachment', 'inline'], true) && !\in_array($mime, ['text/plain', 'text/html'], true)) {
 			$is_attachment = true;
 		}
+		if (!$is_attachment && $content_id !== '' && !\in_array($mime, ['text/plain', 'text/html'], true)) {
+			$is_attachment = true;
+		}
 
 		if ($is_attachment) {
 			$payload['attachments'][] = [
-				'filename' => $filename !== '' ? $filename : 'attachment.bin',
+				'filename' => $filename,
 				'mime'     => $mime,
+				'content_id' => $content_id,
 				'content'  => $content,
 			];
 			return;
@@ -1546,6 +1959,132 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_ids_by_fingerprint
 		}
 
 		return \array_values($matched);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_post_id_by_fingerprint')) {
+	function cmx_emails_find_post_id_by_fingerprint(string $client_id, string $subject = '', string $sender_email = '', int $received_ts = 0, array $folders = ['archive', 'inbox'], bool $include_trash = true): int {
+		$client_id = \sanitize_key($client_id);
+		$sender_email = \sanitize_email($sender_email);
+		$received_ts = (int) $received_ts;
+		$folders = \array_values(\array_filter(\array_map('sanitize_key', $folders), static function (string $folder): bool {
+			return $folder !== '';
+		}));
+
+		$normalize_subject = static function (string $value): string {
+			$value = cmx_emails_subject_text($value);
+			$value = \html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+			$value = \preg_replace('/\s+/u', ' ', \trim($value));
+			if (\class_exists('\\Normalizer')) {
+				$value = (string) \Normalizer::normalize($value, \Normalizer::FORM_C);
+			}
+
+			return \sanitize_text_field($value);
+		};
+
+		$subject = $normalize_subject($subject);
+		if ($client_id === '' || ($subject === '' && $sender_email === '' && $received_ts <= 0)) {
+			return 0;
+		}
+
+		$post_status = ['publish', 'draft', 'private', 'pending'];
+		if ($include_trash) {
+			$post_status[] = 'trash';
+		}
+
+		$meta_query = [
+			['key' => cmx_emails_meta_key('account_id'), 'value' => $client_id],
+		];
+		if ($sender_email !== '') {
+			$meta_query[] = ['key' => cmx_emails_meta_key('sender_email'), 'value' => $sender_email];
+		} elseif ($subject !== '') {
+			$meta_query[] = ['key' => cmx_emails_meta_key('subject'), 'value' => $subject];
+		}
+
+		$ids = \get_posts([
+			'post_type'        => CMX_EMAILS_CPT,
+			'post_status'      => $post_status,
+			'posts_per_page'   => 100,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+			'meta_query'       => $meta_query,
+		]);
+
+		$best_id = 0;
+		$best_score = 0;
+		$best_delta = \PHP_INT_MAX;
+		$best_ambiguous = false;
+
+		foreach ((array) $ids as $candidate_id) {
+			$candidate_id = (int) $candidate_id;
+			if ($candidate_id <= 0) {
+				continue;
+			}
+
+			$candidate_status = (string) \get_post_status($candidate_id);
+			if ($candidate_status === 'trash' && !$include_trash) {
+				continue;
+			}
+
+			$candidate_folder = \sanitize_key((string) \get_post_meta($candidate_id, cmx_emails_meta_key('folder'), true));
+			if ($folders !== [] && !\in_array($candidate_folder, $folders, true)) {
+				continue;
+			}
+
+			$score = 0;
+			if ($candidate_folder !== '') {
+				$score += 2;
+			}
+
+			$candidate_subject = $normalize_subject((string) \get_post_meta($candidate_id, cmx_emails_meta_key('subject'), true));
+			$subject_matched = false;
+			if ($subject !== '') {
+				$subject_matched = $candidate_subject !== '' && $candidate_subject === $subject;
+				if ($subject_matched) {
+					$score += 5;
+				}
+			}
+
+			$candidate_sender_email = \sanitize_email((string) \get_post_meta($candidate_id, cmx_emails_meta_key('sender_email'), true));
+			$sender_matched = false;
+			if ($sender_email !== '') {
+				$sender_matched = $candidate_sender_email !== '' && $candidate_sender_email === $sender_email;
+				if ($sender_matched) {
+					$score += 5;
+				}
+			}
+
+			if (!$subject_matched && !$sender_matched) {
+				continue;
+			}
+
+			$delta = \PHP_INT_MAX;
+			if ($received_ts > 0) {
+				$candidate_ts = (int) \get_post_meta($candidate_id, cmx_emails_meta_key('received_ts'), true);
+				if ($candidate_ts <= 0) {
+					continue;
+				}
+
+				$delta = \abs($candidate_ts - $received_ts);
+				if ($delta > 3600) {
+					continue;
+				}
+
+				$score += $delta === 0 ? 6 : ($delta <= 300 ? 5 : 3);
+			}
+
+			if ($score > $best_score || ($score === $best_score && $delta < $best_delta)) {
+				$best_id = $candidate_id;
+				$best_score = $score;
+				$best_delta = $delta;
+				$best_ambiguous = false;
+			} elseif ($score === $best_score && $delta === $best_delta && $candidate_id !== $best_id) {
+				$best_ambiguous = true;
+			}
+		}
+
+		return (!$best_ambiguous && $best_score >= 8) ? $best_id : 0;
 	}
 }
 
@@ -2313,6 +2852,194 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_link_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_fetch_post_payload_from_imap')) {
+	function cmx_emails_fetch_post_payload_from_imap(int $post_id): array {
+		$post_id = (int) $post_id;
+		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
+			: 'emails';
+		if ($post_id <= 0 || !\function_exists('imap_fetchstructure')) {
+			return [];
+		}
+
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== $email_post_type) {
+			return [];
+		}
+
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
+		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
+		$mailbox = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true));
+		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
+		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+		if ($account_id === '' || $uid <= 0) {
+			return [];
+		}
+
+		$client = \function_exists(__NAMESPACE__ . '\\cmx_emails_get_client')
+			? (array) cmx_emails_get_client($account_id)
+			: [];
+		if ($client === []) {
+			return [];
+		}
+
+		$resolved_mailbox = '';
+		if ($mailbox !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_mailbox')) {
+			$imap = cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox);
+		} elseif ($folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_archive_mailbox')) {
+			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder')) {
+			$imap = cmx_emails_open_client_folder($client, $folder !== '' ? $folder : 'inbox', $resolved_mailbox);
+		} else {
+			$imap = false;
+		}
+
+		if ($imap === false) {
+			return [];
+		}
+
+		$msg_no = \function_exists('imap_msgno') ? (int) \imap_msgno($imap, $uid) : 0;
+		if ($msg_no <= 0) {
+			@\imap_close($imap);
+			return [];
+		}
+
+		$payload = cmx_emails_fetch_message_payload($imap, $msg_no);
+		@\imap_close($imap);
+
+		return \is_array($payload) ? $payload : [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_update_post_body_from_payload')) {
+	function cmx_emails_update_post_body_from_payload(int $post_id, array $payload): bool {
+		$plain = \trim((string) ($payload['plain'] ?? ''));
+		$html = (string) ($payload['html'] ?? '');
+		$content = $plain !== '' ? $plain : \trim(\wp_strip_all_tags($html));
+		if ($plain === '' && $html === '' && $content === '') {
+			return false;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $plain);
+		\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $html);
+
+		$excerpt = cmx_emails_text_excerpt($content !== '' ? $content : (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
+		\wp_update_post([
+			'ID' => $post_id,
+			'post_content' => $content,
+			'post_excerpt' => $excerpt,
+		]);
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_update_post_attachments_from_payload')) {
+	function cmx_emails_update_post_attachments_from_payload(int $post_id, array $payload): bool {
+		$post_id = (int) $post_id;
+		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
+		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
+		if ($post_id <= 0 || $account_id === '' || $uid <= 0) {
+			return false;
+		}
+
+		$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
+		$key_to_index = [];
+		foreach ($attachments as $index => $attachment) {
+			foreach (cmx_emails_attachment_match_keys((array) $attachment) as $key) {
+				if (!isset($key_to_index[$key])) {
+					$key_to_index[$key] = (int) $index;
+				}
+			}
+		}
+
+		$changed = false;
+		foreach ((array) ($payload['attachments'] ?? []) as $attachment) {
+			if (!\is_array($attachment)) {
+				continue;
+			}
+
+			$match_index = null;
+			foreach (cmx_emails_attachment_match_keys($attachment) as $key) {
+				if (isset($key_to_index[$key])) {
+					$match_index = (int) $key_to_index[$key];
+					break;
+				}
+			}
+
+			$incoming_content_id = cmx_emails_normalize_content_id((string) ($attachment['content_id'] ?? ''));
+			if ($match_index !== null) {
+				$current_content_id = cmx_emails_normalize_content_id((string) ($attachments[$match_index]['content_id'] ?? ''));
+				if ($current_content_id === '' && $incoming_content_id !== '') {
+					$attachments[$match_index]['content_id'] = $incoming_content_id;
+					$changed = true;
+				}
+				foreach (cmx_emails_attachment_match_keys($attachments[$match_index]) as $key) {
+					$key_to_index[$key] = $match_index;
+				}
+				continue;
+			}
+
+			$stored = cmx_emails_store_attachment($account_id, $uid, $attachment);
+			if ($stored === []) {
+				continue;
+			}
+
+			$attachments[] = $stored;
+			$new_index = \count($attachments) - 1;
+			foreach (cmx_emails_attachment_match_keys($attachments[$new_index]) as $key) {
+				$key_to_index[$key] = $new_index;
+			}
+			$changed = true;
+		}
+
+		if (!$changed) {
+			return false;
+		}
+
+		\update_post_meta($post_id, cmx_emails_meta_key('attachments'), $attachments);
+		\update_post_meta($post_id, cmx_emails_meta_key('attachment_count'), (string) \count($attachments));
+		\update_post_meta($post_id, cmx_emails_meta_key('has_attachment'), $attachments !== [] ? '1' : '0');
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_backfill_post_inline_attachments_from_imap')) {
+	function cmx_emails_backfill_post_inline_attachments_from_imap(int $post_id): bool {
+		$payload = cmx_emails_fetch_post_payload_from_imap($post_id);
+		if ($payload === []) {
+			return false;
+		}
+
+		$body_updated = cmx_emails_update_post_body_from_payload($post_id, $payload);
+		$attachments_updated = cmx_emails_update_post_attachments_from_payload($post_id, $payload);
+
+		return $body_updated || $attachments_updated;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_prepare_body_html_for_display')) {
+	function cmx_emails_prepare_body_html_for_display(int $post_id, string $html): string {
+		$post_id = (int) $post_id;
+		$html = (string) $html;
+		if ($post_id <= 0 || $html === '') {
+			return $html;
+		}
+
+		$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
+		if (cmx_emails_body_has_unresolved_inline_sources($html, $attachments)) {
+			if (cmx_emails_backfill_post_inline_attachments_from_imap($post_id)) {
+				$html = (string) \get_post_meta($post_id, cmx_emails_meta_key('body_html'), true);
+				$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
+			}
+		}
+
+		return cmx_emails_rewrite_inline_attachment_sources($html, $attachments);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
 	function cmx_emails_load_body_content(int $post_id, bool $hydrate = true): array {
 		$post_id = (int) $post_id;
@@ -2350,78 +3077,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_hydrate_post_body_from_imap')) {
 	function cmx_emails_hydrate_post_body_from_imap(int $post_id): bool {
-		$post_id = (int) $post_id;
-		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
-			? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT')
-			: 'emails';
-		if ($post_id <= 0 || !\function_exists('imap_fetchstructure')) {
+		$payload = cmx_emails_fetch_post_payload_from_imap($post_id);
+		if ($payload === []) {
 			return false;
 		}
 
-		$post = \get_post($post_id);
-		if (!$post instanceof \WP_Post || (string) $post->post_type !== $email_post_type) {
-			return false;
-		}
-
-		$account_id = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('account_id'), true));
-		$uid = (int) \get_post_meta($post_id, cmx_emails_meta_key('uid'), true);
-		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
-		$mailbox = \trim((string) \get_post_meta($post_id, cmx_emails_meta_key('mailbox'), true));
-		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
-		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
-		if ($account_id === '' || $uid <= 0) {
-			return false;
-		}
-
-		$client = \function_exists(__NAMESPACE__ . '\\cmx_emails_get_client')
-			? (array) cmx_emails_get_client($account_id)
-			: [];
-		if ($client === []) {
-			return false;
-		}
-
-		$resolved_mailbox = '';
-		if ($mailbox !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_mailbox')) {
-			$imap = cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox);
-		} elseif ($folder === 'archive' && \strlen($archive_year) === 4 && $archive_month !== '' && \function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_archive_mailbox')) {
-			$imap = cmx_emails_open_client_archive_mailbox($client, $archive_year, $archive_month, $resolved_mailbox);
-		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_emails_open_client_folder')) {
-			$imap = cmx_emails_open_client_folder($client, $folder !== '' ? $folder : 'inbox', $resolved_mailbox);
-		} else {
-			$imap = false;
-		}
-
-		if ($imap === false) {
-			return false;
-		}
-
-		$msg_no = \function_exists('imap_msgno') ? (int) \imap_msgno($imap, $uid) : 0;
-		if ($msg_no <= 0) {
-			@\imap_close($imap);
-			return false;
-		}
-
-		$payload = cmx_emails_fetch_message_payload($imap, $msg_no);
-		@\imap_close($imap);
-
-		$plain = \trim((string) ($payload['plain'] ?? ''));
-		$html = (string) ($payload['html'] ?? '');
-		$content = $plain !== '' ? $plain : \trim(\wp_strip_all_tags($html));
-		if ($plain === '' && $html === '' && $content === '') {
-			return false;
-		}
-
-		\update_post_meta($post_id, cmx_emails_meta_key('body_plain'), $plain);
-		\update_post_meta($post_id, cmx_emails_meta_key('body_html'), $html);
-
-		$excerpt = cmx_emails_text_excerpt($content !== '' ? $content : (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true));
-		\wp_update_post([
-			'ID' => $post_id,
-			'post_content' => $content,
-			'post_excerpt' => $excerpt,
-		]);
-
-		return true;
+		return cmx_emails_update_post_body_from_payload($post_id, $payload);
 	}
 }
 
@@ -2430,7 +3091,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sent_body_note_html')) {
 		$body = cmx_emails_load_body_content($post_id);
 		$body_html = (string) ($body['html'] ?? '');
 		if ($body_html !== '') {
-			return \trim((string) \wp_kses_post($body_html));
+			$body_html = cmx_emails_prepare_body_html_for_display($post_id, $body_html);
+			return \trim((string) cmx_emails_sanitize_body_html($body_html));
 		}
 
 		$body_plain = (string) ($body['plain'] ?? '');
@@ -3017,6 +3679,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		if ($existing_id <= 0 && $message_id !== '') {
 			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, true);
 		}
+		if ($existing_id <= 0) {
+			$existing_id = cmx_emails_find_post_id_by_fingerprint(
+				$account_id,
+				$subject,
+				$sender_email,
+				$ts,
+				\array_values(\array_unique(\array_filter([$logical_folder, 'archive', 'inbox', 'spam']))),
+				true
+			);
+		}
 		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
 			return ['post_id' => $existing_id, 'uid' => $uid, 'archived' => false, 'skipped' => true, 'trashed_existing' => true];
 		}
@@ -3161,6 +3833,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_sync_single_message')) {
 		$existing_id = cmx_emails_find_post_id($account_id, $logical_folder, $uid, $logical_mailbox, $archive_year, $archive_month, true);
 		if ($existing_id <= 0 && $message_id !== '') {
 			$existing_id = cmx_emails_find_post_id_by_message_id($account_id, $message_id, true);
+		}
+		if ($existing_id <= 0) {
+			$existing_id = cmx_emails_find_post_id_by_fingerprint(
+				$account_id,
+				$subject,
+				$sender_email,
+				$ts,
+				\array_values(\array_unique(\array_filter([$logical_folder, 'archive', 'inbox', 'spam']))),
+				true
+			);
 		}
 		if ($existing_id > 0 && (string) \get_post_status($existing_id) === 'trash') {
 			return ['post_id' => $existing_id, 'uid' => $uid, 'archived' => $archived_message, 'skipped' => true, 'trashed_existing' => true];
@@ -3941,6 +4623,108 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_resolve_uid_in_mailbox')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_find_uid_by_fingerprint')) {
+	function cmx_emails_find_uid_by_fingerprint($imap, string $subject = '', string $sender_email = '', int $received_ts = 0): int {
+		$normalize_subject = static function (string $value): string {
+			$value = cmx_emails_subject_text($value);
+			$value = \html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+			$value = \preg_replace('/\s+/u', ' ', \trim($value));
+			if (\class_exists('\\Normalizer')) {
+				$value = (string) \Normalizer::normalize($value, \Normalizer::FORM_C);
+			}
+
+			return \sanitize_text_field($value);
+		};
+
+		$subject = $normalize_subject($subject);
+		$sender_email = \sanitize_email($sender_email);
+		$received_ts = (int) $received_ts;
+
+		if (($subject === '' && $sender_email === '') || !\function_exists('imap_num_msg')) {
+			return 0;
+		}
+
+		$total = (int) @\imap_num_msg($imap);
+		if ($total <= 0) {
+			return 0;
+		}
+
+		$best_uid = 0;
+		$best_score = 0;
+		$best_delta = \PHP_INT_MAX;
+		$best_ambiguous = false;
+
+		for ($msg_no = $total; $msg_no >= 1; $msg_no--) {
+			$overview_rows = @\imap_fetch_overview($imap, (string) $msg_no, 0);
+			$overview = (\is_array($overview_rows) && isset($overview_rows[0]) && \is_object($overview_rows[0])) ? $overview_rows[0] : null;
+			if (!($overview instanceof \stdClass)) {
+				continue;
+			}
+
+			$uid = \function_exists('imap_uid') ? (int) @\imap_uid($imap, $msg_no) : 0;
+			$raw_header = (string) @\imap_fetchheader($imap, $msg_no, \FT_PREFETCHTEXT);
+			if ($uid <= 0 || $raw_header === '') {
+				continue;
+			}
+
+			$header = @\imap_rfc822_parse_headers($raw_header);
+			if (!$header || !\is_object($header)) {
+				continue;
+			}
+
+			$candidate_subject = isset($header->subject) ? $normalize_subject((string) $header->subject) : '';
+			$candidate_sender = cmx_emails_sender_from_header($header);
+			$candidate_sender_email = \sanitize_email((string) ($candidate_sender['email'] ?? ''));
+
+			$score = 0;
+			$subject_matched = false;
+			if ($subject !== '') {
+				$subject_matched = $candidate_subject !== '' && $candidate_subject === $subject;
+				if ($subject_matched) {
+					$score += 5;
+				}
+			}
+			$sender_matched = false;
+			if ($sender_email !== '') {
+				$sender_matched = $candidate_sender_email !== '' && $candidate_sender_email === $sender_email;
+				if ($sender_matched) {
+					$score += 5;
+				}
+			}
+
+			if (!$subject_matched && !$sender_matched) {
+				continue;
+			}
+
+			$delta = \PHP_INT_MAX;
+			if ($received_ts > 0) {
+				$candidate_ts = cmx_emails_parse_message_timestamp($overview, $header);
+				if ($candidate_ts <= 0) {
+					continue;
+				}
+
+				$delta = \abs($candidate_ts - $received_ts);
+				if ($delta > 3600) {
+					continue;
+				}
+
+				$score += $delta === 0 ? 6 : ($delta <= 300 ? 5 : 3);
+			}
+
+			if ($score > $best_score || ($score === $best_score && $delta < $best_delta)) {
+				$best_uid = $uid;
+				$best_score = $score;
+				$best_delta = $delta;
+				$best_ambiguous = false;
+			} elseif ($score === $best_score && $delta === $best_delta && $uid !== $best_uid) {
+				$best_ambiguous = true;
+			}
+		}
+
+		return (!$best_ambiguous && $best_score >= 8) ? $best_uid : 0;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_spam')) {
 	function cmx_emails_move_existing_post_to_spam(int $post_id, array $client = []): bool {
 		$post_id = (int) $post_id;
@@ -4043,6 +4827,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_inbox'
 		$folder = \sanitize_key((string) \get_post_meta($post_id, cmx_emails_meta_key('folder'), true));
 		$archive_year = \preg_replace('/[^0-9]/', '', (string) \get_post_meta($post_id, cmx_emails_meta_key('archive_year'), true));
 		$archive_month = cmx_emails_normalize_archive_month((string) \get_post_meta($post_id, cmx_emails_meta_key('archive_month'), true));
+		$subject = (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true);
+		$sender_email = (string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true);
+		$received_ts = (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true);
 
 		$resolved_mailbox = '';
 		$imap = $mailbox !== '' ? cmx_emails_open_client_mailbox($client, $mailbox, $resolved_mailbox) : false;
@@ -4058,8 +4845,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_inbox'
 
 		$resolved_uid = cmx_emails_resolve_uid_in_mailbox($imap, $uid, $message_id);
 		if ($resolved_uid <= 0) {
+			$resolved_uid = cmx_emails_find_uid_by_fingerprint($imap, $subject, $sender_email, $received_ts);
+		}
+		if ($resolved_uid <= 0) {
 			@\imap_close($imap);
 			return false;
+		}
+		if ($message_id === '') {
+			$resolved_message_id = cmx_emails_message_id_from_uid($imap, $resolved_uid);
+			if ($resolved_message_id !== '') {
+				$message_id = $resolved_message_id;
+				\update_post_meta($post_id, cmx_emails_meta_key('message_id'), $message_id);
+			}
 		}
 		if ($resolved_uid !== $uid) {
 			\update_post_meta($post_id, cmx_emails_meta_key('uid'), (string) $resolved_uid);
@@ -4068,22 +4865,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_move_existing_post_to_inbox'
 		$inbox_move = cmx_emails_move_message_to_inbox($imap, $resolved_uid, $resolved_mailbox !== '' ? $resolved_mailbox : $mailbox);
 		if (!empty($inbox_move['moved'])) {
 			$target_mailbox = (string) ($inbox_move['full_mailbox'] ?? '');
-			cmx_emails_mark_post_as_manual_ham($post_id, $target_mailbox);
-			cmx_emails_mark_existing_message_as_manual_ham(
-				$account_id,
-				$resolved_uid,
-				$message_id,
-				$target_mailbox,
-				[
-					'subject' => (string) \get_post_meta($post_id, cmx_emails_meta_key('subject'), true),
-					'sender_email' => (string) \get_post_meta($post_id, cmx_emails_meta_key('sender_email'), true),
-					'received_ts' => (int) \get_post_meta($post_id, cmx_emails_meta_key('received_ts'), true),
-					'folders' => ['archive', 'inbox', 'spam'],
-				]
-			);
+			$target_uid = 0;
 			if (\function_exists('imap_expunge')) {
 				@\imap_expunge($imap);
 			}
+			if ($target_mailbox !== '') {
+				$target_resolved_mailbox = '';
+				$target_imap = cmx_emails_open_client_mailbox($client, $target_mailbox, $target_resolved_mailbox);
+				if ($target_imap !== false) {
+					$target_uid = cmx_emails_resolve_uid_in_mailbox($target_imap, 0, $message_id);
+					if ($target_uid <= 0) {
+						$target_uid = cmx_emails_find_uid_by_fingerprint($target_imap, $subject, $sender_email, $received_ts);
+					}
+					if ($target_uid > 0) {
+						\update_post_meta($post_id, cmx_emails_meta_key('uid'), (string) $target_uid);
+						if ($message_id === '') {
+							$target_message_id = cmx_emails_message_id_from_uid($target_imap, $target_uid);
+							if ($target_message_id !== '') {
+								$message_id = $target_message_id;
+								\update_post_meta($post_id, cmx_emails_meta_key('message_id'), $message_id);
+							}
+						}
+					}
+					@\imap_close($target_imap);
+				}
+			}
+			cmx_emails_mark_post_as_manual_ham($post_id, $target_mailbox);
+			cmx_emails_mark_existing_message_as_manual_ham(
+				$account_id,
+				$target_uid > 0 ? $target_uid : $resolved_uid,
+				$message_id,
+				$target_mailbox,
+				[
+					'subject' => $subject,
+					'sender_email' => $sender_email,
+					'received_ts' => $received_ts,
+					'folders' => ['archive', 'inbox', 'spam'],
+				]
+			);
 			@\imap_close($imap);
 			return true;
 		}
@@ -5077,6 +5896,113 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_from_imap_before_perm
 	}
 }
 \add_action('before_delete_post', __NAMESPACE__ . '\\cmx_emails_delete_from_imap_before_permanent_delete', 10, 2);
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_local_attachment_path')) {
+	function cmx_emails_local_attachment_path(array $attachment): string {
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		if ($basedir === '') {
+			return '';
+		}
+
+		$email_root = $basedir . 'misbuero/emails/';
+		$path = \wp_normalize_path((string) ($attachment['path'] ?? ''));
+		$rel = \ltrim((string) ($attachment['rel'] ?? ''), '/');
+		if ($path === '' && $rel !== '') {
+			$path = \wp_normalize_path($basedir . $rel);
+		}
+
+		if ($path === '' || !\str_starts_with($path, $email_root)) {
+			return '';
+		}
+
+		return $path;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_local_attachment_files')) {
+	function cmx_emails_delete_local_attachment_files(int $post_id): void {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return;
+		}
+
+		$attachments = cmx_emails_normalize_attachment_list(\get_post_meta($post_id, cmx_emails_meta_key('attachments'), true));
+		if ($attachments === []) {
+			return;
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		$email_root = \rtrim($basedir . 'misbuero/emails/', '/');
+		$directories = [];
+
+		foreach ($attachments as $attachment) {
+			$path = cmx_emails_local_attachment_path((array) $attachment);
+			if ($path === '' || !\is_file($path)) {
+				continue;
+			}
+
+			$directories[\dirname($path)] = true;
+			@\unlink($path);
+		}
+
+		$directories = \array_keys($directories);
+		\usort($directories, static function (string $left, string $right): int {
+			return \strlen($right) <=> \strlen($left);
+		});
+
+		foreach ($directories as $directory) {
+			$directory = \wp_normalize_path($directory);
+			while ($directory !== '' && $directory !== $email_root && \str_starts_with($directory, $email_root . '/')) {
+				if (!\is_dir($directory)) {
+					$directory = \wp_normalize_path(\dirname($directory));
+					continue;
+				}
+
+				$items = @\scandir($directory);
+				if (!\is_array($items) || \count($items) > 2) {
+					break;
+				}
+
+				@\rmdir($directory);
+				$parent = \wp_normalize_path(\dirname($directory));
+				if ($parent === $directory) {
+					break;
+				}
+				$directory = $parent;
+			}
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_local_files_before_permanent_delete')) {
+	function cmx_emails_delete_local_files_before_permanent_delete($post_id, $post = null): void {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return;
+		}
+
+		if (!$post instanceof \WP_Post) {
+			$post = \get_post($post_id);
+		}
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== CMX_EMAILS_CPT) {
+			return;
+		}
+
+		cmx_emails_delete_local_attachment_files($post_id);
+	}
+}
+\add_action('before_delete_post', __NAMESPACE__ . '\\cmx_emails_delete_local_files_before_permanent_delete', 20, 2);
+
+\add_filter('pre_delete_post', static function ($delete, \WP_Post $post, bool $force_delete) {
+	if (!$force_delete || (string) $post->post_type !== CMX_EMAILS_CPT) {
+		return $delete;
+	}
+
+	cmx_emails_delete_local_attachment_files((int) $post->ID);
+	return $delete;
+}, 20, 3);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_emails_delete_message')) {
 	function cmx_emails_delete_message(int $post_id): array {
