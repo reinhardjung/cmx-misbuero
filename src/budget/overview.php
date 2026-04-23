@@ -1199,7 +1199,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 
 				<div class="cmx-budget-overview-panel cmx-budget-overview-panel-liquid">
 					<div class="cmx-budget-overview-panel-head">
-						<h3>Liquiditätsprognose</h3>
+						<h3>
+							<span class="cmx-budget-overview-tooltip">
+								<span>Liquiditätsprognose</span>
+								<span class="cmx-budget-overview-tooltip-toggle" tabindex="0" aria-label="Info zur Liquiditätsprognose">i</span>
+								<span class="cmx-budget-overview-tooltip-bubble">
+									<strong>So wird gerechnet</strong>
+									<span>Offene Kundenrechnungen zählen als erwartete Eingänge.</span>
+									<span>Offene Lieferantenrechnungen zählen als erwartete Ausgänge.</span>
+									<span>Der Saldo zeigt die voraussichtliche Liquidität nach Fälligkeit.</span>
+								</span>
+							</span>
+						</h3>
 						<span><?php echo \esc_html((string) ((int) ($liquidity['summary']['total_count'] ?? 0))); ?> offene Belege</span>
 					</div>
 					<p class="cmx-budget-overview-panel-text">Erwartete Zahlungseingänge aus offenen Rechnungen und erwartete Zahlungsausgänge aus offenen Lieferantenrechnungen nach Fälligkeitsdatum.</p>
@@ -1296,6 +1307,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 		}
 		.cmx-budget-overview-active #posts-filter > .tablenav.top .alignleft.actions,
 		.cmx-budget-overview-active #posts-filter > .tablenav.top .search-box,
+		.cmx-budget-overview-active #posts-filter > .search-box,
+		.cmx-budget-overview-active #posts-filter .search-box,
+		.cmx-budget-overview-active .wrap > .search-box,
 		.cmx-budget-overview-active #posts-filter > .tablenav.top .tablenav-pages,
 		.cmx-budget-overview-active #posts-filter > .tablenav.bottom,
 		.cmx-budget-overview-active #posts-filter > .wp-list-table,
@@ -1365,6 +1379,76 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 			margin:0;
 			font-size:16px;
 			line-height:1.2;
+		}
+		.cmx-budget-overview-tooltip{
+			position:relative;
+			display:inline-flex;
+			align-items:center;
+			gap:8px;
+		}
+		.cmx-budget-overview-tooltip-toggle{
+			display:inline-flex;
+			align-items:center;
+			justify-content:center;
+			width:20px;
+			height:20px;
+			border-radius:999px;
+			background:linear-gradient(135deg, #eef4fb 0%, #dce8f5 100%);
+			color:#0a4b78;
+			font-size:12px;
+			font-weight:700;
+			line-height:1;
+			cursor:help;
+			box-shadow:inset 0 0 0 1px rgba(10,75,120,.12);
+		}
+		.cmx-budget-overview-tooltip-toggle:focus{
+			outline:2px solid #0f62fe;
+			outline-offset:2px;
+		}
+		.cmx-budget-overview-tooltip-bubble{
+			position:absolute;
+			left:0;
+			top:calc(100% + 12px);
+			z-index:20;
+			display:flex;
+			flex-direction:column;
+			gap:6px;
+			width:min(320px, 70vw);
+			padding:14px 16px;
+			border:1px solid rgba(10,75,120,.12);
+			border-radius:14px;
+			background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+			box-shadow:0 20px 44px rgba(31,49,74,.18);
+			color:#314255;
+			font-size:13px;
+			line-height:1.45;
+			opacity:0;
+			visibility:hidden;
+			transform:translateY(8px);
+			transition:opacity .18s ease, transform .18s ease, visibility .18s ease;
+			pointer-events:none;
+		}
+		.cmx-budget-overview-tooltip-bubble::before{
+			content:"";
+			position:absolute;
+			left:22px;
+			top:-7px;
+			width:14px;
+			height:14px;
+			background:#fff;
+			border-top:1px solid rgba(10,75,120,.12);
+			border-left:1px solid rgba(10,75,120,.12);
+			transform:rotate(45deg);
+		}
+		.cmx-budget-overview-tooltip-bubble strong{
+			font-size:13px;
+			color:#13263a;
+		}
+		.cmx-budget-overview-tooltip:hover .cmx-budget-overview-tooltip-bubble,
+		.cmx-budget-overview-tooltip:focus-within .cmx-budget-overview-tooltip-bubble{
+			opacity:1;
+			visibility:visible;
+			transform:translateY(0);
 		}
 		.cmx-budget-overview-kpis{
 			display:grid;
@@ -1507,6 +1591,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 		.cmx-budget-overview-liquid-row.is-overdue td:first-child{
 			color:#b42318;
 			font-weight:700;
+		}
+		.cmx-budget-overview-liquid-table tbody tr{
+			transition:background-color .16s ease, box-shadow .16s ease;
+		}
+		.cmx-budget-overview-liquid-table tbody tr:hover td,
+		.cmx-budget-overview-liquid-table tbody tr:focus-within td{
+			background:#eef6ff !important;
 		}
 		.cmx-budget-status{
 			display:inline-flex;
