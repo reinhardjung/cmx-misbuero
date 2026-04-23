@@ -26,6 +26,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_upload_field_name')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_delete_field_name')) {
+	function cmx_carent_pdf_delete_field_name(): string {
+		return 'cmx_carent_pdf_delete';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_client_option_key')) {
 	function cmx_carent_client_option_key(): string {
 		return 'carent_email_client_id';
@@ -111,6 +117,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_abs_path_from_rel')) {
+	function cmx_carent_pdf_abs_path_from_rel(string $file_rel): string {
+		$file_rel = \ltrim(\trim($file_rel), '/');
+		if ($file_rel === '') {
+			return '';
+		}
+
+		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+		$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel));
+		if ($file_abs === '' || !\str_starts_with($file_abs, $uploads_root)) {
+			return '';
+		}
+
+		return $file_abs;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_name')) {
 	function cmx_carent_current_pdf_name(): string {
 		$file_rel = cmx_carent_current_pdf_rel();
@@ -156,9 +179,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 			$file_name = cmx_carent_current_pdf_name();
 
 			echo '<input type="file" id="cmx-carent-pdf-file" name="' . \esc_attr(cmx_carent_pdf_upload_field_name()) . '" accept=".pdf,application/pdf">';
+			echo '<input type="hidden" id="cmx-carent-pdf-delete" name="' . \esc_attr(cmx_carent_pdf_delete_field_name()) . '" value="0">';
 			echo '<p class="description" id="cmx-carent-pdf-current">';
 			if ($file_url !== '' && $file_name !== '') {
+				echo '<span id="cmx-carent-pdf-current-row" style="display:inline-flex;align-items:center;gap:8px;">';
 				echo '<a href="' . \esc_url($file_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($file_name) . '</a>';
+				echo '<button type="button" class="button-link-delete" id="cmx-carent-pdf-delete-button" title="PDF löschen" aria-label="PDF löschen" style="display:inline-flex;align-items:center;justify-content:center;min-height:18px;padding:0;border:0;background:none;line-height:1;vertical-align:middle;">';
+				echo '<span class="dashicons dashicons-trash" aria-hidden="true" style="font-size:16px;width:16px;height:16px;"></span>';
+				echo '</button>';
+				echo '</span>';
 			} else {
 				echo 'Noch kein PDF ausgewählt.';
 			}
@@ -193,6 +222,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 	);
 });
 
+\add_action('admin_print_footer_scripts', function (): void {
+	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
+	$tab = isset($_GET['tab']) ? \sanitize_key((string) \wp_unslash($_GET['tab'])) : '';
+	$settings_page = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		: 'cmx-einstellungen';
+	if ($page !== $settings_page || $tab !== 'carent' || !cmx_carent_settings_is_enabled()) {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		var button = document.getElementById('cmx-carent-pdf-delete-button');
+		var flag = document.getElementById('cmx-carent-pdf-delete');
+		var current = document.getElementById('cmx-carent-pdf-current');
+		var fileInput = document.getElementById('cmx-carent-pdf-file');
+		if (!button || !flag || !current) {
+			return;
+		}
+
+		button.addEventListener('click', function(event){
+			event.preventDefault();
+			flag.value = '1';
+			if (fileInput) {
+				fileInput.value = '';
+			}
+			current.textContent = 'Noch kein PDF ausgewählt.';
+		});
+	})();
+	</script>
+	<?php
+});
+
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($value, $old_value) {
 	$value = \is_array($value) ? $value : [];
 	$old_value = \is_array($old_value) ? $old_value : [];
@@ -202,7 +264,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 	$client_key = cmx_carent_client_option_key();
 
 	$uploaded_file = $_FILES[cmx_carent_pdf_upload_field_name()] ?? null;
-	if (\is_array($uploaded_file) && !empty($uploaded_file['name'])) {
+	$has_uploaded_file = \is_array($uploaded_file) && !empty($uploaded_file['name']);
+	$delete_pdf = isset($_POST[cmx_carent_pdf_delete_field_name()])
+		&& !\is_array($_POST[cmx_carent_pdf_delete_field_name()])
+		&& (string) \wp_unslash($_POST[cmx_carent_pdf_delete_field_name()]) === '1';
+
+	if ($has_uploaded_file) {
 		$upload_dir_filter = static function (array $dirs): array {
 			$subdir = '/misbuero/carent';
 			$dirs['subdir'] = $subdir;
@@ -222,14 +289,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 		]);
 		\remove_filter('upload_dir', $upload_dir_filter);
 
-		if (\is_array($uploaded) && empty($uploaded['error']) && !empty($uploaded['file'])) {
-			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-			$file_abs = \wp_normalize_path((string) $uploaded['file']);
-			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root)) {
-				$value[$pdf_key] = \ltrim(\str_replace($uploads_root, '', $file_abs), '/');
-				$value[$pdf_legacy_key] = 0;
+			if (\is_array($uploaded) && empty($uploaded['error']) && !empty($uploaded['file'])) {
+				$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+				$file_abs = \wp_normalize_path((string) $uploaded['file']);
+				if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root)) {
+					$value[$pdf_key] = \ltrim(\str_replace($uploads_root, '', $file_abs), '/');
+					$value[$pdf_legacy_key] = 0;
+				}
 			}
+	} elseif ($delete_pdf) {
+		$old_file_rel = \trim((string) ($old_value[$pdf_key] ?? ''));
+		$old_file_abs = cmx_carent_pdf_abs_path_from_rel($old_file_rel);
+		if ($old_file_abs !== '' && \is_file($old_file_abs)) {
+			@unlink($old_file_abs);
 		}
+
+		$old_attachment_id = isset($old_value[$pdf_legacy_key]) ? (int) $old_value[$pdf_legacy_key] : 0;
+		if ($old_attachment_id > 0 && \get_post_type($old_attachment_id) === 'attachment') {
+			\wp_delete_attachment($old_attachment_id, true);
+		}
+
+		$value[$pdf_key] = '';
+		$value[$pdf_legacy_key] = 0;
 	} elseif (isset($old_value[$pdf_key])) {
 		$value[$pdf_key] = \trim((string) $old_value[$pdf_key]);
 	}

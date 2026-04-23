@@ -66,6 +66,45 @@ function cmx_beleg_field_input_id(string $key): string {
 	return 'cmx_belege_' . $key;
 }
 
+function cmx_get_beleg_mail_ini_template(string $key): string {
+	if (!\preg_match('/^mail_([a-z0-9_]+)_(sie|du)$/', $key, $matches)) {
+		return '';
+	}
+
+	$beleg_typ = \trim((string) ($matches[1] ?? ''));
+	$mail_mode = \trim((string) ($matches[2] ?? 'sie'));
+	if ($beleg_typ === '') {
+		return '';
+	}
+
+	$section = $mail_mode === 'du' ? 'Mail-Vorlagen-Du' : 'Mail-Vorlagen-Sie';
+	$template = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? cmx_ini_get_value($section, \ucfirst($beleg_typ))
+		: null;
+
+	return \is_string($template) ? \trim($template) : '';
+}
+
+function cmx_get_beleg_field_label_html(string $label, string $key): string {
+	$label = \trim($label);
+	if ($label === '' || !cmx_starts_with($key, 'mail_')) {
+		return \esc_html($label);
+	}
+
+	$template = cmx_get_beleg_mail_ini_template($key);
+	if ($template === '') {
+		return \esc_html($label);
+	}
+
+	return '<button type="button" class="cmx-load-mail-template-from-ini"'
+		. ' data-editor="' . \esc_attr(cmx_beleg_field_input_id($key)) . '"'
+		. ' data-template="' . \esc_attr($template) . '"'
+		. ' title="Text aus globales.ini laden"'
+		. ' style="padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:600;cursor:pointer;text-align:left;">'
+		. \esc_html($label)
+		. '</button>';
+}
+
 function cmx_render_beleg_placeholder_buttons(string $field_id, array $placeholders): void {
 	if ($field_id === '' || empty($placeholders)) {
 		return;
@@ -118,10 +157,10 @@ function cmx_render_beleg_placeholder_buttons(string $field_id, array $placehold
 				el.selectionEnd = pos;
 			}
 			el.focus();
-		}
-		function insertPlaceholder(editorId, text) {
-			if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
-				var editor = tinyMCE.get(editorId);
+			}
+			function insertPlaceholder(editorId, text) {
+				if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
+					var editor = tinyMCE.get(editorId);
 				editor.focus();
 				var beforeChar = "";
 				var afterChar = "";
@@ -136,13 +175,32 @@ function cmx_render_beleg_placeholder_buttons(string $field_id, array $placehold
 				editor.selection.setContent(text);
 				return;
 			}
-			var field = document.getElementById(editorId);
-			insertAtCursor(field, text);
-		}
-		document.addEventListener("click", function(e){
-			var btn = e.target.closest ? e.target.closest(".cmx-insert-placeholder") : null;
-			if (!btn) return;
-			e.preventDefault();
+				var field = document.getElementById(editorId);
+				insertAtCursor(field, text);
+			}
+			function setEditorContent(editorId, html) {
+				if (!editorId) return;
+				var field = document.getElementById(editorId);
+				var editor = window.tinyMCE && tinyMCE.get(editorId) ? tinyMCE.get(editorId) : null;
+				if (editor) {
+					editor.setContent(html || "");
+					editor.save();
+				}
+				if (field) {
+					field.value = html || "";
+					field.focus();
+				}
+			}
+			document.addEventListener("click", function(e){
+				var loadBtn = e.target.closest ? e.target.closest(".cmx-load-mail-template-from-ini") : null;
+				if (loadBtn) {
+					e.preventDefault();
+					setEditorContent(loadBtn.getAttribute("data-editor"), loadBtn.getAttribute("data-template") || "");
+					return;
+				}
+				var btn = e.target.closest ? e.target.closest(".cmx-insert-placeholder") : null;
+				if (!btn) return;
+				e.preventDefault();
 			insertPlaceholder(btn.getAttribute("data-editor"), btn.getAttribute("data-placeholder"));
 		});
 	})();
@@ -242,7 +300,7 @@ add_action('admin_init', function() {
 	$add = function($page,$section,$label,$key,$rows) {
 		add_settings_field(
 			$key,
-			$label,
+			cmx_get_beleg_field_label_html((string) $label, (string) $key),
 			__NAMESPACE__ . '\\cmx_field_textarea_beleg',
 			$page,
 			$section,
