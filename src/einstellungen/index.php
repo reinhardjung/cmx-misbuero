@@ -72,6 +72,7 @@ require_once 'kontakte.php';
 require_once 'belege.php';
 require_once 'woocommerce.php';
 require_once 'email.php';
+require_once 'carnet.php';
 require_once 'system.php';
 require_once 'erweitert.php';
 require_once 'support.php';
@@ -183,16 +184,23 @@ add_action('all_admin_notices', function (): void {
  * TAB-LISTEN
  * ------------------------------------------------------------ */
 function cmx_get_tabs(): array {
-	return [
+	$tabs = [
 		'general'     => 'Allgemein',
 		'vorgaben'    => 'Vorgaben',
 		'banken'      => 'Zahlungen',
 		'belege'      => 'Belege',
 		'woocommerce' => 'WooCommerce',
 		'email'       => 'E-Mails',
-		'system'      => 'System',
-		'support'     => 'Support',
 	];
+
+	if (\function_exists(__NAMESPACE__ . '\\cmx_carnet_settings_is_enabled') && cmx_carnet_settings_is_enabled()) {
+		$tabs['carnet'] = 'Carnet';
+	}
+
+	$tabs['system'] = 'System';
+	$tabs['support'] = 'Support';
+
+	return $tabs;
 }
 
 function cmx_get_subtabs(string $tab): array {
