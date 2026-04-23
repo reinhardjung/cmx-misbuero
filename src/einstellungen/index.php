@@ -379,7 +379,11 @@ function cmx_render_settings_page(): void {
 	}
 
 	/* ALLE ANDEREN */
-	echo '<form method="post" action="options.php">';
+	$form_attrs = 'method="post" action="options.php"';
+	if ($tab === 'carent') {
+		$form_attrs .= ' enctype="multipart/form-data"';
+	}
+	echo '<form ' . $form_attrs . '>';
 	settings_fields(CMX_SETTINGS_MAIN);
 	if ($tab !== 'general' && $tab !== 'system') {
 		$openai_key = (string) \get_option('mis_buero_openai_key', '');

@@ -10,7 +10,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_option_name')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_option_key')) {
 	function cmx_carent_pdf_option_key(): string {
+		return 'carent_pdf_file_rel';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_legacy_option_key')) {
+	function cmx_carent_pdf_legacy_option_key(): string {
 		return 'carent_pdf_attachment_id';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_upload_field_name')) {
+	function cmx_carent_pdf_upload_field_name(): string {
+		return 'cmx_carent_pdf_file';
 	}
 }
 
@@ -65,10 +77,53 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_client_options')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_attachment_id')) {
-	function cmx_carent_current_pdf_attachment_id(): int {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_rel')) {
+	function cmx_carent_current_pdf_rel(): string {
 		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
-		return isset($options[cmx_carent_pdf_option_key()]) ? (int) $options[cmx_carent_pdf_option_key()] : 0;
+		return \trim((string) ($options[cmx_carent_pdf_option_key()] ?? ''));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_legacy_attachment_id')) {
+	function cmx_carent_current_pdf_legacy_attachment_id(): int {
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
+		return isset($options[cmx_carent_pdf_legacy_option_key()]) ? (int) $options[cmx_carent_pdf_legacy_option_key()] : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_url')) {
+	function cmx_carent_current_pdf_url(): string {
+		$file_rel = cmx_carent_current_pdf_rel();
+		if ($file_rel !== '') {
+			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . ltrim($file_rel, '/')));
+			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs)) {
+				return (string) \content_url('/uploads/' . ltrim($file_rel, '/'));
+			}
+		}
+
+		$attachment_id = cmx_carent_current_pdf_legacy_attachment_id();
+		if ($attachment_id > 0) {
+			return (string) \wp_get_attachment_url($attachment_id);
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_name')) {
+	function cmx_carent_current_pdf_name(): string {
+		$file_rel = cmx_carent_current_pdf_rel();
+		if ($file_rel !== '') {
+			return (string) \basename($file_rel);
+		}
+
+		$attachment_id = cmx_carent_current_pdf_legacy_attachment_id();
+		if ($attachment_id > 0) {
+			return (string) \basename((string) \get_attached_file($attachment_id));
+		}
+
+		return '';
 	}
 }
 
@@ -97,19 +152,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 		'cmx_carent_pdf_attachment_id',
 		'Deine AGB als PDF',
 		function (): void {
-			$option_name = cmx_carent_settings_option_name();
-			$key = cmx_carent_pdf_option_key();
-			$attachment_id = cmx_carent_current_pdf_attachment_id();
-			$file_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
-			$file_name = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+			$file_url = cmx_carent_current_pdf_url();
+			$file_name = cmx_carent_current_pdf_name();
 
-			echo '<input type="hidden" id="cmx-carent-pdf-attachment-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '" value="' . \esc_attr((string) $attachment_id) . '">';
-			echo '<button type="button" class="button" id="cmx-carent-pdf-upload-button">PDF auswählen</button>';
+			echo '<input type="file" id="cmx-carent-pdf-file" name="' . \esc_attr(cmx_carent_pdf_upload_field_name()) . '" accept=".pdf,application/pdf">';
 			echo '<p class="description" id="cmx-carent-pdf-current">';
 			if ($file_url !== '' && $file_name !== '') {
 				echo '<a href="' . \esc_url($file_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($file_name) . '</a>';
 			} else {
-				// echo 'Kein PDF ausgewählt.';
+				echo 'Noch kein PDF ausgewählt.';
 			}
 			echo '</p>';
 		},
@@ -127,7 +178,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 			$clients = cmx_carent_client_options();
 
 			echo '<select id="cmx-carent-email-client-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '"' . ($clients === [] ? ' disabled' : '') . '>';
-			echo '<option value=""></option>';
+			echo '<option value="">- Mailkonto auswählen -</option>';
 			foreach ($clients as $client_id => $label) {
 				echo '<option value="' . \esc_attr((string) $client_id) . '"' . \selected($current, (string) $client_id, false) . '>' . \esc_html((string) $label) . '</option>';
 			}
@@ -142,115 +193,49 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 	);
 });
 
-\add_action('admin_enqueue_scripts', function (): void {
-	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
-	$tab = isset($_GET['tab']) ? \sanitize_key((string) \wp_unslash($_GET['tab'])) : '';
-	$settings_page = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
-		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
-		: 'cmx-einstellungen';
-	if ($page !== $settings_page || $tab !== 'carent' || !cmx_carent_settings_is_enabled()) {
-		return;
-	}
-
-	\wp_enqueue_media();
-});
-
-\add_action('admin_footer', function (): void {
-	$page = isset($_GET['page']) ? \sanitize_key((string) \wp_unslash($_GET['page'])) : '';
-	$tab = isset($_GET['tab']) ? \sanitize_key((string) \wp_unslash($_GET['tab'])) : '';
-	$settings_page = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
-		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
-		: 'cmx-einstellungen';
-	if ($page !== $settings_page || $tab !== 'carent' || !cmx_carent_settings_is_enabled()) {
-		return;
-	}
-	?>
-	<script>
-	(function(){
-		var button = document.getElementById('cmx-carent-pdf-upload-button');
-		var input = document.getElementById('cmx-carent-pdf-attachment-id');
-		var current = document.getElementById('cmx-carent-pdf-current');
-		if (!button || !input || !current || !window.wp || !wp.media) {
-			return;
-		}
-
-		var frame;
-
-		function escapeHtml(value) {
-			return String(value || '').replace(/[&<>"']/g, function(char) {
-				return {
-					'&': '&amp;',
-					'<': '&lt;',
-					'>': '&gt;',
-					'"': '&quot;',
-					"'": '&#039;'
-				}[char] || char;
-			});
-		}
-
-		button.addEventListener('click', function(event) {
-			event.preventDefault();
-
-			if (!frame) {
-				frame = wp.media({
-					title: 'PDF auswählen',
-					button: {
-						text: 'PDF übernehmen'
-					},
-					library: {
-						type: 'application/pdf'
-					},
-					multiple: false
-				});
-
-				frame.on('open', function() {
-					try {
-						if (frame.content && typeof frame.content.mode === 'function') {
-							frame.content.mode('upload');
-						}
-					} catch (error) {}
-				});
-
-				frame.on('select', function() {
-					var attachment = frame.state().get('selection').first().toJSON();
-					var attachmentId = attachment && attachment.id ? String(attachment.id) : '';
-					var url = attachment && attachment.url ? String(attachment.url) : '';
-					var filename = attachment && attachment.filename ? String(attachment.filename) : '';
-
-					input.value = attachmentId;
-					if (url && filename) {
-						current.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(filename) + '</a>';
-						return;
-					}
-					current.textContent = filename || 'Noch kein PDF ausgewählt.';
-				});
-			}
-
-			frame.open();
-		});
-	})();
-	</script>
-	<?php
-});
-
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($value, $old_value) {
 	$value = \is_array($value) ? $value : [];
 	$old_value = \is_array($old_value) ? $old_value : [];
 
 	$pdf_key = cmx_carent_pdf_option_key();
+	$pdf_legacy_key = cmx_carent_pdf_legacy_option_key();
 	$client_key = cmx_carent_client_option_key();
 
-	if (\array_key_exists($pdf_key, $value)) {
-		$attachment_id = (int) $value[$pdf_key];
-		if ($attachment_id > 0) {
-			$is_attachment = \get_post_type($attachment_id) === 'attachment';
-			$mime_type = (string) \get_post_mime_type($attachment_id);
-			$value[$pdf_key] = ($is_attachment && $mime_type === 'application/pdf') ? $attachment_id : 0;
-		} else {
-			$value[$pdf_key] = 0;
+	$uploaded_file = $_FILES[cmx_carent_pdf_upload_field_name()] ?? null;
+	if (\is_array($uploaded_file) && !empty($uploaded_file['name'])) {
+		$upload_dir_filter = static function (array $dirs): array {
+			$subdir = '/misbuero/carent';
+			$dirs['subdir'] = $subdir;
+			$dirs['path'] = (string) (($dirs['basedir'] ?? '') . $subdir);
+			$dirs['url'] = (string) (($dirs['baseurl'] ?? '') . $subdir);
+			return $dirs;
+		};
+
+		if (!\function_exists('wp_handle_upload')) {
+			require_once \ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		\add_filter('upload_dir', $upload_dir_filter);
+		$uploaded = \wp_handle_upload($uploaded_file, [
+			'test_form' => false,
+			'mimes'     => ['pdf' => 'application/pdf'],
+		]);
+		\remove_filter('upload_dir', $upload_dir_filter);
+
+		if (\is_array($uploaded) && empty($uploaded['error']) && !empty($uploaded['file'])) {
+			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+			$file_abs = \wp_normalize_path((string) $uploaded['file']);
+			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root)) {
+				$value[$pdf_key] = \ltrim(\str_replace($uploads_root, '', $file_abs), '/');
+				$value[$pdf_legacy_key] = 0;
+			}
 		}
 	} elseif (isset($old_value[$pdf_key])) {
-		$value[$pdf_key] = (int) $old_value[$pdf_key];
+		$value[$pdf_key] = \trim((string) $old_value[$pdf_key]);
+	}
+
+	if (!isset($value[$pdf_legacy_key]) && isset($old_value[$pdf_legacy_key])) {
+		$value[$pdf_legacy_key] = (int) $old_value[$pdf_legacy_key];
 	}
 
 	if (\array_key_exists($client_key, $value)) {
