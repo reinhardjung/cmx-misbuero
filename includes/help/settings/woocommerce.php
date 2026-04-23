@@ -33,12 +33,3 @@ return [
 		],
 	],
 ];
-
-
-
-	// 		'content' => '
-	// 			<ul>
-	// 				<li>Erste Zeile<br>Zweite Zeile im selben Bullet</li>
-	// 				<li>Noch ein Punkt</li>
-	// 			</ul>
-	// 		',

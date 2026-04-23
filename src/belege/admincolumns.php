@@ -84,6 +84,80 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_date_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_contact_ids')) {
+	function cmx_beleg_admin_search_contact_ids(string $term): array {
+		$term = \trim($term);
+		if ($term === '') {
+			return [];
+		}
+
+		$search_terms = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_terms')
+			? (array) cmx_kontakte_search_terms($term)
+			: [$term];
+		$search_terms = \array_values(\array_unique(\array_filter(\array_map('strval', $search_terms))));
+		if ($search_terms === []) {
+			return [];
+		}
+
+		$kontakt_post_type = \defined(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
+			: 'kontakte';
+
+		$lookup_args = [
+			'post_type'              => $kontakt_post_type,
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'suppress_filters'       => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		];
+
+		$matched_ids = [];
+		foreach ($search_terms as $lookup_term) {
+			$matched_ids = \array_merge($matched_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $lookup_term,
+			])));
+		}
+
+		$meta_keys = [
+			\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMA')
+				: '_cmx_kontakte_firma',
+			\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+				: '_cmx_kontakte_vorname',
+			\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+				: '_cmx_kontakte_nachname',
+		];
+		$meta_keys = \array_values(\array_unique(\array_filter(\array_map('strval', $meta_keys))));
+
+		if ($meta_keys !== []) {
+			$meta_query = ['relation' => 'OR'];
+			foreach ($search_terms as $lookup_term) {
+				foreach ($meta_keys as $meta_key) {
+					$meta_query[] = [
+						'key'     => $meta_key,
+						'value'   => $lookup_term,
+						'compare' => 'LIKE',
+					];
+				}
+			}
+
+			$matched_ids = \array_merge($matched_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's'          => '',
+				'meta_query' => $meta_query,
+			])));
+		}
+
+		return \array_values(\array_unique(\array_map('intval', $matched_ids)));
+	}
+}
+
 /**
  * Zentraler Filter-Handler für die Belege-Liste.
  * Greift alle Selects ab (Kontakt, Kategorie, Zahlstatus, Projekt) und baut
@@ -336,43 +410,51 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 
 	global $wpdb;
 	$like = '%' . $wpdb->esc_like($term) . '%';
-	$kontakt_meta_id = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
-		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
-		: '_cmx_beleg_kontakt_id';
+	$kontakt_meta_keys = \function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_meta_keys')
+		? (array) cmx_beleg_kontakt_meta_keys()
+		: [
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT')
+				: '_cmx_beleg_kontakt_id',
+		];
+	$kontakt_meta_keys = \array_values(\array_unique(\array_filter(\array_map('strval', $kontakt_meta_keys))));
 	$kontakt_meta_label = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL')
 		? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_LABEL')
 		: '_cmx_beleg_kontakt_label';
-	$kontakt_post_type = \defined(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
-		? (string) \constant(__NAMESPACE__ . '\\CMX_PT_KONTAKTE')
-		: 'kontakte';
-
-	$contact_sql = $wpdb->prepare(
-		"(
-			EXISTS (
-				SELECT 1
-				FROM {$wpdb->postmeta} AS cmx_klabel
-				WHERE cmx_klabel.post_id = {$wpdb->posts}.ID
-					AND cmx_klabel.meta_key = %s
-					AND cmx_klabel.meta_value LIKE %s
-			)
-			OR EXISTS (
-				SELECT 1
-				FROM {$wpdb->postmeta} AS cmx_kid
-				INNER JOIN {$wpdb->posts} AS cmx_kpost
-					ON cmx_kpost.ID = CAST(cmx_kid.meta_value AS UNSIGNED)
-				WHERE cmx_kid.post_id = {$wpdb->posts}.ID
-					AND cmx_kid.meta_key = %s
-					AND cmx_kpost.post_type = %s
-					AND cmx_kpost.post_status <> 'trash'
-					AND cmx_kpost.post_title LIKE %s
-			)
+	$contact_conditions = [];
+	$contact_conditions[] = $wpdb->prepare(
+		"EXISTS (
+			SELECT 1
+			FROM {$wpdb->postmeta} AS cmx_klabel
+			WHERE cmx_klabel.post_id = {$wpdb->posts}.ID
+				AND cmx_klabel.meta_key = %s
+				AND cmx_klabel.meta_value LIKE %s
 		)",
 		$kontakt_meta_label,
-		$like,
-		$kontakt_meta_id,
-		$kontakt_post_type,
 		$like
 	);
+
+	$matching_contact_ids = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_contact_ids')
+		? (array) cmx_beleg_admin_search_contact_ids($term)
+		: [];
+	if ($matching_contact_ids !== [] && $kontakt_meta_keys !== []) {
+		$meta_placeholders = \implode(', ', \array_fill(0, \count($kontakt_meta_keys), '%s'));
+		$id_placeholders = \implode(', ', \array_fill(0, \count($matching_contact_ids), '%d'));
+		$contact_conditions[] = $wpdb->prepare(
+			"EXISTS (
+				SELECT 1
+				FROM {$wpdb->postmeta} AS cmx_kid
+				WHERE cmx_kid.post_id = {$wpdb->posts}.ID
+					AND cmx_kid.meta_key IN ({$meta_placeholders})
+					AND CAST(cmx_kid.meta_value AS UNSIGNED) IN ({$id_placeholders})
+			)",
+			\array_merge($kontakt_meta_keys, \array_map('intval', $matching_contact_ids))
+		);
+	}
+
+	$contact_sql = $contact_conditions !== []
+		? '(' . \implode(' OR ', \array_filter($contact_conditions)) . ')'
+		: '';
 	$date_sql = '';
 	$date_value = cmx_beleg_admin_search_date_value($term);
 	if ($date_value !== '') {

@@ -72,7 +72,7 @@ require_once 'kontakte.php';
 require_once 'belege.php';
 require_once 'woocommerce.php';
 require_once 'email.php';
-require_once 'carnet.php';
+require_once 'carent.php';
 require_once 'system.php';
 require_once 'erweitert.php';
 require_once 'support.php';
@@ -193,8 +193,8 @@ function cmx_get_tabs(): array {
 		'email'       => 'E-Mails',
 	];
 
-	if (\function_exists(__NAMESPACE__ . '\\cmx_carnet_settings_is_enabled') && cmx_carnet_settings_is_enabled()) {
-		$tabs['carnet'] = 'Carnet';
+	if (\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_is_enabled') && cmx_carent_settings_is_enabled()) {
+		$tabs['carent'] = 'Carent';
 	}
 
 	$tabs['system'] = 'System';
