@@ -1,32 +1,32 @@
 <?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_settings_option_name')) {
-	function cmx_carnet_settings_option_name(): string {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_option_name')) {
+	function cmx_carent_settings_option_name(): string {
 		return \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
 			: 'cmx_einstellungen';
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_pdf_option_key')) {
-	function cmx_carnet_pdf_option_key(): string {
-		return 'carnet_pdf_attachment_id';
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_option_key')) {
+	function cmx_carent_pdf_option_key(): string {
+		return 'carent_pdf_attachment_id';
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_client_option_key')) {
-	function cmx_carnet_client_option_key(): string {
-		return 'carnet_email_client_id';
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_client_option_key')) {
+	function cmx_carent_client_option_key(): string {
+		return 'carent_email_client_id';
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_settings_is_enabled')) {
-	function cmx_carnet_settings_is_enabled(): bool {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_is_enabled')) {
+	function cmx_carent_settings_is_enabled(): bool {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_system_is_carent_enabled')) {
 			return cmx_system_is_carent_enabled();
 		}
 
-		$options = (array) \get_option(cmx_carnet_settings_option_name(), []);
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
 		$key = \defined(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_SYSTEM_CARENT_KEY')
 			: 'carent';
@@ -35,8 +35,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_settings_is_enabled')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_client_options')) {
-	function cmx_carnet_client_options(): array {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_client_options')) {
+	function cmx_carent_client_options(): array {
 		if (!\function_exists(__NAMESPACE__ . '\\cmx_email_client_list')) {
 			return [];
 		}
@@ -65,68 +65,68 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_client_options')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_pdf_attachment_id')) {
-	function cmx_carnet_current_pdf_attachment_id(): int {
-		$options = (array) \get_option(cmx_carnet_settings_option_name(), []);
-		return isset($options[cmx_carnet_pdf_option_key()]) ? (int) $options[cmx_carnet_pdf_option_key()] : 0;
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_attachment_id')) {
+	function cmx_carent_current_pdf_attachment_id(): int {
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
+		return isset($options[cmx_carent_pdf_option_key()]) ? (int) $options[cmx_carent_pdf_option_key()] : 0;
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
-	function cmx_carnet_current_client_id(): string {
-		$options = (array) \get_option(cmx_carnet_settings_option_name(), []);
-		return \sanitize_key((string) ($options[cmx_carnet_client_option_key()] ?? ''));
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
+	function cmx_carent_current_client_id(): string {
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
+		return \sanitize_key((string) ($options[cmx_carent_client_option_key()] ?? ''));
 	}
 }
 
 \add_action('admin_init', function (): void {
-	if (!cmx_carnet_settings_is_enabled()) {
+	if (!cmx_carent_settings_is_enabled()) {
 		return;
 	}
 
-	$page = 'cmx_tab_carnet';
+	$page = 'cmx_tab_carent';
 
 	\add_settings_section(
-		'cmx_sec_carnet',
+		'cmx_sec_carent',
 		'',
 		'__return_false',
 		$page
 	);
 
 	\add_settings_field(
-		'cmx_carnet_pdf_attachment_id',
-		'PDF',
+		'cmx_carent_pdf_attachment_id',
+		'Deine AGB als PDF',
 		function (): void {
-			$option_name = cmx_carnet_settings_option_name();
-			$key = cmx_carnet_pdf_option_key();
-			$attachment_id = cmx_carnet_current_pdf_attachment_id();
+			$option_name = cmx_carent_settings_option_name();
+			$key = cmx_carent_pdf_option_key();
+			$attachment_id = cmx_carent_current_pdf_attachment_id();
 			$file_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
 			$file_name = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
 
-			echo '<input type="hidden" id="cmx-carnet-pdf-attachment-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '" value="' . \esc_attr((string) $attachment_id) . '">';
-			echo '<button type="button" class="button" id="cmx-carnet-pdf-upload-button">PDF auswählen</button>';
-			echo '<p class="description" id="cmx-carnet-pdf-current">';
+			echo '<input type="hidden" id="cmx-carent-pdf-attachment-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '" value="' . \esc_attr((string) $attachment_id) . '">';
+			echo '<button type="button" class="button" id="cmx-carent-pdf-upload-button">PDF auswählen</button>';
+			echo '<p class="description" id="cmx-carent-pdf-current">';
 			if ($file_url !== '' && $file_name !== '') {
 				echo '<a href="' . \esc_url($file_url) . '" target="_blank" rel="noopener noreferrer">' . \esc_html($file_name) . '</a>';
 			} else {
-				echo 'Kein PDF ausgewählt.';
+				// echo 'Kein PDF ausgewählt.';
 			}
 			echo '</p>';
 		},
 		$page,
-		'cmx_sec_carnet'
+		'cmx_sec_carent'
 	);
 
 	\add_settings_field(
-		'cmx_carnet_email_client_id',
+		'cmx_carent_email_client_id',
 		'E-Mail Client',
 		function (): void {
-			$option_name = cmx_carnet_settings_option_name();
-			$key = cmx_carnet_client_option_key();
-			$current = cmx_carnet_current_client_id();
-			$clients = cmx_carnet_client_options();
+			$option_name = cmx_carent_settings_option_name();
+			$key = cmx_carent_client_option_key();
+			$current = cmx_carent_current_client_id();
+			$clients = cmx_carent_client_options();
 
-			echo '<select id="cmx-carnet-email-client-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '"' . ($clients === [] ? ' disabled' : '') . '>';
+			echo '<select id="cmx-carent-email-client-id" name="' . \esc_attr($option_name . '[' . $key . ']') . '"' . ($clients === [] ? ' disabled' : '') . '>';
 			echo '<option value=""></option>';
 			foreach ($clients as $client_id => $label) {
 				echo '<option value="' . \esc_attr((string) $client_id) . '"' . \selected($current, (string) $client_id, false) . '>' . \esc_html((string) $label) . '</option>';
@@ -138,7 +138,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 			}
 		},
 		$page,
-		'cmx_sec_carnet'
+		'cmx_sec_carent'
 	);
 });
 
@@ -148,7 +148,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 	$settings_page = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 		: 'cmx-einstellungen';
-	if ($page !== $settings_page || $tab !== 'carnet' || !cmx_carnet_settings_is_enabled()) {
+	if ($page !== $settings_page || $tab !== 'carent' || !cmx_carent_settings_is_enabled()) {
 		return;
 	}
 
@@ -161,15 +161,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 	$settings_page = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 		? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
 		: 'cmx-einstellungen';
-	if ($page !== $settings_page || $tab !== 'carnet' || !cmx_carnet_settings_is_enabled()) {
+	if ($page !== $settings_page || $tab !== 'carent' || !cmx_carent_settings_is_enabled()) {
 		return;
 	}
 	?>
 	<script>
 	(function(){
-		var button = document.getElementById('cmx-carnet-pdf-upload-button');
-		var input = document.getElementById('cmx-carnet-pdf-attachment-id');
-		var current = document.getElementById('cmx-carnet-pdf-current');
+		var button = document.getElementById('cmx-carent-pdf-upload-button');
+		var input = document.getElementById('cmx-carent-pdf-attachment-id');
+		var current = document.getElementById('cmx-carent-pdf-current');
 		if (!button || !input || !current || !window.wp || !wp.media) {
 			return;
 		}
@@ -222,7 +222,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 						current.innerHTML = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(filename) + '</a>';
 						return;
 					}
-					current.textContent = filename || 'Kein PDF ausgewählt.';
+					current.textContent = filename || 'Noch kein PDF ausgewählt.';
 				});
 			}
 
@@ -237,8 +237,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 	$value = \is_array($value) ? $value : [];
 	$old_value = \is_array($old_value) ? $old_value : [];
 
-	$pdf_key = cmx_carnet_pdf_option_key();
-	$client_key = cmx_carnet_client_option_key();
+	$pdf_key = cmx_carent_pdf_option_key();
+	$client_key = cmx_carent_client_option_key();
 
 	if (\array_key_exists($pdf_key, $value)) {
 		$attachment_id = (int) $value[$pdf_key];
@@ -255,7 +255,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carnet_current_client_id')) {
 
 	if (\array_key_exists($client_key, $value)) {
 		$client_id = \sanitize_key((string) $value[$client_key]);
-		$allowed_ids = \array_keys(cmx_carnet_client_options());
+		$allowed_ids = \array_keys(cmx_carent_client_options());
 		$value[$client_key] = \in_array($client_id, $allowed_ids, true) ? $client_id : '';
 	} elseif (isset($old_value[$client_key])) {
 		$value[$client_key] = \sanitize_key((string) $old_value[$client_key]);
