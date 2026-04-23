@@ -241,7 +241,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
 			: '';
 		$custom_message = cmx_get_belegmail($beleg_slug, $kontakt_id, $mail_mode, $to);
 		if ($mail_mode === 'du' && \trim(\wp_strip_all_tags($custom_message)) === '') {
-			return new \WP_Error('missing_mail_template', 'Fuer ' . $beleg_label . ' fehlt die Du-E-Mail-Vorlage unter Einstellungen > Belege.');
+			return new \WP_Error('missing_mail_template', 'Für ' . $beleg_label . ' fehlt die Du-E-Mail Vorlage: ');
 		}
 			$custom_has_anrede_token = $custom_message !== ''
 				&& \function_exists(__NAMESPACE__ . '\\cmxbu_belegmail_content_has_placeholder')

@@ -85,13 +85,36 @@ function cmx_get_beleg_mail_ini_template(string $key): string {
 	return \is_string($template) ? \trim($template) : '';
 }
 
+function cmx_get_belegfuss_ini_template(string $key): string {
+	if (!\preg_match('/^belegfuss_([a-z0-9_]+)$/', $key, $matches)) {
+		return '';
+	}
+
+	$beleg_typ = \trim((string) ($matches[1] ?? ''));
+	if ($beleg_typ === '') {
+		return '';
+	}
+
+	$template = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? cmx_ini_get_value('Belegfuss', \ucfirst($beleg_typ))
+		: null;
+
+	return \is_string($template) ? \trim($template) : '';
+}
+
 function cmx_get_beleg_field_label_html(string $label, string $key): string {
 	$label = \trim($label);
-	if ($label === '' || !cmx_starts_with($key, 'mail_')) {
+	if ($label === '') {
 		return \esc_html($label);
 	}
 
-	$template = cmx_get_beleg_mail_ini_template($key);
+	$template = '';
+	if (cmx_starts_with($key, 'mail_')) {
+		$template = cmx_get_beleg_mail_ini_template($key);
+	} elseif (cmx_starts_with($key, 'belegfuss_')) {
+		$template = cmx_get_belegfuss_ini_template($key);
+	}
+
 	if ($template === '') {
 		return \esc_html($label);
 	}
