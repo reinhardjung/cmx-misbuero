@@ -71,16 +71,79 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_date_value')) {
 			return '';
 		}
 
+		if (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2}|\d{4})$/', $term, $matches)) {
+			$day = (int) ($matches[1] ?? 0);
+			$month = (int) ($matches[2] ?? 0);
+			$year = (int) ($matches[3] ?? 0);
+			if ($year > 0 && $year < 100) {
+				$year += 2000;
+			}
+			if ($year > 0 && \checkdate($month, $day, $year)) {
+				return \sprintf('%04d-%02d-%02d', $year, $month, $day);
+			}
+			return '';
+		}
+
 		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_normalize_date_value')) {
-			return (string) cmx_beleg_admin_normalize_date_value($term);
+			$normalized = (string) cmx_beleg_admin_normalize_date_value($term);
+			if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
+				return $normalized;
+			}
 		}
 
 		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $term)) {
 			return $term;
 		}
 
-		$ts = \strtotime($term);
-		return $ts ? (string) \wp_date('Y-m-d', $ts) : '';
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_date_meta_keys')) {
+	function cmx_beleg_admin_search_date_meta_keys(): array {
+		$keys = [
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
+				: '_cmx_beleg_rng_datum',
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')
+				: '_cmx_beleg_faelligkeitsdatum',
+			\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT')
+				: (
+					\defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+						? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+						: '_cmx_beleg_bezahlt_am'
+				),
+			'_cmx_rechnungsdatum',
+			'_invoice_date',
+			'_date',
+			'_cmx_beleg_faellig_am',
+			'cmx_beleg_bezahlt_am',
+		];
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_day_month_pattern')) {
+	function cmx_beleg_admin_search_day_month_pattern(string $term): string {
+		$term = \trim($term);
+		if ($term === '') {
+			return '';
+		}
+
+		if (!\preg_match('/^(\d{1,2})[.\/-](\d{1,2})\.?$/', $term, $matches)) {
+			return '';
+		}
+
+		$day = (int) ($matches[1] ?? 0);
+		$month = (int) ($matches[2] ?? 0);
+		if ($day < 1 || $day > 31 || $month < 1 || $month > 12) {
+			return '';
+		}
+
+		return \sprintf('____-%02d-%02d', $month, $day);
 	}
 }
 
@@ -155,6 +218,71 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_contact_ids')) {
 		}
 
 		return \array_values(\array_unique(\array_map('intval', $matched_ids)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_amount_ids')) {
+	function cmx_beleg_admin_search_amount_ids(string $term): array {
+		static $cache = [];
+		static $total_cache = [];
+
+		$term = \trim($term);
+		if ($term === '') {
+			return [];
+		}
+		if (isset($cache[$term])) {
+			return $cache[$term];
+		}
+
+		$raw_amount = (string) \preg_replace('/\s*(chf|fr\.?)\s*/iu', '', $term);
+		$raw_amount = \trim($raw_amount);
+		if ($raw_amount === '' || !\preg_match('/\d/u', $raw_amount)) {
+			return $cache[$term] = [];
+		}
+		if (!\preg_match('/^[\d\s\'.’,`´′+\-]+$/u', $raw_amount)) {
+			return $cache[$term] = [];
+		}
+
+		$search_amount = \function_exists(__NAMESPACE__ . '\\cmx_parse_number')
+			? (float) cmx_parse_number($raw_amount)
+			: (float) \str_replace(',', '.', \str_replace(["'", ' '], '', $raw_amount));
+		$search_amount = \round($search_amount, 2);
+
+		$post_ids = (array) \get_posts([
+			'post_type'              => 'belege',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'orderby'                => 'ID',
+			'order'                  => 'ASC',
+			'suppress_filters'       => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		]);
+
+		$matched_ids = [];
+		foreach ($post_ids as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0) {
+				continue;
+			}
+
+			if (!isset($total_cache[$post_id])) {
+				if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+					$calc = (array) cmxbu_get_beleg_positionen_calc($post_id);
+					$total_cache[$post_id] = \round((float) ($calc['total'] ?? 0.0), 2);
+				} else {
+					$total_cache[$post_id] = 0.0;
+				}
+			}
+
+			if (\abs((float) $total_cache[$post_id] - $search_amount) < 0.00001) {
+				$matched_ids[] = $post_id;
+			}
+		}
+
+		return $cache[$term] = \array_values(\array_unique(\array_map('intval', $matched_ids)));
 	}
 }
 
@@ -456,25 +584,61 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 		? '(' . \implode(' OR ', \array_filter($contact_conditions)) . ')'
 		: '';
 	$date_sql = '';
+	$date_conditions = [];
+	$date_meta_keys = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_date_meta_keys')
+		? (array) cmx_beleg_admin_search_date_meta_keys()
+		: [];
 	$date_value = cmx_beleg_admin_search_date_value($term);
-	if ($date_value !== '') {
-		$date_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
-			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_DATUM')
-			: '_cmx_beleg_rng_datum';
-		$date_sql = $wpdb->prepare(
-			"EXISTS (
-				SELECT 1
-				FROM {$wpdb->postmeta} AS cmx_bdate
-				WHERE cmx_bdate.post_id = {$wpdb->posts}.ID
-					AND cmx_bdate.meta_key = %s
-					AND cmx_bdate.meta_value = %s
-			)",
-			$date_meta_key,
-			$date_value
+	if ($date_value !== '' && $date_meta_keys !== []) {
+		foreach ($date_meta_keys as $meta_key) {
+			$date_conditions[] = $wpdb->prepare(
+				"EXISTS (
+					SELECT 1
+					FROM {$wpdb->postmeta} AS cmx_bdate
+					WHERE cmx_bdate.post_id = {$wpdb->posts}.ID
+						AND cmx_bdate.meta_key = %s
+						AND cmx_bdate.meta_value = %s
+				)",
+				(string) $meta_key,
+				$date_value
+			);
+		}
+	}
+	$date_day_month_pattern = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_day_month_pattern')
+		? (string) cmx_beleg_admin_search_day_month_pattern($term)
+		: '';
+	if ($date_day_month_pattern !== '' && $date_meta_keys !== []) {
+		foreach ($date_meta_keys as $meta_key) {
+			$date_conditions[] = $wpdb->prepare(
+				"EXISTS (
+					SELECT 1
+					FROM {$wpdb->postmeta} AS cmx_bdate_partial
+					WHERE cmx_bdate_partial.post_id = {$wpdb->posts}.ID
+						AND cmx_bdate_partial.meta_key = %s
+						AND cmx_bdate_partial.meta_value LIKE %s
+				)",
+				(string) $meta_key,
+				$date_day_month_pattern
+			);
+		}
+	}
+	$date_sql = $date_conditions !== []
+		? '(' . \implode(' OR ', \array_values(\array_unique(\array_filter($date_conditions)))) . ')'
+		: '';
+
+	$amount_sql = '';
+	$matching_amount_ids = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_amount_ids')
+		? (array) cmx_beleg_admin_search_amount_ids($term)
+		: [];
+	if ($matching_amount_ids !== []) {
+		$id_placeholders = \implode(', ', \array_fill(0, \count($matching_amount_ids), '%d'));
+		$amount_sql = $wpdb->prepare(
+			"{$wpdb->posts}.ID IN ({$id_placeholders})",
+			\array_map('intval', $matching_amount_ids)
 		);
 	}
 
-	$extra_conditions = \array_values(\array_filter([$contact_sql, $date_sql]));
+	$extra_conditions = \array_values(\array_filter([$contact_sql, $date_sql, $amount_sql]));
 	$extra_sql = \implode(' OR ', $extra_conditions);
 
 	$search_sql = \trim((string) $search);

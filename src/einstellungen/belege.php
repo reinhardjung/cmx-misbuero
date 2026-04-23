@@ -66,6 +66,60 @@ function cmx_beleg_field_input_id(string $key): string {
 	return 'cmx_belege_' . $key;
 }
 
+function cmx_get_ini_raw_string_value(string $section, string $key): string {
+	$file = \dirname(__DIR__, 2) . '/includes/globales.ini';
+	if (!\is_file($file)) {
+		return '';
+	}
+
+	$ini = \parse_ini_file($file, true, \INI_SCANNER_TYPED);
+	if (!\is_array($ini)) {
+		return '';
+	}
+
+	$normalize = static function (string $value): string {
+		$value = \trim($value);
+		if ($value === '') {
+			return '';
+		}
+		$value = \function_exists(__NAMESPACE__ . '\\cmx_no_umlaute') ? cmx_no_umlaute($value) : $value;
+		return \strtolower($value);
+	};
+
+	$section_normalized = $normalize($section);
+	$key_normalized = $normalize($key);
+	$section_data = null;
+
+	foreach ($ini as $section_name => $data) {
+		if (!\is_array($data)) {
+			continue;
+		}
+		if (\strcasecmp((string) $section_name, $section) === 0 || $normalize((string) $section_name) === $section_normalized) {
+			$section_data = $data;
+			break;
+		}
+	}
+
+	if (!\is_array($section_data)) {
+		return '';
+	}
+
+	foreach ($section_data as $entry_key => $entry_value) {
+		if (\strcasecmp((string) $entry_key, $key) !== 0 && $normalize((string) $entry_key) !== $key_normalized) {
+			continue;
+		}
+		if (\is_string($entry_value)) {
+			return \trim($entry_value);
+		}
+		if (\is_scalar($entry_value)) {
+			return \trim((string) $entry_value);
+		}
+		return '';
+	}
+
+	return '';
+}
+
 function cmx_get_beleg_mail_ini_template(string $key): string {
 	if (!\preg_match('/^mail_([a-z0-9_]+)_(sie|du)$/', $key, $matches)) {
 		return '';
@@ -78,11 +132,9 @@ function cmx_get_beleg_mail_ini_template(string $key): string {
 	}
 
 	$section = $mail_mode === 'du' ? 'Mail-Vorlagen-Du' : 'Mail-Vorlagen-Sie';
-	$template = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
-		? cmx_ini_get_value($section, \ucfirst($beleg_typ))
-		: null;
+	$template = cmx_get_ini_raw_string_value($section, \ucfirst($beleg_typ));
 
-	return \is_string($template) ? \trim($template) : '';
+	return \trim($template);
 }
 
 function cmx_get_belegfuss_ini_template(string $key): string {
@@ -95,11 +147,9 @@ function cmx_get_belegfuss_ini_template(string $key): string {
 		return '';
 	}
 
-	$template = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
-		? cmx_ini_get_value('Belegfuss', \ucfirst($beleg_typ))
-		: null;
+	$template = cmx_get_ini_raw_string_value('Belegfuss', \ucfirst($beleg_typ));
 
-	return \is_string($template) ? \trim($template) : '';
+	return \trim($template);
 }
 
 function cmx_get_beleg_field_label_html(string $label, string $key): string {
