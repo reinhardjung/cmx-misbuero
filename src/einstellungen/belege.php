@@ -333,13 +333,14 @@ add_action('admin_init', function() {
 			]
 		);
 	};
-	$tabs = [
-		'offerte'      => 'Offerte',
-		'gutschrift'   => 'Gutschrift',
-		'lieferschein' => 'Lieferschein',
-		'rechnung'     => 'Rechnung',
-		'mahnung'      => 'Mahnung',
-	];
+		$tabs = [
+			'offerte'      => 'Offerte',
+			'gutschrift'   => 'Gutschrift',
+			'lieferschein' => 'Lieferschein',
+			'quittung'     => 'Quittung',
+			'rechnung'     => 'Rechnung',
+			'mahnung'      => 'Mahnung',
+		];
 
 	foreach ($tabs as $sub => $label) {
 

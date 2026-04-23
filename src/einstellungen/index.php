@@ -219,6 +219,7 @@ function cmx_get_subtabs(string $tab): array {
 			'offerte'      => 'Offerte',
 			'gutschrift'   => 'Gutschrift',
 			'lieferschein' => 'Lieferschein',
+			'quittung'     => 'Quittung',
 			'rechnung'     => 'Rechnung',
 			'mahnung'      => 'Mahnung',
 		];
