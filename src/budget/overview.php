@@ -659,6 +659,314 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_month_plan_totals')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_parse_date_ts')) {
+	function cmx_budget_overview_parse_date_ts(string $raw): int {
+		$raw = \trim($raw);
+		if ($raw === '') {
+			return 0;
+		}
+
+		if (\ctype_digit($raw) && \strlen($raw) >= 9 && \strlen($raw) <= 11) {
+			return (int) $raw;
+		}
+
+		if (\ctype_digit($raw) && \strlen($raw) === 8) {
+			$raw = \substr($raw, 0, 4) . '-' . \substr($raw, 4, 2) . '-' . \substr($raw, 6, 2);
+		}
+
+		foreach (['Y-m-d', 'd.m.Y', 'Y/m/d', 'd/m/Y'] as $format) {
+			$date = \DateTimeImmutable::createFromFormat('!' . $format, $raw, cmx_budget_overview_timezone());
+			if (!$date instanceof \DateTimeImmutable) {
+				continue;
+			}
+			$errors = \DateTimeImmutable::getLastErrors();
+			if (\is_array($errors) && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0)) {
+				continue;
+			}
+			return $date->setTime(0, 0, 0)->getTimestamp();
+		}
+
+		$timestamp = \strtotime($raw);
+		return $timestamp ? (int) $timestamp : 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_due_raw')) {
+	function cmx_budget_overview_due_raw(int $beleg_id): string {
+		$keys = [];
+
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')) {
+			$keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG');
+		}
+
+		$keys = \array_merge($keys, [
+			'_cmx_beleg_faelligkeitsdatum',
+			'_cmx_beleg_faellig_am',
+			'cmx_beleg_faelligkeitsdatum',
+			'cmx_beleg_faellig_am',
+		]);
+
+		foreach (\array_values(\array_unique(\array_filter($keys))) as $key) {
+			$value = \trim((string) \get_post_meta($beleg_id, $key, true));
+			if ($value !== '') {
+				return $value;
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_is_unpaid_beleg')) {
+	function cmx_budget_overview_is_unpaid_beleg(int $beleg_id): bool {
+		$paid_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_BEZAHLT_AM')
+			: '_cmx_beleg_bezahlt_am';
+		$keys = \array_values(\array_unique(\array_filter([
+			$paid_key,
+			\ltrim($paid_key, '_'),
+			'_cmx_beleg_bezahlt_am',
+			'cmx_beleg_bezahlt_am',
+		])));
+
+		foreach ($keys as $key) {
+			$value = \trim((string) \get_post_meta($beleg_id, $key, true));
+			if ($value === '' || $value === '0' || $value === '0000-00-00' || $value === '0000-00-00 00:00:00') {
+				continue;
+			}
+			if (cmx_budget_overview_parse_date_ts($value) > 0) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_beleg_effective_type')) {
+	function cmx_budget_overview_beleg_effective_type(int $beleg_id): string {
+		static $cache = [];
+
+		if (isset($cache[$beleg_id])) {
+			return $cache[$beleg_id];
+		}
+
+		$type = '';
+		$post = \get_post($beleg_id);
+		if ($post instanceof \WP_Post && \function_exists(__NAMESPACE__ . '\\cmx_get_beleg_type')) {
+			[, $type] = cmx_get_beleg_type($post);
+		}
+
+		$type = \sanitize_key((string) $type);
+		if ($type === '') {
+			$type = 'rechnung';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_effective_type')) {
+			$type = \sanitize_key((string) cmxbu_get_beleg_pdf_effective_type($beleg_id, $type));
+		}
+
+		$cache[$beleg_id] = $type;
+		return $type;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_liquidity_side')) {
+	function cmx_budget_overview_liquidity_side(int $beleg_id): string {
+		if (!cmx_budget_overview_is_unpaid_beleg($beleg_id)) {
+			return '';
+		}
+
+		$side = cmx_budget_overview_beleg_side($beleg_id);
+		$type = cmx_budget_overview_beleg_effective_type($beleg_id);
+
+		if ($side === 'income' && \in_array($type, ['rechnung', 'rechnungen'], true)) {
+			return 'income';
+		}
+
+		if ($side === 'expense' && \in_array($type, ['lieferantenrechnung', 'lieferantenrechnungen'], true)) {
+			return 'expense';
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_liquidity_forecast_data')) {
+	function cmx_budget_overview_liquidity_forecast_data(): array {
+		static $cache = null;
+
+		if ($cache !== null) {
+			return $cache;
+		}
+
+		$now = cmx_budget_overview_now()->setTime(0, 0, 0);
+		$month_start = $now->modify('first day of this month')->setTime(0, 0, 0);
+		$today_ts = $now->getTimestamp();
+		$next_30_ts = $now->modify('+30 days')->setTime(23, 59, 59)->getTimestamp();
+
+		$rows = [];
+		$month_rows = [];
+
+		$rows['overdue'] = [
+			'label'         => 'Überfällig',
+			'income_count'  => 0,
+			'expense_count' => 0,
+			'income'        => 0.0,
+			'expense'       => 0.0,
+			'kind'          => 'overdue',
+		];
+
+		for ($index = 0; $index < 6; $index++) {
+			$bucket_date = $month_start->modify('+' . $index . ' months');
+			$key = $bucket_date->format('Y-m');
+			$month_rows[$key] = [
+				'label'         => \wp_date('F Y', $bucket_date->getTimestamp(), $bucket_date->getTimezone()),
+				'income_count'  => 0,
+				'expense_count' => 0,
+				'income'        => 0.0,
+				'expense'       => 0.0,
+				'kind'          => 'month',
+			];
+		}
+
+		$rows['later'] = [
+			'label'         => 'Später',
+			'income_count'  => 0,
+			'expense_count' => 0,
+			'income'        => 0.0,
+			'expense'       => 0.0,
+			'kind'          => 'later',
+		];
+		$rows['undated'] = [
+			'label'         => 'Ohne Fälligkeit',
+			'income_count'  => 0,
+			'expense_count' => 0,
+			'income'        => 0.0,
+			'expense'       => 0.0,
+			'kind'          => 'undated',
+		];
+
+		$summary = [
+			'total_count'      => 0,
+			'income_count'     => 0,
+			'expense_count'    => 0,
+			'income_open'      => 0.0,
+			'expense_open'     => 0.0,
+			'net_open'         => 0.0,
+			'income_next_30'   => 0.0,
+			'expense_next_30'  => 0.0,
+			'net_next_30'      => 0.0,
+			'income_overdue'   => 0.0,
+			'expense_overdue'  => 0.0,
+			'net_overdue'      => 0.0,
+			'income_undated'   => 0.0,
+			'expense_undated'  => 0.0,
+		];
+
+		$beleg_ids = \array_map('intval', (array) \get_posts([
+			'post_type'              => 'belege',
+			'post_status'            => ['publish', 'private', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		]));
+
+		foreach ($beleg_ids as $beleg_id) {
+			if ($beleg_id <= 0) {
+				continue;
+			}
+
+			$liquidity_side = cmx_budget_overview_liquidity_side($beleg_id);
+			if ($liquidity_side === '') {
+				continue;
+			}
+
+			$amount = (float) \round(cmx_budget_overview_beleg_total($beleg_id), 2);
+			if ($amount <= 0.0) {
+				continue;
+			}
+
+			$summary['total_count']++;
+			$summary[$liquidity_side . '_count']++;
+			$summary[$liquidity_side . '_open'] += $amount;
+
+			$due_ts = cmx_budget_overview_parse_date_ts(cmx_budget_overview_due_raw($beleg_id));
+			if ($due_ts >= $today_ts && $due_ts <= $next_30_ts) {
+				$summary[$liquidity_side . '_next_30'] += $amount;
+			}
+
+			if ($due_ts <= 0) {
+				$summary[$liquidity_side . '_undated'] += $amount;
+				$rows['undated'][$liquidity_side . '_count']++;
+				$rows['undated'][$liquidity_side] += $amount;
+				continue;
+			}
+
+			if ($due_ts < $today_ts) {
+				$summary[$liquidity_side . '_overdue'] += $amount;
+				$rows['overdue'][$liquidity_side . '_count']++;
+				$rows['overdue'][$liquidity_side] += $amount;
+				continue;
+			}
+
+			$month_key = \wp_date('Y-m', $due_ts, cmx_budget_overview_timezone());
+			if (isset($month_rows[$month_key])) {
+				$month_rows[$month_key][$liquidity_side . '_count']++;
+				$month_rows[$month_key][$liquidity_side] += $amount;
+				continue;
+			}
+
+			$rows['later'][$liquidity_side . '_count']++;
+			$rows['later'][$liquidity_side] += $amount;
+		}
+
+		foreach (['income_open', 'expense_open', 'income_next_30', 'expense_next_30', 'income_overdue', 'expense_overdue', 'income_undated', 'expense_undated'] as $key) {
+			$summary[$key] = (float) \round((float) $summary[$key], 2);
+		}
+		$summary['net_open'] = (float) \round($summary['income_open'] - $summary['expense_open'], 2);
+		$summary['net_next_30'] = (float) \round($summary['income_next_30'] - $summary['expense_next_30'], 2);
+		$summary['net_overdue'] = (float) \round($summary['income_overdue'] - $summary['expense_overdue'], 2);
+
+		foreach ($month_rows as $key => $row) {
+			$month_rows[$key]['income'] = (float) \round((float) $row['income'], 2);
+			$month_rows[$key]['expense'] = (float) \round((float) $row['expense'], 2);
+			$month_rows[$key]['net'] = (float) \round((float) $month_rows[$key]['income'] - (float) $month_rows[$key]['expense'], 2);
+			$month_rows[$key]['count'] = (int) $row['income_count'] + (int) $row['expense_count'];
+		}
+
+		foreach (['overdue', 'later', 'undated'] as $key) {
+			$rows[$key]['income'] = (float) \round((float) $rows[$key]['income'], 2);
+			$rows[$key]['expense'] = (float) \round((float) $rows[$key]['expense'], 2);
+			$rows[$key]['net'] = (float) \round((float) $rows[$key]['income'] - (float) $rows[$key]['expense'], 2);
+			$rows[$key]['count'] = (int) $rows[$key]['income_count'] + (int) $rows[$key]['expense_count'];
+		}
+
+		$forecast_rows = [];
+		if ($summary['total_count'] > 0) {
+			if ($rows['overdue']['count'] > 0) {
+				$forecast_rows[] = $rows['overdue'];
+			}
+			$forecast_rows = \array_merge($forecast_rows, \array_values($month_rows));
+			if ($rows['later']['count'] > 0) {
+				$forecast_rows[] = $rows['later'];
+			}
+			if ($rows['undated']['count'] > 0) {
+				$forecast_rows[] = $rows['undated'];
+			}
+		}
+
+		$cache = [
+			'summary' => $summary,
+			'rows'    => $forecast_rows,
+		];
+
+		return $cache;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_rows')) {
 	function cmx_budget_overview_rows(): array {
 		$rows = [];
@@ -790,6 +1098,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 		$rows = cmx_budget_overview_rows();
 		$cards = cmx_budget_overview_dashboard_data();
 		$alerts = cmx_budget_overview_alerts();
+		$liquidity = cmx_budget_overview_liquidity_forecast_data();
 		$month_label = (string) (cmx_budget_overview_period_range('monat')['label'] ?? '');
 
 		\ob_start();
@@ -886,6 +1195,59 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 						</tbody>
 					</table>
 				</div>
+			</div>
+
+				<div class="cmx-budget-overview-panel cmx-budget-overview-panel-liquid">
+					<div class="cmx-budget-overview-panel-head">
+						<h3>Liquiditätsprognose</h3>
+						<span><?php echo \esc_html((string) ((int) ($liquidity['summary']['total_count'] ?? 0))); ?> offene Belege</span>
+					</div>
+					<p class="cmx-budget-overview-panel-text">Erwartete Zahlungseingänge aus offenen Rechnungen und erwartete Zahlungsausgänge aus offenen Lieferantenrechnungen nach Fälligkeitsdatum.</p>
+
+					<div class="cmx-budget-overview-liquid-kpis">
+						<div class="cmx-budget-overview-liquid-kpi">
+							<span>Erwartete Eingänge</span>
+							<strong><?php echo \esc_html(cmx_budget_overview_money((float) ($liquidity['summary']['income_open'] ?? 0.0))); ?></strong>
+							<small>30 Tage: <?php echo \esc_html(cmx_budget_overview_money((float) ($liquidity['summary']['income_next_30'] ?? 0.0))); ?></small>
+						</div>
+						<div class="cmx-budget-overview-liquid-kpi">
+							<span>Erwartete Ausgänge</span>
+							<strong><?php echo \esc_html(cmx_budget_overview_money((float) ($liquidity['summary']['expense_open'] ?? 0.0))); ?></strong>
+							<small>30 Tage: <?php echo \esc_html(cmx_budget_overview_money((float) ($liquidity['summary']['expense_next_30'] ?? 0.0))); ?></small>
+						</div>
+						<div class="cmx-budget-overview-liquid-kpi">
+							<span>Liquiditätssaldo</span>
+							<strong><?php echo \esc_html(cmx_budget_overview_signed_money((float) ($liquidity['summary']['net_open'] ?? 0.0))); ?></strong>
+							<small>30 Tage: <?php echo \esc_html(cmx_budget_overview_signed_money((float) ($liquidity['summary']['net_next_30'] ?? 0.0))); ?></small>
+						</div>
+					</div>
+
+					<table class="widefat striped cmx-budget-overview-table cmx-budget-overview-liquid-table">
+						<thead>
+							<tr>
+								<th>Zeitraum</th>
+								<th class="num">Eingänge</th>
+								<th class="num">Ausgänge</th>
+								<th class="num">Saldo</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php if (empty($liquidity['rows'])) : ?>
+								<tr>
+									<td colspan="4">Aktuell keine offenen Rechnungen oder Lieferantenrechnungen vorhanden.</td>
+								</tr>
+							<?php else : ?>
+								<?php foreach ((array) $liquidity['rows'] as $forecast_row) : ?>
+									<tr class="cmx-budget-overview-liquid-row is-<?php echo \esc_attr((string) ($forecast_row['kind'] ?? 'month')); ?>">
+										<td><?php echo \esc_html((string) ($forecast_row['label'] ?? '')); ?></td>
+										<td class="num"><?php echo \esc_html(cmx_budget_overview_money((float) ($forecast_row['income'] ?? 0.0))); ?></td>
+										<td class="num"><?php echo \esc_html(cmx_budget_overview_money((float) ($forecast_row['expense'] ?? 0.0))); ?></td>
+										<td class="num"><?php echo \esc_html(cmx_budget_overview_signed_money((float) ($forecast_row['net'] ?? 0.0))); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php endif; ?>
+					</tbody>
+				</table>
 			</div>
 		</div>
 		<?php
@@ -1067,6 +1429,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 		.cmx-budget-overview-panel{
 			padding:18px;
 		}
+		.cmx-budget-overview-panel-text{
+			margin:-4px 0 16px;
+			color:#5b6779;
+			font-size:14px;
+		}
 		.cmx-budget-overview-alerts{
 			margin:0;
 			padding:0;
@@ -1102,6 +1469,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 			text-align:right;
 			white-space:nowrap;
 		}
+		.cmx-budget-overview-panel-liquid{
+			margin-top:18px;
+		}
+		.cmx-budget-overview-liquid-kpis{
+			display:grid;
+			grid-template-columns:repeat(3, minmax(0, 1fr));
+			gap:14px;
+			margin:0 0 16px;
+		}
+		.cmx-budget-overview-liquid-kpi{
+			padding:14px 16px;
+			background:#f8fbff;
+			border:1px solid #dce8f5;
+			border-radius:12px;
+		}
+		.cmx-budget-overview-liquid-kpi span{
+			display:block;
+			margin:0 0 6px;
+			color:#64748b;
+			font-size:12px;
+			text-transform:uppercase;
+			letter-spacing:.04em;
+		}
+		.cmx-budget-overview-liquid-kpi strong{
+			display:block;
+			font-size:22px;
+			line-height:1.15;
+		}
+		.cmx-budget-overview-liquid-kpi small{
+			display:block;
+			margin-top:8px;
+			color:#64748b;
+			font-size:12px;
+			line-height:1.35;
+		}
+		.cmx-budget-overview-liquid-row.is-overdue td:first-child{
+			color:#b42318;
+			font-weight:700;
+		}
 		.cmx-budget-status{
 			display:inline-flex;
 			align-items:center;
@@ -1124,6 +1530,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_budget_overview_render_html')) {
 			.cmx-budget-overview-cards{grid-template-columns:1fr}
 			.cmx-budget-overview-bottom{grid-template-columns:1fr}
 			.cmx-budget-overview-kpis{grid-template-columns:1fr}
+			.cmx-budget-overview-liquid-kpis{grid-template-columns:1fr}
 		}
 	</style>';
 });
