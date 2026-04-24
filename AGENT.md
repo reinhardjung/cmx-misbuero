@@ -1,7 +1,7 @@
 # AGENT.md
 
 ## Purpose
-Defines rules for automation and AI agents in this repository.
+Defines rules for automation and AI agents in this repository!
 
 ## Coding Rules
 - Only PHP is allowed
