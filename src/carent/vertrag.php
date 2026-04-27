@@ -183,6 +183,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_article_image_src')) {
+	function cmx_carent_vertrag_article_image_src(int $artikel_id): string {
+		if ($artikel_id <= 0) {
+			return '';
+		}
+
+		$gallery = \function_exists(__NAMESPACE__ . '\\cmx_li_gallery_get')
+			? (array) cmx_li_gallery_get($artikel_id, '_cmx_local_image_artikel')
+			: (array) \get_post_meta($artikel_id, '_cmx_local_image_artikel_gallery', true);
+		$primary_image = \is_array($gallery[0] ?? null) ? (array) $gallery[0] : [];
+		$local_path = \trim((string) (($primary_image['path'] ?? '') ?: \get_post_meta($artikel_id, '_cmx_local_image_artikel_path', true)));
+		if ($local_path !== '' && \is_readable($local_path)) {
+			$mime = (string) (\wp_check_filetype($local_path)['type'] ?? '');
+			if ($mime !== '' && \str_starts_with($mime, 'image/')) {
+				$raw = \file_get_contents($local_path);
+				if (\is_string($raw) && $raw !== '') {
+					return 'data:' . $mime . ';base64,' . \base64_encode($raw);
+				}
+			}
+		}
+
+		$local_url = \trim((string) (($primary_image['url'] ?? '') ?: \get_post_meta($artikel_id, '_cmx_local_image_artikel_url', true)));
+		if ($local_url !== '') {
+			$uploads = \wp_upload_dir();
+			$baseurl = \untrailingslashit((string) ($uploads['baseurl'] ?? ''));
+			$basedir = \untrailingslashit((string) ($uploads['basedir'] ?? ''));
+			if ($baseurl !== '' && $basedir !== '' && \str_starts_with($local_url, $baseurl)) {
+				$rel = \ltrim((string) \substr($local_url, \strlen($baseurl)), '/');
+				$rel = (string) \preg_replace('/\?.*$/', '', $rel);
+				$resolved_path = $basedir . '/' . $rel;
+				if (\is_readable($resolved_path)) {
+					$mime = (string) (\wp_check_filetype($resolved_path)['type'] ?? '');
+					$raw = \file_get_contents($resolved_path);
+					if ($mime !== '' && \str_starts_with($mime, 'image/') && \is_string($raw) && $raw !== '') {
+						return 'data:' . $mime . ';base64,' . \base64_encode($raw);
+					}
+				}
+			}
+		}
+
+		return cmx_carent_vertrag_image_data_uri((int) \get_post_thumbnail_id($artikel_id));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_info')) {
 	function cmx_carent_vertrag_attachment_info(int $attachment_id, bool $with_data_uri = false): array {
 		if ($attachment_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment') {
@@ -702,13 +746,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_normalize_rel_path')
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_address_lines_from_string')) {
-	function cmx_carent_vertrag_address_lines_from_string(string $address, string $country = ''): array {
-		$address = \trim($address);
-		if ($address === '') {
-			return [];
+	function cmx_carent_vertrag_known_country_label(string $country): string {
+		$country = \trim($country);
+		if ($country === '' || !\function_exists(__NAMESPACE__ . '\\cmx_countries_from_taxonomy')) {
+			return '';
 		}
 
+		$needle = \strtolower(\remove_accents($country));
+		foreach (cmx_countries_from_taxonomy() as $option) {
+			$value = \strtolower(\remove_accents((string) ($option['value'] ?? '')));
+			$label = (string) ($option['label'] ?? '');
+			$label_key = \strtolower(\remove_accents($label));
+			if ($needle !== '' && ($needle === $value || $needle === $label_key)) {
+				return $label;
+			}
+		}
+
+		return '';
+	}
+
+	function cmx_carent_vertrag_address_lines_from_string(string $address, string $country = ''): array {
+		$address = \trim($address);
 		$country = \trim($country);
+		$country_label = $country !== '' ? cmx_carent_vertrag_known_country_label($country) : '';
+		if ($address === '') {
+			return $country_label !== '' ? [$country_label] : [];
+		}
+
 		$lines = \preg_split('/\s*,\s*/u', $address) ?: [];
 		$lines = \array_values(\array_filter(\array_map(static function (string $value): string {
 			return \trim($value);
@@ -721,6 +785,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_address_lines_from_s
 			}
 			return true;
 		}));
+		$lines = \array_map(static function (string $value): string {
+			$country_label = cmx_carent_vertrag_known_country_label($value);
+			return $country_label !== '' ? $country_label : $value;
+		}, $lines);
+		if ($country_label !== '') {
+			$has_country = false;
+			foreach ($lines as $line) {
+				if (\strcasecmp($line, $country_label) === 0 || \strcasecmp($line, $country) === 0) {
+					$has_country = true;
+					break;
+				}
+			}
+			if (!$has_country) {
+				$lines[] = $country_label;
+			}
+		}
 
 		return $lines;
 	}
@@ -1266,7 +1346,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		if ($contact_address === '' && $contact_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_telefonbuch_address_string')) {
 			$contact_address = \trim((string) cmx_telefonbuch_address_string($contact_id));
 		}
-		$contact_address_lines = cmx_carent_vertrag_address_lines_from_string($contact_address, '');
+		$contact_country = $contact_id > 0 ? \trim((string) \get_post_meta($contact_id, $self_country_key, true)) : '';
+		$contact_address_lines = cmx_carent_vertrag_address_lines_from_string($contact_address, $contact_country);
 		$contact_email = \sanitize_email((string) ($contact['email'] ?? ''));
 		if ($contact_email === '' && $contact_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
 			$contact_email = \sanitize_email((string) cmx_kommunikation_primary_email($contact_id));
@@ -1318,7 +1399,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		if ($vehicle_title === '') {
 			$vehicle_title = \trim((string) ($vehicle['label'] ?? ''));
 		}
-		$vehicle_image_src = $article_id > 0 ? cmx_carent_vertrag_image_data_uri((int) \get_post_thumbnail_id($article_id)) : '';
+		$vehicle_image_src = $article_id > 0 ? cmx_carent_vertrag_article_image_src($article_id) : '';
 		$vehicle_number = \trim((string) (($variant['sku'] ?? '') ?: ($vehicle['number'] ?? '')));
 		$vehicle_plate = \trim((string) (($vehicle['kennzeichen'] ?? '') ?: ($article['kennzeichen'] ?? '')));
 		$vehicle_fuel = \trim((string) ($article['treibstoff'] ?? ''));
@@ -1355,7 +1436,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		<head>
 			<meta charset="utf-8">
 			<style>
-				@page{margin:0}
+				@page{margin:8mm 0 0}
+				@page:first{margin:0}
 				*{box-sizing:border-box}
 				body{margin:0;background:#fff;color:#111;font-family:DejaVu Sans,Arial,sans-serif;font-size:10px;line-height:1.25}
 				.sheet{position:relative;width:210mm;min-height:297mm;padding:44.2mm 9.5mm 14mm;background:#fff}
@@ -1386,24 +1468,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.icon-badge .pdf-icon{width:3.8mm;height:3.8mm}
 				.pdf-field-icon{width:4.2mm;height:4.2mm}
 				.card-table{width:177.3mm;border-collapse:separate;border-spacing:0;table-layout:fixed;margin:0 0 4mm}
-				.card{vertical-align:top;padding:0;background:transparent}
-				.card-panel{height:42mm;background:#f4f7fb;border-radius:2mm;padding:5mm 5mm 4mm}
+				.card{height:35mm;vertical-align:top;background:#f4f7fb;border-radius:2mm;padding:0;text-align:left}
+				.card-inner{height:26mm;padding:5mm 5mm 4mm;text-align:left}
 				.card-left{width:57.8mm;max-width:57.8mm}
-				.card-right{width:115.5mm;max-width:115.5mm}
-				.card-left .card-panel{width:57.8mm}
-				.card-right .card-panel{width:115.5mm}
-				.card-spacer{width:4mm;max-width:4mm;padding:0}
+				.card-right{width:115.5mm;max-width:115.5mm;background:transparent}
+				.card-right .card-inner{position:relative;left:-39.7mm;width:105.5mm;background:#f4f7fb;border-radius:2mm}
+				.card-spacer{width:4mm;max-width:4mm;padding:0;background:transparent}
 				.party-table{width:100%;border-collapse:collapse}
 				.party-icon{width:8.5mm;vertical-align:top}
-				.party-icon .icon-badge{width:5.6mm;height:5.6mm;border-radius:50%;padding-top:1.4mm}
-				.party-icon .icon-badge .pdf-icon{width:3.8mm;height:3.8mm}
+				.party-icon .icon-badge{width:5.6mm;height:5.6mm;border-radius:999mm;padding-top:1.4mm;line-height:1}
+				.party-icon .icon-badge .pdf-icon{width:3.8mm;height:3.8mm;vertical-align:top}
 				.party-title{font-size:9.2px;font-weight:800;text-transform:uppercase;margin:.5mm 0 2mm}
 				.party-line{font-size:9px;line-height:1.42}
-				.party-contact{margin-top:4mm;font-size:9px;line-height:1.35}
+				.tenant-details{width:100%;border-collapse:collapse;table-layout:fixed}
+				.tenant-address{width:55%;vertical-align:top}
+				.tenant-contact-cell{width:45%;vertical-align:top;padding-top:0}
+				.party-contact{margin-top:0;font-size:9px;line-height:1.35}
 				.party-contact .pdf-icon{width:10px;height:10px;vertical-align:middle;margin-right:4px}
-				.vehicle-box{border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
-				.vehicle-table{width:100%;border-collapse:collapse;table-layout:fixed}
-				.vehicle-image-cell{width:34%;height:40mm;text-align:center;vertical-align:middle;border-right:1px solid #c7d4e6}
+				.vehicle-box{width:190mm;border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
+				.vehicle-table{width:190mm;border-collapse:collapse;table-layout:fixed}
+				.vehicle-image-cell{width:60.1mm;height:40mm;text-align:center;vertical-align:middle;border-right:1px solid #c7d4e6}
 				.vehicle-image{max-width:60mm;max-height:34mm;width:auto;height:auto}
 				.vehicle-placeholder{color:#001b3d}
 				.vehicle-placeholder .pdf-icon{width:22mm;height:22mm}
@@ -1413,10 +1497,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.field-copy{display:inline-block;width:42mm;vertical-align:top}
 				.field-copy strong{display:block;color:#001b3d;font-size:9px}
 				.field-copy span{display:block;font-size:8.8px}
-				.two-col{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:4.5mm}
-				.two-col>tbody>tr>td{width:50%;vertical-align:top}
-				.two-col-gap{width:6mm!important}
+				.two-col{width:190mm;border-collapse:collapse;table-layout:fixed;margin-bottom:4.5mm}
+				.two-col-panel{width:50%;max-width:50%;vertical-align:top}
+				.two-col-left,.two-col-right{padding:0}
+				.two-col-left .two-col-inner{margin-right:3mm}
+				.two-col-right .two-col-inner{margin-left:3mm}
+				.two-col .section-title{margin-right:0}
+				.section-gap{height:4mm;line-height:4mm}
 				.panel{background:#f4f7fb;border-radius:2mm;padding:4mm;min-height:41mm}
+				.two-col-right .panel{min-height:53mm}
 				.insurance-table{width:86%;margin:2mm auto 3mm;border-collapse:collapse}
 				.insurance-table td{padding:2mm 0;font-size:10px;font-weight:800}
 				.insurance-table tr+tr td{border-top:1px solid #d5deec}
@@ -1424,7 +1513,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.insurance-note{text-align:center;color:#001b3d;font-weight:800;margin-top:2mm}
 				.check-row{margin:0 0 2.2mm}
 				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm}
-				.transfer-strip{background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.transfer-strip{width:190mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
 				.transfer-table td{font-size:9.2px;vertical-align:top;border-right:1px solid #8aa7cc;padding:0 5mm}
 				.transfer-table td:last-child{border-right:0}
@@ -1444,7 +1534,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.signature-line .pdf-icon{width:11mm;height:11mm;vertical-align:bottom;margin-right:3mm}
 				.signature-img{max-width:45mm;max-height:10mm;width:auto;height:auto}
 				.signature-label{font-size:8.5px;margin-top:1.2mm}
-				.footer{position:absolute;left:0;bottom:0;width:210mm;height:8mm;background:#001b3d;color:#fff;text-align:center;font-size:8.5px;font-weight:800;padding-top:2.2mm}
+				.footer{display:none}
 			</style>
 		</head>
 		<body>
@@ -1494,11 +1584,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					<colgroup>
 						<col style="width:57.8mm;">
 						<col style="width:4mm;">
-							<col style="width:115.5mm;">
+						<col style="width:115.5mm;">
 					</colgroup>
 					<tr>
 						<td class="card card-left" style="width:57.8mm;min-width:57.8mm;max-width:57.8mm;">
-							<div class="card-panel">
+							<div class="card-inner">
 								<table class="party-table" role="presentation"><tr><td class="party-icon"><?php echo cmx_carent_vertrag_icon_badge('user-round'); ?></td><td>
 									<div class="party-title">Vermieter</div>
 									<?php if ($self_title !== '') : ?><div class="party-line"><?php echo \esc_html($self_title); ?></div><?php endif; ?>
@@ -1506,26 +1596,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 								</td></tr></table>
 							</div>
 						</td>
-						<td class="card-spacer" style="width:4mm;min-width:4mm;max-width:4mm;padding:0;"></td>
+						<td class="card-spacer" style="width:4mm;min-width:4mm;max-width:4mm;padding:0;background:transparent;"></td>
 						<td class="card card-right" style="width:115.5mm;min-width:115.5mm;max-width:115.5mm;">
-							<div class="card-panel">
+							<div class="card-inner">
 								<table class="party-table" role="presentation"><tr><td class="party-icon"><?php echo cmx_carent_vertrag_icon_badge('user-round'); ?></td><td>
 									<div class="party-title">Mieter</div>
-									<?php if (($contact['title'] ?? '') !== '') : ?><div class="party-line"><?php echo \esc_html((string) $contact['title']); ?></div><?php endif; ?>
-									<?php foreach ($contact_address_lines as $address_line) : ?><div class="party-line"><?php echo \esc_html($address_line); ?></div><?php endforeach; ?>
-									<div class="party-contact">
-										<?php if ($contact_phone !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_phone); ?></div><?php endif; ?>
-										<?php if ($contact_email !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_email); ?></div><?php endif; ?>
-									</div>
+									<table class="tenant-details" role="presentation"><tr>
+										<td class="tenant-address">
+											<?php if (($contact['title'] ?? '') !== '') : ?><div class="party-line"><?php echo \esc_html((string) $contact['title']); ?></div><?php endif; ?>
+											<?php foreach ($contact_address_lines as $address_line) : ?><div class="party-line"><?php echo \esc_html($address_line); ?></div><?php endforeach; ?>
+										</td>
+										<td class="tenant-contact-cell">
+											<div class="party-contact">
+												<?php if ($contact_phone !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_phone); ?></div><?php endif; ?>
+												<?php if ($contact_email !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_email); ?></div><?php endif; ?>
+											</div>
+										</td>
+									</tr></table>
 								</td></tr></table>
 							</div>
 						</td>
 					</tr>
 				</table>
 
+				<div class="section-gap"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('car'); ?>FAHRZEUG</div>
 				<div class="vehicle-box">
 					<table class="vehicle-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+						<colgroup>
+							<col style="width:60.1mm;">
+							<col style="width:64.95mm;">
+							<col style="width:64.95mm;">
+						</colgroup>
 						<tr>
 							<td class="vehicle-image-cell" rowspan="4">
 								<?php if ($vehicle_image_src !== '') : ?>
@@ -1552,32 +1654,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					</table>
 				</div>
 
+				<div class="section-gap"></div>
 				<table class="two-col" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<colgroup>
+						<col style="width:50%;">
+						<col style="width:50%;">
+					</colgroup>
 					<tr>
-						<td>
-							<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('shield-check'); ?>VERSICHERUNG</div>
-							<div class="panel">
-								<table class="insurance-table" role="presentation">
-									<tr><td>KASKO MIN.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_min); ?> CHF</td></tr>
-									<tr><td>KASKO MAX.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_max); ?> CHF</td></tr>
-								</table>
-								<div class="insurance-note">Selbstbehalt im Schadenfall zu Lasten Kunde:</div>
-								<div style="text-align:center">Haftpflicht, Teil- oder Vollkasko wie oben angegeben.</div>
+						<td class="two-col-panel two-col-left" style="width:50%;max-width:50%;padding:0;">
+							<div class="two-col-inner" style="margin-right:3mm;">
+								<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('shield-check'); ?>VERSICHERUNG</div>
+								<div class="panel">
+									<table class="insurance-table" role="presentation">
+										<tr><td>KASKO MIN.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_min); ?> CHF</td></tr>
+										<tr><td>KASKO MAX.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_max); ?> CHF</td></tr>
+									</table>
+									<div class="insurance-note">Selbstbehalt im Schadenfall zu Lasten Kunde:</div>
+									<div style="text-align:center">Haftpflicht, Teil- oder Vollkasko wie oben angegeben.</div>
+								</div>
 							</div>
 						</td>
-						<td class="two-col-gap"></td>
-						<td>
-							<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('clipboard-list'); ?>ÜBERNAHME</div>
-							<div class="panel">
-								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</div>
-								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen müssen aufbewahrt werden.</div>
-								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Das Fahrzeug ist vollgetankt zurückzugeben, andernfalls werden Treibstoffkosten plus CHF 50.- Aufwandsentschädigung verrechnet.</div>
-								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Besondere Abmachungen: <?php echo \esc_html($special_notes !== '' ? $special_notes : ''); ?></div>
+						<td class="two-col-panel two-col-right" style="width:50%;max-width:50%;padding:0;">
+							<div class="two-col-inner" style="margin-left:3mm;">
+								<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('clipboard-list'); ?>ÜBERNAHME</div>
+								<div class="panel">
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</div>
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen müssen aufbewahrt werden.</div>
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Das Fahrzeug ist vollgetankt zurückzugeben, andernfalls werden Treibstoffkosten plus CHF 50.- Aufwandsentschädigung verrechnet.</div>
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Besondere Abmachungen: <?php echo \esc_html($special_notes !== '' ? $special_notes : ''); ?></div>
+								</div>
 							</div>
 						</td>
 					</tr>
 				</table>
 
+				<div class="page-break-before"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calendar'); ?>MIETDATEN</div>
 				<div class="transfer-strip">
 					<table class="transfer-table" role="presentation">
@@ -1613,7 +1724,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 						</td>
 					</tr>
 				</table>
-				<div class="footer">Seite 1 / 2</div>
+				<div class="footer"></div>
 			</div>
 		</body>
 		</html>
@@ -1666,6 +1777,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 		$dompdf->loadHtml($html, 'UTF-8');
 		$dompdf->setPaper('A4');
 		$dompdf->render();
+		$canvas = $dompdf->getCanvas();
+		$font_metrics = $dompdf->getFontMetrics();
+		$font = $font_metrics->getFont('DejaVu Sans', 'bold');
+		if (\method_exists($canvas, 'page_script')) {
+			$canvas->page_script(static function (int $page_number, int $page_count, $canvas, $font_metrics): void {
+				$font = $font_metrics->getFont('DejaVu Sans', 'bold');
+				$text = 'Seite ' . $page_number . ' von ' . $page_count;
+				$font_size = 8.5;
+				$text_width = $font_metrics->getTextWidth($text, $font, $font_size);
+				$canvas->filled_rectangle(0, 818, 595.28, 24, [0, 0.106, 0.239]);
+				$canvas->text(595.28 - 28 - $text_width, 826, $text, $font, $font_size, [1, 1, 1]);
+			});
+		} else {
+			$canvas->page_text(500, 826, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
+		}
 
 		$pdf_binary = $dompdf->output();
 		if (!\is_string($pdf_binary) || $pdf_binary === '') {
