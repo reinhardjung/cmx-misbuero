@@ -1485,6 +1485,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.tenant-contact-cell{width:45%;vertical-align:top;padding-top:0}
 				.party-contact{margin-top:0;font-size:9px;line-height:1.35}
 				.party-contact .pdf-icon{width:10px;height:10px;vertical-align:middle;margin-right:4px}
+				.party-contact .phone-icon{position:relative;top:5px}
+				.party-contact .mail-icon{position:relative;top:5px}
 				.vehicle-box{width:190mm;border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
 				.vehicle-table{width:190mm;border-collapse:collapse;table-layout:fixed}
 				.vehicle-image-cell{width:60.1mm;height:40mm;text-align:center;vertical-align:middle;border-right:1px solid #c7d4e6}
@@ -1608,8 +1610,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 										</td>
 										<td class="tenant-contact-cell">
 											<div class="party-contact">
-												<?php if ($contact_phone !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_phone); ?></div><?php endif; ?>
-												<?php if ($contact_email !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon', '#001b3d'); ?><?php echo \esc_html($contact_email); ?></div><?php endif; ?>
+												<?php if ($contact_phone !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon phone-icon', '#001b3d'); ?><?php echo \esc_html($contact_phone); ?></div><?php endif; ?>
+												<?php if ($contact_email !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon mail-icon', '#001b3d'); ?><?php echo \esc_html($contact_email); ?></div><?php endif; ?>
 											</div>
 										</td>
 									</tr></table>
