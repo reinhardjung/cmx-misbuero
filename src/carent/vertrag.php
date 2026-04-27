@@ -116,6 +116,75 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_html_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_icon_svg')) {
+	function cmx_carent_vertrag_icon_svg(string $name, string $class = 'pdf-icon', string $color = '#002754'): string {
+		$name = \sanitize_file_name($name);
+		if ($name === '') {
+			return '';
+		}
+
+		$path = \dirname(__DIR__, 2) . '/assets/icons/' . $name . '.svg';
+		if (!\is_readable($path)) {
+			return '';
+		}
+
+		$svg = \file_get_contents($path);
+		if (!\is_string($svg) || \trim($svg) === '') {
+			return '';
+		}
+
+		$svg = \preg_replace('/<svg\b([^>]*)>/i', '<svg$1 class="' . \esc_attr($class) . '" aria-hidden="true" focusable="false">', $svg, 1);
+		$svg = \str_replace(['currentColor', 'black', '#000000', '#000'], $color, $svg);
+
+		return $svg;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_icon_badge')) {
+	function cmx_carent_vertrag_icon_badge(string $name): string {
+		$icon = cmx_carent_vertrag_icon_svg($name, 'pdf-icon', '#ffffff');
+		return '<span class="icon-badge">' . $icon . '</span>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_field_html')) {
+	function cmx_carent_vertrag_field_html(string $icon, string $label, string $value): string {
+		return '<td class="vehicle-field">'
+			. '<span class="field-icon">' . cmx_carent_vertrag_icon_svg($icon, 'pdf-field-icon', '#002754') . '</span>'
+			. '<span class="field-copy"><strong>' . \esc_html($label) . '</strong><span>' . cmx_carent_vertrag_html_value($value) . '</span></span>'
+			. '</td>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri')) {
+	function cmx_carent_vertrag_image_data_uri(int $attachment_id): string {
+		if ($attachment_id <= 0) {
+			return '';
+		}
+
+		$path = (string) \get_attached_file($attachment_id);
+		if ($path === '' || !\is_readable($path)) {
+			return '';
+		}
+
+		$mime = (string) \get_post_mime_type($attachment_id);
+		if ($mime === '' || !\str_starts_with($mime, 'image/')) {
+			$filetype = \wp_check_filetype($path);
+			$mime = (string) ($filetype['type'] ?? '');
+		}
+		if ($mime === '' || !\str_starts_with($mime, 'image/')) {
+			return '';
+		}
+
+		$raw = \file_get_contents($path);
+		if (!\is_string($raw) || $raw === '') {
+			return '';
+		}
+
+		return 'data:' . $mime . ';base64,' . \base64_encode($raw);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_info')) {
 	function cmx_carent_vertrag_attachment_info(int $attachment_id, bool $with_data_uri = false): array {
 		if ($attachment_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment') {
@@ -1243,6 +1312,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$rueckgabe_km_stand = cmx_carent_vertrag_format_int(\trim((string) ($rueckgabe['km_stand'] ?? '')));
 		$rueckgabe_datum = cmx_carent_vertrag_format_date(\trim((string) ($rueckgabe['datum'] ?? '')));
 		$rueckgabe_uhrzeit = \trim((string) ($rueckgabe['uhrzeit'] ?? ''));
+		$article = (array) ($vehicle['article_meta'] ?? []);
+		$variant = (array) ($vehicle['variant_meta'] ?? []);
+		$article_id = isset($vehicle['article_id']) ? (int) $vehicle['article_id'] : 0;
+		$vehicle_title = $article_id > 0 ? \trim((string) \get_the_title($article_id)) : '';
+		if ($vehicle_title === '') {
+			$vehicle_title = \trim((string) ($vehicle['label'] ?? ''));
+		}
+		$vehicle_image_src = $article_id > 0 ? cmx_carent_vertrag_image_data_uri((int) \get_post_thumbnail_id($article_id)) : '';
+		$vehicle_number = \trim((string) (($variant['sku'] ?? '') ?: ($vehicle['number'] ?? '')));
+		$vehicle_plate = \trim((string) (($vehicle['kennzeichen'] ?? '') ?: ($article['kennzeichen'] ?? '')));
+		$vehicle_fuel = \trim((string) ($article['treibstoff'] ?? ''));
+		$vehicle_limit_raw = \trim((string) (($vehicle['begrenzung'] ?? '') ?: ($article['begrenzung'] ?? '')));
+		$vehicle_limit = $vehicle_limit_raw !== '' && cmx_carent_vertrag_parse_number($vehicle_limit_raw) > 0
+			? cmx_carent_vertrag_format_int($vehicle_limit_raw)
+			: 'unbegrenzt';
+		$vehicle_more_price = cmx_carent_vertrag_format_money((string) (($vehicle['mehrpreis'] ?? '') ?: ($article['mehrpreis'] ?? '')));
+		$vehicle_unit = \trim((string) ($variant['einheit'] ?? ''));
+		$vehicle_price = cmx_carent_vertrag_format_money((string) ($vehicle['mietpreis'] ?? ($variant['vk'] ?? '')));
+		$vehicle_amount = \trim((string) ($vehicle['anzahl'] ?? ($variant['anzahl'] ?? '')));
+		$vehicle_kasko_min = cmx_carent_vertrag_format_money((string) (($vehicle['kasko_min'] ?? '') ?: ($article['kasko_min'] ?? '')));
+		$vehicle_kasko_max = cmx_carent_vertrag_format_money((string) (($vehicle['kasko_max'] ?? '') ?: ($article['kasko_max'] ?? '')));
+		$rental_total = cmx_carent_vertrag_format_money((string) ($vehicle['summe'] ?? ''));
+		$damage_rows = (array) (($data['damage'] ?? [])['rows'] ?? []);
+		$damage_total = $damage_rows !== [] ? $vehicle_kasko_max : '';
+		$total_amount = cmx_carent_vertrag_format_money(
+			cmx_carent_vertrag_parse_number($rental_total) + cmx_carent_vertrag_parse_number($damage_total)
+		);
+		$duration_label = cmx_carent_vertrag_join_text_parts([$vehicle_amount, $vehicle_unit], ' ');
+		$special_notes = \trim((string) ($uebernahme['besondere_abmachungen'] ?? ''));
+		$self_signature = (array) (($uebernahme['signatures'] ?? [])['vermieter'] ?? []);
+		$contact_signature = (array) (($uebernahme['signatures'] ?? [])['mieter'] ?? []);
+		$self_street = \trim((string) ($self_address_lines[0] ?? ''));
+		$self_zip_city = \trim((string) ($self_address_lines[1] ?? ''));
+		if (\count($self_address_lines) > 2) {
+			$self_zip_city = \trim($self_zip_city . ' ' . \implode(' ', \array_slice($self_address_lines, 2)));
+		}
+		$logo_link = $self_website_link !== '' ? $self_website_link : \home_url('/');
 		\ob_start();
 		?>
 		<!doctype html>
@@ -1250,139 +1356,242 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		<head>
 			<meta charset="utf-8">
 			<style>
-				@page{margin:10mm 8mm 9mm}
+				@page{margin:0}
 				*{box-sizing:border-box}
-				body{margin:0;background:#fff}
-				.page{width:100%}
+				body{margin:0;background:#fff;color:#111;font-family:DejaVu Sans,Arial,sans-serif;font-size:10px;line-height:1.25}
+				.sheet{position:relative;width:210mm;min-height:297mm;padding:42mm 9.5mm 14mm;background:#fff}
+				.topbar{position:absolute;left:0;top:0;width:210mm;height:36mm;background:#002754;color:#fff;padding:7mm 9.5mm}
 				.header-table{width:100%;border-collapse:collapse;table-layout:fixed}
-				.header-address{width:34%;vertical-align:top;text-align:left;padding:2px 18px 0 0}
-				.header-logo{width:32%;vertical-align:top;text-align:center;padding:0 12px}
-				.header-contact{width:34%;vertical-align:top;text-align:right;padding-top:2px}
-				.brand-logo{display:block;max-width:220px;max-height:90px;width:auto;height:auto;margin:0 auto}
-				.brand-contract-label{margin-top:6px;font-size:11px;line-height:1;color:#111;text-align:center}
-				.header-company{font-size:13px;font-weight:700;line-height:1.15;color:#111}
-				.header-line{font-size:12px;line-height:1.1;color:#222}
-				.header-contact-line{font-size:12px;line-height:1.1;color:#222}
-				.header-contact-link{color:#222;text-decoration:none}
-				.contract-section-title{margin:36px 0 8px;font-size:13px;font-weight:700;line-height:1.2;color:#111}
-				.contract-party-table{width:100%;margin-top:0;border-collapse:collapse;table-layout:auto}
-				.contract-party-label{width:95px;min-width:95px;max-width:95px;padding:7px 6px 7px 0;vertical-align:top;font-size:11px;font-weight:700;font-style:italic;line-height:1.25;color:#111;white-space:nowrap}
-				.contract-party-value{padding:7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;white-space:nowrap}
-				.contract-party-table tr+tr .contract-party-label,
-				.contract-party-table tr+tr .contract-party-value{border-top:1px solid #d8dbe2}
-				.contract-transfer-table{width:100%;margin-top:12px;border-collapse:collapse;table-layout:fixed}
-				.contract-transfer-table td{padding:7px 8px 7px 0;vertical-align:top;font-size:11px;line-height:1.25;color:#222;border-top:1px solid #d8dbe2;white-space:nowrap}
-				.contract-transfer-kind{width:24%;font-weight:700;font-style:italic;color:#111}
-				.contract-transfer-value{font-weight:700;color:#111}
-				.contract-inline-label{font-weight:400;color:#222}
-				.contract-inline-value{font-weight:700;color:#111}
-				.contract-inline-separator{color:#777}
-				.contract-inline-note{margin-top:4px;font-weight:400;color:#222;white-space:normal}
-				.contract-note{margin-top:14px;font-size:11px;line-height:1.35;color:#222}
-				.contract-note-text{margin:0}
+				.header-logo-cell{width:30%;padding-right:10mm;border-right:1px solid #4274ad;vertical-align:middle}
+				.header-title-cell{width:70%;padding-left:12mm;vertical-align:middle}
+				.brand-logo-wrap{display:inline-block;background:#fff;border-radius:1.8mm;padding:3mm 4mm;line-height:0}
+				.brand-logo-link{display:inline-block;text-decoration:none;border:0;line-height:0}
+				.brand-logo{display:block;max-width:43mm;max-height:15mm;width:auto;height:auto}
+				.brand-fallback{font-size:25px;line-height:1;font-weight:800;letter-spacing:.5px}
+				.brand-sub{margin-top:2mm;font-size:7px;letter-spacing:1.8px;text-transform:uppercase}
+				.doc-title{font-size:27px;line-height:1;font-weight:800;letter-spacing:1.8px}
+				.header-rule{height:1px;background:#3d70a8;margin:6mm 0 4mm}
+				.header-contact-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				.header-contact-table td{width:50%;color:#fff;font-size:8.8px;vertical-align:top}
+				.header-contact-table td+td{padding-left:11mm}
+				.header-contact-table .pdf-icon{width:11px;height:11px;vertical-align:middle;margin-right:4px}
+				.header-contact-title{font-size:9.5px;font-weight:800;line-height:1.2}
+				.header-contact-line{display:block;margin-top:1.1mm;font-size:8.4px;line-height:1.2;color:#fff}
+				.header-contact-link{color:#fff;text-decoration:none;font-weight:700}
+				.section-title{margin:0 0 3mm;color:#002754;font-size:13px;font-weight:800;text-transform:uppercase;border-bottom:1px solid #c7d4e6;padding-bottom:1.6mm}
+				.section-title .icon-badge{margin-right:4mm}
+				.icon-badge{display:inline-block;width:7mm;height:7mm;background:#002754;border-radius:1.4mm;text-align:center;vertical-align:middle;padding-top:1.4mm}
+				.icon-badge .pdf-icon{width:4.2mm;height:4.2mm}
+				.pdf-field-icon{width:4.2mm;height:4.2mm}
+				.card-table{width:100%;border-collapse:separate;border-spacing:0 0;table-layout:fixed;margin-bottom:4mm}
+				.card{background:#f4f7fb;border-radius:2mm;padding:4mm;vertical-align:top}
+				.card-spacer{width:5mm}
+				.party-table{width:100%;border-collapse:collapse}
+				.party-icon{width:11mm;vertical-align:top}
+				.party-icon .icon-badge{width:8mm;height:8mm;border-radius:4mm;padding-top:1.8mm}
+				.party-title{font-weight:800;text-transform:uppercase;margin-bottom:1.2mm}
+				.party-line{font-size:9.3px}
+				.party-contact{margin-top:2mm}
+				.party-contact .pdf-icon{width:10px;height:10px;vertical-align:middle;margin-right:3px}
+				.vehicle-box{border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
+				.vehicle-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				.vehicle-image-cell{width:34%;height:40mm;text-align:center;vertical-align:middle;border-right:1px solid #c7d4e6}
+				.vehicle-image{max-width:60mm;max-height:34mm;width:auto;height:auto}
+				.vehicle-placeholder{color:#002754}
+				.vehicle-placeholder .pdf-icon{width:22mm;height:22mm}
+				.vehicle-field{width:33%;height:10mm;border-bottom:1px solid #c7d4e6;padding:2mm 3mm;vertical-align:middle}
+				.vehicle-field+.vehicle-field{border-left:1px solid #c7d4e6}
+				.field-icon{display:inline-block;width:8mm;vertical-align:top}
+				.field-copy{display:inline-block;width:42mm;vertical-align:top}
+				.field-copy strong{display:block;color:#002754;font-size:9px}
+				.field-copy span{display:block;font-size:8.8px}
+				.two-col{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:4.5mm}
+				.two-col>tbody>tr>td{width:50%;vertical-align:top}
+				.two-col-gap{width:6mm!important}
+				.panel{background:#f4f7fb;border-radius:2mm;padding:4mm;min-height:41mm}
+				.insurance-table{width:86%;margin:2mm auto 3mm;border-collapse:collapse}
+				.insurance-table td{padding:2mm 0;font-size:10px;font-weight:800}
+				.insurance-table tr+tr td{border-top:1px solid #d5deec}
+				.insurance-table td:last-child{text-align:right}
+				.insurance-note{text-align:center;color:#002754;font-weight:800;margin-top:2mm}
+				.check-row{margin:0 0 2.2mm}
+				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm}
+				.transfer-strip{background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				.transfer-table td{font-size:9.2px;vertical-align:top;border-right:1px solid #8aa7cc;padding:0 5mm}
+				.transfer-table td:last-child{border-right:0}
+				.transfer-label{display:block;color:#002754;font-weight:800;text-transform:uppercase}
+				.transfer-value{display:block;font-weight:800}
+				.billing{width:100%;border-collapse:collapse;margin-bottom:8mm}
+				.billing th{background:#002754;color:#fff;text-align:left;text-transform:uppercase;font-size:8.5px;padding:2.5mm 4mm}
+				.billing th:not(:last-child),.billing td:not(:last-child){border-right:1px solid #c7d4e6}
+				.billing td{border:1px solid #c7d4e6;border-top:0;padding:2mm 4mm;font-size:9px}
+				.billing .num{text-align:center}
+				.billing .money{text-align:right}
+				.billing-total-label{text-align:right!important;color:#002754;font-size:13px!important;font-weight:800}
+				.billing-total-value{background:#002754;color:#fff;font-size:14px!important;font-weight:800;text-align:center!important}
+				.signatures{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:2mm}
+				.signatures td{width:50%;vertical-align:bottom;padding-right:10mm}
+				.signature-line{border-bottom:1px solid #c7d4e6;height:11mm;position:relative}
+				.signature-line .pdf-icon{width:11mm;height:11mm;vertical-align:bottom;margin-right:3mm}
+				.signature-img{max-width:45mm;max-height:10mm;width:auto;height:auto}
+				.signature-label{font-size:8.5px;margin-top:1.2mm}
+				.footer{position:absolute;left:0;bottom:0;width:210mm;height:8mm;background:#002754;color:#fff;text-align:center;font-size:8.5px;font-weight:800;padding-top:2.2mm}
 			</style>
 		</head>
 		<body>
-			<div class="page">
-				<table class="header-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
-					<tr>
-						<td class="header-address">
-							<?php if ($self_title !== '') : ?>
-								<div class="header-company"><?php echo \esc_html($self_title); ?></div>
-							<?php endif; ?>
-							<?php if ($self_subtitle !== '') : ?>
-								<div class="header-line"><?php echo \esc_html($self_subtitle); ?></div>
-							<?php endif; ?>
-							<?php foreach ($self_address_lines as $address_line) : ?>
-								<div class="header-line"><?php echo \esc_html($address_line); ?></div>
-							<?php endforeach; ?>
-						</td>
-						<td class="header-logo">
-							<?php if ($logo_src !== '') : ?>
-								<img src="<?php echo \esc_attr($logo_src); ?>" alt="Logo" class="brand-logo">
-							<?php endif; ?>
-							<div class="brand-contract-label">M I E T V E R T R A G</div>
-						</td>
-						<td class="header-contact">
-							<?php if ($self_email !== '') : ?>
-								<div class="header-contact-line"><?php echo \esc_html($self_email); ?></div>
-							<?php endif; ?>
-							<?php if ($self_phone !== '') : ?>
-								<div class="header-contact-line"><?php echo \esc_html($self_phone); ?></div>
-							<?php endif; ?>
-							<?php if ($self_website !== '') : ?>
-								<div class="header-contact-line">
-									<?php if ($self_website_link !== '') : ?>
-										<a href="<?php echo \esc_url($self_website_link); ?>" class="header-contact-link"><?php echo \esc_html($self_website); ?></a>
-									<?php else : ?>
-										<?php echo \esc_html($self_website); ?>
-									<?php endif; ?>
-								</div>
-							<?php endif; ?>
-						</td>
-					</tr>
-				</table>
-				<div class="contract-section-title">Stammdaten</div>
-				<table class="contract-party-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">Vermieter</td>
-						<td class="contract-party-value">
-							<?php echo $self_party_html; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">Mieter</td>
-						<td class="contract-party-value">
-							<?php echo $contact_party_html; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">Fahrzeug</td>
-						<td class="contract-party-value">
-							<?php echo $vehicle_article_text; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">&nbsp;</td>
-						<td class="contract-party-value">
-							<?php echo $vehicle_article_secondary_text; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">&nbsp;</td>
-						<td class="contract-party-value">
-							<?php echo $vehicle_variant_text; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">Versicherung</td>
-						<td class="contract-party-value">
-							<?php echo $vehicle_insurance_full_text; ?>
-						</td>
-					</tr>
-					<tr>
-						<td class="contract-party-label" width="95" style="width:95px;">Übernahme</td>
-						<td class="contract-party-value">Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</td>
-					</tr>
-				</table>
-				<div class="contract-note">
-					<p class="contract-note-text">Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen m&uuml;ssen aufbewahrt werden. Das Fahrzeug ist vollgetankt zur&uuml;ckzugeben, andernfalls werden Treibstoff kosten plus CHF 50.-Aufwandsentsch&auml;digung verrechnet.</p>
+			<div class="sheet">
+				<div class="topbar">
+					<table class="header-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+						<tr>
+							<td class="header-logo-cell">
+								<?php if ($logo_src !== '') : ?>
+									<a href="<?php echo \esc_url($logo_link); ?>" class="brand-logo-link"><span class="brand-logo-wrap"><img src="<?php echo \esc_attr($logo_src); ?>" alt="Rentify" class="brand-logo"></span></a>
+								<?php else : ?>
+									<a href="<?php echo \esc_url($logo_link); ?>" class="brand-logo-link">
+										<div class="brand-fallback"><?php echo \esc_html($self_title !== '' ? $self_title : 'RENTIFY.'); ?></div>
+										<div class="brand-sub">Autovermietung</div>
+									</a>
+								<?php endif; ?>
+							</td>
+							<td class="header-title-cell">
+								<div class="doc-title">MIETVERTRAG</div>
+								<div class="header-rule"></div>
+								<table class="header-contact-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+									<tr>
+										<td>
+											<span class="header-contact-title"><?php echo \esc_html($self_title !== '' ? $self_title : $self_subtitle); ?></span>
+											<?php if ($self_street !== '') : ?><span class="header-contact-line"><?php echo \esc_html($self_street); ?></span><?php endif; ?>
+											<?php if ($self_zip_city !== '') : ?><span class="header-contact-line"><?php echo \esc_html($self_zip_city); ?></span><?php endif; ?>
+										</td>
+										<td>
+											<?php if ($self_phone !== '') : ?><span class="header-contact-line"><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon', '#ffffff'); ?><a href="<?php echo \esc_url('tel:' . \preg_replace('/\s+/', '', $self_phone)); ?>" class="header-contact-link"><?php echo \esc_html($self_phone); ?></a></span><?php endif; ?>
+											<?php if ($self_email !== '') : ?><span class="header-contact-line"><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon', '#ffffff'); ?><a href="<?php echo \esc_url('mailto:' . $self_email); ?>" class="header-contact-link"><?php echo \esc_html($self_email); ?></a></span><?php endif; ?>
+											<?php if ($self_website !== '') : ?><span class="header-contact-line"><?php echo cmx_carent_vertrag_icon_svg('globe', 'pdf-icon', '#ffffff'); ?><a href="<?php echo \esc_url($self_website_link); ?>" class="header-contact-link"><?php echo \esc_html($self_website); ?></a></span><?php endif; ?>
+										</td>
+									</tr>
+								</table>
+							</td>
+						</tr>
+					</table>
 				</div>
-				<div class="contract-section-title">Abrechnung</div>
-				<table class="contract-transfer-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('user'); ?>KONTAKTDATEN</div>
+				<table class="card-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<tr>
-						<td class="contract-transfer-kind">Übernahme</td>
-						<td><span class="contract-inline-label">KM-Stand</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_km_stand !== '' ? $uebernahme_km_stand : '–'); ?></span></td>
-						<td><span class="contract-inline-label">Datum</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_datum !== '' ? $uebernahme_datum : '–'); ?></span></td>
-						<td><span class="contract-inline-label">Uhrzeit</span> <span class="contract-transfer-value"><?php echo \esc_html($uebernahme_uhrzeit !== '' ? $uebernahme_uhrzeit : '–'); ?></span></td>
-					</tr>
-					<tr>
-						<td class="contract-transfer-kind">Rückgabe</td>
-						<td><span class="contract-inline-label">KM-Stand</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_km_stand !== '' ? $rueckgabe_km_stand : '–'); ?></span></td>
-						<td><span class="contract-inline-label">Datum</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_datum !== '' ? $rueckgabe_datum : '–'); ?></span></td>
-						<td><span class="contract-inline-label">Uhrzeit</span> <span class="contract-transfer-value"><?php echo \esc_html($rueckgabe_uhrzeit !== '' ? $rueckgabe_uhrzeit : '–'); ?></span></td>
+						<td class="card">
+							<table class="party-table" role="presentation"><tr><td class="party-icon"><?php echo cmx_carent_vertrag_icon_badge('user'); ?></td><td>
+								<div class="party-title">Vermieter</div>
+								<?php if ($self_title !== '') : ?><div class="party-line"><?php echo \esc_html($self_title); ?></div><?php endif; ?>
+								<?php foreach ($self_address_lines as $address_line) : ?><div class="party-line"><?php echo \esc_html($address_line); ?></div><?php endforeach; ?>
+							</td></tr></table>
+						</td>
+						<td class="card-spacer"></td>
+						<td class="card">
+							<table class="party-table" role="presentation"><tr><td class="party-icon"><?php echo cmx_carent_vertrag_icon_badge('user'); ?></td><td>
+								<div class="party-title">Mieter</div>
+								<?php if (($contact['title'] ?? '') !== '') : ?><div class="party-line"><?php echo \esc_html((string) $contact['title']); ?></div><?php endif; ?>
+								<?php foreach ($contact_address_lines as $address_line) : ?><div class="party-line"><?php echo \esc_html($address_line); ?></div><?php endforeach; ?>
+								<div class="party-contact">
+									<?php if ($contact_phone !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('phone', 'pdf-icon', '#000000'); ?><?php echo \esc_html($contact_phone); ?></div><?php endif; ?>
+									<?php if ($contact_email !== '') : ?><div><?php echo cmx_carent_vertrag_icon_svg('mail', 'pdf-icon', '#000000'); ?><?php echo \esc_html($contact_email); ?></div><?php endif; ?>
+								</div>
+							</td></tr></table>
+						</td>
 					</tr>
 				</table>
+
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('car'); ?>FAHRZEUG</div>
+				<div class="vehicle-box">
+					<table class="vehicle-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+						<tr>
+							<td class="vehicle-image-cell" rowspan="4">
+								<?php if ($vehicle_image_src !== '') : ?>
+									<img src="<?php echo \esc_attr($vehicle_image_src); ?>" alt="" class="vehicle-image">
+								<?php else : ?>
+									<div class="vehicle-placeholder"><?php echo cmx_carent_vertrag_icon_svg('car-front', 'pdf-icon', '#002754'); ?></div>
+								<?php endif; ?>
+							</td>
+							<?php echo cmx_carent_vertrag_field_html('car', 'Typ', $vehicle_title); ?>
+							<?php echo cmx_carent_vertrag_field_html('tag', 'Fahrzeug-Nr.', $vehicle_plate); ?>
+						</tr>
+						<tr>
+							<?php echo cmx_carent_vertrag_field_html('fuel', 'Treibstoff', $vehicle_fuel); ?>
+							<?php echo cmx_carent_vertrag_field_html('gauge', 'KM-Begrenzung', $vehicle_limit); ?>
+						</tr>
+						<tr>
+							<?php echo cmx_carent_vertrag_field_html('tag', 'Artikel Nr.', $vehicle_number); ?>
+							<?php echo cmx_carent_vertrag_field_html('road', 'KM-Mehrpreis', $vehicle_more_price !== '' ? $vehicle_more_price . ' CHF / km' : ''); ?>
+						</tr>
+						<tr>
+							<?php echo cmx_carent_vertrag_field_html('calendar', 'Einheit', $vehicle_unit); ?>
+							<?php echo cmx_carent_vertrag_field_html('badge-swiss-franc', 'Preis pro Einheit', $vehicle_price !== '' ? $vehicle_price . ' CHF' : ''); ?>
+						</tr>
+					</table>
+				</div>
+
+				<table class="two-col" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td>
+							<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('shield-check'); ?>VERSICHERUNG</div>
+							<div class="panel">
+								<table class="insurance-table" role="presentation">
+									<tr><td>KASKO MIN.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_min); ?> CHF</td></tr>
+									<tr><td>KASKO MAX.</td><td><?php echo cmx_carent_vertrag_html_value($vehicle_kasko_max); ?> CHF</td></tr>
+								</table>
+								<div class="insurance-note">Selbstbehalt im Schadenfall zu Lasten Kunde:</div>
+								<div style="text-align:center">Haftpflicht, Teil- oder Vollkasko wie oben angegeben.</div>
+							</div>
+						</td>
+						<td class="two-col-gap"></td>
+						<td>
+							<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('clipboard-list'); ?>ÜBERNAHME</div>
+							<div class="panel">
+								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#002754'); ?>Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</div>
+								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#002754'); ?>Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen müssen aufbewahrt werden.</div>
+								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#002754'); ?>Das Fahrzeug ist vollgetankt zurückzugeben, andernfalls werden Treibstoffkosten plus CHF 50.- Aufwandsentschädigung verrechnet.</div>
+								<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#002754'); ?>Besondere Abmachungen: <?php echo \esc_html($special_notes !== '' ? $special_notes : ''); ?></div>
+							</div>
+						</td>
+					</tr>
+				</table>
+
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calendar'); ?>MIETDATEN</div>
+				<div class="transfer-strip">
+					<table class="transfer-table" role="presentation">
+						<tr>
+							<td><span class="transfer-label">Übernahme</span><span class="transfer-value"><?php echo \esc_html($uebernahme_datum !== '' ? $uebernahme_datum : '–'); ?></span><span>Uhrzeit: <?php echo \esc_html($uebernahme_uhrzeit !== '' ? $uebernahme_uhrzeit : '–'); ?></span></td>
+							<td><span class="transfer-label">KM-Stand</span><span class="transfer-value"><?php echo \esc_html($uebernahme_km_stand !== '' ? $uebernahme_km_stand : '–'); ?></span></td>
+							<td><span class="transfer-label">Rückgabe</span><span class="transfer-value"><?php echo \esc_html($rueckgabe_datum !== '' ? $rueckgabe_datum : '–'); ?></span><span>Uhrzeit: <?php echo \esc_html($rueckgabe_uhrzeit !== '' ? $rueckgabe_uhrzeit : '–'); ?></span></td>
+							<td><span class="transfer-label">KM-Stand</span><span class="transfer-value"><?php echo \esc_html($rueckgabe_km_stand !== '' ? $rueckgabe_km_stand : '–'); ?></span></td>
+						</tr>
+					</table>
+				</div>
+
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calculator'); ?>ABRECHNUNG</div>
+				<table class="billing" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr><th>Position</th><th class="num">Menge</th><th class="num">Einheitspreis</th><th class="money">Total</th></tr>
+					<tr><td>Mietdauer</td><td class="num"><?php echo \esc_html($duration_label !== '' ? $duration_label : '–'); ?></td><td class="num"><?php echo \esc_html($vehicle_price !== '' ? $vehicle_price . ' CHF' : '–'); ?></td><td class="money"><?php echo \esc_html($rental_total !== '' ? $rental_total . ' CHF' : '–'); ?></td></tr>
+					<tr><td>Mehrkilometer</td><td class="num">0 km</td><td class="num"><?php echo \esc_html($vehicle_more_price !== '' ? $vehicle_more_price . ' CHF / km' : '–'); ?></td><td class="money">0.00 CHF</td></tr>
+					<tr><td>Zusatzkosten (Schaden)</td><td class="num">–</td><td class="num">–</td><td class="money"><?php echo \esc_html($damage_total !== '' ? $damage_total . ' CHF' : '0.00 CHF'); ?></td></tr>
+					<tr><td colspan="3" class="billing-total-label">TOTAL</td><td class="billing-total-value"><?php echo \esc_html($total_amount !== '' ? $total_amount . ' CHF' : '–'); ?></td></tr>
+				</table>
+
+				<table class="signatures" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td>
+							<div class="signature-line"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#002754'); ?><?php if (!empty($self_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $self_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
+							<div class="signature-label">Unterschrift Mitarbeiter Vermieter</div>
+							<div class="signature-label"><?php echo \esc_html(\implode(' · ', \array_slice($self_address_lines, 0, 2))); ?></div>
+						</td>
+						<td>
+							<div class="signature-line"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#002754'); ?><?php if (!empty($contact_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $contact_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
+							<div class="signature-label">Unterschrift Mieter</div>
+							<div class="signature-label">(inkl. Zustimmung zu den AGB)</div>
+						</td>
+					</tr>
+				</table>
+				<div class="footer">Seite 1 / 2</div>
 			</div>
 		</body>
 		</html>

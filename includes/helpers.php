@@ -36,6 +36,21 @@ function cmx_tax_key(string $cpt, string $singular): string {
 	return trim($base, '_');
 }
 
+function cmx_icon(string $name): string {
+	$name = sanitize_file_name($name);
+	if ($name === '') {
+		return '';
+	}
+
+	$path = dirname(__DIR__) . "/assets/icons/$name.svg";
+	if (!is_readable($path)) {
+		return '';
+	}
+
+	$svg = file_get_contents($path);
+	return is_string($svg) ? $svg : '';
+}
+
 
 // cmx_require_files(__DIR__, 'stammdaten, lieferanten');
 function cmx_require_files(string $dir, string|array $files): void {
