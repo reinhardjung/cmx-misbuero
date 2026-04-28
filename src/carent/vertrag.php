@@ -1421,6 +1421,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		);
 		$duration_label = cmx_carent_vertrag_join_text_parts([$vehicle_amount, $vehicle_unit], ' ');
 		$special_notes = \trim((string) ($uebernahme['besondere_abmachungen'] ?? ''));
+		$special_notes_html = \wp_kses(\nl2br($special_notes, false), ['br' => []]);
 		$self_signature = (array) (($uebernahme['signatures'] ?? [])['vermieter'] ?? []);
 		$contact_signature = (array) (($uebernahme['signatures'] ?? [])['mieter'] ?? []);
 		$self_street = \trim((string) ($self_address_lines[0] ?? ''));
@@ -1471,6 +1472,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.card{height:35mm;vertical-align:top;background:#f4f7fb;border-radius:2mm;padding:0;text-align:left}
 				.card-inner{height:26mm;padding:5mm 5mm 4mm;text-align:left}
 				.card-left{width:57.8mm;max-width:57.8mm}
+				.card-left .card-inner{width:62mm;background:#f4f7fb;border-radius:2mm}
 				.card-right{width:115.5mm;max-width:115.5mm;background:transparent}
 				.card-right .card-inner{position:relative;left:-39.7mm;width:108mm;background:#f4f7fb;border-radius:2mm}
 				.card-spacer{width:4mm;max-width:4mm;padding:0;background:transparent}
@@ -1495,6 +1497,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.vehicle-placeholder .pdf-icon{width:22mm;height:22mm}
 				.vehicle-field{width:33%;height:10mm;border-bottom:1px solid #c7d4e6;padding:2mm 3mm;vertical-align:middle}
 				.vehicle-field+.vehicle-field{border-left:1px solid #c7d4e6}
+				.vehicle-table tr:last-child .vehicle-field{border-bottom:0}
 				.field-icon{display:inline-block;width:8mm;vertical-align:top}
 				.field-copy{display:inline-block;width:42mm;vertical-align:top}
 				.field-copy strong{display:block;color:#001b3d;font-size:9px}
@@ -1515,24 +1518,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.insurance-note{text-align:center;color:#001b3d;font-weight:800;margin-top:2mm}
 				.check-row{margin:0 0 2.2mm}
 				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm;position:relative;top:3px}
-				.transfer-strip{width:190mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
 				.transfer-table td{font-size:9.2px;vertical-align:top;border-right:1px solid #8aa7cc;padding:0 5mm}
 				.transfer-table td:last-child{border-right:0}
 				.transfer-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase}
 				.transfer-value{display:block;font-weight:800}
-				.billing{width:190mm;border-collapse:collapse;table-layout:fixed;margin-bottom:8mm}
+				.billing{width:197mm;border-collapse:collapse;table-layout:fixed;margin-bottom:8mm}
 				.billing th{background:#001b3d;color:#fff;text-align:left;text-transform:uppercase;font-size:8.5px;padding:2.5mm 4mm}
 				.billing th:not(:last-child),.billing td:not(:last-child){border-right:1px solid #c7d4e6}
 				.billing td{border:1px solid #c7d4e6;border-top:0;padding:2mm 4mm;font-size:9px}
 				.billing .num{text-align:center}
 				.billing .money{text-align:right}
+				.billing tr:first-child th:first-child{border-top-left-radius:1.3mm}
+				.billing tr:first-child th:last-child{border-top-right-radius:1.3mm}
+				.billing tr:last-child td:first-child{border-bottom-left-radius:1.3mm}
+				.billing tr:last-child td:last-child{border-bottom-right-radius:1.3mm}
 				.billing-total-label{text-align:right!important;color:#001b3d;font-size:13px!important;font-weight:800}
 				.billing-total-value{background:#001b3d;color:#fff;font-size:14px!important;font-weight:800;text-align:center!important}
 				.signatures{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:2mm}
 				.signatures td{width:50%;vertical-align:bottom;padding-right:10mm}
 				.signature-line{border-bottom:1px solid #c7d4e6;height:11mm;position:relative}
+				.signature-line-mieter{margin-right:14px}
 				.signature-line .pdf-icon{width:11mm;height:11mm;vertical-align:bottom;margin-right:3mm}
 				.signature-img{max-width:45mm;max-height:10mm;width:auto;height:auto}
 				.signature-label{font-size:8.5px;margin-top:1.2mm}
@@ -1683,7 +1691,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</div>
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen müssen aufbewahrt werden.</div>
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Das Fahrzeug ist vollgetankt zurückzugeben, andernfalls werden Treibstoffkosten plus CHF 50.- Aufwandsentschädigung verrechnet.</div>
-									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Besondere Abmachungen: <?php echo \esc_html($special_notes !== '' ? $special_notes : ''); ?></div>
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Besondere Abmachungen: <?php echo $special_notes_html; ?></div>
 								</div>
 							</div>
 						</td>
@@ -1722,9 +1730,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 							<div class="signature-label"><?php echo \esc_html(\implode(' · ', \array_slice($self_address_lines, 0, 2))); ?></div>
 						</td>
 						<td>
-							<div class="signature-line"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#001b3d'); ?><?php if (!empty($contact_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $contact_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
+							<div class="signature-line signature-line-mieter"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#001b3d'); ?><?php if (!empty($contact_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $contact_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
 							<div class="signature-label">Unterschrift Mieter</div>
-							<div class="signature-label">(inkl. Zustimmung zu den AGB)</div>
+							<div class="signature-label">(Der Mieter erklärt ausdrücklich seine Zustimmung zu den AGB.)</div>
 						</td>
 					</tr>
 				</table>
