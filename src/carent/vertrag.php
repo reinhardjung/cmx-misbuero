@@ -1752,7 +1752,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				<div class="section-gap"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('video'); ?>ÜBERNAHMEVIDEO</div>
 				<div class="video-box">
-					<span class="video-label">Übernahmevideo</span>
+					<!-- <span class="video-label">Übernahmevideo</span> -->
 					<?php if ($uebernahme_video_url !== '') : ?>
 						<a href="<?php echo \esc_url($uebernahme_video_url); ?>" class="video-link"><?php if ($uebernahme_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($uebernahme_video_poster_src); ?>" alt="" class="video-poster"><?php else : ?>Video herunterladen<?php endif; ?></a>
 					<?php else : ?>
