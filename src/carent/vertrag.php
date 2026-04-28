@@ -1442,6 +1442,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$identitaetskarte = (array) ($documents['identitaetskarte'] ?? []);
 		$fuehrerausweis_src = cmx_carent_vertrag_image_data_uri((int) ($fuehrerausweis['id'] ?? 0));
 		$identitaetskarte_src = cmx_carent_vertrag_image_data_uri((int) ($identitaetskarte['id'] ?? 0));
+		$fuehrerausweis_url = \trim((string) ($fuehrerausweis['url'] ?? ''));
+		$identitaetskarte_url = \trim((string) ($identitaetskarte['url'] ?? ''));
 		$self_signature = (array) (($uebernahme['signatures'] ?? [])['vermieter'] ?? []);
 		$contact_signature = (array) (($uebernahme['signatures'] ?? [])['mieter'] ?? []);
 		$self_street = \trim((string) ($self_address_lines[0] ?? ''));
@@ -1538,17 +1540,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.insurance-note{text-align:center;color:#001b3d;font-weight:800;margin-top:2mm}
 				.check-row{margin:0 0 2.2mm}
 				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm;position:relative;top:3px}
-				.document-table{width:190mm;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:4.5mm}
+				.document-table{width:200.7mm;border-collapse:separate;border-spacing:3mm 0;table-layout:fixed;margin:0 -1.5mm 4.5mm}
 				.document-cell{width:50%;background:#f4f7fb;border:1px solid #c7d4e6;padding:3mm;text-align:center;vertical-align:top}
 				.document-cell:first-child{border-top-left-radius:1.3mm;border-bottom-left-radius:1.3mm}
-				.document-cell:last-child{border-left:0;border-top-right-radius:1.3mm;border-bottom-right-radius:1.3mm}
+				.document-cell:last-child{border-top-right-radius:1.3mm;border-bottom-right-radius:1.3mm}
 				.document-label{color:#001b3d;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-bottom:2mm;text-align:left}
 				.document-image{max-width:86mm;max-height:42mm;width:auto;height:auto}
 				.document-empty{height:42mm;color:#667085;font-size:9px;line-height:42mm}
-				.video-box{width:190mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm;font-size:9.2px}
+				.video-box{width:187.9mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm;font-size:9.2px}
 				.video-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase;margin-bottom:1mm}
 				.video-poster{display:block;max-width:86mm;max-height:42mm;width:auto;height:auto;margin-bottom:2mm;border-radius:1.3mm}
-				.video-link{color:#001b3d;text-decoration:none;font-weight:800}
+				.video-link{display:block;color:#001b3d;text-decoration:none;font-weight:800}
 				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -1738,11 +1740,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					<tr>
 						<td class="document-cell">
 							<div class="document-label">Führerausweis</div>
-							<?php if ($fuehrerausweis_src !== '') : ?><img src="<?php echo \esc_attr($fuehrerausweis_src); ?>" alt="" class="document-image"><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
+							<?php if ($fuehrerausweis_src !== '') : ?><?php if ($fuehrerausweis_url !== '') : ?><a href="<?php echo \esc_url($fuehrerausweis_url); ?>"><?php endif; ?><img src="<?php echo \esc_attr($fuehrerausweis_src); ?>" alt="" class="document-image"><?php if ($fuehrerausweis_url !== '') : ?></a><?php endif; ?><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
 						</td>
-						<td class="document-cell">
+						<td class="document-cell document-cell-id">
 							<div class="document-label">Identitätskarte</div>
-							<?php if ($identitaetskarte_src !== '') : ?><img src="<?php echo \esc_attr($identitaetskarte_src); ?>" alt="" class="document-image"><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
+							<?php if ($identitaetskarte_src !== '') : ?><?php if ($identitaetskarte_url !== '') : ?><a href="<?php echo \esc_url($identitaetskarte_url); ?>"><?php endif; ?><img src="<?php echo \esc_attr($identitaetskarte_src); ?>" alt="" class="document-image"><?php if ($identitaetskarte_url !== '') : ?></a><?php endif; ?><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
 						</td>
 					</tr>
 				</table>
@@ -1752,8 +1754,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				<div class="video-box">
 					<span class="video-label">Übernahmevideo</span>
 					<?php if ($uebernahme_video_url !== '') : ?>
-						<?php if ($uebernahme_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($uebernahme_video_poster_src); ?>" alt="" class="video-poster"><?php endif; ?>
-						<a href="<?php echo \esc_url($uebernahme_video_url); ?>" class="video-link"><?php echo \esc_html($uebernahme_video_label !== '' ? $uebernahme_video_label : $uebernahme_video_url); ?></a>
+						<a href="<?php echo \esc_url($uebernahme_video_url); ?>" class="video-link"><?php if ($uebernahme_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($uebernahme_video_poster_src); ?>" alt="" class="video-poster"><?php else : ?>Video herunterladen<?php endif; ?></a>
 					<?php else : ?>
 						<span>Kein Video vorhanden</span>
 					<?php endif; ?>
@@ -1862,10 +1863,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 				$font_size = 8.5;
 				$text_width = $font_metrics->getTextWidth($text, $font, $font_size);
 				$canvas->filled_rectangle(0, 818, 595.28, 24, [0, 0.106, 0.239]);
-				$canvas->text(595.28 - 28 - $text_width, 824, $text, $font, $font_size, [1, 1, 1]);
+				$canvas->text(595.28 - 28 - $text_width, 826, $text, $font, $font_size, [1, 1, 1]);
 			});
 		} else {
-			$canvas->page_text(500, 821, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
+			$canvas->page_text(500, 823, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
 		}
 
 		$pdf_binary = $dompdf->output();

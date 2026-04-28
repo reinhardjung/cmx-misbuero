@@ -3886,23 +3886,82 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 							renderEmpty();
 						}
 					}
+					function createPosterData(file){
+						return new Promise(function(resolve){
+							if(!file || String(file.type||"").indexOf("video/")!==0){
+								resolve("");
+								return;
+							}
+							var objectUrl="";
+							var video=document.createElement("video");
+							var done=false;
+							function finish(value){
+								if(done){return;}
+								done=true;
+								if(objectUrl){try{URL.revokeObjectURL(objectUrl);}catch(err){}}
+								resolve(value || "");
+							}
+							video.muted=true;
+							video.playsInline=true;
+							video.preload="metadata";
+							video.addEventListener("loadeddata", function(){
+								try{
+									if(video.duration && video.duration > 0.2){
+										video.currentTime=0.1;
+										return;
+									}
+								}catch(err){}
+								capture();
+							});
+							video.addEventListener("seeked", capture);
+							video.addEventListener("error", function(){finish("");});
+							window.setTimeout(function(){finish("");}, 3500);
+							function capture(){
+								try{
+									var width=video.videoWidth || 0;
+									var height=video.videoHeight || 0;
+									if(width <= 0 || height <= 0){finish("");return;}
+									var maxWidth=960;
+									var scale=Math.min(1, maxWidth / width);
+									var canvas=document.createElement("canvas");
+									canvas.width=Math.max(1, Math.round(width * scale));
+									canvas.height=Math.max(1, Math.round(height * scale));
+									canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+									finish(canvas.toDataURL("image/jpeg", 0.82));
+								}catch(err){
+									finish("");
+								}
+							}
+							try{
+								objectUrl=URL.createObjectURL(file);
+								video.src=objectUrl;
+								video.load();
+							}catch(err){
+								finish("");
+							}
+						});
+					}
 					function uploadFile(file){
 						if(!enabled || !file){return;}
 						if(String(file.type||"").indexOf("video/")!==0){
 							status.textContent="Bitte nur Videodateien hochladen.";
 							return;
 						}
-						var data=new FormData();
-						data.append("action", "cmx_carent_transfer_video_upload");
-						data.append("nonce", videoUploadNonce);
-						data.append("post_id", String(currentPostId()));
-						data.append("file", file);
-						status.textContent="Upload läuft: " + (file.name||"");
 						dropzone.style.opacity=".6";
-						fetch(ajaxUrl, {
-							method:"POST",
-							credentials:"same-origin",
-							body:data
+						status.textContent="Preview wird erstellt...";
+						createPosterData(file).then(function(posterData){
+							var data=new FormData();
+							data.append("action", "cmx_carent_transfer_video_upload");
+							data.append("nonce", videoUploadNonce);
+							data.append("post_id", String(currentPostId()));
+							data.append("file", file);
+							if(posterData){data.append("poster_data", posterData);}
+							status.textContent="Upload läuft: " + (file.name||"");
+							return fetch(ajaxUrl, {
+								method:"POST",
+								credentials:"same-origin",
+								body:data
+							});
 						}).then(function(response){
 							return response.json();
 						}).then(function(json){

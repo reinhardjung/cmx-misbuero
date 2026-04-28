@@ -669,6 +669,62 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 	]);
 });
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')) {
+	function cmx_carent_transfer_video_save_poster(int $video_attachment_id, int $post_id, string $data_uri): int {
+		if ($video_attachment_id <= 0 || $data_uri === '') {
+			return 0;
+		}
+		if (!\preg_match('#^data:image/(png|jpe?g|webp);base64,(.+)$#i', $data_uri, $matches)) {
+			return 0;
+		}
+
+		$extension = \strtolower((string) $matches[1]);
+		$extension = $extension === 'jpeg' ? 'jpg' : $extension;
+		$binary = \base64_decode((string) $matches[2], true);
+		if (!\is_string($binary) || $binary === '') {
+			return 0;
+		}
+
+		$uploads = \wp_upload_dir();
+		$upload_dir = (string) ($uploads['path'] ?? '');
+		$upload_url = (string) ($uploads['url'] ?? '');
+		if ($upload_dir === '' || $upload_url === '') {
+			return 0;
+		}
+
+		$base_name = \sanitize_file_name(\pathinfo((string) \get_attached_file($video_attachment_id), \PATHINFO_FILENAME));
+		$base_name = $base_name !== '' ? $base_name : ('video-' . $video_attachment_id);
+		$filename = \wp_unique_filename($upload_dir, $base_name . '-preview.' . $extension);
+		$path = \trailingslashit($upload_dir) . $filename;
+		if (\file_put_contents($path, $binary) === false) {
+			return 0;
+		}
+
+		$mime = (string) \wp_check_filetype($filename)['type'];
+		if ($mime === '') {
+			$mime = 'image/' . ($extension === 'jpg' ? 'jpeg' : $extension);
+		}
+		$attachment_id = (int) \wp_insert_attachment([
+			'post_mime_type' => $mime,
+			'post_title' => \sanitize_text_field(\pathinfo($filename, \PATHINFO_FILENAME)),
+			'post_content' => '',
+			'post_status' => 'inherit',
+		], $path, $post_id);
+		if ($attachment_id <= 0) {
+			return 0;
+		}
+
+		require_once \ABSPATH . 'wp-admin/includes/image.php';
+		$metadata = \wp_generate_attachment_metadata($attachment_id, $path);
+		if (\is_array($metadata)) {
+			\wp_update_attachment_metadata($attachment_id, $metadata);
+		}
+		\set_post_thumbnail($video_attachment_id, $attachment_id);
+
+		return $attachment_id;
+	}
+}
+
 \add_action('wp_ajax_cmx_carent_transfer_video_upload', function (): void {
 	if (!\current_user_can('upload_files')) {
 		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
@@ -704,12 +760,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 	}
 
 	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$poster_data = isset($_POST['poster_data']) ? (string) \wp_unslash($_POST['poster_data']) : '';
+	$poster_id = cmx_carent_transfer_video_save_poster((int) $attachment_id, $post_id > 0 ? $post_id : 0, $poster_data);
 
 	\wp_send_json_success([
 		'id' => (int) $attachment_id,
 		'url' => $file_url,
 		'file_url' => $file_url,
 		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+		'poster_id' => $poster_id,
 	]);
 });
 
