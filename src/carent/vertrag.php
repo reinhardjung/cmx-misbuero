@@ -1472,7 +1472,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.card-inner{height:26mm;padding:5mm 5mm 4mm;text-align:left}
 				.card-left{width:57.8mm;max-width:57.8mm}
 				.card-right{width:115.5mm;max-width:115.5mm;background:transparent}
-				.card-right .card-inner{position:relative;left:-39.7mm;width:105.5mm;background:#f4f7fb;border-radius:2mm}
+				.card-right .card-inner{position:relative;left:-39.7mm;width:108mm;background:#f4f7fb;border-radius:2mm}
 				.card-spacer{width:4mm;max-width:4mm;padding:0;background:transparent}
 				.party-table{width:100%;border-collapse:collapse}
 				.party-icon{width:8.5mm;vertical-align:top}
@@ -1487,8 +1487,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.party-contact .pdf-icon{width:10px;height:10px;vertical-align:middle;margin-right:4px}
 				.party-contact .phone-icon{position:relative;top:5px}
 				.party-contact .mail-icon{position:relative;top:5px}
-				.vehicle-box{width:190mm;border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
-				.vehicle-table{width:190mm;border-collapse:collapse;table-layout:fixed}
+				.vehicle-box{width:196mm;border:1px solid #c7d4e6;border-radius:1.3mm;margin-bottom:4.5mm}
+				.vehicle-table{width:196mm;border-collapse:collapse;table-layout:fixed}
 				.vehicle-image-cell{width:60.1mm;height:40mm;text-align:center;vertical-align:middle;border-right:1px solid #c7d4e6}
 				.vehicle-image{max-width:60mm;max-height:34mm;width:auto;height:auto}
 				.vehicle-placeholder{color:#001b3d}
@@ -1503,8 +1503,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.two-col-panel{width:50%;max-width:50%;vertical-align:top}
 				.two-col-left,.two-col-right{padding:0}
 				.two-col-left .two-col-inner{margin-right:3mm}
-				.two-col-right .two-col-inner{margin-left:3mm}
-				.two-col .section-title{margin-right:0}
+				.two-col-right .two-col-inner{margin-left:3mm;width:99mm}
+				.two-col .section-title{width:auto;margin-right:0}
 				.section-gap{height:4mm;line-height:4mm}
 				.panel{background:#f4f7fb;border-radius:2mm;padding:4mm;min-height:41mm}
 				.two-col-right .panel{min-height:53mm}
@@ -1514,7 +1514,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.insurance-table td:last-child{text-align:right}
 				.insurance-note{text-align:center;color:#001b3d;font-weight:800;margin-top:2mm}
 				.check-row{margin:0 0 2.2mm}
-				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm}
+				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm;position:relative;top:3px}
 				.transfer-strip{width:190mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -1522,7 +1522,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.transfer-table td:last-child{border-right:0}
 				.transfer-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase}
 				.transfer-value{display:block;font-weight:800}
-				.billing{width:100%;border-collapse:collapse;margin-bottom:8mm}
+				.billing{width:190mm;border-collapse:collapse;table-layout:fixed;margin-bottom:8mm}
 				.billing th{background:#001b3d;color:#fff;text-align:left;text-transform:uppercase;font-size:8.5px;padding:2.5mm 4mm}
 				.billing th:not(:last-child),.billing td:not(:last-child){border-right:1px solid #c7d4e6}
 				.billing td{border:1px solid #c7d4e6;border-top:0;padding:2mm 4mm;font-size:9px}
@@ -1627,8 +1627,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					<table class="vehicle-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
 						<colgroup>
 							<col style="width:60.1mm;">
-							<col style="width:64.95mm;">
-							<col style="width:64.95mm;">
+							<col style="width:67.95mm;">
+							<col style="width:67.95mm;">
 						</colgroup>
 						<tr>
 							<td class="vehicle-image-cell" rowspan="4">
@@ -1703,6 +1703,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					</table>
 				</div>
 
+				<div class="section-gap"></div>
+				<div class="section-gap"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calculator'); ?>ABRECHNUNG</div>
 				<table class="billing" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<tr><th>Position</th><th class="num">Menge</th><th class="num">Einheitspreis</th><th class="money">Total</th></tr>
@@ -1792,7 +1794,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 				$canvas->text(595.28 - 28 - $text_width, 826, $text, $font, $font_size, [1, 1, 1]);
 			});
 		} else {
-			$canvas->page_text(500, 826, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
+			$canvas->page_text(500, 823, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
 		}
 
 		$pdf_binary = $dompdf->output();
