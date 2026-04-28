@@ -1422,6 +1422,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$duration_label = cmx_carent_vertrag_join_text_parts([$vehicle_amount, $vehicle_unit], ' ');
 		$special_notes = \trim((string) ($uebernahme['besondere_abmachungen'] ?? ''));
 		$special_notes_html = \wp_kses(\nl2br($special_notes, false), ['br' => []]);
+		$documents = (array) ($data['documents'] ?? []);
+		$fuehrerausweis = (array) ($documents['fuehrerausweis'] ?? []);
+		$identitaetskarte = (array) ($documents['identitaetskarte'] ?? []);
+		$fuehrerausweis_src = cmx_carent_vertrag_image_data_uri((int) ($fuehrerausweis['id'] ?? 0));
+		$identitaetskarte_src = cmx_carent_vertrag_image_data_uri((int) ($identitaetskarte['id'] ?? 0));
 		$self_signature = (array) (($uebernahme['signatures'] ?? [])['vermieter'] ?? []);
 		$contact_signature = (array) (($uebernahme['signatures'] ?? [])['mieter'] ?? []);
 		$self_street = \trim((string) ($self_address_lines[0] ?? ''));
@@ -1518,6 +1523,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.insurance-note{text-align:center;color:#001b3d;font-weight:800;margin-top:2mm}
 				.check-row{margin:0 0 2.2mm}
 				.check-row .pdf-icon{width:10px;height:10px;vertical-align:top;margin-right:3mm;position:relative;top:3px}
+				.document-table{width:190mm;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:4.5mm}
+				.document-cell{width:50%;background:#f4f7fb;border:1px solid #c7d4e6;padding:3mm;text-align:center;vertical-align:top}
+				.document-cell:first-child{border-top-left-radius:1.3mm;border-bottom-left-radius:1.3mm}
+				.document-cell:last-child{border-left:0;border-top-right-radius:1.3mm;border-bottom-right-radius:1.3mm}
+				.document-label{color:#001b3d;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-bottom:2mm;text-align:left}
+				.document-image{max-width:86mm;max-height:42mm;width:auto;height:auto}
+				.document-empty{height:42mm;color:#667085;font-size:9px;line-height:42mm}
 				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -1630,6 +1642,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</table>
 
 				<div class="section-gap"></div>
+				<div class="section-gap"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('car'); ?>FAHRZEUG</div>
 				<div class="vehicle-box">
 					<table class="vehicle-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
@@ -1665,6 +1678,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</div>
 
 				<div class="section-gap"></div>
+				<div class="section-gap"></div>
 				<table class="two-col" role="presentation" cellpadding="0" cellspacing="0" border="0">
 					<colgroup>
 						<col style="width:50%;">
@@ -1691,7 +1705,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Wir empfehlen dem Kunden (auch bei der Rückgabe) Bilder vom Zustand des Fahrzeuges zu machen.</div>
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Es muss mind. der oben genannte Treibstoff getankt werden. Alle Tankquittungen müssen aufbewahrt werden.</div>
 									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Das Fahrzeug ist vollgetankt zurückzugeben, andernfalls werden Treibstoffkosten plus CHF 50.- Aufwandsentschädigung verrechnet.</div>
-									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?>Besondere Abmachungen: <?php echo $special_notes_html; ?></div>
+									<div class="check-row"><?php echo cmx_carent_vertrag_icon_svg('circle-check-big', 'pdf-icon', '#001b3d'); ?><strong>Besondere Abmachungen:</strong><br><?php echo $special_notes_html; ?></div>
 								</div>
 							</div>
 						</td>
@@ -1699,6 +1713,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</table>
 
 				<div class="page-break-before"></div>
+				<div class="section-gap"></div>
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('id-card'); ?>AUSWEISE</div>
+				<table class="document-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td class="document-cell">
+							<div class="document-label">Führerausweis</div>
+							<?php if ($fuehrerausweis_src !== '') : ?><img src="<?php echo \esc_attr($fuehrerausweis_src); ?>" alt="" class="document-image"><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
+						</td>
+						<td class="document-cell">
+							<div class="document-label">Identitätskarte</div>
+							<?php if ($identitaetskarte_src !== '') : ?><img src="<?php echo \esc_attr($identitaetskarte_src); ?>" alt="" class="document-image"><?php else : ?><div class="document-empty">Kein Bild vorhanden</div><?php endif; ?>
+						</td>
+					</tr>
+				</table>
+
+				<div class="section-gap"></div>
+				<div class="section-gap"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calendar'); ?>MIETDATEN</div>
 				<div class="transfer-strip">
 					<table class="transfer-table" role="presentation">

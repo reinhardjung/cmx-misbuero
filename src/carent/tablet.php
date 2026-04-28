@@ -2385,6 +2385,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-upload-body{padding:0 18px 18px}
 			.cmx-vermietung-upload-dropzone{display:flex;align-items:center;gap:16px;min-height:168px;padding:16px;border:1px dashed #c8d1dc;border-radius:14px;background:#f8fafc;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
 			.cmx-vermietung-upload-dropzone:hover{border-color:#135e96;background:#eef6ff}
+			.cmx-vermietung-upload-dropzone.is-dragover{border-color:#135e96;background:#eef6ff}
 			.cmx-vermietung-upload-input{display:none}
 			.cmx-vermietung-upload-preview,.cmx-vermietung-upload-video{display:none;flex:0 0 180px;max-width:180px;width:100%;height:132px;border:1px solid #d0d5dd;border-radius:12px;object-fit:cover;background:#fff}
 			.cmx-vermietung-upload-preview.is-active,.cmx-vermietung-upload-video.is-active{display:block}
@@ -2689,11 +2690,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<p class="cmx-vermietung-upload-meta" id="cmx-vermietung-fuehrerausweis-meta">' . \esc_html($license_filename !== '' ? $license_filename : '') . '</p>'; // Noch kein Foto gewählt.
 		echo '</div>';
 		echo '</section>';
-		echo '<section class="cmx-vermietung-upload-panel is-collapsed' . ($selected_contact_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-identitaetskarte-panel">';
+		echo '<section class="cmx-vermietung-upload-panel' . ($identity_image_url !== '' ? '' : ' is-collapsed') . ($selected_contact_id > 0 ? '' : ' is-hidden') . '" id="cmx-vermietung-identitaetskarte-panel">';
 		echo '<div class="cmx-vermietung-panel-head is-collapsible">';
 		echo '<div class="cmx-vermietung-panel-copy">';
 		echo '<h2 class="cmx-vermietung-panel-title" style="padding-bottom:15px;">';
-		echo '<button type="button" class="cmx-vermietung-panel-toggle" id="cmx-vermietung-identitaetskarte-toggle" aria-expanded="false" aria-controls="cmx-vermietung-identitaetskarte-body">';
+		echo '<button type="button" class="cmx-vermietung-panel-toggle" id="cmx-vermietung-identitaetskarte-toggle" aria-expanded="' . ($identity_image_url !== '' ? 'true' : 'false') . '" aria-controls="cmx-vermietung-identitaetskarte-body">';
 		echo '<span class="cmx-vermietung-panel-toggle-label">Identitätskarte</span>';
 		echo '<span class="cmx-vermietung-panel-toggle-icon" aria-hidden="true">&#9662;</span>';
 		echo '</button>';
@@ -2839,12 +2840,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var licenseFile=document.getElementById("cmx-vermietung-fuehrerausweis-file");
 				var licensePreview=document.getElementById("cmx-vermietung-fuehrerausweis-preview");
 				var licenseMeta=document.getElementById("cmx-vermietung-fuehrerausweis-meta");
+				var licenseDropzone=document.getElementById("cmx-vermietung-fuehrerausweis-dropzone");
 				var licensePanel=document.getElementById("cmx-vermietung-fuehrerausweis-panel");
 				var statusNotice=document.getElementById("cmx-vermietung-status-notice");
 				var licenseRequired=licenseFile && String(licenseFile.getAttribute("data-required")||"0")==="1";
 				var identityFile=document.getElementById("cmx-vermietung-identitaetskarte-file");
 				var identityPreview=document.getElementById("cmx-vermietung-identitaetskarte-preview");
 				var identityMeta=document.getElementById("cmx-vermietung-identitaetskarte-meta");
+				var identityDropzone=document.getElementById("cmx-vermietung-identitaetskarte-dropzone");
 				var identityPanel=document.getElementById("cmx-vermietung-identitaetskarte-panel");
 				var identityToggle=document.getElementById("cmx-vermietung-identitaetskarte-toggle");
 				var damagePanel=document.getElementById("cmx-vermietung-schadenprotokoll-panel");
@@ -3497,6 +3500,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					}
 					previewNode.src=URL.createObjectURL(file);
 					previewNode.classList.add("is-active");
+				}
+				function bindUploadDropzone(fileInput, previewNode, metaNode, dropzone){
+					if(!fileInput || !previewNode || !metaNode || !dropzone){return;}
+					function setDragover(active){
+						dropzone.classList.toggle("is-dragover", !!active);
+					}
+					function setDroppedFile(file){
+						if(!file || fileInput.disabled){return;}
+						if(String(file.type||"").indexOf("image/")!==0){
+							updateUploadPreview(file, previewNode, metaNode);
+							return;
+						}
+						try{
+							var transfer=new DataTransfer();
+							transfer.items.add(file);
+							fileInput.files=transfer.files;
+						}catch(err){}
+						updateUploadPreview(file, previewNode, metaNode);
+					}
+					dropzone.addEventListener("dragover", function(event){
+						if(fileInput.disabled){return;}
+						event.preventDefault();
+						setDragover(true);
+					});
+					dropzone.addEventListener("dragleave", function(event){
+						event.preventDefault();
+						setDragover(false);
+					});
+					dropzone.addEventListener("drop", function(event){
+						if(fileInput.disabled){return;}
+						event.preventDefault();
+						setDragover(false);
+						var files=event.dataTransfer && event.dataTransfer.files ? event.dataTransfer.files : [];
+						if(files.length){setDroppedFile(files[0]);}
+					});
 				}
 				function initTransferPhotoSection(sectionId){
 					var host=document.getElementById(sectionId);
@@ -4553,11 +4591,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						updateUploadPreview(licenseFile.files && licenseFile.files[0] ? licenseFile.files[0] : null, licensePreview, licenseMeta);
 					});
 				}
+				bindUploadDropzone(licenseFile, licensePreview, licenseMeta, licenseDropzone);
 				if(identityFile){
 					identityFile.addEventListener("change", function(){
 						updateUploadPreview(identityFile.files && identityFile.files[0] ? identityFile.files[0] : null, identityPreview, identityMeta);
 					});
 				}
+				bindUploadDropzone(identityFile, identityPreview, identityMeta, identityDropzone);
 				if(transferNodes.ort && transferLabels.ort){
 					transferLabels.ort.addEventListener("click", function(event){
 						if(transferNodes.ort.disabled){return;}
