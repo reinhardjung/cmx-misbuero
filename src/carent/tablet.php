@@ -2341,7 +2341,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-fotos-preview.is-disabled{cursor:not-allowed;background:#f8fafc}
 			.cmx-vermietung-fotos-preview-image{display:block;max-width:100%;max-height:240px;height:auto;border-radius:8px}
 			.cmx-vermietung-fotos-empty{font-size:14px;color:#667085;text-align:center}
-			.cmx-vermietung-fotos-image-remove,.cmx-vermietung-upload-remove{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;border-radius:999px;background:rgba(255,255,255,.96);color:#b42318;box-shadow:0 2px 6px rgba(0,0,0,.14);cursor:pointer;z-index:2}
+			.cmx-vermietung-fotos-image-remove,.cmx-vermietung-upload-remove{display:none!important}
 			.cmx-vermietung-fotos-image-remove:hover,.cmx-vermietung-upload-remove:hover{background:#fff5f5}
 			.cmx-vermietung-fotos-image-remove:disabled,.cmx-vermietung-upload-remove:disabled{opacity:.55;cursor:not-allowed}
 			.cmx-vermietung-fotos-image-remove svg,.cmx-vermietung-upload-remove svg{display:block;width:18px;height:18px}

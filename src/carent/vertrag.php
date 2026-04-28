@@ -1396,6 +1396,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$uebernahme_video_url = \trim((string) ($uebernahme_video['url'] ?? ''));
 		$uebernahme_video_label = \trim((string) ($uebernahme_video['label'] ?? ''));
 		$uebernahme_video_poster_src = cmx_carent_vertrag_video_poster_src((int) ($uebernahme_video['id'] ?? 0));
+		$uebernahme_photo_items = [];
+		foreach ((array) ($uebernahme['fotos'] ?? []) as $photo_item) {
+			$photo_item = (array) $photo_item;
+			$attachment = (array) ($photo_item['attachment'] ?? []);
+			$photo_src = cmx_carent_vertrag_image_data_uri((int) ($attachment['id'] ?? 0));
+			if ($photo_src === '') {
+				continue;
+			}
+			$uebernahme_photo_items[] = [
+				'src' => $photo_src,
+				'url' => \trim((string) ($attachment['url'] ?? '')),
+				'label' => \trim((string) ($photo_item['term_label'] ?? '')),
+			];
+		}
 		$uebernahme_km_stand = \trim((string) ($uebernahme['km_stand'] ?? ''));
 		if ($uebernahme_km_stand === '') {
 			$uebernahme_km_stand = \trim((string) (($vehicle['article_meta']['km_stand'] ?? '')));
@@ -1551,6 +1565,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.video-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase;margin-bottom:1mm}
 				.video-poster{display:block;max-width:86mm;max-height:42mm;width:auto;height:auto;margin-bottom:2mm;border-radius:1.3mm}
 				.video-link{display:block;color:#001b3d;text-decoration:none;font-weight:800}
+				.photo-table{width:190mm;border-collapse:separate;border-spacing:2mm 2mm;table-layout:fixed;margin:0 -1mm 4.5mm}
+				.photo-cell{width:25%;height:27.4mm;background:#f4f7fb;border:1px solid #c7d4e6;border-radius:1.3mm;text-align:center;vertical-align:middle;padding:1.5mm}
+				.photo-label{display:block;color:#001b3d;font-size:7.8px;font-weight:800;text-transform:uppercase;margin-bottom:1mm;text-align:left}
+				.photo-image{max-width:42.5mm;max-height:19.4mm;width:auto;height:auto}
+				.photo-empty{height:19.4mm;color:#667085;font-size:8px;line-height:19.4mm}
 				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -1761,7 +1780,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				</div>
 
 				<div class="section-gap"></div>
-				<div class="section-gap"></div>
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('images'); ?>ÜBERNAHMEFOTOS</div>
+				<table class="photo-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<?php for ($photo_row_index = 0; $photo_row_index < 3; $photo_row_index++) : ?>
+						<tr>
+							<?php for ($photo_col_index = 0; $photo_col_index < 4; $photo_col_index++) : ?>
+								<?php $photo = (array) ($uebernahme_photo_items[($photo_row_index * 4) + $photo_col_index] ?? []); ?>
+								<td class="photo-cell">
+									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
+								</td>
+							<?php endfor; ?>
+						</tr>
+					<?php endfor; ?>
+				</table>
+
+				<div class="page-break-before"></div>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calendar'); ?>MIETDATEN</div>
 				<div class="transfer-strip">
 					<table class="transfer-table" role="presentation">
