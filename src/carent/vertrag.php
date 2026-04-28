@@ -1566,10 +1566,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.video-poster{display:block;max-width:86mm;max-height:42mm;width:auto;height:auto;margin-bottom:2mm;border-radius:1.3mm}
 				.video-link{display:block;color:#001b3d;text-decoration:none;font-weight:800}
 				.photo-table{width:190mm;border-collapse:separate;border-spacing:2mm 2mm;table-layout:fixed;margin:0 -1mm 4.5mm}
-				.photo-cell{width:25%;height:27.4mm;background:#f4f7fb;border:1px solid #c7d4e6;border-radius:1.3mm;text-align:center;vertical-align:middle;padding:1.5mm}
+				.photo-cell{width:25%;height:27.4mm;background:#f4f7fb;border:1px solid #c7d4e6;border-radius:1.3mm;text-align:center;vertical-align:middle;padding:1mm}
 				.photo-label{display:block;color:#001b3d;font-size:7.8px;font-weight:800;text-transform:uppercase;margin-bottom:1mm;text-align:left}
-				.photo-image{max-width:42.5mm;max-height:19.4mm;width:auto;height:auto}
-				.photo-empty{height:19.4mm;color:#667085;font-size:8px;line-height:19.4mm}
+				.photo-image{width:44.3mm;max-width:100%;height:auto}
+				.photo-empty{height:22mm;color:#667085;font-size:8px;line-height:22mm}
 				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
 				.transfer-table{width:100%;border-collapse:collapse;table-layout:fixed}
