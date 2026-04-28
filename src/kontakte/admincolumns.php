@@ -978,6 +978,38 @@ function cmx_kontakte_search_email_meta_keys(): array {
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
 }
 
+function cmx_kontakte_search_phone_meta_keys(): array {
+	$keys = [
+		'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
+		'cmx_telefon_1', 'cmx_telefon_2', 'cmx_telefon_3',
+		'telefon_1', 'telefon_2', 'telefon_3',
+		'kontakt_telefon', 'telefon', 'phone',
+		'_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation',
+	];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('telefon', 10), $keys);
+	}
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+}
+
+function cmx_kontakte_search_name_meta_keys(): array {
+	$keys = [
+		CMX_KONTAKTE_META_VORNAME,
+		CMX_KONTAKTE_META_NACHNAME,
+		'_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation',
+	];
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+		$keys = \array_merge(
+			(array) cmx_kommunikation_flat_field_meta_keys('vorname', 10),
+			(array) cmx_kommunikation_flat_field_meta_keys('nachname', 10),
+			$keys
+		);
+	}
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+}
+
 function cmx_kontakte_search_address_meta_keys(): array {
 	$keys = [
 		CMX_RECHNUNG_META_STRASSE,
@@ -1049,6 +1081,16 @@ function cmx_kontakte_search_terms(string $search_term): array {
 	if ($umlaut_variant !== $search_term) {
 		$terms[] = $umlaut_variant;
 	}
+	$compact_phone = (string) \preg_replace('/[^\d+]+/', '', $search_term);
+	if ($compact_phone !== '' && $compact_phone !== $search_term) {
+		$terms[] = $compact_phone;
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_phone')) {
+		$normalized_phone = cmx_kommunikation_normalize_phone($search_term);
+		if ($normalized_phone !== '') {
+			$terms[] = $normalized_phone;
+		}
+	}
 
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $terms))));
 }
@@ -1095,6 +1137,8 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	$email_meta_query = ['relation' => 'OR'];
 	foreach ($search_terms as $lookup_term) {
 		foreach (\array_merge(
+			cmx_kontakte_search_name_meta_keys(),
+			cmx_kontakte_search_phone_meta_keys(),
 			cmx_kontakte_search_email_meta_keys(),
 			cmx_kontakte_search_address_meta_keys()
 		) as $meta_key) {
