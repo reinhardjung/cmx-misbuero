@@ -1791,10 +1791,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 				$font_size = 8.5;
 				$text_width = $font_metrics->getTextWidth($text, $font, $font_size);
 				$canvas->filled_rectangle(0, 818, 595.28, 24, [0, 0.106, 0.239]);
-				$canvas->text(595.28 - 28 - $text_width, 826, $text, $font, $font_size, [1, 1, 1]);
+				$canvas->text(595.28 - 28 - $text_width, 824, $text, $font, $font_size, [1, 1, 1]);
 			});
 		} else {
-			$canvas->page_text(500, 823, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
+			$canvas->page_text(500, 821, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
 		}
 
 		$pdf_binary = $dompdf->output();
