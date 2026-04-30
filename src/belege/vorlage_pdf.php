@@ -1987,6 +1987,9 @@ add_action('save_post_belege', __NAMESPACE__.'\\cmxbu_generate_document_on_save'
 			}
 
 			cmxbu_log('PDF erstellt', ['pdf' => $pdf_path, 'layout' => (string)($tpl['layout']['profile'] ?? 'dl')]);
+			if (\function_exists(__NAMESPACE__ . '\\cmx_misbuero_embed_facturx_xml_into_pdf')) {
+				cmx_misbuero_embed_facturx_xml_into_pdf($pdf_path, $post_id);
+			}
 		} catch (\Throwable $e) {
 			cmxbu_log('DOMPDF EXCEPTION', ['error' => $e->getMessage()]);
 			return;

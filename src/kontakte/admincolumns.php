@@ -821,7 +821,7 @@ function cmx_kontakte_add_columns(array $columns): array {
 	if (!isset($new['cmx_hersteller_url'])) {
 		$new['cmx_hersteller_url'] = 'URL';
 	}
-	if (!isset($new['cmx_telefonbuch_detail'])) $new['cmx_telefonbuch_detail'] = 'Muh';
+	if (!isset($new['cmx_telefonbuch_detail'])) $new['cmx_telefonbuch_detail'] = 'Tel';
 	if (!isset($new['cmx_kontakt_belege'])) $new['cmx_kontakt_belege'] = 'P';
 	if (!isset($new['cmx_firmengruendung'])) $new['cmx_firmengruendung'] = 'Gründung';
 	if (!isset($new['cmx_geburtsdatum'])) $new['cmx_geburtsdatum'] = 'Geburt';
