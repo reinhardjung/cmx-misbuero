@@ -436,7 +436,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			.cmx-telefonbuch-map-icon{display:block;width:15px;height:15px;fill:currentColor}
 			.cmx-telefonbuch-detail-link{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;border:1px solid #d7e3ee;background:#fff6eb;color:#b45309;text-decoration:none;flex:0 0 auto}
 			.cmx-telefonbuch-detail-link:hover{background:#ffedd5;color:#92400e;border-color:#fdba74}
-			.cmx-telefonbuch-detail-link .dashicons{width:16px;height:16px;font-size:16px;line-height:16px}
+			.cmx-telefonbuch-detail-link .cmx-book-user-icon{display:block;width:16px;height:16px}
 			.cmx-telefonbuch-subtitle{display:block;margin-top:3px;color:#667085;font-size:13px}
 			.cmx-telefonbuch-list{display:flex;flex-direction:column;gap:8px}
 			.cmx-telefonbuch-item{display:flex;flex-direction:column;gap:2px}
@@ -525,7 +525,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_telefonbuch_page')) {
 			}
 			if ($detail_url !== '') {
 				echo '<a class="cmx-telefonbuch-detail-link" href="' . \esc_url($detail_url) . '" data-detail-url="' . \esc_url($detail_url) . '" title="Kontaktdetails öffnen" aria-label="Kontaktdetails öffnen">';
-				echo '<span class="dashicons dashicons-carrot" aria-hidden="true"></span>';
+				echo \function_exists(__NAMESPACE__ . '\\cmx_book_user_icon_svg') ? cmx_book_user_icon_svg() : '';
 				echo '</a>';
 			}
 			if ($edit_url !== '') {

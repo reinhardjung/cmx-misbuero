@@ -51,6 +51,22 @@ function cmx_icon(string $name): string {
 	return is_string($svg) ? $svg : '';
 }
 
+function cmx_book_user_icon_svg(string $class = 'cmx-book-user-icon'): string {
+	$svg = cmx_icon('book-user');
+	if ($svg === '') {
+		return '';
+	}
+
+	$svg = preg_replace(
+		'/<svg\b/',
+		'<svg class="' . esc_attr($class) . '" aria-hidden="true" focusable="false"',
+		$svg,
+		1
+	);
+
+	return is_string($svg) ? $svg : '';
+}
+
 
 // cmx_require_files(__DIR__, 'stammdaten, lieferanten');
 function cmx_require_files(string $dir, string|array $files): void {

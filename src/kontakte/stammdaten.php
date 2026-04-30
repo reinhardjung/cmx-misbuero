@@ -12,6 +12,7 @@ const CMX_KONTAKTE_META_ANREDE   = '_cmx_kontakte_anrede';
 const CMX_KONTAKTE_META_FIRMA    = '_cmx_kontakte_firma';
 const CMX_KONTAKTE_META_URL      = '_cmx_kontakte_url';
 const CMX_KONTAKTE_META_HR_UID   = '_cmx_kontakte_hr_uid';
+const CMX_KONTAKTE_META_MUH      = '_cmx_kontakte_muh';
 const CMX_KONTAKTE_META_PRIVAT   = '_cmx_kontakte_privat';
 const CMX_KONTAKTE_META_KUNDEN_NR = '_cmx_kontakte_kunden_nr';
 const CMX_KONTAKTE_META_DATUM    = '_cmx_kontakte_datum';
@@ -27,7 +28,7 @@ const CMX_KONTAKTE_META_KUNDE_SEIT      = '_cmx_kontakte_kunde_seit';
 \add_action('init', __NAMESPACE__ . '\\cmx_register_kontakte_stammdaten_meta');
 function cmx_register_kontakte_stammdaten_meta() {
 	// Text
-	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_FIRMA, CMX_KONTAKTE_META_HR_UID, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
+	foreach ([CMX_KONTAKTE_META_VORNAME, CMX_KONTAKTE_META_NACHNAME, CMX_KONTAKTE_META_ANREDE, CMX_KONTAKTE_META_FIRMA, CMX_KONTAKTE_META_HR_UID, CMX_KONTAKTE_META_MUH, CMX_KONTAKTE_META_KUNDEN_NR] as $key) {
 		\register_post_meta('kontakte', $key, [
 			'type'              => 'string',
 			'single'            => true,
@@ -240,6 +241,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	$kunden_nr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_KUNDEN_NR, true);
 	$url_raw  = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_URL, true);
 	$hr_uid   = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_HR_UID, true);
+	$muh      = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_MUH, true);
 	$firmengr = (string) \get_post_meta($post->ID, CMX_KONTAKTE_META_FIRMENGRUENDUNG, true);
 	$kunde_seit = cmx_kontakt_kunde_seit_value((int) $post->ID);
 	$business_form_taxonomy = cmx_kontakte_business_form_taxonomy();
@@ -280,7 +282,7 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		position:relative;
 		overflow:visible;
 		display:grid !important;
-		grid-template-columns:minmax(260px,1.75fr) minmax(140px,0.9fr) minmax(170px,1.45fr) minmax(160px,1.05fr) minmax(120px,0.95fr) minmax(120px,0.95fr) max-content 150px;
+		grid-template-columns:minmax(210px,1.25fr) minmax(140px,0.9fr) minmax(170px,1.45fr) minmax(160px,1.05fr) minmax(128px,0.92fr) minmax(128px,0.92fr) minmax(90px,0.62fr) max-content 150px;
 		column-gap:12px;
 		row-gap:0;
 		align-items:flex-start;
@@ -365,6 +367,10 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 	<label for="cmx_kunde_seit"><strong>Kunde seit</strong></label><br>
 	<input id="cmx_kunde_seit" name="cmx_kunde_seit" type="date" class="date" value="' . \esc_attr($kunde_seit) . '">
 	</p>';
+	echo '<p class="field field--muh">
+		<label for="cmx_muh"><strong>Muh</strong></label><br>
+		<input id="cmx_muh" name="cmx_muh" type="text" class="text" value="' . \esc_attr($muh) . '">
+	</p>';
 	echo '<div class="field field--status">
 		<label for="cmx_status"><strong>Status</strong></label>
 		<div class="cmx-status-field-control">';
@@ -419,6 +425,10 @@ function cmx_save_kontakte_meta(int $post_id): void {
 	// HR-UID
 	if (isset($_POST['cmx_hr_uid'])) {
 		\update_post_meta($post_id, CMX_KONTAKTE_META_HR_UID, \sanitize_text_field((string) $_POST['cmx_hr_uid']));
+	}
+
+	if (isset($_POST['cmx_muh'])) {
+		\update_post_meta($post_id, CMX_KONTAKTE_META_MUH, \sanitize_text_field((string) \wp_unslash($_POST['cmx_muh'])));
 	}
 
 	// URL

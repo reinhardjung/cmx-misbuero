@@ -812,7 +812,8 @@ add_action('add_meta_boxes', function() {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
 					}
 					if ($kontakt_telefonbuch_url !== '') {
-						echo '<a href="' . esc_url($kontakt_telefonbuch_url) . '" class="cmx-kontakt-telefonbuch-link dashicons dashicons-carrot" style="text-decoration:none;color:#b45309; position:relative; left:15px;" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer"><span class="screen-reader-text">Telefonbuch-Detailansicht öffnen</span></a>';
+						$kontakt_telefonbuch_icon = \function_exists(__NAMESPACE__ . '\\cmx_book_user_icon_svg') ? cmx_book_user_icon_svg() : '';
+						echo '<a href="' . esc_url($kontakt_telefonbuch_url) . '" class="cmx-kontakt-telefonbuch-link" style="display:inline-block;width:20px;height:20px;text-decoration:none;color:#b45309; position:relative; left:15px;" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer">' . $kontakt_telefonbuch_icon . '<span class="screen-reader-text">Telefonbuch-Detailansicht öffnen</span></a>';
 					}
 						if ($show_pdf_icons) {
 							echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Anzeigen als PDF (DL/C5/C4)" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';

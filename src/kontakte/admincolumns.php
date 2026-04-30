@@ -755,7 +755,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
 		.column-cmx_telefonbuch_detail a { display:inline-block; padding:2px; color:#b45309; }
-		.column-cmx_telefonbuch_detail .dashicons { width:16px; height:16px; font-size:16px; line-height:16px; }
+		.column-cmx_telefonbuch_detail .cmx-book-user-icon { display:block; width:16px; height:16px; }
 		.column-cmx_hersteller_url a,
 		.column-cmx_kontakt_belege a { display:inline-block; padding:2px; }
 	</style>';
@@ -869,7 +869,8 @@ function cmx_kontakte_render_custom_columns(string $column, int $post_id): void 
 			return;
 		}
 
-		echo '<a href="' . \esc_url($url) . '" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-carrot" aria-hidden="true"></span></a>';
+		$icon = \function_exists(__NAMESPACE__ . '\\cmx_book_user_icon_svg') ? cmx_book_user_icon_svg() : '';
+		echo '<a href="' . \esc_url($url) . '" title="Telefonbuch-Detailansicht öffnen" target="_blank" rel="noopener noreferrer">' . $icon . '</a>';
 		return;
 	}
 
