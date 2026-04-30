@@ -746,7 +746,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_kontakt_belege { width:56px; text-align:center; padding-left:0 !important; padding-right:0 !important; }
 		th#cmx_gmaps,
 		th#cmx_hersteller_url,
-		th#cmx_telefonbuch_detail { text-indent:1ch; }
+		th#cmx_telefonbuch_detail { text-indent:2ch; }
 		th#cmx_kontakt_belege { text-indent:2ch; }
 		th#cmx_geburtsdatum { text-indent:1ch; }
 		.column-cmx_stufen { width:56px; max-width:56px; }
@@ -755,7 +755,7 @@ function cmx_kontakte_apply_tax_filters($query) {
 		.column-cmx_gmaps .dashicons { font-size:20px; width:20px; height:20px; line-height:20px; }
 		.column-cmx_gmaps a.cmx-gmaps-link { display:inline-block; padding:2px; }
 		.column-cmx_telefonbuch_detail a { display:inline-block; padding:2px; color:#b45309; }
-		.column-cmx_telefonbuch_detail .cmx-book-user-icon { display:block; width:16px; height:16px; }
+		.column-cmx_telefonbuch_detail .cmx-book-user-icon { display:block; width:16px; height:16px; position:relative; top:4px; }
 		.column-cmx_hersteller_url a,
 		.column-cmx_kontakt_belege a { display:inline-block; padding:2px; }
 	</style>';
