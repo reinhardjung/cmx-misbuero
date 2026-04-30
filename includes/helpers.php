@@ -51,18 +51,21 @@ function cmx_icon(string $name): string {
 	return is_string($svg) ? $svg : '';
 }
 
-function cmx_book_user_icon_svg(string $class = 'cmx-book-user-icon'): string {
+function cmx_book_user_icon_svg(string $class = 'cmx-book-user-icon', int $size = 24): string {
 	$svg = cmx_icon('book-user');
 	if ($svg === '') {
 		return '';
 	}
 
+	$size = max(1, $size);
 	$svg = preg_replace(
 		'/<svg\b/',
 		'<svg class="' . esc_attr($class) . '" aria-hidden="true" focusable="false"',
 		$svg,
 		1
 	);
+	$svg = preg_replace('/\swidth="[^"]*"/', ' width="' . (int) $size . '"', (string) $svg, 1);
+	$svg = preg_replace('/\sheight="[^"]*"/', ' height="' . (int) $size . '"', (string) $svg, 1);
 
 	return is_string($svg) ? $svg : '';
 }
