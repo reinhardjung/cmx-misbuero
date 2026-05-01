@@ -121,9 +121,13 @@ if ((LIST_ONLY)); then
 fi
 
 RSYNC_OPTS=(
-  -az
+  -rz
   --human-readable
   --stats
+  --delay-updates
+  --no-perms
+  --no-owner
+  --no-group
   --exclude .git/
   --exclude .gitignore
   --exclude .gitlab-ci.yml
@@ -147,11 +151,26 @@ fi
 
 deploy_instance() {
   local instance="$1"
-  local remote="${HOST}:${REMOTE_BASE}/${instance}.misbuero.ch/${PLUGIN_PATH}/"
+  local remote_wp_root="${REMOTE_BASE}/${instance}.misbuero.ch/httpdocs"
+  local remote_plugin_dir="${remote_wp_root}/wp-content/plugins/cmx-misbuero"
+  local remote="${HOST}:${remote_plugin_dir}/"
 
   echo
   echo "==> Deploy ${instance}.misbuero.ch"
   rsync "${RSYNC_OPTS[@]}" -e "$SSH_CMD" "$PLUGIN_DIR/" "$remote"
+
+  if ((DRY_RUN)); then
+    return
+  fi
+
+  echo "    Fix ownership and permissions"
+  $SSH_CMD "$HOST" "chown -R '${instance}:psacln' '${remote_plugin_dir}' && find '${remote_plugin_dir}' -type d -exec chmod 755 {} + && find '${remote_plugin_dir}' -type f -exec chmod 644 {} + && chmod 755 '${remote_plugin_dir}/bin/deploy-all.sh' 2>/dev/null || true"
+
+  echo "    Validate plugin header"
+  $SSH_CMD "$HOST" "test -f '${remote_plugin_dir}/cmx-misbuero.php' && grep -q 'Plugin Name:' '${remote_plugin_dir}/cmx-misbuero.php'"
+
+  echo "    Ensure plugin is active"
+  $SSH_CMD "$HOST" "cd '${remote_wp_root}' && PATH=/opt/plesk/php/8.4/bin:\$PATH wp plugin is-active cmx-misbuero --allow-root >/dev/null 2>&1 || PATH=/opt/plesk/php/8.4/bin:\$PATH wp plugin activate cmx-misbuero --allow-root"
 }
 
 if [[ -n "$ONLY" ]]; then

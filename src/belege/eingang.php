@@ -727,7 +727,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	exit;
 });
 
-\add_action('admin_notices', function (): void {
+\add_action('all_admin_notices', function (): void {
 	if (empty($_GET['cmx_belegeingang_sent'])) {
 		return;
 	}
@@ -878,7 +878,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	return $post_states;
 }, 20, 2);
 
-\add_action('admin_notices', function (): void {
+\add_action('all_admin_notices', function (): void {
 	if (!\current_user_can('edit_posts')) {
 		return;
 	}
