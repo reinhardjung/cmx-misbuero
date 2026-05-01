@@ -220,4 +220,4 @@ cmx_const_taxos(strtoupper(basename(__DIR__)),basename(__DIR__), CMX_TAX_BELEGE)
 
 
 // Include: @ll metaboxes
-cmx_require_files(__DIR__,'kopfdaten,positionen,abschnitt,konditionen,offerte,mwst,liste_belege,admincolumns,summen,anzahlungen,vorlage_pdf,factur-x,meta_action,logfile,vorlage_qr_code,add_tasks,exports_data,imports,exports,woocommerce,ext_pdf,abo');
+cmx_require_files(__DIR__,'kopfdaten,positionen,abschnitt,konditionen,offerte,mwst,liste_belege,admincolumns,summen,anzahlungen,vorlage_pdf,factur-x,meta_action,logfile,vorlage_qr_code,add_tasks,exports_data,imports,exports,woocommerce,ext_pdf,abo,eingang');

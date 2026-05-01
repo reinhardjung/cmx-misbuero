@@ -492,6 +492,8 @@ add_action('add_meta_boxes', function() {
 			$download_url = '';
 			$kontakt_belege_url = '';
 			$kontakt_telefonbuch_url = '';
+			$beleg_kontakt_muh_url = '';
+			$beleg_send_eingang_url = '';
 			$has_pdf = false;
 			$send_tooltip = 'PDF-Link per Mail versendern';
 			if ($is_belege && function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
@@ -506,6 +508,17 @@ add_action('add_meta_boxes', function() {
 							: \sanitize_email((string) get_post_meta($kontakt_id, '_cmx_email_1', true));
 						if (\is_email($recipient_mail)) {
 							$send_tooltip .= ' an: ' . $recipient_mail;
+						}
+						$muh_meta_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_MUH') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_MUH') : '_cmx_kontakte_muh';
+						$muh_value = \trim((string) get_post_meta($kontakt_id, $muh_meta_key, true));
+						if ($muh_value !== '') {
+							$beleg_kontakt_muh_url = \function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_href')
+								? (string) cmx_normalize_url_for_href($muh_value)
+								: (\preg_match('~^https?://~i', $muh_value) ? $muh_value : 'https://' . \ltrim($muh_value, '/'));
+							$beleg_send_eingang_url = (string) \wp_nonce_url(
+								\add_query_arg(['action' => 'cmx_beleg_send_eingang', 'post_id' => (int) $post->ID], \admin_url('admin-post.php')),
+								'cmx_beleg_send_eingang_' . (int) $post->ID
+							);
 						}
 					}
 				}
@@ -568,6 +581,9 @@ add_action('add_meta_boxes', function() {
 				esc_attr($btn_name),
 				esc_attr($btn_label)
 			);
+			if ($is_belege && $beleg_send_eingang_url !== '') {
+				echo '<a href="' . esc_url($beleg_send_eingang_url) . '" title="' . esc_attr__('Beleg an Muh-Instanz senden', 'default') . '" class="button button-secondary" style="height:36px; display:inline-flex; align-items:center; justify-content:center;"><span class="dashicons dashicons-carrot" style="margin-top:2px;"></span></a>';
+			}
 			if ($is_belege && $send_href !== '') {
 				echo '<a href="'.$send_href.'" title="' . esc_attr($send_tooltip) . '" class="button button-secondary" style="height:36px; display:inline-flex; align-items:center; justify-content:center;"><span class="dashicons dashicons-email" style="margin-top:2px;"></span></a>';
 			}

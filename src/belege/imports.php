@@ -256,6 +256,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_refresh_beleg_pdf')) {
 	return $views;
 }, 36);
 
+/* ===== Eingang-Link in der Belege-Liste ===== */
+\add_filter('views_edit-' . CMX_PT_BELEGE, function(array $views): array {
+	if (!\current_user_can('edit_posts')) {
+		return $views;
+	}
+
+	$url = \add_query_arg(['post_type' => CMX_PT_BELEGE, 'cmx_belegeingang' => 1], \admin_url('edit.php'));
+	$is_current = !empty($_GET['cmx_belegeingang']);
+	$link = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>' . \esc_html__('Eingang', 'cmx') . '</a>';
+
+	if (\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_before')) {
+		return cmxbel_view_insert_before($views, 'cmx_deckungsbeitrag', 'cmx_eingang_belege', $link);
+	}
+
+	$views['cmx_eingang_belege'] = $link;
+	return $views;
+}, 37);
+
 /* ===== Inline-Formular ===== */
 \add_action('all_admin_notices', function (): void {
 	global $typenow;
