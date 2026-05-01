@@ -19,6 +19,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_admin_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_instance_url')) {
+	function cmx_belegeingang_instance_url(string $raw): string {
+		$raw = \trim($raw);
+		if ($raw === '') {
+			return '';
+		}
+		if (\preg_match('~^https?://~i', $raw)) {
+			return \rtrim($raw, '/');
+		}
+		$raw = \trim($raw, '/');
+		if (\str_contains($raw, '.') || \str_contains($raw, ':')) {
+			return 'https://' . $raw;
+		}
+		$slug = \sanitize_title($raw);
+		return $slug !== '' ? 'https://' . $slug . '.misbuero.ch' : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_send_error_key')) {
+	function cmx_belegeingang_send_error_key(): string {
+		return 'cmx_belegeingang_send_error_' . (int) \get_current_user_id();
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_pdf_path_from_rel')) {
 	function cmx_belegeingang_pdf_path_from_rel(string $rel): string {
 		$rel = \ltrim(\str_replace('\\', '/', $rel), '/');
@@ -67,6 +91,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 			$grand_total = $due_payable = $line_total = $charge_total = $allowance_total = $tax_basis = $tax_total = $rounding = $prepaid = null;
 			$reader->getDocumentSummation($grand_total, $due_payable, $line_total, $charge_total, $allowance_total, $tax_basis, $tax_total, $rounding, $prepaid);
 
+			$due_date = null;
+			if ($reader->firstDocumentPaymentTerms()) {
+				$payment_description = $direct_debit_mandate_id = null;
+				$reader->getDocumentPaymentTerm($payment_description, $due_date, $direct_debit_mandate_id);
+			}
+
+			$positions = [];
+			if ($reader->firstDocumentPosition()) {
+				do {
+					$name = $description = $seller_assigned_id = $buyer_assigned_id = $global_id_type = $global_id = null;
+					$reader->getDocumentPositionProductDetails($name, $description, $seller_assigned_id, $buyer_assigned_id, $global_id_type, $global_id);
+
+					$quantity = $charge_free_quantity = $package_quantity = null;
+					$quantity_unit = $charge_free_unit = $package_unit = null;
+					$reader->getDocumentPositionQuantity($quantity, $quantity_unit, $charge_free_quantity, $charge_free_unit, $package_quantity, $package_unit);
+
+					$unit_price = $price_basis_quantity = null;
+					$price_basis_unit = null;
+					$reader->getDocumentPositionNetPrice($unit_price, $price_basis_quantity, $price_basis_unit);
+
+					$line_amount = $allowance_charge_amount = null;
+					$reader->getDocumentPositionLineSummation($line_amount, $allowance_charge_amount);
+
+					$title = \trim((string) ($name ?: $description ?: $seller_assigned_id ?: $buyer_assigned_id));
+					if ($title === '' && (float) $line_amount <= 0) {
+						continue;
+					}
+
+					$positions[] = [
+						'artikel_name' => $title !== '' ? $title : 'Factur-X Position',
+						'menge' => (string) \number_format((float) ($quantity ?: 1), 2, '.', ''),
+						'einheit' => (string) ($quantity_unit ?: $price_basis_unit ?: ''),
+						'preis' => (string) \number_format((float) ($unit_price ?: $line_amount ?: 0), 2, '.', ''),
+						'rabatt' => '',
+						'beschreibung' => \trim((string) $description),
+					];
+				} while ($reader->nextDocumentPosition());
+			}
+
 			$address_lines = \array_values(\array_filter([
 				(string) $seller_name,
 				(string) $line_one,
@@ -80,12 +143,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 				'xml' => $xml,
 				'document_no' => (string) $document_no,
 				'document_date' => $document_date instanceof \DateTimeInterface ? $document_date->format('Y-m-d') : '',
+				'due_date' => $due_date instanceof \DateTimeInterface ? $due_date->format('Y-m-d') : '',
 				'currency' => (string) ($currency ?: 'CHF'),
 				'seller_name' => \trim((string) $seller_name),
 				'seller_address' => \implode("\n", $address_lines),
 				'gross_total' => (float) ($grand_total ?: $due_payable ?: 0),
 				'tax_total' => (float) ($tax_total ?: 0),
 				'net_total' => (float) ($tax_basis ?: $line_total ?: 0),
+				'positions' => $positions,
 			];
 		} catch (\Throwable $e) {
 			\error_log('[CMX Belegeingang] Factur-X lesen fehlgeschlagen: ' . $e->getMessage());
@@ -97,8 +162,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_store_pdf')) {
 	function cmx_belegeingang_store_pdf(string $pdf_binary, string $filename): array {
 		$year = (int) \wp_date('Y');
-		$uploads = \wp_get_upload_dir();
-		$base_dir = \trailingslashit((string) ($uploads['basedir'] ?? '')) . 'misbuero/archiv/' . $year . '/belegeingang/';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belege_upload_dir')) {
+			[$base_dir] = cmx_belege_upload_dir($year);
+			$base_dir = \trailingslashit((string) $base_dir);
+		} else {
+			$uploads = \wp_get_upload_dir();
+			$base_dir = \trailingslashit((string) ($uploads['basedir'] ?? '')) . 'misbuero/archiv/' . $year . '/belege/';
+		}
 		if (!\wp_mkdir_p($base_dir)) {
 			return ['', ''];
 		}
@@ -114,8 +184,62 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_store_pdf')) {
 			return ['', ''];
 		}
 
-		$rel = 'misbuero/archiv/' . $year . '/belegeingang/' . $unique;
+		$rel = 'misbuero/archiv/' . $year . '/belege/' . $unique;
 		return [$path, $rel];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_set_term_by_slug')) {
+	function cmx_belegeingang_set_term_by_slug(int $post_id, string $taxonomy, string $slug): void {
+		if ($post_id <= 0 || $taxonomy === '' || $slug === '' || !\taxonomy_exists($taxonomy)) {
+			return;
+		}
+
+		$term = \get_term_by('slug', $slug, $taxonomy);
+		if ($term instanceof \WP_Term) {
+			\wp_set_object_terms($post_id, [(int) $term->term_id], $taxonomy, false);
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_apply_facturx_meta')) {
+	function cmx_belegeingang_apply_facturx_meta(int $post_id, array $facturx): void {
+		if ($post_id <= 0) {
+			return;
+		}
+
+		$seller_name = \trim((string) ($facturx['seller_name'] ?? ''));
+		$seller_address = \trim((string) ($facturx['seller_address'] ?? ''));
+		$document_date = \trim((string) ($facturx['document_date'] ?? ''));
+		$due_date = \trim((string) ($facturx['due_date'] ?? ''));
+		$currency = \trim((string) ($facturx['currency'] ?? 'CHF'));
+		$gross_total = (float) ($facturx['gross_total'] ?? 0);
+
+		\update_post_meta($post_id, '_cmx_belegeingang_exclude_stats', '1');
+		\update_post_meta($post_id, '_cmx_beleg_richtung', 'eingang');
+		\update_post_meta($post_id, '_cmx_beleg_status', 'offen');
+		\update_post_meta($post_id, '_cmx_beleg_kontakt_label', $seller_name);
+		\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', $seller_address);
+		\update_post_meta($post_id, '_cmx_beleg_waehrung', $currency !== '' ? $currency : 'CHF');
+
+		if ($document_date !== '') {
+			\update_post_meta($post_id, '_cmx_beleg_rng_datum', $document_date);
+		}
+		if ($due_date !== '') {
+			\update_post_meta($post_id, '_cmx_beleg_faelligkeitsdatum', $due_date);
+		}
+		if ($gross_total > 0) {
+			\update_post_meta($post_id, '_cmx_beleg_summe_override', (string) \number_format($gross_total, 2, '.', ''));
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? (string) cmx_belege_kategorie_taxonomy() : '';
+		cmx_belegeingang_set_term_by_slug($post_id, $tax, 'rechnung');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_title_from_facturx')) {
+	function cmx_belegeingang_title_from_facturx(array $facturx): string {
+		$document_no = \trim((string) ($facturx['document_no'] ?? ''));
+		return $document_no !== '' ? $document_no : 'Belegeingang ' . \wp_date('ymd-His');
 	}
 }
 
@@ -152,11 +276,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		return new \WP_REST_Response(['success' => false, 'message' => 'Das PDF enthält keine lesbare Factur-X/ZUGFeRD-XML-Datei.'], 422);
 	}
 
-	$title_parts = \array_filter([
-		(string) ($facturx['document_no'] ?? ''),
-		(string) ($facturx['seller_name'] ?? ''),
-	]);
-	$title = !empty($title_parts) ? \implode(' – ', $title_parts) : 'Belegeingang ' . \wp_date('ymd-His');
+	$title = cmx_belegeingang_title_from_facturx($facturx);
 
 	$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
 	$post_id = (int) \wp_insert_post([
@@ -173,16 +293,12 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 
 	\update_post_meta($post_id, CMX_BELEGEINGANG_SOURCE_META, 'rest');
 	\update_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, 'pending');
-	\update_post_meta($post_id, '_cmx_belegeingang_exclude_stats', '1');
 	\update_post_meta($post_id, CMX_BELEGEINGANG_PDF_META, $pdf_rel);
 	\update_post_meta($post_id, '_cmx_belege_uploads', [$pdf_rel]);
 	\update_post_meta($post_id, '_cmx_beleg_upload_prefix', \sanitize_title((string) \get_the_title($post_id)));
 	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_id', $source_id);
 	\update_post_meta($post_id, '_cmx_belegeingang_facturx', $facturx);
-	\update_post_meta($post_id, '_cmx_beleg_kontakt_label', (string) ($facturx['seller_name'] ?? ''));
-	\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', (string) ($facturx['seller_address'] ?? ''));
-	\update_post_meta($post_id, '_cmx_beleg_rng_datum', (string) ($facturx['document_date'] ?? ''));
-	\update_post_meta($post_id, '_cmx_beleg_summe_override', (string) \number_format((float) ($facturx['gross_total'] ?? 0), 2, '.', ''));
+	cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
 
 	return new \WP_REST_Response([
 		'success' => true,
@@ -206,13 +322,15 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		: (int) \get_post_meta($post_id, '_cmx_beleg_kontakt_id', true);
 	$muh_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_MUH') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_MUH') : '_cmx_kontakte_muh';
 	$instance = $kontakt_id > 0 ? \trim((string) \get_post_meta($kontakt_id, $muh_key, true)) : '';
-	$instance = \function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_href') ? (string) cmx_normalize_url_for_href($instance) : $instance;
+	$instance = cmx_belegeingang_instance_url($instance);
 	if ($instance === '') {
+		\set_transient(cmx_belegeingang_send_error_key(), 'Beim Kontakt ist keine Muh-Instanz hinterlegt.', 60);
 		\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', 'missing_instance', $redirect));
 		exit;
 	}
 
 	if (!\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_pdf_paths')) {
+		\set_transient(cmx_belegeingang_send_error_key(), 'PDF-Pfad konnte nicht ermittelt werden.', 60);
 		\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', 'missing_pdf_helper', $redirect));
 		exit;
 	}
@@ -220,6 +338,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$post = \get_post($post_id);
 	[, $pdf_path] = cmxbu_get_beleg_pdf_paths($post);
 	if (!\is_readable($pdf_path)) {
+		\set_transient(cmx_belegeingang_send_error_key(), 'Für diesen Beleg wurde kein lesbares PDF gefunden: ' . $pdf_path, 60);
 		\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', 'missing_pdf', $redirect));
 		exit;
 	}
@@ -237,12 +356,18 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	]);
 
 	if (\is_wp_error($response)) {
-		\error_log('[CMX Belegeingang] Versand fehlgeschlagen: ' . $response->get_error_message());
+		$error_message = 'Versand an ' . $endpoint . ' fehlgeschlagen: ' . $response->get_error_message();
+		\set_transient(cmx_belegeingang_send_error_key(), $error_message, 60);
+		\error_log('[CMX Belegeingang] ' . $error_message);
 		\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', 'error', $redirect));
 		exit;
 	}
 
 	$code = (int) \wp_remote_retrieve_response_code($response);
+	if ($code < 200 || $code >= 300) {
+		$body = \trim((string) \wp_remote_retrieve_body($response));
+		\set_transient(cmx_belegeingang_send_error_key(), 'Zielinstanz hat abgelehnt (' . $code . '): ' . \wp_strip_all_tags($body), 60);
+	}
 	\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', $code >= 200 && $code < 300 ? 'ok' : 'rejected', $redirect));
 	exit;
 });
@@ -264,6 +389,11 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		return;
 	}
 	[$type, $text] = $messages[$status];
+	$detail = (string) \get_transient(cmx_belegeingang_send_error_key());
+	if ($detail !== '') {
+		\delete_transient(cmx_belegeingang_send_error_key());
+		$text .= ' ' . $detail;
+	}
 	echo '<div class="notice notice-' . \esc_attr($type) . ' is-dismissible"><p>' . \esc_html($text) . '</p></div>';
 });
 
@@ -333,48 +463,40 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	echo '<div class="notice notice-info"><p>Neuer Beleg im Eingang: ' . $link . ' von ' . \esc_html($seller) . ' – ' . \esc_html($currency . ' ' . $total) . '</p></div>';
 });
 
-\add_action('all_admin_notices', function (): void {
-	global $typenow;
-	if ($typenow !== 'belege' || empty($_GET['cmx_belegeingang'])) {
+\add_action('admin_init', function (): void {
+	if (!\is_admin() || !\current_user_can('edit_posts')) {
 		return;
 	}
 
-	$items = \get_posts([
+	$post_ids = \get_posts([
 		'post_type' => 'belege',
 		'post_status' => 'pending',
 		'posts_per_page' => 50,
-		'orderby' => 'date',
-		'order' => 'DESC',
+		'fields' => 'ids',
+		'no_found_rows' => true,
 		'meta_query' => [
 			['key' => CMX_BELEGEINGANG_SOURCE_META, 'value' => 'rest'],
+			['key' => CMX_BELEGEINGANG_STATUS_META, 'value' => 'pending'],
 		],
 	]);
 
-	echo '<div class="wrap cmx-belegeingang-wrap"><h2>' . \esc_html__('Belegeingang', 'cmx') . '</h2>';
-	if (empty($items)) {
-		echo '<p>' . \esc_html__('Noch keine eingegangenen Belege.', 'cmx') . '</p></div>';
-		return;
-	}
-	echo '<style>.cmx-belegeingang-card{background:#fff;border:1px solid #ccd0d4;border-radius:4px;margin:12px 0;padding:12px}.cmx-belegeingang-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.cmx-belegeingang-preview{width:100%;height:360px;border:1px solid #ccd0d4;background:#f6f7f7}</style>';
-	foreach ($items as $item) {
-		$post_id = (int) $item->ID;
-		$data = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
-		$status = (string) \get_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, true);
-		$confirm_url = (string) \wp_nonce_url(\add_query_arg(['action' => 'cmx_belegeingang_confirm', 'post_id' => $post_id], \admin_url('admin-post.php')), 'cmx_belegeingang_confirm_' . $post_id);
-		echo '<div class="cmx-belegeingang-card" id="post-' . (int) $post_id . '">';
-		echo '<div class="cmx-belegeingang-head"><strong>' . \esc_html((string) \get_the_title($post_id)) . '</strong><span>';
-		echo '<a class="button" href="' . \esc_url(cmx_belegeingang_pdf_url($post_id)) . '" target="_blank" rel="noopener noreferrer">' . \esc_html__('PDF öffnen', 'cmx') . '</a> ';
-		if ($status === 'pending') {
-			echo '<a class="button button-primary" href="' . \esc_url($confirm_url) . '">' . \esc_html__('als Lieferantenrechnung anlegen', 'cmx') . '</a>';
-		} else {
-			echo '<span class="button disabled">' . \esc_html__('übernommen', 'cmx') . '</span>';
+	foreach ($post_ids as $post_id) {
+		$post_id = (int) $post_id;
+		if ((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true) !== '') {
+			continue;
 		}
-		echo '</span></div>';
-		echo '<p>' . \esc_html(\trim((string) ($data['seller_name'] ?? ''))) . ' – ' . \esc_html((string) ($data['currency'] ?? 'CHF')) . ' ' . \esc_html(\number_format((float) ($data['gross_total'] ?? 0), 2, '.', "'")) . '</p>';
-		echo '<iframe class="cmx-belegeingang-preview" src="' . \esc_url(cmx_belegeingang_pdf_url($post_id)) . '"></iframe>';
-		echo '</div>';
+		$facturx = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
+		if (!empty($facturx)) {
+			cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
+			$title = cmx_belegeingang_title_from_facturx($facturx);
+			if ($title !== '' && $title !== (string) \get_the_title($post_id)) {
+				\wp_update_post([
+					'ID' => $post_id,
+					'post_title' => $title,
+				]);
+			}
+		}
 	}
-	echo '</div>';
 });
 
 \add_action('admin_post_cmx_belegeingang_pdf', function (): void {
@@ -423,6 +545,10 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	\update_post_meta($post_id, '_cmx_beleg_kontakt_label', $seller);
 	\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', (string) ($data['seller_address'] ?? ''));
 	\update_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, 'imported');
+	\wp_update_post([
+		'ID' => $post_id,
+		'post_status' => 'publish',
+	]);
 
 	$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? (string) cmx_belege_kategorie_taxonomy() : '';
 	if ($tax !== '') {
@@ -432,6 +558,9 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		}
 	}
 
-	\wp_safe_redirect(cmx_belegeingang_admin_url($post_id));
+	$redirect_to = isset($_GET['redirect_to']) ? (string) \wp_unslash($_GET['redirect_to']) : '';
+	$redirect_to = $redirect_to !== '' ? \rawurldecode($redirect_to) : '';
+	$redirect_to = $redirect_to !== '' ? $redirect_to : cmx_belegeingang_admin_url($post_id);
+	\wp_safe_redirect($redirect_to);
 	exit;
 });

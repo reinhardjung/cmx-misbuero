@@ -231,7 +231,7 @@ function cmx_render_uploads_box(\WP_Post $post): void {
 				continue;
 			}
 			$norm = str_replace('\\', '/', $file_abs);
-			if (strpos($norm, '/uploads/misbuero/') === false || strpos($norm, '/belege/') === false) {
+			if (strpos($norm, '/uploads/misbuero/') === false || (strpos($norm, '/belege/') === false && strpos($norm, '/belegeingang/') === false)) {
 				continue;
 			}
 			$file_base = $file_rel ? basename($file_rel) : '';

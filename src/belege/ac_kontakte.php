@@ -96,7 +96,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_kontakt_id_for_post')) {
 		? cmx_beleg_kontakt_id_for_post($post_id)
 		: (int) \get_post_meta($post_id, CMX_BELEG_META_KONTAKT, true);
 	if ($kontakt_id <= 0) {
-		echo '<span style="color:#777"></span>';
+		$label = \trim((string) \get_post_meta($post_id, '_cmx_beleg_kontakt_label', true));
+		echo $label !== '' ? \esc_html($label) : '<span style="color:#777"></span>';
 		return;
 	}
 

@@ -203,7 +203,7 @@ function cmxbu_is_beleg_archive_abs_path(string $abs_path): bool {
 	if (\strpos($normalized, $uploads_base) !== 0) {
 		return false;
 	}
-	return \strpos($normalized, '/belege/') !== false;
+	return \strpos($normalized, '/belege/') !== false || \strpos($normalized, '/belegeingang/') !== false;
 }
 
 function cmxbu_collect_beleg_upload_attachment_ids(int $post_id): array {
