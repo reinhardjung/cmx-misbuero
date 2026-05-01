@@ -262,9 +262,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_refresh_beleg_pdf')) {
 		return $views;
 	}
 
+	unset($views['pending']);
+
 	$url = \add_query_arg(['post_type' => CMX_PT_BELEGE, 'cmx_belegeingang' => 1], \admin_url('edit.php'));
-	$is_current = !empty($_GET['cmx_belegeingang']);
-	$link = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>' . \esc_html__('Eingang', 'cmx') . '</a>';
+	$is_current = !empty($_GET['cmx_belegeingang'])
+		|| (isset($_GET['post_status']) && \sanitize_key((string) \wp_unslash($_GET['post_status'])) === 'pending');
+	$count_query = new \WP_Query([
+		'post_type' => CMX_PT_BELEGE,
+		'post_status' => 'pending',
+		'posts_per_page' => 1,
+		'fields' => 'ids',
+		'no_found_rows' => false,
+		'meta_query' => [
+			[
+				'key' => '_cmx_belegeingang_source',
+				'value' => 'rest',
+			],
+			[
+				'key' => '_cmx_belegeingang_status',
+				'value' => 'pending',
+			],
+		],
+	]);
+	$count = (int) $count_query->found_posts;
+	$label = __('Eingang', 'cmx');
+	if ($count > 1) {
+		$label .= ' (' . $count . ')';
+	}
+	$link = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>' . \esc_html($label) . '</a>';
 
 	if (\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_before')) {
 		return cmxbel_view_insert_before($views, 'cmx_deckungsbeitrag', 'cmx_eingang_belege', $link);

@@ -202,6 +202,64 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_set_term_by_slug')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_collect_transfer_meta')) {
+	function cmx_belegeingang_collect_transfer_meta(int $post_id): array {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return [];
+		}
+
+		$data = [];
+		$leistungsmonat = \trim((string) \get_post_meta($post_id, '_cmx_beleg_leistungsmonat', true));
+		if (\preg_match('/^(0[1-9]|1[0-2])$/', $leistungsmonat)) {
+			$data['leistungsmonat'] = $leistungsmonat;
+		}
+
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_tax') ? (string) cmx_beleg_zahlungsgrund_tax() : '';
+		if ($tax !== '' && \taxonomy_exists($tax)) {
+			$terms = \wp_get_post_terms($post_id, $tax);
+			if (!\is_wp_error($terms) && !empty($terms) && $terms[0] instanceof \WP_Term) {
+				$data['zahlungsgrund'] = [
+					'slug' => (string) $terms[0]->slug,
+					'name' => (string) $terms[0]->name,
+				];
+			}
+		}
+
+		return $data;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_apply_transfer_meta')) {
+	function cmx_belegeingang_apply_transfer_meta(int $post_id, array $data): void {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0) {
+			return;
+		}
+
+		$leistungsmonat = \trim((string) ($data['leistungsmonat'] ?? ''));
+		if (\preg_match('/^(0[1-9]|1[0-2])$/', $leistungsmonat)) {
+			\update_post_meta($post_id, '_cmx_beleg_leistungsmonat', $leistungsmonat);
+		}
+
+		$reason = \is_array($data['zahlungsgrund'] ?? null) ? (array) $data['zahlungsgrund'] : [];
+		$slug = \sanitize_title((string) ($reason['slug'] ?? ''));
+		$name = \trim(\sanitize_text_field((string) ($reason['name'] ?? '')));
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsgrund_tax') ? (string) cmx_beleg_zahlungsgrund_tax() : '';
+		if ($tax === '' || !\taxonomy_exists($tax) || ($slug === '' && $name === '')) {
+			return;
+		}
+
+		$term = $slug !== '' ? \get_term_by('slug', $slug, $tax) : false;
+		if (!$term && $name !== '') {
+			$term = \get_term_by('name', $name, $tax);
+		}
+		if ($term instanceof \WP_Term) {
+			\wp_set_post_terms($post_id, [(int) $term->term_id], $tax, false);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_apply_facturx_meta')) {
 	function cmx_belegeingang_apply_facturx_meta(int $post_id, array $facturx): void {
 		if ($post_id <= 0) {
@@ -256,6 +314,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$pdf_base64 = (string) ($params['pdf_base64'] ?? '');
 	$source_id = \sanitize_text_field((string) ($params['source_beleg_id'] ?? ''));
 	$filename = \sanitize_file_name((string) ($params['filename'] ?? 'beleg.pdf'));
+	$transfer_meta = \is_array($params['cmx_meta'] ?? null) ? (array) $params['cmx_meta'] : [];
 
 	$pdf_binary = $pdf_base64 !== '' ? \base64_decode($pdf_base64, true) : false;
 	if (!\is_string($pdf_binary) || $pdf_binary === '' || !\str_starts_with($pdf_binary, '%PDF-')) {
@@ -298,7 +357,9 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	\update_post_meta($post_id, '_cmx_beleg_upload_prefix', \sanitize_title((string) \get_the_title($post_id)));
 	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_id', $source_id);
 	\update_post_meta($post_id, '_cmx_belegeingang_facturx', $facturx);
+	\update_post_meta($post_id, '_cmx_belegeingang_cmx_meta', $transfer_meta);
 	cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
+	cmx_belegeingang_apply_transfer_meta($post_id, $transfer_meta);
 
 	return new \WP_REST_Response([
 		'success' => true,
@@ -351,6 +412,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 			'source_url' => \home_url('/'),
 			'source_beleg_id' => (string) \get_the_title($post_id),
 			'filename' => \basename($pdf_path),
+			'cmx_meta' => cmx_belegeingang_collect_transfer_meta($post_id),
 			'pdf_base64' => \base64_encode((string) \file_get_contents($pdf_path)),
 		]),
 	]);
@@ -408,7 +470,8 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	}
 
 	$meta_query = (array) $query->get('meta_query');
-	if (!empty($_GET['cmx_belegeingang'])) {
+	$requested_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
+	if (!empty($_GET['cmx_belegeingang']) || $requested_status === 'pending') {
 		$meta_query[] = [
 			'key' => CMX_BELEGEINGANG_SOURCE_META,
 			'value' => 'rest',
@@ -418,7 +481,6 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		return;
 	}
 
-	$requested_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
 	if ($requested_status !== 'trash') {
 		$query->set('post_status', ['publish']);
 	}
@@ -449,6 +511,15 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	];
 	$query->set('meta_query', $meta_query);
 }, 5);
+
+\add_filter('display_post_states', function (array $post_states, \WP_Post $post): array {
+	if ((string) $post->post_type !== 'belege') {
+		return $post_states;
+	}
+
+	unset($post_states['pending']);
+	return $post_states;
+}, 20, 2);
 
 \add_action('admin_notices', function (): void {
 	if (!\current_user_can('edit_posts')) {
@@ -481,24 +552,20 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 });
 
 \add_action('admin_head-edit.php', function (): void {
-	if (empty($_GET['cmx_belegeingang'])) {
-		return;
-	}
-	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'belege') {
+	if (empty($_GET['cmx_belegeingang']) || !isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'belege') {
 		return;
 	}
 
 	echo '<style>
 		.wp-list-table th.manage-column.column-title,
 		.wp-list-table td.title.column-title {
-			width: 18ch !important;
-			min-width: 18ch !important;
-			max-width: 18ch !important;
+			width: 17ch !important;
+			min-width: 17ch !important;
+			max-width: 17ch !important;
 		}
 		.wp-list-table td.column-title strong,
 		.wp-list-table td.column-title .row-title {
-			max-width: none !important;
-			overflow: visible !important;
+			max-width: 17ch !important;
 			text-overflow: clip !important;
 		}
 	</style>';
@@ -530,6 +597,10 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 
 		if ((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true) === '') {
 			cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
+		}
+		$transfer_meta = (array) \get_post_meta($post_id, '_cmx_belegeingang_cmx_meta', true);
+		if (!empty($transfer_meta)) {
+			cmx_belegeingang_apply_transfer_meta($post_id, $transfer_meta);
 		}
 
 		$title = cmx_belegeingang_title_from_facturx($facturx);

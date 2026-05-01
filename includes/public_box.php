@@ -809,14 +809,23 @@ add_action('add_meta_boxes', function() {
 				$dup_link = is_callable($dup_fn) ? $dup_fn((int)$post->ID) : '';
 
 				$show_pdf_icons = ($is_belege && $has_pdf && $download_url !== '');
+				$belegeingang_confirm_url = '';
 				$is_pending_belegeingang = $is_belege
 					&& (string) $post->post_status === 'pending'
 					&& (string) \get_post_meta((int) $post->ID, '_cmx_belegeingang_source', true) === 'rest'
 					&& (string) \get_post_meta((int) $post->ID, '_cmx_belegeingang_status', true) === 'pending';
 				if ($is_pending_belegeingang) {
 					$dup_link = '';
+					$belegeingang_confirm_url = (string) \wp_nonce_url(
+						\add_query_arg([
+							'action' => 'cmx_belegeingang_confirm',
+							'post_id' => (int) $post->ID,
+							'redirect_to' => \rawurlencode((string) \get_edit_post_link((int) $post->ID, 'raw')),
+						], \admin_url('admin-post.php')),
+						'cmx_belegeingang_confirm_' . (int) $post->ID
+					);
 				}
-					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $kontakt_belege_url !== '' || $kontakt_telefonbuch_url !== '') {
+					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $belegeingang_confirm_url !== '' || $kontakt_belege_url !== '' || $kontakt_telefonbuch_url !== '') {
 						$justify = $is_belege ? 'space-between' : 'flex-start';
 							echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 						if ($dup_link !== '') {
@@ -840,6 +849,9 @@ add_action('add_meta_boxes', function() {
 					}
 						if ($show_pdf_icons) {
 							echo '<a href="' . esc_url($download_url) . '" class="cmx-pdf-link" style="text-decoration:none;" title="Anzeigen als PDF (DL/C5/C4)" target="_blank" rel="noopener noreferrer"><span class="dashicons dashicons-pdf" style="margin-top:5px;"></span></a>';
+						}
+						if ($belegeingang_confirm_url !== '') {
+							echo '<a href="' . esc_url($belegeingang_confirm_url) . '" class="cmx-belegeingang-confirm-link" style="text-decoration:none;" title="Als Lieferanten Rechnung übernehmen"><span class="dashicons dashicons-carrot" style="margin-top:5px;"></span><span class="screen-reader-text">Als Lieferanten Rechnung übernehmen</span></a>';
 						}
 					if ($delete_link) {
 						$delete_style = $is_belege
