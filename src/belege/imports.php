@@ -286,10 +286,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbei_import_refresh_beleg_pdf')) {
 	]);
 	$count = (int) $count_query->found_posts;
 	$label = __('Eingang', 'cmx');
-	if ($count > 1) {
-		$label .= ' (' . $count . ')';
+	$count_html = '';
+	if ($count > 0) {
+		$count_html = ' <span class="count">(' . $count . ')</span>';
 	}
-	$link = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>' . \esc_html($label) . '</a>';
+	$link = '<a href="' . \esc_url($url) . '"' . ($is_current ? ' class="current" aria-current="page"' : '') . '>' . \esc_html($label) . $count_html . '</a>';
 
 	if (\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_before')) {
 		return cmxbel_view_insert_before($views, 'cmx_deckungsbeitrag', 'cmx_eingang_belege', $link);

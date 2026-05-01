@@ -102,6 +102,10 @@ function cmx_misbuero_generate_facturx_xml($beleg_id): string {
 		if ((string) $buyer['email'] !== '') {
 			$builder->setDocumentBuyerCommunication(ZugferdElectronicAddressScheme::UNECE3155_EM, (string) $buyer['email']);
 		}
+		$contact_email_note = cmx_misbuero_facturx_contact_email_note((array) ($seller['emails'] ?? []), (array) ($buyer['emails'] ?? []));
+		if ($contact_email_note !== '') {
+			$builder->addDocumentNote($contact_email_note);
+		}
 
 		if ((string) $data['payment_iban'] !== '') {
 			$builder->addDocumentPaymentMeanToCreditTransfer(
@@ -254,13 +258,20 @@ function cmx_misbuero_facturx_positions(array $rows, float $tax_rate, bool $is_b
 
 function cmx_misbuero_facturx_seller(): array {
 	$me = \function_exists(__NAMESPACE__ . '\\cmxbu_get_me_contact') ? (array) cmxbu_get_me_contact() : [];
+	$contact_id = cmx_misbuero_facturx_self_contact_id();
+	$emails = $contact_id > 0 ? cmx_misbuero_facturx_contact_emails($contact_id) : [];
+	$primary_email = \sanitize_email((string) ($me['email'] ?? ''));
+	if (\is_email($primary_email)) {
+		$emails = cmx_misbuero_facturx_normalize_emails(\array_merge([$primary_email], $emails));
+	}
 	return [
 		'name'     => cmx_misbuero_facturx_non_empty((string) ($me['company'] ?? ''), 'Mis Büro'),
 		'street'   => \trim((string) ($me['strasse'] ?? '')),
 		'postcode' => \trim((string) ($me['plz'] ?? '')),
 		'city'     => \trim((string) ($me['ort'] ?? '')),
 		'country'  => cmx_misbuero_facturx_country((string) ($me['land'] ?? 'CH')),
-		'email'    => \sanitize_email((string) ($me['email'] ?? '')),
+		'email'    => (string) ($emails[0] ?? ''),
+		'emails'   => $emails,
 		'phone'    => \trim((string) ($me['phone'] ?? '')),
 	];
 }
@@ -272,15 +283,77 @@ function cmx_misbuero_facturx_buyer(int $beleg_id): array {
 	$address = cmx_misbuero_facturx_parse_address((string) \get_post_meta($beleg_id, '_cmx_beleg_kontakt_addr', true));
 	$title = $kontakt_id > 0 ? (string) \get_the_title($kontakt_id) : '';
 
+	$emails = $kontakt_id > 0 ? cmx_misbuero_facturx_contact_emails($kontakt_id) : [];
+	$primary_email = $kontakt_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')
+		? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id))
+		: '';
+	if (\is_email($primary_email)) {
+		$emails = cmx_misbuero_facturx_normalize_emails(\array_merge([$primary_email], $emails));
+	}
+
 	return [
 		'name'     => cmx_misbuero_facturx_non_empty($title !== '' ? $title : (string) ($address['name'] ?? ''), 'Kunde'),
 		'street'   => \trim((string) ($address['street'] ?? '')),
 		'postcode' => \trim((string) ($address['postcode'] ?? '')),
 		'city'     => \trim((string) ($address['city'] ?? '')),
 		'country'  => cmx_misbuero_facturx_country((string) ($address['country'] ?? 'CH')),
-		'email'    => $kontakt_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email') ? \sanitize_email((string) cmx_kommunikation_primary_email($kontakt_id)) : '',
+		'email'    => (string) ($emails[0] ?? ''),
+		'emails'   => $emails,
 		'phone'    => $kontakt_id > 0 && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone') ? \trim((string) cmx_kommunikation_primary_phone($kontakt_id)) : '',
 	];
+}
+
+function cmx_misbuero_facturx_normalize_emails(array $emails): array {
+	$out = [];
+	foreach ($emails as $email) {
+		$email = \sanitize_email((string) $email);
+		if (\is_email($email)) {
+			$out[\strtolower($email)] = $email;
+		}
+	}
+	return \array_values($out);
+}
+
+function cmx_misbuero_facturx_contact_emails(int $kontakt_id): array {
+	$kontakt_id = (int) $kontakt_id;
+	if ($kontakt_id <= 0) {
+		return [];
+	}
+	$emails = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')
+		? (array) cmx_kommunikation_collect_emails($kontakt_id)
+		: [];
+	foreach (['_cmx_email_1', '_cmx_email_2', '_cmx_email_3', 'email', 'mail'] as $key) {
+		$emails[] = (string) \get_post_meta($kontakt_id, $key, true);
+	}
+	return cmx_misbuero_facturx_normalize_emails($emails);
+}
+
+function cmx_misbuero_facturx_self_contact_id(): int {
+	$q = \get_posts([
+		'post_type' => ['kontakte', 'kontakt', 'contact'],
+		'post_status' => ['publish', 'private'],
+		'posts_per_page' => 1,
+		'fields' => 'ids',
+		'tax_query' => [
+			'relation' => 'OR',
+			['taxonomy' => 'kontakte_kategorien', 'field' => 'slug', 'terms' => ['das-bin-ich', 'ich']],
+			['taxonomy' => 'kontakte_kategorien', 'field' => 'name', 'terms' => ['Das bin ich']],
+		],
+		'no_found_rows' => true,
+		'suppress_filters' => true,
+	]);
+	return !empty($q[0]) ? (int) $q[0] : 0;
+}
+
+function cmx_misbuero_facturx_contact_email_note(array $seller_emails, array $buyer_emails): string {
+	$payload = [
+		'seller_emails' => cmx_misbuero_facturx_normalize_emails($seller_emails),
+		'buyer_emails' => cmx_misbuero_facturx_normalize_emails($buyer_emails),
+	];
+	if ($payload['seller_emails'] === [] && $payload['buyer_emails'] === []) {
+		return '';
+	}
+	return 'CMX_CONTACT_EMAILS:' . (string) \wp_json_encode($payload);
 }
 
 function cmx_misbuero_facturx_parse_address(string $address): array {

@@ -522,14 +522,7 @@ function cmx_kontakte_import_apply_logo(int $post_id, array $row, array $row_l, 
 		}
 	}
 
-	$logo_url  = isset($row['logo_url'])  ? \trim((string)$row['logo_url'])  : (isset($row_l['logo_url'])  ? \trim((string)$row_l['logo_url'])  : '');
 	$logo_path = isset($row['logo_path']) ? \trim((string)$row['logo_path']) : (isset($row_l['logo_path']) ? \trim((string)$row_l['logo_path']) : '');
-	if ($logo_url !== '' && \function_exists(__NAMESPACE__.'\\cmx_download_to_local_and_save_meta')) {
-		$res = cmx_download_to_local_and_save_meta($post_id, $logo_url);
-		if (!\is_wp_error($res)) {
-			return;
-		}
-	}
 
 	if ($logo_path !== '' && cmx_kontakte_import_copy_logo_file_to_contact($post_id, $logo_path)) {
 		return;

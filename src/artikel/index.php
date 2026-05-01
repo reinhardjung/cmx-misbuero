@@ -115,28 +115,33 @@ cmx_define_meta_constants(basename(__DIR__), 'sku,anzahl,ek,vk,marge,waehrungen,
 cmx_require_files(__DIR__,'stammdaten,lieferanten,belegtext,konditionen,carent,admincolumns,doppelte,liste_artikel,liste_artikel detail,qr-code,exports,imports,bilder,preview,status');
 
 
-// Halte den Slug immer synchron mit dem Titel beim Speichern.
-\add_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10, 3);
-function cmx_sync_artikel_slug(int $post_id, \WP_Post $post, bool $update): void {
-	if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
-		return;
+// Halte den Slug vor dem Schreiben synchron, ohne zweiten wp_update_post()-Durchlauf.
+\add_filter('wp_insert_post_data', function (array $data, array $postarr): array {
+	$post_type = \sanitize_key((string) ($data['post_type'] ?? $postarr['post_type'] ?? ''));
+	if ($post_type !== 'artikel') {
+		return $data;
 	}
 
-	$title = trim($post->post_title);
-	if ($title === '') return;
+	$post_id = (int) ($postarr['ID'] ?? 0);
+	if ($post_id <= 0 || \wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id)) {
+		return $data;
+	}
 
-	$new_slug = sanitize_title($title);
-	if ($new_slug === '') return;
+	$title = \trim((string) ($data['post_title'] ?? ''));
+	if ($title === '') {
+		return $data;
+	}
 
-	$unique_slug = wp_unique_post_slug($new_slug, $post_id, $post->post_status, $post->post_type, $post->post_parent);
-	if ($unique_slug === $post->post_name) return;
+	$new_slug = \sanitize_title($title);
+	if ($new_slug === '') {
+		return $data;
+	}
 
-
-	// Temporär abklemmen, um keine Endlosschleife auszulösen.
-	remove_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10);
-	wp_update_post(['ID' => $post_id, 'post_name' => $unique_slug]);
-	add_action('save_post_artikel', __NAMESPACE__ . '\\cmx_sync_artikel_slug', 10, 3);
-}
+	$status = \sanitize_key((string) ($data['post_status'] ?? 'publish'));
+	$parent = (int) ($data['post_parent'] ?? 0);
+	$data['post_name'] = \wp_unique_post_slug($new_slug, $post_id, $status, $post_type, $parent);
+	return $data;
+}, 101, 2);
 
 // CMX_TAX_BELEGE_KATEGORIEN?
 // cmx_show_consts(); exit;

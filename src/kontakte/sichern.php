@@ -58,65 +58,6 @@ function cmx_save_kontakte_all($post_id, $post, $update) {
 	if ($post->post_type !== 'kontakte') return;
 	if (!current_user_can('edit_post', $post_id)) return;
 
-	/* --- Stammdaten (per Nonce) --- */
-	if (isset($_POST['cmx_kontakte_nonce']) && \wp_verify_nonce($_POST['cmx_kontakte_nonce'], 'cmx_kontakte_save_meta')) {
-		$url = isset($_POST['cmx_url']) ? \trim((string) \wp_unslash($_POST['cmx_url'])) : null;
-		if ($url !== null && \function_exists(__NAMESPACE__ . '\\cmx_normalize_url_for_storage')) {
-			$url = cmx_normalize_url_for_storage($url);
-		}
-
-		// Firmengründung / Kunde seit (YYYY-MM-DD), mit serverseitiger Validierung
-		$firmengruendung = isset($_POST['cmx_firmengruendung']) ? (string) \wp_unslash($_POST['cmx_firmengruendung']) : null;
-		$kunde_seit      = isset($_POST['cmx_kunde_seit']) ? (string) \wp_unslash($_POST['cmx_kunde_seit']) : null;
-		if (function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
-			if ($firmengruendung !== null) {
-				$firmengruendung = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $firmengruendung);
-			}
-			if ($kunde_seit !== null) {
-				$kunde_seit = \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', $kunde_seit);
-			}
-		} else {
-			if ($firmengruendung !== null) {
-				$dt = \DateTime::createFromFormat('Y-m-d', $firmengruendung);
-				$firmengruendung = ($dt && $dt->format('Y-m-d') === $firmengruendung) ? $firmengruendung : '';
-			}
-			if ($kunde_seit !== null) {
-				$dt = \DateTime::createFromFormat('Y-m-d', $kunde_seit);
-				$kunde_seit = ($dt && $dt->format('Y-m-d') === $kunde_seit) ? $kunde_seit : '';
-			}
-		}
-
-		if ($url !== null) {
-			\update_post_meta($post_id, CMX_KONTAKTE_META_URL, $url);
-		}
-		if ($firmengruendung !== null) {
-			if ($firmengruendung === '') {
-				\delete_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG);
-			} else {
-				\update_post_meta($post_id, CMX_KONTAKTE_META_FIRMENGRUENDUNG, $firmengruendung);
-			}
-		}
-		if ($kunde_seit !== null) {
-			if ($kunde_seit === '') {
-				\delete_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT);
-			} else {
-				\update_post_meta($post_id, CMX_KONTAKTE_META_KUNDE_SEIT, $kunde_seit);
-			}
-		}
-
-		if ($firmengruendung !== null) {
-			$existing_birth = \function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')
-				? \call_user_func(__NAMESPACE__ . '\\cmx_sanitize_date_ymd', (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true))
-				: (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true);
-			$legacy_val = $firmengruendung !== '' ? $firmengruendung : $existing_birth;
-			if ($legacy_val === '') {
-				\delete_post_meta($post_id, CMX_KONTAKTE_META_DATUM);
-			} else {
-				\update_post_meta($post_id, CMX_KONTAKTE_META_DATUM, $legacy_val);
-			}
-		}
-	}
-
 	/* --- Umsatz-Metabox (optional) --- */
 	if (isset($_POST['cmx_kontakte_umsatz_nonce']) && \wp_verify_nonce($_POST['cmx_kontakte_umsatz_nonce'], 'cmx_kontakte_umsatz_save')) {
 		if (isset($_POST['cmx_kontakte_umsatz_field'])) {

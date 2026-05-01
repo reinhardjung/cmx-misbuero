@@ -88,6 +88,56 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 			$sub_division = null;
 			$reader->getDocumentSellerAddress($line_one, $line_two, $line_three, $post_code, $city, $country, $sub_division);
 
+			$seller_email = '';
+			$seller_phone = '';
+			if ($reader->firstDocumentSellerContact()) {
+				$seller_contact_name = $seller_contact_department = $seller_contact_fax = null;
+				$seller_contact_phone = $seller_contact_email = null;
+				$reader->getDocumentSellerContact($seller_contact_name, $seller_contact_department, $seller_contact_phone, $seller_contact_fax, $seller_contact_email);
+				$seller_email = \sanitize_email((string) $seller_contact_email);
+				$seller_phone = \trim((string) $seller_contact_phone);
+			}
+			$seller_communication_scheme = $seller_communication_uri = null;
+			$reader->getDocumentSellerCommunication($seller_communication_scheme, $seller_communication_uri);
+			$seller_communication_email = \sanitize_email((string) $seller_communication_uri);
+			if ($seller_email === '' && \is_email($seller_communication_email)) {
+				$seller_email = $seller_communication_email;
+			}
+			$seller_emails = cmx_belegeingang_normalize_emails([$seller_email, $seller_communication_email]);
+
+			$buyer_name = $buyer_description = null;
+			$buyer_ids = null;
+			$reader->getDocumentBuyer($buyer_name, $buyer_ids, $buyer_description);
+
+			$buyer_line_one = $buyer_line_two = $buyer_line_three = $buyer_post_code = $buyer_city = $buyer_country = null;
+			$buyer_sub_division = null;
+			$reader->getDocumentBuyerAddress($buyer_line_one, $buyer_line_two, $buyer_line_three, $buyer_post_code, $buyer_city, $buyer_country, $buyer_sub_division);
+
+			$buyer_email = '';
+			$buyer_phone = '';
+			if ($reader->firstDocumentBuyerContact()) {
+				$buyer_contact_name = $buyer_contact_department = $buyer_contact_fax = null;
+				$buyer_contact_phone = $buyer_contact_email = null;
+				$reader->getDocumentBuyerContact($buyer_contact_name, $buyer_contact_department, $buyer_contact_phone, $buyer_contact_fax, $buyer_contact_email);
+				$buyer_email = \sanitize_email((string) $buyer_contact_email);
+				$buyer_phone = \trim((string) $buyer_contact_phone);
+			}
+			$buyer_communication_scheme = $buyer_communication_uri = null;
+			$reader->getDocumentBuyerCommunication($buyer_communication_scheme, $buyer_communication_uri);
+			$buyer_communication_email = \sanitize_email((string) $buyer_communication_uri);
+			if ($buyer_email === '' && \is_email($buyer_communication_email)) {
+				$buyer_email = $buyer_communication_email;
+			}
+			$buyer_emails = cmx_belegeingang_normalize_emails([$buyer_email, $buyer_communication_email]);
+
+			$notes = [];
+			$reader->getDocumentNotes($notes);
+			$contact_email_note = cmx_belegeingang_contact_email_note_data((array) $notes);
+			$seller_emails = cmx_belegeingang_normalize_emails(\array_merge($seller_emails, (array) ($contact_email_note['seller_emails'] ?? [])));
+			$buyer_emails = cmx_belegeingang_normalize_emails(\array_merge($buyer_emails, (array) ($contact_email_note['buyer_emails'] ?? [])));
+			$seller_email = (string) ($seller_emails[0] ?? '');
+			$buyer_email = (string) ($buyer_emails[0] ?? '');
+
 			$grand_total = $due_payable = $line_total = $charge_total = $allowance_total = $tax_basis = $tax_total = $rounding = $prepaid = null;
 			$reader->getDocumentSummation($grand_total, $due_payable, $line_total, $charge_total, $allowance_total, $tax_basis, $tax_total, $rounding, $prepaid);
 
@@ -138,6 +188,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 				\trim((string) $post_code . ' ' . (string) $city),
 				(string) $country,
 			]));
+			$buyer_address_lines = \array_values(\array_filter([
+				(string) $buyer_name,
+				(string) $buyer_line_one,
+				(string) $buyer_line_two,
+				(string) $buyer_line_three,
+				\trim((string) $buyer_post_code . ' ' . (string) $buyer_city),
+				(string) $buyer_country,
+			]));
 
 			return [
 				'xml' => $xml,
@@ -146,7 +204,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_parse_facturx_pdf')) {
 				'due_date' => $due_date instanceof \DateTimeInterface ? $due_date->format('Y-m-d') : '',
 				'currency' => (string) ($currency ?: 'CHF'),
 				'seller_name' => \trim((string) $seller_name),
+				'seller_email' => \is_email($seller_email) ? $seller_email : '',
+				'seller_emails' => $seller_emails,
+				'seller_phone' => $seller_phone,
 				'seller_address' => \implode("\n", $address_lines),
+				'buyer_name' => \trim((string) $buyer_name),
+				'buyer_email' => \is_email($buyer_email) ? $buyer_email : '',
+				'buyer_emails' => $buyer_emails,
+				'buyer_phone' => $buyer_phone,
+				'buyer_address' => \implode("\n", $buyer_address_lines),
 				'gross_total' => (float) ($grand_total ?: $due_payable ?: 0),
 				'tax_total' => (float) ($tax_total ?: 0),
 				'net_total' => (float) ($tax_basis ?: $line_total ?: 0),
@@ -260,6 +326,36 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_apply_transfer_meta'))
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_track_source_beleg')) {
+	function cmx_belegeingang_track_source_beleg(int $post_id, string $event): void {
+		$post_id = (int) $post_id;
+		$event = \sanitize_key($event);
+		if ($post_id <= 0 || $event === '') {
+			return;
+		}
+
+		$source_url = cmx_belegeingang_instance_url((string) \get_post_meta($post_id, '_cmx_belegeingang_source_url', true));
+		$token = \sanitize_text_field((string) \get_post_meta($post_id, '_cmx_belegeingang_source_beleg_token', true));
+		if ($source_url === '' || $token === '') {
+			return;
+		}
+
+		$endpoint = \trailingslashit($source_url) . 'wp-json/cmx-misbuero/v1/beleg/source-track';
+		\wp_remote_post($endpoint, [
+			'timeout' => 5,
+			'blocking' => false,
+			'headers' => ['Content-Type' => 'application/json'],
+			'body' => \wp_json_encode([
+				'token' => $token,
+				'event' => $event,
+				'source_url' => $source_url,
+				'target_url' => \home_url('/'),
+				'target_beleg_id' => (string) $post_id,
+			]),
+		]);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_apply_facturx_meta')) {
 	function cmx_belegeingang_apply_facturx_meta(int $post_id, array $facturx): void {
 		if ($post_id <= 0) {
@@ -301,6 +397,196 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_title_from_facturx')) 
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_normalize_emails')) {
+	function cmx_belegeingang_normalize_emails(array $emails): array {
+		$out = [];
+		foreach ($emails as $email) {
+			$email = \sanitize_email((string) $email);
+			if (\is_email($email)) {
+				$out[\strtolower($email)] = $email;
+			}
+		}
+		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_contact_email_note_data')) {
+	function cmx_belegeingang_contact_email_note_data(array $notes): array {
+		foreach ($notes as $note) {
+			$content = \trim((string) (\is_array($note) ? ($note['content'] ?? '') : ''));
+			if (!\str_starts_with($content, 'CMX_CONTACT_EMAILS:')) {
+				continue;
+			}
+			$json = \trim(\substr($content, \strlen('CMX_CONTACT_EMAILS:')));
+			$data = \json_decode($json, true);
+			if (!\is_array($data)) {
+				continue;
+			}
+			return [
+				'seller_emails' => cmx_belegeingang_normalize_emails((array) ($data['seller_emails'] ?? [])),
+				'buyer_emails' => cmx_belegeingang_normalize_emails((array) ($data['buyer_emails'] ?? [])),
+			];
+		}
+		return ['seller_emails' => [], 'buyer_emails' => []];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_find_kontakt_id_by_email')) {
+	function cmx_belegeingang_find_kontakt_id_by_email(string $email): int {
+		$email = \sanitize_email($email);
+		if (!\is_email($email)) {
+			return 0;
+		}
+
+		$cpt = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_cpt') ? (string) cmx_kontakte_cpt() : 'kontakte';
+		if (!\post_type_exists($cpt)) {
+			return 0;
+		}
+
+		$meta_query = ['relation' => 'OR'];
+		foreach (['_cmx_email_1', '_cmx_email_2', '_cmx_email_3', 'cmx_email_1', 'email_1', 'e_mail_1', 'kontakt_email', 'email', 'e_mail', 'mail'] as $key) {
+			$meta_query[] = [
+				'key' => $key,
+				'value' => $email,
+				'compare' => '=',
+			];
+		}
+		for ($slot = 1; $slot <= 10; $slot++) {
+			$meta_query[] = [
+				'key' => '_cmx_kommunikation_' . $slot . '_email',
+				'value' => $email,
+				'compare' => '=',
+			];
+		}
+		foreach (['_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation', 'cmx_kommunikation_data'] as $key) {
+			$meta_query[] = [
+				'key' => $key,
+				'value' => $email,
+				'compare' => 'LIKE',
+			];
+		}
+
+		$ids = \get_posts([
+			'post_type' => $cpt,
+			'post_status' => 'any',
+			'posts_per_page' => 20,
+			'fields' => 'ids',
+			'no_found_rows' => true,
+			'suppress_filters' => true,
+			'meta_query' => $meta_query,
+		]);
+
+		foreach ((array) $ids as $id) {
+			$id = (int) $id;
+			if ($id <= 0) {
+				continue;
+			}
+			$emails = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')
+				? (array) cmx_kommunikation_collect_emails($id)
+				: [];
+			foreach (\array_merge($emails, [(string) \get_post_meta($id, '_cmx_email_1', true)]) as $candidate) {
+				if (\strtolower(\sanitize_email((string) $candidate)) === \strtolower($email)) {
+					return $id;
+				}
+			}
+		}
+
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_find_kontakt_id_by_emails')) {
+	function cmx_belegeingang_find_kontakt_id_by_emails(array $emails): int {
+		foreach (cmx_belegeingang_normalize_emails($emails) as $email) {
+			$id = cmx_belegeingang_find_kontakt_id_by_email($email);
+			if ($id > 0) {
+				return $id;
+			}
+		}
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_merge_contact_emails')) {
+	function cmx_belegeingang_merge_contact_emails(int $kontakt_id, array $emails): void {
+		$kontakt_id = (int) $kontakt_id;
+		$emails = cmx_belegeingang_normalize_emails($emails);
+		if ($kontakt_id <= 0 || $emails === []) {
+			return;
+		}
+
+		$existing = \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')
+			? (array) cmx_kommunikation_collect_emails($kontakt_id)
+			: [];
+		$merged = cmx_belegeingang_normalize_emails(\array_merge($existing, $emails));
+		if ($merged === []) {
+			return;
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts') && \function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+			$rows = \array_values(\array_filter((array) cmx_kommunikation_read_contacts($kontakt_id), static fn($row): bool => \is_array($row)));
+			$row_emails = [];
+			foreach ($rows as $row) {
+				$email = \sanitize_email((string) ($row['email'] ?? ''));
+				if (\is_email($email)) {
+					$row_emails[\strtolower($email)] = true;
+				}
+			}
+			foreach ($merged as $email) {
+				if (isset($row_emails[\strtolower($email)])) {
+					continue;
+				}
+				$rows[] = [
+					'vorname' => '',
+					'nachname' => '',
+					'telefon_label' => '',
+					'telefon' => '',
+					'email_label' => $rows === [] ? 'E-Mail' : 'Weitere E-Mail',
+					'email' => $email,
+					'geburtsdatum' => '',
+					'anrede' => '',
+					'duzis' => '0',
+				];
+			}
+			cmx_kommunikation_persist_contacts($kontakt_id, $rows);
+		}
+
+		if (\sanitize_email((string) \get_post_meta($kontakt_id, '_cmx_email_1', true)) === '') {
+			\update_post_meta($kontakt_id, '_cmx_email_1', (string) ($merged[0] ?? ''));
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_contact_id_for_party')) {
+	function cmx_belegeingang_contact_id_for_party(string $name, string $address, array $emails, string $phone = ''): int {
+		$name = \trim($name);
+		$emails = cmx_belegeingang_normalize_emails($emails);
+		if ($name === '' && $emails !== []) {
+			$name = (string) $emails[0];
+		}
+		$kontakt_id = cmx_belegeingang_find_kontakt_id_by_emails($emails);
+
+		if ($kontakt_id <= 0 && $name !== '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_find_existing_kontakt_id_from_label')) {
+			$kontakt_id = (int) cmx_beleg_find_existing_kontakt_id_from_label($name);
+		}
+		if ($kontakt_id <= 0 && $name !== '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_create_kontakt_from_label')) {
+			$kontakt_id = (int) cmx_beleg_create_kontakt_from_label($name);
+		}
+		if ($kontakt_id <= 0) {
+			return 0;
+		}
+
+		cmx_belegeingang_merge_contact_emails($kontakt_id, $emails);
+		if (\trim((string) \get_post_meta($kontakt_id, '_cmx_telefon_1', true)) === '' && \trim($phone) !== '') {
+			\update_post_meta($kontakt_id, '_cmx_telefon_1', \sanitize_text_field($phone));
+		}
+		if (\trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_strasse', true)) === '' && \trim($address) !== '') {
+			\update_post_meta($kontakt_id, '_cmx_belegeingang_import_addr', $address);
+		}
+		return $kontakt_id;
+	}
+}
+
 \add_action('rest_api_init', function (): void {
 	\register_rest_route('cmx-misbuero/v1', '/beleg/eingang', [
 		'methods' => 'POST',
@@ -313,6 +599,8 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$params = (array) $request->get_json_params();
 	$pdf_base64 = (string) ($params['pdf_base64'] ?? '');
 	$source_id = \sanitize_text_field((string) ($params['source_beleg_id'] ?? ''));
+	$source_url = cmx_belegeingang_instance_url((string) ($params['source_url'] ?? ''));
+	$source_token = \sanitize_text_field((string) ($params['source_beleg_token'] ?? ''));
 	$filename = \sanitize_file_name((string) ($params['filename'] ?? 'beleg.pdf'));
 	$transfer_meta = \is_array($params['cmx_meta'] ?? null) ? (array) $params['cmx_meta'] : [];
 
@@ -356,6 +644,8 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	\update_post_meta($post_id, '_cmx_belege_uploads', [$pdf_rel]);
 	\update_post_meta($post_id, '_cmx_beleg_upload_prefix', \sanitize_title((string) \get_the_title($post_id)));
 	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_id', $source_id);
+	\update_post_meta($post_id, '_cmx_belegeingang_source_url', $source_url);
+	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_token', $source_token);
 	\update_post_meta($post_id, '_cmx_belegeingang_facturx', $facturx);
 	\update_post_meta($post_id, '_cmx_belegeingang_cmx_meta', $transfer_meta);
 	cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
@@ -405,12 +695,15 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	}
 
 	$endpoint = \trailingslashit($instance) . 'wp-json/cmx-misbuero/v1/beleg/eingang';
+	$source_token = \function_exists(__NAMESPACE__ . '\\cmxbu_get_stable_token') ? (string) cmxbu_get_stable_token($post_id) : '';
 	$response = \wp_remote_post($endpoint, [
 		'timeout' => 30,
 		'headers' => ['Content-Type' => 'application/json'],
 		'body' => \wp_json_encode([
 			'source_url' => \home_url('/'),
 			'source_beleg_id' => (string) \get_the_title($post_id),
+			'source_beleg_post_id' => (string) $post_id,
+			'source_beleg_token' => $source_token,
 			'filename' => \basename($pdf_path),
 			'cmx_meta' => cmx_belegeingang_collect_transfer_meta($post_id),
 			'pdf_base64' => \base64_encode((string) \file_get_contents($pdf_path)),
@@ -511,6 +804,70 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	];
 	$query->set('meta_query', $meta_query);
 }, 5);
+
+\add_action('pre_get_posts', function (\WP_Query $query): void {
+	if (!\is_admin() || !$query->is_main_query()) {
+		return;
+	}
+	$post_type = $query->get('post_type');
+	$post_type = \is_array($post_type) ? (string) \reset($post_type) : (string) $post_type;
+	if ($post_type !== 'belege') {
+		return;
+	}
+
+	$requested_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
+	if (empty($_GET['cmx_belegeingang']) && $requested_status !== 'pending') {
+		return;
+	}
+
+	foreach ([
+		'cmx_kontakt_id',
+		'cmx_proj_id',
+		'cmx_bezahlfilter',
+		'cmx_richtungfilter',
+		'cmx_zahlungsartfilter',
+		'cmx_zahlungsgrundfilter',
+		'cmx_leistungsmonat',
+		'cmx_zeitraumfilter',
+		'cmx_woo',
+	] as $query_var) {
+		$query->set($query_var, '');
+	}
+
+	$query->set('post_status', ['pending']);
+	$query->set('tax_query', []);
+	$query->set('meta_query', [
+		[
+			'key' => CMX_BELEGEINGANG_SOURCE_META,
+			'value' => 'rest',
+		],
+		[
+			'key' => CMX_BELEGEINGANG_STATUS_META,
+			'value' => 'pending',
+		],
+	]);
+}, 999);
+
+\add_action('admin_head-edit.php', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) $screen->id !== 'edit-belege') {
+		return;
+	}
+
+	$requested_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
+	if (empty($_GET['cmx_belegeingang']) && $requested_status !== 'pending') {
+		return;
+	}
+
+	echo '<style>
+		#posts-filter .tablenav.top .alignleft.actions select:not([name="action"]),
+		#posts-filter .tablenav.top .alignleft.actions #post-query-submit,
+		#posts-filter .tablenav.top .alignleft.actions .cmx-belege-woo-filter,
+		#posts-filter .tablenav.top .alignleft.actions #cmx-projekt-filter-wrap {
+			display: none !important;
+		}
+	</style>';
+});
 
 \add_filter('display_post_states', function (array $post_states, \WP_Post $post): array {
 	if ((string) $post->post_type !== 'belege') {
@@ -626,6 +983,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	if ($path === '' || !\is_readable($path)) {
 		\wp_die('PDF nicht gefunden.');
 	}
+	cmx_belegeingang_track_source_beleg($post_id, 'target_pdf_view');
 	\nocache_headers();
 	\header('Content-Type: application/pdf');
 	\header('Content-Disposition: inline; filename="' . \basename($path) . '"');
@@ -646,19 +1004,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_import_as_supplier_inv
 
 		$data = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
 		$seller = \trim((string) ($data['seller_name'] ?? ''));
-		if ($seller !== '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_find_existing_kontakt_id_from_label')) {
-			$kontakt_id = (int) cmx_beleg_find_existing_kontakt_id_from_label($seller);
-			if ($kontakt_id <= 0 && \function_exists(__NAMESPACE__ . '\\cmx_beleg_create_kontakt_from_label')) {
-				$kontakt_id = (int) cmx_beleg_create_kontakt_from_label($seller);
+		$seller_emails = cmx_belegeingang_normalize_emails(\array_merge(
+			[(string) ($data['seller_email'] ?? '')],
+			(array) ($data['seller_emails'] ?? [])
+		));
+		$buyer = \trim((string) ($data['buyer_name'] ?? ''));
+		$buyer_emails = cmx_belegeingang_normalize_emails(\array_merge(
+			[(string) ($data['buyer_email'] ?? '')],
+			(array) ($data['buyer_emails'] ?? [])
+		));
+
+		$kontakt_id = cmx_belegeingang_contact_id_for_party($seller, (string) ($data['seller_address'] ?? ''), $seller_emails, (string) ($data['seller_phone'] ?? ''));
+		$recipient_kontakt_id = cmx_belegeingang_contact_id_for_party($buyer, (string) ($data['buyer_address'] ?? ''), $buyer_emails, (string) ($data['buyer_phone'] ?? ''));
+
+		if ($kontakt_id > 0) {
+			\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $kontakt_id);
+			\update_post_meta($post_id, '_cmx_beleg_absender_kontakt_id', $kontakt_id);
+			\update_post_meta($post_id, '_cmx_belegeingang_sender_kontakt_id', $kontakt_id);
+			$contact_title = \trim((string) \get_the_title($kontakt_id));
+			if ($contact_title !== '') {
+				$seller = $contact_title;
 			}
-			if ($kontakt_id > 0) {
-				\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $kontakt_id);
-			}
+		}
+		if ($recipient_kontakt_id > 0) {
+			\update_post_meta($post_id, '_cmx_beleg_empfaenger_kontakt_id', $recipient_kontakt_id);
+			\update_post_meta($post_id, '_cmx_belegeingang_recipient_kontakt_id', $recipient_kontakt_id);
 		}
 
 		\update_post_meta($post_id, '_cmx_beleg_richtung', 'eingang');
 		\update_post_meta($post_id, '_cmx_beleg_kontakt_label', $seller);
 		\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', (string) ($data['seller_address'] ?? ''));
+		\update_post_meta($post_id, '_cmx_belegeingang_sender_emails', $seller_emails);
+		\update_post_meta($post_id, '_cmx_belegeingang_recipient_emails', $buyer_emails);
 		\update_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, 'imported');
 		$result = \wp_update_post([
 			'ID' => $post_id,
@@ -677,9 +1054,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_import_as_supplier_inv
 			}
 		}
 
+		cmx_belegeingang_track_source_beleg($post_id, 'target_imported');
+
 		return true;
 	}
 }
+
+\add_action('load-post.php', function (): void {
+	$post_id = isset($_GET['post']) ? (int) \wp_unslash($_GET['post']) : 0;
+	if ($post_id <= 0 || !\current_user_can('edit_post', $post_id)) {
+		return;
+	}
+	$post = \get_post($post_id);
+	if (!$post instanceof \WP_Post || (string) $post->post_type !== 'belege') {
+		return;
+	}
+	if ((string) \get_post_meta($post_id, CMX_BELEGEINGANG_SOURCE_META, true) !== 'rest') {
+		return;
+	}
+	cmx_belegeingang_track_source_beleg($post_id, 'target_admin_view');
+});
 
 \add_action('admin_post_cmx_belegeingang_confirm', function (): void {
 	$post_id = isset($_GET['post_id']) ? (int) \wp_unslash($_GET['post_id']) : 0;

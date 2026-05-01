@@ -280,12 +280,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_artikel_image_entries')) {
 			}
 		}
 
-		$extra_image_url = \trim((string) \get_post_meta($post_id, '_cmx_artikel_bild_url', true));
-		if ($extra_image_url !== '') {
-			$resolved = cmxal_local_file_from_url($extra_image_url);
-			$candidates[] = ['path' => $resolved, 'url' => $extra_image_url, 'suffix' => 'bild'];
-		}
-
 		return $candidates;
 	}
 
@@ -761,22 +755,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxal_fetch_image_binary')) {
 			return \is_string($raw) ? $raw : '';
 		}
 
-		if (!\preg_match('~^https?://~i', $url)) {
-			return '';
-		}
-
-		$response = \wp_remote_get($url, [
-			'timeout'     => 20,
-			'redirection' => 5,
-		]);
-		if (!\is_wp_error($response)) {
-			$code = (int) \wp_remote_retrieve_response_code($response);
-			$body = (string) \wp_remote_retrieve_body($response);
-			if ($code >= 200 && $code < 300 && $body !== '') {
-				return $body;
-			}
-		}
-		
 		return '';
 	}
 }

@@ -48,10 +48,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_admin_image_url_exists')) 
 				$rel = \ltrim((string) \substr($url, \strlen($baseurl)), '/');
 				$rel = (string) \preg_replace('/\?.*$/', '', $rel);
 			}
-			return $rel !== '' && \is_file($basedir . '/' . $rel);
+			return $rel !== '' && cmx_kontakte_admin_upload_file_exists($basedir . '/' . $rel);
 		}
 
 		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_admin_upload_file_exists')) {
+	function cmx_kontakte_admin_upload_file_exists(string $path): bool {
+		$path = \trim($path);
+		if ($path === '') {
+			return false;
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		$candidate = \wp_normalize_path($path);
+		if ($basedir === '/' || $candidate === '' || \strpos($candidate, $basedir) !== 0) {
+			return false;
+		}
+
+		return \is_file($candidate);
 	}
 }
 
@@ -59,7 +77,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_admin_logo_src')) {
 	function cmx_kontakte_admin_logo_src(int $post_id): string {
 		$local_path = \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_path', true));
 		$local_img = \trim((string) \get_post_meta($post_id, '_cmx_local_image_kontakte_url', true));
-		if ($local_path !== '' && \is_file($local_path) && $local_img !== '') {
+		if ($local_path !== '' && cmx_kontakte_admin_upload_file_exists($local_path) && $local_img !== '') {
 			return $local_img;
 		}
 		if ($local_img !== '' && cmx_kontakte_admin_image_url_exists($local_img)) {
@@ -69,7 +87,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakte_admin_logo_src')) {
 		$thumb_id = (int) \get_post_thumbnail_id($post_id);
 		if ($thumb_id > 0) {
 			$attached_file = (string) \get_attached_file($thumb_id);
-			if ($attached_file !== '' && \is_file($attached_file)) {
+			if ($attached_file !== '' && cmx_kontakte_admin_upload_file_exists($attached_file)) {
 				$thumb_url = (string) \wp_get_attachment_image_url($thumb_id, 'thumbnail');
 				if ($thumb_url !== '') {
 					return $thumb_url;

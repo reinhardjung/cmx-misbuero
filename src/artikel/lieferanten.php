@@ -94,6 +94,78 @@ function cmx_fetch_lieferanten_ids_unified(string $post_type): array {
 	}
 	return $out;
 }
+function cmx_artikel_lieferanten_search_items_unified(string $query, array $include_ids = [], int $limit = 50): array {
+	$kontakt_pt = cmx_first_existing_kontakt_cpt_unified();
+	if (!$kontakt_pt) {
+		return [];
+	}
+
+	$include_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $include_ids))));
+	$args = [
+		'post_type'        => $kontakt_pt,
+		'post_status'      => ['publish', 'private'],
+		'posts_per_page'   => \max(1, $limit),
+		'orderby'          => 'title',
+		'order'            => 'ASC',
+		'suppress_filters' => true,
+	];
+	if ($include_ids !== []) {
+		$args['post__in'] = $include_ids;
+		$args['orderby'] = 'post__in';
+	} else {
+		$args['s'] = $query;
+		$lieferant_args = cmx_lieferanten_query_args_unified($kontakt_pt);
+		if (!empty($lieferant_args['tax_query']) && \is_array($lieferant_args['tax_query'])) {
+			$args['tax_query'] = $lieferant_args['tax_query'];
+		}
+		if (!empty($lieferant_args['meta_query']) && \is_array($lieferant_args['meta_query'])) {
+			$args['meta_query'] = $lieferant_args['meta_query'];
+		}
+	}
+
+	$posts = \get_posts($args);
+	$items = [];
+	foreach ((array) $posts as $supplier) {
+		if (!($supplier instanceof \WP_Post)) {
+			continue;
+		}
+		$id = (int) $supplier->ID;
+		if ($id <= 0) {
+			continue;
+		}
+		$items[] = [
+			'id'    => $id,
+			'title' => (string) (\get_the_title($id) ?: '(#' . $id . ')'),
+			'edit'  => (string) \get_edit_post_link($id, ''),
+		];
+	}
+	return $items;
+}
+\add_action('wp_ajax_cmx_artikel_lieferanten_search', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error('forbidden', 403);
+	}
+	$nonce = isset($_POST['nonce']) ? (string) \wp_unslash($_POST['nonce']) : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_artikel_lieferanten_search')) {
+		\wp_send_json_error('nonce', 403);
+	}
+	$query = isset($_POST['q']) ? \sanitize_text_field((string) \wp_unslash($_POST['q'])) : '';
+	$include = [];
+	if (isset($_POST['include']) && \is_array($_POST['include'])) {
+		$include = \array_map('intval', \wp_unslash($_POST['include']));
+	}
+	if ($include === [] && \strlen(\trim($query)) < 2) {
+		\wp_send_json_success([]);
+	}
+	\wp_send_json_success(cmx_artikel_lieferanten_search_items_unified($query, $include, 50));
+});
+function cmx_lieferanten_filter_available_unified(): bool {
+	if (\taxonomy_exists('lieferant')) return true;
+	foreach (['kontakt_type', 'kundenart'] as $tx) {
+		if (\taxonomy_exists($tx)) return true;
+	}
+	return cmx_taxq_kontakte_kategorien_lieferant_unified() !== null;
+}
 function cmx_artikel_lieferanten_list_url_unified(): string {
 	$kontakt_pt = cmx_first_existing_kontakt_cpt_unified();
 	if (!$kontakt_pt) return '';
@@ -408,35 +480,18 @@ function cmx_artikel_lieferanten_box_html_unified(\WP_Post $post): void {
 	}
 
 	$kontakt_pt=cmx_first_existing_kontakt_cpt_unified();
-	$lieferanten_ids=$kontakt_pt?cmx_fetch_lieferanten_ids_unified($kontakt_pt):[];
+	$lieferanten_ids=[];
 	foreach ($normalized_rows as $row) {
 		$current_supplier_id = (int) ($row['lieferant_id'] ?? 0);
 		if ($current_supplier_id > 0) $lieferanten_ids[] = $current_supplier_id;
 	}
 	$lieferanten_ids = \array_values(\array_unique(\array_map('intval', $lieferanten_ids)));
-	$lieferanten_posts = [];
-	if ($lieferanten_ids) {
-		$lieferanten_posts = \get_posts([
-			'post_type'=>$kontakt_pt?:'post',
-			'posts_per_page'=>-1,
-			'post__in'=>$lieferanten_ids,
-			'orderby'=>'title',
-			'order'=>'ASC',
-			'post_status'=>['publish','private'],
-			'suppress_filters'=>true
-		]);
-	}
-	$lieferanten_items = [];
-	foreach ($lieferanten_posts as $lieferant_post) {
-		$lieferant_id = (int) ($lieferant_post->ID ?? 0);
-		if ($lieferant_id <= 0) continue;
-		$lieferanten_items[] = [
-			'id' => $lieferant_id,
-			'title' => (string) (\get_the_title($lieferant_id) ?: '(#' . $lieferant_id . ')'),
-			'edit' => (string) \get_edit_post_link($lieferant_id, ''),
-		];
-	}
+	$lieferanten_items = cmx_artikel_lieferanten_search_items_unified('', $lieferanten_ids, 50);
 	$lieferanten_json = \wp_json_encode($lieferanten_items) ?: '[]';
+	$supplier_search_nonce = \wp_create_nonce('cmx_artikel_lieferanten_search');
+	$supplier_search_url = \admin_url('admin-ajax.php');
+	$supplier_search_nonce_json = \wp_json_encode($supplier_search_nonce) ?: '""';
+	$supplier_search_url_json = \wp_json_encode($supplier_search_url) ?: '""';
 	echo '<style>
 	#cmx-artikel-lieferanten-head{
 		display:grid;
@@ -621,6 +676,8 @@ echo <<<HTML
 <script>
 (function(){
 	var supplierItems = {$lieferanten_json};
+	var supplierSearchUrl = {$supplier_search_url_json};
+	var supplierSearchNonce = {$supplier_search_nonce_json};
 	function esc(s){
 		return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 	}
@@ -642,6 +699,44 @@ echo <<<HTML
 	supplierItems.forEach(function(item){
 		if(item.id > 0) supplierById[String(item.id)] = item;
 	});
+	var supplierSearchCache = {};
+	function mergeSupplierItems(items){
+		(items||[]).forEach(function(item){
+			item.id = parseInt(item.id || 0, 10) || 0;
+			if(item.id <= 0) return;
+			item.title = item.title || "";
+			item.edit = item.edit || "";
+			item.titleLower = item.title.toLocaleLowerCase();
+			supplierById[String(item.id)] = item;
+		});
+		supplierItems = Object.keys(supplierById).map(function(id){ return supplierById[id]; });
+		supplierItems.sort(compareSupplierTitle);
+	}
+	function fetchSupplierItems(query){
+		var q = (query||"").trim();
+		if(q.length < 2) return Promise.resolve([]);
+		var key = q.toLocaleLowerCase();
+		if(supplierSearchCache[key]) return supplierSearchCache[key];
+		var body = new URLSearchParams();
+		body.set("action", "cmx_artikel_lieferanten_search");
+		body.set("nonce", supplierSearchNonce);
+		body.set("q", q);
+		supplierSearchCache[key] = fetch(supplierSearchUrl, {
+			method: "POST",
+			credentials: "same-origin",
+			headers: {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+			body: body.toString()
+		}).then(function(resp){
+			return resp.json();
+		}).then(function(resp){
+			var items = resp && resp.success && Array.isArray(resp.data) ? resp.data : [];
+			mergeSupplierItems(items);
+			return items;
+		}).catch(function(){
+			return [];
+		});
+		return supplierSearchCache[key];
+	}
 	function makeNavigator(inputEl, listEl, chooseCb){
 		var active=-1, items=[];
 		function closeList(){
@@ -849,7 +944,15 @@ echo <<<HTML
 					closeSuggestions();
 					return;
 				}
-				navigator.render(matchedSuppliers(showAll ? "" : query));
+				if(showAll || query.length<2){
+					navigator.render(matchedSuppliers(showAll ? "" : query));
+					return;
+				}
+				navigator.render(matchedSuppliers(query));
+				fetchSupplierItems(query).then(function(){
+					if((input.value||"").trim() !== query) return;
+					navigator.render(matchedSuppliers(query));
+				});
 			}
 			input.addEventListener("input", function(){
 				hidden.value = "0";
@@ -1057,7 +1160,7 @@ HTML;
 	if (!isset($_POST['cmx_artikel_lieferanten_payload'])) return;
 
 	$kontakt_pt   = cmx_first_existing_kontakt_cpt_unified();
-	$allowed_ids  = $kontakt_pt ? cmx_fetch_lieferanten_ids_unified($kontakt_pt) : [];
+	$strict_lieferant = cmx_lieferanten_filter_available_unified();
 	$rows_in = isset($_POST['cmx_artikel_lieferanten']) && \is_array($_POST['cmx_artikel_lieferanten']) ? $_POST['cmx_artikel_lieferanten'] : [];
 	$rows_out = [];
 	foreach ($rows_in as $row) {
@@ -1073,11 +1176,11 @@ HTML;
 		$rnotiz = isset($row['notiz']) ? \sanitize_textarea_field((string)$row['notiz']) : '';
 
 		$rid_valid = 0;
-		if ($rid > 0 && $allowed_ids && \in_array($rid, $allowed_ids, true)) {
-			$rid_valid = $rid;
-		} elseif ($rid > 0 && !$allowed_ids) {
+		if ($rid > 0 && $kontakt_pt) {
 			$p = \get_post($rid);
-			if ($p && $kontakt_pt && $p->post_type === $kontakt_pt) $rid_valid = $rid;
+			if ($p && $p->post_type === $kontakt_pt && (!$strict_lieferant || cmx_is_lieferant_unified($rid))) {
+				$rid_valid = $rid;
+			}
 		}
 
 		if ($rid_valid <= 0 && $rnr === '' && $rek_num === null && $rurl === '' && $rltage === 0 && $rlager === 0 && $rnotiz === '') continue;

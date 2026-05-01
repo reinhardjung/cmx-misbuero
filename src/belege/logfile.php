@@ -32,7 +32,7 @@ function cmxbu_fetch_geo_ip(string $ip): array {
 
 
 // Logging einer Beleg-Ansicht
-function cmxbu_log_beleg_view(int $post_id): void {
+function cmxbu_log_beleg_view(int $post_id, array $context = []): void {
 	if ($post_id <= 0) return;
 
 	// Counter
@@ -43,9 +43,16 @@ function cmxbu_log_beleg_view(int $post_id): void {
 	$log = get_post_meta($post_id, '_cmx_beleg_views_log', true);
 	if (!is_array($log)) $log = [];
 
-	$log[] = [
-		'time'     => current_time('mysql'),
+	$entry = [
+		'time' => current_time('mysql'),
 	];
+	foreach (['event', 'source_url', 'target_url', 'target_beleg_id'] as $key) {
+		if (!empty($context[$key])) {
+			$entry[$key] = \sanitize_text_field((string) $context[$key]);
+		}
+	}
+
+	$log[] = $entry;
 
 	update_post_meta($post_id, '_cmx_beleg_views_log', $log);
 }
@@ -60,6 +67,43 @@ function cmxbu_track_beleg_views() {
 	cmxbu_log_beleg_view(get_queried_object_id());
 }
 add_action('template_redirect', __NAMESPACE__ . '\\cmxbu_track_beleg_views');
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_register_beleg_source_tracking_endpoint')) {
+	function cmxbu_register_beleg_source_tracking_endpoint(): void {
+		\register_rest_route('cmx-misbuero/v1', '/beleg/source-track', [
+			'methods' => 'POST',
+			'permission_callback' => '__return_true',
+			'callback' => __NAMESPACE__ . '\\cmxbu_handle_beleg_source_tracking',
+		]);
+	}
+}
+\add_action('rest_api_init', __NAMESPACE__ . '\\cmxbu_register_beleg_source_tracking_endpoint');
+
+if (!\function_exists(__NAMESPACE__ . '\\cmxbu_handle_beleg_source_tracking')) {
+	function cmxbu_handle_beleg_source_tracking(\WP_REST_Request $request): \WP_REST_Response {
+		$params = (array) $request->get_json_params();
+		$token = \sanitize_text_field((string) ($params['token'] ?? ''));
+		if ($token === '') {
+			return new \WP_REST_Response(['success' => false, 'message' => 'Token fehlt.'], 400);
+		}
+
+		$data = \get_option('cmx_beleg_token_data_' . $token);
+		$post_id = \is_array($data) ? (int) ($data['post_id'] ?? 0) : 0;
+		$post = $post_id > 0 ? \get_post($post_id) : null;
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== 'belege') {
+			return new \WP_REST_Response(['success' => false, 'message' => 'Beleg nicht gefunden.'], 404);
+		}
+
+		cmxbu_log_beleg_view($post_id, [
+			'event' => \sanitize_key((string) ($params['event'] ?? 'target_view')),
+			'source_url' => (string) ($params['source_url'] ?? ''),
+			'target_url' => (string) ($params['target_url'] ?? ''),
+			'target_beleg_id' => (string) ($params['target_beleg_id'] ?? ''),
+		]);
+
+		return new \WP_REST_Response(['success' => true], 200);
+	}
+}
 
 
 

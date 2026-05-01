@@ -260,6 +260,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_uploaded_files_from_request')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_upload_file_exists')) {
+	function cmx_kl_upload_file_exists(string $path): bool {
+		$path = \trim($path);
+		if ($path === '') {
+			return false;
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		$candidate = \wp_normalize_path($path);
+		if ($basedir === '/' || $candidate === '' || \strpos($candidate, $basedir) !== 0) {
+			return false;
+		}
+
+		return \is_file($candidate);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_upload_base_name')) {
 	function cmx_kl_upload_base_name(string $original_name, string $fallback = 'bild'): string {
 		$base = (string) \pathinfo($original_name, \PATHINFO_FILENAME);
@@ -347,7 +365,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_maybe_migrate_contact_logo_to_archi
 			$current_path = \wp_normalize_path($current_path);
 		}
 
-		if ($current_path !== '' && \is_file($current_path)) {
+		if ($current_path !== '' && cmx_kl_upload_file_exists($current_path)) {
 			$target_dir = \wp_normalize_path(cmx_local_base_path());
 			if ($target_dir !== '' && !\is_dir($target_dir)) {
 				\wp_mkdir_p($target_dir);
@@ -426,7 +444,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_has_local_logo')) {
 		$gallery = cmx_kl_gallery_get($post_id, cmx_kl_meta_base());
 		foreach ($gallery as $item) {
 			$path = (string) ($item['path'] ?? '');
-			if ($path === '' || !\is_file($path)) {
+			if ($path === '' || !cmx_kl_upload_file_exists($path)) {
 				continue;
 			}
 
@@ -437,165 +455,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_has_local_logo')) {
 		}
 
 		return false;
-	}
-}
-
-if (!\function_exists(__NAMESPACE__ . '\\cmx_download_to_local_and_save_meta')) {
-	function cmx_download_to_local_and_save_meta(int $post_id, string $image_url, ?float $timeout_seconds = null) {
-		$timeout_seconds = ($timeout_seconds === null) ? 8.0 : (float) $timeout_seconds;
-		if ($timeout_seconds <= 0.0) {
-			return new \WP_Error('cmx_logo_timeout', 'Zeitlimit erreicht');
-		}
-
-		$request_timeout = \max(1, (int) \ceil($timeout_seconds));
-		$tmp = \download_url($image_url, $request_timeout);
-		if (\is_wp_error($tmp)) {
-			return $tmp;
-		}
-
-		$info = @\getimagesize($tmp);
-		if (!\is_array($info) || empty($info['mime'])) {
-			@unlink($tmp);
-			return new \WP_Error('invalid_image', 'Ungueltiges Bild oder 404 erhalten');
-		}
-
-		$map = [
-			'image/png'                  => 'png',
-			'image/webp'                 => 'webp',
-			'image/avif'                 => 'avif',
-			'image/gif'                  => 'gif',
-			'image/x-icon'               => 'ico',
-			'image/vnd.microsoft.icon'   => 'ico',
-			'image/jpeg'                 => 'jpg',
-			'image/bmp'                  => 'bmp',
-		];
-
-		$mime = \strtolower((string) $info['mime']);
-		$ext  = '.' . ($map[$mime] ?? 'png');
-
-		$host = (string) \parse_url($image_url, PHP_URL_HOST);
-		if ($host === '') {
-			$host = 'logo';
-		}
-		$host = \strtolower($host);
-		$host = (string) \preg_replace('~[^a-z0-9.-]+~', '', $host);
-		if ($host === '') {
-			$host = 'logo';
-		}
-
-		$file = $host . '-' . (int) $post_id . $ext;
-
-		$base_dir = cmx_local_base_path();
-		$base_url = cmx_local_base_url();
-		if (!\is_dir($base_dir)) {
-			\wp_mkdir_p($base_dir);
-		}
-
-		$target = \wp_normalize_path($base_dir . '/' . $file);
-		if (\file_exists($target)) {
-			@unlink($target);
-		}
-
-		$stored = false;
-		if (\is_readable($tmp)) {
-			$stored = @\copy($tmp, $target);
-			if ($stored) {
-				@unlink($tmp);
-			}
-		}
-		if (!$stored) {
-			$stored = @\rename($tmp, $target);
-		}
-		if (!$stored || !\is_file($target)) {
-			@unlink($tmp);
-			return new \WP_Error('move_failed', 'Speichern fehlgeschlagen');
-		}
-		@chmod($target, 0644);
-
-		$ver = @\filemtime($target) ?: \time();
-		$url = $base_url . '/' . \rawurlencode($file) . '?v=' . $ver;
-		cmx_kl_gallery_update($post_id, cmx_kl_meta_base(), [[
-			'id'   => 'img_' . \wp_generate_password(12, false, false),
-			'path' => $target,
-			'url'  => $url,
-		]]);
-		\clean_post_cache($post_id);
-
-		return ['url' => $url, 'path' => $target];
-	}
-}
-
-if (!\function_exists(__NAMESPACE__ . '\\cmx_get_origin')) {
-	function cmx_get_origin(string $url): string {
-		$p = \wp_parse_url($url);
-		if (empty($p['host'])) {
-			return '';
-		}
-		$scheme = !empty($p['scheme']) ? $p['scheme'] : 'https';
-		$origin = $scheme . '://' . $p['host'];
-		if (!empty($p['port'])) {
-			$origin .= ':' . $p['port'];
-		}
-		return $origin;
-	}
-}
-
-if (!\function_exists(__NAMESPACE__ . '\\cmx_fetch_logo_from_url')) {
-	function cmx_fetch_logo_from_url(int $post_id, float $max_wait_seconds = 2.0) {
-		if ($post_id <= 0) {
-			return new \WP_Error('bad_post', 'Ungueltige Post-ID');
-		}
-
-		cmx_maybe_migrate_contact_logo_to_archiv_path($post_id);
-
-		if (cmx_has_local_logo($post_id)) {
-			return [
-				'url'  => (string) \get_post_meta($post_id, cmx_kl_meta_base() . '_url', true),
-				'path' => (string) \get_post_meta($post_id, cmx_kl_meta_base() . '_path', true),
-			];
-		}
-
-		$site_url = \trim((string) \get_post_meta($post_id, CMX_KONTAKTE_META_URL, true));
-		if ($site_url === '') {
-			return new \WP_Error('no_url', 'Keine URL im Kontakt vorhanden');
-		}
-
-		if (!\preg_match('~^https?://~i', $site_url)) {
-			$site_url = 'https://' . \ltrim($site_url, '/');
-		}
-
-		$origin = cmx_get_origin($site_url);
-		if ($origin === '') {
-			return new \WP_Error('bad_url', 'Ungueltige URL');
-		}
-
-		$max_wait_seconds = \max(0.2, (float) $max_wait_seconds);
-		$deadline = \microtime(true) + $max_wait_seconds;
-		$candidates = [
-			'/favicon-32x32.png',
-			'/favicon-16x16.png',
-			'/apple-touch-icon.png',
-			'/android-chrome-192x192.png',
-			'/android-chrome-512x512.png',
-			'/favicon.png',
-			'/favicon.ico',
-		];
-
-		foreach ($candidates as $candidate) {
-			$remaining = $deadline - \microtime(true);
-			if ($remaining <= 0 || $remaining < 1.0) {
-				return new \WP_Error('cmx_logo_timeout', 'Logo-Suche nach 2 Sekunden abgebrochen');
-			}
-
-			$img_url = \rtrim($origin, '/') . $candidate;
-			$dl = cmx_download_to_local_and_save_meta($post_id, $img_url, $remaining);
-			if (!\is_wp_error($dl)) {
-				\update_post_meta($post_id, '_cmx_logo_src', \esc_url_raw($img_url));
-				return $dl;
-			}
-		}
-
-		return new \WP_Error('cmx_import_failed', 'Kein brauchbares Icon gefunden');
 	}
 }
 
@@ -1226,15 +1085,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 	$remove_ids = \array_values(\array_filter(\array_map('sanitize_key', \explode(',', $remove_ids_raw))));
 	if ($remove_ids !== []) {
 		$keep = [];
-		foreach ($gallery as $item) {
-			$item_id = (string) ($item['id'] ?? '');
-			if ($item_id !== '' && \in_array($item_id, $remove_ids, true)) {
-				$old_path = (string) ($item['path'] ?? '');
-				if ($old_path !== '' && \file_exists($old_path)) {
-					@unlink($old_path);
+			foreach ($gallery as $item) {
+				$item_id = (string) ($item['id'] ?? '');
+				if ($item_id !== '' && \in_array($item_id, $remove_ids, true)) {
+					$old_path = (string) ($item['path'] ?? '');
+					if ($old_path !== '' && cmx_kl_upload_file_exists($old_path)) {
+						@unlink($old_path);
+					}
+					continue;
 				}
-				continue;
-			}
 			$keep[] = $item;
 		}
 		$gallery = $keep;
@@ -1292,55 +1151,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kl_render_box_kontakte')) {
 		\update_post_meta($post_id, cmx_kl_manual_flag_meta_key(), '1');
 	}
 
-	$base_dir = cmx_local_base_path();
-	$base_url = cmx_local_base_url();
-	if (!\is_dir($base_dir)) {
-		if (!\wp_mkdir_p($base_dir)) {
-			\error_log('[CMX Kontakte] Konnte Zielordner nicht erstellen: ' . $base_dir);
+		$upload_files = !empty($_FILES['cmx_kl_files']) ? cmx_kl_uploaded_files_from_request((array) $_FILES['cmx_kl_files']) : [];
+		if ($upload_files !== []) {
+			$base_dir = cmx_local_base_path();
+			$base_url = cmx_local_base_url();
+			if (!\is_dir($base_dir)) {
+				if (!\wp_mkdir_p($base_dir)) {
+					\error_log('[CMX Kontakte] Konnte Zielordner nicht erstellen: ' . $base_dir);
+					return;
+				}
+			}
+
+			$new_items = cmx_kl_store_uploaded_files((array) $_FILES['cmx_kl_files'], $base_dir, $base_url);
+			if ($new_items !== []) {
+				$gallery = \array_merge($gallery, $new_items);
+			}
+			cmx_kl_gallery_update((int) $post_id, $meta_base, $gallery);
 			return;
 		}
-	}
 
-	if (!empty($_FILES['cmx_kl_files']) && !empty($_FILES['cmx_kl_files']['name'])) {
-		$new_items = cmx_kl_store_uploaded_files((array) $_FILES['cmx_kl_files'], $base_dir, $base_url);
-		if ($new_items !== []) {
-			$gallery = \array_merge($gallery, $new_items);
-		}
 		cmx_kl_gallery_update((int) $post_id, $meta_base, $gallery);
-		return;
-	}
-
-	cmx_kl_gallery_update((int) $post_id, $meta_base, $gallery);
-}, 10, 3);
-
-\add_action('save_post_kontakte', function ($post_id, $post, $update) {
-	if (\wp_is_post_revision($post_id)) {
-		return;
-	}
-	if (\defined('DOING_AUTOSAVE') && \DOING_AUTOSAVE) {
-		return;
-	}
-	if (!\current_user_can('edit_post', $post_id)) {
-		return;
-	}
-
-	cmx_maybe_migrate_contact_logo_to_archiv_path((int) $post_id);
-
-	if (!empty($_POST['cmx_kl_change_state'])) {
-		return;
-	}
-	if ((string) \get_post_meta($post_id, cmx_kl_manual_flag_meta_key(), true) === '1') {
-		return;
-	}
-	if (!empty($_POST[cmx_kl_meta_base() . '_url']) || !empty($_POST[cmx_kl_meta_base() . '_path'])) {
-		return;
-	}
-	if (cmx_has_local_logo((int) $post_id)) {
-		return;
-	}
-
-	$res = cmx_fetch_logo_from_url((int) $post_id, 2.0);
-	if (\is_wp_error($res) && $res->get_error_code() !== 'no_url') {
-		\error_log('[CMX Logo] ' . $res->get_error_code() . ': ' . $res->get_error_message());
-	}
-}, 20, 3);
+	}, 10, 3);

@@ -1691,6 +1691,12 @@ add_action('admin_head', function() {
 		border-bottom: 1px solid #e6ebf0;
 	}
 
+	body[class*="post-type-"] .wp-list-table thead .check-column input[type="checkbox"],
+	body[class*="post-type-"] .wp-list-table tfoot .check-column input[type="checkbox"] {
+		position: relative;
+		top: 3px;
+	}
+
 	.wp-list-table td {
 		vertical-align: middle;
 	}

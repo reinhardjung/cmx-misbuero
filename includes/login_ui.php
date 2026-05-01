@@ -8,7 +8,7 @@ if (!defined('CMX_LOGIN_FOCUS_COLOR')) {
     define('CMX_LOGIN_FOCUS_COLOR', '#9B0000');  // 8d44ac
 }
 if (!defined('CMX_LOGIN_LOGO_URL')) {
-    define('CMX_LOGIN_LOGO_URL', 'https://vorlage.misbuero.ch/wp-content/uploads/favicon.png');
+    define('CMX_LOGIN_LOGO_URL', \plugins_url('../assets/favicon.png', __FILE__));
 }
 if (!defined('CMX_LOGIN_LOGO_LINK')) {
     define('CMX_LOGIN_LOGO_LINK', 'https://misbuero.ch/');

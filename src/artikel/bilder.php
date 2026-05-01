@@ -1,14 +1,9 @@
 <?php namespace CLOUDMEISTER\CMX\MisBuero; defined('ABSPATH') || exit;
 
 /**
- * Lokale Bildverwaltung NUR für CPT "artikel" (inkl. Metabox + Auto-Fetch von Bezugsquelle)
+ * Lokale Bildverwaltung NUR für CPT "artikel" (inkl. Metabox)
  * - Manuelles Hochladen in der Metabox
- * - AUTOMATISCHES Laden von der Bezugsquelle beim Speichern, wenn kein Upload erfolgt
- * - Bezugsquelle wird aus bekannten Metafeldern gelesen:
- *     _cmx_bezugsquelle_url, _cmx_bezugsquelle, _cmx_artikel_bezugsquelle, _cmx_artikel_bild_url
- *   (per Filter erweiterbar: 'cmx_li_source_fields')
  * - Speicher: /wp-content/uploads/misbuero/archiv/bilder/artikel/{post_title}.ext (+ Cache-Busting ?v=filemtime)
- * - NEU: Produkt-/Artikelbeschreibung aus der Bezugsquelle (og:description / twitter:description / meta description / JSON-LD) in den Editor schreiben – nur wenn leer
  */
 
 /** Ziel-Unterordner relativ zu uploads/ */
@@ -27,6 +22,24 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_base_url')) {
 	function cmx_li_base_url(): string {
 		$u = wp_get_upload_dir();
 		return rtrim($u['baseurl'], '/') . CMX_LOCAL_IMG_SUBDIR . '/artikel';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_li_upload_file_exists')) {
+	function cmx_li_upload_file_exists(string $path): bool {
+		$path = \trim($path);
+		if ($path === '') {
+			return false;
+		}
+
+		$uploads = \wp_get_upload_dir();
+		$basedir = \trailingslashit(\wp_normalize_path((string) ($uploads['basedir'] ?? '')));
+		$candidate = \wp_normalize_path($path);
+		if ($basedir === '/' || $candidate === '' || \strpos($candidate, $basedir) !== 0) {
+			return false;
+		}
+
+		return \is_file($candidate);
 	}
 }
 
@@ -150,6 +163,21 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_uploaded_files_from_request')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__.'\\cmx_li_upload_error_label')) {
+	function cmx_li_upload_error_label(int $code): string {
+		$labels = [
+			\UPLOAD_ERR_INI_SIZE   => 'UPLOAD_ERR_INI_SIZE',
+			\UPLOAD_ERR_FORM_SIZE  => 'UPLOAD_ERR_FORM_SIZE',
+			\UPLOAD_ERR_PARTIAL    => 'UPLOAD_ERR_PARTIAL',
+			\UPLOAD_ERR_NO_FILE    => 'UPLOAD_ERR_NO_FILE',
+			\UPLOAD_ERR_NO_TMP_DIR => 'UPLOAD_ERR_NO_TMP_DIR',
+			\UPLOAD_ERR_CANT_WRITE => 'UPLOAD_ERR_CANT_WRITE',
+			\UPLOAD_ERR_EXTENSION  => 'UPLOAD_ERR_EXTENSION',
+		];
+		return $labels[$code] ?? ('UPLOAD_ERR_' . $code);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__.'\\cmx_li_upload_base_name')) {
 	function cmx_li_upload_base_name(string $original_name, string $fallback = 'bild'): string {
 		$base = (string) pathinfo($original_name, PATHINFO_FILENAME);
@@ -184,7 +212,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_next_numbered_target')) {
 if (!\function_exists(__NAMESPACE__.'\\cmx_li_sync_filename_with_title')) {
 	function cmx_li_sync_filename_with_title(int $post_id, \WP_Post $post, string $meta_base): void {
 		$current_path = (string) get_post_meta($post_id, $meta_base . '_path', true);
-		if ($current_path === '' || !is_file($current_path)) {
+		if ($current_path === '' || !cmx_li_upload_file_exists($current_path)) {
 			return;
 		}
 
@@ -715,7 +743,7 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_render_box_artikel')) {
 	}
 }
 
-/** Save-Handler NUR für "artikel" (inkl. Auto-Fetch von Bezugsquelle, wenn kein Upload) */
+/** Save-Handler NUR für "artikel" */
 add_action('save_post_artikel', function ($post_id, $post, $update) {
 	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
 	if (!is_object($post) || $post->post_type !== 'artikel') return;
@@ -733,7 +761,7 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 			$item_id = (string) ($item['id'] ?? '');
 			if ($item_id !== '' && in_array($item_id, $remove_ids, true)) {
 				$old_path = (string) ($item['path'] ?? '');
-				if ($old_path !== '' && file_exists($old_path)) {
+				if ($old_path !== '' && cmx_li_upload_file_exists($old_path)) {
 					@unlink($old_path);
 				}
 				continue;
@@ -772,19 +800,19 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 		$gallery = $ordered;
 	}
 
-	$base_dir = cmx_li_base_path();
-	$base_url = cmx_li_base_url();
-	if (!is_dir($base_dir)) {
-		if (!wp_mkdir_p($base_dir)) {
-			error_log('[CMX] Konnte Zielordner nicht erstellen: '.$base_dir);
-			return;
-		}
-	}
-
-	$basename = cmx_li_basename_for_post($post);
-
 	// 1) MANUELLER UPLOAD?
-	if (!empty($_FILES['cmx_li_files']) && !empty($_FILES['cmx_li_files']['name'])) {
+	$upload_files = !empty($_FILES['cmx_li_files']) ? cmx_li_uploaded_files_from_request((array) $_FILES['cmx_li_files']) : [];
+	if ($upload_files !== []) {
+		$base_dir = cmx_li_base_path();
+		$base_url = cmx_li_base_url();
+		if (!is_dir($base_dir)) {
+			if (!wp_mkdir_p($base_dir)) {
+				error_log('[CMX] Konnte Zielordner nicht erstellen: '.$base_dir);
+				return;
+			}
+		}
+
+		$basename = cmx_li_basename_for_post($post);
 		$new_items = cmx_li_store_uploaded_files((array) $_FILES['cmx_li_files'], $base_dir, $base_url, $basename);
 		if ($new_items === []) {
 			error_log('[CMX] Manuelles Speichern fehlgeschlagen.');
@@ -797,30 +825,6 @@ add_action('save_post_artikel', function ($post_id, $post, $update) {
 
 	// 1b) Kein Upload: nur Reihenfolge/Entfernen in die Galerie übernehmen
 	cmx_li_gallery_update($post_id, $meta_base, $gallery);
-
-	// 2) KEIN Upload: Versuche AUTOMATISCH von Bezugsquelle zu laden
-	$source_url = cmx_li_find_source_url($post_id);
-	// if ($source_url) {
-	// 	$img_url = cmx_li_resolve_image_url($source_url);
-	// 	if ($img_url) {
-	// 		if (!cmx_li_store_remote_image($img_url, $base_dir, $base_url, $basename, $post_id, $meta_base)) {
-	// 			error_log('[CMX] Auto-Fetch: Speichern fehlgeschlagen: '.$img_url);
-	// 		}
-	// 	} else {
-	// 		error_log('[CMX] Auto-Fetch: Keine Bild-URL aus Bezugsquelle ermittelbar: '.$source_url);
-	// 	}
-
-	// 	// NEU: Artikel-/Produktbeschreibung in Editor übernehmen – nur wenn leer
-	// 	if (trim((string)$post->post_content) === '') {
-	// 		$desc = cmx_li_fetch_page_description($source_url);
-	// 		if ($desc) {
-	// 			wp_update_post([
-	// 				'ID'           => $post_id,
-	// 				'post_content' => sanitize_textarea_field($desc),
-	// 			]);
-	// 		}
-	// 	}
-	// }
 
 }, 10, 3);
 
@@ -837,12 +841,16 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_store_uploaded_files')) {
 		$stored = [];
 
 		foreach (cmx_li_uploaded_files_from_request($files) as $file) {
-			if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+			$name = (string) ($file['name'] ?? '');
+			$error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+			if ($error !== UPLOAD_ERR_OK) {
+				error_log('[CMX] Artikelbild-Upload übersprungen: ' . $name . ' (' . cmx_li_upload_error_label($error) . ').');
 				continue;
 			}
 
 			$check = wp_check_filetype_and_ext($file['tmp_name'] ?? '', $file['name'] ?? '', $allowed_mimes);
 			if (empty($check['ext']) || empty($check['type'])) {
+				error_log('[CMX] Artikelbild-Upload abgelehnt: ' . $name . ' (Dateityp nicht erlaubt oder nicht erkannt).');
 				continue;
 			}
 
@@ -855,9 +863,11 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_store_uploaded_files')) {
 				: \wp_normalize_path($base_dir . '/' . $target_base . '-1' . $ext);
 
 			if (!is_uploaded_file($file['tmp_name'])) {
+				error_log('[CMX] Artikelbild-Upload abgelehnt: ' . $name . ' (temporäre Datei ist kein HTTP-Upload).');
 				continue;
 			}
 			if (!@move_uploaded_file($file['tmp_name'], $target)) {
+				error_log('[CMX] Artikelbild-Upload konnte nicht verschoben werden: ' . $name . ' -> ' . $target);
 				continue;
 			}
 			@chmod($target, 0644);
@@ -875,31 +885,11 @@ if (!\function_exists(__NAMESPACE__.'\\cmx_li_store_uploaded_files')) {
 	}
 }
 
-/** --- Quelle aus Metafeldern finden --- */
-if (!\function_exists(__NAMESPACE__.'\\cmx_li_find_source_url')) {
-	function cmx_li_find_source_url(int $post_id): ?string {
-		$fields = (array) apply_filters('cmx_li_source_fields', [
-			'_cmx_bezugsquelle_url',
-			'_cmx_bezugsquelle',
-			'_cmx_artikel_bezugsquelle',
-			'_cmx_artikel_bild_url',
-		]);
-
-		foreach ($fields as $key) {
-			$val = trim((string) get_post_meta($post_id, $key, true));
-			if ($val !== '' && preg_match('~^https?://~i', $val)) {
-				return $val;
-			}
-		}
-		return null;
-	}
-}
-
 /** Alte Datei löschen */
 if (!\function_exists(__NAMESPACE__.'\\cmx_li_delete_old')) {
 	function cmx_li_delete_old(int $post_id, string $meta_base): void {
 		$old = (string) get_post_meta($post_id, $meta_base . '_path', true);
-		if ($old && file_exists($old)) {
+		if ($old && cmx_li_upload_file_exists($old)) {
 			@unlink($old);
 		}
 	}

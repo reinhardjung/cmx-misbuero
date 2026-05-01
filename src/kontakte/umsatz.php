@@ -281,6 +281,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_beleg_zahlungsgrund_label')
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 	function cmx_kontakt_belege_data(int $kontakt_id): array {
+		$limit = 50;
 		static $cache = [];
 		if ($kontakt_id <= 0) {
 			return ['sum' => 0.0, 'rows' => []];
@@ -316,7 +317,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 		$query_args = [
 			'post_type'               => CMX_PT_BELEGE,
 			'post_status'             => ['publish', 'private', 'draft', 'pending', 'future'],
-			'posts_per_page'          => -1,
+			'posts_per_page'          => $limit,
 			'fields'                  => 'ids',
 			'no_found_rows'           => true,
 			'update_post_meta_cache'  => false,
@@ -387,17 +388,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_kontakt_belege_data')) {
 	} elseif (isset($_GET['post'])) {
 		$kontakt_id = (int) $_GET['post'];
 	}
-	$data = cmx_kontakt_belege_data($kontakt_id);
-	$sum = (float) ($data['sum'] ?? 0.0);
-	$rows = (array) ($data['rows'] ?? []);
-	$count = \count($rows);
-	$sum_label = \function_exists(__NAMESPACE__ . '\\cmx_format_swiss_number')
-		? (string) cmx_format_swiss_number($sum, 2)
-		: \number_format($sum, 2, '.', "'");
-	$title_text = $count . ' Belege (' . $sum_label . ')';
-	$list_url = cmx_kontakt_belege_list_url($kontakt_id, \array_map(static function ($row): int {
-		return (int) ($row['id'] ?? 0);
-	}, $rows));
+	$title_text = 'Belege';
+	$list_url = cmx_kontakt_belege_list_url($kontakt_id);
 	$title = '<a href="' . \esc_url($list_url) . '" style="text-decoration:none;color:inherit;" onclick="event.stopPropagation();">' . \esc_html($title_text) . '</a>';
 
 	\add_meta_box(
@@ -419,9 +411,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 		}
 			$data = cmx_kontakt_belege_data($kontakt_id);
 			$rows = (array) ($data['rows'] ?? []);
-			$list_url = cmx_kontakt_belege_list_url($kontakt_id, \array_map(static function ($row): int {
-				return (int) ($row['id'] ?? 0);
-			}, $rows));
+			$list_url = cmx_kontakt_belege_list_url($kontakt_id);
 
 				echo '<style>
 					#cmx_kontakt_belege_umsatz .cmx-kb-wrap{width:100%;max-height:320px;overflow:auto}
@@ -458,6 +448,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_kontakt_belege_umsatz')) {
 				return;
 			}
 
+		echo '<p style="margin:0 0 8px;"><a href="' . \esc_url($list_url) . '">Alle Belege öffnen</a></p>';
 		echo '<div class="cmx-kb-wrap"><table class="cmx-kb-table">';
 		echo '<thead><tr>';
 		echo '<th>Beleg</th>';

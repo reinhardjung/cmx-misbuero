@@ -274,6 +274,16 @@ function cmx_render_stammdaten_metabox(\WP_Post $post) {
 		position:relative;
 		z-index:50;
 	}
+	body.post-type-kontakte #cmx_kontakte_stammdaten{
+		border-radius:12px !important;
+		overflow:visible !important;
+	}
+	body.post-type-kontakte #cmx_kontakte_stammdaten .postbox-header{
+		border-radius:12px 12px 0 0 !important;
+	}
+	body.post-type-kontakte #cmx_kontakte_stammdaten .inside{
+		border-radius:0 0 12px 12px !important;
+	}
 	#cmx-stammdaten{
 		position:relative;
 		overflow:visible;

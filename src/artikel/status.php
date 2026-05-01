@@ -36,26 +36,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_artikel_should_force_publish_status
 	\wp_dequeue_script('autosave');
 }, 20);
 
-// Beim Speichern immer publish erzwingen (keine Entwürfe).
-\add_action('save_post_artikel', function(int $post_id, \WP_Post $post): void {
-	static $is_updating = false;
-	if ($is_updating) {
-		return;
-	}
-	if (\wp_is_post_revision($post_id) || \wp_is_post_autosave($post_id)) {
-		return;
-	}
-	if (in_array($post->post_status, ['trash', 'auto-draft'], true)) {
-		return;
-	}
-	if (!cmx_artikel_should_force_publish_status((string) $post->post_status)) {
-		return;
-	}
-	$is_updating = true;
-	\wp_update_post(['ID' => $post_id, 'post_status' => 'publish']);
-	$is_updating = false;
-}, 10, 2);
-
 // Nicht veröffentlichte Artikel im Listen-Screen entfernen.
 \add_action('admin_init', function(): void {
 	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;

@@ -19,10 +19,7 @@ if (!defined(__NAMESPACE__.'\\CMX_LOCAL_IMG_SUBDIR')) {
 
 /** CPT-Konfiguration */
 function cmx_local_image_cpt_map(): array {
-	$map = [
-		// 'artikel'  => ['label' => 'Bild', 'meta' => '_cmx_local_image_artikel'],
-		'kontakte' => ['label' => 'Logo', 'meta' => '_cmx_local_image_kontakte'], // dynamisch zu "Foto" bei _cmx_privat=1
-	];
+	$map = [];
 	return (array) apply_filters('cmx_local_image_cpt_map', $map);
 }
 

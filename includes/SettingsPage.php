@@ -53,6 +53,8 @@ class SettingsPage {
 	 * Settings + Felder (Settings API)
 	 * --------------------------------- */
 	public function registerSettingsAndFields(): void {
+		delete_option('cmx_logo_url');
+
 		// Optionen registrieren (mit Sanitizern)
 		register_setting(self::SETTINGS_GROUP, 'cmx_no_website', [
 			'type' => 'boolean',
@@ -68,11 +70,6 @@ class SettingsPage {
 			'type' => 'string',
 			'sanitize_callback' => [$this, 'sanitizeHexColor'],
 			'default' => '#8d44ac',
-		]);
-		register_setting(self::SETTINGS_GROUP, 'cmx_logo_url', [
-			'type' => 'string',
-			'sanitize_callback' => 'esc_url_raw',
-			'default' => 'https://cloudmeister.ch/wp-content/uploads/cloudmeister.png',
 		]);
 		register_setting(self::SETTINGS_GROUP, 'cmx_logo_link', [
 			'type' => 'string',
@@ -114,14 +111,6 @@ class SettingsPage {
 		);
 
 		add_settings_field(
-			'cmx_logo_url',
-			'URL',
-			[$this, 'fieldLogoUrl'],
-			self::PAGE_SLUG,
-			'cmx_section_main'
-		);
-
-		add_settings_field(
 			'cmx_logo_link',
 			'Link',
 			[$this, 'fieldLogoLink'],
@@ -154,15 +143,6 @@ class SettingsPage {
 		echo '<input type="text" class="cmx-color-field regular-text" name="cmx_focus_color" value="'.$val.'" />';
 	}
 
-	public function fieldLogoUrl(): void {
-		$val = esc_attr(get_option('cmx_logo_url', ''));
-		?>
-		<input type="text" id="cmx_logo_url" name="cmx_logo_url" class="regular-text cmx-long-text-field" placeholder="https://cloudmeister.ch/wp-content/uploads/cloudmeister.png" value="<?php echo $val; ?>" />
-		<button type="button" class="button" id="cmx_logo_button">Select Image</button>
-		<p class="description">Wähle ein Bild aus der Mediathek oder füge eine URL ein.</p>
-		<?php
-	}
-
 	public function fieldLogoLink(): void {
 		$val = esc_attr(get_option('cmx_logo_link', 'https://cloudmeister.ch/'));
 		echo '<input type="text" class="regular-text cmx-long-text-field" name="cmx_logo_link" placeholder="https://cloudmeister.ch/" value="'.$val.'" />';
@@ -182,42 +162,14 @@ class SettingsPage {
 		}
 		if (!$is_our_page) return;
 
-		// jQuery, Media, Color Picker
+		// jQuery + Color Picker
 		wp_enqueue_script('jquery');
-		wp_enqueue_media();
 		wp_enqueue_style('wp-color-picker');
 		wp_enqueue_script('wp-color-picker');
 
-		// Inline-JS: Media-Frame + Color-Picker initialisieren
+		// Inline-JS: Color-Picker initialisieren
 		$inline_js = <<<JS
 (function($){
-	var frame;
-	var \$btn  = $('#cmx_logo_button');
-	var \$inpt = $('#cmx_logo_url');
-
-	if (\$btn.length && \$inpt.length) {
-		\$btn.on('click', function(e){
-			e.preventDefault();
-			if (frame) { frame.open(); return; }
-
-			frame = wp.media({
-				title: 'Logo auswählen',
-				button: { text: 'Übernehmen' },
-				library: { type: ['image'] },
-				multiple: false
-			});
-
-			frame.on('select', function(){
-				var att = frame.state().get('selection').first().toJSON();
-				if (att && att.url) {
-					\$inpt.val(att.url).trigger('change');
-				}
-			});
-
-			frame.open();
-		});
-	}
-
 	$('.cmx-color-field').each(function(){
 		var \$f = $(this);
 		if (!\$f.val()) { \$f.val('#15adcb'); }
@@ -288,7 +240,7 @@ JS;
 	public function customizeLoginPage(): void {
 		$login_color = esc_html(get_option('cmx_color', '#15adcb'));
 		$focus_color = esc_html(get_option('cmx_focus_color', '#8d44ac'));
-		$logo_url    = esc_url(get_option('cmx_logo_url', 'https://cloudmeister.ch/wp-content/uploads/cloudmeister.png'));
+		$logo_url    = esc_url(\plugins_url('../assets/favicon.png', __FILE__));
 		?>
 		<style>
 			.language-switcher, .privacy-policy-page-link { display: none; }
