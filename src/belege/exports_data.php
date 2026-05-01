@@ -5,6 +5,56 @@ if (!\defined(__NAMESPACE__ . '\\CMX_PT_BELEGE')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_relative')) {
+	function cmxbel_view_request_key(): string {
+		foreach ([
+			'cmx_belegeingang' => 'cmx_eingang_belege',
+			'cmx_view' => 'cmx_deckungsbeitrag',
+			'cmx_export' => 'cmx_milchbueechli_belege',
+			'cmx_import' => 'cmx_import_belege',
+		] as $query_key => $view_key) {
+			if (!empty($_GET[$query_key])) {
+				if ($query_key === 'cmx_view' && \sanitize_key((string) \wp_unslash($_GET[$query_key])) !== 'deckungsbeitrag') {
+					continue;
+				}
+				return $view_key;
+			}
+		}
+
+		if (isset($_GET['post_status']) && \sanitize_key((string) \wp_unslash($_GET['post_status'])) === 'pending') {
+			return 'cmx_eingang_belege';
+		}
+
+		return '';
+	}
+
+	function cmxbel_view_mark_current(string $html, bool $current): string {
+		$html = (string) \preg_replace('/\s+aria-current=(["\'])page\1/i', '', $html);
+		$html = (string) \preg_replace_callback('/<a\b([^>]*)>/i', static function (array $matches) use ($current): string {
+			$attrs = (string) ($matches[1] ?? '');
+			$attrs = (string) \preg_replace('/\sclass=(["\'])(.*?)\1/i', '', $attrs);
+			$attrs = \trim($attrs);
+			if (!$current) {
+				return '<a' . ($attrs !== '' ? ' ' . $attrs : '') . '>';
+			}
+			return '<a' . ($attrs !== '' ? ' ' . $attrs : '') . ' class="current" aria-current="page">';
+		}, $html, 1);
+
+		return $html;
+	}
+
+	function cmxbel_views_normalize_current(array $views): array {
+		$current_key = cmxbel_view_request_key();
+		if ($current_key === '') {
+			return $views;
+		}
+
+		foreach ($views as $key => $html) {
+			$views[$key] = cmxbel_view_mark_current((string) $html, (string) $key === $current_key);
+		}
+
+		return $views;
+	}
+
 	function cmxbel_view_insert_relative(array $views, string $anchor_key, string $new_key, string $html, string $position = 'before'): array {
 		$new_views = [];
 		$inserted = false;
@@ -36,6 +86,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbel_view_insert_relative')) {
 		return cmxbel_view_insert_relative($views, $anchor_key, $new_key, $html, 'after');
 	}
 }
+
+\add_filter('views_edit-' . CMX_PT_BELEGE, __NAMESPACE__ . '\\cmxbel_views_normalize_current', 999);
 
 /* ===== Export-Link in der Belege-Liste ===== */
 \add_filter('views_edit-' . CMX_PT_BELEGE, function(array $views): array {

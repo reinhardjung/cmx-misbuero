@@ -1317,7 +1317,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 				<button type="submit" id="cmx-export-belege-zip-btn" name="action" value="cmx_export_belege_list" class="button button-primary">ZIP</button>
 				<button type="submit" id="cmx-export-belege-pdf-btn" name="action" value="cmx_export_belege_list_pdf" class="button">PDF</button>
 				<button type="submit" id="cmx-export-belege-csv-btn" name="action" value="cmx_export_belege_list_csv" class="button">CSV</button>
-				<a href="<?php echo \esc_url($cancel_url); ?>" class="button">Abbrechen</a>
+				<a href="<?php echo \esc_url($cancel_url); ?>" id="cmx-export-belege-cancel-btn" class="button">Abbrechen</a>
 			</p>
 
 				<div id="cmx-export-zip-share-shell">
@@ -1359,6 +1359,7 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 				var actionMemoryField = document.getElementById('cmx-export-submit-action');
 				var submitButtons = form.querySelectorAll('button[type="submit"][name="action"]');
 				var zipButton = document.getElementById('cmx-export-belege-zip-btn');
+				var cancelButton = document.getElementById('cmx-export-belege-cancel-btn');
 				var zipRequestActive = false;
 				var initialTrustees = <?php echo \wp_json_encode(\array_values($zip_trustees)); ?>;
 				var initialSendNonce = <?php echo \wp_json_encode((string) $zip_send_nonce); ?>;
@@ -1938,6 +1939,14 @@ function cmxbu_belege_export_zip_copy_delete_url(string $ref = '', ?array $range
 					runZipExportAjax(zipButton);
 				});
 			}
+
+			document.addEventListener('keydown', function(ev){
+				if (!ev || ev.key !== 'Escape' || !cancelButton) return;
+				var active = document.activeElement;
+				if (active && /^(INPUT|TEXTAREA|SELECT)$/i.test(active.tagName || '')) return;
+				ev.preventDefault();
+				window.location.href = cancelButton.href;
+			});
 
 			form.addEventListener('submit', function (ev) {
 				var actionVal = detectSubmitAction(ev);

@@ -11,6 +11,9 @@ if (!\defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_STATUS_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_PDF_META')) {
 	\define(__NAMESPACE__ . '\\CMX_BELEGEINGANG_PDF_META', '_cmx_belegeingang_pdf_rel');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_DISMISSED_META')) {
+	\define(__NAMESPACE__ . '\\CMX_BELEGEINGANG_DISMISSED_META', '_cmx_belegeingang_dismissed_notices');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_admin_url')) {
 	function cmx_belegeingang_admin_url(int $post_id = 0): string {
@@ -898,6 +901,13 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	}
 
 	$post_id = (int) $pending[0];
+	$user_id = (int) \get_current_user_id();
+	$dismissed = $user_id > 0 ? (array) \get_user_meta($user_id, CMX_BELEGEINGANG_DISMISSED_META, true) : [];
+	$dismissed = \array_map('intval', $dismissed);
+	if (\in_array($post_id, $dismissed, true)) {
+		return;
+	}
+
 	$data = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
 	$seller = \trim((string) ($data['seller_name'] ?? 'Unbekannt'));
 	$total = \number_format((float) ($data['gross_total'] ?? 0), 2, '.', "'");
@@ -905,7 +915,56 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$document_no = \trim((string) ($data['document_no'] ?? ''));
 	$link_label = $document_no !== '' ? $document_no : (string) \get_the_title($post_id);
 	$link = '<a href="' . \esc_url(cmx_belegeingang_admin_url($post_id)) . '">' . \esc_html($link_label) . '</a>';
-	echo '<div class="notice notice-info"><p>Neuer Beleg im Eingang: ' . $link . ' von ' . \esc_html($seller) . ' – ' . \esc_html($currency . ' ' . $total) . '</p></div>';
+	echo '<div class="notice notice-info is-dismissible cmx-belegeingang-notice" data-cmx-belegeingang-post-id="' . \esc_attr((string) $post_id) . '" data-cmx-belegeingang-nonce="' . \esc_attr(\wp_create_nonce('cmx_belegeingang_dismiss_' . $post_id)) . '"><p>Neuer Beleg im Eingang: ' . $link . ' von ' . \esc_html($seller) . ' – ' . \esc_html($currency . ' ' . $total) . '</p></div>';
+});
+
+\add_action('admin_footer', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		return;
+	}
+	?>
+	<script>
+	(function() {
+		document.addEventListener('click', function(event) {
+			var button = event.target && event.target.closest ? event.target.closest('.cmx-belegeingang-notice .notice-dismiss') : null;
+			if (!button) return;
+			var notice = button.closest('.cmx-belegeingang-notice');
+			if (!notice) return;
+			var postId = notice.getAttribute('data-cmx-belegeingang-post-id') || '';
+			var nonce = notice.getAttribute('data-cmx-belegeingang-nonce') || '';
+			if (!postId || !nonce || typeof ajaxurl === 'undefined') return;
+			var data = new FormData();
+			data.append('action', 'cmx_belegeingang_dismiss_notice');
+			data.append('post_id', postId);
+			data.append('_wpnonce', nonce);
+			fetch(ajaxurl, {
+				method: 'POST',
+				credentials: 'same-origin',
+				body: data
+			}).catch(function() {});
+		});
+	})();
+	</script>
+	<?php
+});
+
+\add_action('wp_ajax_cmx_belegeingang_dismiss_notice', function (): void {
+	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+	if ($post_id <= 0 || !\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+	if (!isset($_POST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_POST['_wpnonce']), 'cmx_belegeingang_dismiss_' . $post_id)) {
+		\wp_send_json_error(['message' => 'Ungültige Anfrage.'], 403);
+	}
+
+	$user_id = (int) \get_current_user_id();
+	$dismissed = $user_id > 0 ? (array) \get_user_meta($user_id, CMX_BELEGEINGANG_DISMISSED_META, true) : [];
+	$dismissed = \array_values(\array_unique(\array_filter(\array_map('intval', $dismissed))));
+	$dismissed[] = $post_id;
+	$dismissed = \array_slice(\array_values(\array_unique($dismissed)), -50);
+	\update_user_meta($user_id, CMX_BELEGEINGANG_DISMISSED_META, $dismissed);
+
+	\wp_send_json_success();
 });
 
 \add_action('admin_head-edit.php', function (): void {
