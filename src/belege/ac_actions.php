@@ -171,6 +171,32 @@ $add_action_columns = static function (array $columns): array {
 	$related_doc_url = \function_exists(__NAMESPACE__ . '\\cmx_beleg_latest_related_doc_url')
 		? (string) cmx_beleg_latest_related_doc_url($post_id)
 		: '';
+	$is_belegeingang_view = !empty($_GET['cmx_belegeingang']);
+	$is_pending_belegeingang = $is_belegeingang_view
+		&& (string) $post->post_status === 'pending'
+		&& (string) \get_post_meta($post_id, '_cmx_belegeingang_source', true) === 'rest'
+		&& (string) \get_post_meta($post_id, '_cmx_belegeingang_status', true) === 'pending';
+	$belegeingang_confirm_url = '';
+	if ($is_pending_belegeingang) {
+		$redirect_to = (string) \add_query_arg(
+			[
+				'post_type' => CMX_PT_BELEGE,
+				'cmx_belegeingang' => 1,
+			],
+			\admin_url('edit.php')
+		);
+		$belegeingang_confirm_url = (string) \wp_nonce_url(
+			\add_query_arg(
+				[
+					'action' => 'cmx_belegeingang_confirm',
+					'post_id' => $post_id,
+					'redirect_to' => \rawurlencode($redirect_to),
+				],
+				\admin_url('admin-post.php')
+			),
+			'cmx_belegeingang_confirm_' . $post_id
+		);
+	}
 
 	echo '<span class="cmx-beleg-action-icons">';
 	if ($related_doc_url !== '') {
@@ -189,6 +215,12 @@ $add_action_columns = static function (array $columns): array {
 		echo '<a href="' . \esc_url($pdf_url) . '" target="_blank" rel="noopener noreferrer" title="Anzeigen als PDF (DL/C5/C4)" class="cmx-beleg-action-icon cmx-beleg-action-pdf" aria-label="Anzeigen als PDF (DL/C5/C4)"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></a>';
 	} else {
 		echo '<span class="cmx-beleg-action-icon cmx-beleg-action-disabled cmx-beleg-action-pdf" title="' . \esc_attr($disabled_title) . '"><span class="dashicons dashicons-pdf" aria-hidden="true"></span></span>';
+	}
+
+	if ($belegeingang_confirm_url !== '') {
+		echo '<a href="' . \esc_url($belegeingang_confirm_url) . '" title="Als Lieferanten Rechnung übernehmen" class="cmx-beleg-action-icon cmx-belegeingang-confirm-action" aria-label="Als Lieferanten Rechnung übernehmen"><span class="dashicons dashicons-carrot" aria-hidden="true"></span></a>';
+	} else {
+		echo '<span class="cmx-beleg-action-placeholder" aria-hidden="true"></span>';
 	}
 	echo '</span>';
 }, 20, 2);
@@ -210,7 +242,7 @@ $add_action_columns = static function (array $columns): array {
 				vertical-align: top;
 			}
 			.wp-list-table th.column-cmx_beleg_pdf_action {
-				width: 98px;
+				width: 126px;
 				text-align: center;
 			}
 			.wp-list-table td.column-cmx_beleg_pdf_action {
@@ -219,7 +251,7 @@ $add_action_columns = static function (array $columns): array {
 			}
 			.cmx-beleg-action-icons {
 				display: inline-grid;
-				grid-template-columns: 18px 18px 18px;
+				grid-template-columns: 18px 18px 18px 18px;
 				column-gap: 6px;
 				align-items: start;
 				justify-items: center;
@@ -258,6 +290,13 @@ $add_action_columns = static function (array $columns): array {
 			}
 			.cmx-beleg-action-related {
 				color: #111111;
+			}
+			.cmx-belegeingang-confirm-action {
+				color: #cc4b00;
+			}
+			.cmx-belegeingang-confirm-action:hover,
+			.cmx-belegeingang-confirm-action:focus {
+				color: #8a3200;
 			}
 			.cmx-beleg-action-disabled {
 				opacity: 0.35;

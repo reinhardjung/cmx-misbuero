@@ -1047,6 +1047,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_mark_beleg_paid')) {
 			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_STATUS')
 			: '_cmx_beleg_status';
 
+		$is_pending_belegeingang = (string) $post->post_status === 'pending'
+			&& \defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_SOURCE_META')
+			&& \defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_STATUS_META')
+			&& (string) \get_post_meta($post_id, \constant(__NAMESPACE__ . '\\CMX_BELEGEINGANG_SOURCE_META'), true) === 'rest'
+			&& (string) \get_post_meta($post_id, \constant(__NAMESPACE__ . '\\CMX_BELEGEINGANG_STATUS_META'), true) === 'pending';
+		if ($is_pending_belegeingang) {
+			if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_import_as_supplier_invoice') || !cmx_belegeingang_import_as_supplier_invoice($post_id)) {
+				return [
+					'success' => false,
+					'message' => 'import_failed',
+					'status'  => 500,
+				];
+			}
+			$post = \get_post($post_id);
+			if (!$post instanceof \WP_Post) {
+				return [
+					'success' => false,
+					'message' => 'invalid',
+					'status'  => 400,
+				];
+			}
+		}
+
 		\update_post_meta($post_id, CMX_BELEG_META_BEZAHLT, $paid_date);
 		\update_post_meta($post_id, $status_meta_key, 'bezahlt');
 		\clean_post_cache($post_id);

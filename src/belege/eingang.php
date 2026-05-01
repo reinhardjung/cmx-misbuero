@@ -418,6 +418,11 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		return;
 	}
 
+	$requested_status = isset($_GET['post_status']) ? \sanitize_key((string) \wp_unslash($_GET['post_status'])) : '';
+	if ($requested_status !== 'trash') {
+		$query->set('post_status', ['publish']);
+	}
+
 	$meta_query[] = [
 		'relation' => 'OR',
 		[
@@ -428,6 +433,18 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 			'key' => CMX_BELEGEINGANG_SOURCE_META,
 			'value' => 'rest',
 			'compare' => '!=',
+		],
+		[
+			'relation' => 'AND',
+			[
+				'key' => CMX_BELEGEINGANG_SOURCE_META,
+				'value' => 'rest',
+			],
+			[
+				'key' => CMX_BELEGEINGANG_STATUS_META,
+				'value' => 'pending',
+				'compare' => '!=',
+			],
 		],
 	];
 	$query->set('meta_query', $meta_query);
@@ -463,6 +480,30 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	echo '<div class="notice notice-info"><p>Neuer Beleg im Eingang: ' . $link . ' von ' . \esc_html($seller) . ' – ' . \esc_html($currency . ' ' . $total) . '</p></div>';
 });
 
+\add_action('admin_head-edit.php', function (): void {
+	if (empty($_GET['cmx_belegeingang'])) {
+		return;
+	}
+	if (!isset($_GET['post_type']) || (string) $_GET['post_type'] !== 'belege') {
+		return;
+	}
+
+	echo '<style>
+		.wp-list-table th.manage-column.column-title,
+		.wp-list-table td.title.column-title {
+			width: 18ch !important;
+			min-width: 18ch !important;
+			max-width: 18ch !important;
+		}
+		.wp-list-table td.column-title strong,
+		.wp-list-table td.column-title .row-title {
+			max-width: none !important;
+			overflow: visible !important;
+			text-overflow: clip !important;
+		}
+	</style>';
+});
+
 \add_action('admin_init', function (): void {
 	if (!\is_admin() || !\current_user_can('edit_posts')) {
 		return;
@@ -482,19 +523,21 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 
 	foreach ($post_ids as $post_id) {
 		$post_id = (int) $post_id;
-		if ((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true) !== '') {
+		$facturx = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
+		if (empty($facturx)) {
 			continue;
 		}
-		$facturx = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
-		if (!empty($facturx)) {
+
+		if ((string) \get_post_meta($post_id, '_cmx_beleg_richtung', true) === '') {
 			cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
-			$title = cmx_belegeingang_title_from_facturx($facturx);
-			if ($title !== '' && $title !== (string) \get_the_title($post_id)) {
-				\wp_update_post([
-					'ID' => $post_id,
-					'post_title' => $title,
-				]);
-			}
+		}
+
+		$title = cmx_belegeingang_title_from_facturx($facturx);
+		if ($title !== '' && $title !== (string) \get_the_title($post_id)) {
+			\wp_update_post([
+				'ID' => $post_id,
+				'post_title' => $title,
+			]);
 		}
 	}
 });
@@ -520,6 +563,53 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	exit;
 });
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_import_as_supplier_invoice')) {
+	function cmx_belegeingang_import_as_supplier_invoice(int $post_id): bool {
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== 'belege') {
+			return false;
+		}
+		if ((string) \get_post_meta($post_id, CMX_BELEGEINGANG_SOURCE_META, true) !== 'rest') {
+			return false;
+		}
+
+		$data = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
+		$seller = \trim((string) ($data['seller_name'] ?? ''));
+		if ($seller !== '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_find_existing_kontakt_id_from_label')) {
+			$kontakt_id = (int) cmx_beleg_find_existing_kontakt_id_from_label($seller);
+			if ($kontakt_id <= 0 && \function_exists(__NAMESPACE__ . '\\cmx_beleg_create_kontakt_from_label')) {
+				$kontakt_id = (int) cmx_beleg_create_kontakt_from_label($seller);
+			}
+			if ($kontakt_id > 0) {
+				\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $kontakt_id);
+			}
+		}
+
+		\update_post_meta($post_id, '_cmx_beleg_richtung', 'eingang');
+		\update_post_meta($post_id, '_cmx_beleg_kontakt_label', $seller);
+		\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', (string) ($data['seller_address'] ?? ''));
+		\update_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, 'imported');
+		$result = \wp_update_post([
+			'ID' => $post_id,
+			'post_status' => 'publish',
+		], true);
+		if (\is_wp_error($result)) {
+			\error_log('[CMX Belegeingang] Uebernahme fehlgeschlagen: ' . $result->get_error_message());
+			return false;
+		}
+
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? (string) cmx_belege_kategorie_taxonomy() : '';
+		if ($tax !== '') {
+			$term = \get_term_by('slug', 'rechnung', $tax);
+			if ($term && !\is_wp_error($term)) {
+				\wp_set_object_terms($post_id, [(int) $term->term_id], $tax, false);
+			}
+		}
+
+		return true;
+	}
+}
+
 \add_action('admin_post_cmx_belegeingang_confirm', function (): void {
 	$post_id = isset($_GET['post_id']) ? (int) \wp_unslash($_GET['post_id']) : 0;
 	if ($post_id <= 0 || !\current_user_can('edit_post', $post_id)) {
@@ -529,33 +619,8 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 		\wp_die('Ungültige Anfrage.');
 	}
 
-	$data = (array) \get_post_meta($post_id, '_cmx_belegeingang_facturx', true);
-	$seller = \trim((string) ($data['seller_name'] ?? ''));
-	if ($seller !== '' && \function_exists(__NAMESPACE__ . '\\cmx_beleg_find_existing_kontakt_id_from_label')) {
-		$kontakt_id = (int) cmx_beleg_find_existing_kontakt_id_from_label($seller);
-		if ($kontakt_id <= 0 && \function_exists(__NAMESPACE__ . '\\cmx_beleg_create_kontakt_from_label')) {
-			$kontakt_id = (int) cmx_beleg_create_kontakt_from_label($seller);
-		}
-		if ($kontakt_id > 0) {
-			\update_post_meta($post_id, '_cmx_beleg_kontakt_id', $kontakt_id);
-		}
-	}
-
-	\update_post_meta($post_id, '_cmx_beleg_richtung', 'eingang');
-	\update_post_meta($post_id, '_cmx_beleg_kontakt_label', $seller);
-	\update_post_meta($post_id, '_cmx_beleg_kontakt_addr', (string) ($data['seller_address'] ?? ''));
-	\update_post_meta($post_id, CMX_BELEGEINGANG_STATUS_META, 'imported');
-	\wp_update_post([
-		'ID' => $post_id,
-		'post_status' => 'publish',
-	]);
-
-	$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? (string) cmx_belege_kategorie_taxonomy() : '';
-	if ($tax !== '') {
-		$term = \get_term_by('slug', 'rechnung', $tax);
-		if ($term && !\is_wp_error($term)) {
-			\wp_set_object_terms($post_id, [(int) $term->term_id], $tax, false);
-		}
+	if (!cmx_belegeingang_import_as_supplier_invoice($post_id)) {
+		\wp_die('Beleg konnte nicht übernommen werden.');
 	}
 
 	$redirect_to = isset($_GET['redirect_to']) ? (string) \wp_unslash($_GET['redirect_to']) : '';
