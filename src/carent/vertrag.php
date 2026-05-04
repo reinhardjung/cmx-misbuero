@@ -154,22 +154,61 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_field_html')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri')) {
-	function cmx_carent_vertrag_image_data_uri(int $attachment_id): string {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_image_path')) {
+	function cmx_carent_vertrag_attachment_image_path(int $attachment_id): string {
 		if ($attachment_id <= 0) {
 			return '';
 		}
 
-		$path = (string) \get_attached_file($attachment_id);
+		$full_path = (string) \get_attached_file($attachment_id);
+		$meta = (array) \wp_get_attachment_metadata($attachment_id);
+		$sizes = (array) ($meta['sizes'] ?? []);
+		if ($full_path === '' || $sizes === []) {
+			return $full_path;
+		}
+
+		$dir = \trailingslashit((string) \dirname($full_path));
+		$best_path = '';
+		$best_area = 0;
+		$smallest_path = '';
+		$smallest_area = PHP_INT_MAX;
+		foreach ($sizes as $size) {
+			$size = (array) $size;
+			$file = \trim((string) ($size['file'] ?? ''));
+			$width = (int) ($size['width'] ?? 0);
+			$height = (int) ($size['height'] ?? 0);
+			if ($file === '' || $width <= 0 || $height <= 0) {
+				continue;
+			}
+
+			$path = $dir . $file;
+			if (!\is_readable($path)) {
+				continue;
+			}
+
+			$area = $width * $height;
+			if ($width <= 1400 && $height <= 1400 && $area > $best_area) {
+				$best_path = $path;
+				$best_area = $area;
+			}
+			if ($area < $smallest_area) {
+				$smallest_path = $path;
+				$smallest_area = $area;
+			}
+		}
+
+		return $best_path !== '' ? $best_path : ($smallest_path !== '' ? $smallest_path : $full_path);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri_from_path')) {
+	function cmx_carent_vertrag_image_data_uri_from_path(string $path): string {
+		$path = \wp_normalize_path($path);
 		if ($path === '' || !\is_readable($path)) {
 			return '';
 		}
 
-		$mime = (string) \get_post_mime_type($attachment_id);
-		if ($mime === '' || !\str_starts_with($mime, 'image/')) {
-			$filetype = \wp_check_filetype($path);
-			$mime = (string) ($filetype['type'] ?? '');
-		}
+		$mime = (string) (\wp_check_filetype($path)['type'] ?? '');
 		if ($mime === '' || !\str_starts_with($mime, 'image/')) {
 			return '';
 		}
@@ -180,6 +219,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri')) {
 		}
 
 		return 'data:' . $mime . ';base64,' . \base64_encode($raw);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_image_data_uri')) {
+	function cmx_carent_vertrag_image_data_uri(int $attachment_id): string {
+		if ($attachment_id <= 0) {
+			return '';
+		}
+
+		return cmx_carent_vertrag_image_data_uri_from_path(cmx_carent_vertrag_attachment_image_path($attachment_id));
 	}
 }
 
@@ -206,12 +255,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_article_image_src'))
 		$primary_image = \is_array($gallery[0] ?? null) ? (array) $gallery[0] : [];
 		$local_path = \trim((string) (($primary_image['path'] ?? '') ?: \get_post_meta($artikel_id, '_cmx_local_image_artikel_path', true)));
 		if ($local_path !== '' && \is_readable($local_path)) {
-			$mime = (string) (\wp_check_filetype($local_path)['type'] ?? '');
-			if ($mime !== '' && \str_starts_with($mime, 'image/')) {
-				$raw = \file_get_contents($local_path);
-				if (\is_string($raw) && $raw !== '') {
-					return 'data:' . $mime . ';base64,' . \base64_encode($raw);
-				}
+			$data_uri = cmx_carent_vertrag_image_data_uri_from_path($local_path);
+			if ($data_uri !== '') {
+				return $data_uri;
 			}
 		}
 
@@ -225,10 +271,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_article_image_src'))
 				$rel = (string) \preg_replace('/\?.*$/', '', $rel);
 				$resolved_path = $basedir . '/' . $rel;
 				if (\is_readable($resolved_path)) {
-					$mime = (string) (\wp_check_filetype($resolved_path)['type'] ?? '');
-					$raw = \file_get_contents($resolved_path);
-					if ($mime !== '' && \str_starts_with($mime, 'image/') && \is_string($raw) && $raw !== '') {
-						return 'data:' . $mime . ';base64,' . \base64_encode($raw);
+					$data_uri = cmx_carent_vertrag_image_data_uri_from_path($resolved_path);
+					if ($data_uri !== '') {
+						return $data_uri;
 					}
 				}
 			}
@@ -258,10 +303,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_info')) {
 		$data_uri = '';
 
 		if ($with_data_uri && $path !== '' && \is_readable($path) && \str_starts_with($mime, 'image/')) {
-			$raw = \file_get_contents($path);
-			if (\is_string($raw) && $raw !== '') {
-				$data_uri = 'data:' . ($mime !== '' ? $mime : 'image/png') . ';base64,' . \base64_encode($raw);
-			}
+			$data_uri = cmx_carent_vertrag_image_data_uri($attachment_id);
 		}
 
 		return [
@@ -1418,9 +1460,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$uebernahme_datum = cmx_carent_vertrag_format_date(\trim((string) ($uebernahme['datum'] ?? '')));
 		$uebernahme_uhrzeit = \trim((string) ($uebernahme['uhrzeit'] ?? ''));
 		$rueckgabe = (array) ($transfer['rueckgabe'] ?? []);
+		$rueckgabe_ort = \trim((string) ($rueckgabe['ort'] ?? ''));
 		$rueckgabe_km_stand = cmx_carent_vertrag_format_int(\trim((string) ($rueckgabe['km_stand'] ?? '')));
 		$rueckgabe_datum = cmx_carent_vertrag_format_date(\trim((string) ($rueckgabe['datum'] ?? '')));
 		$rueckgabe_uhrzeit = \trim((string) ($rueckgabe['uhrzeit'] ?? ''));
+		$rueckgabe_video = (array) ($rueckgabe['video'] ?? []);
+		$rueckgabe_video_url = \trim((string) ($rueckgabe_video['url'] ?? ''));
+		$rueckgabe_video_poster_src = cmx_carent_vertrag_video_poster_src((int) ($rueckgabe_video['id'] ?? 0));
+		$rueckgabe_photo_items = [];
+		foreach ((array) ($rueckgabe['fotos'] ?? []) as $photo_item) {
+			$photo_item = (array) $photo_item;
+			$attachment = (array) ($photo_item['attachment'] ?? []);
+			$photo_src = cmx_carent_vertrag_image_data_uri((int) ($attachment['id'] ?? 0));
+			if ($photo_src === '') {
+				continue;
+			}
+			$rueckgabe_photo_items[] = [
+				'src' => $photo_src,
+				'url' => \trim((string) ($attachment['url'] ?? '')),
+				'label' => \trim((string) ($photo_item['term_label'] ?? '')),
+			];
+		}
 		$article = (array) ($vehicle['article_meta'] ?? []);
 		$variant = (array) ($vehicle['variant_meta'] ?? []);
 		$article_id = isset($vehicle['article_id']) ? (int) $vehicle['article_id'] : 0;
@@ -1443,7 +1503,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$vehicle_kasko_min = cmx_carent_vertrag_format_money((string) (($vehicle['kasko_min'] ?? '') ?: ($article['kasko_min'] ?? '')));
 		$vehicle_kasko_max = cmx_carent_vertrag_format_money((string) (($vehicle['kasko_max'] ?? '') ?: ($article['kasko_max'] ?? '')));
 		$rental_total = cmx_carent_vertrag_format_money((string) ($vehicle['summe'] ?? ''));
-		$damage_rows = (array) (($data['damage'] ?? [])['rows'] ?? []);
+		$damage = (array) ($data['damage'] ?? []);
+		$damage_rows = (array) ($damage['rows'] ?? []);
+		$damage_ort = \trim((string) ($damage['ort'] ?? ''));
+		$damage_datum = cmx_carent_vertrag_format_date(\trim((string) ($damage['datum'] ?? '')));
+		$damage_uhrzeit = \trim((string) ($damage['uhrzeit'] ?? ''));
+		$damage_weitere_beteiligte = \trim((string) ($damage['weitere_beteiligte'] ?? ''));
+		$damage_weitere_angaben = \trim((string) ($damage['weitere_angaben'] ?? ''));
+		$damage_unfallprotokoll = \trim((string) ($damage['unfallprotokoll'] ?? ''));
+		$damage_anerkennung = \trim((string) ($damage['anerkennung'] ?? ''));
+		$has_damage_protocol = $damage_rows !== []
+			|| $damage_ort !== ''
+			|| $damage_datum !== ''
+			|| $damage_uhrzeit !== ''
+			|| $damage_weitere_beteiligte !== ''
+			|| $damage_weitere_angaben !== ''
+			|| $damage_unfallprotokoll !== ''
+			|| $damage_anerkennung !== '';
+		$damage_weitere_beteiligte_html = \wp_kses(\nl2br($damage_weitere_beteiligte, false), ['br' => []]);
+		$damage_weitere_angaben_html = \wp_kses(\nl2br($damage_weitere_angaben, false), ['br' => []]);
+		$damage_unfallprotokoll_html = \wp_kses(\nl2br($damage_unfallprotokoll, false), ['br' => []]);
+		$damage_anerkennung_html = \wp_kses(\nl2br($damage_anerkennung, false), ['br' => []]);
 		$damage_total = $damage_rows !== [] ? $vehicle_kasko_max : '';
 		$total_amount = cmx_carent_vertrag_format_money(
 			cmx_carent_vertrag_parse_number($rental_total) + cmx_carent_vertrag_parse_number($damage_total)
@@ -1460,6 +1540,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$identitaetskarte_url = \trim((string) ($identitaetskarte['url'] ?? ''));
 		$self_signature = (array) (($uebernahme['signatures'] ?? [])['vermieter'] ?? []);
 		$contact_signature = (array) (($uebernahme['signatures'] ?? [])['mieter'] ?? []);
+		$rueckgabe_self_signature = (array) (($rueckgabe['signatures'] ?? [])['vermieter'] ?? []);
+		$rueckgabe_contact_signature = (array) (($rueckgabe['signatures'] ?? [])['mieter'] ?? []);
 		$self_street = \trim((string) ($self_address_lines[0] ?? ''));
 		$self_zip_city = \trim((string) ($self_address_lines[1] ?? ''));
 		if (\count($self_address_lines) > 2) {
@@ -1577,6 +1659,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.transfer-table td:last-child{border-right:0}
 				.transfer-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase}
 				.transfer-value{display:block;font-weight:800}
+				.damage-summary{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.damage-summary-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				.damage-summary-table td{font-size:9.2px;vertical-align:top;border-right:1px solid #8aa7cc;padding:0 5mm}
+				.damage-summary-table td:last-child{border-right:0}
+				.damage-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase}
+				.damage-value{display:block;font-weight:800}
+				.damage-table{width:197mm;border-collapse:collapse;table-layout:fixed;margin-bottom:4.5mm}
+				.damage-table th{background:#001b3d;color:#fff;text-align:left;text-transform:uppercase;font-size:8.5px;padding:2.5mm 4mm}
+				.damage-table th:not(:last-child),.damage-table td:not(:last-child){border-right:1px solid #c7d4e6}
+				.damage-table td{border:1px solid #c7d4e6;border-top:0;padding:2mm 4mm;font-size:9px;vertical-align:top}
+				.damage-table tr:first-child th:first-child{border-top-left-radius:1.3mm}
+				.damage-table tr:first-child th:last-child{border-top-right-radius:1.3mm}
+				.damage-table tr:last-child td:first-child{border-bottom-left-radius:1.3mm}
+				.damage-table tr:last-child td:last-child{border-bottom-right-radius:1.3mm}
+				.damage-text-grid{width:197mm;border-collapse:separate;border-spacing:0 2.5mm;table-layout:fixed;margin-bottom:4.5mm}
+				.damage-text-grid td{width:50%;vertical-align:top;background:#f4f7fb;border:1px solid #c7d4e6;border-radius:1.3mm;padding:3mm 4mm;font-size:9px}
+				.damage-text-grid td+td{border-left:3mm solid #fff}
+				.return-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
+				.return-table{width:100%;border-collapse:collapse;table-layout:fixed}
+				.return-table td{font-size:9.2px;vertical-align:top;border-right:1px solid #8aa7cc;padding:0 5mm}
+				.return-table td:last-child{border-right:0}
+				.return-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase}
+				.return-value{display:block;font-weight:800}
 				.billing{width:197mm;border-collapse:collapse;table-layout:fixed;margin-bottom:8mm}
 				.billing th{background:#001b3d;color:#fff;text-align:left;text-transform:uppercase;font-size:8.5px;padding:2.5mm 4mm}
 				.billing th:not(:last-child),.billing td:not(:last-child){border-right:1px solid #c7d4e6}
@@ -1794,7 +1899,98 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 					<?php endfor; ?>
 				</table>
 
-				<div class="page-break-before"></div>
+				<?php if ($has_damage_protocol) : ?>
+					<div class="page-break-before"></div>
+					<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('triangle-alert'); ?>SCHADENSPROTOKOLL</div>
+					<div class="damage-summary">
+						<table class="damage-summary-table" role="presentation">
+							<tr>
+								<td><span class="damage-label">Ort</span><span class="damage-value"><?php echo \esc_html($damage_ort !== '' ? $damage_ort : '–'); ?></span></td>
+								<td><span class="damage-label">Datum</span><span class="damage-value"><?php echo \esc_html($damage_datum !== '' ? $damage_datum : '–'); ?></span></td>
+								<td><span class="damage-label">Uhrzeit</span><span class="damage-value"><?php echo \esc_html($damage_uhrzeit !== '' ? $damage_uhrzeit : '–'); ?></span></td>
+							</tr>
+						</table>
+					</div>
+
+					<?php if ($damage_rows !== []) : ?>
+						<table class="damage-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+							<tr><th>Schaden</th><th>Bemerkung</th><th>Fotos</th></tr>
+							<?php foreach ($damage_rows as $damage_row) : ?>
+								<?php $damage_row = (array) $damage_row; ?>
+								<tr>
+									<td><?php echo cmx_carent_vertrag_html_value((string) ($damage_row['term_label'] ?? '')); ?></td>
+									<td><?php echo cmx_carent_vertrag_html_value((string) ($damage_row['note'] ?? '')); ?></td>
+									<td><?php echo !empty($damage_row['fotos_gemacht']) ? 'Ja' : 'Nein'; ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</table>
+					<?php endif; ?>
+
+					<table class="damage-text-grid" role="presentation" cellpadding="0" cellspacing="0" border="0">
+						<tr>
+							<td><span class="damage-label">Weitere Beteiligte</span><?php echo $damage_weitere_beteiligte_html !== '' ? $damage_weitere_beteiligte_html : '&ndash;'; ?></td>
+							<td><span class="damage-label">Weitere Angaben</span><?php echo $damage_weitere_angaben_html !== '' ? $damage_weitere_angaben_html : '&ndash;'; ?></td>
+						</tr>
+						<tr>
+							<td><span class="damage-label">Unfallprotokoll</span><?php echo $damage_unfallprotokoll_html !== '' ? $damage_unfallprotokoll_html : '&ndash;'; ?></td>
+							<td><span class="damage-label">Anerkennung</span><?php echo $damage_anerkennung_html !== '' ? $damage_anerkennung_html : '&ndash;'; ?></td>
+						</tr>
+					</table>
+					<div class="section-gap"></div>
+				<?php endif; ?>
+
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('clipboard-check'); ?>RÜCKGABE</div>
+				<div class="return-strip">
+					<table class="return-table" role="presentation">
+						<tr>
+							<td><span class="return-label">Ort</span><span class="return-value"><?php echo \esc_html($rueckgabe_ort !== '' ? $rueckgabe_ort : '–'); ?></span></td>
+							<td><span class="return-label">Datum</span><span class="return-value"><?php echo \esc_html($rueckgabe_datum !== '' ? $rueckgabe_datum : '–'); ?></span></td>
+							<td><span class="return-label">Uhrzeit</span><span class="return-value"><?php echo \esc_html($rueckgabe_uhrzeit !== '' ? $rueckgabe_uhrzeit : '–'); ?></span></td>
+							<td><span class="return-label">KM-Stand</span><span class="return-value"><?php echo \esc_html($rueckgabe_km_stand !== '' ? $rueckgabe_km_stand : '–'); ?></span></td>
+						</tr>
+					</table>
+				</div>
+				<div class="section-gap"></div>
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('video'); ?>RÜCKGABEVIDEO</div>
+				<div class="video-box">
+					<?php if ($rueckgabe_video_url !== '') : ?>
+						<a href="<?php echo \esc_url($rueckgabe_video_url); ?>" class="video-link"><?php if ($rueckgabe_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($rueckgabe_video_poster_src); ?>" alt="" class="video-poster"><?php else : ?>Video herunterladen<?php endif; ?></a>
+					<?php else : ?>
+						<span>Kein Video vorhanden</span>
+					<?php endif; ?>
+				</div>
+
+				<div class="section-gap"></div>
+				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('images'); ?>RÜCKGABEFOTOS</div>
+				<table class="photo-table" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<?php for ($photo_row_index = 0; $photo_row_index < 3; $photo_row_index++) : ?>
+						<tr>
+							<?php for ($photo_col_index = 0; $photo_col_index < 4; $photo_col_index++) : ?>
+								<?php $photo = (array) ($rueckgabe_photo_items[($photo_row_index * 4) + $photo_col_index] ?? []); ?>
+								<td class="photo-cell">
+									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
+								</td>
+							<?php endfor; ?>
+						</tr>
+					<?php endfor; ?>
+				</table>
+
+				<table class="signatures" role="presentation" cellpadding="0" cellspacing="0" border="0">
+					<tr>
+						<td>
+							<div class="signature-line"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#001b3d'); ?><?php if (!empty($rueckgabe_self_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $rueckgabe_self_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
+							<div class="signature-label">Unterschrift Mitarbeiter Vermieter Rückgabe</div>
+						</td>
+						<td>
+							<div class="signature-line signature-line-mieter"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#001b3d'); ?><?php if (!empty($rueckgabe_contact_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $rueckgabe_contact_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
+							<div class="signature-label">Unterschrift Mieter Rückgabe</div>
+						</td>
+					</tr>
+				</table>
+				<div class="section-gap"></div>
+				<div class="section-gap"></div>
+
+				<?php if (!$has_damage_protocol) : ?><div class="page-break-before"></div><?php endif; ?>
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('calendar'); ?>MIETDATEN</div>
 				<div class="transfer-strip">
 					<table class="transfer-table" role="presentation">
