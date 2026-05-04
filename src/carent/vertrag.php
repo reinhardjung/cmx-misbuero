@@ -1889,16 +1889,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 		$canvas = $dompdf->getCanvas();
 		$font_metrics = $dompdf->getFontMetrics();
 		$font = $font_metrics->getFont('DejaVu Sans', 'bold');
+		$contract_id = \trim(\wp_strip_all_tags((string) $post->post_title));
 		if (\method_exists($canvas, 'page_script')) {
-			$canvas->page_script(static function (int $page_number, int $page_count, $canvas, $font_metrics): void {
+			$canvas->page_script(static function (int $page_number, int $page_count, $canvas, $font_metrics) use ($contract_id): void {
 				$font = $font_metrics->getFont('DejaVu Sans', 'bold');
 				$text = 'Seite ' . $page_number . ' von ' . $page_count;
 				$font_size = 8.5;
 				$text_width = $font_metrics->getTextWidth($text, $font, $font_size);
 				$canvas->filled_rectangle(0, 818, 595.28, 24, [0, 0.106, 0.239]);
+				if ($contract_id !== '') {
+					$canvas->text(28, 826, $contract_id, $font, $font_size, [1, 1, 1]);
+				}
 				$canvas->text(595.28 - 28 - $text_width, 826, $text, $font, $font_size, [1, 1, 1]);
 			});
 		} else {
+			if ($contract_id !== '') {
+				$canvas->page_text(28, 823, $contract_id, $font, 8.5, [1, 1, 1]);
+			}
 			$canvas->page_text(500, 823, 'Seite {PAGE_NUM} von {PAGE_COUNT}', $font, 8.5, [1, 1, 1]);
 		}
 
