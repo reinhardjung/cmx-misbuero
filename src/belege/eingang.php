@@ -339,23 +339,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_track_source_beleg')) 
 
 		$source_url = cmx_belegeingang_instance_url((string) \get_post_meta($post_id, '_cmx_belegeingang_source_url', true));
 		$token = \sanitize_text_field((string) \get_post_meta($post_id, '_cmx_belegeingang_source_beleg_token', true));
-		if ($source_url === '' || $token === '') {
+		$source_beleg_id = \sanitize_text_field((string) \get_post_meta($post_id, '_cmx_belegeingang_source_beleg_id', true));
+		$source_beleg_post_id = \sanitize_text_field((string) \get_post_meta($post_id, '_cmx_belegeingang_source_beleg_post_id', true));
+		if ($source_url === '' || ($token === '' && $source_beleg_post_id === '')) {
+			\error_log('[CMX Belegeingang] Source-Tracking uebersprungen: source_url und Beleg-Referenz unvollstaendig fuer Zielbeleg ' . $post_id . ' / Event ' . $event);
 			return;
 		}
 
 		$endpoint = \trailingslashit($source_url) . 'wp-json/cmx-misbuero/v1/beleg/source-track';
-		\wp_remote_post($endpoint, [
-			'timeout' => 5,
-			'blocking' => false,
+		$response = \wp_remote_post($endpoint, [
+			'timeout' => 4,
 			'headers' => ['Content-Type' => 'application/json'],
 			'body' => \wp_json_encode([
 				'token' => $token,
 				'event' => $event,
+				'source_beleg_id' => $source_beleg_id,
+				'source_beleg_post_id' => $source_beleg_post_id,
 				'source_url' => $source_url,
 				'target_url' => \home_url('/'),
 				'target_beleg_id' => (string) $post_id,
 			]),
 		]);
+		if (\is_wp_error($response)) {
+			\error_log('[CMX Belegeingang] Source-Tracking fehlgeschlagen fuer Zielbeleg ' . $post_id . ' / Event ' . $event . ': ' . $response->get_error_message());
+			return;
+		}
+		$code = (int) \wp_remote_retrieve_response_code($response);
+		if ($code < 200 || $code >= 300) {
+			\error_log('[CMX Belegeingang] Source-Tracking abgelehnt fuer Zielbeleg ' . $post_id . ' / Event ' . $event . ' HTTP ' . $code . ': ' . \wp_strip_all_tags((string) \wp_remote_retrieve_body($response)));
+		}
 	}
 }
 
@@ -602,6 +614,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$params = (array) $request->get_json_params();
 	$pdf_base64 = (string) ($params['pdf_base64'] ?? '');
 	$source_id = \sanitize_text_field((string) ($params['source_beleg_id'] ?? ''));
+	$source_post_id = \sanitize_text_field((string) ($params['source_beleg_post_id'] ?? ''));
 	$source_url = cmx_belegeingang_instance_url((string) ($params['source_url'] ?? ''));
 	$source_token = \sanitize_text_field((string) ($params['source_beleg_token'] ?? ''));
 	$filename = \sanitize_file_name((string) ($params['filename'] ?? 'beleg.pdf'));
@@ -647,12 +660,14 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	\update_post_meta($post_id, '_cmx_belege_uploads', [$pdf_rel]);
 	\update_post_meta($post_id, '_cmx_beleg_upload_prefix', \sanitize_title((string) \get_the_title($post_id)));
 	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_id', $source_id);
+	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_post_id', $source_post_id);
 	\update_post_meta($post_id, '_cmx_belegeingang_source_url', $source_url);
 	\update_post_meta($post_id, '_cmx_belegeingang_source_beleg_token', $source_token);
 	\update_post_meta($post_id, '_cmx_belegeingang_facturx', $facturx);
 	\update_post_meta($post_id, '_cmx_belegeingang_cmx_meta', $transfer_meta);
 	cmx_belegeingang_apply_facturx_meta($post_id, $facturx);
 	cmx_belegeingang_apply_transfer_meta($post_id, $transfer_meta);
+	cmx_belegeingang_track_source_beleg($post_id, 'target_received');
 
 	return new \WP_REST_Response([
 		'success' => true,
@@ -725,6 +740,10 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	if ($code < 200 || $code >= 300) {
 		$body = \trim((string) \wp_remote_retrieve_body($response));
 		\set_transient(cmx_belegeingang_send_error_key(), 'Zielinstanz hat abgelehnt (' . $code . '): ' . \wp_strip_all_tags($body), 60);
+	} else {
+		$host = (string) \wp_parse_url($instance, PHP_URL_HOST);
+		$host = $host !== '' ? $host : (string) \preg_replace('~^https?://~i', '', $instance);
+		\set_transient(cmx_belegeingang_send_error_key(), $host, 60);
 	}
 	\wp_safe_redirect(\add_query_arg('cmx_belegeingang_sent', $code >= 200 && $code < 300 ? 'ok' : 'rejected', $redirect));
 	exit;
@@ -736,7 +755,7 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	}
 	$status = \sanitize_key((string) \wp_unslash($_GET['cmx_belegeingang_sent']));
 	$messages = [
-		'ok' => ['success', 'Beleg wurde an die Zielinstanz gesendet.'],
+		'ok' => ['success', 'Beleg wurde an {instanz}.misbuero.ch gesendet.'],
 		'rejected' => ['error', 'Die Zielinstanz hat den Beleg abgelehnt.'],
 		'missing_instance' => ['error', 'Beim Kontakt ist keine Muh-Instanz hinterlegt.'],
 		'missing_pdf' => ['error', 'Für diesen Beleg wurde kein PDF gefunden.'],
@@ -750,7 +769,17 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	$detail = (string) \get_transient(cmx_belegeingang_send_error_key());
 	if ($detail !== '') {
 		\delete_transient(cmx_belegeingang_send_error_key());
-		$text .= ' ' . $detail;
+		if ($status === 'ok') {
+			$host = \sanitize_text_field($detail);
+			if (!\str_contains($host, '.')) {
+				$host .= '.misbuero.ch';
+			}
+			$text = \str_replace('{instanz}.misbuero.ch', $host, $text);
+		} else {
+			$text .= ' ' . $detail;
+		}
+	} elseif ($status === 'ok') {
+		$text = \str_replace('{instanz}.misbuero.ch', 'die Zielinstanz', $text);
 	}
 	echo '<div class="notice notice-' . \esc_attr($type) . ' is-dismissible"><p>' . \esc_html($text) . '</p></div>';
 });

@@ -37,6 +37,15 @@ function cmxbu_handle_beleg_download(): void {
 	$file_abs_path = '';
 	$content_type = 'application/pdf';
 
+	if (\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_track_source_beleg')) {
+		$source_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEGEINGANG_SOURCE_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_BELEGEINGANG_SOURCE_META')
+			: '_cmx_belegeingang_source';
+		if ((string) \get_post_meta($post_id, $source_meta_key, true) === 'rest') {
+			cmx_belegeingang_track_source_beleg($post_id, $is_upload_view ? 'target_upload_view' : 'target_pdf_view');
+		}
+	}
+
 	if ($is_upload_view) {
 		$file_abs_path = \function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_primary_upload_abs_path')
 			? (string) cmxbu_get_beleg_primary_upload_abs_path($post_id)

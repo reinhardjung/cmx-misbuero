@@ -1074,6 +1074,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_mark_beleg_paid')) {
 		\update_post_meta($post_id, $status_meta_key, 'bezahlt');
 		\clean_post_cache($post_id);
 
+		if (\function_exists(__NAMESPACE__ . '\\cmx_belegeingang_track_source_beleg')) {
+			cmx_belegeingang_track_source_beleg($post_id, 'target_paid');
+		}
+
 		if (\function_exists(__NAMESPACE__ . '\\cmxbu_mark_project_tasks_paid')) {
 			cmxbu_mark_project_tasks_paid($post_id, $post, true);
 		}

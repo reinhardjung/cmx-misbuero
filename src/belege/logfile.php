@@ -83,12 +83,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmxbu_handle_beleg_source_tracking')) {
 	function cmxbu_handle_beleg_source_tracking(\WP_REST_Request $request): \WP_REST_Response {
 		$params = (array) $request->get_json_params();
 		$token = \sanitize_text_field((string) ($params['token'] ?? ''));
-		if ($token === '') {
-			return new \WP_REST_Response(['success' => false, 'message' => 'Token fehlt.'], 400);
+		$post_id = 0;
+		if ($token !== '') {
+			$data = \get_option('cmx_beleg_token_data_' . $token);
+			$post_id = \is_array($data) ? (int) ($data['post_id'] ?? 0) : 0;
 		}
-
-		$data = \get_option('cmx_beleg_token_data_' . $token);
-		$post_id = \is_array($data) ? (int) ($data['post_id'] ?? 0) : 0;
+		if ($post_id <= 0) {
+			$source_post_id = (int) ($params['source_beleg_post_id'] ?? 0);
+			$source_beleg_id = \trim(\sanitize_text_field((string) ($params['source_beleg_id'] ?? '')));
+			$candidate = $source_post_id > 0 ? \get_post($source_post_id) : null;
+			if ($candidate instanceof \WP_Post && (string) $candidate->post_type === 'belege') {
+				$candidate_title = \trim((string) \get_the_title($source_post_id));
+				if ($source_beleg_id === '' || \hash_equals($candidate_title, $source_beleg_id)) {
+					$post_id = $source_post_id;
+				}
+			}
+		}
 		$post = $post_id > 0 ? \get_post($post_id) : null;
 		if (!$post instanceof \WP_Post || (string) $post->post_type !== 'belege') {
 			return new \WP_REST_Response(['success' => false, 'message' => 'Beleg nicht gefunden.'], 404);
