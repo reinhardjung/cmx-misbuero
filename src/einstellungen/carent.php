@@ -38,6 +38,88 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_client_option_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_mail_contract_template_key')) {
+	function cmx_carent_mail_contract_template_key(): string {
+		return 'carent_mail_contract_template';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_mail_return_template_key')) {
+	function cmx_carent_mail_return_template_key(): string {
+		return 'carent_mail_return_template';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_mail_return_days_key')) {
+	function cmx_carent_mail_return_days_key(): string {
+		return 'carent_mail_return_days';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_mail_template_default')) {
+	function cmx_carent_mail_template_default(string $key): string {
+		if ($key === cmx_carent_mail_return_template_key()) {
+			return '<p>{anrede}</p><p>anbei erhalten Sie die Unterlagen zur Rückgabe des Mietvertrags als PDF im Anhang.</p><p>Sonnige Grüsse<br><strong>{firma}</strong></p>';
+		}
+
+		return '<p>{anrede}</p><p>anbei erhalten Sie den aktuellen Mietvertrag als PDF im Anhang.</p><p>Sonnige Grüsse<br><strong>{firma}</strong></p>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_mail_template')) {
+	function cmx_carent_current_mail_template(string $key): string {
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
+		$value = \trim((string) ($options[$key] ?? ''));
+		return $value !== '' ? $value : cmx_carent_mail_template_default($key);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_return_days')) {
+	function cmx_carent_current_return_days(): int {
+		$options = (array) \get_option(cmx_carent_settings_option_name(), []);
+		return isset($options[cmx_carent_mail_return_days_key()]) ? \max(0, (int) $options[cmx_carent_mail_return_days_key()]) : 14;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_mail_placeholders')) {
+	function cmx_carent_mail_placeholders(): array {
+		return ['{anrede}', '{tageszeit}', '{vorname}', '{nachname}', '{firma}', '{vertrag}', '{vertrags_id}', '{fahrzeug}', '{kennzeichen}', '{uebernahme}', '{rueckgabe}', '{betrag}', '{logo}'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_placeholder_buttons')) {
+	function cmx_carent_render_placeholder_buttons(string $editor_id): void {
+		$buttons = [];
+		foreach (cmx_carent_mail_placeholders() as $placeholder) {
+			$buttons[] = '<button type="button" class="button-link cmx-carent-insert-placeholder" data-editor="' . \esc_attr($editor_id) . '" data-placeholder="' . \esc_attr($placeholder) . '">' . \esc_html($placeholder) . '</button>';
+		}
+		echo '<p class="description">Platzhalter: ' . \implode(' · ', $buttons) . '</p>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_mail_editor')) {
+	function cmx_carent_render_mail_editor(string $key, string $editor_id): void {
+		\wp_editor(cmx_carent_current_mail_template($key), $editor_id, [
+			'textarea_name' => cmx_carent_settings_option_name() . '[' . $key . ']',
+			'textarea_rows' => 9,
+			'media_buttons' => false,
+			'quicktags' => [
+				'buttons' => 'strong,em,link,ul,ol,li,close',
+			],
+			'tinymce' => [
+				'menubar' => false,
+				'statusbar' => true,
+				'resize' => true,
+				'toolbar1' => 'bold,italic,link,unlink,bullist,numlist,undo,redo',
+				'toolbar2' => '',
+				'toolbar3' => '',
+				'toolbar4' => '',
+			],
+		]);
+		cmx_carent_render_placeholder_buttons($editor_id);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_is_enabled')) {
 	function cmx_carent_settings_is_enabled(): bool {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_system_is_carent_enabled')) {
@@ -220,6 +302,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 		$page,
 		'cmx_sec_carent'
 	);
+
+	\add_settings_field(
+		'cmx_carent_mail_contract_template',
+		'Vertrag senden',
+		static function (): void {
+			cmx_carent_render_mail_editor(cmx_carent_mail_contract_template_key(), 'cmx_carent_mail_contract_template');
+		},
+		$page,
+		'cmx_sec_carent'
+	);
+
+	\add_settings_field(
+		'cmx_carent_mail_return_template',
+		'Rückgabe',
+		static function (): void {
+			cmx_carent_render_mail_editor(cmx_carent_mail_return_template_key(), 'cmx_carent_mail_return_template');
+		},
+		$page,
+		'cmx_sec_carent'
+	);
+
+	\add_settings_field(
+		'cmx_carent_mail_return_days',
+		'Anzahl Tage',
+		static function (): void {
+			$option_name = cmx_carent_settings_option_name();
+			$key = cmx_carent_mail_return_days_key();
+			echo '<input type="number" min="0" step="1" class="small-text" id="cmx-carent-mail-return-days" name="' . \esc_attr($option_name . '[' . $key . ']') . '" value="' . \esc_attr((string) cmx_carent_current_return_days()) . '">';
+			echo '<p class="description">Anzahl Tage nach dem Versand des Mietvertrags, bis die Rückgabe-Mail als Reminder versendet wird. 0 deaktiviert den Reminder.</p>';
+		},
+		$page,
+		'cmx_sec_carent'
+	);
 });
 
 \add_action('admin_print_footer_scripts', function (): void {
@@ -234,22 +349,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 	?>
 	<script>
 	(function(){
+		function insertAtCursor(el, text) {
+			if (!el) return;
+			var start = typeof el.selectionStart === 'number' ? el.selectionStart : (el.value || '').length;
+			var end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
+			var val = el.value || '';
+			el.value = val.slice(0, start) + text + val.slice(end);
+			var pos = start + text.length;
+			if (typeof el.selectionStart === 'number') {
+				el.selectionStart = pos;
+				el.selectionEnd = pos;
+			}
+			el.focus();
+		}
+		function insertPlaceholder(editorId, text) {
+			if (window.tinyMCE && tinyMCE.get(editorId) && !tinyMCE.get(editorId).isHidden()) {
+				var editor = tinyMCE.get(editorId);
+				editor.focus();
+				editor.selection.setContent(text);
+				return;
+			}
+			insertAtCursor(document.getElementById(editorId), text);
+		}
 		var button = document.getElementById('cmx-carent-pdf-delete-button');
 		var flag = document.getElementById('cmx-carent-pdf-delete');
 		var current = document.getElementById('cmx-carent-pdf-current');
 		var fileInput = document.getElementById('cmx-carent-pdf-file');
-		if (!button || !flag || !current) {
-			return;
-		}
-
-		button.addEventListener('click', function(event){
-			event.preventDefault();
-			flag.value = '1';
-			if (fileInput) {
-				fileInput.value = '';
+		document.addEventListener('click', function(event){
+			var placeholderButton = event.target && event.target.closest ? event.target.closest('.cmx-carent-insert-placeholder') : null;
+			if (!placeholderButton) {
+				return;
 			}
-			current.textContent = 'Noch kein PDF ausgewählt.';
+			event.preventDefault();
+			insertPlaceholder(placeholderButton.getAttribute('data-editor') || '', placeholderButton.getAttribute('data-placeholder') || '');
 		});
+		if (button && flag && current) {
+			button.addEventListener('click', function(event){
+				event.preventDefault();
+				flag.value = '1';
+				if (fileInput) {
+					fileInput.value = '';
+				}
+				current.textContent = 'Noch kein PDF ausgewählt.';
+			});
+		}
 	})();
 	</script>
 	<?php
@@ -262,6 +405,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 	$pdf_key = cmx_carent_pdf_option_key();
 	$pdf_legacy_key = cmx_carent_pdf_legacy_option_key();
 	$client_key = cmx_carent_client_option_key();
+	$mail_contract_key = cmx_carent_mail_contract_template_key();
+	$mail_return_key = cmx_carent_mail_return_template_key();
+	$mail_return_days_key = cmx_carent_mail_return_days_key();
 
 	$uploaded_file = $_FILES[cmx_carent_pdf_upload_field_name()] ?? null;
 	$has_uploaded_file = \is_array($uploaded_file) && !empty($uploaded_file['name']);
@@ -325,6 +471,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 		$value[$client_key] = \in_array($client_id, $allowed_ids, true) ? $client_id : '';
 	} elseif (isset($old_value[$client_key])) {
 		$value[$client_key] = \sanitize_key((string) $old_value[$client_key]);
+	}
+
+	foreach ([$mail_contract_key, $mail_return_key] as $mail_key) {
+		if (\array_key_exists($mail_key, $value)) {
+			$value[$mail_key] = \wp_kses_post((string) $value[$mail_key]);
+		} elseif (isset($old_value[$mail_key])) {
+			$value[$mail_key] = \wp_kses_post((string) $old_value[$mail_key]);
+		}
+	}
+
+	if (\array_key_exists($mail_return_days_key, $value)) {
+		$value[$mail_return_days_key] = \max(0, (int) $value[$mail_return_days_key]);
+	} elseif (isset($old_value[$mail_return_days_key])) {
+		$value[$mail_return_days_key] = \max(0, (int) $old_value[$mail_return_days_key]);
 	}
 
 	return $value;

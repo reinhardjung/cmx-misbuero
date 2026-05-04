@@ -15,6 +15,21 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_MAIL_SENT_CC_META')) {
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_MAIL_SUBJECT_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_MAIL_SUBJECT_META', '_cmx_carent_vertrag_mail_subject');
 }
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_HOOK')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_HOOK', 'cmx_carent_send_rueckgabe_reminder');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SCHEDULED_AT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SCHEDULED_AT_META', '_cmx_carent_rueckgabe_reminder_scheduled_at');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SENT_AT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SENT_AT_META', '_cmx_carent_rueckgabe_reminder_sent_at');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SENT_TO_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SENT_TO_META', '_cmx_carent_rueckgabe_reminder_sent_to');
+}
+if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SUBJECT_META')) {
+	\define(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_REMINDER_SUBJECT_META', '_cmx_carent_rueckgabe_reminder_subject');
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_email_list')) {
 	function cmx_carent_versand_email_list(string $raw): array {
@@ -83,6 +98,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_self_email')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_return_reminder_days')) {
+	function cmx_carent_versand_return_reminder_days(): int {
+		$options = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen', []);
+		return isset($options['carent_mail_return_days']) ? \max(0, (int) $options['carent_mail_return_days']) : 14;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_subject')) {
 	function cmx_carent_versand_subject(int $post_id, array $data = []): string {
 		$post_id = (int) $post_id;
@@ -129,6 +151,43 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_contact_greeting_nam
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_contact_name_parts')) {
+	function cmx_carent_versand_contact_name_parts(array $data = []): array {
+		$contact = (array) ($data['contact'] ?? []);
+		$kontakt_id = isset($contact['id']) ? (int) $contact['id'] : 0;
+		$vorname_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+			: '_cmx_kontakte_vorname';
+		$nachname_key = \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+			: '_cmx_kontakte_nachname';
+
+		$first_name = \trim((string) ($contact['first_name'] ?? ''));
+		$last_name = \trim((string) ($contact['last_name'] ?? ''));
+		if ($first_name === '' && $kontakt_id > 0) {
+			$first_name = \trim((string) \get_post_meta($kontakt_id, $vorname_key, true));
+		}
+		if ($last_name === '' && $kontakt_id > 0) {
+			$last_name = \trim((string) \get_post_meta($kontakt_id, $nachname_key, true));
+		}
+
+		if ($first_name !== '' || $last_name !== '') {
+			return [$first_name, $last_name];
+		}
+
+		$name = cmx_carent_versand_contact_greeting_name($data);
+		$parts = \preg_split('/\s+/u', \trim($name)) ?: [];
+		if (\count($parts) <= 1) {
+			return [$name, ''];
+		}
+
+		return [
+			\trim((string) \array_shift($parts)),
+			\trim(\implode(' ', $parts)),
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_logo_html')) {
 	function cmx_carent_versand_logo_html(int $width = 220, bool $prefer_outlook_embed = true): string {
 		$width = \max(1, (int) $width);
@@ -168,20 +227,53 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_logo_html')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_mail_template')) {
+	function cmx_carent_versand_mail_template(string $key): string {
+		$options = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen', []);
+		$value = \trim((string) ($options[$key] ?? ''));
+		if ($value !== '') {
+			return $value;
+		}
+
+		if ($key === 'carent_mail_return_template') {
+			return '<p>{anrede}</p><p>anbei erhalten Sie die Unterlagen zur Rückgabe des Mietvertrags als PDF im Anhang.</p><p>Sonnige Grüsse<br><strong>{firma}</strong></p>';
+		}
+
+		return '<p>{anrede}</p><p>anbei erhalten Sie den aktuellen Mietvertrag als PDF im Anhang.</p><p>Sonnige Grüsse<br><strong>{firma}</strong></p>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_render_mail_template')) {
+	function cmx_carent_versand_render_mail_template(string $template, array $values): string {
+		$replace = [];
+		foreach ($values as $key => $value) {
+			$replace['{' . $key . '}'] = (string) $value;
+		}
+
+		return \strtr($template, $replace);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
-	function cmx_carent_versand_message_html(int $post_id, array $data, array $pdf): string {
+	function cmx_carent_versand_message_html(int $post_id, array $data, array $pdf = [], string $template_key = 'carent_mail_contract_template'): string {
 		$post_id = (int) $post_id;
 		$contact_name = cmx_carent_versand_contact_greeting_name($data);
 		$self_name = \trim((string) (($data['self']['branding'] ?? '') ?: ($data['self']['title'] ?? '')));
+		$contact = (array) ($data['contact'] ?? []);
 		$vehicle = \trim((string) ($data['vehicle']['label'] ?? ''));
 		$kennzeichen = \trim((string) ($data['vehicle']['kennzeichen'] ?? ''));
 		$uebernahme = (array) ($data['transfer']['uebernahme'] ?? []);
+		$rueckgabe = (array) ($data['transfer']['rueckgabe'] ?? []);
 		$uebernahme_when = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_format_datetime')
 			? cmx_carent_vertrag_format_datetime((string) ($uebernahme['datum'] ?? ''), (string) ($uebernahme['uhrzeit'] ?? ''))
 			: \trim((string) (($uebernahme['datum'] ?? '') . ' ' . ($uebernahme['uhrzeit'] ?? '')));
+		$rueckgabe_when = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_format_datetime')
+			? cmx_carent_vertrag_format_datetime((string) ($rueckgabe['datum'] ?? ''), (string) ($rueckgabe['uhrzeit'] ?? ''))
+			: \trim((string) (($rueckgabe['datum'] ?? '') . ' ' . ($rueckgabe['uhrzeit'] ?? '')));
 		$uebernahme_ort = \trim((string) ($uebernahme['ort'] ?? ''));
 		$logo_html = cmx_carent_versand_logo_html(220, true);
 		$greeting = $contact_name !== '' ? 'Guten Tag ' . $contact_name : 'Guten Tag';
+		[$first_name, $last_name] = cmx_carent_versand_contact_name_parts($data);
 		$contract_title = \trim((string) ($data['title'] ?? ''));
 		if ($contract_title === '') {
 			$contract_title = \trim((string) \get_the_title($post_id));
@@ -189,16 +281,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 		if ($contract_title === '') {
 			$contract_title = 'Vertrag #' . $post_id;
 		}
+		$amount = \trim((string) ($data['vehicle']['summe'] ?? ''));
+		if ($amount !== '') {
+			$amount .= ' CHF';
+		}
+		$template = cmx_carent_versand_mail_template($template_key);
+		$body = cmx_carent_versand_render_mail_template($template, [
+			'anrede' => $greeting,
+			'tageszeit' => 'Guten Tag',
+			'vorname' => $first_name,
+			'nachname' => $last_name,
+			'firma' => $self_name !== '' ? $self_name : \get_bloginfo('name'),
+			'vertrag' => $contract_title,
+			'vertrags_id' => $contract_title,
+			'fahrzeug' => $vehicle,
+			'kennzeichen' => $kennzeichen,
+			'uebernahme' => \trim($uebernahme_when . ($uebernahme_ort !== '' ? ' · ' . $uebernahme_ort : '')),
+			'rueckgabe' => $rueckgabe_when,
+			'betrag' => $amount,
+			'logo' => $logo_html,
+		]);
 
 		$message = '';
 		$message .= '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1d2327;">';
-		if ($logo_html !== '') {
+		if ($logo_html !== '' && !\str_contains($body, $logo_html)) {
 			$message .= '<div style="margin:0 0 24px;">' . $logo_html . '</div>';
 		}
-		$message .= '<p style="margin:0 0 14px;">' . \esc_html($greeting) . '</p>';
-		$message .= '<p style="margin:0 0 18px;">anbei erhalten Sie den aktuellen Mietvertrag als PDF im Anhang.</p>';
-		$message .= '<p style="margin:0 0 6px;">Sonnige Gr&uuml;sse</p>';
-		$message .= '<p style="margin:0;font-weight:700;">' . \esc_html($self_name !== '' ? $self_name : \get_bloginfo('name')) . '</p>';
+		$message .= \wp_kses_post($body);
 		$message .= '</div>';
 
 		return $message;
@@ -276,6 +385,139 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_append_contact_note'
 		return true;
 	}
 }
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_schedule_rueckgabe_reminder')) {
+	function cmx_carent_schedule_rueckgabe_reminder(int $post_id): bool {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'carent') {
+			return false;
+		}
+
+		\wp_clear_scheduled_hook(CMX_CARENT_RUECKGABE_REMINDER_HOOK, [$post_id]);
+
+		$days = cmx_carent_versand_return_reminder_days();
+		if ($days <= 0) {
+			\delete_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SCHEDULED_AT_META);
+			return false;
+		}
+
+		$day_seconds = \defined('DAY_IN_SECONDS') ? (int) \DAY_IN_SECONDS : 86400;
+		$timestamp = \time() + ($days * $day_seconds);
+		$scheduled = \wp_schedule_single_event($timestamp, CMX_CARENT_RUECKGABE_REMINDER_HOOK, [$post_id]);
+		if ($scheduled === false) {
+			return false;
+		}
+
+		\update_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SCHEDULED_AT_META, \wp_date('Y-m-d H:i:s', $timestamp));
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail')) {
+	function cmx_carent_send_rueckgabe_reminder_mail(int $post_id) {
+		$post_id = (int) $post_id;
+		$post = \get_post($post_id);
+		if (!$post instanceof \WP_Post || (string) $post->post_type !== 'carent') {
+			return new \WP_Error('invalid_post', 'Vertrag nicht gefunden.');
+		}
+		if (\trim((string) \get_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SENT_AT_META, true)) !== '') {
+			return true;
+		}
+
+		$sender_email = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? \sanitize_email((string) cmx_email_option_value('email_address'))
+			: '';
+		if (!\is_email($sender_email)) {
+			return new \WP_Error('missing_sender', 'Bitte hinterlege zuerst Deine E-Mail-Adresse in den Einstellungen.');
+		}
+
+		$data = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')
+			? (array) cmx_carent_vertrag_collect_data($post_id)
+			: [];
+		if ($data === []) {
+			return new \WP_Error('missing_contract_data', 'Vertragsdaten konnten nicht geladen werden.');
+		}
+
+		$to = cmx_carent_versand_contact_email($post_id, $data);
+		if (!\is_email($to)) {
+			return new \WP_Error('missing_contact_email', 'Beim Kontakt ist keine gueltige E-Mail-Adresse hinterlegt.');
+		}
+
+		$self_email = cmx_carent_versand_self_email($data);
+		if (!\is_email($self_email)) {
+			return new \WP_Error('missing_self_email', 'Beim "Das bin ich"-Kontakt ist keine gueltige E-Mail-Adresse hinterlegt.');
+		}
+
+		$subject = 'Rückgabe Reminder - ' . cmx_carent_versand_subject($post_id, $data);
+		$message = cmx_carent_versand_message_html($post_id, $data, [], 'carent_mail_return_template');
+		$from_name = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? \trim((string) cmx_email_option_value('email_name'))
+			: '';
+		$reply_to = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? \sanitize_email((string) cmx_email_option_value('reply'))
+			: '';
+		$bcc = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? cmx_carent_versand_email_list((string) cmx_email_option_value('email_bcc'))
+			: [];
+
+		$headers = [
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . ($from_name !== '' ? $from_name . ' <' . $sender_email . '>' : $sender_email),
+		];
+		if (\is_email($reply_to)) {
+			$headers[] = 'Reply-To: ' . $reply_to;
+		}
+		if (\strcasecmp($self_email, $to) !== 0) {
+			$headers[] = 'Cc: ' . $self_email;
+		}
+		if ($bcc !== []) {
+			$headers[] = 'Bcc: ' . \implode(', ', $bcc);
+		}
+
+		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
+		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
+		$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
+		$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
+		$embedded_logo_listener = static function ($phpmailer): void {
+			if (!\function_exists(__NAMESPACE__ . '\\cmx_email_embed_self_logo_for_phpmailer')) {
+				return;
+			}
+			cmx_email_embed_self_logo_for_phpmailer($phpmailer);
+		};
+
+		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
+		$GLOBALS['cmx_mail_context'] = 'carent_rueckgabe_reminder';
+		\add_action('phpmailer_init', $embedded_logo_listener, 100, 1);
+		try {
+			$sent = \wp_mail($to, $subject, $message, $headers);
+		} finally {
+			\remove_action('phpmailer_init', $embedded_logo_listener, 100);
+			if ($had_sender_override) {
+				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
+			} else {
+				unset($GLOBALS['cmx_force_current_user_mail_sender']);
+			}
+			if ($had_mail_context) {
+				$GLOBALS['cmx_mail_context'] = $previous_mail_context;
+			} else {
+				unset($GLOBALS['cmx_mail_context']);
+			}
+		}
+
+		if (!$sent) {
+			return new \WP_Error('mail_failed', 'Rückgabe-Reminder konnte nicht gesendet werden.');
+		}
+
+		\update_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SENT_AT_META, \current_time('mysql'));
+		\update_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SENT_TO_META, $to);
+		\update_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SUBJECT_META, $subject);
+		\delete_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SCHEDULED_AT_META);
+
+		return true;
+	}
+}
+
+\add_action(CMX_CARENT_RUECKGABE_REMINDER_HOOK, __NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail', 10, 1);
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 	function cmx_carent_send_vertrag_mail(int $post_id) {
@@ -417,11 +659,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SENT_TO_META, $to);
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SENT_CC_META, \implode(', ', $cc));
 		\update_post_meta($post_id, CMX_CARENT_VERTRAG_MAIL_SUBJECT_META, $subject);
+		\delete_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SENT_AT_META);
+		\delete_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SENT_TO_META);
+		\delete_post_meta($post_id, CMX_CARENT_RUECKGABE_REMINDER_SUBJECT_META);
+		$reminder_scheduled = cmx_carent_schedule_rueckgabe_reminder($post_id);
 		$note_created = cmx_carent_versand_append_contact_note($post_id, $data);
 
 		return [
 			'post_id' => $post_id,
-			'message' => 'Vertrag wurde per E-Mail versendet.',
+			'message' => 'Vertrag wurde per E-Mail versendet an ' . $to,
 			'to' => $to,
 			'cc' => $cc,
 			'bcc' => $bcc,
@@ -429,6 +675,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 			'pdf' => (array) $pdf,
 			'sent_at' => (string) \current_time('mysql'),
 			'note_created' => $note_created,
+			'reminder_scheduled' => $reminder_scheduled,
 		];
 	}
 }
