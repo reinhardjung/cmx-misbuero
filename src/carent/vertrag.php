@@ -5,6 +5,7 @@ defined('ABSPATH') || exit;
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use setasign\Fpdi\Fpdi;
 
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_REL_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_REL_META', '_cmx_carent_vertrag_pdf_rel_path');
@@ -17,6 +18,81 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_DOKUMENT_META')) {
 }
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR', 'misbuero/carent/vertraege');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_path')) {
+	function cmx_carent_vertrag_agb_pdf_path(): string {
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+
+		$file_rel = \trim((string) ($options['carent_pdf_file_rel'] ?? ''));
+		if ($file_rel !== '') {
+			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . \ltrim($file_rel, '/')));
+			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs) && \is_readable($file_abs)) {
+				return $file_abs;
+			}
+		}
+
+		$attachment_id = (int) ($options['carent_pdf_attachment_id'] ?? 0);
+		$attachment_path = $attachment_id > 0 ? \wp_normalize_path((string) \get_attached_file($attachment_id)) : '';
+		if ($attachment_path !== '' && \is_file($attachment_path) && \is_readable($attachment_path)) {
+			return $attachment_path;
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_append_pdf_file')) {
+	function cmx_carent_vertrag_append_pdf_file(string $pdf_binary, string $append_pdf_path): string {
+		if ($pdf_binary === '' || $append_pdf_path === '' || !\is_file($append_pdf_path) || !\is_readable($append_pdf_path)) {
+			return $pdf_binary;
+		}
+		if (!\class_exists(Fpdi::class)) {
+			\error_log('[CMX Carent] AGB-PDF nicht angehaengt: FPDI ist nicht verfuegbar.');
+			return $pdf_binary;
+		}
+
+		$tmp_contract = \wp_tempnam('cmx-carent-vertrag.pdf');
+		if (!\is_string($tmp_contract) || $tmp_contract === '') {
+			\error_log('[CMX Carent] AGB-PDF nicht angehaengt: Temp-Datei konnte nicht erstellt werden.');
+			return $pdf_binary;
+		}
+
+		try {
+			if (\file_put_contents($tmp_contract, $pdf_binary) === false) {
+				\error_log('[CMX Carent] AGB-PDF nicht angehaengt: Vertrags-PDF konnte nicht temporaer geschrieben werden.');
+				return $pdf_binary;
+			}
+
+			$pdf = new Fpdi();
+			$pdf->SetAutoPageBreak(false);
+			foreach ([$tmp_contract, $append_pdf_path] as $source_path) {
+				$page_count = $pdf->setSourceFile($source_path);
+				for ($page_no = 1; $page_no <= $page_count; $page_no++) {
+					$template_id = $pdf->importPage($page_no);
+					$size = (array) $pdf->getTemplateSize($template_id);
+					$width = (float) ($size['width'] ?? 210);
+					$height = (float) ($size['height'] ?? 297);
+					$pdf->AddPage($width > $height ? 'L' : 'P', [$width, $height]);
+					$pdf->useTemplate($template_id);
+				}
+			}
+
+			$merged = $pdf->Output('S');
+			return \is_string($merged) && $merged !== '' ? $merged : $pdf_binary;
+		} catch (\Throwable $e) {
+			\error_log('[CMX Carent] AGB-PDF nicht angehaengt: ' . $e->getMessage());
+			return $pdf_binary;
+		} finally {
+			if (\is_file($tmp_contract)) {
+				@\unlink($tmp_contract);
+			}
+		}
+	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_parse_number')) {
@@ -2108,6 +2184,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 		$pdf_binary = $dompdf->output();
 		if (!\is_string($pdf_binary) || $pdf_binary === '') {
 			return new \WP_Error('pdf_render_failed', 'PDF konnte nicht gerendert werden.');
+		}
+		$agb_pdf_path = cmx_carent_vertrag_agb_pdf_path();
+		if ($agb_pdf_path !== '') {
+			$pdf_binary = cmx_carent_vertrag_append_pdf_file($pdf_binary, $agb_pdf_path);
 		}
 
 		$written = \file_put_contents((string) $storage['abs_path'], $pdf_binary);
