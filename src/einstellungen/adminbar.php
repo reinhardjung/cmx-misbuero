@@ -285,14 +285,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_default_dates')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_type_options')) {
-	function cmx65_adminbar_beleg_type_options(): array {
-		return [
+	function cmx65_adminbar_beleg_type_options(bool $include_booking = false): array {
+		$options = [
 			'rechnung'    => 'Rechnung',
 			'lieferschein'=> 'Lieferschein',
 			'quittung'    => 'Quittung',
 			'gutschrift'  => 'Gutschrift',
 			'offerte'     => 'Offerte',
 		];
+		if ($include_booking) {
+			$options['buchung'] = 'Buchung';
+		}
+
+		return $options;
 	}
 }
 
@@ -329,7 +334,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup
 		$html .= '<button type="submit" class="cmx-adminbar-create-btn" disabled aria-haspopup="listbox" aria-expanded="false" aria-controls="cmx65-adminbar-beleg-type-list">Beleg erstellen</button>';
 		$html .= '<div id="cmx65-adminbar-beleg-type-picker" class="cmx-adminbar-type-picker" hidden>';
 		$html .= '<div id="cmx65-adminbar-beleg-type-list" class="cmx-adminbar-type-list" role="listbox" aria-label="Belegart auswählen">';
-		foreach (cmx65_adminbar_beleg_type_options() as $slug => $label) {
+		foreach (cmx65_adminbar_beleg_type_options(true) as $slug => $label) {
 			$html .= '<button type="submit" class="cmx-adminbar-type-option" role="option" name="beleg_typ" value="' . \esc_attr($slug) . '" data-value="' . \esc_attr($slug) . '">' . \esc_html($label) . '</button>';
 		}
 		$html .= '</div>';
@@ -361,7 +366,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 		$artikel_id = isset($_POST['artikel_id']) ? (int) \wp_unslash($_POST['artikel_id']) : 0;
 		$artikel_name = isset($_POST['artikel_name']) ? (string) \wp_unslash($_POST['artikel_name']) : '';
 		$artikel_variant_index = isset($_POST['artikel_variant_index']) ? (string) \wp_unslash($_POST['artikel_variant_index']) : '';
-		$beleg_typ_optionen = cmx65_adminbar_beleg_type_options();
+		$beleg_typ_optionen = cmx65_adminbar_beleg_type_options(true);
 		$beleg_typ = isset($_POST['beleg_typ']) ? \sanitize_key((string) \wp_unslash($_POST['beleg_typ'])) : 'rechnung';
 		$allowed_beleg_typen = \array_keys($beleg_typ_optionen);
 		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_kategorie_allowed_slugs')) {
@@ -373,6 +378,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 			), static function (string $slug): bool {
 				return $slug !== '';
 			}));
+			$allowed_beleg_typen[] = 'buchung';
 		}
 		if ($beleg_typ === '' || !\in_array($beleg_typ, $allowed_beleg_typen, true)) {
 			$beleg_typ = 'rechnung';
@@ -387,20 +393,81 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) 
 		$kontakt_types = cmx65_adminbar_kontakt_post_types();
 		$artikel_post = \get_post($artikel_id);
 
+		if (
+			!$kontakt_post instanceof \WP_Post
+			|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
+			|| !\current_user_can('edit_post', $kontakt_id)
+			|| !$artikel_post instanceof \WP_Post
+			|| (string) $artikel_post->post_type !== 'artikel'
+			|| !\current_user_can('edit_post', $artikel_id)
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		if ($beleg_typ === 'buchung') {
+			$buchungen_cpt = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') ? CMX_BUCHUNGEN_CPT : 'buchungen';
 			if (
-				!$kontakt_post instanceof \WP_Post
-				|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
-				|| !\current_user_can('edit_post', $kontakt_id)
-				|| !$artikel_post instanceof \WP_Post
-				|| (string) $artikel_post->post_type !== 'artikel'
-				|| !\current_user_can('edit_post', $artikel_id)
-				|| !\post_type_exists('belege')
-				|| !cmx65_adminbar_can_create_post_type('belege')
-				|| !cmx65_adminbar_can_publish_post_type('belege')
+				!\post_type_exists($buchungen_cpt)
+				|| !cmx65_adminbar_can_create_post_type($buchungen_cpt)
+				|| !cmx65_adminbar_can_publish_post_type($buchungen_cpt)
 			) {
 				\wp_safe_redirect($redirect_url);
 				exit;
 			}
+
+			$booking_meta = [
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') ? CMX_BUCHUNGEN_META_KONTAKT : '_cmx_buchung_kontakt_id' => $kontakt_id,
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') ? CMX_BUCHUNGEN_META_ARTIKEL : '_cmx_buchung_artikel_id' => $artikel_id,
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') ? CMX_BUCHUNGEN_META_STATUS : '_cmx_buchung_status' => 'angefragt',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_DURATION') ? CMX_BUCHUNGEN_META_DURATION : '_cmx_buchung_duration' => '60',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BUFFER_BEFORE') ? CMX_BUCHUNGEN_META_BUFFER_BEFORE : '_cmx_buchung_buffer_before' => '0',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BUFFER_AFTER') ? CMX_BUCHUNGEN_META_BUFFER_AFTER : '_cmx_buchung_buffer_after' => '0',
+			];
+			if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_token')) {
+				$booking_meta[\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BOOKING_TOKEN') ? CMX_BUCHUNGEN_META_BOOKING_TOKEN : '_cmx_buchung_online_token'] = (string) cmx_buchungen_token();
+				$booking_meta[\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_CANCEL_TOKEN') ? CMX_BUCHUNGEN_META_CANCEL_TOKEN : '_cmx_buchung_cancel_token'] = (string) cmx_buchungen_token();
+			}
+
+			$booking_id = \wp_insert_post([
+				'post_type'   => $buchungen_cpt,
+				'post_status' => 'publish',
+				'post_title'  => \trim((string) \get_the_title($kontakt_id) . ' - ' . (string) \get_the_title($artikel_id)),
+				'post_author' => (int) \get_current_user_id(),
+				'meta_input'  => $booking_meta,
+			], true);
+			if (\is_wp_error($booking_id) || (int) $booking_id <= 0) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$booking_id = (int) $booking_id;
+			$duration_taxonomy = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_TAX_DAUER') ? CMX_BUCHUNGEN_TAX_DAUER : 'buchungen_dauern';
+			if (\taxonomy_exists($duration_taxonomy)) {
+				$duration_term = \get_term_by('name', '60', $duration_taxonomy);
+				if ($duration_term instanceof \WP_Term) {
+					\wp_set_object_terms($booking_id, [(int) $duration_term->term_id], $duration_taxonomy, false);
+				}
+			}
+			if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sync_title')) {
+				cmx_buchungen_sync_title($booking_id);
+			}
+
+			$edit_url = (string) \get_edit_post_link($booking_id, '');
+			if ($edit_url === '') {
+				$edit_url = (string) \admin_url('post.php?post=' . $booking_id . '&action=edit');
+			}
+			\wp_safe_redirect($edit_url);
+			exit;
+		}
+
+		if (
+			!\post_type_exists('belege')
+			|| !cmx65_adminbar_can_create_post_type('belege')
+			|| !cmx65_adminbar_can_publish_post_type('belege')
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
 
 		$kontakt_label = (string) \get_the_title($kontakt_id);
 		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
