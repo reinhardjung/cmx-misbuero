@@ -1080,6 +1080,96 @@ function cmx_kontakte_search_address_meta_keys(): array {
 	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
 }
 
+function cmx_kontakte_search_date_meta_keys(): array {
+	$keys = [
+		\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_DATUM') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_DATUM') : '_cmx_kontakte_datum',
+		\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_FIRMENGRUENDUNG') : '_cmx_kontakte_firmengruendung',
+		\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_KUNDE_SEIT') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_KUNDE_SEIT') : '_cmx_kontakte_kunde_seit',
+		\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM') ? (string) \constant(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM') : '_cmx_kontakte_geburtsdatum',
+		'_cmx_kommunikation',
+		'cmx_kommunikation',
+		'kommunikation',
+	];
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+}
+
+function cmx_kontakte_search_date_terms(string $search_term): array {
+	$search_term = \trim($search_term);
+	if ($search_term === '') {
+		return [];
+	}
+
+	$terms = [];
+	if (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2}|\d{4})$/', $search_term, $matches)) {
+		$day = (int) ($matches[1] ?? 0);
+		$month = (int) ($matches[2] ?? 0);
+		$year = (int) ($matches[3] ?? 0);
+		if ($year > 0 && $year < 100) {
+			$year += 2000;
+		}
+		if ($year > 0 && \checkdate($month, $day, $year)) {
+			$terms[] = \sprintf('%04d-%02d-%02d', $year, $month, $day);
+			$terms[] = \sprintf('%02d.%02d.%04d', $day, $month, $year);
+		}
+	}
+
+	if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $search_term)) {
+		$terms[] = $search_term;
+		$timestamp = \strtotime($search_term);
+		if ($timestamp !== false) {
+			$terms[] = (string) \date_i18n('d.m.Y', $timestamp);
+		}
+	}
+
+	if (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})\.?$/', $search_term, $matches)) {
+		$day = (int) ($matches[1] ?? 0);
+		$month = (int) ($matches[2] ?? 0);
+		if ($day >= 1 && $day <= 31 && $month >= 1 && $month <= 12) {
+			$terms[] = \sprintf('-%02d-%02d', $month, $day);
+			$terms[] = \sprintf('%02d.%02d.', $day, $month);
+		}
+	}
+
+	return \array_values(\array_unique(\array_filter(\array_map('strval', $terms))));
+}
+
+function cmx_kontakte_search_post_date_query(string $search_term): array {
+	$search_term = \trim($search_term);
+	if ($search_term === '') {
+		return [];
+	}
+
+	$date_query = ['relation' => 'OR'];
+	if (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2}|\d{4})$/', $search_term, $matches)) {
+		$day = (int) ($matches[1] ?? 0);
+		$month = (int) ($matches[2] ?? 0);
+		$year = (int) ($matches[3] ?? 0);
+		if ($year > 0 && $year < 100) {
+			$year += 2000;
+		}
+		if ($year > 0 && \checkdate($month, $day, $year)) {
+			$date_query[] = ['column' => 'post_date', 'year' => $year, 'month' => $month, 'day' => $day];
+			$date_query[] = ['column' => 'post_modified', 'year' => $year, 'month' => $month, 'day' => $day];
+		}
+	} elseif (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $search_term)) {
+		$timestamp = \strtotime($search_term);
+		if ($timestamp !== false) {
+			$date_query[] = ['column' => 'post_date', 'year' => (int) \date('Y', $timestamp), 'month' => (int) \date('m', $timestamp), 'day' => (int) \date('d', $timestamp)];
+			$date_query[] = ['column' => 'post_modified', 'year' => (int) \date('Y', $timestamp), 'month' => (int) \date('m', $timestamp), 'day' => (int) \date('d', $timestamp)];
+		}
+	} elseif (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})\.?$/', $search_term, $matches)) {
+		$day = (int) ($matches[1] ?? 0);
+		$month = (int) ($matches[2] ?? 0);
+		if ($day >= 1 && $day <= 31 && $month >= 1 && $month <= 12) {
+			$date_query[] = ['column' => 'post_date', 'month' => $month, 'day' => $day];
+			$date_query[] = ['column' => 'post_modified', 'month' => $month, 'day' => $day];
+		}
+	}
+
+	return \count($date_query) > 1 ? $date_query : [];
+}
+
 function cmx_kontakte_search_terms(string $search_term): array {
 	$search_term = \trim($search_term);
 	if ($search_term === '') {
@@ -1087,6 +1177,7 @@ function cmx_kontakte_search_terms(string $search_term): array {
 	}
 
 	$terms = [$search_term];
+	$terms = \array_merge($terms, cmx_kontakte_search_date_terms($search_term));
 	$umlaut_variant = \strtr($search_term, [
 		'Ä' => 'Ae',
 		'Ö' => 'Oe',
@@ -1159,7 +1250,8 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 			cmx_kontakte_search_name_meta_keys(),
 			cmx_kontakte_search_phone_meta_keys(),
 			cmx_kontakte_search_email_meta_keys(),
-			cmx_kontakte_search_address_meta_keys()
+			cmx_kontakte_search_address_meta_keys(),
+			cmx_kontakte_search_date_meta_keys()
 		) as $meta_key) {
 			$email_meta_query[] = [
 				'key' => $meta_key,
@@ -1174,9 +1266,19 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 		'meta_query' => $email_meta_query,
 	]));
 
+	$date_match_ids = [];
+	$date_query = cmx_kontakte_search_post_date_query($search_term);
+	if ($date_query !== []) {
+		$date_match_ids = \get_posts(\array_merge($lookup_args, [
+			's' => '',
+			'date_query' => $date_query,
+		]));
+	}
+
 	$matched_ids = \array_values(\array_unique(\array_map('intval', \array_merge(
 		(array) $default_match_ids,
-		(array) $email_match_ids
+		(array) $email_match_ids,
+		(array) $date_match_ids
 	))));
 
 	$query->set('s', '');

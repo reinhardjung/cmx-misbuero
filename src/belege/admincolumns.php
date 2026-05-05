@@ -626,6 +626,22 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 		? '(' . \implode(' OR ', \array_values(\array_unique(\array_filter($date_conditions)))) . ')'
 		: '';
 
+	$post_date_sql = '';
+	if ($date_value !== '') {
+		$post_date_sql = $wpdb->prepare(
+			"(DATE({$wpdb->posts}.post_date) = %s OR DATE({$wpdb->posts}.post_modified) = %s)",
+			$date_value,
+			$date_value
+		);
+	} elseif ($date_day_month_pattern !== '') {
+		$post_date_like = \str_replace('_', '%', $date_day_month_pattern);
+		$post_date_sql = $wpdb->prepare(
+			"(DATE({$wpdb->posts}.post_date) LIKE %s OR DATE({$wpdb->posts}.post_modified) LIKE %s)",
+			$post_date_like,
+			$post_date_like
+		);
+	}
+
 	$amount_sql = '';
 	$matching_amount_ids = \function_exists(__NAMESPACE__ . '\\cmx_beleg_admin_search_amount_ids')
 		? (array) cmx_beleg_admin_search_amount_ids($term)
@@ -638,8 +654,13 @@ add_filter('posts_search', function(string $search, \WP_Query $q): string {
 		);
 	}
 
-	$extra_conditions = \array_values(\array_filter([$contact_sql, $date_sql, $amount_sql]));
+	$extra_conditions = \array_values(\array_filter([$contact_sql, $date_sql, $post_date_sql, $amount_sql]));
 	$extra_sql = \implode(' OR ', $extra_conditions);
+	$is_date_search = ($date_value !== '' || $date_day_month_pattern !== '');
+	if ($is_date_search) {
+		$date_only_sql = \implode(' OR ', \array_values(\array_filter([$date_sql, $post_date_sql])));
+		return $date_only_sql !== '' ? " AND ({$date_only_sql}) " : $search;
+	}
 
 	$search_sql = \trim((string) $search);
 	$search_sql = (string) \preg_replace('/^\s*AND\s*/i', '', $search_sql);

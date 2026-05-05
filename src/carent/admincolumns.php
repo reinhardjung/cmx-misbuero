@@ -208,6 +208,42 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_haystack')) {
 			}
 		}
 
+		$post_date = \trim((string) \get_the_date('Y-m-d', $post_id));
+		if ($post_date !== '') {
+			$parts[] = $post_date;
+			$timestamp = \strtotime($post_date);
+			if ($timestamp !== false) {
+				$parts[] = (string) \date_i18n('d.m.Y', $timestamp);
+				$parts[] = (string) \date_i18n('d.m.', $timestamp);
+			}
+		}
+
+		$date_meta_keys = [
+			\defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META')
+				: '_cmx_carent_uebernahme_datum',
+			\defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+				: '_cmx_carent_rueckgabe_datum',
+			\defined(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_DATUM_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_SCHADENPROTOKOLL_DATUM_META')
+				: '_cmx_carent_schadenprotokoll_datum',
+		];
+		foreach (\array_values(\array_unique(\array_filter($date_meta_keys))) as $date_meta_key) {
+			$date_value = \trim((string) \get_post_meta($post_id, (string) $date_meta_key, true));
+			if ($date_value === '') {
+				continue;
+			}
+			$parts[] = $date_value;
+			if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_value)) {
+				$timestamp = \strtotime($date_value);
+				if ($timestamp !== false) {
+					$parts[] = (string) \date_i18n('d.m.Y', $timestamp);
+					$parts[] = (string) \date_i18n('d.m.', $timestamp);
+				}
+			}
+		}
+
 		$kontakt_id = cmx_carent_admin_linked_contact_id($post_id);
 		if ($kontakt_id > 0 && \get_post_status($kontakt_id)) {
 			$parts[] = cmx_carent_admin_contact_label($kontakt_id);

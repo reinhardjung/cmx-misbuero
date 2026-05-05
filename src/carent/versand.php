@@ -105,6 +105,183 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_return_reminder_days
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_selected_client')) {
+	function cmx_carent_versand_selected_client(): array {
+		$options = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen', []);
+		$selected_id = \sanitize_key((string) ($options['carent_email_client_id'] ?? ''));
+		if ($selected_id === '' || !\function_exists(__NAMESPACE__ . '\\cmx_email_client_list')) {
+			return [];
+		}
+
+		foreach ((array) cmx_email_client_list() as $client) {
+			if (!\is_array($client) || \sanitize_key((string) ($client['id'] ?? '')) !== $selected_id) {
+				continue;
+			}
+
+			$email = \sanitize_email((string) ($client['email'] ?? ''));
+			if (!\is_email($email)) {
+				return [];
+			}
+
+			return $client;
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_sender_settings')) {
+	function cmx_carent_versand_sender_settings(): array {
+		$options = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') : 'cmx_einstellungen', []);
+		$client = cmx_carent_versand_selected_client();
+
+		if ($client !== []) {
+			$email = \sanitize_email((string) ($client['email'] ?? ''));
+			$name = \trim((string) ($client['name'] ?? ''));
+			$host = \sanitize_text_field((string) ($client['smtp_host'] ?? ''));
+			$password = (string) ($client['password'] ?? '');
+			$port = (int) ($client['smtp_port'] ?? 587);
+			if ($port <= 0 || $port > 65535) {
+				$port = 587;
+			}
+
+			return [
+				'email' => $email,
+				'name' => $name,
+				'reply' => $email,
+				'bcc' => cmx_carent_versand_email_list((string) ($options['email_bcc'] ?? '')),
+				'smtp_host' => $host,
+				'smtp_user' => $email,
+				'smtp_password' => $password,
+				'smtp_port' => $port,
+				'smtp_secure' => 'tls',
+				'smtp_enabled' => ($host !== '' && \is_email($email) && $password !== ''),
+				'selected_client' => true,
+			];
+		}
+
+		$email = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? \sanitize_email((string) cmx_email_option_value('email_address'))
+			: '';
+		$reply = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
+			? \sanitize_email((string) cmx_email_option_value('reply'))
+			: '';
+		if (!\is_email($reply)) {
+			$reply = $email;
+		}
+
+		return [
+			'email' => $email,
+			'name' => \function_exists(__NAMESPACE__ . '\\cmx_email_option_value') ? \trim((string) cmx_email_option_value('email_name')) : '',
+			'reply' => $reply,
+			'bcc' => \function_exists(__NAMESPACE__ . '\\cmx_email_option_value') ? cmx_carent_versand_email_list((string) cmx_email_option_value('email_bcc')) : [],
+			'smtp_host' => \function_exists(__NAMESPACE__ . '\\cmx_email_option_value') ? \sanitize_text_field((string) cmx_email_option_value('smtp_host')) : '',
+			'smtp_user' => $email,
+			'smtp_password' => \function_exists(__NAMESPACE__ . '\\cmx_email_option_value') ? (string) cmx_email_option_value('email_password') : '',
+			'smtp_port' => 587,
+			'smtp_secure' => 'tls',
+			'smtp_enabled' => false,
+			'selected_client' => false,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_headers')) {
+	function cmx_carent_versand_headers(array $sender, string $self_email, string $to, array &$cc): array {
+		$sender_email = \sanitize_email((string) ($sender['email'] ?? ''));
+		$from_name = \trim((string) \preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+		$reply_to = \sanitize_email((string) ($sender['reply'] ?? ''));
+		$bcc = \is_array($sender['bcc'] ?? null) ? (array) $sender['bcc'] : [];
+
+		$headers = [
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . ($from_name !== '' ? $from_name . ' <' . $sender_email . '>' : $sender_email),
+		];
+		if (\is_email($reply_to)) {
+			$headers[] = 'Reply-To: ' . ($from_name !== '' ? $from_name . ' <' . $reply_to . '>' : $reply_to);
+		}
+		if (\is_email($self_email) && \strcasecmp($self_email, $to) !== 0) {
+			$cc[] = $self_email;
+			$headers[] = 'Cc: ' . $self_email;
+		}
+		if ($bcc !== []) {
+			$headers[] = 'Bcc: ' . \implode(', ', $bcc);
+		}
+
+		return $headers;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_add_sender_runtime')) {
+	function cmx_carent_versand_add_sender_runtime(array $sender): array {
+		$from_filter = static function ($email) use ($sender): string {
+			$sender_email = \sanitize_email((string) ($sender['email'] ?? ''));
+			return \is_email($sender_email) ? $sender_email : (string) $email;
+		};
+		$name_filter = static function ($name) use ($sender): string {
+			$sender_name = \trim((string) \preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+			return $sender_name !== '' ? $sender_name : (string) $name;
+		};
+		$phpmailer_listener = static function ($phpmailer) use ($sender): void {
+			if (!$phpmailer instanceof \PHPMailer\PHPMailer\PHPMailer) {
+				return;
+			}
+
+			$email = \sanitize_email((string) ($sender['email'] ?? ''));
+			if (!\is_email($email)) {
+				return;
+			}
+			$name = \trim((string) \preg_replace('/[\r\n]+/', ' ', (string) ($sender['name'] ?? '')));
+			$reply = \sanitize_email((string) ($sender['reply'] ?? ''));
+
+			if (!empty($sender['smtp_enabled'])) {
+				$phpmailer->isSMTP();
+				$phpmailer->Host = (string) ($sender['smtp_host'] ?? '');
+				$phpmailer->Port = (int) ($sender['smtp_port'] ?? 587);
+				$phpmailer->SMTPAuth = true;
+				$phpmailer->Username = (string) ($sender['smtp_user'] ?? $email);
+				$phpmailer->Password = (string) ($sender['smtp_password'] ?? '');
+				$phpmailer->SMTPAutoTLS = true;
+				$phpmailer->SMTPSecure = (string) ($sender['smtp_secure'] ?? 'tls');
+			}
+
+			try {
+				$phpmailer->setFrom($email, $name, false);
+			} catch (\Throwable $e) {
+				$phpmailer->From = $email;
+				if ($name !== '') {
+					$phpmailer->FromName = $name;
+				}
+			}
+			$phpmailer->Sender = $email;
+			$phpmailer->clearReplyTos();
+			if (\is_email($reply)) {
+				$phpmailer->addReplyTo($reply, $name);
+			}
+		};
+
+		\add_filter('wp_mail_from', $from_filter, \PHP_INT_MAX);
+		\add_filter('wp_mail_from_name', $name_filter, \PHP_INT_MAX);
+		\add_action('phpmailer_init', $phpmailer_listener, \PHP_INT_MAX, 1);
+
+		return [$from_filter, $name_filter, $phpmailer_listener];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_remove_sender_runtime')) {
+	function cmx_carent_versand_remove_sender_runtime(array $runtime): void {
+		if (isset($runtime[0]) && \is_callable($runtime[0])) {
+			\remove_filter('wp_mail_from', $runtime[0], \PHP_INT_MAX);
+		}
+		if (isset($runtime[1]) && \is_callable($runtime[1])) {
+			\remove_filter('wp_mail_from_name', $runtime[1], \PHP_INT_MAX);
+		}
+		if (isset($runtime[2]) && \is_callable($runtime[2])) {
+			\remove_action('phpmailer_init', $runtime[2], \PHP_INT_MAX);
+		}
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_subject')) {
 	function cmx_carent_versand_subject(int $post_id, array $data = []): string {
 		$post_id = (int) $post_id;
@@ -424,11 +601,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail
 			return true;
 		}
 
-		$sender_email = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \sanitize_email((string) cmx_email_option_value('email_address'))
-			: '';
+		$sender = cmx_carent_versand_sender_settings();
+		$sender_email = \sanitize_email((string) ($sender['email'] ?? ''));
 		if (!\is_email($sender_email)) {
 			return new \WP_Error('missing_sender', 'Bitte hinterlege zuerst Deine E-Mail-Adresse in den Einstellungen.');
+		}
+		if (!empty($sender['selected_client']) && empty($sender['smtp_enabled'])) {
+			return new \WP_Error('missing_sender_smtp', 'Beim ausgewählten Carent E-Mail Client fehlen SMTP Host oder Kennwort.');
 		}
 
 		$data = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')
@@ -450,29 +629,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail
 
 		$subject = 'Rückgabe Reminder - ' . cmx_carent_versand_subject($post_id, $data);
 		$message = cmx_carent_versand_message_html($post_id, $data, [], 'carent_mail_return_template');
-		$from_name = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \trim((string) cmx_email_option_value('email_name'))
-			: '';
-		$reply_to = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \sanitize_email((string) cmx_email_option_value('reply'))
-			: '';
-		$bcc = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? cmx_carent_versand_email_list((string) cmx_email_option_value('email_bcc'))
-			: [];
-
-		$headers = [
-			'Content-Type: text/html; charset=UTF-8',
-			'From: ' . ($from_name !== '' ? $from_name . ' <' . $sender_email . '>' : $sender_email),
-		];
-		if (\is_email($reply_to)) {
-			$headers[] = 'Reply-To: ' . $reply_to;
-		}
-		if (\strcasecmp($self_email, $to) !== 0) {
-			$headers[] = 'Cc: ' . $self_email;
-		}
-		if ($bcc !== []) {
-			$headers[] = 'Bcc: ' . \implode(', ', $bcc);
-		}
+		$cc = [];
+		$bcc = \is_array($sender['bcc'] ?? null) ? \array_values((array) $sender['bcc']) : [];
+		$headers = cmx_carent_versand_headers($sender, $self_email, $to, $cc);
 
 		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
@@ -484,6 +643,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail
 			}
 			cmx_email_embed_self_logo_for_phpmailer($phpmailer);
 		};
+		$sender_runtime = cmx_carent_versand_add_sender_runtime($sender);
 
 		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
 		$GLOBALS['cmx_mail_context'] = 'carent_rueckgabe_reminder';
@@ -492,6 +652,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_rueckgabe_reminder_mail
 			$sent = \wp_mail($to, $subject, $message, $headers);
 		} finally {
 			\remove_action('phpmailer_init', $embedded_logo_listener, 100);
+			cmx_carent_versand_remove_sender_runtime($sender_runtime);
 			if ($had_sender_override) {
 				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
 			} else {
@@ -527,11 +688,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 			return new \WP_Error('invalid_post', 'Vertrag nicht gefunden.');
 		}
 
-		$sender_email = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \sanitize_email((string) cmx_email_option_value('email_address'))
-			: '';
+		$sender = cmx_carent_versand_sender_settings();
+		$sender_email = \sanitize_email((string) ($sender['email'] ?? ''));
 		if (!\is_email($sender_email)) {
 			return new \WP_Error('missing_sender', 'Bitte hinterlege zuerst Deine E-Mail-Adresse in den Einstellungen.');
+		}
+		if (!empty($sender['selected_client']) && empty($sender['smtp_enabled'])) {
+			return new \WP_Error('missing_sender_smtp', 'Beim ausgewählten Carent E-Mail Client fehlen SMTP Host oder Kennwort.');
 		}
 
 		$data = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')
@@ -570,32 +733,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 
 		$subject = cmx_carent_versand_subject($post_id, $data);
 		$message = cmx_carent_versand_message_html($post_id, $data, (array) $pdf);
-		$from_name = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \trim((string) cmx_email_option_value('email_name'))
-			: '';
-		$reply_to = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? \sanitize_email((string) cmx_email_option_value('reply'))
-			: '';
-		$bcc = \function_exists(__NAMESPACE__ . '\\cmx_email_option_value')
-			? cmx_carent_versand_email_list((string) cmx_email_option_value('email_bcc'))
-			: [];
-
-		$headers = [
-			'Content-Type: text/html; charset=UTF-8',
-			'From: ' . ($from_name !== '' ? $from_name . ' <' . $sender_email . '>' : $sender_email),
-		];
-		if (\is_email($reply_to)) {
-			$headers[] = 'Reply-To: ' . $reply_to;
-		}
-
 		$cc = [];
-		if (\strcasecmp($self_email, $to) !== 0) {
-			$cc[] = $self_email;
-			$headers[] = 'Cc: ' . $self_email;
-		}
-		if ($bcc !== []) {
-			$headers[] = 'Bcc: ' . \implode(', ', $bcc);
-		}
+		$bcc = \is_array($sender['bcc'] ?? null) ? \array_values((array) $sender['bcc']) : [];
+		$headers = cmx_carent_versand_headers($sender, $self_email, $to, $cc);
 
 		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;
@@ -625,6 +765,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 			}
 			cmx_email_embed_self_logo_for_phpmailer($phpmailer);
 		};
+		$sender_runtime = cmx_carent_versand_add_sender_runtime($sender);
 
 		$GLOBALS['cmx_force_current_user_mail_sender'] = true;
 		$GLOBALS['cmx_mail_context'] = 'carent_vertrag';
@@ -635,6 +776,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 		} finally {
 			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
 			\remove_action('phpmailer_init', $embedded_logo_listener, 100);
+			cmx_carent_versand_remove_sender_runtime($sender_runtime);
 			if ($had_sender_override) {
 				$GLOBALS['cmx_force_current_user_mail_sender'] = $previous_sender_override;
 			} else {
