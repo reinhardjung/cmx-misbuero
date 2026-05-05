@@ -7,6 +7,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_default_headline')) {
+	function cmx_buchungen_frontend_default_headline(): string {
+		return 'Online Buchung';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_default_subline')) {
+	function cmx_buchungen_frontend_default_subline(): string {
+		return 'Leistung wählen, freien Termin aussuchen und direkt buchen.';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_setting_text')) {
+	function cmx_buchungen_frontend_setting_text(string $key, string $default): string {
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+		$value = \trim((string) ($options[$key] ?? ''));
+		return $value !== '' ? $value : $default;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_powered_by_enabled')) {
+	function cmx_buchungen_frontend_powered_by_enabled(): bool {
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+		return \array_key_exists('powered_by', $options)
+			? !empty($options['powered_by'])
+			: true;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_is_buchungen_frontend_request')) {
 	function cmx_is_buchungen_frontend_request(): bool {
 		if (\is_admin() || !\post_type_exists(CMX_BUCHUNGEN_CPT)) {
@@ -458,6 +493,127 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_json')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_ics_text')) {
+	function cmx_buchungen_frontend_ics_text(string $value): string {
+		$value = \str_replace(["\\", ";", ",", "\r\n", "\r", "\n"], ["\\\\", "\;", "\,", "\\n", "\\n", "\\n"], $value);
+		return $value;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_calendar_dates')) {
+	function cmx_buchungen_frontend_calendar_dates(string $date, string $time, int $duration): array {
+		$duration = \max(1, $duration);
+		$is_day_booking = $duration >= 1440 && $duration % 1440 === 0;
+		$timezone = \wp_timezone();
+
+		if ($is_day_booking) {
+			$start = new \DateTimeImmutable($date . ' 00:00:00', $timezone);
+			$end = $start->modify('+' . (int) ($duration / 1440) . ' days');
+			return [
+				'all_day' => true,
+				'ics_start' => $start->format('Ymd'),
+				'ics_end' => $end->format('Ymd'),
+				'google_start' => $start->format('Ymd'),
+				'google_end' => $end->format('Ymd'),
+			];
+		}
+
+		$start = new \DateTimeImmutable($date . ' ' . $time, $timezone);
+		$end = $start->modify('+' . \max(5, $duration) . ' minutes');
+		return [
+			'all_day' => false,
+			'ics_start' => $start->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+			'ics_end' => $end->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+			'google_start' => $start->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+			'google_end' => $end->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_google_calendar_url')) {
+	function cmx_buchungen_frontend_google_calendar_url(int $booking_id, string $title, string $date, string $time, int $duration): string {
+		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration);
+		return \add_query_arg([
+			'action' => 'TEMPLATE',
+			'text' => $title,
+			'dates' => (string) $dates['google_start'] . '/' . (string) $dates['google_end'],
+			'details' => 'Buchung Nr. ' . $booking_id,
+		], 'https://calendar.google.com/calendar/render');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_ics_content')) {
+	function cmx_buchungen_frontend_ics_content(int $booking_id): string {
+		$date = cmx_buchungen_sanitize_date((string) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_START_DATE, true));
+		$time = cmx_buchungen_sanitize_time((string) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_START_TIME, true));
+		$duration = \max(1, (int) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_DURATION, true));
+		$article_id = (int) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_ARTIKEL, true);
+		$title = \trim((string) \get_the_title($article_id));
+		if ($title === '') {
+			$title = \trim((string) \get_the_title($booking_id));
+		}
+		if ($title === '' || $date === '' || $time === '') {
+			return '';
+		}
+
+		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration);
+		$host = \parse_url((string) \home_url('/'), \PHP_URL_HOST);
+		$uid = 'cmx-buchung-' . $booking_id . '@' . ($host ?: 'misbuero.local');
+		$lines = [
+			'BEGIN:VCALENDAR',
+			'VERSION:2.0',
+			'PRODID:-//Mis Buero//Online Buchung//DE',
+			'CALSCALE:GREGORIAN',
+			'METHOD:PUBLISH',
+			'BEGIN:VEVENT',
+			'UID:' . $uid,
+			'DTSTAMP:' . \gmdate('Ymd\THis\Z'),
+			'SUMMARY:' . cmx_buchungen_frontend_ics_text($title),
+			'DESCRIPTION:' . cmx_buchungen_frontend_ics_text('Buchung Nr. ' . $booking_id),
+		];
+
+		if (!empty($dates['all_day'])) {
+			$lines[] = 'DTSTART;VALUE=DATE:' . (string) $dates['ics_start'];
+			$lines[] = 'DTEND;VALUE=DATE:' . (string) $dates['ics_end'];
+		} else {
+			$lines[] = 'DTSTART:' . (string) $dates['ics_start'];
+			$lines[] = 'DTEND:' . (string) $dates['ics_end'];
+		}
+
+		$lines[] = 'END:VEVENT';
+		$lines[] = 'END:VCALENDAR';
+		return \implode("\r\n", $lines) . "\r\n";
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_ics')) {
+	function cmx_buchungen_frontend_handle_ics(): void {
+		if (!cmx_is_buchungen_frontend_request() || !isset($_GET['cmx_booking_ics'])) {
+			return;
+		}
+
+		$booking_id = \max(0, (int) \wp_unslash($_GET['cmx_booking_ics']));
+		$token = isset($_GET['token']) ? \sanitize_text_field((string) \wp_unslash($_GET['token'])) : '';
+		$stored_token = $booking_id > 0 ? \trim((string) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_BOOKING_TOKEN, true)) : '';
+		if ($booking_id <= 0 || \get_post_type($booking_id) !== CMX_BUCHUNGEN_CPT || $token === '' || !\hash_equals($stored_token, $token)) {
+			\status_header(404);
+			exit;
+		}
+
+		$content = cmx_buchungen_frontend_ics_content($booking_id);
+		if ($content === '') {
+			\status_header(404);
+			exit;
+		}
+
+		\nocache_headers();
+		\header('Content-Type: text/calendar; charset=utf-8');
+		\header('Content-Disposition: attachment; filename="buchung-' . $booking_id . '.ics"');
+		echo $content;
+		exit;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 	function cmx_buchungen_frontend_render_page(): void {
 		if (!cmx_is_buchungen_frontend_request()) {
@@ -508,6 +664,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 		$me_contact_title = \function_exists(__NAMESPACE__ . '\\cmx_email_self_contact_branding_text')
 			? (string) cmx_email_self_contact_branding_text()
 			: '';
+		$headline = cmx_buchungen_frontend_setting_text('buchungen_headline', cmx_buchungen_frontend_default_headline());
+		$subline = cmx_buchungen_frontend_setting_text('buchungen_subline', cmx_buchungen_frontend_default_subline());
+		$show_powered_by = cmx_buchungen_frontend_powered_by_enabled();
 
 		\status_header(200);
 		\nocache_headers();
@@ -526,7 +685,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-head-logo{display:block;max-width:190px;max-height:84px;width:auto;height:auto;object-fit:contain;object-position:right top}
 			.cmx-booking-content{padding:34px}
 			.cmx-booking-title{margin:0;font-size:30px;line-height:1.1;font-weight:800;letter-spacing:0}
-			.cmx-booking-title a{color:inherit;text-decoration:none}
+			.cmx-booking-title a{display:inline-flex;align-items:center;gap:10px;color:inherit;text-decoration:none}
+			.cmx-booking-title-back{display:none;position:relative;top:-2px;color:#2563eb;font-size:30px;line-height:1;font-weight:800}
+			.cmx-booking-shell.is-substep .cmx-booking-title-back{display:inline-block}
 			.cmx-booking-sub{margin:7px 0 0;color:var(--cmx-muted)}
 			.cmx-booking-error{margin:0 0 18px;padding:11px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b}
 			.cmx-booking-service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 34px;max-width:940px;margin:0 auto}
@@ -543,7 +704,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-card-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}
 			.cmx-booking-duration{color:#4b5563;font-size:14px}
 			.cmx-booking-card-days{display:flex;align-items:center;gap:8px;color:#4b5563;font-size:14px}
-			.cmx-booking-card-days input{width:72px;border:1px solid #cfd5df;border-radius:6px;padding:8px 9px;font:inherit;font-weight:700;text-align:right;background:#fff}
+			.cmx-booking-card-days input{width:76px;border:1px solid #cfd5df;border-radius:6px;padding:8px 18px 8px 10px;font:inherit;font-weight:700;text-align:center;background:#fff}
+			.cmx-booking-card-days input::-webkit-inner-spin-button,.cmx-booking-day-count input::-webkit-inner-spin-button{margin-left:8px}
 			.cmx-booking-button{border:0;border-radius:6px;background:#3b82f6;color:#fff;font:inherit;font-weight:700;padding:11px 24px;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.08)}
 			.cmx-booking-button:hover{background:#2563eb}
 			.cmx-booking-button[disabled]{opacity:.55;cursor:not-allowed}
@@ -571,14 +733,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-next{border:0;border-radius:4px;background:#2563eb;color:#fff;padding:8px 18px;font-weight:700;cursor:pointer}
 			.cmx-booking-day-count{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;border:1px solid #d8dde6;border-radius:4px;background:#fff;padding:10px 16px}
 			.cmx-booking-day-count label{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;font-weight:700}
-			.cmx-booking-day-count input{width:76px;border:1px solid #cfd5df;border-radius:6px;padding:8px 10px;font:inherit;font-weight:700;text-align:right}
-			.cmx-booking-form{max-width:620px;margin:20px auto 0;border:1px solid #d6dbe3;border-radius:18px;padding:28px;background:#fff}
+			.cmx-booking-day-count input{width:76px;border:1px solid #cfd5df;border-radius:6px;padding:8px 18px 8px 10px;font:inherit;font-weight:700;text-align:center}
+			.cmx-booking-form{max-width:780px;margin:20px auto 0;border:1px solid #d6dbe3;border-radius:18px;padding:28px;background:#fff}
 			.cmx-booking-form h2{margin:0 0 18px;font-size:26px}
-			.cmx-booking-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 			.cmx-booking-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
 			.cmx-booking-form input,.cmx-booking-form textarea{width:100%;border:1px solid #cfd5df;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}
+			.cmx-booking-form input[readonly]{background:#fff;color:#111827;font-weight:700}
 			.cmx-booking-form textarea{min-height:90px;resize:vertical}
 			.cmx-booking-form .is-wide{grid-column:1/-1}
+			.cmx-booking-form-note{grid-column:1/-1;margin:-4px 0 0;color:#6b7280;font-size:13px;line-height:1.45}
 			.cmx-booking-form-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:20px}
 			.cmx-booking-link{border:0;background:transparent;color:#2563eb;font:inherit;font-weight:700;cursor:pointer;padding:0}
 			.cmx-booking-confirm{max-width:820px;margin:22px auto 0;border:1px solid #d6dbe3;border-radius:18px;background:#fff;padding:58px 70px;position:relative;min-height:320px}
@@ -586,13 +750,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-confirm-sub{text-align:center;margin:8px 0 34px;font-size:17px}
 			.cmx-booking-confirm-line{height:1px;background:#dfe3e8;margin:0 0 24px}
 			.cmx-booking-confirm-row{display:flex;align-items:center;gap:12px;margin:12px 0}
-			.cmx-booking-check{position:absolute;right:-72px;bottom:-48px;width:150px;height:150px;border-radius:999px;background:#07bd58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:86px;font-weight:800}
+			.cmx-booking-confirm-cal{display:flex;flex-direction:column;gap:8px;margin-top:30px;font-size:14px;font-weight:700}
+			.cmx-booking-confirm-cal a{color:#2563eb;text-decoration:none}
+			.cmx-booking-confirm-cal a:hover{text-decoration:underline}
+			.cmx-booking-check{position:absolute;right:-36px;bottom:-24px;width:75px;height:75px;border-radius:999px;background:#07bd58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:43px;font-weight:800}
+			.cmx-booking-powered{padding:0 24px 16px;text-align:right;color:#9ca3af;font-size:12px;line-height:1.4}
+			.cmx-booking-shell.is-confirmed .cmx-booking-powered{padding-top:16px}
+			.cmx-booking-powered a{color:#6b7280;text-decoration:none;font-weight:700}
+			.cmx-booking-powered a:hover{text-decoration:underline}
 			[hidden]{display:none !important}
-			@media(max-width:900px){.cmx-booking-content{padding:20px}.cmx-booking-head{padding:20px}.cmx-booking-head-inner{flex-direction:column}.cmx-booking-head-brand{display:none}.cmx-booking-service-grid{grid-template-columns:1fr}.cmx-booking-scheduler{grid-template-columns:1fr;gap:18px}.cmx-booking-slots{padding-top:0}.cmx-booking-weekdays,.cmx-booking-days{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.cmx-booking-day{width:100%}.cmx-booking-form-grid{grid-template-columns:1fr}.cmx-booking-confirm{padding:34px 22px}.cmx-booking-check{position:static;width:96px;height:96px;font-size:56px;margin:28px auto 0}}
+			@media(max-width:900px){.cmx-booking-content{padding:20px}.cmx-booking-head{padding:20px}.cmx-booking-head-inner{flex-direction:column}.cmx-booking-head-brand{display:none}.cmx-booking-service-grid{grid-template-columns:1fr}.cmx-booking-scheduler{grid-template-columns:1fr;gap:18px}.cmx-booking-slots{padding-top:0}.cmx-booking-weekdays,.cmx-booking-days{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}.cmx-booking-day{width:100%}.cmx-booking-form-grid{grid-template-columns:1fr}.cmx-booking-confirm{padding:34px 22px}.cmx-booking-check{position:static;width:75px;height:75px;font-size:43px;margin:28px auto 0}}
 		</style>';
-		echo '</head><body><main class="cmx-booking-page"><section class="cmx-booking-shell" data-cmx-booking-app data-services="' . \esc_attr(cmx_buchungen_frontend_json($services)) . '" data-slots="' . \esc_attr(cmx_buchungen_frontend_json($slots)) . '" data-day-dates="' . \esc_attr(cmx_buchungen_frontend_json($day_dates)) . '">';
+		$shell_classes = 'cmx-booking-shell' . ($confirmed_id > 0 && $confirmed_service !== null ? ' is-confirmed' : '');
+		echo '</head><body><main class="cmx-booking-page"><section class="' . \esc_attr($shell_classes) . '" data-cmx-booking-app data-services="' . \esc_attr(cmx_buchungen_frontend_json($services)) . '" data-slots="' . \esc_attr(cmx_buchungen_frontend_json($slots)) . '" data-day-dates="' . \esc_attr(cmx_buchungen_frontend_json($day_dates)) . '">';
 		echo '<div class="cmx-booking-head"><div class="cmx-booking-head-inner">';
-		echo '<div class="cmx-booking-head-copy"><h1 class="cmx-booking-title"><a href="' . \esc_url(cmx_buchungen_frontend_url()) . '">Online Buchung</a></h1><p class="cmx-booking-sub">Leistung wählen, freien Termin aussuchen und direkt buchen.</p></div>';
+		echo '<div class="cmx-booking-head-copy"><h1 class="cmx-booking-title"><a href="' . \esc_url(cmx_buchungen_frontend_url()) . '"><span class="cmx-booking-title-back" aria-hidden="true">‹</span><span>' . \esc_html($headline) . '</span></a></h1><p class="cmx-booking-sub">' . \esc_html($subline) . '</p></div>';
 		if ($me_logo_url !== '') {
 			echo '<div class="cmx-booking-head-brand">';
 			if ($me_contact_url !== '') {
@@ -614,13 +786,29 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 					? \wp_date('d. F Y', \strtotime($booking_date)) . ' - ' . \wp_date('d. F Y', \strtotime($booking_date . ' +' . (($booking_duration / 1440) - 1) . ' days'))
 					: \wp_date('H:i', \strtotime($booking_date . ' ' . $booking_time)) . ' - ' . \wp_date('H:i', \strtotime($booking_date . ' ' . $booking_time . ' +' . \max(5, $booking_duration) . ' minutes')) . ', ' . \wp_date('l, d. F Y', \strtotime($booking_date));
 			}
+			$booking_token = \trim((string) \get_post_meta($confirmed_id, CMX_BUCHUNGEN_META_BOOKING_TOKEN, true));
+			$ics_url = $booking_token !== ''
+				? cmx_buchungen_frontend_url(['cmx_booking_ics' => $confirmed_id, 'token' => $booking_token])
+				: '';
+			$google_url = ($booking_date !== '' && $booking_time !== '')
+				? cmx_buchungen_frontend_google_calendar_url($confirmed_id, (string) $confirmed_service['title'], $booking_date, $booking_time, $booking_duration)
+				: '';
 			echo '<div class="cmx-booking-confirm">';
-			echo '<h1>Buchung bestätigt</h1>';
-			echo '<p class="cmx-booking-confirm-sub">Dein Termin bei ' . \esc_html((string) $confirmed_service['person']) . ' ist gebucht.</p>';
+			echo '<h1>Buchung erfolgt</h1>';
+			echo '<p class="cmx-booking-confirm-sub">Dein Termin bei ' . \esc_html((string) $confirmed_service['person']) . ' ist vorgemerkt.</p>';
 			echo '<div class="cmx-booking-confirm-line"></div>';
 			echo '<div class="cmx-booking-confirm-row"><strong>' . \esc_html((string) $confirmed_service['title']) . '</strong></div>';
 			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">◴</span><span>' . \esc_html($start_label) . '</span></div>';
-			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">●</span><span>' . \esc_html($is_day_booking ? (string) ($booking_duration / 1440) . ' Tage' : (string) $booking_duration . ' Minuten') . '</span></div>';
+			$booking_days_label = (int) ($booking_duration / 1440);
+			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">●</span><span>' . \esc_html($is_day_booking ? (string) $booking_days_label . ($booking_days_label === 1 ? ' Tag' : ' Tage') : (string) $booking_duration . ' Minuten') . '</span></div>';
+			echo '<div class="cmx-booking-confirm-cal">';
+			if ($ics_url !== '') {
+				echo '<a href="' . \esc_url($ics_url) . '">ICS-Datei herunterladen</a>';
+			}
+			if ($google_url !== '') {
+				echo '<a href="' . \esc_url($google_url) . '" target="_blank" rel="noopener noreferrer">In Google Kalender eintragen</a>';
+			}
+			echo '</div>';
 			echo '<div class="cmx-booking-check">✓</div>';
 			echo '</div>';
 		} else {
@@ -645,7 +833,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 					echo '<div class="cmx-booking-card-line"></div>';
 					echo '<div class="cmx-booking-card-foot">';
 					if ((string) ($service['unit'] ?? 'minutes') === 'days') {
-						echo '<label class="cmx-booking-card-days"><span>Tage</span><input type="number" min="1" max="60" step="1" value="' . \esc_attr((string) \max(1, (int) $service['duration'])) . '" data-service-days></label>';
+						$service_days = \max(1, (int) $service['duration']);
+						echo '<label class="cmx-booking-card-days"><input type="number" min="1" max="60" step="1" value="' . \esc_attr((string) $service_days) . '" data-service-days><span data-service-days-label>' . \esc_html($service_days === 1 ? 'Tag' : 'Tage') . '</span></label>';
 					} else {
 						echo '<span class="cmx-booking-duration">' . \esc_html((string) $service['duration'] . ' Minuten') . '</span>';
 					}
@@ -658,10 +847,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
 			echo '<form class="cmx-booking-form" method="post" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
 			\wp_nonce_field('cmx_buchungen_frontend_book', 'cmx_buchungen_frontend_nonce');
-			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label>Termin<input data-form-summary readonly></label><label class="is-wide">Notiz<textarea name="note"></textarea></label></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">Buchung bestätigen</button></div></form>';
+			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="is-wide">Termin<input data-form-summary readonly></label><label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
 		}
 
-		echo '</div></section></main><script>
+		echo '</div>';
+		if ($show_powered_by) {
+			echo '<div class="cmx-booking-powered">Powered by <a href="https://misbuero.ch/" target="_blank" rel="noopener noreferrer">Mis Büro</a></div>';
+		}
+		echo '</section></main><script>
 		(function(){
 			var root = document.querySelector("[data-cmx-booking-app]");
 			if(!root || root.dataset.ready === "1") return;
@@ -685,6 +878,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			function qs(sel){ return root.querySelector(sel); }
 			function showStep(name){
 				root.querySelectorAll("[data-step]").forEach(function(el){ el.hidden = el.getAttribute("data-step") !== name; });
+				root.classList.toggle("is-substep", name === "schedule" || name === "form");
 			}
 			function ymd(date){
 				var y = date.getFullYear();
@@ -800,8 +994,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				if(isDayService()){
 					var countWrap = document.createElement("div");
 					countWrap.className = "cmx-booking-day-count";
-					countWrap.innerHTML = "<label><span>Anzahl Tage</span><input type=\"number\" min=\"1\" max=\"60\" step=\"1\" value=\"" + String(selectedDayCount) + "\"></label>";
+					countWrap.innerHTML = "<label><span>Anzahl " + (selectedDayCount === 1 ? "Tag" : "Tage") + "</span><input type=\"number\" min=\"1\" max=\"60\" step=\"1\" value=\"" + String(selectedDayCount) + "\"></label>";
 					var countInput = countWrap.querySelector("input");
+					function selectCountInput(){ window.setTimeout(function(){ countInput.select(); }, 0); }
+					countInput.addEventListener("focus", selectCountInput);
+					countInput.addEventListener("click", selectCountInput);
 					countInput.addEventListener("change", function(){
 						var nextCount = parseInt(countInput.value || "1", 10);
 						if(!Number.isFinite(nextCount)) nextCount = 1;
@@ -905,6 +1102,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 					openSchedule(btn.getAttribute("data-service-id"), daysInput ? daysInput.value : "");
 				});
 			});
+			root.querySelectorAll("[data-service-days]").forEach(function(input){
+				function selectInput(){ window.setTimeout(function(){ input.select(); }, 0); }
+				input.addEventListener("focus", selectInput);
+				input.addEventListener("click", selectInput);
+				input.addEventListener("change", function(){
+					var value = Math.max(1, Math.min(60, parseInt(input.value || "1", 10) || 1));
+					input.value = String(value);
+					var label = input.parentElement ? input.parentElement.querySelector("[data-service-days-label]") : null;
+					if(label) label.textContent = value === 1 ? "Tag" : "Tage";
+				});
+			});
 			var prev = qs("[data-prev-month]");
 			var next = qs("[data-next-month]");
 			if(prev) prev.addEventListener("click", function(){ viewDate.setMonth(viewDate.getMonth() - 1); renderCalendar(); renderSlots(); });
@@ -929,4 +1137,5 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 }
 
 \add_action('template_redirect', __NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit', 1);
+\add_action('template_redirect', __NAMESPACE__ . '\\cmx_buchungen_frontend_handle_ics', 2);
 \add_action('template_redirect', __NAMESPACE__ . '\\cmx_buchungen_frontend_render_page', 5);

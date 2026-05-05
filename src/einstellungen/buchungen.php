@@ -6,6 +6,38 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_templates_option_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_headline_option_key')) {
+	function cmx_buchungen_headline_option_key(): string {
+		return 'buchungen_headline';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_subline_option_key')) {
+	function cmx_buchungen_subline_option_key(): string {
+		return 'buchungen_subline';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_default_headline')) {
+	function cmx_buchungen_default_headline(): string {
+		return 'Online Buchung';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_default_subline')) {
+	function cmx_buchungen_default_subline(): string {
+		return 'Leistung wählen, freien Termin aussuchen und direkt buchen.';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_setting_text')) {
+	function cmx_buchungen_setting_text(string $key, string $default): string {
+		$options = (array) \get_option(CMX_SETTINGS_MAIN, []);
+		$value = \trim((string) ($options[$key] ?? ''));
+		return $value !== '' ? $value : $default;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_colors')) {
 	function cmx_buchungen_template_colors(): array {
 		return ['#2563eb', '#16a34a', '#f97316', '#06b6d4', '#9333ea', '#dc2626'];
@@ -266,6 +298,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_rows')) {
 		'cmx_sec_buchungen_templates',
 		'Buchungsvorlagen',
 		static function (): void {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_texts_field')) {
+				cmx_render_buchungen_texts_field();
+			}
 			echo '<p>Diese Vorlagen bestimmen, welche Kacheln auf der öffentlichen Buchungsseite auswählbar sind.</p>';
 			if (\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field')) {
 				cmx_render_buchungen_templates_field();
@@ -274,6 +309,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_rows')) {
 		'cmx_tab_buchungen'
 	);
 });
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_texts_field')) {
+	function cmx_render_buchungen_texts_field(): void {
+		$option = CMX_SETTINGS_MAIN;
+		$headline_key = cmx_buchungen_headline_option_key();
+		$subline_key = cmx_buchungen_subline_option_key();
+		$headline = cmx_buchungen_setting_text($headline_key, cmx_buchungen_default_headline());
+		$subline = cmx_buchungen_setting_text($subline_key, cmx_buchungen_default_subline());
+
+		echo '<input type="hidden" name="' . \esc_attr($option) . '[buchungen_texts_present]" value="1">';
+		echo '<div class="cmx-buchungen-text-fields" style="display:grid;grid-template-columns:minmax(220px,420px) minmax(320px,640px);gap:12px 16px;align-items:end;max-width:1080px;margin:8px 0 22px;">';
+		echo '<label style="display:flex;flex-direction:column;gap:6px;font-weight:700;">Titel<input type="text" name="' . \esc_attr($option . '[' . $headline_key . ']') . '" value="' . \esc_attr($headline) . '" placeholder="' . \esc_attr(cmx_buchungen_default_headline()) . '" style="width:100%;"></label>';
+		echo '<label style="display:flex;flex-direction:column;gap:6px;font-weight:700;">Unterzeile<input type="text" name="' . \esc_attr($option . '[' . $subline_key . ']') . '" value="' . \esc_attr($subline) . '" placeholder="' . \esc_attr(cmx_buchungen_default_subline()) . '" style="width:100%;"></label>';
+		echo '</div>';
+	}
+}
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field')) {
 	function cmx_render_buchungen_templates_field(): void {
@@ -449,8 +500,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field'))
 
 \add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, function ($new, $old) {
 	$new = \is_array($new) ? $new : [];
-	if (!\array_key_exists('buchungen_templates_present', $new) && !\array_key_exists(cmx_buchungen_templates_option_key(), $new)) {
+	if (!\array_key_exists('buchungen_texts_present', $new) && !\array_key_exists('buchungen_templates_present', $new) && !\array_key_exists(cmx_buchungen_templates_option_key(), $new)) {
 		return $new;
+	}
+
+	if (\array_key_exists('buchungen_texts_present', $new)) {
+		$new[cmx_buchungen_headline_option_key()] = \sanitize_text_field((string) ($new[cmx_buchungen_headline_option_key()] ?? ''));
+		$new[cmx_buchungen_subline_option_key()] = \sanitize_text_field((string) ($new[cmx_buchungen_subline_option_key()] ?? ''));
+		unset($new['buchungen_texts_present']);
 	}
 
 	$new[cmx_buchungen_templates_option_key()] = cmx_buchungen_sanitize_template_rows($new[cmx_buchungen_templates_option_key()] ?? []);
