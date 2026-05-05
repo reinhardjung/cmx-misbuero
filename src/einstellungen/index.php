@@ -73,6 +73,7 @@ require_once 'belege.php';
 require_once 'woocommerce.php';
 require_once 'email.php';
 require_once 'carent.php';
+require_once 'buchungen.php';
 require_once 'system.php';
 require_once 'erweitert.php';
 require_once 'support.php';
@@ -197,6 +198,7 @@ function cmx_get_tabs(): array {
 		$tabs['carent'] = 'Carent';
 	}
 
+	$tabs['buchungen'] = 'Buchungen';
 	$tabs['system'] = 'System';
 	$tabs['support'] = 'Support';
 
