@@ -12,14 +12,50 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_colors')) {
 	}
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_article_options')) {
-	function cmx_buchungen_article_options(): array {
-		if (!\post_type_exists('artikel')) {
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_period_options')) {
+	function cmx_buchungen_template_period_options(): array {
+		return [
+			'all' => 'Ganzer Tag',
+			'morning' => 'Vormittags',
+			'afternoon' => 'Nachmittags',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_unit_options')) {
+	function cmx_buchungen_template_unit_options(): array {
+		return [
+			'minutes' => 'Minuten',
+			'days' => 'Tage',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_period_allows_time')) {
+	function cmx_buchungen_template_period_allows_time(string $period, string $time): bool {
+		$period = isset(cmx_buchungen_template_period_options()[$period]) ? $period : 'all';
+		if ($period === 'all') {
+			return true;
+		}
+
+		$parts = \explode(':', $time);
+		$hour = isset($parts[0]) ? (int) $parts[0] : -1;
+		if ($hour < 0 || $hour > 23) {
+			return false;
+		}
+
+		return $period === 'morning' ? $hour < 12 : $hour >= 12;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_post_options')) {
+	function cmx_buchungen_template_post_options(string $post_type): array {
+		if (!\post_type_exists($post_type)) {
 			return [];
 		}
 
 		$ids = \get_posts([
-			'post_type' => 'artikel',
+			'post_type' => $post_type,
 			'post_status' => 'publish',
 			'fields' => 'ids',
 			'posts_per_page' => 300,
@@ -41,15 +77,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_article_options')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_article_options')) {
+	function cmx_buchungen_article_options(): array {
+		return cmx_buchungen_template_post_options('artikel');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_contact_options')) {
+	function cmx_buchungen_contact_options(): array {
+		return cmx_buchungen_template_post_options('kontakte');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_search_field')) {
+	function cmx_buchungen_template_search_field(string $name, int $current, string $placeholder, array $items, string $type): void {
+		$title = $current > 0 ? \trim((string) \get_the_title($current)) : '';
+		if ($current > 0 && $title === '') {
+			$current = 0;
+		}
+
+		echo '<div class="cmx-buchungen-template-search" data-cmx-template-search="' . \esc_attr($type) . '" data-cmx-template-items="' . \esc_attr((string) \wp_json_encode($items, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)) . '">';
+		echo '<input type="hidden" name="' . \esc_attr($name) . '" value="' . \esc_attr((string) $current) . '">';
+		echo '<input type="search" class="cmx-buchungen-template-search-input" autocomplete="off" placeholder="' . \esc_attr($placeholder) . '" value="' . \esc_attr($title) . '">';
+		echo '<ul class="cmx-buchungen-template-search-results" hidden></ul>';
+		echo '</div>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_default_template_row')) {
 	function cmx_buchungen_default_template_row(int $index = 0): array {
 		$colors = cmx_buchungen_template_colors();
 		return [
 			'enabled' => '0',
 			'artikel_id' => 0,
+			'kontakt_id' => 0,
 			'label' => '',
 			'title' => '',
+			'unit' => 'minutes',
 			'duration' => 60,
+			'period' => 'all',
 			'color' => $colors[$index % \count($colors)],
 		];
 	}
@@ -71,11 +137,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_template_rows'))
 			}
 
 			$artikel_id = isset($row['artikel_id']) ? \max(0, (int) $row['artikel_id']) : 0;
+			$kontakt_id = isset($row['kontakt_id']) ? \max(0, (int) $row['kontakt_id']) : 0;
 			$label = isset($row['label']) ? \sanitize_text_field((string) $row['label']) : '';
 			$title = isset($row['title']) ? \sanitize_text_field((string) $row['title']) : '';
+			$unit = isset($row['unit']) ? \sanitize_key((string) $row['unit']) : 'minutes';
+			if (!isset(cmx_buchungen_template_unit_options()[$unit])) {
+				$unit = 'minutes';
+			}
 			$duration = isset($row['duration']) ? (int) $row['duration'] : 60;
-			if (!\in_array($duration, $allowed_durations, true)) {
+			if ($unit === 'minutes' && !\in_array($duration, $allowed_durations, true)) {
 				$duration = 60;
+			}
+			if ($unit === 'days') {
+				$duration = \max(1, \min(60, $duration));
+			}
+			$period = isset($row['period']) ? \sanitize_key((string) $row['period']) : 'all';
+			if (!isset(cmx_buchungen_template_period_options()[$period])) {
+				$period = 'all';
 			}
 
 			$color = isset($row['color']) ? (string) $row['color'] : '';
@@ -89,9 +167,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_template_rows'))
 			$clean[] = [
 				'enabled' => $enabled,
 				'artikel_id' => $artikel_id,
+				'kontakt_id' => $kontakt_id,
 				'label' => $label,
 				'title' => $title,
+				'unit' => $unit,
 				'duration' => $duration,
+				'period' => $period,
 				'color' => $color,
 			];
 
@@ -128,63 +209,77 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_rows')) {
 		'Buchungsvorlagen',
 		static function (): void {
 			echo '<p>Diese Vorlagen bestimmen, welche Kacheln auf der öffentlichen Buchungsseite auswählbar sind.</p>';
+			if (\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field')) {
+				cmx_render_buchungen_templates_field();
+			}
 		},
 		'cmx_tab_buchungen'
-	);
-
-	\add_settings_field(
-		'cmx_buchungen_templates',
-		'Templates',
-		__NAMESPACE__ . '\\cmx_render_buchungen_templates_field',
-		'cmx_tab_buchungen',
-		'cmx_sec_buchungen_templates'
 	);
 });
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field')) {
-		function cmx_render_buchungen_templates_field(): void {
-			$rows = cmx_buchungen_template_rows(false);
-			$rows = \array_slice($rows, 0, 3);
-			while (\count($rows) < 3) {
-				$rows[] = cmx_buchungen_default_template_row(\count($rows));
-			}
+	function cmx_render_buchungen_templates_field(): void {
+		$rows = cmx_buchungen_template_rows(false);
+		$rows = \array_slice($rows, 0, 3);
+		while (\count($rows) < 3) {
+			$rows[] = cmx_buchungen_default_template_row(\count($rows));
+		}
 
 		$articles = cmx_buchungen_article_options();
+		$contacts = cmx_buchungen_contact_options();
 		$key = cmx_buchungen_templates_option_key();
 		$option = CMX_SETTINGS_MAIN;
+		$units = cmx_buchungen_template_unit_options();
+		$periods = cmx_buchungen_template_period_options();
 
 		echo '<input type="hidden" name="' . \esc_attr($option) . '[buchungen_templates_present]" value="1">';
 		echo '<style>
-			.cmx-buchungen-template-table{width:100%;max-width:1180px;border-collapse:separate;border-spacing:0 10px}
+			.cmx-buchungen-template-table{width:100%;max-width:1580px;border-collapse:separate;border-spacing:0 10px}
 			.cmx-buchungen-template-table th{padding:0 8px 4px;text-align:left;color:#1d2327;font-weight:700}
 			.cmx-buchungen-template-table td{padding:10px 8px;background:#fff;border-top:1px solid #dcdcde;border-bottom:1px solid #dcdcde;vertical-align:middle}
 			.cmx-buchungen-template-table td:first-child{border-left:1px solid #dcdcde;border-radius:8px 0 0 8px}
 			.cmx-buchungen-template-table td:last-child{border-right:1px solid #dcdcde;border-radius:0 8px 8px 0}
-			.cmx-buchungen-template-table select,.cmx-buchungen-template-table input[type=text]{width:100%;max-width:240px}
+			.cmx-buchungen-template-table select,.cmx-buchungen-template-table input[type=text],.cmx-buchungen-template-table input[type=number]{width:100%;max-width:240px}
+			.cmx-buchungen-template-search{position:relative;min-width:180px;max-width:240px}
+			.cmx-buchungen-template-search-input{width:100%;max-width:240px;border:1px solid #ccd0d4;border-radius:8px;background:#fff;padding:7px 9px;font:inherit}
+			.cmx-buchungen-template-search-results{position:absolute;z-index:100002;left:0;right:0;top:100%;max-height:240px;overflow:auto;margin:2px 0 0;padding:0;border:1px solid #ccd0d4;border-radius:8px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.12);list-style:none}
+			.cmx-buchungen-template-search-results[hidden]{display:none}
+			.cmx-buchungen-template-search-results li{margin:0;padding:8px 10px;cursor:pointer}
+			.cmx-buchungen-template-search-results li.active,.cmx-buchungen-template-search-results li:hover{background:#e5f3ff}
 			.cmx-buchungen-template-color{width:42px;height:34px;padding:0;border:1px solid #c3c4c7;border-radius:4px;background:#fff}
 			.cmx-buchungen-template-note{max-width:760px;color:#646970}
 		</style>';
 		echo '<table class="cmx-buchungen-template-table"><thead><tr>';
-		echo '<th>Aktiv</th><th>Artikel</th><th>Oberzeile</th><th>Kacheltitel</th><th>Dauer</th><th>Farbe</th>';
+		echo '<th>Aktiv</th><th>Artikel</th><th>Kontakt</th><th>Oberzeile</th><th>Kacheltitel</th><th>Einheit</th><th>Dauer</th><th>Zeitraum</th><th>Farbe</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ($rows as $index => $row) {
 			$name = $option . '[' . $key . '][' . $index . ']';
 			$artikel_id = (int) ($row['artikel_id'] ?? 0);
+			$kontakt_id = (int) ($row['kontakt_id'] ?? 0);
+			$unit = (string) ($row['unit'] ?? 'minutes');
 			$duration = (int) ($row['duration'] ?? 60);
+			$period = (string) ($row['period'] ?? 'all');
 			$color = (string) ($row['color'] ?? '#2563eb');
 			echo '<tr>';
 			echo '<td><input type="hidden" name="' . \esc_attr($name . '[enabled]') . '" value="0"><input type="checkbox" name="' . \esc_attr($name . '[enabled]') . '" value="1" ' . \checked(!empty($row['enabled']), true, false) . '></td>';
-			echo '<td><select name="' . \esc_attr($name . '[artikel_id]') . '"><option value="0">Artikel wählen...</option>';
-			foreach ($articles as $article_id => $article_title) {
-				echo '<option value="' . \esc_attr((string) $article_id) . '" ' . \selected($artikel_id, (int) $article_id, false) . '>' . \esc_html($article_title) . '</option>';
-			}
-			echo '</select></td>';
+			echo '<td>';
+			cmx_buchungen_template_search_field($name . '[artikel_id]', $artikel_id, 'Artikel suchen...', $articles, 'artikel');
+			echo '</td>';
+			echo '<td>';
+			cmx_buchungen_template_search_field($name . '[kontakt_id]', $kontakt_id, 'Kontakt suchen...', $contacts, 'kontakt');
+			echo '</td>';
 			echo '<td><input type="text" name="' . \esc_attr($name . '[label]') . '" value="' . \esc_attr((string) ($row['label'] ?? '')) . '" placeholder="z.B. Beratung"></td>';
 			echo '<td><input type="text" name="' . \esc_attr($name . '[title]') . '" value="' . \esc_attr((string) ($row['title'] ?? '')) . '" placeholder="leer = Artikeltitel"></td>';
-			echo '<td><select name="' . \esc_attr($name . '[duration]') . '">';
-			foreach ([15, 30, 60] as $minutes) {
-				echo '<option value="' . \esc_attr((string) $minutes) . '" ' . \selected($duration, $minutes, false) . '>' . \esc_html((string) $minutes) . ' Minuten</option>';
+			echo '<td><select name="' . \esc_attr($name . '[unit]') . '">';
+			foreach ($units as $unit_key => $unit_label) {
+				echo '<option value="' . \esc_attr($unit_key) . '" ' . \selected($unit, $unit_key, false) . '>' . \esc_html($unit_label) . '</option>';
+			}
+			echo '</select></td>';
+			echo '<td><input type="number" min="1" max="60" step="1" name="' . \esc_attr($name . '[duration]') . '" value="' . \esc_attr((string) $duration) . '"></td>';
+			echo '<td><select name="' . \esc_attr($name . '[period]') . '">';
+			foreach ($periods as $period_key => $period_label) {
+				echo '<option value="' . \esc_attr($period_key) . '" ' . \selected($period, $period_key, false) . '>' . \esc_html($period_label) . '</option>';
 			}
 			echo '</select></td>';
 			echo '<td><input class="cmx-buchungen-template-color" type="color" name="' . \esc_attr($name . '[color]') . '" value="' . \esc_attr($color) . '"></td>';
@@ -193,6 +288,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field'))
 
 		echo '</tbody></table>';
 		echo '<p class="cmx-buchungen-template-note">Nur aktive Zeilen mit ausgewähltem Artikel werden auf <a href="' . \esc_url(\home_url('/buchungen/')) . '" target="_blank" rel="noopener noreferrer">/buchungen/</a> angezeigt.</p>';
+		echo '<script>
+			(function(){
+				function initSearch(root){
+					if(!root || root.dataset.ready === "1") return;
+					root.dataset.ready = "1";
+					var hidden = root.querySelector("input[type=hidden]");
+					var input = root.querySelector(".cmx-buchungen-template-search-input");
+					var list = root.querySelector(".cmx-buchungen-template-search-results");
+					var items = [];
+					try{ var raw = JSON.parse(root.getAttribute("data-cmx-template-items") || "{}"); Object.keys(raw).forEach(function(id){ items.push({id:String(id), title:String(raw[id] || "")}); }); }catch(err){}
+					function close(){ list.hidden = true; list.innerHTML = ""; }
+					function choose(item){
+						hidden.value = item ? item.id : "0";
+						input.value = item ? item.title : "";
+						close();
+					}
+					function render(){
+						var q = input.value.trim().toLowerCase();
+						list.innerHTML = "";
+						var matches = items.filter(function(item){ return q === "" || item.title.toLowerCase().indexOf(q) !== -1; }).slice(0, 25);
+						matches.forEach(function(item){
+							var li = document.createElement("li");
+							li.textContent = item.title;
+							li.tabIndex = 0;
+							li.addEventListener("mousedown", function(ev){ ev.preventDefault(); choose(item); });
+							li.addEventListener("keydown", function(ev){ if(ev.key === "Enter"){ ev.preventDefault(); choose(item); } });
+							list.appendChild(li);
+						});
+						list.hidden = matches.length === 0;
+					}
+					input.addEventListener("input", function(){ hidden.value = "0"; render(); });
+					input.addEventListener("focus", render);
+					input.addEventListener("blur", function(){ window.setTimeout(close, 150); });
+					input.addEventListener("keydown", function(ev){ if(ev.key === "Escape") close(); });
+				}
+				document.querySelectorAll(".cmx-buchungen-template-search").forEach(initSearch);
+			})();
+		</script>';
 	}
 }
 
