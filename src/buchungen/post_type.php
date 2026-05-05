@@ -65,6 +65,7 @@
 		return;
 	}
 	cmx_seed_taxo('Buchungen', CMX_TAX_BUCHUNGEN);
+	cmx_buchungen_seed_logical_terms();
 	if (\taxonomy_exists(CMX_BUCHUNGEN_TAX_DAUER)) {
 		foreach (['15', '30', '60'] as $dauer) {
 			if (!\term_exists($dauer, CMX_BUCHUNGEN_TAX_DAUER)) {
@@ -73,6 +74,40 @@
 		}
 	}
 });
+
+function cmx_buchungen_seed_logical_terms(): void {
+	$defaults = [
+		CMX_BUCHUNGEN_TAX_TYP => [
+			'add' => ['Ersttermin', 'Folgetermin', 'Besprechung', 'Online-Termin', 'Telefontermin', 'Vor-Ort-Termin'],
+			'remove_if_unused' => ['Beratung', 'Schulung', 'Wartung', 'Erstgespräch', 'Kontrolltermin', 'Notfalltermin'],
+		],
+		CMX_BUCHUNGEN_TAX_LEISTUNGSKATEGORIE => [
+			'add' => ['Analyse', 'Beratung', 'Support', 'Schulung', 'Wartung', 'Vermietung'],
+			'remove_if_unused' => ['Strategie', 'Technik', 'Administration', 'Verkauf', 'Kundendienst'],
+		],
+	];
+
+	foreach ($defaults as $taxonomy => $config) {
+		if (!\taxonomy_exists((string) $taxonomy)) {
+			continue;
+		}
+
+		foreach ((array) ($config['add'] ?? []) as $name) {
+			$name = \trim((string) $name);
+			if ($name !== '' && !\term_exists($name, (string) $taxonomy)) {
+				\wp_insert_term($name, (string) $taxonomy);
+			}
+		}
+
+		foreach ((array) ($config['remove_if_unused'] ?? []) as $name) {
+			$term = \get_term_by('name', (string) $name, (string) $taxonomy);
+			if (!$term instanceof \WP_Term || (int) $term->count > 0) {
+				continue;
+			}
+			\wp_delete_term((int) $term->term_id, (string) $taxonomy);
+		}
+	}
+}
 
 function cmx_buchungen_is_empty_auto_draft_title(string $title): bool {
 	$title = \trim($title);

@@ -1254,6 +1254,7 @@ function cmx65_render_front_quicklinks(): void {
 	$pages_links = [
 		['label' => 'Katalog', 'href' => cmx65_adminbar_katalog_focus_url(), 'target' => '_blank'],
 		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/'), 'target' => '_blank'],
+		['label' => 'Buchungen', 'href' => \home_url('/buchungen/'), 'target' => '_blank'],
 	];
 	$pages_links = (array) \apply_filters('cmx65_front_pages_links', $pages_links);
 
@@ -1572,6 +1573,17 @@ function cmx65_adminbar($wp_admin_bar) {
 		'href'  => \home_url('/telefonbuch/'),
 		'meta'  => [
 			'title'  => __('Dein Telefonbuch', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_buchungen_id',
+		'parent' => 'cmx65_pages_id',
+		'title' => 'Buchungen',
+		'href'  => \home_url('/buchungen/'),
+		'meta'  => [
+			'title'  => __('Deine Online Buchungen', 'textdomain'),
 			'target' => '_blank',
 		],
 	]);
