@@ -58,6 +58,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_unit_options')) 
 	function cmx_buchungen_template_unit_options(): array {
 		return [
 			'minutes' => 'Minuten',
+			'hours' => 'Stunden',
 			'days' => 'Tage',
 		];
 	}
@@ -235,6 +236,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_template_rows'))
 			$duration = isset($row['duration']) ? (int) $row['duration'] : 60;
 			if ($unit === 'minutes' && !\in_array($duration, $allowed_durations, true)) {
 				$duration = 60;
+			}
+			if ($unit === 'hours') {
+				$duration = \max(1, \min(60, $duration));
 			}
 			if ($unit === 'days') {
 				$duration = \max(1, \min(60, $duration));

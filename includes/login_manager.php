@@ -6,6 +6,127 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_logout_redirect_url')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_initial_password_host_subdomain')) {
+	function cmx_initial_password_host_subdomain(): string {
+		$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+		if (!\is_string($host) || \trim($host) === '') {
+			$host = (string) \wp_parse_url(\home_url('/'), \PHP_URL_HOST);
+		}
+		$host = \strtolower((string) \preg_replace('~^www\.~i', '', \trim((string) $host)));
+		if ($host === '' || !\str_ends_with($host, '.misbuero.ch')) {
+			return '';
+		}
+		$parts = \explode('.', $host);
+		$subdomain = (string) ($parts[0] ?? '');
+		return \preg_match('~^[a-z0-9-]+$~', $subdomain) ? $subdomain : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_initial_password_has_mail_transport')) {
+	function cmx_initial_password_has_mail_transport(): bool {
+		$options = (array) \get_option('cmx_einstellungen', []);
+		$smtp_host = \trim((string) ($options['smtp_host'] ?? ''));
+		$smtp_user = \sanitize_email((string) ($options['email_address'] ?? ''));
+		$smtp_pass = (string) ($options['email_password'] ?? '');
+		if ($smtp_host !== '' && \is_email($smtp_user) && $smtp_pass !== '') {
+			return true;
+		}
+
+		return \is_executable('/usr/sbin/sendmail');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_initial_password_bootstrap_user')) {
+	function cmx_initial_password_bootstrap_user(string $login_or_email): ?\WP_User {
+		$subdomain = cmx_initial_password_host_subdomain();
+		if ($subdomain === '' || cmx_initial_password_has_mail_transport()) {
+			return null;
+		}
+
+		$login_or_email = \trim($login_or_email);
+		if ($login_or_email === '') {
+			return null;
+		}
+
+		$user = \get_user_by('login', $login_or_email);
+		if (!$user instanceof \WP_User && \is_email($login_or_email)) {
+			$user = \get_user_by('email', $login_or_email);
+		}
+		if (!$user instanceof \WP_User || !$user->exists()) {
+			return null;
+		}
+		if (\strtolower((string) $user->user_login) !== $subdomain) {
+			return null;
+		}
+		if (!\in_array('administrator', (array) $user->roles, true)) {
+			return null;
+		}
+		if ((string) \get_user_meta((int) $user->ID, '_cmx_initial_password_set_at', true) !== '') {
+			return null;
+		}
+
+		$until = (int) \get_user_meta((int) $user->ID, '_cmx_initial_password_bootstrap_until', true);
+		if ($until > 0) {
+			return \time() <= $until ? $user : null;
+		}
+
+		$registered_at = \strtotime((string) $user->user_registered);
+		if ($registered_at <= 0 || $registered_at < (\time() - 7 * \DAY_IN_SECONDS)) {
+			return null;
+		}
+
+		return $user;
+	}
+}
+
+\add_action('login_form_lostpassword', function (): void {
+	if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+		return;
+	}
+
+	$raw_login = isset($_POST['user_login']) ? \sanitize_text_field((string) \wp_unslash($_POST['user_login'])) : '';
+	$user = cmx_initial_password_bootstrap_user($raw_login);
+	if (!$user instanceof \WP_User) {
+		return;
+	}
+
+	$key = \get_password_reset_key($user);
+	if (\is_wp_error($key)) {
+		return;
+	}
+
+	$url = \network_site_url(
+		'wp-login.php?action=rp&key=' . \rawurlencode((string) $key) . '&login=' . \rawurlencode((string) $user->user_login) . '&cmx_initial=1',
+		'login'
+	);
+	\wp_safe_redirect($url);
+	exit;
+}, 1);
+
+\add_action('after_password_reset', function ($user): void {
+	if (!$user instanceof \WP_User || !$user->exists()) {
+		return;
+	}
+
+	\update_user_meta((int) $user->ID, '_cmx_initial_password_set_at', \current_time('mysql'));
+	\delete_user_meta((int) $user->ID, '_cmx_initial_password_bootstrap_until');
+}, 10, 1);
+
+\add_action('wp_login', function ($user_login, $user): void {
+	if (!$user instanceof \WP_User || !$user->exists()) {
+		return;
+	}
+	if (\strtolower((string) $user->user_login) !== cmx_initial_password_host_subdomain()) {
+		return;
+	}
+	if ((string) \get_user_meta((int) $user->ID, '_cmx_initial_password_set_at', true) !== '') {
+		return;
+	}
+
+	\update_user_meta((int) $user->ID, '_cmx_initial_password_set_at', \current_time('mysql'));
+	\delete_user_meta((int) $user->ID, '_cmx_initial_password_bootstrap_until');
+}, 5, 2);
+
 \add_filter('logout_redirect', function ($redirect_to, $requested_redirect_to, $user): string {
 	return cmx_logout_redirect_url();
 }, 20, 3);

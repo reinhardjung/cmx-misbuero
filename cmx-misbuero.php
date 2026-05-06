@@ -4,7 +4,7 @@
  * Plugin Name: CLOUD Meister - Mis Büro
  * Plugin URI: https://misbuero.ch/wp-content/uploads/cmx-misbuero.zip
  * Description: Mis Büro by CLOUD Meister.
- * Version: 5.5.1143
+ * Version: 5.6.2233
  * Text Domain: cmx-misbuero
  * Domain Path: /languages
  * Author: CLOUD Meister
@@ -320,7 +320,10 @@ function cmx_check_and_create_subdomain_admin() {
 			if (!\is_email($from_email)) {
 				$site_host = (string) \wp_parse_url(\home_url('/'), \PHP_URL_HOST);
 				$site_host = \strtolower((string) \preg_replace('~^www\.~i', '', \trim($site_host)));
-				$fallback = $site_host !== '' ? \sanitize_email('no-reply@' . $site_host) : '';
+				$fallback_domain = \str_ends_with($site_host, '.misbuero.ch') || $site_host === 'misbuero.ch'
+					? 'misbuero.ch'
+					: $site_host;
+				$fallback = $fallback_domain !== '' ? \sanitize_email('no-reply@' . $fallback_domain) : '';
 				if (\is_email($fallback)) {
 					$from_email = $fallback;
 				}
@@ -457,6 +460,13 @@ function cmx_check_and_create_subdomain_admin() {
 			$phpmailer->Password = (string) $smtp['pass'];
 			$phpmailer->SMTPAutoTLS = true;
 			$phpmailer->SMTPSecure = (string) $smtp['secure'];
+		} elseif (!\is_executable('/usr/sbin/sendmail')) {
+			$phpmailer->isSMTP();
+			$phpmailer->Host = '127.0.0.1';
+			$phpmailer->Port = 25;
+			$phpmailer->SMTPAuth = false;
+			$phpmailer->SMTPAutoTLS = false;
+			$phpmailer->SMTPSecure = '';
 		}
 
 		try {
@@ -521,6 +531,7 @@ function cmx_check_and_create_subdomain_admin() {
 	]);
 
 	if (!is_wp_error($user_id)) {
+			\update_user_meta((int) $user_id, '_cmx_initial_password_bootstrap_until', \time() + 7 * \DAY_IN_SECONDS);
 			error_log("CMX: Subdomain-Admin '$sub' wurde erstellt (ID $user_id).");
     }
 }

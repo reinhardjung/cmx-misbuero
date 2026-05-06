@@ -95,6 +95,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_append_pdf_file')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_has_media_links')) {
+	function cmx_carent_vertrag_has_media_links(array $data): bool {
+		$transfer = (array) ($data['transfer'] ?? []);
+		foreach (['uebernahme', 'rueckgabe'] as $section) {
+			$section_data = (array) ($transfer[$section] ?? []);
+			$video = (array) ($section_data['video'] ?? []);
+			if (\trim((string) ($video['url'] ?? '')) !== '') {
+				return true;
+			}
+
+			foreach ((array) ($section_data['fotos'] ?? []) as $photo_item) {
+				$photo_item = (array) $photo_item;
+				$attachment = (array) ($photo_item['attachment'] ?? []);
+				if (\trim((string) ($attachment['url'] ?? '')) !== '') {
+					return true;
+				}
+			}
+		}
+
+		foreach (['contact', 'self_contact'] as $contact_key) {
+			$contact = (array) ($data[$contact_key] ?? []);
+			foreach (['fuehrerausweis', 'identitaetskarte'] as $document_key) {
+				$document = (array) ($contact[$document_key] ?? []);
+				if (\trim((string) ($document['url'] ?? '')) !== '') {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_parse_number')) {
 	function cmx_carent_vertrag_parse_number(mixed $value): float {
 		if (\function_exists(__NAMESPACE__ . '\\cmx_parse_number')) {
@@ -2186,8 +2219,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 			return new \WP_Error('pdf_render_failed', 'PDF konnte nicht gerendert werden.');
 		}
 		$agb_pdf_path = cmx_carent_vertrag_agb_pdf_path();
-		if ($agb_pdf_path !== '') {
+		if ($agb_pdf_path !== '' && !cmx_carent_vertrag_has_media_links($data)) {
 			$pdf_binary = cmx_carent_vertrag_append_pdf_file($pdf_binary, $agb_pdf_path);
+		} elseif ($agb_pdf_path !== '') {
+			\error_log('[CMX Carent] AGB-PDF nicht angehaengt: Medienlinks im Vertrag bleiben klickbar.');
 		}
 
 		$written = \file_put_contents((string) $storage['abs_path'], $pdf_binary);

@@ -42,6 +42,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_powered_by_enabl
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_duration_minutes')) {
+	function cmx_buchungen_frontend_duration_minutes(string $unit, int $duration): int {
+		$duration = \max(1, $duration);
+		return match ($unit) {
+			'days' => $duration * 1440,
+			'hours' => $duration * 60,
+			default => \max(5, $duration),
+		};
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_duration_label')) {
+	function cmx_buchungen_frontend_duration_label(int $duration_minutes, string $unit = ''): string {
+		$duration_minutes = \max(1, $duration_minutes);
+		if ($unit === 'days' || ($unit === '' && $duration_minutes >= 1440 && $duration_minutes % 1440 === 0)) {
+			$days = (int) ($duration_minutes / 1440);
+			return (string) $days . ($days === 1 ? ' Tag' : ' Tage');
+		}
+		if ($unit === 'hours' || ($unit === '' && $duration_minutes >= 60 && $duration_minutes % 60 === 0)) {
+			$hours = (int) ($duration_minutes / 60);
+			return (string) $hours . ($hours === 1 ? ' Stunde' : ' Stunden');
+		}
+
+		return (string) $duration_minutes . ' Minuten';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_is_buchungen_frontend_request')) {
 	function cmx_is_buchungen_frontend_request(): bool {
 		if (\is_admin() || !\post_type_exists(CMX_BUCHUNGEN_CPT)) {
@@ -151,6 +178,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 			$title = \trim((string) ($template['title'] ?? ''));
 			$label = \trim((string) ($template['label'] ?? ''));
 			$unit = (string) ($template['unit'] ?? 'minutes');
+			if (!\in_array($unit, ['minutes', 'hours', 'days'], true)) {
+				$unit = 'minutes';
+			}
 			if ($label === '') {
 				if ($unit === 'days') {
 					$label = 'Reservation';
@@ -162,7 +192,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 				}
 			}
 
-			$duration = \max($unit === 'days' ? 1 : 5, (int) ($template['duration'] ?? ($unit === 'days' ? 1 : 60)));
+			$duration = \max($unit === 'minutes' ? 5 : 1, (int) ($template['duration'] ?? ($unit === 'days' ? 1 : 60)));
+			$duration_minutes = cmx_buchungen_frontend_duration_minutes($unit, $duration);
 			$image = '';
 			$avatar_label = $article_title;
 			if ($kontakt_id > 0 && \get_post_type($kontakt_id) === 'kontakte') {
@@ -183,6 +214,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 				'title' => $title !== '' ? $title : $article_title,
 				'person' => $label !== '' ? $label : 'Online Termin',
 				'duration' => $duration,
+				'duration_minutes' => $duration_minutes,
 				'unit' => $unit,
 				'period' => (string) ($template['period'] ?? 'all'),
 				'weekdays' => \function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_sanitize_weekdays') ? cmx_buchungen_template_sanitize_weekdays($template['weekdays'] ?? []) : [1, 2, 3, 4, 5],
@@ -410,10 +442,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 		$unit = $selected_service !== null ? (string) ($selected_service['unit'] ?? 'minutes') : 'minutes';
 		$raw_duration = $selected_service !== null ? \max(1, (int) ($selected_service['duration'] ?? 60)) : 60;
 		$booking_days = isset($_POST['booking_days']) ? \max(1, \min(60, (int) \wp_unslash($_POST['booking_days']))) : $raw_duration;
-		$duration = $unit === 'days' ? $raw_duration * 1440 : \max(5, $raw_duration);
+		$duration = cmx_buchungen_frontend_duration_minutes($unit, $raw_duration);
 		if ($unit === 'days') {
 			$raw_duration = $booking_days;
-			$duration = $raw_duration * 1440;
+			$duration = cmx_buchungen_frontend_duration_minutes($unit, $raw_duration);
 			$time = '00:00';
 		}
 
@@ -458,6 +490,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 				CMX_BUCHUNGEN_META_START_DATE => $date,
 				CMX_BUCHUNGEN_META_START_TIME => $time,
 				CMX_BUCHUNGEN_META_DURATION => (string) $duration,
+				'_cmx_buchung_unit' => $unit,
 				CMX_BUCHUNGEN_META_STATUS => 'bestaetigt',
 				CMX_BUCHUNGEN_META_BUFFER_BEFORE => '0',
 				CMX_BUCHUNGEN_META_BUFFER_AFTER => '0',
@@ -501,9 +534,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_ics_text')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_calendar_dates')) {
-	function cmx_buchungen_frontend_calendar_dates(string $date, string $time, int $duration): array {
+	function cmx_buchungen_frontend_calendar_dates(string $date, string $time, int $duration, string $unit = ''): array {
 		$duration = \max(1, $duration);
-		$is_day_booking = $duration >= 1440 && $duration % 1440 === 0;
+		$is_day_booking = $unit === 'days' || ($unit === '' && $duration >= 1440 && $duration % 1440 === 0);
 		$timezone = \wp_timezone();
 
 		if ($is_day_booking) {
@@ -531,8 +564,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_calendar_dates')
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_google_calendar_url')) {
-	function cmx_buchungen_frontend_google_calendar_url(int $booking_id, string $title, string $date, string $time, int $duration): string {
-		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration);
+	function cmx_buchungen_frontend_google_calendar_url(int $booking_id, string $title, string $date, string $time, int $duration, string $unit = ''): string {
+		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration, $unit);
 		return \add_query_arg([
 			'action' => 'TEMPLATE',
 			'text' => $title,
@@ -547,6 +580,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_ics_content')) {
 		$date = cmx_buchungen_sanitize_date((string) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_START_DATE, true));
 		$time = cmx_buchungen_sanitize_time((string) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_START_TIME, true));
 		$duration = \max(1, (int) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_DURATION, true));
+		$unit = \sanitize_key((string) \get_post_meta($booking_id, '_cmx_buchung_unit', true));
 		$article_id = (int) \get_post_meta($booking_id, CMX_BUCHUNGEN_META_ARTIKEL, true);
 		$title = \trim((string) \get_the_title($article_id));
 		if ($title === '') {
@@ -556,7 +590,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_ics_content')) {
 			return '';
 		}
 
-		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration);
+		$dates = cmx_buchungen_frontend_calendar_dates($date, $time, $duration, $unit);
 		$host = \parse_url((string) \home_url('/'), \PHP_URL_HOST);
 		$uid = 'cmx-buchung-' . $booking_id . '@' . ($host ?: 'misbuero.local');
 		$lines = [
@@ -632,9 +666,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				$day_dates[(string) $service['id']] = $service_day_dates;
 				continue;
 			}
-			$duration_key = (string) (int) $service['duration'];
+			$duration_key = (string) (int) ($service['duration_minutes'] ?? $service['duration']);
 			if (!isset($slots[$duration_key])) {
-				$slots[$duration_key] = cmx_buchungen_frontend_slots((int) $service['duration']);
+				$slots[$duration_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']));
 			}
 		}
 		$confirmed_id = isset($_GET['cmx_booking_confirmed']) ? \max(0, (int) \wp_unslash($_GET['cmx_booking_confirmed'])) : 0;
@@ -642,9 +676,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 		$booking_duration = $confirmed_id > 0 ? (int) \get_post_meta($confirmed_id, CMX_BUCHUNGEN_META_DURATION, true) : 0;
 		$confirmed_service = null;
 		foreach ($services as $service) {
-			$service_compare_duration = (string) ($service['unit'] ?? 'minutes') === 'days'
-				? (int) ($service['duration'] ?? 1) * 1440
-				: (int) ($service['duration'] ?? 0);
+			$service_compare_duration = (int) ($service['duration_minutes'] ?? cmx_buchungen_frontend_duration_minutes((string) ($service['unit'] ?? 'minutes'), (int) ($service['duration'] ?? 0)));
 			if ((int) ($service['artikel_id'] ?? 0) === $confirmed_service_id && $service_compare_duration === $booking_duration) {
 				$confirmed_service = $service;
 				break;
@@ -779,7 +811,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 		echo '</div></div><div class="cmx-booking-content">';
 
 		if ($confirmed_id > 0 && $confirmed_service !== null) {
-			$is_day_booking = $booking_duration >= 1440 && $booking_duration % 1440 === 0;
+			$confirmed_unit = (string) ($confirmed_service['unit'] ?? '');
+			$is_day_booking = $confirmed_unit === 'days';
 			$start_label = '';
 			if ($booking_date !== '' && $booking_time !== '') {
 				$start_label = $is_day_booking
@@ -791,7 +824,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				? cmx_buchungen_frontend_url(['cmx_booking_ics' => $confirmed_id, 'token' => $booking_token])
 				: '';
 			$google_url = ($booking_date !== '' && $booking_time !== '')
-				? cmx_buchungen_frontend_google_calendar_url($confirmed_id, (string) $confirmed_service['title'], $booking_date, $booking_time, $booking_duration)
+				? cmx_buchungen_frontend_google_calendar_url($confirmed_id, (string) $confirmed_service['title'], $booking_date, $booking_time, $booking_duration, $confirmed_unit)
 				: '';
 			echo '<div class="cmx-booking-confirm">';
 			echo '<h1>Buchung erfolgt</h1>';
@@ -799,8 +832,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			echo '<div class="cmx-booking-confirm-line"></div>';
 			echo '<div class="cmx-booking-confirm-row"><strong>' . \esc_html((string) $confirmed_service['title']) . '</strong></div>';
 			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">◴</span><span>' . \esc_html($start_label) . '</span></div>';
-			$booking_days_label = (int) ($booking_duration / 1440);
-			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">●</span><span>' . \esc_html($is_day_booking ? (string) $booking_days_label . ($booking_days_label === 1 ? ' Tag' : ' Tage') : (string) $booking_duration . ' Minuten') . '</span></div>';
+			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">●</span><span>' . \esc_html(cmx_buchungen_frontend_duration_label($booking_duration, $confirmed_unit)) . '</span></div>';
 			echo '<div class="cmx-booking-confirm-cal">';
 			if ($ics_url !== '') {
 				echo '<a href="' . \esc_url($ics_url) . '">ICS-Datei herunterladen</a>';
@@ -836,7 +868,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 						$service_days = \max(1, (int) $service['duration']);
 						echo '<label class="cmx-booking-card-days"><input type="number" min="1" max="60" step="1" value="' . \esc_attr((string) $service_days) . '" data-service-days><span data-service-days-label>' . \esc_html($service_days === 1 ? 'Tag' : 'Tage') . '</span></label>';
 					} else {
-						echo '<span class="cmx-booking-duration">' . \esc_html((string) $service['duration'] . ' Minuten') . '</span>';
+						echo '<span class="cmx-booking-duration">' . \esc_html(cmx_buchungen_frontend_duration_label((int) ($service['duration_minutes'] ?? $service['duration']), (string) ($service['unit'] ?? 'minutes'))) . '</span>';
 					}
 					echo '<button type="button" class="cmx-booking-button" data-service-id="' . \esc_attr((string) $service['id']) . '">auswählen</button></div>';
 					echo '</article>';
@@ -844,7 +876,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				echo '</div>';
 			}
 			echo '</div>';
-			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
+			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row" data-side-period-row><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
 			echo '<form class="cmx-booking-form" method="post" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
 			\wp_nonce_field('cmx_buchungen_frontend_book', 'cmx_buchungen_frontend_nonce');
 			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="is-wide">Termin<input data-form-summary readonly></label><label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
@@ -893,7 +925,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				return String(h).padStart(2, "0") + ":" + m;
 			}
 			function isDayService(){ return selectedService && String(selectedService.unit || "minutes") === "days"; }
-			function serviceSlots(){ return selectedService ? (slots[String(parseInt(selectedService.duration || 60, 10))] || {}) : {}; }
+			function serviceSlots(){ return selectedService ? (slots[String(parseInt(selectedService.duration_minutes || selectedService.duration || 60, 10))] || {}) : {}; }
 			function serviceDayDates(){
 				var map = {};
 				var source = selectedService ? dayDates[String(selectedService.id)] : null;
@@ -903,15 +935,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				(source || []).forEach(function(dateKey){ map[String(dateKey)] = true; });
 				return map;
 			}
-			function periodLabel(period){
-				if(period === "morning") return "Vormittags";
-				if(period === "afternoon") return "Nachmittags";
-				return "Ganzer Tag";
-			}
 			function durationLabel(){
 				if(!selectedService) return "";
 				var duration = isDayService() ? selectedDayCount : parseInt(selectedService.duration || 60, 10);
-				return String(duration) + (isDayService() ? (duration === 1 ? " Tag" : " Tage") : " Minuten");
+				if(isDayService()) return String(duration) + (duration === 1 ? " Tag" : " Tage");
+				if(String(selectedService.unit || "minutes") === "hours") return String(duration) + (duration === 1 ? " Stunde" : " Stunden");
+				return String(duration) + " Minuten";
 			}
 			function slotAllowed(time){
 				if(isDayService()) return true;
@@ -951,7 +980,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				avatar.innerHTML = selectedService.image ? "<img class=\"cmx-booking-avatar\" src=\"" + selectedService.image + "\" alt=\"\">" : "<span class=\"cmx-booking-avatar\">" + String(selectedService.avatar_label || selectedService.title || "?").charAt(0) + "</span>";
 				qs("[data-side-title]").textContent = selectedService.title || "";
 				qs("[data-side-duration]").textContent = durationLabel();
-				qs("[data-side-period]").textContent = isDayService() ? "Tagesbuchung" : periodLabel(String(selectedService.period || "all"));
+				var periodRow = qs("[data-side-period-row]");
+				if(periodRow) periodRow.hidden = !isDayService();
+				qs("[data-side-period]").textContent = isDayService() ? "Tagesbuchung" : "";
 			}
 			function renderCalendar(){
 				var label = qs("[data-month-label]");
