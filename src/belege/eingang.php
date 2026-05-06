@@ -809,32 +809,6 @@ function cmx_belegeingang_rest_receive(\WP_REST_Request $request): \WP_REST_Resp
 	if ($requested_status !== 'trash') {
 		$query->set('post_status', ['publish']);
 	}
-
-	$meta_query[] = [
-		'relation' => 'OR',
-		[
-			'key' => CMX_BELEGEINGANG_SOURCE_META,
-			'compare' => 'NOT EXISTS',
-		],
-		[
-			'key' => CMX_BELEGEINGANG_SOURCE_META,
-			'value' => 'rest',
-			'compare' => '!=',
-		],
-		[
-			'relation' => 'AND',
-			[
-				'key' => CMX_BELEGEINGANG_SOURCE_META,
-				'value' => 'rest',
-			],
-			[
-				'key' => CMX_BELEGEINGANG_STATUS_META,
-				'value' => 'pending',
-				'compare' => '!=',
-			],
-		],
-	];
-	$query->set('meta_query', $meta_query);
 }, 5);
 
 \add_action('pre_get_posts', function (\WP_Query $query): void {

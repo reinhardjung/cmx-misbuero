@@ -212,6 +212,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_headers')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_add_bcc')) {
+	function cmx_carent_versand_add_bcc(array $sender, string $email): array {
+		$email = \sanitize_email($email);
+		if (!\is_email($email)) {
+			return $sender;
+		}
+
+		$bcc = \is_array($sender['bcc'] ?? null) ? (array) $sender['bcc'] : [];
+		$seen = [];
+		$clean = [];
+		foreach ($bcc as $bcc_email) {
+			$bcc_email = \sanitize_email((string) $bcc_email);
+			if (!\is_email($bcc_email)) {
+				continue;
+			}
+			$key = \strtolower($bcc_email);
+			if (isset($seen[$key])) {
+				continue;
+			}
+			$seen[$key] = true;
+			$clean[] = $bcc_email;
+		}
+
+		$key = \strtolower($email);
+		if (!isset($seen[$key])) {
+			$clean[] = $email;
+		}
+
+		$sender['bcc'] = $clean;
+		return $sender;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_add_sender_runtime')) {
 	function cmx_carent_versand_add_sender_runtime(array $sender): array {
 		$from_filter = static function ($email) use ($sender): string {
@@ -257,6 +290,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_add_sender_runtime')
 			$phpmailer->clearReplyTos();
 			if (\is_email($reply)) {
 				$phpmailer->addReplyTo($reply, $name);
+			}
+
+			$existing_bcc = [];
+			foreach ((array) $phpmailer->getBccAddresses() as $entry) {
+				if (\is_array($entry) && isset($entry[0]) && \is_string($entry[0])) {
+					$existing_bcc[\strtolower($entry[0])] = true;
+				}
+			}
+			foreach ((array) ($sender['bcc'] ?? []) as $bcc_email) {
+				$bcc_email = \sanitize_email((string) $bcc_email);
+				if (!\is_email($bcc_email) || isset($existing_bcc[\strtolower($bcc_email)])) {
+					continue;
+				}
+				try {
+					$phpmailer->addBCC($bcc_email);
+					$existing_bcc[\strtolower($bcc_email)] = true;
+				} catch (\Throwable $e) {
+					// Ignore invalid BCC entries without aborting the send.
+				}
 			}
 		};
 
@@ -734,8 +786,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 		$subject = cmx_carent_versand_subject($post_id, $data);
 		$message = cmx_carent_versand_message_html($post_id, $data, (array) $pdf);
 		$cc = [];
+		$sender = cmx_carent_versand_add_bcc($sender, $sender_email);
+		$sender = cmx_carent_versand_add_bcc($sender, $self_email);
 		$bcc = \is_array($sender['bcc'] ?? null) ? \array_values((array) $sender['bcc']) : [];
-		$headers = cmx_carent_versand_headers($sender, $self_email, $to, $cc);
+		$headers = cmx_carent_versand_headers($sender, '', $to, $cc);
 
 		$had_sender_override = \array_key_exists('cmx_force_current_user_mail_sender', $GLOBALS);
 		$previous_sender_override = $had_sender_override ? $GLOBALS['cmx_force_current_user_mail_sender'] : null;

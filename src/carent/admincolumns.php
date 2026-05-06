@@ -142,6 +142,54 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_date_value')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_filter_date_value')) {
+	function cmx_carent_admin_filter_date_value(): string {
+		$value = isset($_GET['cmx_carent_stichtag']) ? \trim((string) \wp_unslash($_GET['cmx_carent_stichtag'])) : '';
+		if ($value === '') {
+			return '';
+		}
+
+		if (\preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+			return $value;
+		}
+
+		if (\preg_match('/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2}|\d{4})$/', $value, $matches) === 1) {
+			$day = (int) ($matches[1] ?? 0);
+			$month = (int) ($matches[2] ?? 0);
+			$year = (int) ($matches[3] ?? 0);
+			if ($year > 0 && $year < 100) {
+				$year += 2000;
+			}
+			if (\checkdate($month, $day, $year)) {
+				return \sprintf('%04d-%02d-%02d', $year, $month, $day);
+			}
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_used_article_ids')) {
+	function cmx_carent_admin_used_article_ids(): array {
+		global $wpdb;
+
+		$meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+			: '_cmx_carent_fahrzeug_id';
+		$ids = (array) $wpdb->get_col($wpdb->prepare(
+			"SELECT DISTINCT CAST(meta_value AS UNSIGNED)
+			FROM {$wpdb->postmeta}
+			WHERE meta_key = %s
+				AND meta_value REGEXP '^[0-9]+$'
+				AND CAST(meta_value AS UNSIGNED) > 0
+			ORDER BY CAST(meta_value AS UNSIGNED) ASC",
+			$meta_key
+		));
+
+		return \array_values(\array_unique(\array_filter(\array_map('intval', $ids))));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_search_normalize')) {
 	function cmx_carent_admin_search_normalize(string $value): string {
 		$value = \trim($value);
@@ -453,6 +501,117 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 		.wp-list-table .column-cmx_carent_rueckgabe{width:100px;white-space:nowrap}
 	</style>';
 });
+
+\add_filter('months_dropdown_results', function (array $months, string $post_type): array {
+	return $post_type === 'carent' ? [] : $months;
+}, 10, 2);
+
+\add_action('restrict_manage_posts', function (string $post_type, string $which = 'top'): void {
+	if ($post_type !== 'carent' || $which !== 'top') {
+		return;
+	}
+	if (!\current_user_can('edit_posts')) {
+		return;
+	}
+
+	$selected_article_id = isset($_GET['cmx_carent_artikel_id']) ? (int) \wp_unslash($_GET['cmx_carent_artikel_id']) : 0;
+	$selected_date = cmx_carent_admin_filter_date_value();
+	$article_ids = cmx_carent_admin_used_article_ids();
+
+	echo '<label for="cmx_carent_artikel_id" class="screen-reader-text">' . \esc_html__('Nach Artikel filtern', 'cmx-misbuero') . '</label>';
+	echo '<select name="cmx_carent_artikel_id" id="cmx_carent_artikel_id">';
+	echo '<option value="0">' . \esc_html__('Alle Artikel', 'cmx-misbuero') . '</option>';
+	foreach ($article_ids as $article_id) {
+		if ($article_id <= 0 || (string) \get_post_type($article_id) !== 'artikel') {
+			continue;
+		}
+		$label = cmx_carent_admin_article_label($article_id);
+		if ($label === '') {
+			$label = '#' . $article_id;
+		}
+		echo '<option value="' . (int) $article_id . '"' . \selected($selected_article_id, $article_id, false) . '>' . \esc_html($label) . '</option>';
+	}
+	echo '</select>';
+
+	echo '<label for="cmx_carent_stichtag" class="screen-reader-text">' . \esc_html__('Vermietet am Datum', 'cmx-misbuero') . '</label>';
+	echo '<input type="date" name="cmx_carent_stichtag" id="cmx_carent_stichtag" value="' . \esc_attr($selected_date) . '" title="' . \esc_attr__('Vermietet am Datum', 'cmx-misbuero') . '">';
+}, 10, 2);
+
+\add_action('pre_get_posts', function (\WP_Query $query): void {
+	if (!\is_admin() || !$query->is_main_query()) {
+		return;
+	}
+
+	$post_type = $query->get('post_type');
+	if (\is_array($post_type)) {
+		$post_type = (string) ($post_type[0] ?? '');
+	}
+	if ((string) $post_type !== 'carent') {
+		return;
+	}
+
+	$article_id = isset($_GET['cmx_carent_artikel_id']) ? (int) \wp_unslash($_GET['cmx_carent_artikel_id']) : 0;
+	$filter_date = cmx_carent_admin_filter_date_value();
+	if ($article_id <= 0 && $filter_date === '') {
+		return;
+	}
+
+	$raw_meta_query = $query->get('meta_query');
+	$meta_query = \is_array($raw_meta_query) ? $raw_meta_query : [];
+	if (!isset($meta_query['relation'])) {
+		$meta_query['relation'] = 'AND';
+	}
+
+	if ($article_id > 0) {
+		$meta_query[] = [
+			'key'     => \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
+				: '_cmx_carent_fahrzeug_id',
+			'value'   => $article_id,
+			'compare' => '=',
+			'type'    => 'NUMERIC',
+		];
+	}
+
+	if ($filter_date !== '') {
+		$start_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_UEBERNAHME_DATUM_META')
+			: '_cmx_carent_uebernahme_datum';
+		$end_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_RUECKGABE_DATUM_META')
+			: '_cmx_carent_rueckgabe_datum';
+
+		$meta_query[] = [
+			'relation' => 'AND',
+			[
+				'key'     => $start_key,
+				'value'   => $filter_date,
+				'compare' => '<=',
+				'type'    => 'DATE',
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key'     => $end_key,
+					'value'   => $filter_date,
+					'compare' => '>=',
+					'type'    => 'DATE',
+				],
+				[
+					'key'     => $end_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $end_key,
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		];
+	}
+
+	$query->set('meta_query', $meta_query);
+}, 20);
 
 \add_action('pre_get_posts', function (\WP_Query $query): void {
 	if (!cmx_carent_admin_is_search_query($query)) {
