@@ -483,6 +483,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_render_mail_template
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_format_template_html')) {
+	function cmx_carent_versand_format_template_html(string $html): string {
+		$html = \str_replace(["\r\n", "\r"], "\n", $html);
+		$html = \wpautop($html, true);
+
+		return \wp_kses_post($html);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 	function cmx_carent_versand_message_html(int $post_id, array $data, array $pdf = [], string $template_key = 'carent_mail_contract_template'): string {
 		$post_id = (int) $post_id;
@@ -536,7 +545,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_versand_message_html')) {
 		if ($logo_html !== '' && !\str_contains($body, $logo_html)) {
 			$message .= '<div style="margin:0 0 24px;">' . $logo_html . '</div>';
 		}
-		$message .= \wp_kses_post($body);
+		$message .= cmx_carent_versand_format_template_html($body);
 		$message .= '</div>';
 
 		return $message;

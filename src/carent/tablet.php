@@ -94,6 +94,344 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_can_create_carent')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_attachment_preview_data')) {
+	function cmx_vermietung_attachment_preview_data(int $attachment_id): array {
+		if ($attachment_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment') {
+			return [
+				'id'       => 0,
+				'url'      => '',
+				'filename' => '',
+				'mime'     => '',
+			];
+		}
+
+		$url = (string) \wp_get_attachment_image_url($attachment_id, 'medium');
+		if ($url === '') {
+			$url = (string) \wp_get_attachment_url($attachment_id);
+		}
+		$path = (string) \get_attached_file($attachment_id);
+
+		return [
+			'id'       => $attachment_id,
+			'url'      => $url,
+			'filename' => $path !== '' ? (string) \basename($path) : (string) \get_the_title($attachment_id),
+			'mime'     => (string) \get_post_mime_type($attachment_id),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_dokument_attachment_id')) {
+	function cmx_vermietung_dokument_attachment_id(int $doc_id): int {
+		if ($doc_id <= 0 || (string) \get_post_type($doc_id) !== 'dokumente') {
+			return 0;
+		}
+
+		$candidates = [];
+		$primary_attachment_id = (int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true);
+		if ($primary_attachment_id > 0) {
+			$candidates[] = $primary_attachment_id;
+		}
+
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+		foreach ((array) \get_post_meta($doc_id, $self_meta_key, true) as $entry) {
+			if (\is_numeric($entry)) {
+				$candidates[] = (int) $entry;
+			}
+		}
+
+		foreach (\array_values(\array_unique(\array_filter($candidates))) as $attachment_id) {
+			$attachment_id = (int) $attachment_id;
+			if ($attachment_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment') {
+				continue;
+			}
+			$mime = (string) \get_post_mime_type($attachment_id);
+			if (\str_starts_with($mime, 'image/')) {
+				return $attachment_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_license_document')) {
+	function cmx_vermietung_contact_license_document(int $contact_id): array {
+		static $cache = [];
+		if ($contact_id <= 0 || !\post_type_exists('dokumente')) {
+			return cmx_vermietung_attachment_preview_data(0);
+		}
+		if (isset($cache[$contact_id])) {
+			return $cache[$contact_id];
+		}
+
+		$relation_meta_key = 'cmx_dokumente_kunden';
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+			$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+			if (\is_array($map) && isset($map['kontakte']) && \is_string($map['kontakte']) && $map['kontakte'] !== '') {
+				$relation_meta_key = (string) $map['kontakte'];
+			}
+		}
+
+		$doc_ids = \get_posts([
+			'post_type'              => 'dokumente',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'numberposts'            => 100,
+			'fields'                 => 'ids',
+			'orderby'                => 'modified',
+			'order'                  => 'DESC',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => true,
+			'meta_query'             => [
+				[
+					'key'     => $relation_meta_key,
+					'value'   => (string) $contact_id,
+					'compare' => 'LIKE',
+				],
+			],
+		]);
+
+		$taxonomy = \function_exists(__NAMESPACE__ . '\\cmx_tax_key')
+			? (string) cmx_tax_key('dokumente', 'Kategorien')
+			: '';
+		$keywords = ['führerausweis', 'fuehrerausweis', 'führer ausweis', 'fuehrer ausweis', 'fahrausweis', 'fahrerlaubnis', 'driving license', 'driving licence', 'driver license', 'driver licence'];
+		$result = cmx_vermietung_attachment_preview_data(0);
+
+		foreach ((array) $doc_ids as $doc_id) {
+			$doc_id = (int) $doc_id;
+			$related_ids = \array_values(\array_filter(\array_map('intval', (array) \get_post_meta($doc_id, $relation_meta_key, true))));
+			if (!\in_array($contact_id, $related_ids, true)) {
+				continue;
+			}
+
+			$attachment_id = cmx_vermietung_dokument_attachment_id($doc_id);
+			if ($attachment_id <= 0) {
+				continue;
+			}
+
+			$text_parts = [
+				(string) \get_the_title($doc_id),
+				(string) \get_post_meta($doc_id, '_cmx_dokumente_file_path', true),
+			];
+			if ($taxonomy !== '' && \taxonomy_exists($taxonomy)) {
+				$terms = \get_the_terms($doc_id, $taxonomy);
+				if (!\is_wp_error($terms) && !empty($terms)) {
+					foreach ($terms as $term) {
+						$text_parts[] = (string) $term->name;
+						$text_parts[] = (string) $term->slug;
+					}
+				}
+			}
+
+			$haystack = \function_exists('mb_strtolower')
+				? \mb_strtolower(\implode(' ', $text_parts), 'UTF-8')
+				: \strtolower(\implode(' ', $text_parts));
+			foreach ($keywords as $keyword) {
+				$needle = \function_exists('mb_strtolower') ? \mb_strtolower($keyword, 'UTF-8') : \strtolower($keyword);
+				if (\str_contains($haystack, $needle)) {
+					$result = cmx_vermietung_attachment_preview_data($attachment_id);
+					$cache[$contact_id] = $result;
+					return $result;
+				}
+			}
+		}
+
+		$cache[$contact_id] = $result;
+		return $result;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_document_relation_meta_key')) {
+	function cmx_vermietung_contact_document_relation_meta_key(): string {
+		if (\defined(__NAMESPACE__ . '\\CMX_DOK_REL_META')) {
+			$map = \constant(__NAMESPACE__ . '\\CMX_DOK_REL_META');
+			if (\is_array($map) && isset($map['kontakte']) && \is_string($map['kontakte']) && $map['kontakte'] !== '') {
+				return (string) $map['kontakte'];
+			}
+		}
+
+		return 'cmx_dokumente_kunden';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_license_document_base_name')) {
+	function cmx_vermietung_license_document_base_name(int $contact_id): string {
+		$name = $contact_id > 0 ? \trim((string) \get_the_title($contact_id)) : '';
+		$name = \preg_replace('/\s+/', '', \wp_strip_all_tags($name));
+		$name = \sanitize_file_name('FA_' . ($name !== '' ? $name : ('Kontakt' . $contact_id)));
+		$name = (string) \pathinfo($name, \PATHINFO_FILENAME);
+
+		return $name !== '' ? $name : ('FA_Kontakt' . $contact_id);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_rename_license_attachment')) {
+	function cmx_vermietung_rename_license_attachment(int $attachment_id, int $contact_id): string {
+		if ($attachment_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment' || $contact_id <= 0) {
+			return '';
+		}
+
+		$file_path = (string) \get_attached_file($attachment_id);
+		if ($file_path === '' || !\is_file($file_path)) {
+			return \ltrim((string) \get_post_meta($attachment_id, '_wp_attached_file', true), '/');
+		}
+
+		$dir = (string) \dirname($file_path);
+		$ext = \strtolower((string) \pathinfo($file_path, \PATHINFO_EXTENSION));
+		if ($ext === '') {
+			$mime_ext = \wp_get_default_extension_for_mime_type((string) \get_post_mime_type($attachment_id));
+			$ext = \is_string($mime_ext) && $mime_ext !== '' ? $mime_ext : 'png';
+		}
+
+		$desired_base = cmx_vermietung_license_document_base_name($contact_id) . '.' . $ext;
+		$current_base = (string) \basename($file_path);
+		$new_base = $current_base;
+		if (\strcasecmp($current_base, $desired_base) !== 0 && \preg_match('/^' . \preg_quote((string) \pathinfo($desired_base, \PATHINFO_FILENAME), '/') . '-\d+\.' . \preg_quote($ext, '/') . '$/i', $current_base) !== 1) {
+			$new_base = \wp_unique_filename($dir, $desired_base);
+			$new_path = $dir . '/' . $new_base;
+			if (@\rename($file_path, $new_path)) {
+				$old_rel = \ltrim((string) \get_post_meta($attachment_id, '_wp_attached_file', true), '/');
+				$rel_dir = \trim((string) \dirname($old_rel), '.');
+				$new_rel = ($rel_dir !== '' ? \trailingslashit($rel_dir) : '') . $new_base;
+				\update_post_meta($attachment_id, '_wp_attached_file', $new_rel);
+				$metadata = \wp_get_attachment_metadata($attachment_id);
+				if (\is_array($metadata)) {
+					$metadata['file'] = $new_rel;
+					\wp_update_attachment_metadata($attachment_id, $metadata);
+				}
+				\wp_update_post([
+					'ID'         => $attachment_id,
+					'post_title' => (string) \pathinfo($new_base, \PATHINFO_FILENAME),
+					'post_name'  => \sanitize_title((string) \pathinfo($new_base, \PATHINFO_FILENAME)),
+				]);
+				return $new_rel;
+			}
+		}
+
+		return \ltrim((string) \get_post_meta($attachment_id, '_wp_attached_file', true), '/');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_find_license_document')) {
+	function cmx_vermietung_find_license_document(int $attachment_id, int $contact_id, string $rel_path): int {
+		if ($attachment_id <= 0 || $contact_id <= 0 || !\post_type_exists('dokumente')) {
+			return 0;
+		}
+
+		$relation_meta_key = cmx_vermietung_contact_document_relation_meta_key();
+		$query = new \WP_Query([
+			'post_type'              => 'dokumente',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => 50,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+			'meta_query'             => [
+				[
+					'key'     => $relation_meta_key,
+					'value'   => (string) $contact_id,
+					'compare' => 'LIKE',
+				],
+			],
+		]);
+
+		foreach ((array) $query->posts as $doc_id) {
+			$doc_id = (int) $doc_id;
+			$related_ids = \array_values(\array_filter(\array_map('intval', (array) \get_post_meta($doc_id, $relation_meta_key, true))));
+			if (!\in_array($contact_id, $related_ids, true)) {
+				continue;
+			}
+			if ((int) \get_post_meta($doc_id, '_cmx_dokumente_attachment_id', true) === $attachment_id) {
+				return $doc_id;
+			}
+			$file_refs = \function_exists(__NAMESPACE__ . '\\cmx_dokumente_collect_file_refs')
+				? (array) cmx_dokumente_collect_file_refs($doc_id)
+				: (array) \get_post_meta($doc_id, \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META') ? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META') : '_cmx_dokumente_files', true);
+			if ($rel_path !== '' && \in_array($rel_path, \array_map('strval', $file_refs), true)) {
+				return $doc_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_sync_license_document')) {
+	function cmx_vermietung_sync_license_document(int $attachment_id, int $contact_id): int {
+		if ($attachment_id <= 0 || $contact_id <= 0 || (string) \get_post_type($attachment_id) !== 'attachment' || !\post_type_exists('dokumente')) {
+			return 0;
+		}
+		if (!\str_starts_with((string) \get_post_mime_type($attachment_id), 'image/')) {
+			return 0;
+		}
+
+		$rel_path = cmx_vermietung_rename_license_attachment($attachment_id, $contact_id);
+		if ($rel_path === '') {
+			$rel_path = \ltrim((string) \get_post_meta($attachment_id, '_wp_attached_file', true), '/');
+		}
+
+		$title = cmx_vermietung_license_document_base_name($contact_id);
+		$doc_id = cmx_vermietung_find_license_document($attachment_id, $contact_id, $rel_path);
+		if ($doc_id <= 0) {
+			$doc_id = \wp_insert_post([
+				'post_type'   => 'dokumente',
+				'post_status' => 'publish',
+				'post_title'  => $title,
+				'post_name'   => \sanitize_title($title),
+				'post_author' => (int) \get_current_user_id(),
+			], true);
+			if (\is_wp_error($doc_id) || (int) $doc_id <= 0) {
+				return 0;
+			}
+			$doc_id = (int) $doc_id;
+		} else {
+			\wp_update_post([
+				'ID'         => $doc_id,
+				'post_title' => $title,
+				'post_name'  => \sanitize_title($title),
+			]);
+		}
+
+		$relation_meta_key = cmx_vermietung_contact_document_relation_meta_key();
+		\update_post_meta($doc_id, $relation_meta_key, [$contact_id]);
+		\update_post_meta($doc_id, '_cmx_dokumente_attachment_id', $attachment_id);
+		if ($rel_path !== '') {
+			\update_post_meta($doc_id, '_cmx_dokumente_file_path', $rel_path);
+		}
+
+		$self_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_SELF_META')
+			: '_cmx_dokumente_files';
+		$self_files = \array_values(\array_filter((array) \get_post_meta($doc_id, $self_meta_key, true), static fn($value): bool => $value !== '' && $value !== null));
+		if ($rel_path !== '') {
+			$self_files[] = $rel_path;
+		}
+		$self_files[] = $attachment_id;
+		\update_post_meta($doc_id, $self_meta_key, \array_values(\array_unique($self_files)));
+
+		$uploads_meta_key = \defined(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_DOK_UPLOADS_META')
+			: '_cmx_dokumente_uploads';
+		$contact_docs = \array_values(\array_filter(\array_map('intval', (array) \get_post_meta($contact_id, $uploads_meta_key, true))));
+		$contact_docs[] = $doc_id;
+		\update_post_meta($contact_id, $uploads_meta_key, \array_values(\array_unique($contact_docs)));
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_assign_dokument_category')) {
+			cmx_carent_vertrag_assign_dokument_category($doc_id, 'Führerausweis');
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_tax_key')) {
+			$taxonomy = (string) cmx_tax_key('dokumente', 'Kategorien');
+			if ($taxonomy !== '' && \taxonomy_exists($taxonomy)) {
+				\wp_set_object_terms($doc_id, ['Führerausweis'], $taxonomy, false);
+			}
+		}
+
+		return $doc_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_rows')) {
 	function cmx_vermietung_contact_rows(): array {
 		$post_types = \function_exists(__NAMESPACE__ . '\\cmx_carent_kontakt_post_types')
@@ -155,6 +493,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_rows')) {
 
 			$meta = \implode(' · ', \array_values(\array_filter([$subtitle, $phone !== '' ? $phone : $email], static fn(string $value): bool => \trim($value) !== '')));
 			$search_text = \trim($search !== '' ? $search : \implode(' ', [$title, $subtitle, $phone, $email]));
+			$license_document = cmx_vermietung_contact_license_document($post_id);
 
 			$rows[] = [
 				'id'        => $post_id,
@@ -164,6 +503,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_rows')) {
 				'email_href'=> $email_href,
 				'image_url' => $image_url,
 				'search'    => \function_exists('mb_strtolower') ? \mb_strtolower($search_text, 'UTF-8') : \strtolower($search_text),
+				'license'   => $license_document,
 			];
 		}
 
@@ -1889,6 +2229,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		$artikel_variant_index = isset($_POST['cmx_vermietung_artikel_variant_index']) && \is_numeric((string) \wp_unslash($_POST['cmx_vermietung_artikel_variant_index']))
 			? \max(0, (int) \wp_unslash($_POST['cmx_vermietung_artikel_variant_index']))
 			: 0;
+		$selected_license_attachment_id = isset($_POST['cmx_vermietung_fuehrerausweis_attachment_id'])
+			? (int) \wp_unslash($_POST['cmx_vermietung_fuehrerausweis_attachment_id'])
+			: 0;
 		$booking_id = isset($_POST['cmx_vermietung_buchung_id']) ? (int) \wp_unslash($_POST['cmx_vermietung_buchung_id']) : 0;
 		if ($booking_id > 0) {
 			if (!\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') || \get_post_type($booking_id) !== CMX_BUCHUNGEN_CPT || !\current_user_can('edit_post', $booking_id)) {
@@ -1935,6 +2278,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		$existing_license_attachment_id = $current_post_id > 0
 			? (int) \get_post_meta($current_post_id, $license_meta_key, true)
 			: 0;
+		if ($selected_license_attachment_id > 0) {
+			$selected_license_mime = (string) \get_post_mime_type($selected_license_attachment_id);
+			if ((string) \get_post_type($selected_license_attachment_id) !== 'attachment' || !\str_starts_with($selected_license_mime, 'image/')) {
+				$selected_license_attachment_id = 0;
+			}
+		}
 		$has_identity_upload = \is_array($identity_upload)
 			&& isset($identity_upload['error'], $identity_upload['name'])
 			&& (int) $identity_upload['error'] !== \UPLOAD_ERR_NO_FILE
@@ -1977,7 +2326,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_agb_acceptance']));
 			exit;
 		}
-		if (!$has_license_upload && $existing_license_attachment_id <= 0) {
+		if (!$has_license_upload && $existing_license_attachment_id <= 0 && $selected_license_attachment_id <= 0) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_license_photo']));
 			exit;
 		}
@@ -2062,6 +2411,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 			}
 
 			\update_post_meta($post_id, $license_meta_key, (int) $attachment_id);
+		} elseif ($selected_license_attachment_id > 0) {
+			\update_post_meta($post_id, $license_meta_key, $selected_license_attachment_id);
+		}
+		$final_license_attachment_id = (int) \get_post_meta($post_id, $license_meta_key, true);
+		if ($final_license_attachment_id > 0 && $kontakt_id > 0) {
+			cmx_vermietung_sync_license_document($final_license_attachment_id, $kontakt_id);
 		}
 		if ($has_identity_upload) {
 			require_once \ABSPATH . 'wp-admin/includes/file.php';
@@ -2179,6 +2534,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$selected_contact_title = (string) ($selected_contact_row['title'] ?? '');
 		$selected_contact_email_href = \trim((string) ($selected_contact_row['email_href'] ?? ''));
 		$selected_vehicle_title = (string) ($selected_vehicle_row['title'] ?? '');
+		if ($license_attachment_id <= 0 && $selected_contact_id > 0) {
+			$contact_license_document = cmx_vermietung_contact_license_document($selected_contact_id);
+			$license_attachment_id = (int) ($contact_license_document['id'] ?? 0);
+			if ($license_attachment_id > 0) {
+				$license_image_url = (string) ($contact_license_document['url'] ?? '');
+				$license_filename = (string) ($contact_license_document['filename'] ?? '');
+			}
+		}
 		$selected_vehicle_details = cmx_vermietung_vehicle_detail_values($selected_vehicle_id, $current_post_id, $selected_vehicle_variant_index);
 		$selected_uebernahme_values = [
 			'ort'                   => '',
@@ -2642,6 +3005,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<input type="hidden" name="cmx_vermietung_kontakt_id" id="cmx-vermietung-kontakt-id" value="' . (int) $selected_contact_id . '">';
 		echo '<input type="hidden" name="cmx_vermietung_artikel_id" id="cmx-vermietung-artikel-id" value="' . (int) $selected_vehicle_id . '">';
 		echo '<input type="hidden" name="cmx_vermietung_artikel_variant_index" id="cmx-vermietung-artikel-variant-index" value="' . (int) $selected_vehicle_variant_index . '">';
+		echo '<input type="hidden" name="cmx_vermietung_fuehrerausweis_attachment_id" id="cmx-vermietung-fuehrerausweis-attachment-id" value="' . (int) $license_attachment_id . '">';
 		echo '<input type="hidden" name="cmx_vermietung_buchung_id" id="cmx-vermietung-buchung-id" value="0">';
 		\wp_nonce_field('cmx_vermietung_create', 'cmx_vermietung_nonce');
 		echo '<div class="cmx-vermietung-summary">';
@@ -2760,7 +3124,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 							? 'Kennzeichen ' . \trim((string) ($details_source['kennzeichen'] ?? ''))
 							: $meta);
 
-					echo '<button type="button" class="cmx-vermietung-item" data-id="' . $id . '" data-variant-index="' . $variant_index . '" data-title="' . \esc_attr($row_title) . '" data-search="' . \esc_attr($search) . '" data-selected-meta="' . \esc_attr($item_selected_meta) . '"' . ($key === 'kontakt' ? ' data-email-href="' . \esc_attr((string) ($row['email_href'] ?? '')) . '"' : '') . ' data-kennzeichen="' . \esc_attr((string) ($details_source['kennzeichen'] ?? '')) . '" data-km-stand-uebernahme="' . \esc_attr((string) ($details_source['km_stand_uebernahme'] ?? '')) . '" data-km-stand-rueckgabe="' . \esc_attr((string) ($details_source['km_stand_rueckgabe'] ?? '')) . '" data-begrenzung="' . \esc_attr((string) ($details_source['begrenzung'] ?? '')) . '" data-mehrpreis="' . \esc_attr((string) ($details_source['mehrpreis'] ?? '')) . '" data-kasko-min="' . \esc_attr((string) ($details_source['kasko_min'] ?? '')) . '" data-kasko-max="' . \esc_attr((string) ($details_source['kasko_max'] ?? '')) . '" data-mietpreis="' . \esc_attr((string) ($details_source['mietpreis'] ?? '')) . '">';
+					$license_row = $key === 'kontakt' ? (array) ($row['license'] ?? []) : [];
+					echo '<button type="button" class="cmx-vermietung-item" data-id="' . $id . '" data-variant-index="' . $variant_index . '" data-title="' . \esc_attr($row_title) . '" data-search="' . \esc_attr($search) . '" data-selected-meta="' . \esc_attr($item_selected_meta) . '"' . ($key === 'kontakt' ? ' data-email-href="' . \esc_attr((string) ($row['email_href'] ?? '')) . '" data-license-id="' . (int) ($license_row['id'] ?? 0) . '" data-license-url="' . \esc_url((string) ($license_row['url'] ?? '')) . '" data-license-filename="' . \esc_attr((string) ($license_row['filename'] ?? '')) . '"' : '') . ' data-kennzeichen="' . \esc_attr((string) ($details_source['kennzeichen'] ?? '')) . '" data-km-stand-uebernahme="' . \esc_attr((string) ($details_source['km_stand_uebernahme'] ?? '')) . '" data-km-stand-rueckgabe="' . \esc_attr((string) ($details_source['km_stand_rueckgabe'] ?? '')) . '" data-begrenzung="' . \esc_attr((string) ($details_source['begrenzung'] ?? '')) . '" data-mehrpreis="' . \esc_attr((string) ($details_source['mehrpreis'] ?? '')) . '" data-kasko-min="' . \esc_attr((string) ($details_source['kasko_min'] ?? '')) . '" data-kasko-max="' . \esc_attr((string) ($details_source['kasko_max'] ?? '')) . '" data-mietpreis="' . \esc_attr((string) ($details_source['mietpreis'] ?? '')) . '">';
 					echo '<span class="cmx-vermietung-thumb">';
 					if ($image_url !== '') {
 						echo '<img src="' . \esc_url($image_url) . '" alt="">';
@@ -3040,6 +3405,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var licenseMeta=document.getElementById("cmx-vermietung-fuehrerausweis-meta");
 				var licenseDropzone=document.getElementById("cmx-vermietung-fuehrerausweis-dropzone");
 				var licensePanel=document.getElementById("cmx-vermietung-fuehrerausweis-panel");
+				var licenseAttachmentInput=document.getElementById("cmx-vermietung-fuehrerausweis-attachment-id");
 				var statusNotice=document.getElementById("cmx-vermietung-status-notice");
 				var licenseRequired=licenseFile && String(licenseFile.getAttribute("data-required")||"0")==="1";
 				var identityFile=document.getElementById("cmx-vermietung-identitaetskarte-file");
@@ -3628,6 +3994,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						identityFile.disabled=!hasContact;
 					}
 				}
+				function setExistingLicensePreview(id, url, filename){
+					var attachmentId=String(id||"").trim();
+					var imageUrl=String(url||"").trim();
+					var label=String(filename||"").trim();
+					if(licenseAttachmentInput){licenseAttachmentInput.value=attachmentId;}
+					if(!licensePreview || !licenseMeta){return;}
+					if(attachmentId!=="" && attachmentId!=="0" && imageUrl!==""){
+						licensePreview.src=imageUrl;
+						licensePreview.classList.add("is-active");
+						licenseMeta.textContent=label!=="" ? label : "Führerausweis vom Kontakt übernommen.";
+						return;
+					}
+					licensePreview.classList.remove("is-active");
+					licensePreview.removeAttribute("src");
+					licenseMeta.textContent="Noch kein Foto gewählt.";
+				}
+				function applyContactLicense(item){
+					if(!item){return;}
+					setExistingLicensePreview(
+						item.getAttribute("data-license-id"),
+						item.getAttribute("data-license-url"),
+						item.getAttribute("data-license-filename")
+					);
+				}
 				function syncReturnPanelState(){
 					if(!returnPanel || !returnToggle){return;}
 					returnToggle.setAttribute("aria-expanded", returnPanel.classList.contains("is-collapsed") ? "false" : "true");
@@ -3689,6 +4079,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				}
 				function updateUploadPreview(file, previewNode, metaNode){
 					if(!previewNode || !metaNode){return;}
+					if(previewNode===licensePreview && licenseAttachmentInput){
+						licenseAttachmentInput.value="";
+					}
 					if(!file){
 						previewNode.classList.remove("is-active");
 						previewNode.removeAttribute("src");
@@ -4818,6 +5211,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						close();
 						if(key==="kontakt"){
 							setContactEmailAction(item ? String(item.getAttribute("data-email-href")||"").trim() : "");
+							applyContactLicense(item);
 							setArtikelLocked(currentId==="");
 							if(currentId!=="" && artikelSearch && !suppressPickerAutoFocus){
 								window.setTimeout(function(){artikelSearch.focus();}, 30);
@@ -5109,7 +5503,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				});
 				form.addEventListener("submit", function(event){
 					var hasLicenseFile=licenseFile && licenseFile.files && licenseFile.files[0];
-					if(licenseRequired && !hasLicenseFile){
+					var hasExistingLicense=licenseAttachmentInput && Number(licenseAttachmentInput.value||0)>0;
+					if(licenseRequired && !hasLicenseFile && !hasExistingLicense){
 						event.preventDefault();
 						window.alert("Bitte zuerst einen Führerausweis hochladen.");
 						return;
