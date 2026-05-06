@@ -992,6 +992,138 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contract_rows')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_booking_transfer_values')) {
+	function cmx_vermietung_booking_transfer_values(int $booking_id): array {
+		if ($booking_id <= 0 || !\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') || \get_post_type($booking_id) !== CMX_BUCHUNGEN_CPT) {
+			return [];
+		}
+
+		$date_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') : '_cmx_buchung_start_date';
+		$time_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_TIME') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_TIME') : '_cmx_buchung_start_time';
+		$duration_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_DURATION') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_DURATION') : '_cmx_buchung_duration';
+		$date = \trim((string) \get_post_meta($booking_id, $date_key, true));
+		$time = \trim((string) \get_post_meta($booking_id, $time_key, true));
+		$duration = \max(1, (int) \get_post_meta($booking_id, $duration_key, true));
+		$unit = \sanitize_key((string) \get_post_meta($booking_id, '_cmx_buchung_unit', true));
+		$return_date = '';
+		$return_time = '';
+
+		if (!\preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+			$date = '';
+		}
+		if (!\preg_match('/^\d{2}:\d{2}$/', $time)) {
+			$time = '';
+		}
+		if ($date !== '') {
+			$start_time = $time !== '' ? $time : '00:00';
+			try {
+				$start = new \DateTimeImmutable($date . ' ' . $start_time, \wp_timezone());
+				$minutes = $unit === 'days' && $duration < 1440 ? $duration * 1440 : $duration;
+				$end = $start->modify('+' . \max(1, $minutes) . ' minutes');
+				$return_date = $end->format('Y-m-d');
+				$return_time = $time !== '' ? $end->format('H:i') : '';
+			} catch (\Throwable) {
+				$return_date = '';
+				$return_time = '';
+			}
+		}
+
+		return [
+			'uebernahme_datum'   => $date,
+			'uebernahme_uhrzeit' => $time,
+			'rueckgabe_datum'    => $return_date,
+			'rueckgabe_uhrzeit'  => $return_time,
+			'duration'           => $duration,
+			'unit'               => $unit,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_booking_rows')) {
+	function cmx_vermietung_booking_rows(): array {
+		if (!\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') || !\post_type_exists(CMX_BUCHUNGEN_CPT)) {
+			return [];
+		}
+
+		$query = new \WP_Query([
+			'post_type'              => CMX_BUCHUNGEN_CPT,
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+			'meta_key'               => \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') : '_cmx_buchung_start_date',
+			'orderby'                => 'meta_value',
+			'order'                  => 'DESC',
+		]);
+
+		$kontakt_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') : '_cmx_buchung_kontakt_id';
+		$artikel_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') : '_cmx_buchung_artikel_id';
+		$status_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') : '_cmx_buchung_status';
+		$rows = [];
+
+		foreach ((array) $query->posts as $post_id) {
+			$post_id = (int) $post_id;
+			if ($post_id <= 0 || !\current_user_can('edit_post', $post_id)) {
+				continue;
+			}
+
+			$kontakt_id = (int) \get_post_meta($post_id, $kontakt_key, true);
+			$artikel_id = (int) \get_post_meta($post_id, $artikel_key, true);
+			if ($kontakt_id <= 0 || $artikel_id <= 0) {
+				continue;
+			}
+
+			$transfer = cmx_vermietung_booking_transfer_values($post_id);
+			$date = (string) ($transfer['uebernahme_datum'] ?? '');
+			$time = (string) ($transfer['uebernahme_uhrzeit'] ?? '');
+			$status = \trim((string) \get_post_meta($post_id, $status_key, true));
+			$post_title = \trim((string) \get_the_title($post_id));
+			$contact_title = \trim((string) \get_the_title($kontakt_id));
+			$vehicle_title = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_display_label')
+				? \trim((string) cmx_carent_fahrzeug_display_label($artikel_id))
+				: \trim((string) \get_the_title($artikel_id));
+			$vehicle_details = cmx_vermietung_vehicle_detail_values($artikel_id, 0, 0);
+			$display_date = $date !== '' ? (string) \wp_date('d.m.Y', \strtotime($date . ' 00:00:00')) : '';
+			$title = $display_date !== '' ? $display_date : ($post_title !== '' ? $post_title : 'Buchung #' . $post_id);
+			if ($time !== '') {
+				$title .= ' ' . $time;
+			}
+			if ($contact_title !== '') {
+				$title .= ' - ' . $contact_title;
+			}
+			$meta_parts = \array_values(\array_filter([$vehicle_title, $status !== '' ? \ucfirst($status) : ''], static fn(string $value): bool => \trim($value) !== ''));
+			$search_text = \implode(' ', \array_filter([$title, $post_title, $contact_title, $vehicle_title, $status, (string) $post_id], static fn(string $value): bool => \trim($value) !== ''));
+
+			$rows[] = [
+				'id'                 => $post_id,
+				'title'              => $title,
+				'meta'               => \implode(' · ', $meta_parts),
+				'search'             => \function_exists('mb_strtolower') ? \mb_strtolower($search_text, 'UTF-8') : \strtolower($search_text),
+				'kontakt_id'         => $kontakt_id,
+				'kontakt_title'      => $contact_title,
+				'artikel_id'         => $artikel_id,
+				'artikel_title'      => $vehicle_title,
+				'uebernahme_datum'   => (string) ($transfer['uebernahme_datum'] ?? ''),
+				'uebernahme_uhrzeit' => (string) ($transfer['uebernahme_uhrzeit'] ?? ''),
+				'rueckgabe_datum'    => (string) ($transfer['rueckgabe_datum'] ?? ''),
+				'rueckgabe_uhrzeit'  => (string) ($transfer['rueckgabe_uhrzeit'] ?? ''),
+				'kennzeichen'        => \trim((string) ($vehicle_details['kennzeichen'] ?? '')),
+				'km_stand_uebernahme'=> \trim((string) ($vehicle_details['km_stand_uebernahme'] ?? '')),
+				'km_stand_rueckgabe' => \trim((string) ($vehicle_details['km_stand_rueckgabe'] ?? '')),
+				'begrenzung'         => \trim((string) ($vehicle_details['begrenzung'] ?? '')),
+				'mehrpreis'          => \trim((string) ($vehicle_details['mehrpreis'] ?? '')),
+				'kasko_min'          => \trim((string) ($vehicle_details['kasko_min'] ?? '')),
+				'kasko_max'          => \trim((string) ($vehicle_details['kasko_max'] ?? '')),
+				'mietpreis'          => \trim((string) ($vehicle_details['mietpreis'] ?? '')),
+			];
+		}
+
+		return $rows;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 	function cmx_vermietung_error_message(string $code): string {
 		return match ($code) {
@@ -1001,6 +1133,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_error_message')) {
 			'missing_vehicle' => 'Bitte zuerst ein Fahrzeug auswählen.',
 			'missing_agb_acceptance' => 'Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren.',
 			'missing_license_photo' => 'Bitte den Führerausweis hochladen.',
+			'invalid_booking' => 'Die gewählte Buchung ist nicht gültig.',
 			'invalid_contact' => 'Der gewählte Kontakt ist nicht gültig.',
 			'invalid_vehicle' => 'Das gewählte Fahrzeug ist nicht gültig.',
 			'invalid_license_photo' => 'Bitte nur Bilddateien für den Führerausweis hochladen.',
@@ -1756,6 +1889,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		$artikel_variant_index = isset($_POST['cmx_vermietung_artikel_variant_index']) && \is_numeric((string) \wp_unslash($_POST['cmx_vermietung_artikel_variant_index']))
 			? \max(0, (int) \wp_unslash($_POST['cmx_vermietung_artikel_variant_index']))
 			: 0;
+		$booking_id = isset($_POST['cmx_vermietung_buchung_id']) ? (int) \wp_unslash($_POST['cmx_vermietung_buchung_id']) : 0;
+		if ($booking_id > 0) {
+			if (!\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') || \get_post_type($booking_id) !== CMX_BUCHUNGEN_CPT || !\current_user_can('edit_post', $booking_id)) {
+				\wp_safe_redirect(cmx_vermietung_manage_url(0, ['cmx_vermietung_error' => 'invalid_booking']));
+				exit;
+			}
+
+			$booking_kontakt_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') : '_cmx_buchung_kontakt_id';
+			$booking_artikel_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') : '_cmx_buchung_artikel_id';
+			$booking_kontakt_id = (int) \get_post_meta($booking_id, $booking_kontakt_key, true);
+			$booking_artikel_id = (int) \get_post_meta($booking_id, $booking_artikel_key, true);
+			if ($booking_kontakt_id <= 0 || $booking_artikel_id <= 0) {
+				\wp_safe_redirect(cmx_vermietung_manage_url(0, ['cmx_vermietung_error' => 'invalid_booking']));
+				exit;
+			}
+
+			$current_post_id = 0;
+			$kontakt_id = $booking_kontakt_id;
+			$artikel_id = $booking_artikel_id;
+			$artikel_variant_index = 0;
+			$booking_transfer = cmx_vermietung_booking_transfer_values($booking_id);
+			foreach ([
+				'cmx_vermietung_uebernahme_datum'   => 'uebernahme_datum',
+				'cmx_vermietung_uebernahme_uhrzeit' => 'uebernahme_uhrzeit',
+				'cmx_vermietung_rueckgabe_datum'    => 'rueckgabe_datum',
+				'cmx_vermietung_rueckgabe_uhrzeit'  => 'rueckgabe_uhrzeit',
+			] as $post_key => $transfer_key) {
+				$current_value = isset($_POST[$post_key]) ? \trim((string) \wp_unslash($_POST[$post_key])) : '';
+				$booking_value = \trim((string) ($booking_transfer[$transfer_key] ?? ''));
+				if ($current_value === '' && $booking_value !== '') {
+					$_POST[$post_key] = $booking_value;
+				}
+			}
+		}
 		$license_meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
 			: '_cmx_carent_fuehrerausweis_attachment_id';
@@ -1865,6 +2032,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 		\update_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_VARIANT_INDEX_META')
 			: '_cmx_carent_fahrzeug_variant_index', $artikel_variant_index);
+		if ($booking_id > 0) {
+			\update_post_meta($post_id, '_cmx_carent_buchung_id', $booking_id);
+		}
 		cmx_vermietung_save_vehicle_detail_values($post_id);
 		cmx_vermietung_save_uebernahme_values($post_id);
 		cmx_vermietung_save_rueckgabe_values($post_id);
@@ -1939,6 +2109,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$contacts = cmx_vermietung_contact_rows();
 		$vehicles = cmx_vermietung_vehicle_rows();
 		$contracts = cmx_vermietung_contract_rows();
+		$bookings = cmx_vermietung_booking_rows();
 		$current_post_id = cmx_vermietung_current_post_id();
 		$status_code = isset($_GET['cmx_vermietung_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_vermietung_status'])) : '';
 		$error_code = isset($_GET['cmx_vermietung_error']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_vermietung_error'])) : '';
@@ -2221,8 +2392,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-summary-pill{display:inline-flex;align-items:center;gap:6px}
 			.cmx-vermietung-summary-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
 			.cmx-vermietung-summary-value{font-size:15px;font-weight:700;color:#1d2327}
-			.cmx-vermietung-summary-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0}
-			.cmx-vermietung-summary-picker{position:relative;flex:0 1 468px;min-width:364px;z-index:30}
+			.cmx-vermietung-summary-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-width:0;flex:1 1 auto}
+			.cmx-vermietung-summary-picker{position:relative;flex:1 1 300px;min-width:260px;z-index:30}
 			.cmx-vermietung-summary-search{width:100%;min-height:42px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit}
 			.cmx-vermietung-summary-results{z-index:9200}
 			.cmx-vermietung-submit{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border:0;border-radius:10px;background:#a42c24;color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
@@ -2471,6 +2642,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<input type="hidden" name="cmx_vermietung_kontakt_id" id="cmx-vermietung-kontakt-id" value="' . (int) $selected_contact_id . '">';
 		echo '<input type="hidden" name="cmx_vermietung_artikel_id" id="cmx-vermietung-artikel-id" value="' . (int) $selected_vehicle_id . '">';
 		echo '<input type="hidden" name="cmx_vermietung_artikel_variant_index" id="cmx-vermietung-artikel-variant-index" value="' . (int) $selected_vehicle_variant_index . '">';
+		echo '<input type="hidden" name="cmx_vermietung_buchung_id" id="cmx-vermietung-buchung-id" value="0">';
 		\wp_nonce_field('cmx_vermietung_create', 'cmx_vermietung_nonce');
 		echo '<div class="cmx-vermietung-summary">';
 		echo '<div class="cmx-vermietung-summary-copy">';
@@ -2478,6 +2650,30 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<span class="cmx-vermietung-summary-pill"><span class="cmx-vermietung-summary-label">Fahrzeug</span><span class="cmx-vermietung-summary-value" id="cmx-vermietung-artikel-value">' . \esc_html($selected_vehicle_title !== '' ? $selected_vehicle_title : 'Noch keines gewählt') . '</span></span>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-summary-actions">';
+		echo '<div class="cmx-vermietung-summary-picker" id="cmx-vermietung-buchung-picker">';
+		echo '<input type="search" class="cmx-vermietung-summary-search" id="cmx-vermietung-buchung-search" placeholder="Bestehende Buchung suchen" value="">';
+		echo '<div class="cmx-vermietung-results cmx-vermietung-summary-results" id="cmx-vermietung-buchung-results">';
+		if ($bookings !== []) {
+			foreach ($bookings as $row) {
+				$booking_id = (int) ($row['id'] ?? 0);
+				$booking_title = (string) ($row['title'] ?? '');
+				$booking_meta = (string) ($row['meta'] ?? '');
+				$booking_search = (string) ($row['search'] ?? '');
+
+				echo '<button type="button" class="cmx-vermietung-item" data-id="' . $booking_id . '" data-title="' . \esc_attr($booking_title) . '" data-search="' . \esc_attr($booking_search) . '" data-kontakt-id="' . (int) ($row['kontakt_id'] ?? 0) . '" data-kontakt-title="' . \esc_attr((string) ($row['kontakt_title'] ?? '')) . '" data-artikel-id="' . (int) ($row['artikel_id'] ?? 0) . '" data-artikel-title="' . \esc_attr((string) ($row['artikel_title'] ?? '')) . '" data-uebernahme-datum="' . \esc_attr((string) ($row['uebernahme_datum'] ?? '')) . '" data-uebernahme-uhrzeit="' . \esc_attr((string) ($row['uebernahme_uhrzeit'] ?? '')) . '" data-rueckgabe-datum="' . \esc_attr((string) ($row['rueckgabe_datum'] ?? '')) . '" data-rueckgabe-uhrzeit="' . \esc_attr((string) ($row['rueckgabe_uhrzeit'] ?? '')) . '" data-kennzeichen="' . \esc_attr((string) ($row['kennzeichen'] ?? '')) . '" data-km-stand-uebernahme="' . \esc_attr((string) ($row['km_stand_uebernahme'] ?? '')) . '" data-km-stand-rueckgabe="' . \esc_attr((string) ($row['km_stand_rueckgabe'] ?? '')) . '" data-begrenzung="' . \esc_attr((string) ($row['begrenzung'] ?? '')) . '" data-mehrpreis="' . \esc_attr((string) ($row['mehrpreis'] ?? '')) . '" data-kasko-min="' . \esc_attr((string) ($row['kasko_min'] ?? '')) . '" data-kasko-max="' . \esc_attr((string) ($row['kasko_max'] ?? '')) . '" data-mietpreis="' . \esc_attr((string) ($row['mietpreis'] ?? '')) . '">';
+				echo '<span class="cmx-vermietung-thumb"><span class="cmx-vermietung-thumb-placeholder" aria-hidden="true"></span></span>';
+				echo '<span class="cmx-vermietung-item-copy">';
+				echo '<span class="cmx-vermietung-item-title">' . \esc_html($booking_title) . '</span>';
+				if ($booking_meta !== '') {
+					echo '<span class="cmx-vermietung-item-meta">' . \esc_html($booking_meta) . '</span>';
+				}
+				echo '</span>';
+				echo '</button>';
+			}
+		}
+		echo '<div class="cmx-vermietung-empty" id="cmx-vermietung-buchung-empty"' . ($bookings === [] ? '' : ' style="display:none"') . '>' . \esc_html($bookings === [] ? 'Aktuell keine Buchungen gefunden.' : 'Keine Treffer.') . '</div>';
+		echo '</div>';
+		echo '</div>';
 		echo '<div class="cmx-vermietung-summary-picker" id="cmx-vermietung-vertrag-picker">';
 		echo '<input type="search" class="cmx-vermietung-summary-search" id="cmx-vermietung-vertrag-search" placeholder="Bestehenden Vertrag suchen" value="' . \esc_attr($selected_contract_title) . '">';
 		echo '<div class="cmx-vermietung-results cmx-vermietung-summary-results" id="cmx-vermietung-vertrag-results">';
@@ -2827,11 +3023,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var kontaktInput=document.getElementById("cmx-vermietung-kontakt-id");
 				var artikelInput=document.getElementById("cmx-vermietung-artikel-id");
 				var artikelVariantInput=document.getElementById("cmx-vermietung-artikel-variant-index");
+				var buchungInput=document.getElementById("cmx-vermietung-buchung-id");
 				var kontaktValue=document.getElementById("cmx-vermietung-kontakt-value");
 				var artikelValue=document.getElementById("cmx-vermietung-artikel-value");
 				var submit=document.getElementById("cmx-vermietung-submit");
 				var contractPdfButton=document.getElementById("cmx-vermietung-contract-pdf");
 				var contractPdfButtonDefaultHtml=contractPdfButton ? String(contractPdfButton.innerHTML || "") : "";
+				var contractEditButton=document.getElementById("cmx-vermietung-contract-edit");
 				var contactEmailButton=document.getElementById("cmx-vermietung-contact-email");
 				var uebernahmeMieterAgbAccepted=document.getElementById("cmx-vermietung-signature-uebernahme-mieter-agb-accepted");
 				var artikelPanel=document.querySelector(\'[data-picker="artikel"]\');
@@ -2866,6 +3064,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var contractResults=document.getElementById("cmx-vermietung-vertrag-results");
 				var contractEmpty=document.getElementById("cmx-vermietung-vertrag-empty");
 				var contractActive=null;
+				var bookingPicker=document.getElementById("cmx-vermietung-buchung-picker");
+				var bookingSearch=document.getElementById("cmx-vermietung-buchung-search");
+				var bookingResults=document.getElementById("cmx-vermietung-buchung-results");
+				var bookingEmpty=document.getElementById("cmx-vermietung-buchung-empty");
+				var bookingActive=null;
+				var suppressPickerAutoFocus=false;
 				var vehicleInfoPanel=document.getElementById("cmx-vermietung-info-panel");
 				var transferPanel=document.getElementById("cmx-vermietung-uebernahme-panel");
 				var returnPanel=document.getElementById("cmx-vermietung-rueckgabe-panel");
@@ -2985,6 +3189,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						contractPdfButton.setAttribute("tabindex","-1");
 						contractPdfButton.setAttribute("title","Bitte zuerst einen bestehenden Vertrag speichern oder auswählen");
 					}
+				}
+				function setContractEditAction(){
+					var enabled=hasCurrentContract();
+					if(!contractEditButton){return;}
+					if(enabled){
+						contractEditButton.classList.remove("is-disabled");
+						contractEditButton.removeAttribute("aria-disabled");
+						contractEditButton.removeAttribute("tabindex");
+						return;
+					}
+					contractEditButton.classList.add("is-disabled");
+					contractEditButton.setAttribute("href","#");
+					contractEditButton.setAttribute("aria-disabled","true");
+					contractEditButton.setAttribute("tabindex","-1");
 				}
 				function getTodayValue(){
 					var now=new Date();
@@ -4312,6 +4530,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					if(!contractResults || !contractPicker || !contractSearch){return;}
 					filterContractPicker();
 					closeAll();
+					closeBookingPicker();
 					contractResults.style.display="block";
 					contractPicker.classList.add("is-open");
 				}
@@ -4335,6 +4554,127 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					var url=String(item.getAttribute("data-url")||"");
 					if(url===""){return;}
 					window.location.href=url;
+				}
+				function bookingItems(){
+					return bookingResults ? Array.prototype.slice.call(bookingResults.querySelectorAll(".cmx-vermietung-item")) : [];
+				}
+				function bookingVisibleItems(){
+					return bookingItems().filter(function(item){return item.style.display!== "none";});
+				}
+				function markBookingActive(item){
+					bookingItems().forEach(function(row){row.classList.toggle("is-active", row===item);});
+					bookingActive=item||null;
+				}
+				function closeBookingPicker(){
+					if(!bookingResults || !bookingPicker){return;}
+					bookingResults.style.display="none";
+					bookingPicker.classList.remove("is-open");
+					markBookingActive(null);
+				}
+				function filterBookingPicker(){
+					var term=normalize(bookingSearch ? bookingSearch.value : "");
+					var visible=0;
+					var firstVisible=null;
+					bookingItems().forEach(function(item){
+						var match=term==="" || normalize(item.getAttribute("data-search")).indexOf(term)!==-1;
+						item.style.display=match ? "" : "none";
+						if(match){
+							visible++;
+							if(!firstVisible){firstVisible=item;}
+						}
+					});
+					if(bookingEmpty){bookingEmpty.style.display=visible===0 ? "" : "none";}
+					if(bookingActive && bookingActive.style.display==="none"){
+						markBookingActive(firstVisible);
+					}
+					if(!bookingActive && firstVisible){
+						markBookingActive(firstVisible);
+					}
+				}
+				function openBookingPicker(){
+					if(!bookingResults || !bookingPicker || !bookingSearch){return;}
+					filterBookingPicker();
+					closeAll();
+					closeContractPicker();
+					bookingResults.style.display="block";
+					bookingPicker.classList.add("is-open");
+				}
+				function moveBookingPicker(delta){
+					var rows=bookingVisibleItems();
+					var index;
+					if(!rows.length){return;}
+					index=rows.indexOf(bookingActive);
+					if(index===-1){
+						markBookingActive(rows[delta < 0 ? rows.length - 1 : 0]);
+						return;
+					}
+					index+=delta;
+					if(index<0){index=0;}
+					if(index>=rows.length){index=rows.length-1;}
+					markBookingActive(rows[index]);
+					try{rows[index].scrollIntoView({block:"nearest"});}catch(e){}
+				}
+				function setFieldValue(node, value){
+					if(!node){return;}
+					node.value=String(value||"");
+					triggerInputEvents(node);
+				}
+				function chooseBooking(item){
+					var bookingId;
+					var contactId;
+					var vehicleId;
+					var contactItem;
+					var vehicleItem;
+					var postField=document.getElementById("cmx-vermietung-post-id");
+					if(!item){return;}
+					bookingId=String(item.getAttribute("data-id")||"");
+					contactId=String(item.getAttribute("data-kontakt-id")||"");
+					vehicleId=String(item.getAttribute("data-artikel-id")||"");
+					contactItem=contactId!=="" ? document.querySelector(\'#cmx-vermietung-list-kontakt .cmx-vermietung-item[data-id="\'+contactId+\'"]\') : null;
+					vehicleItem=vehicleId!=="" ? document.querySelector(\'#cmx-vermietung-list-artikel .cmx-vermietung-item[data-id="\'+vehicleId+\'"]\') : null;
+					suppressPickerAutoFocus=true;
+					if(contactItem){
+						contactItem.click();
+					}else if(contactId!==""){
+						kontaktInput.value=contactId;
+						kontaktValue.textContent=String(item.getAttribute("data-kontakt-title")||"Noch keiner gewählt");
+						setArtikelLocked(false);
+					}
+					if(vehicleItem){
+						vehicleItem.click();
+					}else if(vehicleId!==""){
+						var vehicleTitle=String(item.getAttribute("data-artikel-title")||"Noch keines gewählt");
+						var vehicleKennzeichen=String(item.getAttribute("data-kennzeichen")||"").trim();
+						var selectedArtikel=document.getElementById("cmx-vermietung-selected-artikel");
+						var selectedArtikelTitle=document.getElementById("cmx-vermietung-selected-title-artikel");
+						var selectedArtikelMeta=document.getElementById("cmx-vermietung-selected-meta-artikel");
+						artikelInput.value=vehicleId;
+						if(artikelVariantInput){artikelVariantInput.value="0";}
+						artikelValue.textContent=vehicleTitle;
+						if(artikelSearch){artikelSearch.value=vehicleTitle;}
+						if(selectedArtikel){selectedArtikel.classList.add("is-active");}
+						if(selectedArtikelTitle){selectedArtikelTitle.textContent=vehicleTitle;}
+						if(selectedArtikelMeta){
+							selectedArtikelMeta.textContent=vehicleKennzeichen!=="" ? "Kennzeichen " + vehicleKennzeichen : "";
+							selectedArtikelMeta.classList.toggle("is-empty", vehicleKennzeichen==="");
+						}
+					}
+					suppressPickerAutoFocus=false;
+					updateVehicleInfo(vehicleItem || item);
+					if(buchungInput){buchungInput.value=bookingId;}
+					if(postField){postField.value="0";}
+					if(contractSearch){contractSearch.value="";}
+					if(submit){submit.textContent="anlegen";}
+					if(bookingSearch){bookingSearch.value=String(item.getAttribute("data-title")||"");}
+					setFieldValue(transferNodes.datum, item.getAttribute("data-uebernahme-datum"));
+					setFieldValue(transferNodes.uhrzeit, item.getAttribute("data-uebernahme-uhrzeit"));
+					setFieldValue(returnNodes.datum, item.getAttribute("data-rueckgabe-datum"));
+					setFieldValue(returnNodes.uhrzeit, item.getAttribute("data-rueckgabe-uhrzeit"));
+					updateSubmit();
+					setContractPdfAction();
+					setContractEditAction();
+					setContactEmailAction();
+					closeBookingPicker();
 				}
 				if(returnToggle && returnPanel){
 					returnToggle.addEventListener("click", function(){
@@ -4396,6 +4736,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						if(input.disabled){return;}
 						filter();
 						closeAll(key);
+						closeContractPicker();
+						closeBookingPicker();
 						list.style.display="block";
 						panel.classList.add("is-open");
 					}
@@ -4456,6 +4798,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						var currentVariantIndex=item ? String(item.getAttribute("data-variant-index")||"0") : "";
 						var title=item ? String(item.getAttribute("data-title")||"") : "";
 						var meta=item ? String(item.getAttribute("data-selected-meta")||"").trim() : "";
+						if(buchungInput){buchungInput.value="";}
+						if(bookingSearch){bookingSearch.value="";}
 						hidden.value=currentId;
 						if(hiddenVariant){hiddenVariant.value=currentVariantIndex;}
 						valueNode.textContent=title!=="" ? title : ((key==="kontakt") ? "Noch keiner gewählt" : "Noch keines gewählt");
@@ -4475,7 +4819,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						if(key==="kontakt"){
 							setContactEmailAction(item ? String(item.getAttribute("data-email-href")||"").trim() : "");
 							setArtikelLocked(currentId==="");
-							if(currentId!=="" && artikelSearch){
+							if(currentId!=="" && artikelSearch && !suppressPickerAutoFocus){
 								window.setTimeout(function(){artikelSearch.focus();}, 30);
 							}
 						} else if(key==="artikel"){
@@ -4623,6 +4967,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				refreshKmSyncButtonStates();
 				updateContactUploadPanels();
 				syncIdentityPanelState();
+				setContractEditAction();
 				if(contractSearch && contractResults){
 					contractSearch.addEventListener("input", openContractPicker);
 					contractSearch.addEventListener("focus", openContractPicker);
@@ -4643,6 +4988,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					contractItems().forEach(function(item){
 						item.addEventListener("click", function(){chooseContract(item);});
 						item.addEventListener("dblclick", function(){chooseContract(item);});
+					});
+				}
+				if(bookingSearch && bookingResults){
+					bookingSearch.addEventListener("input", openBookingPicker);
+					bookingSearch.addEventListener("focus", openBookingPicker);
+					bookingSearch.addEventListener("click", openBookingPicker);
+					bookingSearch.addEventListener("keydown", function(event){
+						if(event.key==="ArrowDown"){event.preventDefault();moveBookingPicker(1);return;}
+						if(event.key==="ArrowUp"){event.preventDefault();moveBookingPicker(-1);return;}
+						if(event.key==="Enter"){
+							if(bookingActive){event.preventDefault();chooseBooking(bookingActive);}
+							return;
+						}
+						if(event.key==="Escape"){
+							event.preventDefault();
+							closeBookingPicker();
+							return;
+						}
+					});
+					bookingItems().forEach(function(item){
+						item.addEventListener("click", function(){chooseBooking(item);});
+						item.addEventListener("dblclick", function(){chooseBooking(item);});
 					});
 				}
 				if(licenseFile){
@@ -4735,6 +5102,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					});
 					if(contractPicker && !contractPicker.contains(event.target)){
 						closeContractPicker();
+					}
+					if(bookingPicker && !bookingPicker.contains(event.target)){
+						closeBookingPicker();
 					}
 				});
 				form.addEventListener("submit", function(event){
