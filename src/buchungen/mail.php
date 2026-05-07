@@ -41,8 +41,12 @@ function cmx_buchungen_maybe_send_confirmation(int $post_id): bool {
 
 	$service = cmx_buchungen_mail_service($post_id);
 	$datetime = cmx_buchungen_mail_datetime($post_id);
+	$booking_url = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_booking_url') ? cmx_buchungen_booking_url($post_id) : '';
 	$cancel_url = cmx_buchungen_cancel_url($post_id);
 	$message = '<p>Guten Tag</p><p>Ihre Buchungsanfrage wurde bestätigt.</p><p><strong>' . \esc_html($service) . '</strong><br>' . \esc_html($datetime) . '</p>';
+	if ($booking_url !== '') {
+		$message .= '<p>Buchung zeigen: <a href="' . \esc_url($booking_url) . '">' . \esc_html($booking_url) . '</a></p>';
+	}
 	if ($cancel_url !== '') {
 		$message .= '<p>Storno-Link: <a href="' . \esc_url($cancel_url) . '">' . \esc_html($cancel_url) . '</a></p>';
 	}
@@ -67,8 +71,12 @@ function cmx_buchungen_send_status_mail(int $post_id, string $status): bool {
 
 	$service = cmx_buchungen_mail_service($post_id);
 	$datetime = cmx_buchungen_mail_datetime($post_id);
+	$booking_url = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_booking_url') ? cmx_buchungen_booking_url($post_id) : '';
 	$label = $status === 'abgesagt' ? 'abgesagt' : 'aktualisiert';
 	$message = '<p>Guten Tag</p><p>Ihre Buchung wurde ' . \esc_html($label) . '.</p><p><strong>' . \esc_html($service) . '</strong><br>' . \esc_html($datetime) . '</p>';
+	if ($booking_url !== '') {
+		$message .= '<p>Buchung zeigen: <a href="' . \esc_url($booking_url) . '">' . \esc_html($booking_url) . '</a></p>';
+	}
 
 	return \wp_mail($to, 'Buchung ' . $label . ': ' . $service, $message, cmx_buchungen_mail_headers());
 }

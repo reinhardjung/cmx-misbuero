@@ -466,10 +466,19 @@ function cmx_buchungen_render_mitarbeiter_box(\WP_Post $post): void {
 }
 
 function cmx_buchungen_render_tokens_box(\WP_Post $post): void {
+	$booking_url = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_booking_url') ? cmx_buchungen_booking_url($post->ID) : '';
 	$cancel_token = \trim((string) \get_post_meta($post->ID, CMX_BUCHUNGEN_META_CANCEL_TOKEN, true));
 	$cancel_url = $cancel_token !== '' ? \home_url('/?cmx_buchung_cancel=' . \rawurlencode($cancel_token)) : '';
 
-	echo '<p><strong>Storno-Link</strong><br>';
+	echo '<p style="margin-top:0;">';
+	if ($booking_url !== '') {
+		echo '<a href="' . \esc_url($booking_url) . '" target="_blank" rel="noopener noreferrer">Buchung zeigen</a>';
+	} else {
+		echo 'wird beim Speichern erstellt';
+	}
+	echo '</p>';
+
+	echo '<p>';
 	if ($cancel_url !== '') {
 		echo '<a href="' . \esc_url($cancel_url) . '" target="_blank" rel="noopener noreferrer">Storno-Link öffnen</a>';
 	} else {

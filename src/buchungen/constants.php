@@ -126,3 +126,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_token')) {
 		return \wp_generate_password(32, false, false);
 	}
 }
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_booking_url')) {
+	function cmx_buchungen_booking_url(int $post_id): string {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== CMX_BUCHUNGEN_CPT) {
+			return '';
+		}
+		$token = \trim((string) \get_post_meta($post_id, CMX_BUCHUNGEN_META_BOOKING_TOKEN, true));
+		if ($token === '') {
+			return '';
+		}
+
+		return (string) \add_query_arg(
+			[
+				'cmx_booking_confirmed' => $post_id,
+				'token'                 => $token,
+			],
+			\home_url('/buchungen/')
+		);
+	}
+}

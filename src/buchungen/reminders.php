@@ -64,6 +64,10 @@ function cmx_buchungen_send_reminder(int $post_id) {
 	$service = $artikel_id > 0 ? \trim((string) \get_the_title($artikel_id)) : 'Termin';
 	$subject = 'Erinnerung: ' . $service;
 	$message = '<p>Guten Tag</p><p>Dies ist eine Erinnerung an Ihre Buchung.</p><p><strong>' . \esc_html($service) . '</strong><br>' . \esc_html($date . ' ' . $time) . '</p>';
+	$booking_url = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_booking_url') ? cmx_buchungen_booking_url($post_id) : '';
+	if ($booking_url !== '') {
+		$message .= '<p>Buchung zeigen: <a href="' . \esc_url($booking_url) . '">' . \esc_html($booking_url) . '</a></p>';
+	}
 
 	$sent = \wp_mail($to, $subject, $message, ['Content-Type: text/html; charset=UTF-8']);
 	if ($sent) {
