@@ -1099,9 +1099,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_render_signature_pad')) 
 		$clear_name = 'cmx_vermietung_' . $transfer_key . '_' . $role . '_signature_clear';
 		$label = $role === 'mieter' ? 'Mieter' : 'Vermieter';
 		$show_acceptance_note = ($transfer_key === 'uebernahme' && $role === 'mieter');
-		$agb_link = $show_acceptance_note && \function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')
-			? \trim((string) cmx_email_agb_link())
+		$agb_link = $show_acceptance_note && \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_link')
+			? \trim((string) cmx_carent_agb_link())
 			: '';
+		$show_acceptance_note = $show_acceptance_note && $agb_link !== '';
 		$acceptance_input_id = $prefix . '-agb-accepted';
 		$acceptance_copy_id = $acceptance_input_id . '-copy';
 		$image_url = cmx_vermietung_signature_attachment_url($attachment_id);
@@ -1174,6 +1175,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			: '';
 		$agb_acceptance = isset($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted'])
 			&& (string) \wp_unslash($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted']) === '1';
+		$agb_required = \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')
+			? cmx_carent_agb_required()
+			: false;
 
 		if ($ort === '') {
 			\delete_post_meta($post_id, $ort_meta_key);
@@ -1205,7 +1209,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_save_uebernahme_values')
 			\update_post_meta($post_id, $km_meta_key, $km_stand);
 		}
 
-		if ($agb_acceptance) {
+		if ($agb_required && $agb_acceptance) {
 			\update_post_meta($post_id, $agb_acceptance_meta_key, '1');
 		} else {
 			\delete_post_meta($post_id, $agb_acceptance_meta_key);
@@ -2332,9 +2336,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 				exit;
 			}
 		}
+		$agb_required = \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')
+			? cmx_carent_agb_required()
+			: false;
 		$agb_acceptance = isset($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted'])
 			&& (string) \wp_unslash($_POST['cmx_vermietung_uebernahme_mieter_agb_accepted']) === '1';
-		if (!$agb_acceptance) {
+		if ($agb_required && !$agb_acceptance) {
 			\wp_safe_redirect(cmx_vermietung_manage_url($redirect_post_id, ['cmx_vermietung_error' => 'missing_agb_acceptance']));
 			exit;
 		}
@@ -3044,14 +3051,17 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$selected_contract_title = (string) ($selected_contract_row['title'] ?? '');
 		$submit_label = $current_post_id > 0 ? 'aktualisieren' : 'anlegen';
 		$current_contract_edit_url = $current_post_id > 0 ? (string) \admin_url('post.php?post=' . $current_post_id . '&action=edit') : '';
-		$contact_email_button_enabled = $current_post_id > 0 && $selected_contact_email_href !== '' && !empty($selected_uebernahme_values['agb_akzeptiert']);
+		$agb_required = \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')
+			? cmx_carent_agb_required()
+			: false;
+		$contact_email_button_enabled = $current_post_id > 0 && $selected_contact_email_href !== '' && (!$agb_required || !empty($selected_uebernahme_values['agb_akzeptiert']));
 		$contact_email_button_title = $contact_email_button_enabled
 			? 'Vertrag per E-Mail versenden'
 			: ($selected_contact_email_href === ''
 				? 'Keine E-Mail-Adresse beim Kontakt hinterlegt'
 				: ($current_post_id <= 0
 					? 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen'
-					: 'Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren'));
+					: ($agb_required ? 'Bitte zuerst die AGB-Bestätigung beim Mieter aktivieren' : 'Vertrag per E-Mail versenden')));
 		$license_required = $license_attachment_id <= 0;
 		$ajax_url = (string) \admin_url('admin-ajax.php');
 		$photo_upload_nonce = (string) \wp_create_nonce('cmx_carent_fotos_upload');

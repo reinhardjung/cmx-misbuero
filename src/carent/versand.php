@@ -765,8 +765,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_send_vertrag_mail')) {
 			return new \WP_Error('missing_contract_data', 'Vertragsdaten konnten nicht geladen werden.');
 		}
 
+		$agb_required = \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')
+			? cmx_carent_agb_required()
+			: false;
 		$agb_accepted = !empty($data['transfer']['uebernahme']['agb_akzeptiert']);
-		if (!$agb_accepted) {
+		if ($agb_required && !$agb_accepted) {
 			return new \WP_Error('missing_agb_acceptance', 'Bitte zuerst die AGB-Bestaetigung beim Mieter aktivieren.');
 		}
 

@@ -46,6 +46,57 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_path')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_url')) {
+	function cmx_carent_vertrag_agb_pdf_url(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_url')) {
+			$url = \trim((string) cmx_carent_current_pdf_url());
+			if ($url !== '') {
+				return $url;
+			}
+		}
+
+		$option_name = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			: 'cmx_einstellungen';
+		$options = (array) \get_option($option_name, []);
+
+		$file_rel = \trim((string) ($options['carent_pdf_file_rel'] ?? ''));
+		if ($file_rel !== '') {
+			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . \ltrim($file_rel, '/')));
+			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs)) {
+				return (string) \content_url('/uploads/' . \ltrim($file_rel, '/'));
+			}
+		}
+
+		$attachment_id = (int) ($options['carent_pdf_attachment_id'] ?? 0);
+		if ($attachment_id > 0) {
+			return (string) \wp_get_attachment_url($attachment_id);
+		}
+
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_agb_link')) {
+	function cmx_carent_agb_link(): string {
+		$email_link = \function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')
+			? \trim((string) cmx_email_agb_link())
+			: '';
+		if ($email_link !== '') {
+			return $email_link;
+		}
+
+		return \trim((string) cmx_carent_vertrag_agb_pdf_url());
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')) {
+	function cmx_carent_agb_required(): bool {
+		return cmx_carent_agb_link() !== '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_append_pdf_file')) {
 	function cmx_carent_vertrag_append_pdf_file(string $pdf_binary, string $append_pdf_path): string {
 		if ($pdf_binary === '' || $append_pdf_path === '' || !\is_file($append_pdf_path) || !\is_readable($append_pdf_path)) {
@@ -839,8 +890,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')) {
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
 					: '_cmx_carent_identitaetskarte_attachment_id', true)),
 			],
-			'agb_link' => \function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')
-				? \trim((string) cmx_email_agb_link())
+			'agb_link' => \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_link')
+				? \trim((string) cmx_carent_agb_link())
 				: '',
 		];
 	}
@@ -2134,7 +2185,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 						<td>
 							<div class="signature-line signature-line-mieter"><?php echo cmx_carent_vertrag_icon_svg('signature', 'pdf-icon', '#001b3d'); ?><?php if (!empty($contact_signature['data_uri'])) : ?><img class="signature-img" src="<?php echo \esc_attr((string) $contact_signature['data_uri']); ?>" alt=""><?php endif; ?></div>
 							<div class="signature-label">Unterschrift Mieter</div>
-							<div class="signature-label">(Der Mieter erklärt ausdrücklich seine Zustimmung zu den AGB.)</div>
+							<?php if (!empty($data['agb_link'])) : ?><div class="signature-label">(Der Mieter erklärt ausdrücklich seine Zustimmung zu den AGB.)</div><?php endif; ?>
 						</td>
 					</tr>
 				</table>
