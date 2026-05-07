@@ -66,6 +66,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_active_statuses')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_blocking_status_meta_query')) {
+	function cmx_buchungen_blocking_status_meta_query(): array {
+		return [
+			'relation' => 'OR',
+			[
+				'key'     => CMX_BUCHUNGEN_META_STATUS,
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'key'     => CMX_BUCHUNGEN_META_STATUS,
+				'value'   => '',
+				'compare' => '=',
+			],
+			[
+				'key'     => CMX_BUCHUNGEN_META_STATUS,
+				'value'   => cmx_buchungen_active_statuses(),
+				'compare' => 'IN',
+			],
+		];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_date')) {
 	function cmx_buchungen_sanitize_date($value): string {
 		$value = \trim((string) $value);

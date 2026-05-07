@@ -489,6 +489,7 @@ function cmx_buchungen_render_tokens_box(\WP_Post $post): void {
 	if (!\current_user_can('edit_post', $post_id)) {
 		return;
 	}
+	$previous_status = \sanitize_key((string) \get_post_meta($post_id, CMX_BUCHUNGEN_META_STATUS, true));
 
 	$map = [
 		CMX_BUCHUNGEN_META_KONTAKT => ['cmx_buchung_kontakt_id', 'int'],
@@ -564,7 +565,10 @@ function cmx_buchungen_render_tokens_box(\WP_Post $post): void {
 
 	cmx_buchungen_sync_title($post_id);
 	cmx_buchungen_schedule_reminder($post_id);
-	cmx_buchungen_maybe_send_confirmation($post_id);
+	$current_status = \sanitize_key((string) \get_post_meta($post_id, CMX_BUCHUNGEN_META_STATUS, true));
+	if ($previous_status !== 'bestaetigt' && $current_status === 'bestaetigt') {
+		cmx_buchungen_maybe_send_confirmation($post_id);
+	}
 }, 20, 3);
 
 function cmx_buchungen_generate_nummer(): string {

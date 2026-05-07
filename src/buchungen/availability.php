@@ -34,22 +34,40 @@ function cmx_buchungen_time_to_minutes(string $time): int {
 	return ($hour * 60) + $minute;
 }
 
-function cmx_buchungen_booking_ranges(string $date, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $exclude_post_id = 0): array {
+function cmx_buchungen_booking_ranges(string $date, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $exclude_post_id = 0, int $artikel_id = 0): array {
+	static $range_cache = [];
+
 	$date = cmx_buchungen_sanitize_date($date);
 	if ($date === '') {
+		return [];
+	}
+	$artikel_id = \max(0, $artikel_id);
+	$cache_key = \implode(':', [$date, (string) $mitarbeiter_term_id, (string) $ressource_term_id, (string) $exclude_post_id, (string) $artikel_id]);
+	if (\array_key_exists($cache_key, $range_cache)) {
+		return $range_cache[$cache_key];
+	}
+
+	$day_start = \strtotime($date . ' 00:00:00');
+	$day_end = \strtotime($date . ' 23:59:59');
+	if (!$day_start || !$day_end) {
 		return [];
 	}
 
 	$meta_query = [
 		'relation' => 'AND',
-		['key' => CMX_BUCHUNGEN_META_START_DATE, 'value' => $date, 'compare' => '='],
-		['key' => CMX_BUCHUNGEN_META_STATUS, 'value' => cmx_buchungen_active_statuses(), 'compare' => 'IN'],
+		['key' => CMX_BUCHUNGEN_META_START_DATE, 'compare' => 'EXISTS'],
+		\function_exists(__NAMESPACE__ . '\\cmx_buchungen_blocking_status_meta_query')
+			? cmx_buchungen_blocking_status_meta_query()
+			: ['key' => CMX_BUCHUNGEN_META_STATUS, 'value' => cmx_buchungen_active_statuses(), 'compare' => 'IN'],
 	];
 	if ($mitarbeiter_term_id > 0) {
 		$meta_query[] = ['key' => CMX_BUCHUNGEN_META_MITARBEITER, 'value' => (string) $mitarbeiter_term_id, 'compare' => '='];
 	}
 	if ($ressource_term_id > 0) {
 		$meta_query[] = ['key' => CMX_BUCHUNGEN_META_RESSOURCE, 'value' => (string) $ressource_term_id, 'compare' => '='];
+	}
+	if ($artikel_id > 0) {
+		$meta_query[] = ['key' => CMX_BUCHUNGEN_META_ARTIKEL, 'value' => (string) $artikel_id, 'compare' => '='];
 	}
 
 	$ids = \get_posts([
@@ -64,20 +82,40 @@ function cmx_buchungen_booking_ranges(string $date, int $mitarbeiter_term_id = 0
 
 	$ranges = [];
 	foreach ((array) $ids as $id) {
-		$start = cmx_buchungen_time_to_minutes((string) \get_post_meta((int) $id, CMX_BUCHUNGEN_META_START_TIME, true));
+		$id = (int) $id;
+		$existing_date = cmx_buchungen_sanitize_date((string) \get_post_meta($id, CMX_BUCHUNGEN_META_START_DATE, true));
+		$existing_time = cmx_buchungen_sanitize_time((string) \get_post_meta($id, CMX_BUCHUNGEN_META_START_TIME, true));
+		if ($existing_date === '' || $existing_time === '') {
+			continue;
+		}
+		$duration = \max(5, (int) \get_post_meta($id, CMX_BUCHUNGEN_META_DURATION, true));
+		$before = \max(0, (int) \get_post_meta($id, CMX_BUCHUNGEN_META_BUFFER_BEFORE, true));
+		$after = \max(0, (int) \get_post_meta($id, CMX_BUCHUNGEN_META_BUFFER_AFTER, true));
+		$existing_start = \strtotime($existing_date . ' ' . $existing_time);
+		$existing_end = $existing_start ? $existing_start + (($duration + $after) * 60) : false;
+		$existing_start = $existing_start ? $existing_start - ($before * 60) : false;
+		if (!$existing_start || !$existing_end || $existing_start > $day_end || $existing_end < $day_start) {
+			continue;
+		}
+
+		$range_start_ts = \max((int) $existing_start, (int) $day_start);
+		$range_end_ts = \min((int) $existing_end, (int) $day_end + 1);
+		$start = ((int) \wp_date('G', $range_start_ts) * 60) + (int) \wp_date('i', $range_start_ts);
+		$end = ((int) \wp_date('G', $range_end_ts) * 60) + (int) \wp_date('i', $range_end_ts);
+		if ($range_end_ts > $day_end) {
+			$end = 1440;
+		}
 		if ($start < 0) {
 			continue;
 		}
-		$duration = \max(5, (int) \get_post_meta((int) $id, CMX_BUCHUNGEN_META_DURATION, true));
-		$before = \max(0, (int) \get_post_meta((int) $id, CMX_BUCHUNGEN_META_BUFFER_BEFORE, true));
-		$after = \max(0, (int) \get_post_meta((int) $id, CMX_BUCHUNGEN_META_BUFFER_AFTER, true));
-		$ranges[] = [$start - $before, $start + $duration + $after];
+		$ranges[] = [$start, $end];
 	}
 
+	$range_cache[$cache_key] = $ranges;
 	return $ranges;
 }
 
-function cmx_buchungen_slot_is_free(string $date, string $time, int $duration, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $exclude_post_id = 0): bool {
+function cmx_buchungen_slot_is_free(string $date, string $time, int $duration, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $exclude_post_id = 0, int $artikel_id = 0): bool {
 	$start = cmx_buchungen_time_to_minutes($time);
 	if ($start < 0 || $duration <= 0) {
 		return false;
@@ -96,7 +134,7 @@ function cmx_buchungen_slot_is_free(string $date, string $time, int $duration, i
 		}
 	}
 
-	foreach (cmx_buchungen_booking_ranges($date, $mitarbeiter_term_id, $ressource_term_id, $exclude_post_id) as [$busy_from, $busy_to]) {
+	foreach (cmx_buchungen_booking_ranges($date, $mitarbeiter_term_id, $ressource_term_id, $exclude_post_id, $artikel_id) as [$busy_from, $busy_to]) {
 		if ($start < $busy_to && $end > $busy_from) {
 			return false;
 		}
@@ -105,7 +143,7 @@ function cmx_buchungen_slot_is_free(string $date, string $time, int $duration, i
 	return true;
 }
 
-function cmx_buchungen_available_slots(string $date, int $duration = 60, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $step = 15): array {
+function cmx_buchungen_available_slots(string $date, int $duration = 60, int $mitarbeiter_term_id = 0, int $ressource_term_id = 0, int $step = 15, int $artikel_id = 0): array {
 	$date = cmx_buchungen_sanitize_date($date);
 	if ($date === '') {
 		return [];
@@ -126,7 +164,7 @@ function cmx_buchungen_available_slots(string $date, int $duration = 60, int $mi
 		}
 		for ($minute = $from; $minute + $duration <= $to; $minute += \max(5, $step)) {
 			$time = \sprintf('%02d:%02d', \intdiv($minute, 60), $minute % 60);
-			if (cmx_buchungen_slot_is_free($date, $time, $duration, $mitarbeiter_term_id, $ressource_term_id)) {
+			if (cmx_buchungen_slot_is_free($date, $time, $duration, $mitarbeiter_term_id, $ressource_term_id, 0, $artikel_id)) {
 				$slots[] = $time;
 			}
 		}

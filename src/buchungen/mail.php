@@ -42,12 +42,12 @@ function cmx_buchungen_maybe_send_confirmation(int $post_id): bool {
 	$service = cmx_buchungen_mail_service($post_id);
 	$datetime = cmx_buchungen_mail_datetime($post_id);
 	$cancel_url = cmx_buchungen_cancel_url($post_id);
-	$message = '<p>Guten Tag</p><p>Die Buchung ist bei uns eingegangen.</p><p><strong>' . \esc_html($service) . '</strong><br>' . \esc_html($datetime) . '</p>';
+	$message = '<p>Guten Tag</p><p>Ihre Buchungsanfrage wurde bestätigt.</p><p><strong>' . \esc_html($service) . '</strong><br>' . \esc_html($datetime) . '</p>';
 	if ($cancel_url !== '') {
 		$message .= '<p>Storno-Link: <a href="' . \esc_url($cancel_url) . '">' . \esc_html($cancel_url) . '</a></p>';
 	}
 
-	$sent = \wp_mail($to, 'Buchung eingegangen: ' . $service, $message, cmx_buchungen_mail_headers());
+	$sent = \wp_mail($to, 'Buchung bestätigt: ' . $service, $message, cmx_buchungen_mail_headers());
 	if ($sent) {
 		\update_post_meta($post_id, CMX_BUCHUNGEN_META_CONFIRMATION_SENT_AT, \current_time('mysql'));
 	}

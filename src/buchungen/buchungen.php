@@ -233,11 +233,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_date_range_is_free')) {
-	function cmx_buchungen_frontend_date_range_is_free(string $start_date, int $days): bool {
-		static $busy_ranges = null;
+	function cmx_buchungen_frontend_date_range_is_free(string $start_date, int $days, int $artikel_id = 0): bool {
+		static $busy_ranges_by_article = [];
 
 		$start_date = cmx_buchungen_sanitize_date($start_date);
 		$days = \max(1, \min(60, $days));
+		$artikel_id = \max(0, $artikel_id);
 		if ($start_date === '') {
 			return false;
 		}
@@ -248,19 +249,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_date_range_is_fr
 			return false;
 		}
 
-		if ($busy_ranges === null) {
+		if (!\array_key_exists($artikel_id, $busy_ranges_by_article)) {
 			$busy_ranges = [];
+			$meta_query = [
+				'relation' => 'AND',
+				['key' => CMX_BUCHUNGEN_META_START_DATE, 'compare' => 'EXISTS'],
+				\function_exists(__NAMESPACE__ . '\\cmx_buchungen_blocking_status_meta_query')
+					? cmx_buchungen_blocking_status_meta_query()
+					: ['key' => CMX_BUCHUNGEN_META_STATUS, 'value' => cmx_buchungen_active_statuses(), 'compare' => 'IN'],
+			];
+			if ($artikel_id > 0) {
+				$meta_query[] = ['key' => CMX_BUCHUNGEN_META_ARTIKEL, 'value' => (string) $artikel_id, 'compare' => '='];
+			}
+
 			$ids = \get_posts([
 				'post_type' => CMX_BUCHUNGEN_CPT,
 				'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
 				'fields' => 'ids',
 				'posts_per_page' => -1,
 				'no_found_rows' => true,
-				'meta_query' => [
-					'relation' => 'AND',
-					['key' => CMX_BUCHUNGEN_META_START_DATE, 'compare' => 'EXISTS'],
-					['key' => CMX_BUCHUNGEN_META_STATUS, 'value' => cmx_buchungen_active_statuses(), 'compare' => 'IN'],
-				],
+				'meta_query' => $meta_query,
 			]);
 
 			foreach ((array) $ids as $id) {
@@ -278,9 +286,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_date_range_is_fr
 					$busy_ranges[] = [$existing_start, $existing_end];
 				}
 			}
+			$busy_ranges_by_article[$artikel_id] = $busy_ranges;
 		}
 
-		foreach ($busy_ranges as [$existing_start, $existing_end]) {
+		foreach ($busy_ranges_by_article[$artikel_id] as [$existing_start, $existing_end]) {
 			if ((int) $existing_start <= $wanted_end && (int) $existing_end >= $wanted_start) {
 				return false;
 			}
@@ -291,10 +300,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_date_range_is_fr
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_day_dates')) {
-	function cmx_buchungen_frontend_day_dates(int $days, int $range_days = 90, array $weekdays = []): array {
+	function cmx_buchungen_frontend_day_dates(int $days, int $range_days = 90, array $weekdays = [], int $artikel_id = 0): array {
 		$days = \max(1, \min(60, $days));
 		$range_days = \max(1, \min(365, $range_days));
 		$weekdays = $weekdays !== [] ? $weekdays : [1, 2, 3, 4, 5];
+		$artikel_id = \max(0, $artikel_id);
 		$today = \wp_date('Y-m-d');
 		$dates = [];
 
@@ -303,7 +313,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_day_dates')) {
 			if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_allows_date') && !cmx_buchungen_template_allows_date(['weekdays' => $weekdays], $date)) {
 				continue;
 			}
-			if (cmx_buchungen_frontend_date_range_is_free($date, $days)) {
+			if (cmx_buchungen_frontend_date_range_is_free($date, $days, $artikel_id)) {
 				$dates[] = $date;
 			}
 		}
@@ -345,11 +355,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_opening_hours_fo
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_slots')) {
-	function cmx_buchungen_frontend_slots(int $duration, int $days = 42, array $weekdays = []): array {
+	function cmx_buchungen_frontend_slots(int $duration, int $days = 42, array $weekdays = [], int $artikel_id = 0): array {
 		$duration = \max(5, $duration);
 		$days = \max(1, \min(90, $days));
 		$weekdays = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_sanitize_weekdays') ? cmx_buchungen_template_sanitize_weekdays($weekdays) : $weekdays;
 		$weekdays = $weekdays !== [] ? $weekdays : [1, 2, 3, 4, 5];
+		$artikel_id = \max(0, $artikel_id);
 		$today = \wp_date('Y-m-d');
 		$slots_by_date = [];
 
@@ -370,7 +381,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_slots')) {
 				}
 				for ($minute = $from; $minute + $duration <= $to; $minute += 15) {
 					$time = \sprintf('%02d:%02d', \intdiv($minute, 60), $minute % 60);
-					if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_slot_is_free') || cmx_buchungen_slot_is_free($date, $time, $duration)) {
+					if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_slot_is_free') || cmx_buchungen_slot_is_free($date, $time, $duration, 0, 0, 0, $artikel_id)) {
 						$slots[] = $time;
 					}
 				}
@@ -512,7 +523,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'slot']));
 			exit;
 		}
-		if ($unit === 'days' && !cmx_buchungen_frontend_date_range_is_free($date, $raw_duration)) {
+		if ($unit === 'days' && !cmx_buchungen_frontend_date_range_is_free($date, $raw_duration, $service_id)) {
 			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'slot']));
 			exit;
 		}
@@ -521,7 +532,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 				\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'slot']));
 				exit;
 			}
-			if (!cmx_buchungen_slot_is_free($date, $time, $duration)) {
+			if (!cmx_buchungen_slot_is_free($date, $time, $duration, 0, 0, 0, $service_id)) {
 				\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'slot']));
 				exit;
 			}
@@ -546,7 +557,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 				CMX_BUCHUNGEN_META_START_TIME => $time,
 				CMX_BUCHUNGEN_META_DURATION => (string) $duration,
 				'_cmx_buchung_unit' => $unit,
-				CMX_BUCHUNGEN_META_STATUS => 'bestaetigt',
+				CMX_BUCHUNGEN_META_STATUS => 'angefragt',
 				CMX_BUCHUNGEN_META_BUFFER_BEFORE => '0',
 				CMX_BUCHUNGEN_META_BUFFER_AFTER => '0',
 				CMX_BUCHUNGEN_META_BOOKING_TOKEN => cmx_buchungen_token(),
@@ -568,7 +579,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 		}
 		cmx_buchungen_sync_title($booking_id);
 		cmx_buchungen_schedule_reminder($booking_id);
-		cmx_buchungen_maybe_send_confirmation($booking_id);
 
 		\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_confirmed' => $booking_id]));
 		exit;
@@ -715,20 +725,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 		foreach ($services as $service) {
 			if ((string) ($service['unit'] ?? 'minutes') === 'days') {
 				$service_day_dates = [];
+				$service_article_id = \max(0, (int) ($service['artikel_id'] ?? 0));
 				for ($days = 1; $days <= 60; $days++) {
-					$service_day_dates[(string) $days] = cmx_buchungen_frontend_day_dates($days, 90, (array) ($service['weekdays'] ?? [1, 2, 3, 4, 5]));
+					$service_day_dates[(string) $days] = cmx_buchungen_frontend_day_dates($days, 90, (array) ($service['weekdays'] ?? [1, 2, 3, 4, 5]), $service_article_id);
 				}
 				$day_dates[(string) $service['id']] = $service_day_dates;
 				continue;
 			}
 			$service_weekdays = (array) ($service['weekdays'] ?? [1, 2, 3, 4, 5]);
+			$service_article_id = \max(0, (int) ($service['artikel_id'] ?? 0));
 			$duration_key = (string) (int) ($service['duration_minutes'] ?? $service['duration']);
-			$slot_cache_key = $duration_key . ':' . \implode(',', \array_map('intval', $service_weekdays));
+			$slot_cache_key = $duration_key . ':' . $service_article_id . ':' . \implode(',', \array_map('intval', $service_weekdays));
 			if (!isset($slots[$duration_key])) {
 				$slots[$duration_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']), 42, [1, 2, 3, 4, 5]);
 			}
 			if (!isset($slots[$slot_cache_key])) {
-				$slots[$slot_cache_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']), 42, $service_weekdays);
+				$slots[$slot_cache_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']), 42, $service_weekdays, $service_article_id);
 			}
 			$slots[(string) ($service['id'] ?? '')] = $slots[$slot_cache_key];
 		}
@@ -833,7 +845,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 			.cmx-booking-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
 			.cmx-booking-form input,.cmx-booking-form textarea{width:100%;border:1px solid #cfd5df;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}
-			.cmx-booking-form input[readonly]{background:#fff;color:#111827;font-weight:700}
+			.cmx-booking-form input[readonly]{background:#f3f4f6;color:#6b7280;font-weight:700;cursor:default}
+			.cmx-booking-form input[readonly]:focus{outline:none;border-color:#cfd5df;box-shadow:none}
 			.cmx-booking-form textarea{min-height:90px;resize:vertical}
 			.cmx-booking-form .is-wide{grid-column:1/-1}
 			.cmx-booking-form-note{grid-column:1/-1;margin:-4px 0 0;color:#6b7280;font-size:13px;line-height:1.45}
@@ -946,7 +959,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row" data-side-period-row><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
 			echo '<form class="cmx-booking-form" method="post" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
 			\wp_nonce_field('cmx_buchungen_frontend_book', 'cmx_buchungen_frontend_nonce');
-			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="is-wide">Termin<input data-form-summary readonly></label><label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
+			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="is-wide">Termin<input data-form-summary readonly tabindex="-1" aria-readonly="true"></label><label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
 		}
 
 		echo '</div>';

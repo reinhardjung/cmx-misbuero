@@ -6,13 +6,16 @@
 		'duration' => '60',
 		'mitarbeiter' => '0',
 		'ressource' => '0',
+		'artikel' => '0',
 	], $atts, 'cmx_buchungen_slots');
 
 	$slots = cmx_buchungen_available_slots(
 		(string) $atts['date'],
 		\max(5, (int) $atts['duration']),
 		\max(0, (int) $atts['mitarbeiter']),
-		\max(0, (int) $atts['ressource'])
+		\max(0, (int) $atts['ressource']),
+		15,
+		\max(0, (int) $atts['artikel'])
 	);
 	if ($slots === []) {
 		return '<p>Keine freien Termine gefunden.</p>';
