@@ -955,11 +955,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-day-count input{width:76px;border:1px solid #cfd5df;border-radius:6px;padding:8px 18px 8px 10px;font:inherit;font-weight:700;text-align:center}
 			.cmx-booking-form{max-width:780px;margin:20px auto 0;border:1px solid #d6dbe3;border-radius:18px;padding:28px;background:#fff}
 			.cmx-booking-form h2{margin:0 0 18px;font-size:26px}
-			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(15,minmax(0,1fr));gap:14px}
-			.cmx-booking-form label{grid-column:span 5;display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
-			.cmx-booking-form .cmx-booking-field-street{grid-column:span 6}
-			.cmx-booking-form .cmx-booking-field-zip{grid-column:span 4}
-			.cmx-booking-form .cmx-booking-field-city{grid-column:span 5}
+			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:14px}
+			.cmx-booking-form label{grid-column:span 10;display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
+			.cmx-booking-form .cmx-booking-field-email{grid-column:span 12}
+			.cmx-booking-form .cmx-booking-field-phone{grid-column:span 8}
+			.cmx-booking-form .cmx-booking-field-street{grid-column:span 12}
+			.cmx-booking-form .cmx-booking-field-zip{grid-column:span 9}
+			.cmx-booking-form .cmx-booking-field-city{grid-column:span 9}
 			.cmx-booking-form input,.cmx-booking-form textarea{width:100%;border:1px solid #cfd5df;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}
 			.cmx-booking-form input[readonly]{background:#f3f4f6;color:#6b7280;font-weight:700;cursor:default}
 			.cmx-booking-form input[readonly]:focus{outline:none;border-color:#cfd5df;box-shadow:none}
@@ -1024,7 +1026,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				? cmx_buchungen_frontend_google_calendar_url($confirmed_id, (string) $confirmed_service['title'], $booking_date, $booking_time, $booking_duration, $confirmed_unit)
 				: '';
 			echo '<div class="cmx-booking-confirm">';
-			echo '<h1>Buchung erfolgt</h1>';
+			echo '<h1>Buchung angefragt</h1>';
 			echo '<p class="cmx-booking-confirm-sub">Dein Termin bei ' . \esc_html((string) $confirmed_service['person']) . ' ist vorgemerkt.</p>';
 			echo '<div class="cmx-booking-confirm-line"></div>';
 			echo '<div class="cmx-booking-confirm-row"><strong>' . \esc_html((string) $confirmed_service['title']) . '</strong></div>';
@@ -1083,7 +1085,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row" data-side-period-row><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
 			echo '<form class="cmx-booking-form" method="post" enctype="multipart/form-data" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
 			\wp_nonce_field('cmx_buchungen_frontend_book', 'cmx_buchungen_frontend_nonce');
-			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="cmx-booking-field-street" data-cr-extra>Strasse<input name="street" autocomplete="street-address" data-cr-field></label><label class="cmx-booking-field-zip" data-cr-extra>PLZ<input name="zip" autocomplete="postal-code" data-cr-field></label><label class="cmx-booking-field-city" data-cr-extra>Ort<input name="city" autocomplete="address-level2" data-cr-field></label><label class="is-wide">Termin<input data-form-summary readonly tabindex="-1" aria-readonly="true"></label><label class="is-wide" data-cr-extra>Führerausweis<input type="file" name="license_file" accept="image/*" data-cr-field></label>';
+			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label class="cmx-booking-field-email">E-Mail<input type="email" name="email" autocomplete="email" required></label><label class="cmx-booking-field-phone">Telefon<input name="phone" autocomplete="tel"></label><label class="cmx-booking-field-street" data-cr-extra>Strasse<input name="street" autocomplete="street-address" data-cr-field></label><label class="cmx-booking-field-zip" data-cr-extra>PLZ<input name="zip" autocomplete="postal-code" data-cr-field></label><label class="cmx-booking-field-city" data-cr-extra>Ort<input name="city" autocomplete="address-level2" data-cr-field></label><label class="is-wide">Termin<input data-form-summary readonly tabindex="-1" aria-readonly="true"></label><label class="is-wide" data-cr-extra>Führerausweis<input type="file" name="license_file" accept="image/*" data-cr-field></label>';
 			if ($agb_link !== '') {
 				echo '<label class="cmx-booking-agb-label" data-cr-extra><input type="checkbox" name="agb_accepted" value="1" data-cr-field data-agb-checkbox> <span>Ich habe die <a href="' . \esc_url($agb_link) . '" target="_blank" rel="noopener noreferrer">AGB gelesen</a>, verstanden und akzeptiert.</span></label>';
 			}
