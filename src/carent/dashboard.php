@@ -38,7 +38,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_preset_options')) 
 			'this_month'   => 'Dieser Monat',
 			'this_quarter' => 'Dieses Quartal',
 			'this_year'    => 'Dieses Jahr',
-			'custom'       => 'Manuell',
+			'custom'       => 'Individuell',
 		];
 	}
 }
@@ -194,6 +194,24 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_color')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_enqueue_chartjs')) {
+	function cmx_carent_dashboard_enqueue_chartjs(): void {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_enqueue_chartjs')) {
+			cmx_enqueue_chartjs();
+			return;
+		}
+
+		if (\wp_script_is('cmx-chartjs', 'enqueued')) {
+			return;
+		}
+
+		$plugin_main = \dirname(__DIR__, 2) . '/cmx-misbuero.php';
+		$local = \plugins_url('vendor/mikuspetr/chartjs/chart.umd.min.js', $plugin_main);
+		\wp_register_script('cmx-chartjs', $local, [], '4.4.1', true);
+		\wp_enqueue_script('cmx-chartjs');
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 	function cmx_carent_dashboard_collect_data(string $from, string $to): array {
 		$range_days = \max(1, cmx_carent_dashboard_days_inclusive($from, $to));
@@ -320,6 +338,124 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_kpi_chart_data')) {
+	function cmx_carent_dashboard_kpi_chart_data(array $vehicles): array {
+		$labels = [];
+		$avg_km = [];
+		$total_km = [];
+		$idle_days = [];
+
+		foreach ($vehicles as $vehicle) {
+			$label = \trim((string) ($vehicle['label'] ?? ''));
+			$labels[] = $label !== '' ? $label : 'Fahrzeug';
+			$avg_km[] = \round((float) ($vehicle['avg_km'] ?? 0), 1);
+			$total_km[] = (int) ($vehicle['km_total'] ?? 0);
+			$idle_days[] = (int) ($vehicle['idle_days'] ?? 0);
+		}
+
+		if ($labels === []) {
+			$labels = ['Keine Daten'];
+			$avg_km = [0];
+			$total_km = [0];
+			$idle_days = [0];
+		}
+
+		return [
+			'avgKm' => [
+				'canvas' => 'cmx-carent-dashboard-chart-avg-km',
+				'labels' => $labels,
+				'values' => $avg_km,
+				'color'  => '#2563eb',
+			],
+			'totalKm' => [
+				'canvas' => 'cmx-carent-dashboard-chart-total-km',
+				'labels' => $labels,
+				'values' => $total_km,
+				'color'  => '#6d28d9',
+			],
+			'idleDays' => [
+				'canvas' => 'cmx-carent-dashboard-chart-idle-days',
+				'labels' => $labels,
+				'values' => $idle_days,
+				'color'  => '#f59e0b',
+			],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_add_kpi_chart_script')) {
+	function cmx_carent_dashboard_add_kpi_chart_script(array $charts): void {
+		$payload = \wp_json_encode($charts);
+		if (!\is_string($payload) || $payload === '') {
+			return;
+		}
+
+		\wp_add_inline_script('cmx-chartjs', '
+			(function(){
+				var charts = ' . $payload . ';
+				function initCaRentKpiCharts(){
+					if (typeof Chart === "undefined" || !charts) return;
+					Object.keys(charts).forEach(function(key){
+						var config = charts[key] || {};
+						var canvas = config.canvas ? document.getElementById(config.canvas) : null;
+						if (!canvas) return;
+						var color = config.color || "#2563eb";
+						new Chart(canvas, {
+							type: "line",
+							data: {
+								labels: config.labels || [],
+								datasets: [{
+									data: config.values || [],
+									borderColor: color,
+									backgroundColor: color,
+									borderWidth: 2.5,
+									pointRadius: 3.5,
+									pointHoverRadius: 4,
+									pointBorderWidth: 0,
+									tension: 0.36,
+									fill: false
+								}]
+							},
+							options: {
+								responsive: true,
+								maintainAspectRatio: false,
+								animation: false,
+								plugins: {
+									legend: { display: false },
+									tooltip: {
+										displayColors: false,
+										backgroundColor: "#111827",
+										titleFont: { weight: "700" },
+										bodyFont: { weight: "700" }
+									}
+								},
+								scales: {
+									x: {
+										display: false,
+										grid: { display: false },
+										border: { display: false }
+									},
+									y: {
+										display: false,
+										beginAtZero: true,
+										grid: { display: false },
+										border: { display: false }
+									}
+								}
+							}
+						});
+					});
+				}
+				if (document.readyState === "loading") {
+					document.addEventListener("DOMContentLoaded", initCaRentKpiCharts);
+				} else {
+					initCaRentKpiCharts();
+				}
+			})();
+		', 'after');
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_export')) {
 	function cmx_carent_dashboard_export(): void {
 		if (!\current_user_can(cmx_carent_dashboard_capability())) {
@@ -411,7 +547,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_bar_chart')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_kpi_card')) {
-	function cmx_carent_dashboard_kpi_card(string $class, string $icon, string $label, string $value, string $subline, float $progress = -1): void {
+	function cmx_carent_dashboard_kpi_card(string $class, string $icon, string $label, string $value, string $subline, float $progress = -1, string $chart_id = ''): void {
 		echo '<section class="cmx-carent-dashboard-kpi cmx-carent-dashboard-kpi-' . \esc_attr($class) . '">';
 		echo '<div class="cmx-carent-dashboard-kpi-icon"><span class="dashicons ' . \esc_attr($icon) . '"></span></div>';
 		echo '<div class="cmx-carent-dashboard-kpi-body">';
@@ -420,6 +556,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_kpi_card')) {
 		echo '<div class="cmx-carent-dashboard-kpi-subline">' . \esc_html($subline) . '</div>';
 		if ($progress >= 0) {
 			echo cmx_carent_dashboard_progress($progress, 'currentColor');
+		} elseif ($chart_id !== '') {
+			echo '<div class="cmx-carent-dashboard-kpi-chart"><canvas id="' . \esc_attr($chart_id) . '"></canvas></div>';
 		} else {
 			echo '<svg class="cmx-carent-dashboard-sparkline" viewBox="0 0 180 44" aria-hidden="true" focusable="false">';
 			echo '<polyline points="2,32 18,14 34,28 50,22 66,10 82,26 98,30 114,18 130,24 146,16 162,28 178,12"></polyline>';
@@ -438,10 +576,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 		}
 
 		\wp_enqueue_style('dashicons');
+		cmx_carent_dashboard_enqueue_chartjs();
 		[$from, $to] = cmx_carent_dashboard_range();
 		$selected_preset = cmx_carent_dashboard_requested_preset();
 		$data = cmx_carent_dashboard_collect_data($from, $to);
 		$vehicles = (array) ($data['vehicles'] ?? []);
+		$kpi_charts = cmx_carent_dashboard_kpi_chart_data($vehicles);
+		cmx_carent_dashboard_add_kpi_chart_script($kpi_charts);
 		$export_url = \wp_nonce_url(\add_query_arg([
 			'action'   => 'cmx_carent_dashboard_export',
 			'cmx_range' => $selected_preset,
@@ -481,6 +622,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 			.cmx-carent-dashboard-kpi-subline{color:#64748b;font-size:12px;margin-bottom:12px}
 			.cmx-carent-dashboard-progress{height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden}
 			.cmx-carent-dashboard-progress span{display:block;height:100%;border-radius:999px}
+			.cmx-carent-dashboard-kpi-chart{position:relative;width:100%;height:52px;margin-top:4px}
+			.cmx-carent-dashboard-kpi-chart canvas{display:block;width:100%!important;height:52px!important}
 			.cmx-carent-dashboard-sparkline{display:block;width:100%;height:44px;margin-top:4px;overflow:visible}
 			.cmx-carent-dashboard-sparkline polyline{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 			.cmx-carent-dashboard-sparkline circle{fill:currentColor;opacity:.9}
@@ -568,9 +711,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 
 		echo '<div class="cmx-carent-dashboard-grid">';
 		cmx_carent_dashboard_kpi_card('green', 'dashicons-dashboard', 'Auslastung (Ø)', \number_format_i18n((float) $data['utilization'], 0) . ' %', 'aus abgeschlossenen Verträgen', (float) $data['utilization']);
-		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø km pro Buchung', \number_format_i18n((float) $data['avg_km'], 0) . ' km', (int) $data['total_bookings'] . ' Buchungen im Zeitraum');
-		cmx_carent_dashboard_kpi_card('purple', 'dashicons-performance', 'Gefahrene km (gesamt)', \number_format_i18n((int) $data['total_km']) . ' km', 'Summe Rückgabe minus Übernahme');
-		cmx_carent_dashboard_kpi_card('orange', 'dashicons-clock', 'Standzeit (gesamt)', \number_format_i18n((int) $data['total_idle_days']) . ' Tage', 'nicht vermietete Tage im Zeitraum');
+		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø km pro Buchung', \number_format_i18n((float) $data['avg_km'], 0) . ' km', (int) $data['total_bookings'] . ' Buchungen im Zeitraum', -1, 'cmx-carent-dashboard-chart-avg-km');
+		cmx_carent_dashboard_kpi_card('purple', 'dashicons-performance', 'Gefahrene km (gesamt)', \number_format_i18n((int) $data['total_km']) . ' km', 'Summe Rückgabe minus Übernahme', -1, 'cmx-carent-dashboard-chart-total-km');
+		cmx_carent_dashboard_kpi_card('orange', 'dashicons-clock', 'Standzeit (gesamt)', \number_format_i18n((int) $data['total_idle_days']) . ' Tage', 'nicht vermietete Tage im Zeitraum', -1, 'cmx-carent-dashboard-chart-idle-days');
 		echo '</div>';
 
 		echo '<section class="cmx-carent-dashboard-card cmx-carent-dashboard-table-card">';
