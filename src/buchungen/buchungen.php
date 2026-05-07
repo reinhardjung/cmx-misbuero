@@ -221,6 +221,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 				'image' => $image,
 				'avatar_label' => $avatar_label,
 				'color' => (string) ($template['color'] ?? '#2563eb'),
+				'catalog_url' => \function_exists(__NAMESPACE__ . '\\cmx_artikel_detail_url')
+					? (string) cmx_artikel_detail_url($artikel_id)
+					: (string) \add_query_arg(['artikel' => \get_post_field('post_name', $artikel_id) ?: $artikel_id], \home_url('/katalog/')),
 				'excerpt' => \trim((string) \get_the_excerpt($artikel_id)),
 			];
 		}
@@ -309,18 +312,70 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_day_dates')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_opening_hours_for_weekday')) {
+	function cmx_buchungen_frontend_opening_hours_for_weekday(int $weekday, array $allowed_weekdays = []): array {
+		$hours_by_weekday = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_opening_hours')
+			? (array) cmx_buchungen_opening_hours()
+			: [];
+		$hours = (array) ($hours_by_weekday[$weekday] ?? []);
+		if ($hours !== []) {
+			return $hours;
+		}
+
+		if ($allowed_weekdays === []) {
+			return [];
+		}
+
+		foreach ($allowed_weekdays as $allowed_weekday) {
+			$candidate = (array) ($hours_by_weekday[(int) $allowed_weekday] ?? []);
+			if ($candidate !== []) {
+				return $candidate;
+			}
+		}
+
+		foreach ($hours_by_weekday as $candidate) {
+			$candidate = (array) $candidate;
+			if ($candidate !== []) {
+				return $candidate;
+			}
+		}
+
+		return [];
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_slots')) {
-	function cmx_buchungen_frontend_slots(int $duration, int $days = 42): array {
+	function cmx_buchungen_frontend_slots(int $duration, int $days = 42, array $weekdays = []): array {
 		$duration = \max(5, $duration);
 		$days = \max(1, \min(90, $days));
+		$weekdays = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_sanitize_weekdays') ? cmx_buchungen_template_sanitize_weekdays($weekdays) : $weekdays;
+		$weekdays = $weekdays !== [] ? $weekdays : [1, 2, 3, 4, 5];
 		$today = \wp_date('Y-m-d');
 		$slots_by_date = [];
 
 		for ($i = 0; $i < $days; $i++) {
 			$date = \wp_date('Y-m-d', \strtotime($today . ' +' . $i . ' days'));
-			$slots = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_available_slots')
-				? cmx_buchungen_available_slots($date, $duration)
-				: [];
+			$timestamp = \strtotime($date);
+			$weekday = $timestamp !== false ? (int) \wp_date('N', $timestamp) : 0;
+			if ($weekday <= 0 || !\in_array($weekday, $weekdays, true)) {
+				continue;
+			}
+
+			$slots = [];
+			foreach (cmx_buchungen_frontend_opening_hours_for_weekday($weekday, $weekdays) as $range) {
+				$from = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_time_to_minutes') ? cmx_buchungen_time_to_minutes((string) ($range[0] ?? '')) : -1;
+				$to = \function_exists(__NAMESPACE__ . '\\cmx_buchungen_time_to_minutes') ? cmx_buchungen_time_to_minutes((string) ($range[1] ?? '')) : -1;
+				if ($from < 0 || $to <= $from) {
+					continue;
+				}
+				for ($minute = $from; $minute + $duration <= $to; $minute += 15) {
+					$time = \sprintf('%02d:%02d', \intdiv($minute, 60), $minute % 60);
+					if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_slot_is_free') || cmx_buchungen_slot_is_free($date, $time, $duration)) {
+						$slots[] = $time;
+					}
+				}
+			}
+
 			if ($slots !== []) {
 				$slots_by_date[$date] = \array_values($slots);
 			}
@@ -666,10 +721,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				$day_dates[(string) $service['id']] = $service_day_dates;
 				continue;
 			}
+			$service_weekdays = (array) ($service['weekdays'] ?? [1, 2, 3, 4, 5]);
 			$duration_key = (string) (int) ($service['duration_minutes'] ?? $service['duration']);
+			$slot_cache_key = $duration_key . ':' . \implode(',', \array_map('intval', $service_weekdays));
 			if (!isset($slots[$duration_key])) {
-				$slots[$duration_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']));
+				$slots[$duration_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']), 42, [1, 2, 3, 4, 5]);
 			}
+			if (!isset($slots[$slot_cache_key])) {
+				$slots[$slot_cache_key] = cmx_buchungen_frontend_slots((int) ($service['duration_minutes'] ?? $service['duration']), 42, $service_weekdays);
+			}
+			$slots[(string) ($service['id'] ?? '')] = $slots[$slot_cache_key];
 		}
 		$confirmed_id = isset($_GET['cmx_booking_confirmed']) ? \max(0, (int) \wp_unslash($_GET['cmx_booking_confirmed'])) : 0;
 		$confirmed_service_id = $confirmed_id > 0 ? (int) \get_post_meta($confirmed_id, CMX_BUCHUNGEN_META_ARTIKEL, true) : 0;
@@ -726,7 +787,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-card{position:relative;min-height:178px;border:1px solid #d5d9e0;border-radius:22px;background:#fff;box-shadow:0 10px 24px rgba(15,23,42,.04);overflow:hidden;padding:38px 24px 18px}
 			.cmx-booking-card:before{content:"";position:absolute;left:0;top:0;right:0;height:26px;background:#dcecff}
 			.cmx-booking-card-header-label{position:absolute;left:24px;right:64px;top:4px;color:#334155;font-size:13px;font-weight:700;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-			.cmx-booking-card-menu{position:absolute;right:22px;top:26px;color:#111827;font-weight:800;letter-spacing:2px}
+			.cmx-booking-card-menu{position:absolute;right:22px;top:26px;color:#111827;font-weight:800;letter-spacing:2px;text-decoration:none}
+			.cmx-booking-card-menu:hover,.cmx-booking-card-menu:focus{color:#2563eb}
 			.cmx-booking-person{display:flex;align-items:center;gap:16px;margin:0 0 18px}
 			.cmx-booking-avatar{width:58px;height:58px;border-radius:999px;object-fit:cover;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-weight:800;color:#475569;flex:0 0 auto}
 			.cmx-booking-person-name{font-size:16px}
@@ -859,7 +921,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 						: '<span class="cmx-booking-avatar">' . \esc_html(\mb_substr((string) ($service['avatar_label'] ?? $service['title']), 0, 1)) . '</span>';
 					echo '<article class="cmx-booking-card">';
 					echo '<span class="cmx-booking-card-header-label">' . \esc_html((string) $service['person']) . '</span>';
-					echo '<span class="cmx-booking-card-menu">...</span>';
+					$catalog_url = \trim((string) ($service['catalog_url'] ?? ''));
+					if ($catalog_url !== '') {
+						echo '<a class="cmx-booking-card-menu" href="' . \esc_url($catalog_url) . '" target="_blank" rel="noopener noreferrer" aria-label="' . \esc_attr('Artikel im Katalog anzeigen: ' . (string) $service['title']) . '">...</a>';
+					} else {
+						echo '<span class="cmx-booking-card-menu">...</span>';
+					}
 					echo '<div class="cmx-booking-person">' . $avatar . '</div>';
 					echo '<h2 class="cmx-booking-service-name">' . \esc_html((string) $service['title']) . '</h2>';
 					echo '<div class="cmx-booking-card-line"></div>';
@@ -925,7 +992,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				return String(h).padStart(2, "0") + ":" + m;
 			}
 			function isDayService(){ return selectedService && String(selectedService.unit || "minutes") === "days"; }
-			function serviceSlots(){ return selectedService ? (slots[String(parseInt(selectedService.duration_minutes || selectedService.duration || 60, 10))] || {}) : {}; }
+			function serviceSlots(){ return selectedService ? (slots[String(selectedService.id)] || slots[String(parseInt(selectedService.duration_minutes || selectedService.duration || 60, 10))] || {}) : {}; }
 			function serviceDayDates(){
 				var map = {};
 				var source = selectedService ? dayDates[String(selectedService.id)] : null;
