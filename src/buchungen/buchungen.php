@@ -42,6 +42,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_powered_by_enabl
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_agb_link')) {
+	function cmx_buchungen_frontend_agb_link(): string {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_agb_link')) {
+			return \trim((string) cmx_carent_agb_link());
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_email_agb_link')) {
+			$email_link = \trim((string) cmx_email_agb_link());
+			if ($email_link !== '') {
+				return $email_link;
+			}
+		}
+
+		$options = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		$file_rel = \trim((string) ($options['carent_pdf_file_rel'] ?? ''));
+		if ($file_rel !== '') {
+			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . \ltrim($file_rel, '/')));
+			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
+			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs)) {
+				return (string) \content_url('/uploads/' . \ltrim($file_rel, '/'));
+			}
+		}
+
+		$attachment_id = (int) ($options['carent_pdf_attachment_id'] ?? 0);
+		return $attachment_id > 0 ? \trim((string) \wp_get_attachment_url($attachment_id)) : '';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_duration_minutes')) {
 	function cmx_buchungen_frontend_duration_minutes(string $unit, int $duration): int {
 		$duration = \max(1, $duration);
@@ -218,6 +245,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_services')) {
 				'unit' => $unit,
 				'period' => (string) ($template['period'] ?? 'all'),
 				'weekdays' => \function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_sanitize_weekdays') ? cmx_buchungen_template_sanitize_weekdays($template['weekdays'] ?? []) : [1, 2, 3, 4, 5],
+				'cr' => !empty($template['cr']),
 				'image' => $image,
 				'avatar_label' => $avatar_label,
 				'color' => (string) ($template['color'] ?? '#2563eb'),
@@ -397,10 +425,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_slots')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_contact')) {
-	function cmx_buchungen_frontend_find_or_create_contact(string $name, string $email, string $phone) {
+	function cmx_buchungen_frontend_find_or_create_contact(string $name, string $email, string $phone, array $address = []) {
 		$name = \trim($name);
 		$email = \sanitize_email($email);
 		$phone = \trim($phone);
+		$street = isset($address['street']) ? \sanitize_text_field((string) $address['street']) : '';
+		$zip = isset($address['zip']) ? \sanitize_text_field((string) $address['zip']) : '';
+		$city = isset($address['city']) ? \sanitize_text_field((string) $address['city']) : '';
 		if ($name === '' || !\is_email($email)) {
 			return new \WP_Error('invalid_contact', 'Bitte Name und E-Mail ausfüllen.');
 		}
@@ -421,6 +452,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_c
 				if ($phone !== '' && \trim((string) \get_post_meta($contact_id, '_cmx_telefon_1', true)) === '') {
 					\update_post_meta($contact_id, '_cmx_telefon_1', $phone);
 				}
+				cmx_buchungen_frontend_update_contact_address($contact_id, $street, $zip, $city);
 				return $contact_id;
 			}
 
@@ -432,6 +464,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_c
 					'_cmx_email_1' => $email,
 					'_cmx_telefon_1' => $phone,
 					'_cmx_kontakte_vorname' => $name,
+					'_cmx_rechnung_strasse' => $street,
+					'_cmx_rechnung_plz' => $zip,
+					'_cmx_rechnung_ort' => $city,
 				],
 			], true);
 			if (!\is_wp_error($contact_id) && (int) $contact_id > 0) {
@@ -446,11 +481,65 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_c
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_update_contact_address')) {
+	function cmx_buchungen_frontend_update_contact_address(int $contact_id, string $street, string $zip, string $city): void {
+		if ($contact_id <= 0 || (string) \get_post_type($contact_id) !== 'kontakte') {
+			return;
+		}
+		foreach ([
+			'_cmx_rechnung_strasse' => $street,
+			'_cmx_rechnung_plz' => $zip,
+			'_cmx_rechnung_ort' => $city,
+		] as $meta_key => $value) {
+			$value = \trim((string) $value);
+			if ($value !== '') {
+				\update_post_meta($contact_id, $meta_key, $value);
+			}
+		}
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_upload_license')) {
+	function cmx_buchungen_frontend_upload_license(int $booking_id, int $contact_id): int {
+		if ($booking_id <= 0 || $contact_id <= 0 || empty($_FILES['license_file']) || empty($_FILES['license_file']['tmp_name'])) {
+			return 0;
+		}
+
+		$file_type = \wp_check_filetype_and_ext((string) $_FILES['license_file']['tmp_name'], (string) $_FILES['license_file']['name']);
+		$mime_type = (string) ($file_type['type'] ?? '');
+		if (!\str_starts_with($mime_type, 'image/')) {
+			return 0;
+		}
+
+		require_once \ABSPATH . 'wp-admin/includes/file.php';
+		require_once \ABSPATH . 'wp-admin/includes/media.php';
+		require_once \ABSPATH . 'wp-admin/includes/image.php';
+
+		$attachment_id = \media_handle_upload('license_file', $booking_id);
+		if (\is_wp_error($attachment_id) || (int) $attachment_id <= 0) {
+			return 0;
+		}
+
+		$attachment_id = (int) $attachment_id;
+		\update_post_meta($booking_id, '_cmx_buchung_fuehrerausweis_attachment_id', $attachment_id);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_vermietung_sync_license_document')) {
+			$doc_id = (int) cmx_vermietung_sync_license_document($attachment_id, $contact_id);
+			if ($doc_id > 0) {
+				\update_post_meta($booking_id, '_cmx_buchung_fuehrerausweis_document_id', $doc_id);
+			}
+		}
+
+		return $attachment_id;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_error_message')) {
 	function cmx_buchungen_frontend_error_message(string $code): string {
 		return match ($code) {
 			'nonce' => 'Die Buchung konnte nicht gespeichert werden, weil die Seite abgelaufen ist. Bitte neu laden und erneut versuchen.',
 			'missing' => 'Bitte Leistung, Datum, Uhrzeit, Name und eine gültige E-Mail ausfüllen.',
+			'agb' => 'Bitte die AGB akzeptieren.',
+			'upload' => 'Der Führerausweis konnte nicht gespeichert werden. Bitte eine Bilddatei wählen oder ohne Datei fortfahren.',
 			'slot' => 'Dieser Termin ist inzwischen nicht mehr frei. Bitte einen anderen Termin auswählen.',
 			'contact' => 'Der Kontakt konnte nicht angelegt werden. Bitte Name und E-Mail prüfen.',
 			'create' => 'Die Buchung konnte technisch nicht angelegt werden. Details stehen im Server-Log.',
@@ -504,8 +593,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 		$name = isset($_POST['name']) ? \sanitize_text_field((string) \wp_unslash($_POST['name'])) : '';
 		$email = isset($_POST['email']) ? \sanitize_email((string) \wp_unslash($_POST['email'])) : '';
 		$phone = isset($_POST['phone']) ? \sanitize_text_field((string) \wp_unslash($_POST['phone'])) : '';
+		$street = isset($_POST['street']) ? \sanitize_text_field((string) \wp_unslash($_POST['street'])) : '';
+		$zip = isset($_POST['zip']) ? \sanitize_text_field((string) \wp_unslash($_POST['zip'])) : '';
+		$city = isset($_POST['city']) ? \sanitize_text_field((string) \wp_unslash($_POST['city'])) : '';
 		$note = isset($_POST['note']) ? \sanitize_textarea_field((string) \wp_unslash($_POST['note'])) : '';
 		$unit = $selected_service !== null ? (string) ($selected_service['unit'] ?? 'minutes') : 'minutes';
+		$is_cr_booking = $selected_service !== null && !empty($selected_service['cr']);
+		$agb_link = cmx_buchungen_frontend_agb_link();
 		$raw_duration = $selected_service !== null ? \max(1, (int) ($selected_service['duration'] ?? 60)) : 60;
 		$booking_days = isset($_POST['booking_days']) ? \max(1, \min(60, (int) \wp_unslash($_POST['booking_days']))) : $raw_duration;
 		$duration = cmx_buchungen_frontend_duration_minutes($unit, $raw_duration);
@@ -517,6 +611,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 
 		if ($selected_service === null || $service_id <= 0 || \get_post_type($service_id) !== 'artikel' || $date === '' || $time === '' || $name === '' || !\is_email($email)) {
 			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'missing']));
+			exit;
+		}
+		if ($is_cr_booking && $agb_link !== '' && empty($_POST['agb_accepted'])) {
+			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'agb']));
 			exit;
 		}
 		if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_template_allows_date') && !cmx_buchungen_template_allows_date($selected_service, $date)) {
@@ -538,7 +636,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 			}
 		}
 
-		$contact_id = cmx_buchungen_frontend_find_or_create_contact($name, $email, $phone);
+		$contact_id = cmx_buchungen_frontend_find_or_create_contact($name, $email, $phone, [
+			'street' => $is_cr_booking ? $street : '',
+			'zip' => $is_cr_booking ? $zip : '',
+			'city' => $is_cr_booking ? $city : '',
+		]);
 		if (\is_wp_error($contact_id)) {
 			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'contact']));
 			exit;
@@ -557,6 +659,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 				CMX_BUCHUNGEN_META_START_TIME => $time,
 				CMX_BUCHUNGEN_META_DURATION => (string) $duration,
 				'_cmx_buchung_unit' => $unit,
+				'_cmx_buchung_cr' => $is_cr_booking ? '1' : '0',
+				'_cmx_buchung_strasse' => $is_cr_booking ? $street : '',
+				'_cmx_buchung_plz' => $is_cr_booking ? $zip : '',
+				'_cmx_buchung_ort' => $is_cr_booking ? $city : '',
+				'_cmx_buchung_agb_accepted' => ($is_cr_booking && $agb_link !== '') ? '1' : '0',
+				'_cmx_buchung_agb_link' => ($is_cr_booking && $agb_link !== '') ? $agb_link : '',
 				CMX_BUCHUNGEN_META_STATUS => 'angefragt',
 				CMX_BUCHUNGEN_META_BUFFER_BEFORE => '0',
 				CMX_BUCHUNGEN_META_BUFFER_AFTER => '0',
@@ -576,6 +684,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_handle_submit'))
 		$duration_term_id = cmx_buchungen_frontend_duration_term_id($duration);
 		if ($duration_term_id > 0) {
 			\wp_set_object_terms($booking_id, [$duration_term_id], CMX_BUCHUNGEN_TAX_DAUER, false);
+		}
+		if ($is_cr_booking && !empty($_FILES['license_file']) && !empty($_FILES['license_file']['tmp_name']) && cmx_buchungen_frontend_upload_license($booking_id, (int) $contact_id) <= 0) {
+			\wp_safe_redirect(cmx_buchungen_frontend_url(['cmx_booking_error' => 'upload']));
+			exit;
 		}
 		cmx_buchungen_sync_title($booking_id);
 		cmx_buchungen_schedule_reminder($booking_id);
@@ -772,6 +884,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 		$headline = cmx_buchungen_frontend_setting_text('buchungen_headline', cmx_buchungen_frontend_default_headline());
 		$subline = cmx_buchungen_frontend_setting_text('buchungen_subline', cmx_buchungen_frontend_default_subline());
 		$show_powered_by = cmx_buchungen_frontend_powered_by_enabled();
+		$agb_link = cmx_buchungen_frontend_agb_link();
 
 		\status_header(200);
 		\nocache_headers();
@@ -842,11 +955,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-day-count input{width:76px;border:1px solid #cfd5df;border-radius:6px;padding:8px 18px 8px 10px;font:inherit;font-weight:700;text-align:center}
 			.cmx-booking-form{max-width:780px;margin:20px auto 0;border:1px solid #d6dbe3;border-radius:18px;padding:28px;background:#fff}
 			.cmx-booking-form h2{margin:0 0 18px;font-size:26px}
-			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-			.cmx-booking-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
+			.cmx-booking-form-grid{display:grid;grid-template-columns:repeat(15,minmax(0,1fr));gap:14px}
+			.cmx-booking-form label{grid-column:span 5;display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:#374151}
+			.cmx-booking-form .cmx-booking-field-street{grid-column:span 6}
+			.cmx-booking-form .cmx-booking-field-zip{grid-column:span 4}
+			.cmx-booking-form .cmx-booking-field-city{grid-column:span 5}
 			.cmx-booking-form input,.cmx-booking-form textarea{width:100%;border:1px solid #cfd5df;border-radius:8px;padding:11px 12px;font:inherit;background:#fff}
 			.cmx-booking-form input[readonly]{background:#f3f4f6;color:#6b7280;font-weight:700;cursor:default}
 			.cmx-booking-form input[readonly]:focus{outline:none;border-color:#cfd5df;box-shadow:none}
+			.cmx-booking-form input[type=file]{padding:9px 12px;background:#fff}
+			.cmx-booking-agb-label{grid-column:1/-1;display:flex !important;flex-direction:row !important;align-items:center;gap:8px !important;font-weight:600 !important;color:#4b5563 !important}
+			.cmx-booking-agb-label input{width:auto !important;flex:0 0 auto}
+			.cmx-booking-agb-label a{color:#2563eb;text-decoration:none}
+			.cmx-booking-agb-label a:hover{text-decoration:underline}
 			.cmx-booking-form textarea{min-height:90px;resize:vertical}
 			.cmx-booking-form .is-wide{grid-column:1/-1}
 			.cmx-booking-form-note{grid-column:1/-1;margin:-4px 0 0;color:#6b7280;font-size:13px;line-height:1.45}
@@ -858,8 +979,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			.cmx-booking-confirm-line{height:1px;background:#dfe3e8;margin:0 0 24px}
 			.cmx-booking-confirm-row{display:flex;align-items:center;gap:12px;margin:12px 0}
 			.cmx-booking-confirm-cal{display:flex;flex-direction:column;gap:8px;margin-top:30px;font-size:14px;font-weight:700}
-			.cmx-booking-confirm-cal a{color:#2563eb;text-decoration:none}
+			.cmx-booking-confirm-cal a{display:inline-flex;align-items:center;gap:9px;color:#1e3a8a;text-decoration:none}
 			.cmx-booking-confirm-cal a:hover{text-decoration:underline}
+			.cmx-booking-cal-icon{display:block;width:20px;height:20px;object-fit:contain;flex:0 0 20px}
 			.cmx-booking-check{position:absolute;right:-36px;bottom:-24px;width:75px;height:75px;border-radius:999px;background:#07bd58;color:#fff;display:flex;align-items:center;justify-content:center;font-size:43px;font-weight:800}
 			.cmx-booking-powered{padding:0 24px 16px;text-align:right;color:#9ca3af;font-size:12px;line-height:1.4}
 			.cmx-booking-shell.is-confirmed .cmx-booking-powered{padding-top:16px}
@@ -909,11 +1031,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">◴</span><span>' . \esc_html($start_label) . '</span></div>';
 			echo '<div class="cmx-booking-confirm-row"><span class="cmx-booking-icon">●</span><span>' . \esc_html(cmx_buchungen_frontend_duration_label($booking_duration, $confirmed_unit)) . '</span></div>';
 			echo '<div class="cmx-booking-confirm-cal">';
+			$apple_icon_url = \defined('CMX_PLUGIN_URL') ? (string) \constant('CMX_PLUGIN_URL') . 'assets/cal_apple.png' : '';
+			$google_icon_url = \defined('CMX_PLUGIN_URL') ? (string) \constant('CMX_PLUGIN_URL') . 'assets/cal_google.png' : '';
 			if ($ics_url !== '') {
-				echo '<a href="' . \esc_url($ics_url) . '">ICS-Datei herunterladen</a>';
+				echo '<a href="' . \esc_url($ics_url) . '">' . ($apple_icon_url !== '' ? '<img class="cmx-booking-cal-icon" src="' . \esc_url($apple_icon_url) . '" alt="" aria-hidden="true">' : '') . '<span>ICS-Datei herunterladen</span></a>';
 			}
 			if ($google_url !== '') {
-				echo '<a href="' . \esc_url($google_url) . '" target="_blank" rel="noopener noreferrer">In Google Kalender eintragen</a>';
+				echo '<a href="' . \esc_url($google_url) . '" target="_blank" rel="noopener noreferrer">' . ($google_icon_url !== '' ? '<img class="cmx-booking-cal-icon" src="' . \esc_url($google_icon_url) . '" alt="" aria-hidden="true">' : '') . '<span>In Google Kalender eintragen</span></a>';
 			}
 			echo '</div>';
 			echo '<div class="cmx-booking-check">✓</div>';
@@ -957,9 +1081,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 			}
 			echo '</div>';
 			echo '<div data-step="schedule" hidden><div class="cmx-booking-scheduler"><aside class="cmx-booking-side"><div data-side-avatar></div><h2 data-side-title></h2><div class="cmx-booking-side-row"><span class="cmx-booking-icon">◴</span><span data-side-duration></span></div><div class="cmx-booking-side-row" data-side-period-row><span class="cmx-booking-icon">◷</span><span data-side-period></span></div></aside><section><div class="cmx-booking-calendar-head"><button type="button" class="cmx-booking-nav" data-prev-month>‹</button><button type="button" class="cmx-booking-month" data-month-label data-today-jump></button><button type="button" class="cmx-booking-nav is-next" data-next-month>›</button></div><div class="cmx-booking-weekdays"><span>MO</span><span>DI</span><span>MI</span><span>DO</span><span>FR</span><span>SA</span><span>SO</span></div><div class="cmx-booking-days" data-calendar-days></div></section><aside class="cmx-booking-slots" data-slots-list></aside></div></div>';
-			echo '<form class="cmx-booking-form" method="post" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
+			echo '<form class="cmx-booking-form" method="post" enctype="multipart/form-data" action="' . \esc_url(cmx_buchungen_frontend_url()) . '" data-step="form" hidden><h2>Kontaktdaten</h2><input type="hidden" name="cmx_buchungen_frontend_action" value="book"><input type="hidden" name="template_id" data-form-template><input type="hidden" name="service_id" data-form-service><input type="hidden" name="date" data-form-date><input type="hidden" name="time" data-form-time><input type="hidden" name="booking_days" data-form-booking-days value="1">';
 			\wp_nonce_field('cmx_buchungen_frontend_book', 'cmx_buchungen_frontend_nonce');
-			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="is-wide">Termin<input data-form-summary readonly tabindex="-1" aria-readonly="true"></label><label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
+			echo '<div class="cmx-booking-form-grid"><label>Name<input name="name" autocomplete="name" required></label><label>E-Mail<input type="email" name="email" autocomplete="email" required></label><label>Telefon<input name="phone" autocomplete="tel"></label><label class="cmx-booking-field-street" data-cr-extra>Strasse<input name="street" autocomplete="street-address" data-cr-field></label><label class="cmx-booking-field-zip" data-cr-extra>PLZ<input name="zip" autocomplete="postal-code" data-cr-field></label><label class="cmx-booking-field-city" data-cr-extra>Ort<input name="city" autocomplete="address-level2" data-cr-field></label><label class="is-wide">Termin<input data-form-summary readonly tabindex="-1" aria-readonly="true"></label><label class="is-wide" data-cr-extra>Führerausweis<input type="file" name="license_file" accept="image/*" data-cr-field></label>';
+			if ($agb_link !== '') {
+				echo '<label class="cmx-booking-agb-label" data-cr-extra><input type="checkbox" name="agb_accepted" value="1" data-cr-field data-agb-checkbox> <span>Ich habe die <a href="' . \esc_url($agb_link) . '" target="_blank" rel="noopener noreferrer">AGB gelesen</a>, verstanden und akzeptiert.</span></label>';
+			}
+			echo '<label class="is-wide">Notiz<textarea name="note"></textarea></label><p class="cmx-booking-form-note">Du erhältst sofort eine Eingangsbestätigung per E-Mail.<br/>Die Buchung wird erst nach zusätzlicher manueller Bestätigung verbindlich.</p></div><div class="cmx-booking-form-actions"><button type="button" class="cmx-booking-link" data-back-schedule>Zurück</button><button type="submit" class="cmx-booking-button">buchen</button></div></form>';
 		}
 
 		echo '</div>';
@@ -1188,6 +1316,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 				renderSlots();
 				showStep("schedule");
 			}
+			function syncCrFields(){
+				var show = !!(selectedService && selectedService.cr);
+				root.querySelectorAll("[data-cr-extra]").forEach(function(row){
+					row.hidden = !show;
+				});
+				root.querySelectorAll("[data-cr-field]").forEach(function(field){
+					field.disabled = !show;
+					if(!show){
+						if(field.type === "checkbox") field.checked = false;
+						else if(field.type !== "file") field.value = "";
+					}
+				});
+				root.querySelectorAll("[data-agb-checkbox]").forEach(function(field){
+					field.required = show;
+				});
+			}
 			function openForm(){
 				if(!selectedService || !selectedDate || (!selectedTime && !isDayService())) return;
 				qs("[data-form-template]").value = String(selectedService.id);
@@ -1202,6 +1346,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_render_page')) {
 					summaryDate = selectedDate + " - " + ymd(endDate);
 				}
 				qs("[data-form-summary]").value = (isDayService() ? summaryDate + ", " + durationLabel() : fmtTime(selectedTime) + ", " + selectedDate) + " - " + selectedService.title;
+				syncCrFields();
 				showStep("form");
 				var name = root.querySelector("input[name=\"name\"]");
 				if(name) name.focus();

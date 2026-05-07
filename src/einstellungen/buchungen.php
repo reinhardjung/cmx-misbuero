@@ -205,6 +205,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_default_template_row')) {
 			'duration' => 60,
 			'period' => 'all',
 			'weekdays' => cmx_buchungen_template_default_weekdays(),
+			'cr' => '0',
 			'color' => $colors[$index % \count($colors)],
 		];
 	}
@@ -248,6 +249,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_template_rows'))
 				$period = 'all';
 			}
 			$weekdays = cmx_buchungen_template_sanitize_weekdays($row['weekdays'] ?? []);
+			$cr = !empty($row['cr']) ? '1' : '0';
 
 			$color = isset($row['color']) ? (string) $row['color'] : '';
 			$color = \sanitize_hex_color($color) ?: $colors[\count($clean) % \count($colors)];
@@ -267,6 +269,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sanitize_template_rows'))
 				'duration' => $duration,
 				'period' => $period,
 				'weekdays' => $weekdays,
+				'cr' => $cr,
 				'color' => $color,
 			];
 
@@ -366,7 +369,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field'))
 			.cmx-buchungen-template-note{max-width:760px;color:#646970}
 		</style>';
 		echo '<table class="cmx-buchungen-template-table"><thead><tr>';
-		echo '<th>Aktiv</th><th>Artikel</th><th>Kontakt</th><th>Oberzeile</th><th>Kacheltitel</th><th>Einheit</th><th>Dauer</th><th>Zeitraum</th><th>Wochentage</th>';
+		echo '<th>Aktiv</th><th>CR</th><th>Artikel</th><th>Kontakt</th><th>Oberzeile</th><th>Kacheltitel</th><th>Einheit</th><th>Dauer</th><th>Zeitraum</th><th>Wochentage</th>';
 		echo '</tr></thead><tbody>';
 
 		foreach ($rows as $index => $row) {
@@ -379,6 +382,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_buchungen_templates_field'))
 			$weekdays = cmx_buchungen_template_sanitize_weekdays($row['weekdays'] ?? []);
 			echo '<tr>';
 			echo '<td><input type="hidden" name="' . \esc_attr($name . '[enabled]') . '" value="0"><input type="checkbox" name="' . \esc_attr($name . '[enabled]') . '" value="1" ' . \checked(!empty($row['enabled']), true, false) . '></td>';
+			echo '<td><input type="hidden" name="' . \esc_attr($name . '[cr]') . '" value="0"><input type="checkbox" name="' . \esc_attr($name . '[cr]') . '" value="1" ' . \checked(!empty($row['cr']), true, false) . ' title="CaRent-Felder aktivieren"></td>';
 			echo '<td>';
 			cmx_buchungen_template_search_field($name . '[artikel_id]', $artikel_id, 'Artikel suchen...', $articles, 'artikel');
 			echo '</td>';
