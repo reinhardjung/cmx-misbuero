@@ -124,6 +124,46 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_kennzeichen_label')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_status_meta_key')) {
+	function cmx_carent_admin_status_meta_key(): string {
+		return \defined(__NAMESPACE__ . '\\CMX_CARENT_STATUS_META')
+			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_STATUS_META')
+			: '_cmx_carent_status';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_status_options')) {
+	function cmx_carent_admin_status_options(): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_status_options')) {
+			$options = (array) cmx_carent_status_options();
+			if ($options !== []) {
+				return $options;
+			}
+		}
+
+		return [
+			'offen'         => 'offen',
+			'abgeschlossen' => 'abgeschlossen',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_status_value')) {
+	function cmx_carent_admin_status_value(int $post_id): string {
+		$value = \sanitize_key((string) \get_post_meta($post_id, cmx_carent_admin_status_meta_key(), true));
+		$options = cmx_carent_admin_status_options();
+
+		return isset($options[$value]) ? $value : 'offen';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_status_label')) {
+	function cmx_carent_admin_status_label(string $value): string {
+		$options = cmx_carent_admin_status_options();
+		return (string) ($options[$value] ?? ($value !== '' ? \ucfirst($value) : 'offen'));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_date_value')) {
 	function cmx_carent_admin_date_value(int $post_id, string $meta_key): string {
 		$value = \trim((string) \get_post_meta($post_id, $meta_key, true));
@@ -440,6 +480,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	$new_columns = [
 		'cmx_carent_artikel'     => \__('Artikel', 'cmx-misbuero'),
 		'cmx_carent_kontakt'     => \__('Kontakt', 'cmx-misbuero'),
+		'cmx_carent_status'      => \__('Status', 'cmx-misbuero'),
 		'cmx_carent_kennzeichen' => \__('Kennzeichen', 'cmx-misbuero'),
 		'cmx_carent_uebernahme'  => \__('Übernahme', 'cmx-misbuero'),
 		'cmx_carent_rueckgabe'   => \__('Rückgabe', 'cmx-misbuero'),
@@ -460,6 +501,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 		$kontakt_id = cmx_carent_admin_linked_contact_id($post_id);
 		$label = cmx_carent_admin_contact_label($kontakt_id);
 		echo cmx_carent_admin_edit_link($kontakt_id, $label); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		return;
+	}
+
+	if ($column === 'cmx_carent_status') {
+		$status = cmx_carent_admin_status_value($post_id);
+		echo '<span class="cmx-carent-status-badge is-' . \esc_attr($status) . '">' . \esc_html(cmx_carent_admin_status_label($status)) . '</span>';
 		return;
 	}
 
@@ -494,11 +541,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	}
 
 	echo '<style>
-		.wp-list-table .column-cmx_carent_artikel{width:28%;white-space:nowrap}
-		.wp-list-table .column-cmx_carent_kontakt{width:24%;white-space:nowrap}
+		.wp-list-table .column-cmx_carent_artikel{width:25%;white-space:nowrap}
+		.wp-list-table .column-cmx_carent_kontakt{width:22%;white-space:nowrap}
+		.wp-list-table .column-cmx_carent_status{width:120px;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_kennzeichen{width:110px;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_uebernahme{width:100px;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_rueckgabe{width:100px;white-space:nowrap}
+		.wp-list-table .cmx-carent-status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:82px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:1.5}
+		.wp-list-table .cmx-carent-status-badge.is-offen{background:#fef3f2;color:#b42318}
+		.wp-list-table .cmx-carent-status-badge.is-abgeschlossen{background:#ecfdf3;color:#027a48}
 	</style>';
 });
 
@@ -515,6 +566,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	}
 
 	$selected_article_id = isset($_GET['cmx_carent_artikel_id']) ? (int) \wp_unslash($_GET['cmx_carent_artikel_id']) : 0;
+	$selected_status = isset($_GET['cmx_carent_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_carent_status'])) : '';
+	$status_options = cmx_carent_admin_status_options();
+	if ($selected_status !== '' && !isset($status_options[$selected_status])) {
+		$selected_status = '';
+	}
 	$selected_date = cmx_carent_admin_filter_date_value();
 	$article_ids = cmx_carent_admin_used_article_ids();
 
@@ -530,6 +586,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 			$label = '#' . $article_id;
 		}
 		echo '<option value="' . (int) $article_id . '"' . \selected($selected_article_id, $article_id, false) . '>' . \esc_html($label) . '</option>';
+	}
+	echo '</select>';
+
+	echo '<label for="cmx_carent_status" class="screen-reader-text">' . \esc_html__('Nach Status filtern', 'cmx-misbuero') . '</label>';
+	echo '<select name="cmx_carent_status" id="cmx_carent_status">';
+	echo '<option value="">' . \esc_html__('Alle Status', 'cmx-misbuero') . '</option>';
+	foreach ($status_options as $value => $label) {
+		echo '<option value="' . \esc_attr((string) $value) . '"' . \selected($selected_status, (string) $value, false) . '>' . \esc_html((string) $label) . '</option>';
 	}
 	echo '</select>';
 
@@ -551,8 +615,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	}
 
 	$article_id = isset($_GET['cmx_carent_artikel_id']) ? (int) \wp_unslash($_GET['cmx_carent_artikel_id']) : 0;
+	$selected_status = isset($_GET['cmx_carent_status']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_carent_status'])) : '';
+	if ($selected_status !== '' && !isset(cmx_carent_admin_status_options()[$selected_status])) {
+		$selected_status = '';
+	}
 	$filter_date = cmx_carent_admin_filter_date_value();
-	if ($article_id <= 0 && $filter_date === '') {
+	if ($article_id <= 0 && $selected_status === '' && $filter_date === '') {
 		return;
 	}
 
@@ -571,6 +639,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 			'compare' => '=',
 			'type'    => 'NUMERIC',
 		];
+	}
+
+	if ($selected_status !== '') {
+		$status_key = cmx_carent_admin_status_meta_key();
+		if ($selected_status === 'offen') {
+			$meta_query[] = [
+				'relation' => 'OR',
+				[
+					'key'     => $status_key,
+					'value'   => 'offen',
+					'compare' => '=',
+				],
+				[
+					'key'     => $status_key,
+					'value'   => '',
+					'compare' => '=',
+				],
+				[
+					'key'     => $status_key,
+					'compare' => 'NOT EXISTS',
+				],
+			];
+		} else {
+			$meta_query[] = [
+				'key'     => $status_key,
+				'value'   => $selected_status,
+				'compare' => '=',
+			];
+		}
 	}
 
 	if ($filter_date !== '') {

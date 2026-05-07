@@ -1394,6 +1394,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_booking_rows')) {
 			'update_post_meta_cache' => true,
 			'update_post_term_cache' => false,
 			'meta_key'               => \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_START_DATE') : '_cmx_buchung_start_date',
+			'meta_query'             => [
+				[
+					'key'     => \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') : '_cmx_buchung_status',
+					'value'   => 'bestaetigt',
+					'compare' => '=',
+				],
+			],
 			'orderby'                => 'meta_value',
 			'order'                  => 'DESC',
 		]);
@@ -2241,6 +2248,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 
 			$booking_kontakt_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') : '_cmx_buchung_kontakt_id';
 			$booking_artikel_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') : '_cmx_buchung_artikel_id';
+			$booking_status_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') ? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') : '_cmx_buchung_status';
+			if (\sanitize_key((string) \get_post_meta($booking_id, $booking_status_key, true)) !== 'bestaetigt') {
+				\wp_safe_redirect(cmx_vermietung_manage_url(0, ['cmx_vermietung_error' => 'invalid_booking']));
+				exit;
+			}
 			$booking_kontakt_id = (int) \get_post_meta($booking_id, $booking_kontakt_key, true);
 			$booking_artikel_id = (int) \get_post_meta($booking_id, $booking_artikel_key, true);
 			if ($booking_kontakt_id <= 0 || $booking_artikel_id <= 0) {
@@ -2435,7 +2447,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 				\update_post_meta($post_id, $identity_meta_key, (int) $attachment_id);
 			}
 
-			if (\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_carent_apply_auto_title')) {
 			cmx_carent_apply_auto_title($post_id);
 		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_carent_composed_title')) {
 			$title = \trim((string) cmx_carent_composed_title($post_id));
@@ -2448,12 +2460,345 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_handle_vermietung_create')) {
 			}
 		}
 
+		if ($booking_id > 0 && \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') && (string) \get_post_type($booking_id) === CMX_BUCHUNGEN_CPT) {
+			$booking_status_key = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS')
+				? (string) \constant(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS')
+				: '_cmx_buchung_status';
+			if (\sanitize_key((string) \get_post_meta($booking_id, $booking_status_key, true)) === 'bestaetigt') {
+				\update_post_meta($booking_id, $booking_status_key, 'erledigt');
+				if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_schedule_reminder')) {
+					cmx_buchungen_schedule_reminder($booking_id);
+				}
+			}
+		}
+
 		\wp_safe_redirect(cmx_vermietung_manage_url($post_id, [
 			'cmx_vermietung_status' => $current_post_id > 0 ? 'updated' : 'saved',
 		]));
 		exit;
 	}
 }
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_payment_terms')) {
+	function cmx_vermietung_payment_terms(): array {
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')
+			? (string) cmx_beleg_zahlungsart_tax()
+			: '';
+		if ($tax === '') {
+			foreach (['belege_zahlungsarten', 'belege_zahlungsart'] as $candidate) {
+				if (\taxonomy_exists($candidate)) {
+					$tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($tax === '') {
+			return [];
+		}
+
+		$terms = \get_terms([
+			'taxonomy'   => $tax,
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		]);
+		if (\is_wp_error($terms) || !\is_array($terms)) {
+			return [];
+		}
+
+		$rows = [];
+		foreach ($terms as $term) {
+			if (!$term instanceof \WP_Term || (int) $term->term_id <= 0) {
+				continue;
+			}
+			$name = \trim((string) $term->name);
+			if ($name === '') {
+				continue;
+			}
+			$rows[] = [
+				'id'   => (int) $term->term_id,
+				'name' => $name,
+			];
+		}
+		return $rows;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_contact_email')) {
+	function cmx_vermietung_contact_email(int $kontakt_id): string {
+		if ($kontakt_id <= 0) {
+			return '';
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_contact_primary_email')) {
+			return \sanitize_email((string) cmxbu_get_contact_primary_email($kontakt_id));
+		}
+		$email = \sanitize_email((string) \get_post_meta($kontakt_id, '_cmx_email_1', true));
+		if (\is_email($email)) {
+			return $email;
+		}
+		$fallback_keys = (array) \apply_filters('cmx_kontakte_email1_meta_keys', [
+			'cmx_email_1',
+			'email_1',
+			'e_mail_1',
+			'kontakt_email',
+			'email',
+			'e_mail',
+			'mail',
+		]);
+		foreach ($fallback_keys as $key) {
+			$key = \trim((string) $key);
+			if ($key === '') {
+				continue;
+			}
+			$email = \sanitize_email((string) \get_post_meta($kontakt_id, $key, true));
+			if (\is_email($email)) {
+				return $email;
+			}
+		}
+		return '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_receipt_category_term_id')) {
+	function cmx_vermietung_receipt_category_term_id(): int {
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy')
+			? (string) cmx_belege_kategorie_taxonomy()
+			: '';
+		if ($tax === '') {
+			foreach (['belege_kategorien', 'belege_kategorie'] as $candidate) {
+				if (\taxonomy_exists($candidate)) {
+					$tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($tax === '') {
+			return 0;
+		}
+
+		foreach (['quittung', 'quittungen'] as $slug) {
+			$term = \get_term_by('slug', $slug, $tax);
+			if ($term instanceof \WP_Term && (int) $term->term_id > 0) {
+				return (int) $term->term_id;
+			}
+		}
+		$term = \get_term_by('name', 'Quittung', $tax);
+		if ($term instanceof \WP_Term && (int) $term->term_id > 0) {
+			return (int) $term->term_id;
+		}
+
+		$created = \wp_insert_term('Quittung', $tax, ['slug' => 'quittung']);
+		if (!\is_wp_error($created) && !empty($created['term_id'])) {
+			return (int) $created['term_id'];
+		}
+		return 0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_payment_amount')) {
+	function cmx_vermietung_payment_amount(string $raw): float {
+		$value = \trim($raw);
+		if ($value === '') {
+			return 0.0;
+		}
+		$value = \str_replace(["\xc2\xa0", ' ', "'"], '', $value);
+		if (\strpos($value, ',') !== false && \strpos($value, '.') !== false) {
+			if (\strrpos($value, ',') > \strrpos($value, '.')) {
+				$value = \str_replace('.', '', $value);
+				$value = \str_replace(',', '.', $value);
+			} else {
+				$value = \str_replace(',', '', $value);
+			}
+		} elseif (\strpos($value, ',') !== false) {
+			$value = \str_replace(',', '.', $value);
+		}
+		$amount = (float) $value;
+		return \is_finite($amount) && $amount > 0 ? (float) \round($amount, 2) : 0.0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_receipt_position_row')) {
+	function cmx_vermietung_receipt_position_row(int $artikel_id, int $variant_index, float $amount): array {
+		$row = \function_exists(__NAMESPACE__ . '\\cmx_beleg_position_row_from_artikel')
+			? (array) cmx_beleg_position_row_from_artikel($artikel_id)
+			: [];
+		if ($row === []) {
+			$row = [
+				'artikel_id'            => $artikel_id,
+				'artikel_name'          => (string) \get_the_title($artikel_id),
+				'artikel_variant_index' => '',
+				'menge'                 => 1,
+				'einheit_id'            => 0,
+				'unit'                  => '',
+				'preis'                 => '',
+				'rabatt'                => '',
+				'beschreibung'          => '',
+			];
+		}
+		if ($variant_index > 0 && \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_variant_label')) {
+			$label = \trim((string) cmx_carent_fahrzeug_variant_label($artikel_id, $variant_index, true));
+			if ($label !== '') {
+				$row['artikel_name'] = $label;
+			}
+		} elseif ($variant_index > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_entries')) {
+			foreach ((array) cmx_artikel_search_variant_entries($artikel_id) as $entry) {
+				if ((int) ($entry['index'] ?? 0) !== $variant_index) {
+					continue;
+				}
+				if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_search_variant_label')) {
+					$label = \trim((string) cmx_artikel_search_variant_label((array) $entry));
+					if ($label !== '') {
+						$row['artikel_name'] = $label;
+					}
+				}
+				break;
+			}
+		}
+		$row['artikel_id'] = $artikel_id;
+		$row['artikel_variant_index'] = $variant_index > 0 ? $variant_index : '';
+		$row['menge'] = 1;
+		$row['preis'] = \number_format($amount, 2, '.', '');
+		$row['rabatt'] = '';
+		return $row;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_vermietung_create_payment_receipt')) {
+	function cmx_vermietung_create_payment_receipt(): void {
+		if (!\is_user_logged_in()) {
+			\wp_send_json_error(['message' => 'Bitte zuerst anmelden.'], 401);
+		}
+		if (!isset($_POST['_ajax_nonce']) || !\wp_verify_nonce((string) \wp_unslash($_POST['_ajax_nonce']), 'cmx_carent_create_payment_receipt')) {
+			\wp_send_json_error(['message' => 'Ungültige Anfrage.'], 403);
+		}
+		if (!\post_type_exists('belege')
+			|| !\function_exists(__NAMESPACE__ . '\\cmx_post_type_can_create')
+			|| !cmx_post_type_can_create('belege')
+			|| (\function_exists(__NAMESPACE__ . '\\cmx_post_type_can_publish') && !cmx_post_type_can_publish('belege'))
+		) {
+			\wp_send_json_error(['message' => 'Du darfst keine Belege erstellen.'], 403);
+		}
+
+		$kontakt_id = isset($_POST['kontakt_id']) ? (int) \wp_unslash($_POST['kontakt_id']) : 0;
+		$artikel_id = isset($_POST['artikel_id']) ? (int) \wp_unslash($_POST['artikel_id']) : 0;
+		$variant_index = isset($_POST['artikel_variant_index']) ? (int) \wp_unslash($_POST['artikel_variant_index']) : 0;
+		$zahlung_id = isset($_POST['zahlungsart']) ? (int) \wp_unslash($_POST['zahlungsart']) : 0;
+		$amount = cmx_vermietung_payment_amount(isset($_POST['amount']) ? (string) \wp_unslash($_POST['amount']) : '');
+		$carent_post_id = isset($_POST['carent_post_id']) ? (int) \wp_unslash($_POST['carent_post_id']) : 0;
+
+		if ($carent_post_id <= 0 || (string) \get_post_type($carent_post_id) !== 'carent' || !\get_post_status($carent_post_id) || !\current_user_can('edit_post', $carent_post_id)) {
+			\wp_send_json_error(['message' => 'Bitte zuerst den Mietvertrag speichern.'], 400);
+		}
+		if ($kontakt_id <= 0 || $artikel_id <= 0) {
+			\wp_send_json_error(['message' => 'Bitte zuerst Kontakt und Fahrzeug wählen.'], 400);
+		}
+		if ($amount <= 0) {
+			\wp_send_json_error(['message' => 'Bitte einen gültigen Betrag eingeben.'], 400);
+		}
+		$kontakt_post = \get_post($kontakt_id);
+		$artikel_post = \get_post($artikel_id);
+		if (!$kontakt_post instanceof \WP_Post || !$artikel_post instanceof \WP_Post || !\current_user_can('edit_post', $kontakt_id) || !\current_user_can('edit_post', $artikel_id)) {
+			\wp_send_json_error(['message' => 'Kontakt oder Fahrzeug ist ungültig.'], 400);
+		}
+
+		$zahlungsart_tax = \function_exists(__NAMESPACE__ . '\\cmx_beleg_zahlungsart_tax')
+			? (string) cmx_beleg_zahlungsart_tax()
+			: '';
+		if ($zahlungsart_tax === '') {
+			foreach (['belege_zahlungsarten', 'belege_zahlungsart'] as $candidate) {
+				if (\taxonomy_exists($candidate)) {
+					$zahlungsart_tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($zahlung_id <= 0 || $zahlungsart_tax === '' || !\term_exists($zahlung_id, $zahlungsart_tax)) {
+			\wp_send_json_error(['message' => 'Bitte eine Zahlungsart wählen.'], 400);
+		}
+
+		$email = cmx_vermietung_contact_email($kontakt_id);
+		if (!\is_email($email)) {
+			\wp_send_json_error(['message' => 'Beim Kontakt ist keine gültige E-Mail-Adresse hinterlegt.'], 400);
+		}
+
+		$today = (string) \wp_date('Y-m-d');
+		$kontakt_label = \trim((string) \get_the_title($kontakt_id));
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$kontakt_label = (string) cmx_normalize_minus_sign($kontakt_label);
+		}
+		$kontakt_addr = \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')
+			? (string) cmx_build_kontakt_postanschrift($kontakt_id)
+			: '';
+		$position = cmx_vermietung_receipt_position_row($artikel_id, $variant_index, $amount);
+
+		$had_skip_pdf_generation = \array_key_exists('cmx_skip_beleg_pdf_generation', $GLOBALS);
+		$previous_skip_pdf_generation = $had_skip_pdf_generation ? $GLOBALS['cmx_skip_beleg_pdf_generation'] : null;
+		$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
+		try {
+			$beleg_id = \wp_insert_post([
+				'post_type'   => 'belege',
+				'post_status' => 'publish',
+				'post_title'  => 'Quittung ' . $today,
+				'post_author' => (int) \get_current_user_id(),
+				'meta_input'  => [
+					'_cmx_title_auto'          => 1,
+					'_cmx_beleg_richtung'      => 'ausgang',
+					'_cmx_beleg_status'        => 'bezahlt',
+					'_cmx_beleg_bezahlt_am'    => $today,
+					'_cmx_beleg_rng_datum'     => $today,
+					'_cmx_beleg_waehrung'      => 'CHF',
+					'_cmx_beleg_summe_override'=> \number_format($amount, 2, '.', ''),
+					'_cmx_beleg_kontakt_id'    => $kontakt_id,
+					'_cmx_beleg_kontakt_label' => $kontakt_label,
+					'_cmx_beleg_kontakt_addr'  => $kontakt_addr,
+					'_cmx_beleg_positionen'    => [$position],
+				],
+			], true);
+		} finally {
+			if ($had_skip_pdf_generation) {
+				$GLOBALS['cmx_skip_beleg_pdf_generation'] = $previous_skip_pdf_generation;
+			} else {
+				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
+			}
+		}
+		if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+			\wp_send_json_error(['message' => 'Die Quittung konnte nicht erstellt werden.'], 500);
+		}
+		$beleg_id = (int) $beleg_id;
+
+		$category_term_id = cmx_vermietung_receipt_category_term_id();
+		$category_tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy')
+			? (string) cmx_belege_kategorie_taxonomy()
+			: '';
+		if ($category_term_id > 0 && $category_tax !== '') {
+			\wp_set_post_terms($beleg_id, [$category_term_id], $category_tax, false);
+		}
+		\wp_set_post_terms($beleg_id, [$zahlung_id], $zahlungsart_tax, false);
+		if ($carent_post_id > 0) {
+			\update_post_meta($beleg_id, '_cmx_carent_vermietung_id', $carent_post_id);
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_generate_document_on_save')) {
+			cmxbu_generate_document_on_save($beleg_id, \get_post($beleg_id), true);
+		}
+		if (!\function_exists(__NAMESPACE__ . '\\cmxbu_send_beleg_mail')) {
+			\wp_send_json_error(['message' => 'Die Quittung wurde erstellt, konnte aber nicht per Mail versendet werden.'], 500);
+		}
+		$send = cmxbu_send_beleg_mail($beleg_id, ['regenerate_pdf' => true]);
+		if (\is_wp_error($send)) {
+			\wp_send_json_error(['message' => $send->get_error_message()], 500);
+		}
+		$sent_to = \sanitize_email((string) ($send['to'] ?? $email));
+
+		\wp_send_json_success([
+			'beleg_id' => $beleg_id,
+			'email'    => $sent_to !== '' ? $sent_to : $email,
+			'message'  => 'Quittung an E-Mail ' . ($sent_to !== '' ? $sent_to : $email) . ' versendet.',
+		]);
+	}
+}
+
+\add_action('wp_ajax_cmx_carent_create_payment_receipt', __NAMESPACE__ . '\\cmx_vermietung_create_payment_receipt');
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 	function cmx_render_vermietung_page(): void {
@@ -2714,6 +3059,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		$km_sync_nonce = (string) \wp_create_nonce('cmx_carent_fahrzeug_sync_km_stand');
 		$vertrag_pdf_nonce = (string) \wp_create_nonce('cmx_carent_preview_vertrag_pdf');
 		$vertrag_mail_nonce = (string) \wp_create_nonce('cmx_carent_send_vertrag_mail');
+		$payment_receipt_nonce = (string) \wp_create_nonce('cmx_carent_create_payment_receipt');
+		$payment_terms = cmx_vermietung_payment_terms();
 
 		while (\ob_get_level()) {
 			\ob_end_clean();
@@ -2769,6 +3116,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 			.cmx-vermietung-icon-button.is-busy svg{animation:cmx-vermietung-spin 1s linear infinite}
 			.cmx-vermietung-icon-button.is-success{background:#ecfdf3;border-color:#abefc6;color:#027a48}
 			.cmx-vermietung-icon-button svg{display:block;width:20px;height:20px;color:currentColor}
+			.cmx-vermietung-modal{display:none;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.32)}
+			.cmx-vermietung-modal.is-open{display:flex}
+			.cmx-vermietung-modal-panel{width:min(420px,100%);border:1px solid #d0d5dd;border-radius:14px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.25);overflow:hidden}
+			.cmx-vermietung-modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid #e4e7ec}
+			.cmx-vermietung-modal-title{margin:0;font-size:18px;line-height:1.25}
+			.cmx-vermietung-modal-close{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#667085;font-size:20px;line-height:1;cursor:pointer}
+			.cmx-vermietung-modal-close:hover{border-color:#b42318;color:#b42318;background:#fef3f2}
+			.cmx-vermietung-modal-body{display:grid;gap:14px;padding:18px}
+			.cmx-vermietung-modal-error{display:none;padding:10px 12px;border:1px solid #fecaca;border-radius:10px;background:#fef2f2;color:#b91c1c;font-size:13px;font-weight:600}
+			.cmx-vermietung-modal-error.is-active{display:block}
+			.cmx-vermietung-modal-field{display:grid;gap:7px}
+			.cmx-vermietung-modal-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#98a2b3}
+			.cmx-vermietung-modal-select,.cmx-vermietung-modal-input{display:block;width:100%;min-height:42px;padding:10px 12px;border:1px solid #c8c8c8;border-radius:10px;background:#fff;font:inherit;color:#1d2327}
+			.cmx-vermietung-modal-actions{display:flex;justify-content:flex-end;padding:0 18px 18px}
+			.cmx-vermietung-modal-pay{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border:0;border-radius:10px;background:#a42c24;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+			.cmx-vermietung-modal-pay:hover{background:#8f211b}
+			.cmx-vermietung-modal-pay:disabled{background:#d0d5dd;color:#fff;cursor:not-allowed}
 			.cmx-vermietung-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;overflow:visible;z-index:2;isolation:isolate}
 			.cmx-vermietung-panel{position:relative;min-width:0;border:1px solid #e4e7ec;border-radius:14px;background:#fff;overflow:visible;z-index:1}
 			.cmx-vermietung-panel.is-locked{background:#fbfcfe}
@@ -3066,7 +3430,35 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 		echo '<button type="submit" class="cmx-vermietung-submit" id="cmx-vermietung-submit"' . (($selected_contact_id > 0 && $selected_vehicle_id > 0) ? '' : ' disabled') . '>' . \esc_html($submit_label) . '</button>';
 		echo '<button type="button" class="cmx-vermietung-icon-button' . ($current_post_id > 0 ? '' : ' is-disabled') . '" id="cmx-vermietung-contract-pdf"' . ($current_post_id > 0 ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($current_post_id > 0 ? 'Vertrags-PDF öffnen' : 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen') . '" aria-label="' . \esc_attr($current_post_id > 0 ? 'Vertrags-PDF öffnen' : 'Bitte zuerst einen bestehenden Vertrag speichern oder auswählen') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm6 1.5V8h4.5M8 13.25h8M8 16.25h8M8 10.25h3.5"/></svg></button>';
 		echo '<a class="cmx-vermietung-icon-button' . ($contact_email_button_enabled ? '' : ' is-disabled') . '" id="cmx-vermietung-contact-email" href="#" data-email-href="' . \esc_attr($selected_contact_email_href) . '"' . ($contact_email_button_enabled ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($contact_email_button_title) . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 2v.24l8 5.34 8-5.34V7H4Zm16 10V9.66l-7.45 4.97a1 1 0 0 1-1.1 0L4 9.66V17h16Z"/></svg></a>';
-		echo '<a class="cmx-vermietung-icon-button' . ($current_contract_edit_url === '' ? ' is-disabled' : '') . '" id="cmx-vermietung-contract-edit" href="' . \esc_url($current_contract_edit_url !== '' ? $current_contract_edit_url : '#') . '"' . ($current_contract_edit_url !== '' ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') . ' title="Vertrag im WP-Admin öffnen" style="color:' . \esc_attr($current_contract_edit_url === '' ? '#98a2b3' : '#135e96') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 2v3h14V5H5Zm0 5v3h4v-3H5Zm6 0v3h3v-3h-3Zm5 0v3h3v-3h-3ZM5 15v4h4v-4H5Zm6 0v4h3v-4h-3Zm5 0v4h3v-4h-3Z"/></svg></a>';
+		$payment_button_enabled = $current_post_id > 0 && $selected_contact_id > 0 && $selected_vehicle_id > 0;
+		echo '<button type="button" class="cmx-vermietung-icon-button' . ($payment_button_enabled ? '' : ' is-disabled') . '" id="cmx-vermietung-contract-edit"' . ($payment_button_enabled ? '' : ' aria-disabled="true" tabindex="-1"') . ' title="' . \esc_attr($payment_button_enabled ? 'Quittung erstellen und versenden' : 'Bitte zuerst den Mietvertrag speichern') . '" aria-label="' . \esc_attr($payment_button_enabled ? 'Quittung erstellen und versenden' : 'Bitte zuerst den Mietvertrag speichern') . '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 2v3h14V5H5Zm0 5v3h4v-3H5Zm6 0v3h3v-3h-3Zm5 0v3h3v-3h-3ZM5 15v4h4v-4H5Zm6 0v4h3v-4h-3Zm5 0v4h3v-4h-3Z"/></svg></button>';
+		echo '</div>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-modal" id="cmx-vermietung-payment-modal" aria-hidden="true">';
+		echo '<div class="cmx-vermietung-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cmx-vermietung-payment-title">';
+		echo '<div class="cmx-vermietung-modal-head">';
+		echo '<h2 class="cmx-vermietung-modal-title" id="cmx-vermietung-payment-title">Quittung bezahlen</h2>';
+		echo '<button type="button" class="cmx-vermietung-modal-close" data-cmx-payment-close aria-label="Schliessen">×</button>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-modal-body">';
+		echo '<div class="cmx-vermietung-modal-error" id="cmx-vermietung-payment-error"></div>';
+		echo '<label class="cmx-vermietung-modal-field" for="cmx-vermietung-payment-method">';
+		echo '<span class="cmx-vermietung-modal-label">Zahlungsart</span>';
+		echo '<select class="cmx-vermietung-modal-select" id="cmx-vermietung-payment-method">';
+		echo '<option value="">Zahlungsart wählen</option>';
+		foreach ($payment_terms as $term) {
+			echo '<option value="' . (int) ($term['id'] ?? 0) . '">' . \esc_html((string) ($term['name'] ?? '')) . '</option>';
+		}
+		echo '</select>';
+		echo '</label>';
+		echo '<label class="cmx-vermietung-modal-field" for="cmx-vermietung-payment-amount">';
+		echo '<span class="cmx-vermietung-modal-label">Betrag</span>';
+		echo '<input type="text" class="cmx-vermietung-modal-input" id="cmx-vermietung-payment-amount" inputmode="decimal" autocomplete="off">';
+		echo '</label>';
+		echo '</div>';
+		echo '<div class="cmx-vermietung-modal-actions">';
+		echo '<button type="button" class="cmx-vermietung-modal-pay" id="cmx-vermietung-payment-pay">Bezahlen</button>';
+		echo '</div>';
 		echo '</div>';
 		echo '</div>';
 		echo '<div class="cmx-vermietung-grid">';
@@ -3423,8 +3815,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				var kmSyncNonce=' . \wp_json_encode($km_sync_nonce) . ';
 				var vertragPdfNonce=' . \wp_json_encode($vertrag_pdf_nonce) . ';
 				var vertragMailNonce=' . \wp_json_encode($vertrag_mail_nonce) . ';
+				var paymentReceiptNonce=' . \wp_json_encode($payment_receipt_nonce) . ';
 				var emptyPhotoMarkup=' . \wp_json_encode(cmx_vermietung_fotos_empty_markup()) . ';
 				var removePhotoIcon=' . \wp_json_encode(cmx_vermietung_fotos_remove_icon()) . ';
+				var paymentModal=document.getElementById("cmx-vermietung-payment-modal");
+				var paymentMethod=document.getElementById("cmx-vermietung-payment-method");
+				var paymentAmount=document.getElementById("cmx-vermietung-payment-amount");
+				var paymentPayButton=document.getElementById("cmx-vermietung-payment-pay");
+				var paymentError=document.getElementById("cmx-vermietung-payment-error");
 				var contractPicker=document.getElementById("cmx-vermietung-vertrag-picker");
 				var contractSearch=document.getElementById("cmx-vermietung-vertrag-search");
 				var contractResults=document.getElementById("cmx-vermietung-vertrag-results");
@@ -3557,18 +3955,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 					}
 				}
 				function setContractEditAction(){
-					var enabled=hasCurrentContract();
+					var enabled=hasCurrentContract() && Number(kontaktInput.value||0)>0 && Number(artikelInput.value||0)>0;
 					if(!contractEditButton){return;}
+					contractEditButton.classList.toggle("is-disabled", !enabled);
+					contractEditButton.disabled=!enabled;
 					if(enabled){
-						contractEditButton.classList.remove("is-disabled");
 						contractEditButton.removeAttribute("aria-disabled");
 						contractEditButton.removeAttribute("tabindex");
-						return;
+						contractEditButton.setAttribute("title","Quittung erstellen und versenden");
+						contractEditButton.setAttribute("aria-label","Quittung erstellen und versenden");
+					}else{
+						contractEditButton.setAttribute("aria-disabled","true");
+						contractEditButton.setAttribute("tabindex","-1");
+						contractEditButton.setAttribute("title",hasCurrentContract() ? "Bitte zuerst Kontakt und Fahrzeug wählen" : "Bitte zuerst den Mietvertrag speichern");
+						contractEditButton.setAttribute("aria-label",hasCurrentContract() ? "Bitte zuerst Kontakt und Fahrzeug wählen" : "Bitte zuerst den Mietvertrag speichern");
 					}
-					contractEditButton.classList.add("is-disabled");
-					contractEditButton.setAttribute("href","#");
-					contractEditButton.setAttribute("aria-disabled","true");
-					contractEditButton.setAttribute("tabindex","-1");
 				}
 				function getTodayValue(){
 					var now=new Date();
@@ -3619,7 +4020,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						contactEmailButton.setAttribute("tabindex","-1");
 					}
 				}
-				function showStatusNotice(message, isSuccess){
+				function showStatusNotice(message, isSuccess, durationMs){
 					if(!form){return;}
 					if(statusNoticeTimer){
 						window.clearTimeout(statusNoticeTimer);
@@ -3645,7 +4046,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 							}
 							statusNotice=null;
 						}, 320);
-					}, isSuccess ? 5000 : 6500);
+					}, Number(durationMs || 0)>0 ? Number(durationMs || 0) : (isSuccess ? 5000 : 6500));
 				}
 				function setContactMailBusy(busy){
 					if(!contactEmailButton){return;}
@@ -3813,6 +4214,140 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						setContractPdfBusy(false);
 					});
 				}
+				function paymentDefaultAmount(){
+					var value="";
+					if(vehicleInfoNodes.summe && String(vehicleInfoNodes.summe.value||"").trim()!==""){
+						value=String(vehicleInfoNodes.summe.value||"").trim();
+					}else if(vehicleInfoNodes.mietpreis && String(vehicleInfoNodes.mietpreis.value||"").trim()!==""){
+						value=String(vehicleInfoNodes.mietpreis.value||"").trim();
+					}
+					return value;
+				}
+				function showPaymentError(message){
+					if(!paymentError){return;}
+					paymentError.textContent=String(message||"");
+					paymentError.classList.toggle("is-active", String(message||"").trim()!=="");
+				}
+				function openPaymentModal(){
+					if(!contractEditButton){return;}
+					if(!hasCurrentContract()){
+						showStatusNotice("Bitte zuerst den Mietvertrag speichern.", false);
+						return;
+					}
+					if(Number(kontaktInput.value||0)<=0 || Number(artikelInput.value||0)<=0){
+						showStatusNotice("Bitte zuerst Kontakt und Fahrzeug wählen.", false);
+						return;
+					}
+					if(!paymentModal || !paymentMethod || !paymentAmount){
+						showStatusNotice("Das Zahlungsfenster konnte nicht geöffnet werden.", false);
+						return;
+					}
+					paymentAmount.value=paymentDefaultAmount();
+					showPaymentError("");
+					paymentModal.classList.add("is-open");
+					paymentModal.setAttribute("aria-hidden","false");
+					window.setTimeout(function(){
+						if(paymentMethod && String(paymentMethod.value||"")===""){
+							try{paymentMethod.focus();}catch(err){}
+						}else{
+							try{paymentAmount.focus();paymentAmount.select();}catch(err){}
+						}
+					}, 30);
+				}
+				function closePaymentModal(){
+					if(!paymentModal){return;}
+					showPaymentError("");
+					paymentModal.classList.remove("is-open");
+					paymentModal.setAttribute("aria-hidden","true");
+				}
+				function setPaymentBusy(busy){
+					if(!contractEditButton){return;}
+					contractEditButton.dataset.busy=busy ? "1" : "0";
+					contractEditButton.classList.toggle("is-busy", !!busy);
+					if(busy){
+						contractEditButton.classList.remove("is-success");
+						contractEditButton.setAttribute("aria-busy","true");
+						contractEditButton.setAttribute("title","Quittung wird erstellt und versendet...");
+						if(paymentPayButton){paymentPayButton.disabled=true;}
+					}else{
+						contractEditButton.removeAttribute("aria-busy");
+						if(paymentPayButton){paymentPayButton.disabled=false;}
+						setContractEditAction();
+					}
+				}
+				function flashPaymentSuccess(){
+					if(!contractEditButton){return;}
+					contractEditButton.classList.add("is-success");
+					window.setTimeout(function(){
+						if(contractEditButton){
+							contractEditButton.classList.remove("is-success");
+						}
+					}, 2200);
+				}
+				function submitPaymentReceipt(){
+					var data;
+					var methodValue=paymentMethod ? String(paymentMethod.value||"").trim() : "";
+					var amountValue=paymentAmount ? String(paymentAmount.value||"").trim() : "";
+					if(String(contractEditButton && contractEditButton.dataset.busy || "0")==="1"){return;}
+					if(!hasCurrentContract()){
+						showStatusNotice("Bitte zuerst den Mietvertrag speichern.", false);
+						return;
+					}
+					if(Number(kontaktInput.value||0)<=0 || Number(artikelInput.value||0)<=0){
+						showStatusNotice("Bitte zuerst Kontakt und Fahrzeug wählen.", false);
+						return;
+					}
+					if(methodValue===""){
+						showPaymentError("Bitte eine Zahlungsart wählen.");
+						try{paymentMethod.focus();}catch(err){}
+						return;
+					}
+					if(amountValue===""){
+						showPaymentError("Bitte einen Betrag eingeben.");
+						try{paymentAmount.focus();}catch(err){}
+						return;
+					}
+					showPaymentError("");
+					closePaymentModal();
+					setPaymentBusy(true);
+					data=new FormData();
+					data.append("action", "cmx_carent_create_payment_receipt");
+					data.append("_ajax_nonce", paymentReceiptNonce);
+					data.append("kontakt_id", String(kontaktInput.value||"0"));
+					data.append("artikel_id", String(artikelInput.value||"0"));
+					data.append("artikel_variant_index", String(artikelVariantInput && artikelVariantInput.value ? artikelVariantInput.value : "0"));
+					data.append("carent_post_id", String(currentPostId()));
+					data.append("zahlungsart", methodValue);
+					data.append("amount", amountValue);
+					fetch(ajaxUrl, {
+						method:"POST",
+						credentials:"same-origin",
+						body:data
+					}).then(function(response){
+						return response.text().then(function(text){
+							var json=null;
+							try{
+								json=JSON.parse(text);
+							}catch(parseError){
+								throw new Error("Der Server hat keine gültige JSON-Antwort geliefert.");
+							}
+							if(!response.ok && (!json || !json.data || !json.data.message)){
+								throw new Error("Die Quittung konnte nicht versendet werden.");
+							}
+							return json;
+						});
+					}).then(function(json){
+						if(!json || !json.success || !json.data){
+							throw new Error((json && json.data && json.data.message) ? String(json.data.message) : "Die Quittung konnte nicht versendet werden.");
+						}
+						flashPaymentSuccess();
+						showStatusNotice(String(json.data.message || "Quittung wurde versendet."), true, 3000);
+					}).catch(function(error){
+						showStatusNotice(error && error.message ? String(error.message) : "Die Quittung konnte nicht versendet werden.", false);
+					}).finally(function(){
+						setPaymentBusy(false);
+					});
+				}
 				function triggerInputEvents(input){
 					if(!input){return;}
 					try{
@@ -3968,6 +4503,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 				function updateSubmit(){
 					var enabled=Number(kontaktInput.value||0)>0 && Number(artikelInput.value||0)>0;
 					submit.disabled=!enabled;
+					setContractEditAction();
 				}
 				function findSelectedVehicleItem(){
 					if(Number(artikelInput.value||0)<=0){return null;}
@@ -5325,6 +5861,44 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 						openContractPdfPreview();
 					});
 				}
+				if(contractEditButton){
+					contractEditButton.addEventListener("click", function(event){
+						event.preventDefault();
+						openPaymentModal();
+					});
+				}
+				Array.prototype.slice.call(document.querySelectorAll("[data-cmx-payment-close]")).forEach(function(button){
+					button.addEventListener("click", function(event){
+						event.preventDefault();
+						closePaymentModal();
+					});
+				});
+				if(paymentModal){
+					paymentModal.addEventListener("click", function(event){
+						if(event.target===paymentModal){
+							closePaymentModal();
+						}
+					});
+				}
+				if(paymentPayButton){
+					paymentPayButton.addEventListener("click", function(event){
+						event.preventDefault();
+						submitPaymentReceipt();
+					});
+				}
+				[paymentMethod,paymentAmount].forEach(function(node){
+					if(!node){return;}
+					node.addEventListener("keydown", function(event){
+						if(event.key==="Enter"){
+							event.preventDefault();
+							submitPaymentReceipt();
+						}
+						if(event.key==="Escape"){
+							event.preventDefault();
+							closePaymentModal();
+						}
+					});
+				});
 				if(transferNodes.km_stand){
 					["input","change"].forEach(function(eventName){
 						transferNodes.km_stand.addEventListener(eventName, refreshKmSyncButtonStates);

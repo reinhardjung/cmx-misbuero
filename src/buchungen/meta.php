@@ -567,21 +567,59 @@ function cmx_buchungen_render_tokens_box(\WP_Post $post): void {
 	cmx_buchungen_maybe_send_confirmation($post_id);
 }, 20, 3);
 
+function cmx_buchungen_generate_nummer(): string {
+	$generator = __NAMESPACE__ . '\\cmx_generate_rechnungsnummer';
+	if (\function_exists($generator)) {
+		$number = \trim((string) \call_user_func($generator));
+		if ($number !== '') {
+			return $number;
+		}
+	}
+
+	$format = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? \trim((string) cmx_ini_get_value('Belege', 'Format'))
+		: '';
+	if ($format === '') {
+		$format = 'ymd-His';
+	}
+
+	return (string) \wp_date($format);
+}
+
+function cmx_buchungen_ensure_nummer(int $post_id): string {
+	$number = \trim((string) \get_post_meta($post_id, '_cmx_buchung_nummer', true));
+	if ($number === '') {
+		$number = cmx_buchungen_generate_nummer();
+		\update_post_meta($post_id, '_cmx_buchung_nummer', $number);
+	}
+
+	return $number;
+}
+
 function cmx_buchungen_sync_title(int $post_id): void {
 	static $running = false;
 	if ($running) {
 		return;
 	}
-	$date = (string) \get_post_meta($post_id, CMX_BUCHUNGEN_META_START_DATE, true);
-	$time = (string) \get_post_meta($post_id, CMX_BUCHUNGEN_META_START_TIME, true);
-	$kontakt_id = (int) \get_post_meta($post_id, CMX_BUCHUNGEN_META_KONTAKT, true);
-	$artikel_id = (int) \get_post_meta($post_id, CMX_BUCHUNGEN_META_ARTIKEL, true);
-	$parts = \array_filter([$date, $time, $kontakt_id > 0 ? \get_the_title($kontakt_id) : '', $artikel_id > 0 ? \get_the_title($artikel_id) : '']);
-	$title = \trim(\implode(' - ', \array_map('strval', $parts)));
+	$post = \get_post($post_id);
+	if (!$post instanceof \WP_Post || (string) $post->post_type !== CMX_BUCHUNGEN_CPT) {
+		return;
+	}
+
+	$title = \trim((string) cmx_buchungen_ensure_nummer($post_id));
 	if ($title === '') {
 		return;
 	}
+	$slug = \sanitize_title($title);
+	if (\trim((string) $post->post_title) === $title && \trim((string) $post->post_name) === $slug) {
+		return;
+	}
+
 	$running = true;
-	\wp_update_post(['ID' => $post_id, 'post_title' => $title]);
+	\wp_update_post([
+		'ID'         => $post_id,
+		'post_title' => $title,
+		'post_name'  => $slug,
+	]);
 	$running = false;
 }
