@@ -582,6 +582,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	if (!isset($options[$status])) {
 		\wp_send_json_error(['message' => 'Ungültiger Status.'], 400);
 	}
+	if ($status === 'abgeschlossen' && \function_exists(__NAMESPACE__ . '\\cmx_carent_status_tracking_errors')) {
+		$errors = (array) cmx_carent_status_tracking_errors($post_id);
+		if ($errors !== []) {
+			\wp_send_json_error(['message' => 'Der Status kann erst auf abgeschlossen gesetzt werden: ' . \implode(' ', \array_map('strval', $errors))], 400);
+		}
+	}
 
 	\update_post_meta($post_id, cmx_carent_admin_status_meta_key(), $status);
 	\wp_send_json_success([
