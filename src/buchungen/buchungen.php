@@ -424,6 +424,111 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_slots')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_email_meta_keys')) {
+	function cmx_buchungen_frontend_email_meta_keys(): array {
+		$keys = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_email_meta_keys')
+			? (array) cmx_kontakte_search_email_meta_keys()
+			: [
+				'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+				'cmx_email_1', 'cmx_email_2', 'cmx_email_3',
+				'email_1', 'email_2', 'email_3',
+				'e_mail_1', 'e_mail_2', 'e_mail_3',
+				'kontakt_email', 'email', 'e_mail', 'mail',
+				'_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation',
+			];
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $keys))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_flatten_meta_values')) {
+	function cmx_buchungen_frontend_flatten_meta_values($value): array {
+		if (\is_array($value)) {
+			$out = [];
+			foreach ($value as $item) {
+				$out = \array_merge($out, cmx_buchungen_frontend_flatten_meta_values($item));
+			}
+			return $out;
+		}
+
+		return [(string) $value];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_contact_has_email')) {
+	function cmx_buchungen_frontend_contact_has_email(int $contact_id, string $email): bool {
+		$email = \sanitize_email($email);
+		if ($contact_id <= 0 || $email === '' || !\is_email($email)) {
+			return false;
+		}
+
+		$candidates = [];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')) {
+			$candidates = \array_merge($candidates, (array) cmx_kommunikation_collect_emails($contact_id));
+		}
+		foreach (cmx_buchungen_frontend_email_meta_keys() as $meta_key) {
+			foreach ((array) \get_post_meta($contact_id, $meta_key, false) as $value) {
+				$candidates = \array_merge($candidates, cmx_buchungen_frontend_flatten_meta_values($value));
+			}
+		}
+
+		foreach ($candidates as $candidate) {
+			$candidate = (string) $candidate;
+			$candidate_email = \sanitize_email($candidate);
+			if ($candidate_email !== '' && \strcasecmp($candidate_email, $email) === 0) {
+				return true;
+			}
+			if (\preg_match_all('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $candidate, $matches)) {
+				foreach ((array) ($matches[0] ?? []) as $match) {
+					$match_email = \sanitize_email((string) $match);
+					if ($match_email !== '' && \strcasecmp($match_email, $email) === 0) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_contact_by_email')) {
+	function cmx_buchungen_frontend_find_contact_by_email(string $email): int {
+		$email = \sanitize_email($email);
+		if ($email === '' || !\is_email($email) || !\post_type_exists('kontakte')) {
+			return 0;
+		}
+
+		$meta_query = ['relation' => 'OR'];
+		foreach (cmx_buchungen_frontend_email_meta_keys() as $meta_key) {
+			$meta_query[] = [
+				'key'     => $meta_key,
+				'value'   => $email,
+				'compare' => 'LIKE',
+			];
+		}
+
+		$ids = \get_posts([
+			'post_type'              => 'kontakte',
+			'post_status'            => ['publish', 'private', 'draft'],
+			'fields'                 => 'ids',
+			'posts_per_page'         => -1,
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => false,
+			'meta_query'             => $meta_query,
+		]);
+		foreach ((array) $ids as $id) {
+			$contact_id = (int) $id;
+			if (cmx_buchungen_frontend_contact_has_email($contact_id, $email)) {
+				return $contact_id;
+			}
+		}
+
+		return 0;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_contact')) {
 	function cmx_buchungen_frontend_find_or_create_contact(string $name, string $email, string $phone, array $address = []) {
 		$name = \trim($name);
@@ -437,18 +542,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_buchungen_frontend_find_or_create_c
 		}
 
 		if (\post_type_exists('kontakte')) {
-			$existing = \get_posts([
-				'post_type' => 'kontakte',
-				'post_status' => ['publish', 'private', 'draft'],
-				'fields' => 'ids',
-				'posts_per_page' => 1,
-				'no_found_rows' => true,
-				'meta_query' => [
-					['key' => '_cmx_email_1', 'value' => $email, 'compare' => '='],
-				],
-			]);
-			if (!empty($existing)) {
-				$contact_id = (int) $existing[0];
+			$contact_id = cmx_buchungen_frontend_find_contact_by_email($email);
+			if ($contact_id > 0) {
 				if ($phone !== '' && \trim((string) \get_post_meta($contact_id, '_cmx_telefon_1', true)) === '') {
 					\update_post_meta($contact_id, '_cmx_telefon_1', $phone);
 				}

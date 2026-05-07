@@ -506,7 +506,16 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 
 	if ($column === 'cmx_carent_status') {
 		$status = cmx_carent_admin_status_value($post_id);
-		echo '<span class="cmx-carent-status-badge is-' . \esc_attr($status) . '">' . \esc_html(cmx_carent_admin_status_label($status)) . '</span>';
+		$options = cmx_carent_admin_status_options();
+		echo '<span class="cmx-carent-inline-status" data-post-id="' . (int) $post_id . '">';
+		echo '<button type="button" class="cmx-carent-status-badge is-' . \esc_attr($status) . '" data-status-label>' . \esc_html(cmx_carent_admin_status_label($status)) . '</button>';
+		echo '<select class="cmx-carent-inline-status-select" data-status-select hidden>';
+		foreach ($options as $value => $label) {
+			echo '<option value="' . \esc_attr((string) $value) . '"' . \selected($status, (string) $value, false) . '>' . \esc_html((string) $label) . '</option>';
+		}
+		echo '</select>';
+		echo '<span class="spinner" data-status-spinner></span>';
+		echo '</span>';
 		return;
 	}
 
@@ -544,13 +553,149 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 		.wp-list-table .column-cmx_carent_artikel{width:25%;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_kontakt{width:22%;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_status{width:120px;white-space:nowrap}
+		.wp-list-table th.column-cmx_carent_status{padding-left:3ch}
 		.wp-list-table .column-cmx_carent_kennzeichen{width:110px;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_uebernahme{width:100px;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_rueckgabe{width:100px;white-space:nowrap}
-		.wp-list-table .cmx-carent-status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:82px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:1.5}
+		.wp-list-table .cmx-carent-inline-status{display:inline-flex;align-items:center;width:98px;height:30px;position:relative;vertical-align:middle}
+		.wp-list-table .cmx-carent-inline-status [hidden]{display:none!important}
+		.wp-list-table .cmx-carent-status-badge{display:inline-flex;align-items:center;justify-content:center;width:98px;min-width:98px;padding:2px 8px;border:0;border-radius:999px;font-size:11px;font-weight:700;line-height:1.5;cursor:pointer}
 		.wp-list-table .cmx-carent-status-badge.is-offen{background:#fef3f2;color:#b42318}
 		.wp-list-table .cmx-carent-status-badge.is-abgeschlossen{background:#ecfdf3;color:#027a48}
+		.wp-list-table .cmx-carent-inline-status-select{position:absolute;left:0;top:0;width:98px;max-width:98px;height:30px;z-index:4}
+		.wp-list-table .cmx-carent-inline-status .spinner{position:absolute;left:106px;top:5px;float:none;margin:0;visibility:hidden}
+		.wp-list-table .cmx-carent-inline-status.is-saving .spinner{visibility:visible}
 	</style>';
+});
+
+\add_action('wp_ajax_cmx_carent_inline_status', function (): void {
+	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+	$status = isset($_POST['status']) ? \sanitize_key((string) \wp_unslash($_POST['status'])) : '';
+	$options = cmx_carent_admin_status_options();
+
+	if (!\check_ajax_referer('cmx_carent_inline_status', 'nonce', false)) {
+		\wp_send_json_error(['message' => 'Sicherheitsprüfung fehlgeschlagen.'], 403);
+	}
+	if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'carent' || !\current_user_can('edit_post', $post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+	if (!isset($options[$status])) {
+		\wp_send_json_error(['message' => 'Ungültiger Status.'], 400);
+	}
+
+	\update_post_meta($post_id, cmx_carent_admin_status_meta_key(), $status);
+	\wp_send_json_success([
+		'status' => $status,
+		'label'  => (string) $options[$status],
+	]);
+});
+
+\add_action('admin_footer-edit.php', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'carent') {
+		return;
+	}
+
+	$nonce = \wp_create_nonce('cmx_carent_inline_status');
+	?>
+	<script>
+	(function(){
+		const nonce = <?php echo \wp_json_encode($nonce); ?>;
+		function hideSelect(wrap){
+			const button = wrap.querySelector("[data-status-label]");
+			const select = wrap.querySelector("[data-status-select]");
+			if(!button || !select) return;
+			select.hidden = true;
+			select.style.display = "none";
+			button.hidden = false;
+			button.style.display = "inline-flex";
+		}
+		function showSelect(wrap){
+			const button = wrap.querySelector("[data-status-label]");
+			const select = wrap.querySelector("[data-status-select]");
+			if(!button || !select) return;
+			button.hidden = true;
+			button.style.display = "none";
+			select.hidden = false;
+			select.style.display = "block";
+			select.focus();
+		}
+		function setButtonStatus(button, status, label){
+			button.textContent = label;
+			button.className = "cmx-carent-status-badge is-" + status;
+			button.setAttribute("data-status-label", "");
+		}
+		function saveStatus(wrap, status){
+			const button = wrap.querySelector("[data-status-label]");
+			const select = wrap.querySelector("[data-status-select]");
+			if(!button || !select || !wrap.dataset.postId) return;
+			const previous = select.dataset.current || select.value;
+			wrap.classList.add("is-saving");
+			select.disabled = true;
+			window.fetch(window.ajaxurl, {
+				method: "POST",
+				credentials: "same-origin",
+				headers: {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+				body: new URLSearchParams({
+					action: "cmx_carent_inline_status",
+					nonce: nonce,
+					post_id: wrap.dataset.postId,
+					status: status
+				})
+			}).then(function(response){
+				return response.json();
+			}).then(function(payload){
+				if(!payload || !payload.success){
+					throw new Error(payload && payload.data && payload.data.message ? payload.data.message : "Status konnte nicht gespeichert werden.");
+				}
+				select.dataset.current = payload.data.status;
+				select.value = payload.data.status;
+				setButtonStatus(button, payload.data.status, payload.data.label);
+				hideSelect(wrap);
+			}).catch(function(error){
+				select.value = previous;
+				window.alert(error && error.message ? error.message : "Status konnte nicht gespeichert werden.");
+				hideSelect(wrap);
+			}).finally(function(){
+				select.disabled = false;
+				wrap.classList.remove("is-saving");
+			});
+		}
+		document.querySelectorAll(".cmx-carent-inline-status").forEach(function(wrap){
+			const button = wrap.querySelector("[data-status-label]");
+			const select = wrap.querySelector("[data-status-select]");
+			if(!button || !select) return;
+			select.dataset.current = select.value;
+			hideSelect(wrap);
+			button.addEventListener("click", function(event){
+				event.preventDefault();
+				showSelect(wrap);
+			});
+			select.addEventListener("change", function(){
+				if(select.value === select.dataset.current){
+					hideSelect(wrap);
+					return;
+				}
+				saveStatus(wrap, select.value);
+			});
+			select.addEventListener("keydown", function(event){
+				if(event.key === "Escape"){
+					select.value = select.dataset.current || select.value;
+					hideSelect(wrap);
+				}
+			});
+			select.addEventListener("blur", function(){
+				window.setTimeout(function(){
+					if(!wrap.classList.contains("is-saving")){
+						select.value = select.dataset.current || select.value;
+						hideSelect(wrap);
+					}
+				}, 150);
+			});
+		});
+	})();
+	</script>
+	<?php
 });
 
 \add_filter('months_dropdown_results', function (array $months, string $post_type): array {

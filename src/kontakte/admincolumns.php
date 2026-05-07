@@ -1170,6 +1170,15 @@ function cmx_kontakte_search_post_date_query(string $search_term): array {
 	return \count($date_query) > 1 ? $date_query : [];
 }
 
+function cmx_kontakte_search_is_date_like(string $search_term): bool {
+	$search_term = \trim($search_term);
+	if ($search_term === '') {
+		return false;
+	}
+
+	return (bool) \preg_match('/^(?:\d{4}-\d{2}-\d{2}|\d{1,2}[.\/-]\d{1,2}(?:[.\/-](?:\d{2}|\d{4}))?\.?)$/', $search_term);
+}
+
 function cmx_kontakte_search_terms(string $search_term): array {
 	$search_term = \trim($search_term);
 	if ($search_term === '') {
@@ -1225,6 +1234,7 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	if (empty($search_terms)) {
 		return;
 	}
+	$is_date_like = cmx_kontakte_search_is_date_like($search_term);
 
 	$lookup_args = [
 		'post_type' => 'kontakte',
@@ -1238,10 +1248,12 @@ function cmx_kontakte_extend_admin_search(\WP_Query $query): void {
 	];
 
 	$default_match_ids = [];
-	foreach ($search_terms as $lookup_term) {
-		$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
-			's' => $lookup_term,
-		])));
+	if (!$is_date_like) {
+		foreach ($search_terms as $lookup_term) {
+			$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $lookup_term,
+			])));
+		}
 	}
 
 	$email_meta_query = ['relation' => 'OR'];
