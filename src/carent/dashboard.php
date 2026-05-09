@@ -312,6 +312,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 			$vehicles[$key]['idle_days'] = \max(0, $range_days - $rented_days);
 			$vehicles[$key]['utilization'] = $utilization;
 			$vehicles[$key]['avg_km'] = $bookings > 0 ? $km_total / $bookings : 0;
+			$vehicles[$key]['avg_km_per_day'] = $rented_days > 0 ? $km_total / $rented_days : 0;
 			unset($vehicles[$key]['days']);
 		}
 
@@ -333,6 +334,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 			'total_bookings'    => $total_bookings,
 			'total_idle_days'   => $total_idle_days,
 			'avg_km'            => $total_bookings > 0 ? $total_km / $total_bookings : 0,
+			'avg_km_per_day'    => $total_rented_days > 0 ? $total_km / $total_rented_days : 0,
 			'utilization'       => $capacity_days > 0 ? ($total_rented_days / $capacity_days) * 100 : 0,
 		];
 	}
@@ -348,7 +350,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_kpi_chart_data')) 
 		foreach ($vehicles as $vehicle) {
 			$label = \trim((string) ($vehicle['label'] ?? ''));
 			$labels[] = $label !== '' ? $label : 'Fahrzeug';
-			$avg_km[] = \round((float) ($vehicle['avg_km'] ?? 0), 1);
+			$avg_km[] = \round((float) ($vehicle['avg_km_per_day'] ?? 0), 1);
 			$total_km[] = (int) ($vehicle['km_total'] ?? 0);
 			$idle_days[] = (int) ($vehicle['idle_days'] ?? 0);
 		}
@@ -473,7 +475,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_export')) {
 		if ($out === false) {
 			exit;
 		}
-		\fputcsv($out, ['Fahrzeug', 'Kennzeichen', 'Auslastung %', 'Vermietete Tage', 'Verfügbare Tage', 'Gefahrene km', 'Ø km pro Buchung', 'Standzeit Tage', 'Anzahl Buchungen'], ';');
+		\fputcsv($out, ['Fahrzeug', 'Kennzeichen', 'Auslastung %', 'Vermietete Tage', 'Verfügbare Tage', 'Gefahrene km', 'Ø km pro Vermietungstag', 'Standzeit Tage', 'Anzahl Buchungen'], ';');
 		foreach ((array) $data['vehicles'] as $vehicle) {
 			\fputcsv($out, [
 				(string) ($vehicle['label'] ?? ''),
@@ -482,7 +484,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_export')) {
 				(int) ($vehicle['rented_days'] ?? 0),
 				(int) ($data['range_days'] ?? 0),
 				(int) ($vehicle['km_total'] ?? 0),
-				\number_format((float) ($vehicle['avg_km'] ?? 0), 1, '.', ''),
+				\number_format((float) ($vehicle['avg_km_per_day'] ?? 0), 1, '.', ''),
 				(int) ($vehicle['idle_days'] ?? 0),
 				(int) ($vehicle['bookings'] ?? 0),
 			], ';');
@@ -711,7 +713,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 
 		echo '<div class="cmx-carent-dashboard-grid">';
 		cmx_carent_dashboard_kpi_card('green', 'dashicons-dashboard', 'Auslastung (Ø)', \number_format_i18n((float) $data['utilization'], 0) . ' %', 'aus abgeschlossenen Verträgen', (float) $data['utilization']);
-		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø km pro Buchung', \number_format_i18n((float) $data['avg_km'], 0) . ' km', (int) $data['total_bookings'] . ' Buchungen im Zeitraum', -1, 'cmx-carent-dashboard-chart-avg-km');
+		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø gefahrene KM pro Tag', \number_format_i18n((float) $data['avg_km_per_day'], 0) . ' km', 'der Vermietung', -1, 'cmx-carent-dashboard-chart-avg-km');
 		cmx_carent_dashboard_kpi_card('purple', 'dashicons-performance', 'Gefahrene km (gesamt)', \number_format_i18n((int) $data['total_km']) . ' km', 'Summe Rückgabe minus Übernahme', -1, 'cmx-carent-dashboard-chart-total-km');
 		cmx_carent_dashboard_kpi_card('orange', 'dashicons-clock', 'Standzeit (gesamt)', \number_format_i18n((int) $data['total_idle_days']) . ' Tage', 'nicht vermietete Tage im Zeitraum', -1, 'cmx-carent-dashboard-chart-idle-days');
 		echo '</div>';
@@ -723,7 +725,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 		} else {
 			echo '<table class="cmx-carent-dashboard-table">';
 			echo '<thead><tr>';
-			echo '<th>Fahrzeug</th><th>Auslastung<br><span class="cmx-carent-dashboard-cell-sub">(vermietete / verfügbare Tage)</span></th><th>Gefahrene km<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th><th>Ø km pro Buchung<br><span class="cmx-carent-dashboard-cell-sub">(Durchschnitt)</span></th><th>Standzeit<br><span class="cmx-carent-dashboard-cell-sub">(nicht vermietete Tage)</span></th><th>Anzahl Buchungen<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th>';
+			echo '<th>Fahrzeug</th><th>Auslastung<br><span class="cmx-carent-dashboard-cell-sub">(vermietete / verfügbare Tage)</span></th><th>Gefahrene km<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th><th>Ø gefahrene KM pro Tag<br><span class="cmx-carent-dashboard-cell-sub">(Vermietung)</span></th><th>Standzeit<br><span class="cmx-carent-dashboard-cell-sub">(nicht vermietete Tage)</span></th><th>Anzahl Buchungen<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th>';
 			echo '</tr></thead><tbody>';
 			foreach ($vehicles as $vehicle) {
 				$utilization = (float) ($vehicle['utilization'] ?? 0);
@@ -732,8 +734,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 				$idle_color = cmx_carent_dashboard_color((float) $idle_days, true);
 				$km_total = (int) ($vehicle['km_total'] ?? 0);
 				$km_ratio = (int) $data['total_km'] > 0 ? ($km_total / (int) $data['total_km']) * 100 : 0;
-				$avg_km = (float) ($vehicle['avg_km'] ?? 0);
-				$avg_ratio = (float) $data['avg_km'] > 0 ? \min(100, ($avg_km / ((float) $data['avg_km'] * 1.5)) * 100) : 0;
+				$avg_km = (float) ($vehicle['avg_km_per_day'] ?? 0);
+				$avg_ratio = (float) $data['avg_km_per_day'] > 0 ? \min(100, ($avg_km / ((float) $data['avg_km_per_day'] * 1.5)) * 100) : 0;
 
 				echo '<tr>';
 				echo '<td><div class="cmx-carent-dashboard-vehicle"><div class="cmx-carent-dashboard-vehicle-thumb">' . cmx_carent_dashboard_vehicle_image((int) ($vehicle['article_id'] ?? 0)) . '</div><div><div class="cmx-carent-dashboard-vehicle-name">' . \esc_html((string) ($vehicle['label'] ?? '')) . '</div><div class="cmx-carent-dashboard-vehicle-meta">' . \esc_html((string) ($vehicle['kennzeichen'] ?? '')) . '</div></div></div></td>';
