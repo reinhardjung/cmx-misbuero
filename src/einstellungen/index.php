@@ -192,6 +192,7 @@ function cmx_get_tabs(): array {
 		'belege'      => 'Belege',
 		'woocommerce' => 'WooCommerce',
 		'email'       => 'E-Mails',
+		'website'     => 'Website',
 	];
 
 	if (\function_exists(__NAMESPACE__ . '\\cmx_carent_settings_is_enabled') && cmx_carent_settings_is_enabled()) {
