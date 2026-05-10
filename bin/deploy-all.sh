@@ -19,6 +19,8 @@ DRY_RUN=0
 ONLY=""
 VERBOSE=0
 LIST_ONLY=0
+SKIP_LANGUAGE_UPDATES=0
+LANGUAGE_UPDATES_ONLY=0
 
 usage() {
   cat <<'EOF'
@@ -31,6 +33,10 @@ Options:
   --only name        Deploy only one instance, e.g. --only sh.
   --verbose          Show changed files during rsync.
   --list             Discover and print deployable instances, then exit.
+  --skip-language-updates
+                     Do not update WordPress language packs after deploy.
+  --language-updates-only
+                     Update language packs for matching instances, without deploy.
   -h, --help         Show this help.
 
 Environment overrides:
@@ -44,6 +50,7 @@ Examples:
   bin/deploy-all.sh --dry-run
   bin/deploy-all.sh --only sh
   bin/deploy-all.sh --delete
+  bin/deploy-all.sh --language-updates-only
 EOF
 }
 
@@ -71,6 +78,14 @@ while (($#)); do
       ;;
     --list)
       LIST_ONLY=1
+      shift
+      ;;
+    --skip-language-updates)
+      SKIP_LANGUAGE_UPDATES=1
+      shift
+      ;;
+    --language-updates-only)
+      LANGUAGE_UPDATES_ONLY=1
       shift
       ;;
     -h|--help)
@@ -120,6 +135,11 @@ if ((LIST_ONLY)); then
   exit 0
 fi
 
+if ((LANGUAGE_UPDATES_ONLY && DRY_RUN)); then
+  echo "--language-updates-only cannot be combined with --dry-run." >&2
+  exit 2
+fi
+
 RSYNC_OPTS=(
   -rz
   --human-readable
@@ -149,6 +169,14 @@ if ((VERBOSE)); then
   RSYNC_OPTS+=(--itemize-changes)
 fi
 
+update_language_packs_instance() {
+  local instance="$1"
+  local remote_wp_root="${REMOTE_BASE}/${instance}.misbuero.ch/httpdocs"
+
+  echo "    Update WordPress language packs"
+  $SSH_CMD "$HOST" "cd '${remote_wp_root}' && PATH=/opt/plesk/php/8.4/bin:\$PATH wp language core update --allow-root && PATH=/opt/plesk/php/8.4/bin:\$PATH wp language plugin update --all --allow-root && PATH=/opt/plesk/php/8.4/bin:\$PATH wp language theme update --all --allow-root"
+}
+
 deploy_instance() {
   local instance="$1"
   local remote_wp_root="${REMOTE_BASE}/${instance}.misbuero.ch/httpdocs"
@@ -171,6 +199,22 @@ deploy_instance() {
 
   echo "    Ensure plugin is active"
   $SSH_CMD "$HOST" "cd '${remote_wp_root}' && PATH=/opt/plesk/php/8.4/bin:\$PATH wp plugin is-active cmx-misbuero --allow-root >/dev/null 2>&1 || PATH=/opt/plesk/php/8.4/bin:\$PATH wp plugin activate cmx-misbuero --allow-root"
+
+  if ((SKIP_LANGUAGE_UPDATES == 0)); then
+    update_language_packs_instance "$instance"
+  fi
+}
+
+process_instance() {
+  local instance="$1"
+
+  if ((LANGUAGE_UPDATES_ONLY)); then
+    echo
+    echo "==> Language updates ${instance}.misbuero.ch"
+    update_language_packs_instance "$instance"
+  else
+    deploy_instance "$instance"
+  fi
 }
 
 if [[ -n "$ONLY" ]]; then
@@ -178,7 +222,7 @@ if [[ -n "$ONLY" ]]; then
   for instance in "${INSTANCES[@]}"; do
     if [[ "$instance" == "$ONLY" ]]; then
       found=1
-      deploy_instance "$instance"
+      process_instance "$instance"
       break
     fi
   done
@@ -189,13 +233,15 @@ if [[ -n "$ONLY" ]]; then
   fi
 else
   for instance in "${INSTANCES[@]}"; do
-    deploy_instance "$instance"
+    process_instance "$instance"
   done
 fi
 
 echo
 if ((DRY_RUN)); then
   echo "Dry-run complete. Nothing was changed."
+elif ((LANGUAGE_UPDATES_ONLY)); then
+  echo "Language updates complete."
 else
   echo "Deploy complete."
 fi
