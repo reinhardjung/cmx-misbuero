@@ -22,7 +22,7 @@ final class Settings {
 
 		\add_settings_field(
 			'cmx_website_settings',
-			__('Website-Inhalte', 'cmx-misbuero'),
+			__('Inhalte', 'cmx-misbuero'),
 			[self::class, 'render'],
 			'cmx_tab_website',
 			'cmx_sec_website'
@@ -36,8 +36,6 @@ final class Settings {
 			return;
 		}
 
-		\wp_enqueue_media();
-		\wp_add_inline_script('jquery-core', self::media_script(), 'after');
 		\wp_register_style('cmx-website-admin', false, [], '1');
 		\wp_enqueue_style('cmx-website-admin');
 		\wp_add_inline_style('cmx-website-admin', self::admin_css());
@@ -69,9 +67,9 @@ final class Settings {
 		self::checkbox($name . '[enabled]', (string) ($data['enabled'] ?? '1'), __('Website aktivieren', 'cmx-misbuero'));
 		self::select($name . '[industry]', (string) ($data['industry'] ?? 'dienstleister'), $industries, __('Branche', 'cmx-misbuero'));
 		self::text($name . '[company_name]', (string) ($data['company_name'] ?? ''), __('Firmenname', 'cmx-misbuero'));
-		self::media($name . '[logo_id]', (int) ($data['logo_id'] ?? 0), __('Firmenlogo', 'cmx-misbuero'));
+		self::file($name . '[logo_file]', 'cmx_website_logo_file', (string) ($data['logo_file'] ?? ''), __('Firmenlogo', 'cmx-misbuero'));
 		self::color($name . '[primary_color]', (string) ($data['primary_color'] ?? '#0F63F6'), __('Basisfarbe', 'cmx-misbuero'));
-		self::media($name . '[header_image_id]', (int) ($data['header_image_id'] ?? 0), __('Header-Image', 'cmx-misbuero'));
+		self::file($name . '[header_image_file]', 'cmx_website_header_image_file', (string) ($data['header_image_file'] ?? ''), __('Header-Image', 'cmx-misbuero'));
 		self::text($name . '[phone]', (string) ($data['phone'] ?? ''), __('Telefonnummer', 'cmx-misbuero'));
 		self::email($name . '[email]', (string) ($data['email'] ?? ''), __('E-Mail-Adresse', 'cmx-misbuero'));
 		self::url($name . '[contact_link]', (string) ($data['contact_link'] ?? ''), __('Kontaktformular-Ziel oder Kontakt-Link', 'cmx-misbuero'));
@@ -144,7 +142,17 @@ final class Settings {
 			'primary' => $hex,
 			'dark' => self::shade($hex, -42),
 			'soft' => self::shade($hex, 88),
+			'rgb' => self::hex_to_rgb($hex),
 		];
+	}
+
+	private static function hex_to_rgb(string $hex): string {
+		$hex = \ltrim(self::sanitize_color($hex), '#');
+		return \implode(',', [
+			\hexdec(\substr($hex, 0, 2)),
+			\hexdec(\substr($hex, 2, 2)),
+			\hexdec(\substr($hex, 4, 2)),
+		]);
 	}
 
 	private static function section_editor(string $base, string $key, string $label, array $data, int $count, array $fallback_icons): void {
@@ -154,7 +162,7 @@ final class Settings {
 		self::text($base . '[' . $key . '][kicker]', (string) ($section['kicker'] ?? ''), __('Bereichs-Kicker', 'cmx-misbuero'));
 		self::text($base . '[' . $key . '][title]', (string) ($section['title'] ?? ''), __('Überschrift', 'cmx-misbuero'));
 		self::textarea($base . '[' . $key . '][subtitle]', (string) ($section['subtitle'] ?? ''), __('Sub-Überschrift', 'cmx-misbuero'), 2);
-		echo '<div class="cmx-website-repeat">';
+		echo '<div class="cmx-website-repeat' . ($count === 4 ? ' cmx-website-repeat-four' : '') . '">';
 		for ($i = 0; $i < $count; $i++) {
 			$item = isset($section['items'][$i]) && \is_array($section['items'][$i]) ? $section['items'][$i] : [];
 			echo '<div class="cmx-website-repeat-item">';
@@ -176,7 +184,7 @@ final class Settings {
 		self::text($base . '[about][title]', (string) ($section['title'] ?? ''), __('Überschrift', 'cmx-misbuero'));
 		self::textarea($base . '[about][subtitle]', (string) ($section['subtitle'] ?? ''), __('Sub-Überschrift', 'cmx-misbuero'), 2);
 		self::textarea($base . '[about][text]', (string) ($section['text'] ?? ''), __('Text', 'cmx-misbuero'), 5);
-		self::media($base . '[about][image_id]', (int) ($section['image_id'] ?? 0), __('Optionales Bild', 'cmx-misbuero'));
+		self::file($base . '[about][image_file]', 'cmx_website_about_image_file', (string) ($section['image_file'] ?? ''), __('Optionales Bild', 'cmx-misbuero'));
 		self::end_box();
 	}
 
@@ -206,13 +214,15 @@ final class Settings {
 		self::text($base . '[faq][kicker]', (string) ($section['kicker'] ?? ''), __('Kicker', 'cmx-misbuero'));
 		self::text($base . '[faq][title]', (string) ($section['title'] ?? ''), __('Überschrift', 'cmx-misbuero'));
 		self::textarea($base . '[faq][subtitle]', (string) ($section['subtitle'] ?? ''), __('Sub-Überschrift', 'cmx-misbuero'), 2);
+		echo '<div class="cmx-website-repeat cmx-website-repeat-four">';
 		for ($i = 0; $i < 4; $i++) {
 			$item = isset($section['items'][$i]) && \is_array($section['items'][$i]) ? $section['items'][$i] : [];
-			echo '<div class="cmx-website-inline-pair">';
+			echo '<div class="cmx-website-repeat-item">';
 			self::text($base . '[faq][items][' . $i . '][question]', (string) ($item['question'] ?? ''), \sprintf(__('Frage %d', 'cmx-misbuero'), $i + 1));
 			self::textarea($base . '[faq][items][' . $i . '][answer]', (string) ($item['answer'] ?? ''), __('Antwort', 'cmx-misbuero'), 2);
 			echo '</div>';
 		}
+		echo '</div>';
 		self::end_box();
 	}
 
@@ -239,9 +249,9 @@ final class Settings {
 			'enabled' => !empty($data['enabled']) ? '1' : '0',
 			'industry' => $industry,
 			'company_name' => \sanitize_text_field((string) ($data['company_name'] ?? '')),
-			'logo_id' => \absint($data['logo_id'] ?? 0),
+			'logo_file' => self::sanitize_file_path((string) ($data['logo_file'] ?? ($old['logo_file'] ?? ''))),
 			'primary_color' => self::sanitize_color((string) ($data['primary_color'] ?? '#0F63F6')),
-			'header_image_id' => \absint($data['header_image_id'] ?? 0),
+			'header_image_file' => self::sanitize_file_path((string) ($data['header_image_file'] ?? ($old['header_image_file'] ?? ''))),
 			'phone' => \sanitize_text_field((string) ($data['phone'] ?? '')),
 			'email' => \sanitize_email((string) ($data['email'] ?? '')),
 			'contact_link' => self::sanitize_url_or_anchor((string) ($data['contact_link'] ?? '')),
@@ -262,6 +272,7 @@ final class Settings {
 		$out['advantages'] = self::sanitize_advantages((array) ($data['advantages'] ?? []));
 		$out['faq'] = self::sanitize_faq((array) ($data['faq'] ?? []));
 		$out['contact'] = self::sanitize_contact((array) ($data['contact'] ?? []));
+		self::handle_file_uploads($out);
 
 		return $out;
 	}
@@ -288,7 +299,7 @@ final class Settings {
 			'title' => \sanitize_text_field((string) ($section['title'] ?? '')),
 			'subtitle' => \wp_kses_post((string) ($section['subtitle'] ?? '')),
 			'text' => \wp_kses_post((string) ($section['text'] ?? '')),
-			'image_id' => \absint($section['image_id'] ?? 0),
+			'image_file' => self::sanitize_file_path((string) ($section['image_file'] ?? '')),
 		];
 	}
 
@@ -373,6 +384,55 @@ final class Settings {
 		return \preg_match('/^#[0-9a-fA-F]{6}$/', $hex) === 1 ? \strtoupper($hex) : '#0F63F6';
 	}
 
+	private static function sanitize_file_path(string $path): string {
+		if (\function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_dav_normalize_rel_path')) {
+			return (string) \CLOUDMEISTER\CMX\Buero\cmx_dav_normalize_rel_path($path);
+		}
+		$path = \str_replace('\\', '/', \trim($path));
+		$parts = [];
+		foreach (\explode('/', $path) as $part) {
+			$part = \sanitize_file_name($part);
+			if ($part === '' || $part === '.' || $part === '..') {
+				continue;
+			}
+			$parts[] = $part;
+		}
+		return \implode('/', $parts);
+	}
+
+	private static function handle_file_uploads(array &$out): void {
+		$map = [
+			'cmx_website_logo_file' => ['target' => ['logo_file'], 'subdir' => 'allgemein'],
+			'cmx_website_header_image_file' => ['target' => ['header_image_file'], 'subdir' => 'hero'],
+			'cmx_website_about_image_file' => ['target' => ['about', 'image_file'], 'subdir' => 'ueber-uns'],
+		];
+		foreach ($map as $field => $config) {
+			$file = $_FILES[$field] ?? null;
+			if (!\is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+				continue;
+			}
+			if (!\function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_dav_store_uploaded_file')) {
+				continue;
+			}
+			$result = \CLOUDMEISTER\CMX\Buero\cmx_dav_store_uploaded_file('website', $file, (string) $config['subdir'], [
+				'jpg' => 'image/jpeg',
+				'jpeg' => 'image/jpeg',
+				'png' => 'image/png',
+				'webp' => 'image/webp',
+				'gif' => 'image/gif',
+			]);
+			if (\is_wp_error($result) || empty($result['rel_path'])) {
+				continue;
+			}
+			$target = (array) $config['target'];
+			if (\count($target) === 1) {
+				$out[(string) $target[0]] = (string) $result['rel_path'];
+			} elseif (\count($target) === 2) {
+				$out[(string) $target[0]][(string) $target[1]] = (string) $result['rel_path'];
+			}
+		}
+	}
+
 	private static function shade(string $hex, int $percent): string {
 		$hex = \ltrim(self::sanitize_color($hex), '#');
 		$r = \hexdec(\substr($hex, 0, 2));
@@ -439,20 +499,22 @@ final class Settings {
 		echo '</select></label>';
 	}
 
-	private static function media(string $name, int $id, string $label): void {
-		$preview = $id > 0 ? \wp_get_attachment_image($id, 'thumbnail', false, ['class' => 'cmx-website-media-preview']) : '';
+	private static function file(string $name, string $field_name, string $path, string $label): void {
+		$url = '';
+		if ($path !== '' && \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_dav_module_file_url')) {
+			$url = (string) \CLOUDMEISTER\CMX\Buero\cmx_dav_module_file_url('website', $path);
+		}
 		echo '<div class="cmx-website-field cmx-website-media"><span>' . \esc_html($label) . '</span><div class="cmx-website-media-row">';
-		echo '<input type="number" min="0" name="' . \esc_attr($name) . '" value="' . \esc_attr((string) $id) . '">';
-		echo '<button type="button" class="button cmx-website-media-button">' . \esc_html__('Bild auswählen', 'cmx-misbuero') . '</button>';
-		echo '<button type="button" class="button cmx-website-media-clear">' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
-		echo '<div class="cmx-website-media-preview-wrap">' . $preview . '</div></div></div>';
-	}
-
-	private static function media_script(): string {
-		return 'jQuery(function($){$(".cmx-website-admin").on("click",".cmx-website-media-button",function(e){e.preventDefault();var box=$(this).closest(".cmx-website-media");var input=box.find("input");var preview=box.find(".cmx-website-media-preview-wrap");var frame=wp.media({title:"Bild auswählen",button:{text:"Übernehmen"},multiple:false});frame.on("select",function(){var file=frame.state().get("selection").first().toJSON();input.val(file.id);preview.html(file.sizes&&file.sizes.thumbnail?"<img class=\"cmx-website-media-preview\" src=\""+file.sizes.thumbnail.url+"\" alt=\"\">":"");});frame.open();}).on("click",".cmx-website-media-clear",function(e){e.preventDefault();var box=$(this).closest(".cmx-website-media");box.find("input").val("0");box.find(".cmx-website-media-preview-wrap").empty();});});';
+		echo '<input type="hidden" name="' . \esc_attr($name) . '" value="' . \esc_attr($path) . '">';
+		echo '<input type="file" name="' . \esc_attr($field_name) . '" accept=".jpg,.jpeg,.png,.webp,.gif,image/*">';
+		if ($url !== '') {
+			echo '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener">' . \esc_html(\basename($path)) . '</a>';
+			echo '<img class="cmx-website-media-preview" src="' . \esc_url($url) . '" alt="">';
+		}
+		echo '</div></div>';
 	}
 
 	private static function admin_css(): string {
-		return '.cmx-website-admin{max-width:1180px}.cmx-website-admin-actions{display:flex;gap:12px;align-items:center;margin:14px 0 18px}.cmx-website-admin-box{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px 18px 8px;margin:0 0 18px}.cmx-website-admin-box h3{margin:0 0 14px;font-size:16px}.cmx-website-field{display:inline-flex;vertical-align:top;flex-direction:column;gap:6px;margin:0 18px 14px 0;min-width:260px}.cmx-website-field>span{font-weight:600}.cmx-website-field input[type=text],.cmx-website-field input[type=email],.cmx-website-field input[type=number],.cmx-website-field select,.cmx-website-field textarea{width:100%;max-width:520px}.cmx-website-field-full{display:flex;max-width:760px}.cmx-website-field-full textarea{max-width:760px}.cmx-website-checkbox{display:flex;flex-direction:row;align-items:center;min-width:100%;gap:8px}.cmx-website-repeat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.cmx-website-repeat-four{grid-template-columns:repeat(4,minmax(0,1fr))}.cmx-website-repeat-item{border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#f8fafc}.cmx-website-repeat-item h4{margin:0 0 10px}.cmx-website-repeat-item .cmx-website-field{display:flex;min-width:0;margin-right:0}.cmx-website-media-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cmx-website-media-row input{width:90px!important}.cmx-website-media-preview{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #dcdcde}.cmx-website-inline-pair{border-top:1px solid #e5e7eb;padding-top:12px;margin-top:8px}@media(max-width:1100px){.cmx-website-repeat,.cmx-website-repeat-four{grid-template-columns:1fr 1fr}}@media(max-width:782px){.cmx-website-repeat,.cmx-website-repeat-four{grid-template-columns:1fr}.cmx-website-field{display:flex;min-width:100%;margin-right:0}}';
+		return '.cmx-website-admin{max-width:1180px}.cmx-website-admin-actions{display:flex;gap:12px;align-items:center;margin:14px 0 18px}.cmx-website-admin-box{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px 18px 8px;margin:0 0 18px}.cmx-website-admin-box h3{margin:0 0 14px;font-size:16px}.cmx-website-field{display:inline-flex;vertical-align:top;flex-direction:column;gap:6px;margin:0 18px 14px 0;min-width:260px}.cmx-website-field>span{font-weight:600}.cmx-website-field input[type=text],.cmx-website-field input[type=email],.cmx-website-field input[type=number],.cmx-website-field select,.cmx-website-field textarea{width:100%;max-width:520px}.cmx-website-field-full{display:flex;max-width:760px}.cmx-website-field-full textarea{max-width:760px}.cmx-website-checkbox{display:flex;flex-direction:row;align-items:center;min-width:100%;gap:8px}.cmx-website-repeat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.cmx-website-repeat-four{grid-template-columns:repeat(4,minmax(0,1fr))}.cmx-website-repeat-item{border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#f8fafc}.cmx-website-repeat-item h4{margin:0 0 10px}.cmx-website-repeat-item .cmx-website-field{display:flex;min-width:0;margin-right:0}.cmx-website-media-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cmx-website-media-preview{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #dcdcde}.cmx-website-inline-pair{border-top:1px solid #e5e7eb;padding-top:12px;margin-top:8px}@media(max-width:1100px){.cmx-website-repeat,.cmx-website-repeat-four{grid-template-columns:1fr 1fr}}@media(max-width:782px){.cmx-website-repeat,.cmx-website-repeat-four{grid-template-columns:1fr}.cmx-website-field{display:flex;min-width:100%;margin-right:0}}';
 	}
 }

@@ -20,16 +20,16 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabox')) {
 	function cmx_render_carent_fuehrerausweis_metabox(\WP_Post $post): void {
-		$attachment_id = (int) \get_post_meta($post->ID, CMX_CARENT_FUEHRERAUSWEIS_META, true);
-		$image_url = $attachment_id > 0 ? (string) \wp_get_attachment_image_url($attachment_id, 'medium') : '';
-		$attachment_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
-		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+		$file_path = \trim((string) \get_post_meta($post->ID, CMX_CARENT_FUEHRERAUSWEIS_META, true));
+		$image_url = $file_path !== '' && \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url') ? (string) cmx_dav_module_file_url('carent', $file_path) : '';
+		$attachment_url = $image_url;
+		$filename = $file_path !== '' ? (string) \basename($file_path) : '';
 		$ajax_nonce = (string) \wp_create_nonce('cmx_carent_fuehrerausweis_upload');
 
 		\wp_nonce_field('cmx_carent_fuehrerausweis_save', 'cmx_carent_fuehrerausweis_nonce');
 
 		echo '<div class="cmx-carent-fuehrerausweis-box">';
-		echo '<input type="hidden" name="cmx_carent_fuehrerausweis_attachment_id" id="cmx_carent_fuehrerausweis_attachment_id" value="' . \esc_attr((string) $attachment_id) . '">';
+		echo '<input type="hidden" name="cmx_carent_fuehrerausweis_attachment_id" id="cmx_carent_fuehrerausweis_attachment_id" value="' . \esc_attr($file_path) . '">';
 		echo '<input type="file" id="cmx_carent_fuehrerausweis_file" accept="image/*" style="display:none;">';
 		echo '<div id="cmx_carent_fuehrerausweis_dropzone" style="display:block;width:100%;cursor:pointer;">';
 		if ($image_url !== '') {
@@ -46,7 +46,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 		}
 		echo '</p>';
 		echo '<p style="margin:8px 0 0;">';
-		echo '<button type="button" class="button button-link-delete" id="cmx_carent_fuehrerausweis_remove"' . ($attachment_id > 0 ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
+		echo '<button type="button" class="button button-link-delete" id="cmx_carent_fuehrerausweis_remove"' . ($file_path !== '' ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
 		echo '</p>';
 		echo '</div>';
 
@@ -213,26 +213,21 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 		\wp_send_json_error(['message' => 'Bitte nur Bilddateien hochladen.'], 400);
 	}
 
-	require_once \ABSPATH . 'wp-admin/includes/file.php';
-	require_once \ABSPATH . 'wp-admin/includes/media.php';
-	require_once \ABSPATH . 'wp-admin/includes/image.php';
-
-	$attachment_id = \media_handle_upload('file', $post_id > 0 ? $post_id : 0);
-	if (\is_wp_error($attachment_id)) {
-		\wp_send_json_error(['message' => (string) $attachment_id->get_error_message()], 500);
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_dav_store_uploaded_file')) {
+		\wp_send_json_error(['message' => 'WebDAV-Speicher ist nicht verfügbar.'], 500);
 	}
-
-	$image_url = (string) \wp_get_attachment_image_url((int) $attachment_id, 'medium');
-	if ($image_url === '') {
-		$image_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$uploaded = cmx_dav_store_uploaded_file('carent', (array) $_FILES['file'], 'fuehrerausweise' . ($post_id > 0 ? '/' . $post_id : ''));
+	if (\is_wp_error($uploaded)) {
+		\wp_send_json_error(['message' => (string) $uploaded->get_error_message()], 500);
 	}
-	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$image_url = (string) ($uploaded['url'] ?? '');
+	$file_path = (string) ($uploaded['rel_path'] ?? '');
 
 	\wp_send_json_success([
-		'id' => (int) $attachment_id,
+		'id' => $file_path,
 		'url' => $image_url,
-		'file_url' => $file_url,
-		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+		'file_url' => $image_url,
+		'label' => (string) ($uploaded['file_name'] ?? \basename($file_path)),
 	]);
 });
 
@@ -250,19 +245,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fuehrerausweis_metabo
 		return;
 	}
 
-	$attachment_id = isset($_POST['cmx_carent_fuehrerausweis_attachment_id'])
-		? (int) \wp_unslash($_POST['cmx_carent_fuehrerausweis_attachment_id'])
-		: 0;
+	$file_path = isset($_POST['cmx_carent_fuehrerausweis_attachment_id'])
+		? \trim((string) \wp_unslash($_POST['cmx_carent_fuehrerausweis_attachment_id']))
+		: '';
 
-	if ($attachment_id <= 0) {
+	if ($file_path === '') {
 		\delete_post_meta($post_id, CMX_CARENT_FUEHRERAUSWEIS_META);
 		return;
 	}
 
-	$mime = (string) \get_post_mime_type($attachment_id);
-	if (!\str_starts_with($mime, 'image/')) {
+	if (\function_exists(__NAMESPACE__ . '\\cmx_dav_normalize_rel_path')) {
+		$file_path = cmx_dav_normalize_rel_path($file_path);
+	}
+	$absolute = \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path') ? (string) cmx_dav_module_file_path('carent', $file_path) : '';
+	if ($absolute === '' || !\is_file($absolute)) {
 		return;
 	}
 
-	\update_post_meta($post_id, CMX_CARENT_FUEHRERAUSWEIS_META, $attachment_id);
+	\update_post_meta($post_id, CMX_CARENT_FUEHRERAUSWEIS_META, $file_path);
 }, 10, 2);

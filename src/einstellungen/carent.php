@@ -183,10 +183,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_pdf_url')) {
 	function cmx_carent_current_pdf_url(): string {
 		$file_rel = cmx_carent_current_pdf_rel();
 		if ($file_rel !== '') {
-			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . ltrim($file_rel, '/')));
-			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs)) {
-				return (string) \content_url('/uploads/' . ltrim($file_rel, '/'));
+			if (\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+				$url = (string) cmx_dav_module_file_url('carent', $file_rel);
+				if ($url !== '') {
+					return $url;
+				}
 			}
 		}
 
@@ -206,13 +207,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_pdf_abs_path_from_rel')) {
 			return '';
 		}
 
-		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-		$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $file_rel));
-		if ($file_abs === '' || !\str_starts_with($file_abs, $uploads_root)) {
-			return '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path')) {
+			return \wp_normalize_path((string) cmx_dav_module_file_path('carent', $file_rel));
 		}
 
-		return $file_abs;
+		return '';
 	}
 }
 
@@ -416,33 +415,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_current_client_id')) {
 		&& (string) \wp_unslash($_POST[cmx_carent_pdf_delete_field_name()]) === '1';
 
 	if ($has_uploaded_file) {
-		$upload_dir_filter = static function (array $dirs): array {
-			$subdir = '/misbuero/carent';
-			$dirs['subdir'] = $subdir;
-			$dirs['path'] = (string) (($dirs['basedir'] ?? '') . $subdir);
-			$dirs['url'] = (string) (($dirs['baseurl'] ?? '') . $subdir);
-			return $dirs;
-		};
-
-		if (!\function_exists('wp_handle_upload')) {
-			require_once \ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		\add_filter('upload_dir', $upload_dir_filter);
-		$uploaded = \wp_handle_upload($uploaded_file, [
-			'test_form' => false,
-			'mimes'     => ['pdf' => 'application/pdf'],
-		]);
-		\remove_filter('upload_dir', $upload_dir_filter);
-
-			if (\is_array($uploaded) && empty($uploaded['error']) && !empty($uploaded['file'])) {
-				$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-				$file_abs = \wp_normalize_path((string) $uploaded['file']);
-				if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root)) {
-					$value[$pdf_key] = \ltrim(\str_replace($uploads_root, '', $file_abs), '/');
-					$value[$pdf_legacy_key] = 0;
-				}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_dav_store_uploaded_file')) {
+			$uploaded = cmx_dav_store_uploaded_file('carent', $uploaded_file, 'agb', ['pdf' => 'application/pdf']);
+			if (!\is_wp_error($uploaded) && !empty($uploaded['rel_path'])) {
+				$value[$pdf_key] = (string) $uploaded['rel_path'];
+				$value[$pdf_legacy_key] = 0;
 			}
+		}
 	} elseif ($delete_pdf) {
 		$old_file_rel = \trim((string) ($old_value[$pdf_key] ?? ''));
 		$old_file_abs = cmx_carent_pdf_abs_path_from_rel($old_file_rel);

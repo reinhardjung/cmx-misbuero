@@ -95,14 +95,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_normalize_rows')) {
 			}
 
 			$term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
-			$attachment_id = isset($raw_row['attachment_id']) ? (int) $raw_row['attachment_id'] : 0;
-			if ($term_id <= 0 && $attachment_id <= 0) {
+			$attachment_id = isset($raw_row['attachment_id']) ? \trim((string) $raw_row['attachment_id']) : '';
+			if ($term_id <= 0 && $attachment_id === '') {
 				continue;
 			}
 
 			$rows[] = [
 				'term_id' => $term_id > 0 ? $term_id : 0,
-				'attachment_id' => $attachment_id > 0 ? $attachment_id : 0,
+				'attachment_id' => $attachment_id,
 			];
 		}
 
@@ -148,7 +148,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows')) {
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_attachment_payload')) {
-	function cmx_carent_fotos_attachment_payload(int $attachment_id): array {
+	function cmx_carent_fotos_attachment_payload($attachment_id): array {
+		$value = \trim((string) $attachment_id);
+		if ($value !== '' && !\ctype_digit($value) && \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+			$url = (string) cmx_dav_module_file_url('carent', $value);
+			return [
+				'id' => $value,
+				'preview_url' => $url,
+				'file_url' => $url,
+				'label' => (string) \basename($value),
+			];
+		}
+
+		$attachment_id = (int) $value;
 		if ($attachment_id <= 0 || \get_post_type($attachment_id) !== 'attachment') {
 			return [
 				'id' => 0,
@@ -184,7 +196,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_empty_markup')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 	function cmx_carent_fotos_row_markup(string $index, array $row, array $term_options, string $field_name = 'cmx_carent_uebernahme_fotos_rows'): string {
 		$term_id = isset($row['term_id']) ? (int) $row['term_id'] : 0;
-		$attachment_id = isset($row['attachment_id']) ? (int) $row['attachment_id'] : 0;
+		$attachment_id = isset($row['attachment_id']) ? \trim((string) $row['attachment_id']) : '';
 		$attachment = cmx_carent_fotos_attachment_payload($attachment_id);
 
 		$empty_markup = cmx_carent_fotos_empty_markup();
@@ -214,7 +226,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_row_markup')) {
 					<input type="file" class="cmx-carent-fotos-file-input" accept="image/*" style="display:none;">
 					<div class="cmx-carent-fotos-media">
 						<div class="cmx-carent-fotos-preview" role="button" tabindex="0" aria-label="<?php echo \esc_attr__('Foto hochladen', 'cmx-misbuero'); ?>">
-							<button type="button" class="cmx-carent-fotos-image-remove"<?php echo $attachment['id'] > 0 ? '' : ' style="display:none;"'; ?> aria-label="<?php echo \esc_attr__('Bild entfernen', 'cmx-misbuero'); ?>">
+							<button type="button" class="cmx-carent-fotos-image-remove"<?php echo (string) $attachment['id'] !== '' && (string) $attachment['id'] !== '0' ? '' : ' style="display:none;"'; ?> aria-label="<?php echo \esc_attr__('Bild entfernen', 'cmx-misbuero'); ?>">
 								<span class="dashicons dashicons-trash" aria-hidden="true"></span>
 							</button>
 							<?php if ($attachment['preview_url'] !== '') : ?>
@@ -573,7 +585,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 			}
 
 			$term_id = isset($raw_row['term_id']) ? (int) $raw_row['term_id'] : 0;
-			$attachment_id = isset($raw_row['attachment_id']) ? (int) $raw_row['attachment_id'] : 0;
+			$attachment_id = isset($raw_row['attachment_id']) ? \trim((string) $raw_row['attachment_id']) : '';
 
 			if ($term_id > 0) {
 				$term = \get_term($term_id, $taxonomy);
@@ -582,14 +594,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 				}
 			}
 
-			if ($attachment_id > 0) {
-				$mime = (string) \get_post_mime_type($attachment_id);
+			if ($attachment_id !== '' && \ctype_digit($attachment_id)) {
+				$mime = (string) \get_post_mime_type((int) $attachment_id);
 				if (\strpos($mime, 'image/') !== 0) {
-					$attachment_id = 0;
+					$attachment_id = '';
 				}
 			}
 
-			if ($term_id <= 0 && $attachment_id <= 0) {
+			if ($term_id <= 0 && $attachment_id === '') {
 				continue;
 			}
 
@@ -647,25 +659,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 		\wp_send_json_error(['message' => 'Bitte nur Bilddateien hochladen.'], 400);
 	}
 
-	require_once \ABSPATH . 'wp-admin/includes/file.php';
-	require_once \ABSPATH . 'wp-admin/includes/media.php';
-	require_once \ABSPATH . 'wp-admin/includes/image.php';
-
-	$attachment_id = \media_handle_upload('file', $post_id > 0 ? $post_id : 0);
-	if (\is_wp_error($attachment_id)) {
-		\wp_send_json_error(['message' => (string) $attachment_id->get_error_message()], 500);
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_dav_store_uploaded_file')) {
+		\wp_send_json_error(['message' => 'WebDAV-Speicher ist nicht verfügbar.'], 500);
 	}
-
-	$image_url = (string) \wp_get_attachment_image_url((int) $attachment_id, 'medium');
-	if ($image_url === '') {
-		$image_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$uploaded = cmx_dav_store_uploaded_file('carent', (array) $_FILES['file'], 'fotos' . ($post_id > 0 ? '/' . $post_id : ''));
+	if (\is_wp_error($uploaded)) {
+		\wp_send_json_error(['message' => (string) $uploaded->get_error_message()], 500);
 	}
-	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$image_url = (string) ($uploaded['url'] ?? '');
+	$file_path = (string) ($uploaded['rel_path'] ?? '');
 
 	\wp_send_json_success([
-		'id' => (int) $attachment_id,
+		'id' => $file_path,
 		'url' => $image_url,
-		'file_url' => $file_url,
-		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+		'file_url' => $image_url,
+		'label' => (string) ($uploaded['file_name'] ?? \basename($file_path)),
 	]);
 });

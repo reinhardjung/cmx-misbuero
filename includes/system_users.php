@@ -49,7 +49,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_system_plugin_post_types')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_system_cloudmeister_hidden_post_types')) {
 	function cmx_system_cloudmeister_hidden_post_types(): array {
-		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails', 'scanner', 'budget'];
+		$hidden_post_types = ['kontakte', 'artikel', 'belege', 'dokumente', 'projekte', 'emails', 'scanner', 'budget', 'buchungen', 'carent'];
 
 		$post_types = [];
 		foreach ($hidden_post_types as $post_type) {

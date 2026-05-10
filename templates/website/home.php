@@ -34,6 +34,7 @@ $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_en
 			--mib-website-primary:<?php echo \esc_html($colors['primary']); ?>;
 			--mib-website-primary-dark:<?php echo \esc_html($colors['dark']); ?>;
 			--mib-website-primary-soft:<?php echo \esc_html($colors['soft']); ?>;
+			--mib-website-primary-rgb:<?php echo \esc_html($colors['rgb']); ?>;
 		}
 	</style>
 	<?php \wp_site_icon(); ?>
@@ -43,7 +44,7 @@ $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_en
 		<div class="mib-site-container mib-site-nav">
 			<a class="mib-site-brand" href="#start" aria-label="<?php echo \esc_attr($company); ?>">
 				<?php
-				$logo_html = Renderer::asset_image((int) ($settings['logo_id'] ?? 0), 'medium', 'mib-site-logo', $company);
+				$logo_html = Renderer::asset_image((string) ($settings['logo_file'] ?? ''), 'mib-site-logo', $company);
 				if ($logo_html !== '') {
 					echo $logo_html;
 				} else {
@@ -53,7 +54,9 @@ $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_en
 				<span><?php echo \esc_html($company); ?></span>
 			</a>
 			<nav class="mib-site-menu" aria-label="<?php echo \esc_attr__('Hauptnavigation', 'cmx-misbuero'); ?>">
-				<a href="#start"><?php echo \esc_html__('Start', 'cmx-misbuero'); ?></a>
+				<?php if (\is_user_logged_in()): ?>
+					<a href="<?php echo \esc_url(\admin_url('/')); ?>"><?php echo \esc_html__('Start', 'cmx-misbuero'); ?></a>
+				<?php endif; ?>
 				<a href="#leistungen"><?php echo \esc_html__('Leistungen', 'cmx-misbuero'); ?></a>
 				<a href="#ablauf"><?php echo \esc_html__('Ablauf', 'cmx-misbuero'); ?></a>
 				<a href="#ueber-uns"><?php echo \esc_html__('Über uns', 'cmx-misbuero'); ?></a>
@@ -80,7 +83,7 @@ $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_en
 			</div>
 			<div class="mib-hero-media">
 				<?php
-				$hero_image = Renderer::asset_image((int) ($settings['header_image_id'] ?? 0), 'large', 'mib-hero-image', $company);
+				$hero_image = Renderer::asset_image((string) ($settings['header_image_file'] ?? ''), 'mib-hero-image', $company);
 				echo $hero_image !== '' ? $hero_image : '<div class="mib-hero-placeholder">' . Icons::render('chart') . '</div>';
 				?>
 			</div>
@@ -140,7 +143,7 @@ $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_en
 					</div>
 					<div class="mib-about-media">
 						<?php
-						$about_image = Renderer::asset_image((int) ($about['image_id'] ?? 0), 'large', 'mib-about-image', $company);
+						$about_image = Renderer::asset_image((string) ($about['image_file'] ?? ''), 'mib-about-image', $company);
 						echo $about_image !== '' ? $about_image : '<div class="mib-about-placeholder">' . Icons::render('users') . '</div>';
 						?>
 					</div>

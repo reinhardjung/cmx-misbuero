@@ -17,7 +17,7 @@ if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_DOKUMENT_META')) {
 	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_DOKUMENT_META', '_cmx_carent_vertrag_pdf_dokument_id');
 }
 if (!\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')) {
-	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR', 'misbuero/carent/vertraege');
+	\define(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR', 'vertraege');
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_path')) {
@@ -29,9 +29,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_path')) {
 
 		$file_rel = \trim((string) ($options['carent_pdf_file_rel'] ?? ''));
 		if ($file_rel !== '') {
-			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . \ltrim($file_rel, '/')));
-			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs) && \is_readable($file_abs)) {
+			$file_abs = \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path')
+				? \wp_normalize_path((string) cmx_dav_module_file_path('carent', $file_rel))
+				: '';
+			if ($file_abs !== '' && \is_file($file_abs) && \is_readable($file_abs)) {
 				return $file_abs;
 			}
 		}
@@ -62,10 +63,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_agb_pdf_url')) {
 
 		$file_rel = \trim((string) ($options['carent_pdf_file_rel'] ?? ''));
 		if ($file_rel !== '') {
-			$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-			$file_abs = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . \ltrim($file_rel, '/')));
-			if ($file_abs !== '' && \str_starts_with($file_abs, $uploads_root) && \is_file($file_abs)) {
-				return (string) \content_url('/uploads/' . \ltrim($file_rel, '/'));
+			$file_abs = \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path')
+				? \wp_normalize_path((string) cmx_dav_module_file_path('carent', $file_rel))
+				: '';
+			if ($file_abs !== '' && \is_file($file_abs) && \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+				return (string) cmx_dav_module_file_url('carent', $file_rel);
 			}
 		}
 
@@ -477,6 +479,59 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_info')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_file_info')) {
+	function cmx_carent_vertrag_file_info(string $file_path, bool $with_data_uri = false): array {
+		$file_path = cmx_carent_vertrag_normalize_rel_path($file_path);
+		if ($file_path === '' || !\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path') || !\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+			return [
+				'id' => 0,
+				'label' => '',
+				'url' => '',
+				'path' => '',
+				'mime' => '',
+				'data_uri' => '',
+			];
+		}
+
+		$path = \wp_normalize_path((string) cmx_dav_module_file_path('carent', $file_path));
+		$url = (string) cmx_dav_module_file_url('carent', $file_path);
+		$mime = (string) (\wp_check_filetype($path)['type'] ?? '');
+		$data_uri = '';
+		if ($with_data_uri && $path !== '' && \is_readable($path) && \str_starts_with($mime, 'image/')) {
+			$data_uri = cmx_carent_vertrag_image_data_uri_from_path($path);
+		}
+
+		return [
+			'id' => 0,
+			'label' => (string) \basename($file_path),
+			'url' => $url,
+			'path' => $path,
+			'mime' => $mime,
+			'data_uri' => $data_uri,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_document_info_from_meta')) {
+	function cmx_carent_vertrag_document_info_from_meta(int $post_id, string $meta_key): array {
+		$value = \trim((string) \get_post_meta($post_id, $meta_key, true));
+		return cmx_carent_vertrag_attachment_or_file_info($value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_or_file_info')) {
+	function cmx_carent_vertrag_attachment_or_file_info($value, bool $with_data_uri = false): array {
+		$value = \trim((string) $value);
+		if ($value === '') {
+			return cmx_carent_vertrag_attachment_info(0);
+		}
+		if (\ctype_digit($value) && (int) $value > 0) {
+			return cmx_carent_vertrag_attachment_info((int) $value, $with_data_uri);
+		}
+		return cmx_carent_vertrag_file_info($value, $with_data_uri);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_logo_src')) {
 	function cmx_carent_vertrag_logo_src(): string {
 		$logo_path = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')
@@ -659,11 +714,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_transfer_photos')) {
 		foreach ($rows as $row) {
 			$row = (array) $row;
 			$term_id = isset($row['term_id']) ? (int) $row['term_id'] : 0;
-			$attachment_id = isset($row['attachment_id']) ? (int) $row['attachment_id'] : 0;
+			$attachment_ref = isset($row['attachment_id']) ? \trim((string) $row['attachment_id']) : '';
 			$items[] = [
 				'term_id' => $term_id,
 				'term_label' => cmx_carent_vertrag_term_label($taxonomy, $term_id),
-				'attachment' => cmx_carent_vertrag_attachment_info($attachment_id),
+				'attachment' => cmx_carent_vertrag_attachment_or_file_info($attachment_ref),
 			];
 		}
 
@@ -836,10 +891,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')) {
 					? !empty(\get_post_meta($post_id, cmx_carent_vertrag_transfer_meta_key('uebernahme', 'agb_akzeptiert'), true))
 					: false,
 				'fotos' => cmx_carent_vertrag_transfer_photos($post_id, $section),
-				'video' => cmx_carent_vertrag_attachment_info((int) \get_post_meta($post_id, cmx_carent_vertrag_video_meta_key($section), true)),
+				'video' => cmx_carent_vertrag_attachment_or_file_info(\get_post_meta($post_id, cmx_carent_vertrag_video_meta_key($section), true)),
 				'signatures' => [
-					'vermieter' => cmx_carent_vertrag_attachment_info((int) \get_post_meta($post_id, cmx_carent_vertrag_signature_meta_key($section, 'vermieter'), true), true),
-					'mieter' => cmx_carent_vertrag_attachment_info((int) \get_post_meta($post_id, cmx_carent_vertrag_signature_meta_key($section, 'mieter'), true), true),
+					'vermieter' => cmx_carent_vertrag_attachment_or_file_info(\get_post_meta($post_id, cmx_carent_vertrag_signature_meta_key($section, 'vermieter'), true), true),
+					'mieter' => cmx_carent_vertrag_attachment_or_file_info(\get_post_meta($post_id, cmx_carent_vertrag_signature_meta_key($section, 'mieter'), true), true),
 				],
 			];
 		}
@@ -883,12 +938,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_collect_data')) {
 			'transfer' => $transfer_sections,
 			'damage' => $damage_data,
 			'documents' => [
-				'fuehrerausweis' => cmx_carent_vertrag_attachment_info((int) \get_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
+				'fuehrerausweis' => cmx_carent_vertrag_document_info_from_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_FUEHRERAUSWEIS_META')
-					: '_cmx_carent_fuehrerausweis_attachment_id', true)),
-				'identitaetskarte' => cmx_carent_vertrag_attachment_info((int) \get_post_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
+					: '_cmx_carent_fuehrerausweis_attachment_id'),
+				'identitaetskarte' => cmx_carent_vertrag_document_info_from_meta($post_id, \defined(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
 					? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_IDENTITAETSKARTE_META')
-					: '_cmx_carent_identitaetskarte_attachment_id', true)),
+					: '_cmx_carent_identitaetskarte_attachment_id'),
 			],
 			'agb_link' => \function_exists(__NAMESPACE__ . '\\cmx_carent_agb_link')
 				? \trim((string) cmx_carent_agb_link())
@@ -927,27 +982,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_storage')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_storage')) {
 	function cmx_carent_vertrag_pdf_storage(int $post_id): array {
-		$uploads = \wp_get_upload_dir();
-		$basedir = \trim((string) ($uploads['basedir'] ?? ''));
-		$baseurl = \trim((string) ($uploads['baseurl'] ?? ''));
-		$error = \trim((string) ($uploads['error'] ?? ''));
-
-		if ($post_id <= 0 || $basedir === '' || $baseurl === '' || $error !== '') {
+		if ($post_id <= 0 || !\function_exists(__NAMESPACE__ . '\\cmx_dav_module_share_path') || !\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
 			return [];
 		}
 
+		$basedir = \trim((string) cmx_dav_module_share_path('carent'));
+		if ($basedir === '') {
+			return [];
+		}
 		$relative_dir = \defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')
 			? (string) \constant(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')
-			: 'misbuero/carent/vertraege';
+			: 'vertraege';
 		$file_name = cmx_carent_vertrag_pdf_base_name($post_id) . '.pdf';
+		$rel_path = \trim($relative_dir . '/' . $file_name, '/');
 
 		return [
-			'rel_path' => \trim($relative_dir . '/' . $file_name, '/'),
+			'rel_path' => $rel_path,
 			'dir' => \trailingslashit($basedir) . $relative_dir,
-			'url_base' => \trailingslashit($baseurl) . $relative_dir,
+			'url_base' => cmx_dav_module_file_url('carent', $relative_dir),
 			'file_name' => $file_name,
 			'abs_path' => \trailingslashit($basedir) . $relative_dir . '/' . $file_name,
-			'url' => \trailingslashit($baseurl) . $relative_dir . '/' . \rawurlencode($file_name),
+			'url' => cmx_dav_module_file_url('carent', $rel_path),
 		];
 	}
 }
@@ -1221,7 +1276,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_archive_pdf_dir_pref
 	function cmx_carent_vertrag_archive_pdf_dir_prefix(): string {
 		return \rtrim((string) (\defined(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')
 			? \constant(__NAMESPACE__ . '\\CMX_CARENT_VERTRAG_PDF_ARCHIVE_REL_DIR')
-			: 'misbuero/carent/vertraege'), '/') . '/';
+			: 'vertraege'), '/') . '/';
 	}
 }
 
@@ -1430,9 +1485,10 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_unlink_upload_rel_pa
 			return;
 		}
 
-		$uploads_root = \trailingslashit(\wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads')));
-		$absolute_path = \wp_normalize_path((string) (\WP_CONTENT_DIR . '/uploads/' . $rel_path));
-		if ($absolute_path === '' || !\str_starts_with($absolute_path, $uploads_root) || !\is_file($absolute_path)) {
+		$absolute_path = \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path')
+			? \wp_normalize_path((string) cmx_dav_module_file_path('carent', $rel_path))
+			: '';
+		if ($absolute_path === '' || !\is_file($absolute_path)) {
 			return;
 		}
 

@@ -384,7 +384,7 @@ function cmx_render_settings_page(): void {
 
 	/* ALLE ANDEREN */
 	$form_attrs = 'method="post" action="options.php"';
-	if ($tab === 'carent') {
+	if ($tab === 'carent' || $tab === 'website') {
 		$form_attrs .= ' enctype="multipart/form-data"';
 	}
 	echo '<form ' . $form_attrs . '>';

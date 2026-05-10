@@ -101,9 +101,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_empty_markup'
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_upload_field')) {
-	function cmx_carent_render_transfer_upload_field(string $prefix, string $label, int $attachment_id): void {
-		$image_url = $attachment_id > 0 ? (string) \wp_get_attachment_image_url($attachment_id, 'medium') : '';
-		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+	function cmx_carent_render_transfer_upload_field(string $prefix, string $label, $attachment_id): void {
+		$value = \trim((string) $attachment_id);
+		$is_attachment = $value !== '' && \ctype_digit($value) && (int) $value > 0;
+		$image_url = $is_attachment ? (string) \wp_get_attachment_image_url((int) $value, 'medium') : '';
+		$filename = $is_attachment ? (string) \basename((string) \get_attached_file((int) $value)) : '';
+		if (!$is_attachment && $value !== '' && \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+			$image_url = (string) cmx_dav_module_file_url('carent', $value);
+			$filename = (string) \basename($value);
+		}
 		$preview_id = $prefix . '_preview';
 
 		echo '<div class="cmx-carent-transfer-upload" data-prefix="' . \esc_attr($prefix) . '">';
@@ -119,16 +125,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_upload_field
 		echo '</div>';
 		echo '<p id="' . \esc_attr($prefix . '_status') . '" style="margin:8px 0 0;color:#50575e;min-height:18px;">' . \esc_html($filename) . '</p>';
 		echo '<p style="margin:8px 0 0;">';
-		echo '<button type="button" class="button button-link-delete" id="' . \esc_attr($prefix . '_remove') . '"' . ($attachment_id > 0 ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
+		echo '<button type="button" class="button button-link-delete" id="' . \esc_attr($prefix . '_remove') . '"' . ($value !== '' && $value !== '0' ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
 		echo '</p>';
 		echo '</div>';
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_video_field')) {
-	function cmx_carent_render_transfer_video_field(string $prefix, string $label, int $attachment_id): void {
-		$video_url = $attachment_id > 0 ? (string) \wp_get_attachment_url($attachment_id) : '';
-		$filename = $attachment_id > 0 ? (string) \basename((string) \get_attached_file($attachment_id)) : '';
+	function cmx_carent_render_transfer_video_field(string $prefix, string $label, $attachment_id): void {
+		$value = \trim((string) $attachment_id);
+		$is_attachment = $value !== '' && \ctype_digit($value) && (int) $value > 0;
+		$video_url = $is_attachment ? (string) \wp_get_attachment_url((int) $value) : '';
+		$filename = $is_attachment ? (string) \basename((string) \get_attached_file((int) $value)) : '';
+		if (!$is_attachment && $value !== '' && \function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_url')) {
+			$video_url = (string) cmx_dav_module_file_url('carent', $value);
+			$filename = (string) \basename($value);
+		}
 		$preview_id = $prefix . '_preview';
 
 		echo '<div class="cmx-carent-transfer-video" data-prefix="' . \esc_attr($prefix) . '">';
@@ -150,7 +162,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_render_transfer_video_field'
 		}
 		echo '</p>';
 		echo '<p style="margin:8px 0 0;">';
-		echo '<button type="button" class="button button-link-delete" id="' . \esc_attr($prefix . '_remove') . '"' . ($attachment_id > 0 ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
+		echo '<button type="button" class="button button-link-delete" id="' . \esc_attr($prefix . '_remove') . '"' . ($value !== '' && $value !== '0' ? '' : ' style="display:none;"') . '>' . \esc_html__('Entfernen', 'cmx-misbuero') . '</button>';
 		echo '</p>';
 		echo '</div>';
 	}
@@ -181,9 +193,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		$datum = (string) \get_post_meta($post->ID, (string) $config['datum_meta'], true);
 		$uhrzeit = (string) \get_post_meta($post->ID, (string) $config['uhrzeit_meta'], true);
 		$ort = (string) \get_post_meta($post->ID, (string) $config['ort_meta'], true);
-		$vermieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['vermieter_meta'], true);
-		$mieter_attachment_id = (int) \get_post_meta($post->ID, (string) $config['mieter_meta'], true);
-		$inventory_attachment_id = (int) \get_post_meta($post->ID, (string) ($config['inventory_meta'] ?? CMX_CARENT_BESTANDSAUFNAHME_META), true);
+		$vermieter_attachment_id = \trim((string) \get_post_meta($post->ID, (string) $config['vermieter_meta'], true));
+		$mieter_attachment_id = \trim((string) \get_post_meta($post->ID, (string) $config['mieter_meta'], true));
+		$inventory_attachment_id = \trim((string) \get_post_meta($post->ID, (string) ($config['inventory_meta'] ?? CMX_CARENT_BESTANDSAUFNAHME_META), true));
 		$artikel_id = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
 			? (int) \get_post_meta($post->ID, CMX_CARENT_FAHRZEUG_META, true)
 			: 0;
@@ -648,80 +660,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 		\wp_send_json_error(['message' => 'Bitte nur Bilddateien hochladen.'], 400);
 	}
 
-	require_once \ABSPATH . 'wp-admin/includes/file.php';
-	require_once \ABSPATH . 'wp-admin/includes/media.php';
-	require_once \ABSPATH . 'wp-admin/includes/image.php';
-
-	$attachment_id = \media_handle_upload('file', $post_id > 0 ? $post_id : 0);
-	if (\is_wp_error($attachment_id)) {
-		\wp_send_json_error(['message' => (string) $attachment_id->get_error_message()], 500);
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_dav_store_uploaded_file')) {
+		\wp_send_json_error(['message' => 'WebDAV-Speicher ist nicht verfügbar.'], 500);
 	}
-
-	$image_url = (string) \wp_get_attachment_image_url((int) $attachment_id, 'medium');
-	if ($image_url === '') {
-		$image_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$uploaded = cmx_dav_store_uploaded_file('carent', (array) $_FILES['file'], 'uebergabe-rueckgabe' . ($post_id > 0 ? '/' . $post_id : ''));
+	if (\is_wp_error($uploaded)) {
+		\wp_send_json_error(['message' => (string) $uploaded->get_error_message()], 500);
 	}
+	$image_url = (string) ($uploaded['url'] ?? '');
+	$file_path = (string) ($uploaded['rel_path'] ?? '');
 
 	\wp_send_json_success([
-		'id' => (int) $attachment_id,
+		'id' => $file_path,
 		'url' => $image_url,
-		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+		'label' => (string) ($uploaded['file_name'] ?? \basename($file_path)),
 	]);
 });
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')) {
 	function cmx_carent_transfer_video_save_poster(int $video_attachment_id, int $post_id, string $data_uri): int {
-		if ($video_attachment_id <= 0 || $data_uri === '') {
-			return 0;
-		}
-		if (!\preg_match('#^data:image/(png|jpe?g|webp);base64,(.+)$#i', $data_uri, $matches)) {
-			return 0;
-		}
-
-		$extension = \strtolower((string) $matches[1]);
-		$extension = $extension === 'jpeg' ? 'jpg' : $extension;
-		$binary = \base64_decode((string) $matches[2], true);
-		if (!\is_string($binary) || $binary === '') {
-			return 0;
-		}
-
-		$uploads = \wp_upload_dir();
-		$upload_dir = (string) ($uploads['path'] ?? '');
-		$upload_url = (string) ($uploads['url'] ?? '');
-		if ($upload_dir === '' || $upload_url === '') {
-			return 0;
-		}
-
-		$base_name = \sanitize_file_name(\pathinfo((string) \get_attached_file($video_attachment_id), \PATHINFO_FILENAME));
-		$base_name = $base_name !== '' ? $base_name : ('video-' . $video_attachment_id);
-		$filename = \wp_unique_filename($upload_dir, $base_name . '-preview.' . $extension);
-		$path = \trailingslashit($upload_dir) . $filename;
-		if (\file_put_contents($path, $binary) === false) {
-			return 0;
-		}
-
-		$mime = (string) \wp_check_filetype($filename)['type'];
-		if ($mime === '') {
-			$mime = 'image/' . ($extension === 'jpg' ? 'jpeg' : $extension);
-		}
-		$attachment_id = (int) \wp_insert_attachment([
-			'post_mime_type' => $mime,
-			'post_title' => \sanitize_text_field(\pathinfo($filename, \PATHINFO_FILENAME)),
-			'post_content' => '',
-			'post_status' => 'inherit',
-		], $path, $post_id);
-		if ($attachment_id <= 0) {
-			return 0;
-		}
-
-		require_once \ABSPATH . 'wp-admin/includes/image.php';
-		$metadata = \wp_generate_attachment_metadata($attachment_id, $path);
-		if (\is_array($metadata)) {
-			\wp_update_attachment_metadata($attachment_id, $metadata);
-		}
-		\set_post_thumbnail($video_attachment_id, $attachment_id);
-
-		return $attachment_id;
+		unset($video_attachment_id, $post_id, $data_uri);
+		return 0;
 	}
 }
 
@@ -750,24 +709,23 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')
 		\wp_send_json_error(['message' => 'Bitte nur Videodateien hochladen.'], 400);
 	}
 
-	require_once \ABSPATH . 'wp-admin/includes/file.php';
-	require_once \ABSPATH . 'wp-admin/includes/media.php';
-	require_once \ABSPATH . 'wp-admin/includes/image.php';
-
-	$attachment_id = \media_handle_upload('file', $post_id > 0 ? $post_id : 0);
-	if (\is_wp_error($attachment_id)) {
-		\wp_send_json_error(['message' => (string) $attachment_id->get_error_message()], 500);
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_dav_store_uploaded_file')) {
+		\wp_send_json_error(['message' => 'WebDAV-Speicher ist nicht verfügbar.'], 500);
 	}
-
-	$file_url = (string) \wp_get_attachment_url((int) $attachment_id);
+	$uploaded = cmx_dav_store_uploaded_file('carent', (array) $_FILES['file'], 'videos' . ($post_id > 0 ? '/' . $post_id : ''));
+	if (\is_wp_error($uploaded)) {
+		\wp_send_json_error(['message' => (string) $uploaded->get_error_message()], 500);
+	}
+	$file_path = (string) ($uploaded['rel_path'] ?? '');
+	$file_url = (string) ($uploaded['url'] ?? '');
 	$poster_data = isset($_POST['poster_data']) ? (string) \wp_unslash($_POST['poster_data']) : '';
-	$poster_id = cmx_carent_transfer_video_save_poster((int) $attachment_id, $post_id > 0 ? $post_id : 0, $poster_data);
+	$poster_id = 0;
 
 	\wp_send_json_success([
-		'id' => (int) $attachment_id,
+		'id' => $file_path,
 		'url' => $file_url,
 		'file_url' => $file_url,
-		'label' => (string) \basename((string) \get_attached_file((int) $attachment_id)),
+		'label' => (string) ($uploaded['file_name'] ?? \basename($file_path)),
 		'poster_id' => $poster_id,
 	]);
 });
@@ -824,16 +782,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')
 			'mieter' => (string) $config['mieter_meta'],
 		] as $field_key => $meta_key) {
 			$attachment_field = 'cmx_carent_' . $box_key . '_' . $field_key . '_attachment_id';
-			$attachment_id = isset($_POST[$attachment_field]) ? (int) \wp_unslash($_POST[$attachment_field]) : 0;
+			$attachment_id = isset($_POST[$attachment_field]) ? \trim((string) \wp_unslash($_POST[$attachment_field])) : '';
 
-			if ($attachment_id <= 0) {
+			if ($attachment_id === '') {
 				\delete_post_meta($post_id, $meta_key);
 				continue;
 			}
 
-			$mime = (string) \get_post_mime_type($attachment_id);
-			if (!\str_starts_with($mime, 'image/')) {
-				continue;
+			if (\ctype_digit($attachment_id)) {
+				$mime = (string) \get_post_mime_type((int) $attachment_id);
+				if (!\str_starts_with($mime, 'image/')) {
+					continue;
+				}
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_dav_normalize_rel_path')) {
+				$attachment_id = cmx_dav_normalize_rel_path($attachment_id);
 			}
 
 			\update_post_meta($post_id, $meta_key, $attachment_id);
@@ -841,13 +803,20 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')
 
 		$inventory_field = 'cmx_carent_' . $box_key . '_bestandsaufnahme_attachment_id';
 		$inventory_meta = (string) ($config['inventory_meta'] ?? '');
-		$inventory_attachment_id = isset($_POST[$inventory_field]) ? (int) \wp_unslash($_POST[$inventory_field]) : 0;
+		$inventory_attachment_id = isset($_POST[$inventory_field]) ? \trim((string) \wp_unslash($_POST[$inventory_field])) : '';
 		if ($inventory_meta !== '') {
-			if ($inventory_attachment_id <= 0) {
+			if ($inventory_attachment_id === '') {
 				\delete_post_meta($post_id, $inventory_meta);
 			} else {
-				$mime = (string) \get_post_mime_type($inventory_attachment_id);
-				if (\str_starts_with($mime, 'video/')) {
+				if (\ctype_digit($inventory_attachment_id)) {
+					$mime = (string) \get_post_mime_type((int) $inventory_attachment_id);
+					if (\str_starts_with($mime, 'video/')) {
+						\update_post_meta($post_id, $inventory_meta, $inventory_attachment_id);
+					}
+				} else {
+					if (\function_exists(__NAMESPACE__ . '\\cmx_dav_normalize_rel_path')) {
+						$inventory_attachment_id = cmx_dav_normalize_rel_path($inventory_attachment_id);
+					}
 					\update_post_meta($post_id, $inventory_meta, $inventory_attachment_id);
 				}
 			}

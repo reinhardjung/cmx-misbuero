@@ -181,6 +181,139 @@ function cmx_dav_archiv_share_path(): string {
 	return WP_CONTENT_DIR . '/uploads/misbuero/archiv';
 }
 
+/** CaRent-Share: alle Dateien des CaRent-Moduls ausserhalb der Mediathek. */
+function cmx_dav_carent_share_path(): string {
+	return WP_CONTENT_DIR . '/uploads/misbuero/caerent';
+}
+
+/** Website-Share: alle Dateien des Website-Moduls ausserhalb der Mediathek. */
+function cmx_dav_website_share_path(): string {
+	return WP_CONTENT_DIR . '/uploads/misbuero/webssite';
+}
+
+function cmx_dav_module_root(string $module): string {
+	$module = strtolower(trim($module));
+	if ($module === 'caerent' || $module === 'carent') {
+		return 'caerent';
+	}
+	if ($module === 'webssite' || $module === 'website') {
+		return 'webssite';
+	}
+	return '';
+}
+
+function cmx_dav_module_share_path(string $module): string {
+	$root = cmx_dav_module_root($module);
+	if ($root === 'caerent') {
+		return cmx_dav_carent_share_path();
+	}
+	if ($root === 'webssite') {
+		return cmx_dav_website_share_path();
+	}
+	return '';
+}
+
+function cmx_dav_normalize_rel_path(string $relPath): string {
+	$relPath = str_replace('\\', '/', $relPath);
+	$parts = [];
+	foreach (explode('/', $relPath) as $part) {
+		$part = trim($part);
+		if ($part === '' || $part === '.') {
+			continue;
+		}
+		if ($part === '..') {
+			array_pop($parts);
+			continue;
+		}
+		$parts[] = sanitize_file_name($part);
+	}
+	return implode('/', array_filter($parts, static fn($part): bool => $part !== ''));
+}
+
+function cmx_dav_module_file_path(string $module, string $relPath): string {
+	$sharePath = cmx_dav_module_share_path($module);
+	$relPath = cmx_dav_normalize_rel_path($relPath);
+	if ($sharePath === '' || $relPath === '') {
+		return '';
+	}
+	return rtrim($sharePath, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath);
+}
+
+function cmx_dav_module_file_url(string $module, string $relPath): string {
+	$root = cmx_dav_module_root($module);
+	$relPath = cmx_dav_normalize_rel_path($relPath);
+	if ($root === '' || $relPath === '') {
+		return '';
+	}
+	return home_url('/' . $root . '/' . implode('/', array_map('rawurlencode', explode('/', $relPath))));
+}
+
+function cmx_dav_store_uploaded_file(string $module, array $file, string $subdir = '', array $allowedMimes = []) {
+	$sharePath = cmx_dav_module_share_path($module);
+	if ($sharePath === '') {
+		return new \WP_Error('cmx_dav_unknown_module', 'Unbekannter WebDAV-Modulordner.');
+	}
+
+	$error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+	if ($error !== UPLOAD_ERR_OK) {
+		return new \WP_Error('cmx_dav_upload_error', 'Upload fehlgeschlagen.');
+	}
+
+	$tmpName = (string) ($file['tmp_name'] ?? '');
+	$origName = (string) ($file['name'] ?? '');
+	if ($tmpName === '' || $origName === '' || !is_uploaded_file($tmpName)) {
+		return new \WP_Error('cmx_dav_upload_invalid', 'Ungültige Upload-Datei.');
+	}
+
+	$safeName = sanitize_file_name($origName);
+	if ($safeName === '') {
+		return new \WP_Error('cmx_dav_upload_name', 'Ungültiger Dateiname.');
+	}
+
+	$allowedMimes = $allowedMimes ?: [
+		'pdf'  => 'application/pdf',
+		'jpg'  => 'image/jpeg',
+		'jpeg' => 'image/jpeg',
+		'png'  => 'image/png',
+		'webp' => 'image/webp',
+		'gif'  => 'image/gif',
+		'heic' => 'image/heic',
+		'heif' => 'image/heif',
+		'mp4'  => 'video/mp4',
+		'mov'  => 'video/quicktime',
+		'webm' => 'video/webm',
+	];
+	$type = wp_check_filetype_and_ext($tmpName, $safeName, $allowedMimes);
+	if (empty($type['ext']) || !isset($allowedMimes[(string) $type['ext']])) {
+		return new \WP_Error('cmx_dav_upload_type', 'Dateityp nicht erlaubt.');
+	}
+
+	$subdir = cmx_dav_normalize_rel_path($subdir);
+	$targetDir = rtrim($sharePath, '/\\') . ($subdir !== '' ? DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $subdir) : '');
+	if (!is_dir($targetDir)) {
+		wp_mkdir_p($targetDir);
+	}
+	if (!is_dir($targetDir) || !is_writable($targetDir)) {
+		return new \WP_Error('cmx_dav_upload_target', 'Zielordner ist nicht beschreibbar.');
+	}
+
+	$destName = wp_unique_filename($targetDir, $safeName);
+	$destAbs = $targetDir . DIRECTORY_SEPARATOR . $destName;
+	if (!move_uploaded_file($tmpName, $destAbs)) {
+		return new \WP_Error('cmx_dav_upload_move', 'Datei konnte nicht gespeichert werden.');
+	}
+	@chmod($destAbs, 0666);
+
+	$relPath = trim(($subdir !== '' ? $subdir . '/' : '') . $destName, '/');
+	return [
+		'rel_path' => $relPath,
+		'abs_path' => $destAbs,
+		'url' => cmx_dav_module_file_url($module, $relPath),
+		'file_name' => $destName,
+		'mime' => (string) ($type['type'] ?? ''),
+	];
+}
+
 /**
  * Räumt versehentlich angelegte leere Scanner-Ordner unter /archiv auf.
  */
@@ -439,6 +572,27 @@ function cmx_dav_get_route_config(string $path): ?array {
 			'label'      => 'Scanner',
 			'read_only'  => false,
 			'ensure_dir' => true,
+			'upload_profile' => 'scanner',
+		];
+	}
+
+	foreach ([
+		'caerent' => ['path' => cmx_dav_carent_share_path(), 'label' => 'CaRent'],
+		'carent' => ['path' => cmx_dav_carent_share_path(), 'label' => 'CaRent'],
+		'webssite' => ['path' => cmx_dav_website_share_path(), 'label' => 'Website'],
+		'website' => ['path' => cmx_dav_website_share_path(), 'label' => 'Website'],
+	] as $leaf => $cfg) {
+		$baseUri = $matchBaseUri($path, $leaf);
+		if ($baseUri === '') {
+			continue;
+		}
+		return [
+			'base_uri'   => $baseUri,
+			'share_path' => (string) $cfg['path'],
+			'label'      => (string) $cfg['label'],
+			'read_only'  => false,
+			'ensure_dir' => true,
+			'upload_profile' => 'media',
 		];
 	}
 
@@ -494,6 +648,46 @@ function cmx_dav_abs_url(string $path): string {
 	$host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
 	return $scheme . '://' . $host . $path;
 }
+
+function cmx_dav_public_file_response(string $sharePath, string $baseUri, string $requestPath): bool {
+	$method = \strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+	if ($method !== 'GET' && $method !== 'HEAD') {
+		return false;
+	}
+
+	$relPath = cmx_dav_relative_from_base_uri($baseUri, $requestPath);
+	$relPath = cmx_dav_normalize_rel_path($relPath);
+	if ($relPath === '') {
+		return false;
+	}
+
+	$baseReal = \realpath($sharePath);
+	if ($baseReal === false) {
+		return false;
+	}
+
+	$absPath = \rtrim($baseReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . \str_replace('/', DIRECTORY_SEPARATOR, $relPath);
+	$realPath = \realpath($absPath);
+	if ($realPath === false || !\is_file($realPath) || !\is_readable($realPath) || !cmx_dav_is_subpath($baseReal, $realPath)) {
+		return false;
+	}
+
+	$filetype = \wp_check_filetype($realPath);
+	$mime = \trim((string) ($filetype['type'] ?? ''));
+	if ($mime === '') {
+		$mime = 'application/octet-stream';
+	}
+
+	\status_header(200);
+	\header('Content-Type: ' . $mime);
+	\header('Content-Length: ' . (string) \filesize($realPath));
+	\header('Content-Disposition: inline; filename="' . \str_replace('"', '', \basename($realPath)) . '"');
+	\header('X-Content-Type-Options: nosniff');
+	if ($method !== 'HEAD') {
+		\readfile($realPath);
+	}
+	exit;
+}
 /** Zip-Helfer (rekursiv) */
 function cmx_dav_zip_dir(string $source, \ZipArchive $zip, string $base, array $excludeRootNames = []): void {
 	$source = rtrim($source, DIRECTORY_SEPARATOR);
@@ -539,6 +733,7 @@ add_action('init', function () {
 	$label     = (string) ($route['label'] ?? 'Archiv');
 	$readOnly  = !empty($route['read_only']);
 	$ensureDir = !empty($route['ensure_dir']);
+	$uploadProfile = (string) ($route['upload_profile'] ?? '');
 	$maxUploadBytes = 100 * 1024 * 1024; // 100 MB
 
 	if ($ensureDir && $sharePath !== '' && !is_dir($sharePath)) {
@@ -563,6 +758,10 @@ add_action('init', function () {
 		@header('Expires: 0');
 	}
 	cmx_dav_cleanup_ds_store($sharePath, cmx_dav_relative_from_base_uri($baseUri, (string) $path));
+
+	if ($uploadProfile === 'media' && cmx_dav_public_file_response($sharePath, $baseUri, (string) $path)) {
+		exit;
+	}
 
 	// Wenn das Ziel-Verzeichnis noch nicht existiert: leere Seite statt DAV-XML-Fehler.
 	if (!is_dir($sharePath)) {
@@ -657,7 +856,7 @@ add_action('init', function () {
 			}
 		});
 	} else {
-		$server->on('beforeMethod', function(HTTP\RequestInterface $r) use ($sharePath, $baseUri): void {
+		$server->on('beforeMethod', function(HTTP\RequestInterface $r) use ($sharePath, $baseUri, $uploadProfile): void {
 			$writeMethods = ['PUT','POST','MKCOL','DELETE','MOVE','COPY','PROPPATCH','LOCK','UNLOCK','PATCH'];
 			if (!in_array($r->getMethod(), $writeMethods, true)) {
 				return;
@@ -667,7 +866,7 @@ add_action('init', function () {
 			}
 
 			$method = \strtoupper((string) $r->getMethod());
-			if ($method === 'PUT') {
+			if ($uploadProfile === 'scanner' && $method === 'PUT') {
 				$relPath = \ltrim((string) $r->getPath(), '/');
 				if (!cmx_dav_is_pdf_file_name($relPath)) {
 					throw new DAV\Exception\Forbidden('Im Scanner sind nur PDF-Dateien erlaubt.');
@@ -675,7 +874,7 @@ add_action('init', function () {
 				return;
 			}
 
-			if ($method === 'MOVE' || $method === 'COPY') {
+			if ($uploadProfile === 'scanner' && ($method === 'MOVE' || $method === 'COPY')) {
 				$destPath = (string) \parse_url((string) $r->getHeader('Destination'), \PHP_URL_PATH);
 				$destRel = cmx_dav_relative_from_base_uri($baseUri, $destPath);
 				if ($destRel !== '' && !\str_ends_with($destRel, '/') && !cmx_dav_is_pdf_file_name($destRel)) {
@@ -726,9 +925,9 @@ add_action('init', function () {
 			});
 		}
 
-	// Browser-Upload nur für /scanner (multipart/form-data).
+	// Browser-Upload für beschreibbare WebDAV-Bereiche (multipart/form-data).
 	if (!$readOnly) {
-		$server->on('method:POST', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $maxUploadBytes) {
+		$server->on('method:POST', function(HTTP\RequestInterface $request, HTTP\ResponseInterface $response) use ($server, $sharePath, $maxUploadBytes, $uploadProfile) {
 			$contentType = strtolower((string)$request->getHeader('Content-Type'));
 			$relPath = trim($request->getPath(), '/');
 			$targetDir = rtrim($sharePath, DIRECTORY_SEPARATOR) . ($relPath === '' ? '' : DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relPath));
@@ -782,7 +981,8 @@ add_action('init', function () {
 				return null;
 			}
 
-			$raw = $_FILES['scanner_upload'] ?? null;
+			$uploadField = $uploadProfile === 'scanner' ? 'scanner_upload' : 'cmx_dav_upload';
+			$raw = $_FILES[$uploadField] ?? null;
 			$files = [];
 			if (is_array($raw) && isset($raw['name'], $raw['tmp_name'], $raw['error'], $raw['size'])) {
 				if (is_array($raw['name'])) {
@@ -805,11 +1005,32 @@ add_action('init', function () {
 				}
 			}
 
-			$allowedExt = ['pdf', 'xml'];
-			$allowedMimes = [
-				'pdf'  => 'application/pdf',
-				'xml'  => 'text/xml',
-			];
+			if ($uploadProfile === 'scanner') {
+				$allowedExt = ['pdf', 'xml'];
+				$allowedMimes = [
+					'pdf'  => 'application/pdf',
+					'xml'  => 'text/xml',
+				];
+				$typeError = 'Dateityp nicht erlaubt (nur PDF oder XML).';
+				$extError = 'Erlaubt sind nur PDF- oder XML-Dateien.';
+			} else {
+				$allowedExt = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'mp4', 'mov', 'webm'];
+				$allowedMimes = [
+					'pdf'  => 'application/pdf',
+					'jpg'  => 'image/jpeg',
+					'jpeg' => 'image/jpeg',
+					'png'  => 'image/png',
+					'webp' => 'image/webp',
+					'gif'  => 'image/gif',
+					'heic' => 'image/heic',
+					'heif' => 'image/heif',
+					'mp4'  => 'video/mp4',
+					'mov'  => 'video/quicktime',
+					'webm' => 'video/webm',
+				];
+				$typeError = 'Dateityp nicht erlaubt.';
+				$extError = 'Erlaubt sind PDF, Bilder und Videos.';
+			}
 			$okCount = 0;
 			$firstError = '';
 
@@ -853,7 +1074,7 @@ add_action('init', function () {
 				$ext = strtolower((string)pathinfo($safeName, PATHINFO_EXTENSION));
 				if (!in_array($ext, $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Erlaubt sind nur PDF- oder XML-Dateien.';
+						$firstError = $extError;
 					}
 					continue;
 				}
@@ -861,7 +1082,7 @@ add_action('init', function () {
 				$fileType = wp_check_filetype_and_ext($tmpName, $safeName, $allowedMimes);
 				if (empty($fileType['ext']) || !in_array((string)$fileType['ext'], $allowedExt, true)) {
 					if ($firstError === '') {
-						$firstError = 'Dateityp nicht erlaubt (nur PDF oder XML).';
+						$firstError = $typeError;
 					}
 					continue;
 				}
@@ -928,6 +1149,11 @@ add_action('init', function () {
 			'png'  => 'image/png',
 			'jpg'  => 'image/jpeg',
 			'jpeg' => 'image/jpeg',
+			'webp' => 'image/webp',
+			'gif'  => 'image/gif',
+			'mp4'  => 'video/mp4',
+			'mov'  => 'video/quicktime',
+			'webm' => 'video/webm',
 		];
 		if (!isset($mime_map[$ext])) return;
 
@@ -1110,10 +1336,17 @@ add_action('init', function () {
 					. '<span></span></button>';
 				$uploadForm = '';
 				if (!$readOnly) {
+					$uploadField = $uploadProfile === 'scanner' ? 'scanner_upload' : 'cmx_dav_upload';
+					$accept = $uploadProfile === 'scanner'
+						? '.pdf,.xml,application/pdf,text/xml,application/xml'
+						: '.pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.mp4,.mov,.webm,application/pdf,image/*,video/*';
+					$hint = $uploadProfile === 'scanner'
+						? 'Nur PDF oder XML, max. 100 MB pro Datei'
+						: 'PDF, Bilder oder Videos, max. 100 MB pro Datei';
 					$uploadForm = '<form id="uploadform" method="POST" enctype="multipart/form-data" action="'.cmx_dav_h($currentDirUrl).'" class="uploadform">'
-						. '<input type="file" name="scanner_upload[]" accept=".pdf,.xml,application/pdf,text/xml,application/xml" multiple required class="upload-input" />'
+						. '<input type="file" name="' . cmx_dav_h($uploadField) . '[]" accept="' . cmx_dav_h($accept) . '" multiple required class="upload-input" />'
 						. '<button type="submit" class="btn btn-upload">Hochladen</button>'
-						. '<span class="upload-hint">Nur PDF oder XML, max. 100 MB pro Datei</span>'
+						. '<span class="upload-hint">' . cmx_dav_h($hint) . '</span>'
 						. '</form>';
 				}
 				$uploadNotice = '';

@@ -41,17 +41,42 @@ final class Renderer {
 		include $template;
 	}
 
-	public static function asset_image(int $attachment_id, string $size, string $class, string $alt = ''): string {
-		if ($attachment_id <= 0) {
+	public static function asset_image(string $rel_path, string $class, string $alt = ''): string {
+		$rel_path = self::normalize_file_path($rel_path);
+		if ($rel_path === '') {
 			return '';
 		}
 
-		return (string) \wp_get_attachment_image($attachment_id, $size, false, [
-			'class' => $class,
-			'alt' => $alt,
-			'loading' => 'lazy',
-			'decoding' => 'async',
-		]);
+		$url = self::module_file_url($rel_path);
+		if ($url === '') {
+			return '';
+		}
+
+		return '<img src="' . \esc_url($url) . '" class="' . \esc_attr($class) . '" alt="' . \esc_attr($alt) . '" loading="lazy" decoding="async">';
+	}
+
+	public static function module_file_url(string $rel_path): string {
+		$rel_path = self::normalize_file_path($rel_path);
+		if ($rel_path === '') {
+			return '';
+		}
+		if (\function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_dav_module_file_url')) {
+			return (string) \CLOUDMEISTER\CMX\Buero\cmx_dav_module_file_url('website', $rel_path);
+		}
+		return (string) \home_url('/webssite/' . \implode('/', \array_map('rawurlencode', \explode('/', $rel_path))));
+	}
+
+	private static function normalize_file_path(string $rel_path): string {
+		$rel_path = \str_replace('\\', '/', \trim($rel_path));
+		$parts = [];
+		foreach (\explode('/', $rel_path) as $part) {
+			$part = \sanitize_file_name($part);
+			if ($part === '' || $part === '.' || $part === '..') {
+				continue;
+			}
+			$parts[] = $part;
+		}
+		return \implode('/', $parts);
 	}
 
 	public static function link_url(string $url, string $fallback = '#'): string {
