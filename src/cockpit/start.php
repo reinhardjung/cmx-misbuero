@@ -30,6 +30,152 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_amount')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_optional_amount')) {
+	function cmx_start_dashboard_optional_amount(float $value): string {
+		return \abs($value) > 0.0001 ? cmx_start_dashboard_amount($value) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_parse_amount')) {
+	function cmx_start_dashboard_parse_amount(string $value): float {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_parse_decimal')) {
+			return (float) cmx_cockpit_parse_decimal($value);
+		}
+		$value = \str_replace(["\xc2\xa0", ' ', 'CHF'], '', $value);
+		$value = \preg_replace('/[^0-9,.\-]/', '', $value);
+		if (!\is_string($value) || $value === '') {
+			return 0.0;
+		}
+		if (\strpos($value, ',') !== false && \strpos($value, '.') !== false) {
+			$value = \str_replace(',', '.', \str_replace('.', '', $value));
+		} elseif (\strpos($value, ',') !== false) {
+			$value = \str_replace(',', '.', $value);
+		} else {
+			$value = \str_replace("'", '', $value);
+		}
+		return \is_numeric($value) ? (float) $value : 0.0;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_sum_open_items')) {
+	function cmx_start_dashboard_sum_open_items(array $items): float {
+		$total = 0.0;
+		foreach ($items as $item) {
+			if (!\is_array($item)) {
+				continue;
+			}
+			$total += cmx_start_dashboard_parse_amount((string) ($item['amount_display'] ?? ''));
+		}
+		return $total;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_post_amount')) {
+	function cmx_start_dashboard_post_amount(int $post_id): float {
+		if ($post_id <= 0) {
+			return 0.0;
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_amount_display')) {
+			return cmx_start_dashboard_parse_amount((string) cmx_cockpit_beleg_amount_display($post_id));
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmxbu_get_beleg_positionen_calc')) {
+			$calc = (array) cmxbu_get_beleg_positionen_calc($post_id);
+			if (isset($calc['total']) && \is_numeric($calc['total'])) {
+				return (float) $calc['total'];
+			}
+		}
+		return cmx_start_dashboard_parse_amount((string) \get_post_meta($post_id, '_cmx_beleg_summe_override', true));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_open_offers')) {
+	function cmx_start_dashboard_open_offers(array $range): array {
+		if (!\post_type_exists('belege')) {
+			return ['count' => 0, 'amount' => 0.0];
+		}
+		$args = [
+			'post_type' => 'belege',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page' => -1,
+			'fields' => 'ids',
+			'no_found_rows' => true,
+			'meta_query' => [
+				'relation' => 'OR',
+				[
+					'key' => '_cmx_beleg_offertenstatus',
+					'compare' => 'NOT EXISTS',
+				],
+				[
+					'key' => '_cmx_beleg_offertenstatus',
+					'value' => ['', 'offen'],
+					'compare' => 'IN',
+				],
+			],
+		];
+		if ((string) ($range['from'] ?? '') !== '' && (string) ($range['to'] ?? '') !== '') {
+			$args['date_query'] = [[
+				'after' => (string) $range['from'],
+				'before' => (string) $range['to'],
+				'inclusive' => true,
+			]];
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_beleg_taxonomy') ? (string) cmx_cockpit_beleg_taxonomy() : '';
+		if ($tax !== '' && \taxonomy_exists($tax)) {
+			$args['tax_query'] = [[
+				'taxonomy' => $tax,
+				'field' => 'slug',
+				'terms' => ['offerte', 'offerten'],
+				'operator' => 'IN',
+			]];
+		} else {
+			$args['s'] = 'Offerte';
+		}
+
+		$query = new \WP_Query($args);
+		$amount = 0.0;
+		foreach ((array) $query->posts as $post_id) {
+			$amount += cmx_start_dashboard_post_amount((int) $post_id);
+		}
+		return ['count' => \count((array) $query->posts), 'amount' => $amount];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_icon_svg')) {
+	function cmx_start_dashboard_icon_svg(string $name = 'layout-dashboard', string $class = 'cmx-start-dashboard-icon', string $fallback = 'dashicons-dashboard'): string {
+		$name = \sanitize_file_name($name);
+		$svg = ($name !== '' && \function_exists(__NAMESPACE__ . '\\cmx_icon')) ? cmx_icon($name) : '';
+		if (!\is_string($svg) || \trim($svg) === '') {
+			$path = \dirname(__DIR__, 2) . '/assets/icons/' . $name . '.svg';
+			$svg = \is_readable($path) ? \file_get_contents($path) : '';
+		}
+		if (!\is_string($svg) || \trim($svg) === '') {
+			return '<span class="dashicons ' . \esc_attr($fallback) . '" aria-hidden="true"></span>';
+		}
+
+		$svg = \preg_replace(
+			'/<svg\b/',
+			'<svg class="' . \esc_attr($class) . '" aria-hidden="true" focusable="false"',
+			$svg,
+			1
+		);
+
+		return \is_string($svg) ? $svg : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_menu_icon')) {
+	function cmx_start_dashboard_menu_icon(): string {
+		$path = \dirname(__DIR__, 2) . '/assets/icons/layout-dashboard.svg';
+		$svg = \is_readable($path) ? \file_get_contents($path) : '';
+		if (!\is_string($svg) || \trim($svg) === '') {
+			return 'dashicons-dashboard';
+		}
+
+		$svg = \str_replace('currentColor', '#a7aaad', $svg);
+		return 'data:image/svg+xml;base64,' . \base64_encode($svg);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_range')) {
 	function cmx_start_dashboard_range(): array {
 		$preset = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_requested_preset') ? cmx_cockpit_requested_preset() : 'dieses_jahr';
@@ -88,12 +234,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_data')) {
 	function cmx_start_dashboard_data(): array {
 		$range = cmx_start_dashboard_range();
 		$preset = (string) ($range['preset'] ?? 'dieses_jahr');
-		$summary = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_summary')
-			? (array) cmx_cockpit_overview_revenue_summary($preset, 'overview')
-			: [];
-		$open = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')
-			? (array) cmx_cockpit_faellige_rechnungen_data()
-			: ['total' => 0, 'items' => []];
+			$summary = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_overview_revenue_summary')
+				? (array) cmx_cockpit_overview_revenue_summary($preset, 'overview')
+				: [];
+			$open = \function_exists(__NAMESPACE__ . '\\cmx_cockpit_faellige_rechnungen_data')
+				? (array) cmx_cockpit_faellige_rechnungen_data()
+				: ['total' => 0, 'items' => []];
+			$open_items = (array) ($open['items'] ?? []);
+			$open_amount = cmx_start_dashboard_sum_open_items($open_items);
+			$open_offers = cmx_start_dashboard_open_offers($range);
 
 		$kontakte_args = [];
 		if ((string) ($range['from'] ?? '') !== '' && (string) ($range['to'] ?? '') !== '') {
@@ -107,12 +256,15 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_data')) {
 		return [
 			'range' => $range,
 			'umsatz' => (float) ($summary['einnahmen'] ?? 0),
-			'ausgaben' => (float) ($summary['ausgaben'] ?? 0),
-			'gewinn' => (float) ($summary['gewinn'] ?? ((float) ($summary['einnahmen'] ?? 0) - (float) ($summary['ausgaben'] ?? 0))),
-			'offene_forderungen' => (int) ($open['total'] ?? 0),
-			'offene_belege' => (int) ($open['total'] ?? 0),
-			'offene_offerten' => cmx_start_dashboard_count_posts('belege', ['s' => 'Offerte']),
-			'neue_kunden' => cmx_start_dashboard_count_posts('kontakte', $kontakte_args),
+				'ausgaben' => (float) ($summary['ausgaben'] ?? 0),
+				'gewinn' => (float) ($summary['gewinn'] ?? ((float) ($summary['einnahmen'] ?? 0) - (float) ($summary['ausgaben'] ?? 0))),
+				'offene_forderungen' => (int) ($open['total'] ?? 0),
+				'offene_forderungen_betrag' => $open_amount,
+				'offene_belege' => (int) ($open['total'] ?? 0),
+				'offene_belege_betrag' => $open_amount,
+				'offene_offerten' => (int) ($open_offers['count'] ?? 0),
+				'offene_offerten_betrag' => (float) ($open_offers['amount'] ?? 0.0),
+				'neue_kunden' => cmx_start_dashboard_count_posts('kontakte', $kontakte_args),
 			'buchungen' => cmx_start_dashboard_recent_posts('buchungen', 5),
 			'dokumente' => cmx_start_dashboard_recent_posts('dokumente', 5),
 			'artikel' => cmx_start_dashboard_recent_posts('artikel', 5),
@@ -183,25 +335,34 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_css')) {
 		return '
 			.cmx-start{color:#111827}.cmx-start *{box-sizing:border-box}.cmx-start-shell{width:calc(100% - 20px);max-width:none;margin:18px 20px 0 0}
 			.cmx-start-top{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:22px}.cmx-start-title{display:flex;align-items:center;gap:16px}
-			.cmx-start-icon{width:74px;height:74px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;color:#16a34a;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(15,23,42,.06)}.cmx-start-icon .dashicons{width:44px;height:44px;font-size:44px}
+			.cmx-start-icon{width:44px;height:44px;color:#111827;display:flex;align-items:center;justify-content:center}.cmx-start-icon svg{width:34px;height:34px;display:block}.cmx-start-icon .dashicons{width:34px;height:34px;font-size:34px}
 			.cmx-start h1{margin:0;font-size:30px;line-height:1.15;font-weight:800}.cmx-start-sub{margin:7px 0 0;color:#334155;font-size:14px}
 			.cmx-start-filter{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}.cmx-start-filter label{display:block;font-weight:800;font-size:12px;margin-bottom:6px}
 			.cmx-start-filter select,.cmx-start-filter input[type=date]{min-height:38px;border:1px solid #d7dde8;border-radius:6px;background:#fff;padding:4px 10px;min-width:150px}.cmx-start-button{min-height:38px;border:1px solid #d7dde8;border-radius:6px;background:#fff;color:#111827;text-decoration:none;display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-weight:800}
 			.cmx-start-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px}.cmx-start-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-			.cmx-start-kpi{padding:20px;min-height:148px;display:flex;flex-direction:column;justify-content:space-between}.cmx-start-kpi-head{display:flex;gap:14px;align-items:flex-start}.cmx-start-kpi .dashicons{font-size:40px;width:40px;height:40px}.cmx-start-kpi-title{font-weight:800}.cmx-start-kpi-sub{font-size:12px;color:#475569;margin-top:4px}.cmx-start-kpi-value{font-size:24px;font-weight:900;margin-top:14px}
+			.cmx-start-kpi{padding:20px;min-height:148px;display:flex;flex-direction:column;justify-content:space-between}.cmx-start-kpi-head{display:flex;gap:14px;align-items:flex-start}.cmx-start-kpi .dashicons,.cmx-start-kpi-icon{font-size:40px;width:40px;height:40px;display:block;flex:0 0 auto}.cmx-start-kpi-icon--plain{width:34px;height:34px}.cmx-start-kpi-title{font-weight:800}.cmx-start-kpi-sub{font-size:12px;color:#475569;margin-top:4px}.cmx-start-kpi-values{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:14px}.cmx-start-kpi-value{font-size:24px;font-weight:900}.cmx-start-kpi-amount{font-size:20px;font-weight:900;text-align:right;white-space:nowrap;color:#111827}
 			.cmx-start-green{color:#16a34a}.cmx-start-blue{color:#0f6aa8}.cmx-start-purple{color:#6d28d9}.cmx-start-orange{color:#d97706}.cmx-start-red{color:#dc2626}
-			.cmx-start-section{padding:18px;margin-bottom:16px}.cmx-start-section h2{font-size:18px;margin:0 0 14px;font-weight:900}.cmx-start-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.cmx-start-activity-card{border:1px solid #e2e8f0;border-radius:10px;padding:16px;background:#fff;min-height:230px}.cmx-start-activity-card h3{font-size:15px;margin:0 0 14px;font-weight:900}.cmx-start-list{margin:0;padding:0;list-style:none}.cmx-start-list li{display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid #eef2f7;padding:10px 0}.cmx-start-list li:last-child{border-bottom:0}.cmx-start-item-title{font-weight:800}.cmx-start-item-meta{font-size:12px;color:#64748b;margin-top:3px}
+			.cmx-start-section{padding:18px;margin-bottom:16px}.cmx-start-section h2{font-size:18px;margin:0 0 14px;font-weight:900}.cmx-start-grid{display:grid;grid-template-columns:repeat(6,minmax(210px,1fr));gap:12px;overflow-x:auto;padding-bottom:2px}.cmx-start-activity-card{border:1px solid #e2e8f0;border-radius:10px;padding:16px;background:#fff;min-height:230px}.cmx-start-activity-card h3{font-size:15px;margin:0 0 14px;font-weight:900}.cmx-start-list{margin:0;padding:0;list-style:none}.cmx-start-list li{display:block;border-bottom:1px solid #eef2f7;padding:10px 0}.cmx-start-list li:last-child{border-bottom:0}.cmx-start-item-title{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cmx-start-item-meta{font-size:12px;color:#64748b;margin-top:3px;white-space:nowrap}
 			.cmx-start-chart-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}.cmx-start-chart-card{border:1px solid #e2e8f0;border-radius:10px;padding:16px;min-height:310px}.cmx-start-chart-card h3{font-size:14px;margin:0 0 4px;font-weight:900}.cmx-start-chart-sub{font-size:12px;color:#475569;margin-bottom:12px}.cmx-start-chart-box{position:relative;height:230px}.cmx-start-chart-box canvas{width:100%!important;height:230px!important}
-			@media(max-width:1400px){.cmx-start-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.cmx-start-chart-grid{grid-template-columns:1fr}}@media(max-width:900px){.cmx-start-top{display:block}.cmx-start-filter{margin-top:16px}.cmx-start-kpis,.cmx-start-grid{grid-template-columns:1fr}}
+			@media(max-width:1400px){.cmx-start-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.cmx-start-chart-grid{grid-template-columns:1fr}}@media(max-width:900px){.cmx-start-top{display:block}.cmx-start-filter{margin-top:16px}.cmx-start-kpis{grid-template-columns:1fr}}
 		';
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_kpi')) {
-	function cmx_start_dashboard_kpi(string $color, string $icon, string $title, string $sub, string $value): void {
+	function cmx_start_dashboard_kpi(string $color, string $icon, string $title, string $sub, string $value, string $amount = ''): void {
+		$icon_name = \str_starts_with($icon, 'asset:') ? \substr($icon, 6) : '';
+		$icon_class = ($icon_name === 'gamepad-directional') ? 'cmx-start-kpi-icon cmx-start-kpi-icon--plain cmx-start-' . $color : 'cmx-start-kpi-icon cmx-start-' . $color;
+		$icon_html = \str_starts_with($icon, 'asset:')
+			? cmx_start_dashboard_icon_svg($icon_name, $icon_class, 'dashicons-admin-generic')
+			: '<span class="dashicons ' . \esc_attr($icon) . ' cmx-start-' . \esc_attr($color) . '"></span>';
 		echo '<section class="cmx-start-card cmx-start-kpi">';
-		echo '<div class="cmx-start-kpi-head"><span class="dashicons ' . \esc_attr($icon) . ' cmx-start-' . \esc_attr($color) . '"></span><div><div class="cmx-start-kpi-title">' . \esc_html($title) . '</div><div class="cmx-start-kpi-sub">' . \esc_html($sub) . '</div></div></div>';
-		echo '<div class="cmx-start-kpi-value cmx-start-' . \esc_attr($color) . '">' . \esc_html($value) . '</div>';
+		echo '<div class="cmx-start-kpi-head">' . $icon_html . '<div><div class="cmx-start-kpi-title">' . \esc_html($title) . '</div><div class="cmx-start-kpi-sub">' . \esc_html($sub) . '</div></div></div>';
+		echo '<div class="cmx-start-kpi-values"><div class="cmx-start-kpi-value cmx-start-' . \esc_attr($color) . '">' . \esc_html($value) . '</div>';
+		if ($amount !== '') {
+			echo '<div class="cmx-start-kpi-amount">' . \esc_html($amount) . '</div>';
+		}
+		echo '</div>';
 		echo '</section>';
 	}
 }
@@ -232,19 +393,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_render')) {
 		$data = cmx_start_dashboard_data();
 		$range = (array) ($data['range'] ?? []);
 		echo '<div class="wrap cmx-start"><div class="cmx-start-shell">';
-		echo '<div class="cmx-start-top"><div class="cmx-start-title"><div class="cmx-start-icon"><span class="dashicons dashicons-chart-line"></span></div><div><h1>Dashboard</h1><p class="cmx-start-sub">Übersicht der wichtigsten Kennzahlen Ihres Unternehmens</p></div></div>';
+		echo '<div class="cmx-start-top"><div class="cmx-start-title"><div class="cmx-start-icon">' . cmx_start_dashboard_icon_svg('layout-dashboard') . '</div><div><h1>Dashboard</h1><p class="cmx-start-sub">Übersicht der wichtigsten Kennzahlen Ihres Unternehmens</p></div></div>';
 		echo '<form class="cmx-start-filter" method="get"><input type="hidden" name="page" value="' . \esc_attr(cmx_start_dashboard_slug()) . '"><div><label>Zeitraum</label><select name="cmx_cockpit_preset">';
 		foreach ((array) cmx_cockpit_preset_options() as $key => $label) {
 			echo '<option value="' . \esc_attr((string) $key) . '"' . \selected((string) ($range['preset'] ?? ''), (string) $key, false) . '>' . \esc_html((string) $label) . '</option>';
 		}
 		echo '</select></div><div><label>Von</label><input type="date" name="cmx_start_from" value="' . \esc_attr((string) ($range['from'] ?? '')) . '"></div><div><label>Bis</label><input type="date" name="cmx_start_to" value="' . \esc_attr((string) ($range['to'] ?? '')) . '"></div><button class="cmx-start-button" type="submit"><span class="dashicons dashicons-filter"></span>Filter</button></form></div>';
 		echo '<div class="cmx-start-kpis">';
-		cmx_start_dashboard_kpi('green', 'dashicons-chart-line', 'Umsatz', 'im gewählten Zeitraum', cmx_start_dashboard_money((float) $data['umsatz']));
-		cmx_start_dashboard_kpi('blue', 'dashicons-wallet', 'Offene Forderungen', 'Anzahl offener Rechnungen', \number_format_i18n((int) $data['offene_forderungen']));
+		cmx_start_dashboard_kpi('green', 'dashicons-chart-line', 'Umsatz', 'im gewählten Zeitraum', cmx_start_dashboard_amount((float) $data['umsatz']));
+		cmx_start_dashboard_kpi('blue', 'asset:gamepad-directional', 'Offene Forderungen', 'Anzahl offener Rechnungen', \number_format_i18n((int) $data['offene_forderungen']), cmx_start_dashboard_optional_amount((float) $data['offene_forderungen_betrag']));
 		$profit = (float) $data['gewinn'];
 		cmx_start_dashboard_kpi($profit >= 0 ? 'green' : 'red', 'dashicons-money-alt', 'Gewinn / Verlust', 'im gewählten Zeitraum', cmx_start_dashboard_amount($profit));
-		cmx_start_dashboard_kpi('orange', 'dashicons-media-document', 'Offene Belege', 'Anzahl', \number_format_i18n((int) $data['offene_belege']));
-		cmx_start_dashboard_kpi('red', 'dashicons-warning', 'Offene Offerten', 'Anzahl', \number_format_i18n((int) $data['offene_offerten']));
+		cmx_start_dashboard_kpi('orange', 'dashicons-media-document', 'Offene Belege', 'Anzahl', \number_format_i18n((int) $data['offene_belege']), cmx_start_dashboard_optional_amount((float) $data['offene_belege_betrag']));
+		cmx_start_dashboard_kpi('red', 'dashicons-warning', 'Offene Offerten', 'Anzahl', \number_format_i18n((int) $data['offene_offerten']), cmx_start_dashboard_optional_amount((float) $data['offene_offerten_betrag']));
 		cmx_start_dashboard_kpi('green', 'dashicons-businessperson', 'Neue Kunden', 'im gewählten Zeitraum', \number_format_i18n((int) $data['neue_kunden']));
 		echo '</div>';
 		echo '<section class="cmx-start-card cmx-start-section"><h2>Finanzübersicht</h2><div class="cmx-start-chart-grid">';
@@ -283,6 +444,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_render')) {
 	global $menu, $submenu;
 	if (isset($menu[2][0])) {
 		$menu[2][0] = 'Start';
+	}
+	if (isset($menu[2][6])) {
+		$menu[2][6] = cmx_start_dashboard_menu_icon();
 	}
 	if (isset($submenu['index.php']) && \is_array($submenu['index.php'])) {
 		foreach ($submenu['index.php'] as $index => $item) {
