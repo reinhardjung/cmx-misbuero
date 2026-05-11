@@ -215,6 +215,80 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_count_posts')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_new_customer_ids')) {
+	function cmx_start_dashboard_new_customer_ids(array $range): array {
+		if (!\post_type_exists('kontakte')) {
+			return [];
+		}
+		$args = [
+			'post_type' => 'kontakte',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page' => -1,
+			'fields' => 'ids',
+			'no_found_rows' => true,
+		];
+		if ((string) ($range['from'] ?? '') !== '' && (string) ($range['to'] ?? '') !== '') {
+			$args['date_query'] = [[
+				'after' => (string) $range['from'],
+				'before' => (string) $range['to'],
+				'inclusive' => true,
+			]];
+		}
+
+		$query = new \WP_Query($args);
+		return \array_values(\array_filter(\array_map('intval', (array) $query->posts)));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_customer_revenue')) {
+	function cmx_start_dashboard_customer_revenue(array $customer_ids, array $range): float {
+		$customer_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $customer_ids))));
+		if ($customer_ids === [] || !\post_type_exists('belege')) {
+			return 0.0;
+		}
+
+		$kontakt_keys = [];
+		if (\defined(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID')) {
+			$kontakt_keys[] = (string) \constant(__NAMESPACE__ . '\\CMX_BELEG_META_KONTAKT_ID');
+		}
+		$kontakt_keys = \array_values(\array_unique(\array_filter(\array_merge($kontakt_keys, ['_cmx_beleg_kontakt_id', 'cmx_beleg_kontakt_id']))));
+
+		$meta_or = ['relation' => 'OR'];
+		foreach ($kontakt_keys as $key) {
+			$meta_or[] = [
+				'key' => $key,
+				'value' => $customer_ids,
+				'compare' => 'IN',
+				'type' => 'NUMERIC',
+			];
+		}
+
+		$args = [
+			'post_type' => 'belege',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page' => -1,
+			'fields' => 'ids',
+			'no_found_rows' => true,
+			'meta_query' => [$meta_or],
+		];
+		if ((string) ($range['from'] ?? '') !== '' && (string) ($range['to'] ?? '') !== '') {
+			$args['date_query'] = [[
+				'after' => (string) $range['from'],
+				'before' => (string) $range['to'],
+				'inclusive' => true,
+			]];
+		}
+
+		$query = new \WP_Query($args);
+		$sum = 0.0;
+		foreach ((array) $query->posts as $post_id) {
+			$sum += cmx_start_dashboard_post_amount((int) $post_id);
+		}
+
+		return $sum;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_recent_posts')) {
 	function cmx_start_dashboard_recent_posts(string $post_type, int $limit = 5): array {
 		if (!\post_type_exists($post_type)) {
@@ -243,19 +317,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_data')) {
 			$open_items = (array) ($open['items'] ?? []);
 			$open_amount = cmx_start_dashboard_sum_open_items($open_items);
 			$open_offers = cmx_start_dashboard_open_offers($range);
+			$new_customer_ids = cmx_start_dashboard_new_customer_ids($range);
+			$new_customer_revenue = cmx_start_dashboard_customer_revenue($new_customer_ids, $range);
 
-		$kontakte_args = [];
-		if ((string) ($range['from'] ?? '') !== '' && (string) ($range['to'] ?? '') !== '') {
-			$kontakte_args['date_query'] = [[
-				'after' => (string) $range['from'],
-				'before' => (string) $range['to'],
-				'inclusive' => true,
-			]];
-		}
-
-		return [
-			'range' => $range,
-			'umsatz' => (float) ($summary['einnahmen'] ?? 0),
+			return [
+				'range' => $range,
+				'umsatz' => (float) ($summary['einnahmen'] ?? 0),
 				'ausgaben' => (float) ($summary['ausgaben'] ?? 0),
 				'gewinn' => (float) ($summary['gewinn'] ?? ((float) ($summary['einnahmen'] ?? 0) - (float) ($summary['ausgaben'] ?? 0))),
 				'offene_forderungen' => (int) ($open['total'] ?? 0),
@@ -264,8 +331,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_data')) {
 				'offene_belege_betrag' => $open_amount,
 				'offene_offerten' => (int) ($open_offers['count'] ?? 0),
 				'offene_offerten_betrag' => (float) ($open_offers['amount'] ?? 0.0),
-				'neue_kunden' => cmx_start_dashboard_count_posts('kontakte', $kontakte_args),
-			'buchungen' => cmx_start_dashboard_recent_posts('buchungen', 5),
+				'neue_kunden' => \count($new_customer_ids),
+				'neue_kunden_betrag' => $new_customer_revenue,
+				'buchungen' => cmx_start_dashboard_recent_posts('buchungen', 5),
 			'dokumente' => cmx_start_dashboard_recent_posts('dokumente', 5),
 			'artikel' => cmx_start_dashboard_recent_posts('artikel', 5),
 			'kontakte' => cmx_start_dashboard_recent_posts('kontakte', 5),
@@ -406,7 +474,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_render')) {
 		cmx_start_dashboard_kpi($profit >= 0 ? 'green' : 'red', 'dashicons-money-alt', 'Gewinn / Verlust', 'im gewählten Zeitraum', cmx_start_dashboard_amount($profit));
 		cmx_start_dashboard_kpi('orange', 'dashicons-media-document', 'Offene Belege', 'Anzahl', \number_format_i18n((int) $data['offene_belege']), cmx_start_dashboard_optional_amount((float) $data['offene_belege_betrag']));
 		cmx_start_dashboard_kpi('red', 'dashicons-warning', 'Offene Offerten', 'Anzahl', \number_format_i18n((int) $data['offene_offerten']), cmx_start_dashboard_optional_amount((float) $data['offene_offerten_betrag']));
-		cmx_start_dashboard_kpi('green', 'dashicons-businessperson', 'Neue Kunden', 'im gewählten Zeitraum', \number_format_i18n((int) $data['neue_kunden']));
+		cmx_start_dashboard_kpi('green', 'dashicons-businessperson', 'Neue Kunden', 'im gewählten Zeitraum', \number_format_i18n((int) $data['neue_kunden']), cmx_start_dashboard_optional_amount((float) $data['neue_kunden_betrag']));
 		echo '</div>';
 		echo '<section class="cmx-start-card cmx-start-section"><h2>Finanzübersicht</h2><div class="cmx-start-chart-grid">';
 		echo '<div class="cmx-start-chart-card"><h3>Einnahmen / Ausgaben</h3><div class="cmx-start-chart-sub">im gewählten Zeitraum</div><div class="cmx-start-chart-box"><canvas id="cmx-start-income-expense-chart"></canvas></div></div>';
