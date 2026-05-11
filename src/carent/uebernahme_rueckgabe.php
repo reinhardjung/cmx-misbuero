@@ -636,10 +636,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 });
 
 \add_action('wp_ajax_cmx_carent_transfer_upload', function (): void {
-	if (!\current_user_can('upload_files')) {
-		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
-	}
-
 	$nonce = isset($_POST['nonce']) ? (string) \wp_unslash($_POST['nonce']) : '';
 	if (!\wp_verify_nonce($nonce, 'cmx_carent_transfer_upload')) {
 		\wp_send_json_error(['message' => 'Sicherheitsprüfung fehlgeschlagen.'], 403);
@@ -648,6 +644,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_transfer_metabox')) {
 	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
 	if ($post_id > 0 && \get_post_type($post_id) !== 'carent') {
 		\wp_send_json_error(['message' => 'Ungültiger Eintrag.'], 400);
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_file_upload_allowed') || !cmx_carent_file_upload_allowed($post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
 	}
 
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {
@@ -685,10 +684,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')
 }
 
 \add_action('wp_ajax_cmx_carent_transfer_video_upload', function (): void {
-	if (!\current_user_can('upload_files')) {
-		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
-	}
-
 	$nonce = isset($_POST['nonce']) ? (string) \wp_unslash($_POST['nonce']) : '';
 	if (!\wp_verify_nonce($nonce, 'cmx_carent_transfer_video_upload')) {
 		\wp_send_json_error(['message' => 'Sicherheitsprüfung fehlgeschlagen.'], 403);
@@ -697,6 +692,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_transfer_video_save_poster')
 	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
 	if ($post_id > 0 && \get_post_type($post_id) !== 'carent') {
 		\wp_send_json_error(['message' => 'Ungültiger Eintrag.'], 400);
+	}
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_file_upload_allowed') || !cmx_carent_file_upload_allowed($post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
 	}
 
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {

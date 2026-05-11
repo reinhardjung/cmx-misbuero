@@ -4741,7 +4741,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 
 					function attachmentPayloadFromResponse(json){
 						return {
-							id:json && json.data ? Number(json.data.id||0) : 0,
+							id:json && json.data ? String(json.data.id||"") : "",
 							preview_url:json && json.data ? String(json.data.url||"") : "",
 							file_url:json && json.data ? String((json.data.file_url||json.data.url||"")) : "",
 							label:json && json.data ? String(json.data.label||"") : ""
@@ -5157,7 +5157,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_vermietung_page')) {
 								return;
 							}
 							renderVideo({
-								id:Number(json.data.id||0),
+								id:String(json.data.id||""),
 								url:String(json.data.url||""),
 								file_url:String(json.data.file_url||json.data.url||""),
 								label:String(json.data.label||"")

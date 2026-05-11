@@ -788,6 +788,7 @@ add_action('init', function () {
 		: new CmxDavRootFilteredDirectory($sharePath, $hiddenRootNames, true);
 	$server    = new DAV\Server($root);
 	$server->setBaseUri($baseUri); // bewusst ohne Slash am Ende
+	$method = \strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
 	if (!empty($hiddenRootNames)) {
 		$server->on('beforeMethod', function(HTTP\RequestInterface $request) use ($hiddenRootNames): void {
@@ -798,12 +799,19 @@ add_action('init', function () {
 		});
 	}
 
-	// BasicAuth mit WP-Usern
-	$authBackend = new DAV\Auth\Backend\BasicCallBack(function($u,$p){
-		$user = \get_user_by('login', $u);
-		return $user && \wp_check_password($p, $user->user_pass, $user->ID);
-	});
-	$server->addPlugin(new DAV\Auth\Plugin($authBackend, 'WP WebDAV'));
+	// BasicAuth mit WP-Usern. Normale Browser-Ansichten duerfen die bestehende
+	// WordPress-Session nutzen, damit eingebettete WebDAV-Medien im Admin keine
+	// zweite Login-Abfrage ausloesen.
+	$has_wp_browser_session = \in_array($method, ['GET', 'HEAD'], true)
+		&& \function_exists('is_user_logged_in')
+		&& \is_user_logged_in();
+	if (!$has_wp_browser_session) {
+		$authBackend = new DAV\Auth\Backend\BasicCallBack(function($u,$p){
+			$user = \get_user_by('login', $u);
+			return $user && \wp_check_password($p, $user->user_pass, $user->ID);
+		});
+		$server->addPlugin(new DAV\Auth\Plugin($authBackend, 'WP WebDAV'));
+	}
 	$locksPath = cmx_dav_lock_backend_path($sharePath);
 	if ($locksPath !== '' && is_dir($locksPath) && is_writable($locksPath)) {
 		$server->addPlugin(new DAV\Locks\Plugin(new DAV\Locks\Backend\File($locksPath)));

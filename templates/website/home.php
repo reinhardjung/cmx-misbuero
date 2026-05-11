@@ -16,7 +16,7 @@ $advantages = (array) ($settings['advantages'] ?? []);
 $faq = (array) ($settings['faq'] ?? []);
 $contact = (array) ($settings['contact'] ?? []);
 $legal = (array) ($settings['legal'] ?? []);
-$login_url = \is_user_logged_in() ? \wp_logout_url(\home_url('/')) : \wp_login_url(\home_url('/'));
+$login_url = \is_user_logged_in() ? \admin_url('/') : \wp_login_url(\admin_url('/'));
 $login_label = \is_user_logged_in() ? __('Abmelden', 'cmx-misbuero') : __('Anmelden', 'cmx-misbuero');
 $show_powered_by = \function_exists('CLOUDMEISTER\\CMX\\Buero\\cmx_powered_by_enabled')
 	? \CLOUDMEISTER\CMX\Buero\cmx_powered_by_enabled()

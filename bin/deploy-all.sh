@@ -13,6 +13,7 @@ REMOTE_BASE="${CMX_DEPLOY_REMOTE_BASE:-/var/www/vhosts}"
 PLUGIN_PATH="${CMX_DEPLOY_PLUGIN_PATH:-httpdocs/wp-content/plugins/cmx-misbuero}"
 
 INSTANCES=()
+UPDATED_INSTANCES=()
 
 DELETE=0
 DRY_RUN=0
@@ -215,6 +216,8 @@ process_instance() {
   else
     deploy_instance "$instance"
   fi
+
+  UPDATED_INSTANCES+=("$instance")
 }
 
 if [[ -n "$ONLY" ]]; then
@@ -244,4 +247,16 @@ elif ((LANGUAGE_UPDATES_ONLY)); then
   echo "Language updates complete."
 else
   echo "Deploy complete."
+fi
+
+echo
+if ((${#UPDATED_INSTANCES[@]} > 0)); then
+  echo "Aktualisierte Instanzen:"
+  for instance in "${UPDATED_INSTANCES[@]}"; do
+    echo "- ${instance}.misbuero.ch"
+  done
+  echo "Anzahl: ${#UPDATED_INSTANCES[@]}"
+else
+  echo "Aktualisierte Instanzen: keine"
+  echo "Anzahl: 0"
 fi

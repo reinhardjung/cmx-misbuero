@@ -7,7 +7,12 @@
 	},
   "autoload": {
 	"psr-4": {
-		 "CLOUDMEISTER\\CMX\\Buero\\": "src/"
+		 "CLOUDMEISTER\\CMX\\Buero\\": "src/",
+		 "CLOUDMEISTER\\MisBuero\\Core\\": "packages/core/src/",
+		 "CLOUDMEISTER\\MisBuero\\Standard\\": "packages/mis-buero/src/",
+		 "CLOUDMEISTER\\MisBuero\\Trial\\": "packages/mis-buero-trial/src/",
+		 "CLOUDMEISTER\\MisBuero\\Business\\": "packages/mis-buero-business/src/",
+		 "CLOUDMEISTER\\MisBuero\\Modules\\": "packages/mis-buero-modules/src/"
 		}
 	},
 	"authors": [

@@ -82,6 +82,25 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_term_options')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_file_upload_allowed')) {
+	function cmx_carent_file_upload_allowed(int $post_id = 0): bool {
+		if ($post_id > 0) {
+			return \get_post_type($post_id) === 'carent' && \current_user_can('edit_post', $post_id);
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_vermietung_can_create_carent') && cmx_vermietung_can_create_carent()) {
+			return true;
+		}
+
+		$post_type = \get_post_type_object('carent');
+		$capability = $post_type && isset($post_type->cap->create_posts)
+			? (string) $post_type->cap->create_posts
+			: 'edit_posts';
+
+		return \current_user_can($capability);
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_normalize_rows')) {
 	function cmx_carent_fotos_normalize_rows(mixed $raw_rows): array {
 		if (!\is_array($raw_rows)) {
@@ -110,6 +129,49 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_normalize_rows')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows_from_webdav')) {
+	function cmx_carent_fotos_rows_from_webdav(int $post_id): array {
+		if ($post_id <= 0 || !\function_exists(__NAMESPACE__ . '\\cmx_dav_module_file_path')) {
+			return [];
+		}
+
+		$dir = (string) cmx_dav_module_file_path('carent', 'fotos/' . $post_id);
+		if ($dir === '' || !\is_dir($dir) || !\is_readable($dir)) {
+			return [];
+		}
+
+		$entries = \scandir($dir);
+		if (!\is_array($entries)) {
+			return [];
+		}
+
+		$rows = [];
+		foreach ($entries as $entry) {
+			if ($entry === '.' || $entry === '..') {
+				continue;
+			}
+
+			$path = $dir . DIRECTORY_SEPARATOR . $entry;
+			if (!\is_file($path)) {
+				continue;
+			}
+
+			$file_type = \wp_check_filetype($entry);
+			$mime = (string) ($file_type['type'] ?? '');
+			if (!\str_starts_with($mime, 'image/')) {
+				continue;
+			}
+
+			$rows[] = [
+				'term_id' => 0,
+				'attachment_id' => 'fotos/' . $post_id . '/' . $entry,
+			];
+		}
+
+		return $rows;
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows')) {
 	function cmx_carent_fotos_rows(int $post_id, ?string $meta_key = null, string $legacy_meta_key = ''): array {
 		$resolved_meta_key = $meta_key ?: CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META;
@@ -122,6 +184,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_fotos_rows')) {
 			$legacy_rows = cmx_carent_fotos_normalize_rows(\get_post_meta($post_id, $legacy_meta_key, true));
 			if ($legacy_rows !== []) {
 				return $legacy_rows;
+			}
+		}
+
+		if ($resolved_meta_key === CMX_CARENT_UEBERNAHME_FOTOS_ROWS_META || $resolved_meta_key === CMX_CARENT_FOTOS_ROWS_META) {
+			$webdav_rows = cmx_carent_fotos_rows_from_webdav($post_id);
+			if ($webdav_rows !== []) {
+				return $webdav_rows;
 			}
 		}
 
@@ -635,10 +704,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 }, 20, 2);
 
 \add_action('wp_ajax_cmx_carent_fotos_upload', function (): void {
-	if (!\current_user_can('upload_files')) {
-		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
-	}
-
 	$nonce = isset($_POST['nonce']) ? (string) \wp_unslash($_POST['nonce']) : '';
 	if (!\wp_verify_nonce($nonce, 'cmx_carent_fotos_upload')) {
 		\wp_send_json_error(['message' => 'Sicherheitsprüfung fehlgeschlagen.'], 403);
@@ -647,6 +712,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_render_carent_fotos_metabox')) {
 	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
 	if ($post_id > 0 && \get_post_type($post_id) !== 'carent') {
 		\wp_send_json_error(['message' => 'Ungültiger Eintrag.'], 400);
+	}
+	if (!cmx_carent_file_upload_allowed($post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
 	}
 
 	if (empty($_FILES['file']) || !isset($_FILES['file']['tmp_name'])) {

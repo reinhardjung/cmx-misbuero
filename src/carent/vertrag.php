@@ -99,6 +99,100 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_agb_required')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_file_badge_icon')) {
+	function cmx_carent_vertrag_file_badge_icon(string $class = 'cmx-carent-vertrag-file-badge'): string {
+		$path = \dirname(__DIR__, 2) . '/assets/icons/file-badge.svg';
+		if (!\is_readable($path)) {
+			return '<span class="dashicons dashicons-media-document" aria-hidden="true"></span>';
+		}
+
+		$svg = (string) \file_get_contents($path);
+		if ($svg === '') {
+			return '<span class="dashicons dashicons-media-document" aria-hidden="true"></span>';
+		}
+
+		$svg = \preg_replace('/<svg\b/', '<svg class="' . \esc_attr($class) . '" aria-hidden="true" focusable="false"', $svg, 1);
+		return \is_string($svg) ? $svg : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_live_url')) {
+	function cmx_carent_vertrag_live_url(int $post_id): string {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'carent' || !\current_user_can('edit_post', $post_id)) {
+			return '';
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_vermietung_manage_url')) {
+			return (string) cmx_vermietung_manage_url($post_id);
+		}
+
+		return (string) \get_edit_post_link($post_id, 'raw');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_url')) {
+	function cmx_carent_vertrag_pdf_url(int $post_id): string {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'carent' || !\current_user_can('edit_post', $post_id)) {
+			return '';
+		}
+
+		return (string) \add_query_arg([
+			'action' => 'cmx_carent_live_vertrag_pdf',
+			'post_id' => $post_id,
+			'_wpnonce' => \wp_create_nonce('cmx_carent_live_vertrag_pdf_' . $post_id),
+		], \admin_url('admin-post.php'));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_live_icon_link')) {
+	function cmx_carent_vertrag_live_icon_link(int $post_id, string $class = 'cmx-carent-vertrag-live-link'): string {
+		$url = cmx_carent_vertrag_live_url($post_id);
+		if ($url === '') {
+			return '<span aria-hidden="true"></span>';
+		}
+
+		return '<a href="' . \esc_url($url) . '" class="' . \esc_attr($class) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr__('Live-Vermietung öffnen', 'cmx-misbuero') . '" aria-label="' . \esc_attr__('Live-Vermietung öffnen', 'cmx-misbuero') . '">'
+			. cmx_carent_vertrag_file_badge_icon()
+			. '<span class="screen-reader-text">' . \esc_html__('Live-Vermietung öffnen', 'cmx-misbuero') . '</span>'
+			. '</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_icon_link')) {
+	function cmx_carent_vertrag_pdf_icon_link(int $post_id, string $class = 'cmx-carent-vertrag-pdf-link'): string {
+		$url = cmx_carent_vertrag_pdf_url($post_id);
+		if ($url === '') {
+			return '<span aria-hidden="true"></span>';
+		}
+
+		return '<a href="' . \esc_url($url) . '" class="' . \esc_attr($class) . '" target="_blank" rel="noopener noreferrer" title="' . \esc_attr__('Mietvertrag als PDF anzeigen', 'cmx-misbuero') . '" aria-label="' . \esc_attr__('Mietvertrag als PDF anzeigen', 'cmx-misbuero') . '">'
+			. '<span class="dashicons dashicons-pdf" aria-hidden="true"></span>'
+			. '<span class="screen-reader-text">' . \esc_html__('Mietvertrag als PDF anzeigen', 'cmx-misbuero') . '</span>'
+			. '</a>';
+	}
+}
+
+\add_action('admin_head', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->post_type ?? '') !== 'carent') {
+		return;
+	}
+
+	echo '<style>
+		.cmx-carent-vertrag-actions{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+		.cmx-carent-vertrag-live-link,
+		.cmx-carent-vertrag-pdf-link{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;color:#d63638;text-decoration:none;vertical-align:middle}
+		.cmx-carent-vertrag-live-link:hover,
+		.cmx-carent-vertrag-live-link:focus,
+		.cmx-carent-vertrag-pdf-link:hover,
+		.cmx-carent-vertrag-pdf-link:focus{color:#b32d2e;text-decoration:none;box-shadow:none;outline:0}
+		.cmx-carent-vertrag-live-link .cmx-carent-vertrag-file-badge{display:block;width:20px;height:20px;stroke:currentColor}
+		.cmx-carent-vertrag-pdf-link .dashicons{width:20px;height:20px;font-size:20px;line-height:20px}
+		.cmx-carent-vertrag-live-link.is-list,
+		.cmx-carent-vertrag-pdf-link.is-list{margin:0}
+	</style>';
+});
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_append_pdf_file')) {
 	function cmx_carent_vertrag_append_pdf_file(string $pdf_binary, string $append_pdf_path): string {
 		if ($pdf_binary === '' || $append_pdf_path === '' || !\is_file($append_pdf_path) || !\is_readable($append_pdf_path)) {
@@ -532,6 +626,40 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_attachment_or_file_i
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_photo_src')) {
+	function cmx_carent_vertrag_photo_src(array $attachment): string {
+		$data_uri = \trim((string) ($attachment['data_uri'] ?? ''));
+		if ($data_uri !== '') {
+			return $data_uri;
+		}
+
+		$id = isset($attachment['id']) ? (int) $attachment['id'] : 0;
+		return $id > 0 ? cmx_carent_vertrag_image_data_uri($id) : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_fit_image_style')) {
+	function cmx_carent_vertrag_fit_image_style(string $path, float $max_width_mm, float $max_height_mm): string {
+		$path = \wp_normalize_path($path);
+		if ($path === '' || !\is_readable($path)) {
+			return 'max-width:' . $max_width_mm . 'mm;max-height:' . $max_height_mm . 'mm;width:auto;height:auto;';
+		}
+
+		$size = @\getimagesize($path);
+		$width_px = isset($size[0]) ? (float) $size[0] : 0.0;
+		$height_px = isset($size[1]) ? (float) $size[1] : 0.0;
+		if ($width_px <= 0 || $height_px <= 0) {
+			return 'max-width:' . $max_width_mm . 'mm;max-height:' . $max_height_mm . 'mm;width:auto;height:auto;';
+		}
+
+		$scale = \min($max_width_mm / $width_px, $max_height_mm / $height_px);
+		$width_mm = \max(0.1, $width_px * $scale);
+		$height_mm = \max(0.1, $height_px * $scale);
+
+		return 'width:' . \number_format($width_mm, 2, '.', '') . 'mm;height:' . \number_format($height_mm, 2, '.', '') . 'mm;';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_logo_src')) {
 	function cmx_carent_vertrag_logo_src(): string {
 		$logo_path = \function_exists(__NAMESPACE__ . '\\cmx_email_self_logo_path')
@@ -718,7 +846,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_transfer_photos')) {
 			$items[] = [
 				'term_id' => $term_id,
 				'term_label' => cmx_carent_vertrag_term_label($taxonomy, $term_id),
-				'attachment' => cmx_carent_vertrag_attachment_or_file_info($attachment_ref),
+				'attachment' => cmx_carent_vertrag_attachment_or_file_info($attachment_ref, true),
 			];
 		}
 
@@ -1658,7 +1786,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		foreach ((array) ($uebernahme['fotos'] ?? []) as $photo_item) {
 			$photo_item = (array) $photo_item;
 			$attachment = (array) ($photo_item['attachment'] ?? []);
-			$photo_src = cmx_carent_vertrag_image_data_uri((int) ($attachment['id'] ?? 0));
+			$photo_src = cmx_carent_vertrag_photo_src($attachment);
 			if ($photo_src === '') {
 				continue;
 			}
@@ -1666,6 +1794,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				'src' => $photo_src,
 				'url' => \trim((string) ($attachment['url'] ?? '')),
 				'label' => \trim((string) ($photo_item['term_label'] ?? '')),
+				'style' => cmx_carent_vertrag_fit_image_style((string) ($attachment['path'] ?? ''), 46.7, 19.4),
 			];
 		}
 		$uebernahme_km_stand = \trim((string) ($uebernahme['km_stand'] ?? ''));
@@ -1682,12 +1811,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 		$rueckgabe_uhrzeit = \trim((string) ($rueckgabe['uhrzeit'] ?? ''));
 		$rueckgabe_video = (array) ($rueckgabe['video'] ?? []);
 		$rueckgabe_video_url = \trim((string) ($rueckgabe_video['url'] ?? ''));
+		$rueckgabe_video_label = \trim((string) ($rueckgabe_video['label'] ?? ''));
 		$rueckgabe_video_poster_src = cmx_carent_vertrag_video_poster_src((int) ($rueckgabe_video['id'] ?? 0));
 		$rueckgabe_photo_items = [];
 		foreach ((array) ($rueckgabe['fotos'] ?? []) as $photo_item) {
 			$photo_item = (array) $photo_item;
 			$attachment = (array) ($photo_item['attachment'] ?? []);
-			$photo_src = cmx_carent_vertrag_image_data_uri((int) ($attachment['id'] ?? 0));
+			$photo_src = cmx_carent_vertrag_photo_src($attachment);
 			if ($photo_src === '') {
 				continue;
 			}
@@ -1695,6 +1825,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				'src' => $photo_src,
 				'url' => \trim((string) ($attachment['url'] ?? '')),
 				'label' => \trim((string) ($photo_item['term_label'] ?? '')),
+				'style' => cmx_carent_vertrag_fit_image_style((string) ($attachment['path'] ?? ''), 46.7, 19.4),
 			];
 		}
 		$article = (array) ($vehicle['article_meta'] ?? []);
@@ -1859,14 +1990,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				.document-label{color:#001b3d;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-bottom:2mm;text-align:left}
 				.document-image{max-width:86mm;max-height:42mm;width:auto;height:auto}
 				.document-empty{height:42mm;color:#667085;font-size:9px;line-height:42mm}
-				.video-box{width:187.9mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm;font-size:9.2px}
+				.video-box{width:187.9mm;min-height:50mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm;font-size:9.2px}
 				.video-label{display:block;color:#001b3d;font-weight:800;text-transform:uppercase;margin-bottom:1mm}
 				.video-poster{display:block;max-width:86mm;max-height:42mm;width:auto;height:auto;margin-bottom:2mm;border-radius:1.3mm}
 				.video-link{display:block;color:#001b3d;text-decoration:none;font-weight:800}
 				.photo-table{width:200mm;border-collapse:separate;border-spacing:2mm 2mm;table-layout:fixed;margin:0 -1mm 4.5mm}
 				.photo-cell{width:25%;height:27.4mm;background:#f4f7fb;border:1px solid #c7d4e6;border-radius:1.3mm;text-align:center;vertical-align:middle;padding:1mm}
 				.photo-label{display:block;color:#001b3d;font-size:7.8px;font-weight:800;text-transform:uppercase;margin-bottom:1mm;text-align:left}
-				.photo-image{width:46.7mm;height:19.4mm}
+				.photo-image{display:block;margin:0 auto;border-radius:1mm}
 				.photo-empty{height:19.4mm;color:#667085;font-size:8px;line-height:19.4mm}
 				.transfer-strip{width:189mm;background:#f4f7fb;border-radius:2mm;padding:3mm 4mm;margin-bottom:4.5mm}
 				.page-break-before{page-break-before:always;break-before:page}
@@ -2094,7 +2225,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				<div class="video-box">
 					<!-- <span class="video-label">Übernahmevideo</span> -->
 					<?php if ($uebernahme_video_url !== '') : ?>
-						<a href="<?php echo \esc_url($uebernahme_video_url); ?>" class="video-link"><?php if ($uebernahme_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($uebernahme_video_poster_src); ?>" alt="" class="video-poster"><?php else : ?>Video herunterladen<?php endif; ?></a>
+						<a href="<?php echo \esc_url($uebernahme_video_url); ?>" class="video-link"><?php if ($uebernahme_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($uebernahme_video_poster_src); ?>" alt="" class="video-poster"><?php endif; ?><?php echo \esc_html($uebernahme_video_label !== '' ? $uebernahme_video_label : 'Video herunterladen'); ?></a>
 					<?php else : ?>
 						<span>Kein Video vorhanden</span>
 					<?php endif; ?>
@@ -2108,7 +2239,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 							<?php for ($photo_col_index = 0; $photo_col_index < 4; $photo_col_index++) : ?>
 								<?php $photo = (array) ($uebernahme_photo_items[($photo_row_index * 4) + $photo_col_index] ?? []); ?>
 								<td class="photo-cell">
-									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
+									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image" style="<?php echo \esc_attr((string) ($photo['style'] ?? '')); ?>"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
 								</td>
 							<?php endfor; ?>
 						</tr>
@@ -2170,7 +2301,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 				<div class="section-title"><?php echo cmx_carent_vertrag_icon_badge('video'); ?>RÜCKGABEVIDEO</div>
 				<div class="video-box">
 					<?php if ($rueckgabe_video_url !== '') : ?>
-						<a href="<?php echo \esc_url($rueckgabe_video_url); ?>" class="video-link"><?php if ($rueckgabe_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($rueckgabe_video_poster_src); ?>" alt="" class="video-poster"><?php else : ?>Video herunterladen<?php endif; ?></a>
+						<a href="<?php echo \esc_url($rueckgabe_video_url); ?>" class="video-link"><?php if ($rueckgabe_video_poster_src !== '') : ?><img src="<?php echo \esc_attr($rueckgabe_video_poster_src); ?>" alt="" class="video-poster"><?php endif; ?><?php echo \esc_html($rueckgabe_video_label !== '' ? $rueckgabe_video_label : 'Video herunterladen'); ?></a>
 					<?php else : ?>
 						<span>Kein Video vorhanden</span>
 					<?php endif; ?>
@@ -2184,7 +2315,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_render_pdf_html')) {
 							<?php for ($photo_col_index = 0; $photo_col_index < 4; $photo_col_index++) : ?>
 								<?php $photo = (array) ($rueckgabe_photo_items[($photo_row_index * 4) + $photo_col_index] ?? []); ?>
 								<td class="photo-cell">
-									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
+									<?php if (!empty($photo['src'])) : ?><span class="photo-label"><?php echo \esc_html((string) ($photo['label'] ?? '')); ?></span><?php if (!empty($photo['url'])) : ?><a href="<?php echo \esc_url((string) $photo['url']); ?>"><?php endif; ?><img src="<?php echo \esc_attr((string) $photo['src']); ?>" alt="" class="photo-image" style="<?php echo \esc_attr((string) ($photo['style'] ?? '')); ?>"><?php if (!empty($photo['url'])) : ?></a><?php endif; ?><?php else : ?><span class="photo-empty">Kein Foto</span><?php endif; ?>
 								</td>
 							<?php endfor; ?>
 						</tr>
@@ -2405,4 +2536,28 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_generate_pdf')) {
 		'file_name' => (string) ($result['file_name'] ?? ''),
 		'generated_at' => (string) ($result['generated_at'] ?? \current_time('mysql')),
 	]);
+});
+
+\add_action('admin_post_cmx_carent_live_vertrag_pdf', function (): void {
+	$post_id = isset($_GET['post_id']) ? (int) \wp_unslash($_GET['post_id']) : 0;
+	if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'carent' || !\current_user_can('edit_post', $post_id)) {
+		\wp_die(\esc_html__('Vertrag nicht gefunden.', 'cmx-misbuero'), 404);
+	}
+
+	if (!isset($_GET['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_GET['_wpnonce']), 'cmx_carent_live_vertrag_pdf_' . $post_id)) {
+		\wp_die(\esc_html__('Ungültige Anfrage.', 'cmx-misbuero'), 403);
+	}
+
+	$result = cmx_carent_vertrag_generate_pdf($post_id);
+	if (\is_wp_error($result)) {
+		\wp_die(\esc_html($result->get_error_message()), 500);
+	}
+
+	$url = \trim((string) ($result['url'] ?? ''));
+	if ($url === '') {
+		\wp_die(\esc_html__('PDF-URL konnte nicht ermittelt werden.', 'cmx-misbuero'), 500);
+	}
+
+	\wp_safe_redirect(\add_query_arg('v', \rawurlencode((string) ($result['generated_at'] ?? \time())), $url));
+	exit;
 });

@@ -19,6 +19,52 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_meta_key')) {
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_vehicle_articles_url')) {
+	function cmx_carent_dashboard_vehicle_articles_url(): string {
+		$post_type = \function_exists(__NAMESPACE__ . '\\cmx_carent_fahrzeug_post_type')
+			? (string) cmx_carent_fahrzeug_post_type()
+			: 'artikel';
+		if ($post_type === '' || !\post_type_exists($post_type)) {
+			$post_type = 'artikel';
+		}
+
+		$args = ['post_type' => $post_type];
+		$taxonomy = '';
+		if (\defined(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN')) {
+			$taxonomy = (string) \constant(__NAMESPACE__ . '\\TAX_ARTIKEL_TYPEN');
+		}
+		if ($taxonomy === '' && \function_exists(__NAMESPACE__ . '\\cmx_tax_typen')) {
+			$taxonomy = (string) cmx_tax_typen();
+		}
+		if ($taxonomy === '' && \function_exists(__NAMESPACE__ . '\\cmx_artikel_taxonomy_slug')) {
+			$taxonomy = (string) cmx_artikel_taxonomy_slug('Typen');
+		}
+
+		if ($taxonomy !== '' && \taxonomy_exists($taxonomy)) {
+			$term = false;
+			foreach (['autovermietung', 'mietfahrzeug'] as $slug) {
+				$term = \get_term_by('slug', $slug, $taxonomy);
+				if ($term && !\is_wp_error($term)) {
+					break;
+				}
+			}
+			if (!$term || \is_wp_error($term)) {
+				foreach (['Autovermietung', 'Mietfahrzeug'] as $name) {
+					$term = \get_term_by('name', $name, $taxonomy);
+					if ($term && !\is_wp_error($term)) {
+						break;
+					}
+				}
+			}
+			if ($term && !\is_wp_error($term)) {
+				$args[$taxonomy] = (string) $term->slug;
+			}
+		}
+
+		return \add_query_arg($args, \admin_url('edit.php'));
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_date_from_request')) {
 	function cmx_carent_dashboard_date_from_request(string $key, string $fallback): string {
 		$value = isset($_GET[$key]) ? \trim((string) \wp_unslash($_GET[$key])) : '';
@@ -33,22 +79,33 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_date_from_request'
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_preset_options')) {
 	function cmx_carent_dashboard_preset_options(): array {
 		return [
-			'today'        => 'Heute',
-			'this_week'    => 'Diese Woche',
-			'this_month'   => 'Dieser Monat',
-			'this_quarter' => 'Dieses Quartal',
-			'this_year'    => 'Dieses Jahr',
-			'custom'       => 'Individuell',
+			'heute'                => 'Heute (heute bis heute)',
+			'diesen_monat'         => 'Diesen Monat',
+			'letzten_monat'        => 'Letzten Monat',
+			'vorletzten_monat'     => 'Vorletzten Monat',
+			'dieses_quartal'       => 'Dieses Quartal',
+			'letztes_quartal'      => 'Letztes Quartal',
+			'vorletztes_quartal'   => 'Vorletztes Quartal',
+			'dieses_jahr'          => 'Dieses Jahr',
+			'letztes_jahr'         => 'Letztes Jahr',
+			'vorletztes_jahr'      => 'Vorletztes Jahr',
 		];
 	}
 }
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_requested_preset')) {
 	function cmx_carent_dashboard_requested_preset(): string {
-		$preset = isset($_GET['cmx_range']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_range'])) : 'this_month';
+		$preset = isset($_GET['cmx_range']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_range'])) : 'diesen_monat';
+		$legacy_map = [
+			'today'        => 'heute',
+			'this_month'   => 'diesen_monat',
+			'this_quarter' => 'dieses_quartal',
+			'this_year'    => 'dieses_jahr',
+		];
+		$preset = (string) ($legacy_map[$preset] ?? $preset);
 		$options = cmx_carent_dashboard_preset_options();
 
-		return isset($options[$preset]) ? $preset : 'this_month';
+		return isset($options[$preset]) ? $preset : 'diesen_monat';
 	}
 }
 
@@ -60,16 +117,18 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_preset_range')) {
 		}
 
 		switch ($preset) {
-			case 'today':
+			case 'heute':
 				return [\date('Y-m-d', $now), \date('Y-m-d', $now)];
 
-			case 'this_week':
-				$weekday = (int) \date('N', $now);
-				$monday = \strtotime('-' . ($weekday - 1) . ' days', $now);
-				$sunday = \strtotime('+' . (7 - $weekday) . ' days', $now);
-				return [\date('Y-m-d', $monday ?: $now), \date('Y-m-d', $sunday ?: $now)];
+			case 'letzten_monat':
+				$base = \strtotime('first day of last month', $now) ?: $now;
+				return [\date('Y-m-01', $base), \date('Y-m-t', $base)];
 
-			case 'this_quarter':
+			case 'vorletzten_monat':
+				$base = \strtotime('first day of -2 months', $now) ?: $now;
+				return [\date('Y-m-01', $base), \date('Y-m-t', $base)];
+
+			case 'dieses_quartal':
 				$month = (int) \date('n', $now);
 				$year = (int) \date('Y', $now);
 				$quarter_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
@@ -78,10 +137,26 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_preset_range')) {
 				$to = \date('Y-m-t', \strtotime(\sprintf('%04d-%02d-01', $year, $quarter_end_month)) ?: $now);
 				return [$from, $to];
 
-			case 'this_year':
+			case 'letztes_quartal':
+			case 'vorletztes_quartal':
+				$month = (int) \date('n', $now);
+				$year = (int) \date('Y', $now);
+				$quarter_start_month = ((int) \floor(($month - 1) / 3) * 3) + 1;
+				$offset = $preset === 'letztes_quartal' ? -3 : -6;
+				$start_ts = \strtotime($offset . ' months', \strtotime(\sprintf('%04d-%02d-01', $year, $quarter_start_month)) ?: $now) ?: $now;
+				$end_ts = \strtotime('+2 months', $start_ts) ?: $start_ts;
+				return [\date('Y-m-01', $start_ts), \date('Y-m-t', $end_ts)];
+
+			case 'dieses_jahr':
 				return [\date('Y-01-01', $now), \date('Y-12-31', $now)];
 
-			case 'this_month':
+			case 'letztes_jahr':
+				return [\date('Y-01-01', \strtotime('-1 year', $now) ?: $now), \date('Y-12-31', \strtotime('-1 year', $now) ?: $now)];
+
+			case 'vorletztes_jahr':
+				return [\date('Y-01-01', \strtotime('-2 years', $now) ?: $now), \date('Y-12-31', \strtotime('-2 years', $now) ?: $now)];
+
+			case 'diesen_monat':
 			default:
 				return [\date('Y-m-01', $now), \date('Y-m-t', $now)];
 		}
@@ -91,9 +166,9 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_preset_range')) {
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_range')) {
 	function cmx_carent_dashboard_range(): array {
 		$preset = cmx_carent_dashboard_requested_preset();
-		[$default_from, $default_to] = cmx_carent_dashboard_preset_range($preset !== 'custom' ? $preset : 'this_month');
-		$from = $preset !== 'custom' ? $default_from : cmx_carent_dashboard_date_from_request('cmx_from', $default_from);
-		$to = $preset !== 'custom' ? $default_to : cmx_carent_dashboard_date_from_request('cmx_to', $default_to);
+		[$default_from, $default_to] = cmx_carent_dashboard_preset_range($preset);
+		$from = cmx_carent_dashboard_date_from_request('cmx_from', $default_from);
+		$to = cmx_carent_dashboard_date_from_request('cmx_to', $default_to);
 
 		if (\strtotime($from) > \strtotime($to)) {
 			[$from, $to] = [$to, $from];
@@ -160,14 +235,64 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_vehicle_label')) {
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_vehicle_image')) {
 	function cmx_carent_dashboard_vehicle_image(int $article_id): string {
-		if ($article_id <= 0 || !\has_post_thumbnail($article_id)) {
+		if ($article_id <= 0) {
 			return '<span class="dashicons dashicons-car"></span>';
 		}
 
-		return (string) \get_the_post_thumbnail($article_id, 'thumbnail', [
-			'class' => 'cmx-carent-dashboard-vehicle-image',
-			'alt'   => '',
+		$image_url = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_admin_image_src')) {
+			$image_url = \trim((string) cmx_artikel_admin_image_src($article_id));
+		}
+		if ($image_url === '') {
+			$image_url = \trim((string) \get_post_meta($article_id, '_cmx_local_image_artikel_url', true));
+		}
+		if ($image_url !== '') {
+			return '<img class="cmx-carent-dashboard-vehicle-image" src="' . \esc_url($image_url) . '" alt="">';
+		}
+		if (\has_post_thumbnail($article_id)) {
+			return (string) \get_the_post_thumbnail($article_id, 'thumbnail', [
+				'class' => 'cmx-carent-dashboard-vehicle-image',
+				'alt'   => '',
+			]);
+		}
+
+		return '<span class="dashicons dashicons-car"></span>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_vehicle_article_ids')) {
+	function cmx_carent_dashboard_vehicle_article_ids(): array {
+		$ids = \function_exists(__NAMESPACE__ . '\\cmx_carent_admin_used_article_ids')
+			? (array) cmx_carent_admin_used_article_ids()
+			: [];
+
+		$meta_keys = [
+			\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR') ? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_CHASSI_NR') : '_cmx_artikel_carent_chassi_nr',
+			\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN') ? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KENNZEICHEN') : '_cmx_artikel_carent_kennzeichen',
+			\defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND') ? (string) \constant(__NAMESPACE__ . '\\CMX_ARTIKEL_META_CARENT_KM_STAND') : '_cmx_artikel_carent_km_stand',
+		];
+		$meta_query = ['relation' => 'OR'];
+		foreach (\array_values(\array_unique($meta_keys)) as $meta_key) {
+			$meta_query[] = [
+				'key'     => $meta_key,
+				'value'   => '',
+				'compare' => '!=',
+			];
+		}
+
+		$article_ids = \get_posts([
+			'post_type'              => 'artikel',
+			'post_status'            => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => $meta_query,
 		]);
+
+		$ids = \array_merge($ids, \is_array($article_ids) ? $article_ids : []);
+		return \array_values(\array_unique(\array_filter(\array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
 	}
 }
 
@@ -294,7 +419,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 
 			$km_start = cmx_carent_dashboard_int_meta($post_id, $km_start_key);
 			$km_end = cmx_carent_dashboard_int_meta($post_id, $km_end_key);
-			$driven_km = $km_end > $km_start ? $km_end - $km_start : 0;
+			$is_complete_in_range = $start_ts >= $from_ts && $end_ts <= $to_ts;
+			$driven_km = ($is_complete_in_range && $km_end > $km_start) ? $km_end - $km_start : 0;
 
 			$vehicles[$key]['bookings']++;
 			$vehicles[$key]['km_total'] += $driven_km;
@@ -320,15 +446,19 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_collect_data')) {
 			return \strnatcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
 		});
 
+		$fleet_vehicle_count = \count(cmx_carent_dashboard_vehicle_article_ids());
 		$vehicle_count = \count($vehicles);
+		$capacity_vehicle_count = \max($fleet_vehicle_count, $vehicle_count);
 		$total_rented_days = \array_sum(\array_map(static fn(array $vehicle): int => (int) ($vehicle['rented_days'] ?? 0), $vehicles));
-		$total_idle_days = \array_sum(\array_map(static fn(array $vehicle): int => (int) ($vehicle['idle_days'] ?? 0), $vehicles));
-		$capacity_days = $vehicle_count * $range_days;
+		$capacity_days = $capacity_vehicle_count * $range_days;
+		$total_idle_days = \max(0, $capacity_days - $total_rented_days);
 
 		return [
 			'from'              => $from,
 			'to'                => $to,
 			'range_days'        => $range_days,
+			'fleet_vehicle_count' => $capacity_vehicle_count,
+			'capacity_days'     => $capacity_days,
 			'vehicles'          => \array_values($vehicles),
 			'total_km'          => $total_km,
 			'total_bookings'    => $total_bookings,
@@ -475,17 +605,22 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_export')) {
 		if ($out === false) {
 			exit;
 		}
-		\fputcsv($out, ['Fahrzeug', 'Kennzeichen', 'Auslastung %', 'Vermietete Tage', 'Verfügbare Tage', 'Gefahrene km', 'Ø km pro Vermietungstag', 'Standzeit Tage', 'Anzahl Buchungen'], ';');
+		\fputcsv($out, ['Fahrzeug', 'Kennzeichen', 'Gesamtauslastung Fahrzeug %', 'Vermietete Tage', 'Verfügbare Fahrzeugtage', 'Gefahrene km', 'Ø km pro Vermiettag', 'Standzeit %', 'Standzeit Tage', 'Anzahl Buchungen'], ';');
 		foreach ((array) $data['vehicles'] as $vehicle) {
+			$range_days = (int) ($data['range_days'] ?? 0);
+			$idle_days = (int) ($vehicle['idle_days'] ?? 0);
+			$idle_percent = $range_days > 0 ? ($idle_days / $range_days) * 100 : 0;
+
 			\fputcsv($out, [
 				(string) ($vehicle['label'] ?? ''),
 				(string) ($vehicle['kennzeichen'] ?? ''),
 				\number_format((float) ($vehicle['utilization'] ?? 0), 1, '.', ''),
 				(int) ($vehicle['rented_days'] ?? 0),
-				(int) ($data['range_days'] ?? 0),
+				$range_days,
 				(int) ($vehicle['km_total'] ?? 0),
 				\number_format((float) ($vehicle['avg_km_per_day'] ?? 0), 1, '.', ''),
-				(int) ($vehicle['idle_days'] ?? 0),
+				\number_format($idle_percent, 1, '.', ''),
+				$idle_days,
 				(int) ($vehicle['bookings'] ?? 0),
 			], ';');
 		}
@@ -522,13 +657,14 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_bar_chart')) {
 			$max = \max($max, (float) ($vehicle[$metric] ?? 0));
 		}
 		$max = $max > 0 ? $max : 1;
-		$items = \array_slice($vehicles, 0, 8);
+		$items = $vehicles;
 
 		echo '<section class="cmx-carent-dashboard-chart-card">';
 		echo '<h2>' . \esc_html($label) . '</h2>';
 		if ($items === []) {
 			echo '<p class="cmx-carent-dashboard-empty">Keine Daten im gewählten Zeitraum.</p>';
 		} else {
+			echo '<div class="cmx-carent-dashboard-bars-scroll">';
 			echo '<div class="cmx-carent-dashboard-bars">';
 			foreach ($items as $vehicle) {
 				$value = (float) ($vehicle[$metric] ?? 0);
@@ -542,6 +678,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_bar_chart')) {
 				echo '<div class="cmx-carent-dashboard-bar-label">' . \esc_html((string) $short) . '</div>';
 				echo '</div>';
 			}
+			echo '</div>';
 			echo '</div>';
 		}
 		echo '</section>';
@@ -609,6 +746,8 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 			.cmx-carent-dashboard-filter select{min-width:170px}
 			.cmx-carent-dashboard-button{min-height:38px;border:1px solid #d7dde8;border-radius:6px;background:#fff;color:#111827;text-decoration:none;display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-weight:700}
 			.cmx-carent-dashboard-button:hover{border-color:#94a3b8;color:#111827}
+			.cmx-carent-dashboard-button.is-disabled{color:#94a3b8;background:#f8fafc;border-color:#e2e8f0;cursor:not-allowed;pointer-events:none}
+			.cmx-carent-dashboard-button.is-disabled .dashicons{color:#94a3b8}
 			.cmx-carent-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:18px}
 			.cmx-carent-dashboard-card,.cmx-carent-dashboard-kpi,.cmx-carent-dashboard-chart-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
 			.cmx-carent-dashboard-kpi{display:flex;gap:18px;padding:22px}
@@ -632,8 +771,11 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 			.cmx-carent-dashboard-table-card{padding:18px;margin-bottom:18px}
 			.cmx-carent-dashboard-card-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
 			.cmx-carent-dashboard-card-head h2,.cmx-carent-dashboard-chart-card h2{font-size:18px;line-height:1.25;margin:0;font-weight:800}
+			.cmx-carent-dashboard-card-title-link{color:#111827;text-decoration:none}
+			.cmx-carent-dashboard-card-title-link:hover{color:#b91c1c}
+			.cmx-carent-dashboard-table-scroll{max-height:424px;overflow-y:auto;overflow-x:auto}
 			.cmx-carent-dashboard-table{width:100%;border-collapse:collapse}
-			.cmx-carent-dashboard-table th{font-size:12px;color:#334155;text-align:left;border-bottom:1px solid #e2e8f0;padding:10px 10px;font-weight:800}
+			.cmx-carent-dashboard-table th{font-size:12px;color:#334155;text-align:left;border-bottom:1px solid #e2e8f0;padding:10px 10px;font-weight:800;position:sticky;top:0;background:#fff;z-index:1}
 			.cmx-carent-dashboard-table td{padding:11px 10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 			.cmx-carent-dashboard-vehicle{display:flex;align-items:center;gap:12px;min-width:230px}
 			.cmx-carent-dashboard-vehicle-thumb{width:72px;height:46px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#64748b;flex:0 0 auto}
@@ -647,13 +789,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 			.cmx-carent-dashboard-mini-progress .cmx-carent-dashboard-progress{height:5px}
 			.cmx-carent-dashboard-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 			.cmx-carent-dashboard-chart-card{padding:18px;min-height:235px}
-			.cmx-carent-dashboard-bars{height:170px;display:flex;align-items:end;gap:18px;margin-top:16px;border-bottom:1px solid #e2e8f0}
-			.cmx-carent-dashboard-bar-item{height:100%;display:flex;flex:1;min-width:0;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px}
+			.cmx-carent-dashboard-bars-scroll{overflow-x:auto;overflow-y:hidden}
+			.cmx-carent-dashboard-bars{height:170px;display:flex;align-items:end;gap:18px;margin-top:16px;border-bottom:1px solid #e2e8f0;min-width:max-content}
+			.cmx-carent-dashboard-bar-item{height:100%;display:flex;flex:0 0 calc((100% - 72px) / 5);min-width:86px;max-width:110px;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px}
 			.cmx-carent-dashboard-bar-value{font-size:11px;font-weight:800;color:#111827;white-space:nowrap}
 			.cmx-carent-dashboard-bar-track{height:110px;width:34px;display:flex;align-items:flex-end;justify-content:center}
 			.cmx-carent-dashboard-bar-track span{display:block;width:100%;border-radius:5px 5px 0 0}
 			.cmx-carent-dashboard-bar-label{font-size:11px;color:#334155;max-width:82px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-			.cmx-carent-dashboard-note{display:flex;align-items:center;gap:8px;color:#64748b;margin:14px 0 0;font-size:13px}
 			.cmx-carent-dashboard-empty{margin:18px 0;color:#64748b}
 			@media (max-width:1200px){.cmx-carent-dashboard-grid,.cmx-carent-dashboard-charts{grid-template-columns:repeat(2,minmax(0,1fr))}.cmx-carent-dashboard-top{display:block}.cmx-carent-dashboard-filter{margin-top:16px}}
 			@media (max-width:782px){.cmx-carent-dashboard-shell{width:calc(100% - 10px);margin-right:10px}.cmx-carent-dashboard-grid,.cmx-carent-dashboard-charts{grid-template-columns:1fr}.cmx-carent-dashboard-table{display:block;overflow-x:auto}.cmx-carent-dashboard-filter select,.cmx-carent-dashboard-filter input[type=date]{width:100%}}
@@ -663,7 +805,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 		echo '<div class="cmx-carent-dashboard-top">';
 		echo '<div class="cmx-carent-dashboard-title">';
 		echo '<div class="cmx-carent-dashboard-title-icon"><span class="dashicons dashicons-car"></span></div>';
-		echo '<div><h1>CaRent Dashboard</h1><p class="cmx-carent-dashboard-subtitle">Übersicht der Fahrzeugnutzung für den gewählten Zeitraum</p></div>';
+		echo '<div><h1>Dashboard</h1><p class="cmx-carent-dashboard-subtitle">Übersicht der Fahrzeugnutzung für den gewählten Zeitraum</p></div>';
 		echo '</div>';
 		echo '<form class="cmx-carent-dashboard-filter" method="get">';
 		echo '<input type="hidden" name="post_type" value="carent">';
@@ -685,13 +827,13 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 				var select = document.getElementById("cmx-carent-dashboard-range");
 				var from = document.getElementById("cmx-carent-dashboard-from");
 				var to = document.getElementById("cmx-carent-dashboard-to");
-				var ranges = ' . \wp_json_encode([
-					'today' => cmx_carent_dashboard_preset_range('today'),
-					'this_week' => cmx_carent_dashboard_preset_range('this_week'),
-					'this_month' => cmx_carent_dashboard_preset_range('this_month'),
-					'this_quarter' => cmx_carent_dashboard_preset_range('this_quarter'),
-					'this_year' => cmx_carent_dashboard_preset_range('this_year'),
-				]) . ';
+				var ranges = ' . \wp_json_encode(\array_combine(
+					\array_keys(cmx_carent_dashboard_preset_options()),
+					\array_map(
+					static fn(string $preset): array => cmx_carent_dashboard_preset_range($preset),
+					\array_keys(cmx_carent_dashboard_preset_options())
+					)
+				)) . ';
 				if (select) {
 					select.addEventListener("change", function(){
 						var range = ranges[select.value] || null;
@@ -705,33 +847,39 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 				[from, to].forEach(function(field){
 					if (!field) return;
 					field.addEventListener("change", function(){
-						if (select) select.value = "custom";
+						if (select) select.dataset.manualRange = "1";
 					});
 				});
 			})();
 		</script>';
 
 		echo '<div class="cmx-carent-dashboard-grid">';
-		cmx_carent_dashboard_kpi_card('green', 'dashicons-dashboard', 'Auslastung (Ø)', \number_format_i18n((float) $data['utilization'], 0) . ' %', 'aus abgeschlossenen Verträgen', (float) $data['utilization']);
-		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø gefahrene KM pro Tag', \number_format_i18n((float) $data['avg_km_per_day'], 0) . ' km', 'der Vermietung', -1, 'cmx-carent-dashboard-chart-avg-km');
-		cmx_carent_dashboard_kpi_card('purple', 'dashicons-performance', 'Gefahrene km (gesamt)', \number_format_i18n((int) $data['total_km']) . ' km', 'Summe Rückgabe minus Übernahme', -1, 'cmx-carent-dashboard-chart-total-km');
-		cmx_carent_dashboard_kpi_card('orange', 'dashicons-clock', 'Standzeit (gesamt)', \number_format_i18n((int) $data['total_idle_days']) . ' Tage', 'nicht vermietete Tage im Zeitraum', -1, 'cmx-carent-dashboard-chart-idle-days');
+		cmx_carent_dashboard_kpi_card('green', 'dashicons-dashboard', 'Gesamtauslastung (%)', \number_format_i18n((float) $data['utilization'], 0) . ' %', 'Vermiettage / Kalendertage', (float) $data['utilization']);
+		cmx_carent_dashboard_kpi_card('blue', 'dashicons-chart-line', 'Ø km pro Vermiettag', \number_format_i18n((float) $data['avg_km_per_day'], 0) . ' km', 'gefahrene km / Vermiettage', -1, 'cmx-carent-dashboard-chart-avg-km');
+		cmx_carent_dashboard_kpi_card('purple', 'dashicons-performance', 'Gefahrene km (gesamt)', \number_format_i18n((int) $data['total_km']) . ' km', 'Übergabe bis Rückgabe im Zeitraum', -1, 'cmx-carent-dashboard-chart-total-km');
+		cmx_carent_dashboard_kpi_card('orange', 'dashicons-clock', 'Standtage Flotte', \number_format_i18n((int) $data['total_idle_days']) . ' Tage', 'nicht verbuchte Vermiettage', -1, 'cmx-carent-dashboard-chart-idle-days');
 		echo '</div>';
 
 		echo '<section class="cmx-carent-dashboard-card cmx-carent-dashboard-table-card">';
-		echo '<div class="cmx-carent-dashboard-card-head"><h2>Fahrzeugübersicht</h2><a class="cmx-carent-dashboard-button" href="' . \esc_url($export_url) . '"><span class="dashicons dashicons-download"></span>Exportieren</a></div>';
+		$vehicle_articles_url = cmx_carent_dashboard_vehicle_articles_url();
+		$export_button = $vehicles === []
+			? '<span class="cmx-carent-dashboard-button is-disabled" aria-disabled="true"><span class="dashicons dashicons-download"></span>Exportieren</span>'
+			: '<a class="cmx-carent-dashboard-button" href="' . \esc_url($export_url) . '"><span class="dashicons dashicons-download"></span>Exportieren</a>';
+		echo '<div class="cmx-carent-dashboard-card-head"><h2><a class="cmx-carent-dashboard-card-title-link" href="' . \esc_url($vehicle_articles_url) . '">Fahrzeugübersicht</a></h2>' . $export_button . '</div>';
 		if ($vehicles === []) {
 			echo '<p class="cmx-carent-dashboard-empty">Keine abgeschlossenen Vermietungen im gewählten Zeitraum gefunden.</p>';
 		} else {
+			echo '<div class="cmx-carent-dashboard-table-scroll">';
 			echo '<table class="cmx-carent-dashboard-table">';
 			echo '<thead><tr>';
-			echo '<th>Fahrzeug</th><th>Auslastung<br><span class="cmx-carent-dashboard-cell-sub">(vermietete / verfügbare Tage)</span></th><th>Gefahrene km<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th><th>Ø gefahrene KM pro Tag<br><span class="cmx-carent-dashboard-cell-sub">(Vermietung)</span></th><th>Standzeit<br><span class="cmx-carent-dashboard-cell-sub">(nicht vermietete Tage)</span></th><th>Anzahl Buchungen<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th>';
+			echo '<th>Fahrzeug</th><th>Gesamtauslastung (%)<br><span class="cmx-carent-dashboard-cell-sub">(Fahrzeug-Vermiettage / verfügbare Fahrzeugtage)</span></th><th>Gefahrene km<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th><th>Ø km pro Vermiettag<br><span class="cmx-carent-dashboard-cell-sub">(Fahrzeug-km / Fahrzeug-Vermiettage)</span></th><th>Standzeit (%)<br><span class="cmx-carent-dashboard-cell-sub">(Tage ohne Vermietung / verfügbare Fahrzeugtage)</span></th><th>Anzahl Buchungen<br><span class="cmx-carent-dashboard-cell-sub">(im Zeitraum)</span></th>';
 			echo '</tr></thead><tbody>';
 			foreach ($vehicles as $vehicle) {
 				$utilization = (float) ($vehicle['utilization'] ?? 0);
 				$util_color = cmx_carent_dashboard_color($utilization);
 				$idle_days = (int) ($vehicle['idle_days'] ?? 0);
-				$idle_color = cmx_carent_dashboard_color((float) $idle_days, true);
+				$idle_percent = (int) $data['range_days'] > 0 ? ($idle_days / (int) $data['range_days']) * 100 : 0;
+				$idle_color = cmx_carent_dashboard_color((float) $idle_percent, true);
 				$km_total = (int) ($vehicle['km_total'] ?? 0);
 				$km_ratio = (int) $data['total_km'] > 0 ? ($km_total / (int) $data['total_km']) * 100 : 0;
 				$avg_km = (float) ($vehicle['avg_km_per_day'] ?? 0);
@@ -742,11 +890,12 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 				echo '<td><div class="cmx-carent-dashboard-cell-main" style="color:' . \esc_attr($util_color) . '">' . \esc_html(\number_format_i18n($utilization, 0)) . ' %</div><div class="cmx-carent-dashboard-mini-progress">' . cmx_carent_dashboard_progress($utilization, $util_color) . '</div><div class="cmx-carent-dashboard-cell-sub">' . (int) ($vehicle['rented_days'] ?? 0) . ' / ' . (int) $data['range_days'] . ' Tage</div></td>';
 				echo '<td><div class="cmx-carent-dashboard-cell-main blue">' . \esc_html(\number_format_i18n($km_total)) . ' km</div><div class="cmx-carent-dashboard-mini-progress">' . cmx_carent_dashboard_progress($km_ratio, '#2563eb') . '</div></td>';
 				echo '<td><div class="cmx-carent-dashboard-cell-main purple">' . \esc_html(\number_format_i18n($avg_km, 0)) . ' km</div><div class="cmx-carent-dashboard-mini-progress">' . cmx_carent_dashboard_progress($avg_ratio, '#6d28d9') . '</div></td>';
-				echo '<td><div class="cmx-carent-dashboard-cell-main orange" style="color:' . \esc_attr($idle_color) . '">' . \esc_html(\number_format_i18n($idle_days)) . ' Tage</div><div class="cmx-carent-dashboard-mini-progress">' . cmx_carent_dashboard_progress(\min(100, ($idle_days / (int) $data['range_days']) * 100), $idle_color) . '</div></td>';
+				echo '<td><div class="cmx-carent-dashboard-cell-main orange" style="color:' . \esc_attr($idle_color) . '">' . \esc_html(\number_format_i18n($idle_percent, 0)) . ' %</div><div class="cmx-carent-dashboard-mini-progress">' . cmx_carent_dashboard_progress($idle_percent, $idle_color) . '</div><div class="cmx-carent-dashboard-cell-sub">' . \esc_html(\number_format_i18n($idle_days)) . ' Tage</div></td>';
 				echo '<td><div class="cmx-carent-dashboard-cell-main">' . (int) ($vehicle['bookings'] ?? 0) . '</div><div class="cmx-carent-dashboard-cell-sub">Abgeschlossen</div></td>';
 				echo '</tr>';
 			}
 			echo '</tbody></table>';
+			echo '</div>';
 		}
 		echo '</section>';
 
@@ -756,7 +905,6 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_render')) {
 		cmx_carent_dashboard_bar_chart($vehicles, 'idle_days', 'Standzeit pro Fahrzeug (Tage)', ' Tage', true);
 		echo '</div>';
 
-		echo '<p class="cmx-carent-dashboard-note"><span class="dashicons dashicons-info"></span>Die Auswertung basiert auf abgeschlossenen Vermietungen im gewählten Zeitraum (' . \esc_html(cmx_carent_dashboard_format_date($from)) . ' - ' . \esc_html(cmx_carent_dashboard_format_date($to)) . ').</p>';
 		echo '</div></div>';
 	}
 }

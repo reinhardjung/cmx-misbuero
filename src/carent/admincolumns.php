@@ -32,6 +32,45 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_insert_columns_after')
 	}
 }
 
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_insert_views_after')) {
+	function cmx_carent_admin_insert_views_after(array $views, string $after_key, array $new_views): array {
+		if (empty($new_views)) {
+			return $views;
+		}
+
+		$reordered = [];
+		$inserted = false;
+
+		foreach ($views as $key => $html) {
+			$reordered[$key] = $html;
+			if ($key === $after_key) {
+				foreach ($new_views as $new_key => $new_html) {
+					$reordered[$new_key] = $new_html;
+				}
+				$inserted = true;
+			}
+		}
+
+		if (!$inserted) {
+			foreach ($new_views as $new_key => $new_html) {
+				$reordered[$new_key] = $new_html;
+			}
+		}
+
+		return $reordered;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_external_view_link')) {
+	function cmx_carent_admin_external_view_link(string $url, string $label): string {
+		if ($url === '') {
+			return '';
+		}
+
+		return '<a href="' . \esc_url($url) . '">' . \esc_html($label) . '</a>';
+	}
+}
+
 if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_linked_article_id')) {
 	function cmx_carent_admin_linked_article_id(int $post_id): int {
 		$meta_key = \defined(__NAMESPACE__ . '\\CMX_CARENT_FAHRZEUG_META')
@@ -476,6 +515,41 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	}
 }
 
+\add_action('admin_menu', function (): void {
+	\remove_submenu_page('edit.php?post_type=carent', 'cmx-carent-dashboard');
+	\remove_submenu_page('edit.php?post_type=carent', 'cmx-carent-vermietung');
+}, 99);
+
+\add_action('current_screen', function ($screen): void {
+	if (!$screen || (string) ($screen->id ?? '') !== 'carent_page_cmx-carent-dashboard') {
+		return;
+	}
+
+	global $title;
+	$title = \__('CaRent Übersicht', 'cmx-misbuero');
+});
+
+\add_filter('views_edit-carent', function (array $views): array {
+	$new_views = [];
+
+	$dashboard_url = (string) \admin_url('edit.php?post_type=carent&page=cmx-carent-dashboard');
+	$dashboard_cap = \function_exists(__NAMESPACE__ . '\\cmx_carent_dashboard_capability')
+		? (string) cmx_carent_dashboard_capability()
+		: 'edit_posts';
+	if (\current_user_can($dashboard_cap)) {
+		$new_views['cmx_carent_dashboard'] = cmx_carent_admin_external_view_link($dashboard_url, \__('Übersicht', 'cmx-misbuero'));
+	}
+
+	$vermietung_url = \function_exists(__NAMESPACE__ . '\\cmx_vermietung_url')
+		? (string) cmx_vermietung_url()
+		: '';
+	if ($vermietung_url !== '' && \current_user_can('edit_posts')) {
+		$new_views['cmx_carent_vermietung'] = cmx_carent_admin_external_view_link($vermietung_url, \__('Vermietung', 'cmx-misbuero'));
+	}
+
+	return cmx_carent_admin_insert_views_after($views, 'trash', $new_views);
+}, 20);
+
 \add_filter('manage_carent_posts_columns', function (array $columns): array {
 	$new_columns = [
 		'cmx_carent_artikel'     => \__('Artikel', 'cmx-misbuero'),
@@ -486,10 +560,27 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 		'cmx_carent_rueckgabe'   => \__('Rückgabe', 'cmx-misbuero'),
 	];
 
-	return cmx_carent_admin_insert_columns_after($columns, 'title', $new_columns);
+	$columns = cmx_carent_admin_insert_columns_after($columns, 'title', $new_columns);
+	$columns['cmx_carent_vertrag'] = \__('Vertrag', 'cmx-misbuero');
+
+	return $columns;
 }, 20);
 
 \add_action('manage_carent_posts_custom_column', function (string $column, int $post_id): void {
+	if ($column === 'cmx_carent_vertrag') {
+		$live_icon = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_live_icon_link')
+			? (string) cmx_carent_vertrag_live_icon_link($post_id, 'cmx-carent-vertrag-live-link is-list')
+			: '';
+		$pdf_icon = \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_icon_link')
+			? (string) cmx_carent_vertrag_pdf_icon_link($post_id, 'cmx-carent-vertrag-pdf-link is-list')
+			: '';
+
+		echo ($live_icon !== '' || $pdf_icon !== '') // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			? '<span class="cmx-carent-vertrag-actions">' . $live_icon . $pdf_icon . '</span>'
+			: '<span aria-hidden="true"></span>';
+		return;
+	}
+
 	if ($column === 'cmx_carent_artikel') {
 		$artikel_id = cmx_carent_admin_linked_article_id($post_id);
 		$label = cmx_carent_admin_article_label($artikel_id, $post_id);
@@ -550,6 +641,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_carent_admin_edit_link')) {
 	}
 
 	echo '<style>
+		.wp-list-table .column-cmx_carent_vertrag{width:82px;text-align:center;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_artikel{width:25%;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_kontakt{width:22%;white-space:nowrap}
 		.wp-list-table .column-cmx_carent_status{width:120px;white-space:nowrap}

@@ -7,9 +7,9 @@ function cmx_remove_comments_menu() {
 	$is_cloudmeister_switched = \function_exists(__NAMESPACE__ . '\\cmx_user_switch_is_cloudmeister_switched')
 		&& cmx_user_switch_is_cloudmeister_switched();
 
-	if (isset($menu[2][0])) { $menu[2][0] = 'Dashboard'; }	// "Dashboard" -> Übersicht
+	if (isset($menu[2][0])) { $menu[2][0] = 'Start'; }
 	if (isset($submenu['index.php'][0][0])) {
-		$submenu['index.php'][0][0] = 'Übersicht';
+		$submenu['index.php'][0][0] = 'Start';
 	}
 
 	remove_menu_page('edit.php');									// Beiträge

@@ -457,6 +457,7 @@ add_action('add_meta_boxes', function() {
 				$is_belege    = ($post_type === 'belege');
 				$is_kontakte  = ($post_type === 'kontakte');
 				$is_artikel   = ($post_type === 'artikel');
+				$is_carent    = ($post_type === 'carent');
 				$is_add_screen = (($screen->action ?? '') === 'add');
 			$pt_obj       = get_post_type_object($post_type);
 			$singular     = $pt_obj->labels->singular_name ?? '';
@@ -545,6 +546,12 @@ add_action('add_meta_boxes', function() {
 					: '';
 				$artikel_katalog_icon_html = ($is_artikel && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_artikel_katalog_icon_html'))
 					? (string) cmx_artikel_katalog_icon_html((int) $post->ID)
+					: '';
+				$carent_vertrag_icon_html = ($is_carent && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_live_icon_link'))
+					? (string) cmx_carent_vertrag_live_icon_link((int) $post->ID)
+					: '';
+				$carent_vertrag_pdf_icon_html = ($is_carent && (int) $post->ID > 0 && \function_exists(__NAMESPACE__ . '\\cmx_carent_vertrag_pdf_icon_link'))
+					? (string) cmx_carent_vertrag_pdf_icon_link((int) $post->ID)
 					: '';
 
 				echo '<div style="padding:2px 0 8px;">';
@@ -825,7 +832,7 @@ add_action('add_meta_boxes', function() {
 						'cmx_belegeingang_confirm_' . (int) $post->ID
 					);
 				}
-					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $show_pdf_icons || $belegeingang_confirm_url !== '' || $kontakt_belege_url !== '' || $kontakt_telefonbuch_url !== '') {
+					if ($delete_link || $dup_link !== '' || $new_beleg_url !== '' || $new_beleg_from_artikel_url !== '' || $artikel_katalog_icon_html !== '' || $carent_vertrag_icon_html !== '' || $carent_vertrag_pdf_icon_html !== '' || $show_pdf_icons || $belegeingang_confirm_url !== '' || $kontakt_belege_url !== '' || $kontakt_telefonbuch_url !== '') {
 						$justify = $is_belege ? 'space-between' : 'flex-start';
 							echo '<div style="margin-top:8px; padding-top:0; display:flex; justify-content:'.$justify.'; align-items:center; gap:8px;">';
 						if ($dup_link !== '') {
@@ -839,6 +846,9 @@ add_action('add_meta_boxes', function() {
 						}
 						if ($artikel_katalog_icon_html !== '') {
 							echo '<span style="display:inline-flex;margin-left:15px;">' . $artikel_katalog_icon_html . '</span>';
+						}
+						if ($carent_vertrag_icon_html !== '' || $carent_vertrag_pdf_icon_html !== '') {
+							echo '<span class="cmx-carent-vertrag-actions">' . $carent_vertrag_icon_html . $carent_vertrag_pdf_icon_html . '</span>';
 						}
 					if ($kontakt_belege_url !== '') {
 						echo '<a href="' . esc_url($kontakt_belege_url) . '" class="cmx-kontakt-belege-link dashicons dashicons-portfolio" style="text-decoration:none;" title="Alle Belege dieses Kontakts anzeigen" target="_blank" rel="noopener noreferrer" data-copy-url="' . esc_attr($kontakt_belege_url) . '"><span class="screen-reader-text">Belege dieses Kontakts anzeigen</span></a>';
