@@ -232,7 +232,7 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_start_dashboard_render')) {
 		$data = cmx_start_dashboard_data();
 		$range = (array) ($data['range'] ?? []);
 		echo '<div class="wrap cmx-start"><div class="cmx-start-shell">';
-		echo '<div class="cmx-start-top"><div class="cmx-start-title"><div class="cmx-start-icon"><span class="dashicons dashicons-chart-line"></span></div><div><h1>MisBüro Dashboard</h1><p class="cmx-start-sub">Übersicht der wichtigsten Kennzahlen Ihres Unternehmens</p></div></div>';
+		echo '<div class="cmx-start-top"><div class="cmx-start-title"><div class="cmx-start-icon"><span class="dashicons dashicons-chart-line"></span></div><div><h1>Dashboard</h1><p class="cmx-start-sub">Übersicht der wichtigsten Kennzahlen Ihres Unternehmens</p></div></div>';
 		echo '<form class="cmx-start-filter" method="get"><input type="hidden" name="page" value="' . \esc_attr(cmx_start_dashboard_slug()) . '"><div><label>Zeitraum</label><select name="cmx_cockpit_preset">';
 		foreach ((array) cmx_cockpit_preset_options() as $key => $label) {
 			echo '<option value="' . \esc_attr((string) $key) . '"' . \selected((string) ($range['preset'] ?? ''), (string) $key, false) . '>' . \esc_html((string) $label) . '</option>';
