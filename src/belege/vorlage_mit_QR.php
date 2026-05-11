@@ -5,10 +5,39 @@
  * Erwartet $tpl und ggf. $cmx_beleg_adress.
  */
 
-$__fmt_dec  = (string)($tpl['format']['decimal']   ?? '.');
-$__fmt_tho  = (string)($tpl['format']['thousands'] ?? "'");
+$__cmx_pdf_text = static function($value): string {
+	if (\is_array($value)) {
+		foreach (['url', 'href', 'value', 'label', 'text', 'name'] as $key) {
+			if (isset($value[$key]) && !\is_array($value[$key]) && !\is_object($value[$key])) {
+				return \trim((string)$value[$key]);
+			}
+		}
+
+		$parts = [];
+		foreach ($value as $item) {
+			if (!\is_array($item) && !\is_object($item)) {
+				$item = \trim((string)$item);
+				if ($item !== '') {
+					$parts[] = $item;
+				}
+			}
+		}
+		return \trim(\implode(' ', $parts));
+	}
+
+	if (\is_object($value)) {
+		return '';
+	}
+
+	return \trim((string)$value);
+};
+
+$__fmt_dec  = $__cmx_pdf_text($tpl['format']['decimal'] ?? '.');
+$__fmt_tho  = $__cmx_pdf_text($tpl['format']['thousands'] ?? "'");
+$__fmt_dec  = ($__fmt_dec !== '') ? $__fmt_dec : '.';
+$__fmt_tho  = ($__fmt_tho !== '') ? $__fmt_tho : "'";
 $__fmt_prec = (int)   ($tpl['format']['decimals']  ?? 2);
-$__fmt_cur  = (string)($tpl['document']['currency'] ?? ($tpl['format']['currency'] ?? 'CHF'));
+$__fmt_cur  = $__cmx_pdf_text($tpl['document']['currency'] ?? ($tpl['format']['currency'] ?? 'CHF'));
 
 $__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): string {
 	return number_format($v, $__fmt_prec, $__fmt_dec, $__fmt_tho);
@@ -67,11 +96,11 @@ $is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pfli
 $mwst_exempt_note_html = \function_exists(__NAMESPACE__ . '\\cmx_belege_get_mwst_exempt_note_html')
 	? cmx_belege_get_mwst_exempt_note_html($opts_general)
 	: trim((string)($opts_general['mwst_exempt_note_html'] ?? ''));
-$beleg_subject = trim((string)($tpl['document']['subject'] ?? ''));
-$beleg_description = trim((string)($tpl['document']['description'] ?? ''));
+$beleg_subject = $__cmx_pdf_text($tpl['document']['subject'] ?? '');
+$beleg_description = $__cmx_pdf_text($tpl['document']['description'] ?? '');
 $opts_belege = (array) get_option('cmx_belege', []);
-$beleg_type = strtolower((string)($tpl['document']['type'] ?? 'rechnung'));
-$richtung = strtolower((string)($tpl['document']['richtung'] ?? ''));
+$beleg_type = strtolower($__cmx_pdf_text($tpl['document']['type'] ?? 'rechnung'));
+$richtung = strtolower($__cmx_pdf_text($tpl['document']['richtung'] ?? ''));
 $is_ausgang = ($richtung === 'ausgang');
 $is_eingang = ($richtung === 'eingang');
 $is_lieferschein = ($beleg_type === 'lieferschein');
@@ -278,23 +307,23 @@ $header_h_css = $fmt_mm((float)($layout['header_height_mm'] ?? 98.0));
 $meta_top_css = $fmt_mm((float)($layout['meta_top_mm'] ?? 38.0));
 $show_recipient_label = !empty($layout['show_recipient_label']);
 $recipient_label_display = $show_recipient_label ? 'block' : 'none';
-$brand_logo = trim((string)($tpl['branding']['logo'] ?? ''));
-$brand_url = trim((string)($tpl['branding']['website'] ?? ''));
+$brand_logo = $__cmx_pdf_text($tpl['branding']['logo'] ?? '');
+$brand_url = $__cmx_pdf_text($tpl['branding']['website'] ?? '');
 if ($brand_url === '') {
-	$brand_url = trim((string)($tpl['me']['website'] ?? ''));
+	$brand_url = $__cmx_pdf_text($tpl['me']['website'] ?? '');
 }
 if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
 	$brand_url = 'https://' . $brand_url;
 }
-$document_due = trim((string)($tpl['document']['due'] ?? ''));
+$document_due = $__cmx_pdf_text($tpl['document']['due'] ?? '');
 $show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
-$due_label = $is_offerte ? 'Gültig bis' : (string)($tpl['labels']['due'] ?? 'Fällig bis');
+$due_label = $is_offerte ? 'Gültig bis' : $__cmx_pdf_text($tpl['labels']['due'] ?? 'Fällig bis');
 $qr_will_print = !empty($tpl['qr']['will_print']);
-$payrexx_vpos_url = \trim((string)($tpl['document']['payrexx_vpos_url'] ?? ''));
-$payrexx_qr_data_uri = \trim((string)($tpl['document']['payrexx_qr_data_uri'] ?? ''));
+$payrexx_vpos_url = $__cmx_pdf_text($tpl['document']['payrexx_vpos_url'] ?? '');
+$payrexx_qr_data_uri = $__cmx_pdf_text($tpl['document']['payrexx_qr_data_uri'] ?? '');
 $show_payrexx_vpos_link = ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
-$offerte_accept_url = \trim((string)($tpl['document']['offerte_accept_url'] ?? ''));
-$offerte_reject_url = \trim((string)($tpl['document']['offerte_reject_url'] ?? ''));
+$offerte_accept_url = $__cmx_pdf_text($tpl['document']['offerte_accept_url'] ?? '');
+$offerte_reject_url = $__cmx_pdf_text($tpl['document']['offerte_reject_url'] ?? '');
 $show_offerte_accept_link = $is_offerte && $is_ausgang && ($offerte_accept_url !== '');
 $show_offerte_reject_link = $is_offerte && $is_ausgang && ($offerte_reject_url !== '');
 $show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show_offerte_reject_link;
