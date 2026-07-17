@@ -1,0 +1,8 @@
+Export aus Mis Büro
+Firma: Muster GmbH
+Jahr: 2025
+
+Alle Rechnungen befinden sich im Ordner 02_Rechnungen
+Alle Belege befinden sich im Ordner 03_Belege
+
+Die Buchungen befinden sich in 04_Buchungen/buchungen.csv

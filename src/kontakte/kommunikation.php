@@ -1,0 +1,2641 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+
+/** Verbindliche Taxonomien (unverändert) */
+const CMX_TAX_PHONE_LABELS = 'kontakte_telefone';
+const CMX_TAX_MAIL_LABELS  = 'kontakte_emails';
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_default_label_terms')) {
+	function cmx_kommunikation_default_label_terms(): array {
+		return [
+			CMX_TAX_PHONE_LABELS => ['Geschäft', 'Privat', 'Mobil', 'Homeoffice', 'Support', 'Durchwahl', 'FaceTime', 'WhatsApp', 'SMS'],
+			CMX_TAX_MAIL_LABELS  => ['Geschäft', 'Privat', 'Support', 'Sales', 'Direkt'],
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_ensure_default_label_terms')) {
+	function cmx_kommunikation_ensure_default_label_terms(): void {
+		foreach (cmx_kommunikation_default_label_terms() as $taxonomy => $terms) {
+			if (!\taxonomy_exists($taxonomy)) {
+				continue;
+			}
+			foreach ($terms as $term_name) {
+				$term_name = \trim((string) $term_name);
+				if ($term_name === '') {
+					continue;
+				}
+				$slug = \sanitize_title($term_name);
+				$existing = \get_term_by('name', $term_name, $taxonomy);
+				if (!$existing || \is_wp_error($existing)) {
+					$existing = $slug !== '' ? \get_term_by('slug', $slug, $taxonomy) : false;
+				}
+				if ($existing && !\is_wp_error($existing)) {
+					continue;
+				}
+				\wp_insert_term($term_name, $taxonomy, $slug !== '' ? ['slug' => $slug] : []);
+			}
+		}
+	}
+}
+
+/** Hilfsfunktionen (unverändert) */
+function cmx_get_terms_normalized(string $taxonomy): array {
+	$terms = \get_terms([
+		'taxonomy'   => $taxonomy,
+		'hide_empty' => false,
+		'fields'     => 'all',
+	]);
+	if (\is_wp_error($terms) || empty($terms)) return [];
+	$out = [];
+	foreach ($terms as $t) {
+		if (\is_object($t) && isset($t->slug, $t->name)) {
+			$out[] = ['slug' => (string)$t->slug, 'name' => (string)$t->name];
+		} elseif (\is_array($t)) {
+			$slug = isset($t['slug']) ? (string)$t['slug'] : '';
+			$name = isset($t['name']) ? (string)$t['name'] : $slug;
+			if ($slug !== '' || $name !== '') $out[] = ['slug' => $slug, 'name' => $name];
+		}
+	}
+	return $out;
+}
+function cmx_term_slug_exists(string $taxonomy, string $slug): bool {
+	if (!$taxonomy || !$slug) return false;
+	$t = \get_term_by('slug', $slug, $taxonomy);
+	return ($t && !\is_wp_error($t));
+}
+function cmx_label_dropdown(array $terms, string $name, array $meta, string $taxonomy): string {
+	$current = isset($meta[$name]) ? (string)$meta[$name] : '';
+	$html  = '<select name="cmx_kommunikation[' . \esc_attr($name) . ']" data-taxonomy="'.\esc_attr($taxonomy).'">';
+	$html .= '<option value="">auswählen</option>';
+	foreach ($terms as $t) {
+		$slug = (string)($t['slug'] ?? '');
+		$txt  = (string)($t['name'] ?? $slug);
+		$html .= '<option value="' . \esc_attr($slug) . '"' . \selected($current, $slug, false) . '>' . \esc_html($txt) . '</option>';
+	}
+	$html .= '</select>';
+	return $html;
+}
+
+function cmx_kommunikation_taxonomy_label_html(string $taxonomy, string $label): string {
+	if ($taxonomy === '' || !\taxonomy_exists($taxonomy)) {
+		return \esc_html($label);
+	}
+
+	$url = \admin_url('edit-tags.php?taxonomy=' . \rawurlencode($taxonomy) . '&post_type=kontakte');
+
+	return '<a href="' . \esc_url($url) . '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;">' . \esc_html($label) . '</a>';
+}
+
+/** Metabox registrieren (unverändert) */
+\add_action('add_meta_boxes', function () {
+	if (!\post_type_exists('kontakte')) return;
+	\add_meta_box(
+		'cmx_kommunikation_box',
+		'Kommunikation',
+		__NAMESPACE__ . '\\cmx_kommunikation_box_html',
+		'kontakte',
+		'normal',
+		'default'
+	);
+});
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_sanitize_birthdate')) {
+	function cmx_kommunikation_sanitize_birthdate(mixed $value): string {
+		$value = \is_scalar($value) ? \trim((string) $value) : '';
+		if ($value === '') {
+			return '';
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_sanitize_date_ymd')) {
+			return (string) cmx_sanitize_date_ymd($value);
+		}
+		$dt = \DateTime::createFromFormat('Y-m-d', $value);
+		return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_pattern')) {
+	function cmx_kommunikation_phone_pattern(): string {
+		return '(?:\+[1-9][\d\s().\/-]{7,20}|00[1-9][\d\s().\/-]{7,20}|41[\d\s().\/-]{9,20}|0[\d\s().\/-]{9,20}|[\d\s().\/-]{9,20})';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_title')) {
+	function cmx_kommunikation_phone_title(): string {
+		return 'Wird beim Verlassen intern auf E.164 normalisiert und im Feld als Schweizer Nummer angezeigt, z. B. +41 79 123 45 67. Fehlt die Vorwahl, wird automatisch +41 verwendet.';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_phone_placeholder')) {
+	function cmx_kommunikation_phone_placeholder(): string {
+		return '+41 79 123 45 67';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_phone')) {
+	function cmx_kommunikation_normalize_phone(mixed $value): string {
+		$raw = \is_scalar($value) ? \trim((string) $value) : '';
+		if ($raw === '') {
+			return '';
+		}
+
+		$compact = (string) \preg_replace('/[^\d+]+/', '', $raw);
+		if (\strpos($compact, '00') === 0) {
+			$compact = '+' . \substr($compact, 2);
+		}
+		if (\preg_match('/^\+410\d{9}$/', $compact)) {
+			$compact = '+41' . \substr($compact, 4);
+		}
+		if (\preg_match('/^410\d{9}$/', $compact)) {
+			$compact = '+41' . \substr($compact, 3);
+		}
+
+		if (\preg_match('/^\+([1-9]\d{7,14})$/', $compact, $m)) {
+			return '+' . $m[1];
+		}
+		if (\preg_match('/^41\d{9}$/', $compact)) {
+			return '+' . $compact;
+		}
+		if (\preg_match('/^0\d{9}$/', $compact)) {
+			return '+41' . \substr($compact, 1);
+		}
+		if (\preg_match('/^\d{9}$/', $compact)) {
+			return '+41' . $compact;
+		}
+
+		return \sanitize_text_field($raw);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_format_phone_display')) {
+	function cmx_kommunikation_split_e164_phone(string $normalized): array {
+		$compact = (string) \preg_replace('/[^\d+]+/', '', $normalized);
+		if (!\preg_match('/^\+(\d{8,15})$/', $compact, $matches)) {
+			return ['', ''];
+		}
+
+		$digits = (string) ($matches[1] ?? '');
+		$known_codes = ['423', '372', '41', '49', '43', '44', '39', '33', '1'];
+		foreach ($known_codes as $code) {
+			if (\str_starts_with($digits, $code) && \strlen($digits) > \strlen($code)) {
+				return [$code, \substr($digits, \strlen($code))];
+			}
+		}
+
+		$fallback_len = \strlen($digits) > 11 ? 3 : (\strlen($digits) > 10 ? 2 : 1);
+		return [\substr($digits, 0, $fallback_len), \substr($digits, $fallback_len)];
+	}
+
+	function cmx_kommunikation_format_phone_display(mixed $value): string {
+		$normalized = cmx_kommunikation_normalize_phone($value);
+		if ($normalized === '') {
+			return '';
+		}
+
+		[$country, $national] = cmx_kommunikation_split_e164_phone($normalized);
+		if ($country === '' || $national === '') {
+			return $normalized;
+		}
+
+		if ($country === '41') {
+			if (\preg_match('/^(800|840|842|844|848|860|868|900|901|906)(\d{3})(\d{3})$/', $national, $service)) {
+				return '+41 ' . $service[1] . ' ' . $service[2] . ' ' . $service[3];
+			}
+
+			if (\preg_match('/^(\d{2})(\d{3})(\d{2})(\d{2})$/', $national, $standard)) {
+				return '+41 ' . $standard[1] . ' ' . $standard[2] . ' ' . $standard[3] . ' ' . $standard[4];
+			}
+		}
+
+		if (\preg_match('/^(\d{2})(\d{3})(\d{2})(\d{2})$/', $national, $standard)) {
+			return '+' . $country . ' ' . $standard[1] . ' ' . $standard[2] . ' ' . $standard[3] . ' ' . $standard[4];
+		}
+		if (\preg_match('/^(\d{3})(\d{3})(\d{2})(\d{2})$/', $national, $ten)) {
+			return '+' . $country . ' ' . $ten[1] . ' ' . $ten[2] . ' ' . $ten[3] . ' ' . $ten[4];
+		}
+		if (\preg_match('/^(\d{3})(\d{2})(\d{2})$/', $national, $seven)) {
+			return '+' . $country . ' ' . $seven[1] . ' ' . $seven[2] . ' ' . $seven[3];
+		}
+		if (\preg_match('/^(\d{2})(\d{2})(\d{2})(\d{2})$/', $national, $eight)) {
+			return '+' . $country . ' ' . $eight[1] . ' ' . $eight[2] . ' ' . $eight[3] . ' ' . $eight[4];
+		}
+
+		return $normalized;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_label_slug')) {
+	function cmx_kommunikation_normalize_label_slug(mixed $value, string $taxonomy): string {
+		$slug = \sanitize_title((string) $value);
+		if ($slug === '') {
+			return '';
+		}
+		return cmx_term_slug_exists($taxonomy, $slug) ? $slug : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_resolve_label_term_slug')) {
+	function cmx_kommunikation_resolve_label_term_slug(mixed $value, string $taxonomy): string {
+		$raw = \trim((string) $value);
+		if ($raw === '') {
+			return '';
+		}
+
+		$slug = cmx_kommunikation_normalize_label_slug($raw, $taxonomy);
+		if ($slug !== '') {
+			return $slug;
+		}
+
+		$term = \get_term_by('name', $raw, $taxonomy);
+		if ($term && !\is_wp_error($term) && isset($term->slug)) {
+			return (string) $term->slug;
+		}
+
+		return '';
+	}
+}
+
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_row_fields')) {
+		function cmx_kommunikation_row_fields(): array {
+			return ['vorname', 'nachname', 'telefon_label', 'telefon', 'email_label', 'email', 'geburtsdatum', 'anrede', 'duzis'];
+		}
+	}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_count_meta_key')) {
+	function cmx_kommunikation_count_meta_key(): string {
+		return '_cmx_kommunikation_count';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_meta_key')) {
+	function cmx_kommunikation_contact_meta_key(int $slot, string $field): string {
+		return '_cmx_kommunikation_' . \max(1, $slot) . '_' . \sanitize_key($field);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_label_meta_key')) {
+	function cmx_kommunikation_label_meta_key(string $kind, int $slot): string {
+		return ($kind === 'email' ? '_cmx_email_label_' : '_cmx_telefon_label_') . \max(1, $slot);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_bundle_meta_keys')) {
+	function cmx_kommunikation_legacy_bundle_meta_keys(): array {
+		return ['_cmx_kommunikation', 'cmx_kommunikation', 'kommunikation', 'cmx_kommunikation_data'];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_legacy_bundle')) {
+	function cmx_kommunikation_read_legacy_bundle(int $post_id): array {
+		foreach (cmx_kommunikation_legacy_bundle_meta_keys() as $meta_key) {
+			$raw = \get_post_meta($post_id, $meta_key, true);
+			if (\is_array($raw) && $raw !== []) {
+				return $raw;
+			}
+			if (!\is_string($raw) || \trim($raw) === '') {
+				continue;
+			}
+
+			$decoded = \json_decode($raw, true);
+			if (\json_last_error() === \JSON_ERROR_NONE && \is_array($decoded) && $decoded !== []) {
+				return $decoded;
+			}
+
+			$decoded = @\maybe_unserialize($raw);
+			if (\is_array($decoded) && $decoded !== []) {
+				return $decoded;
+			}
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_normalize_contact_row')) {
+	function cmx_kommunikation_normalize_contact_row(array $row): array {
+		$email = \sanitize_email((string) ($row['email'] ?? ''));
+		if ($email === '' && isset($row['email'])) {
+			$email = \trim((string) $row['email']);
+		}
+
+			return [
+				'vorname'      => \sanitize_text_field((string) ($row['vorname'] ?? '')),
+				'nachname'     => \sanitize_text_field((string) ($row['nachname'] ?? '')),
+				'telefon_label'=> cmx_kommunikation_normalize_label_slug($row['telefon_label'] ?? '', CMX_TAX_PHONE_LABELS),
+				'telefon'      => cmx_kommunikation_normalize_phone($row['telefon'] ?? ''),
+				'email_label'  => cmx_kommunikation_normalize_label_slug($row['email_label'] ?? '', CMX_TAX_MAIL_LABELS),
+				'email'        => $email,
+				'geburtsdatum' => cmx_kommunikation_sanitize_birthdate($row['geburtsdatum'] ?? ''),
+				'anrede'       => \sanitize_text_field((string) ($row['anrede'] ?? '')),
+				'duzis'        => !empty($row['duzis']) ? '1' : '0',
+			];
+		}
+	}
+
+	if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_contact_row_is_empty')) {
+		function cmx_kommunikation_contact_row_is_empty(array $row): bool {
+			foreach (['vorname', 'nachname', 'telefon', 'email', 'geburtsdatum', 'anrede'] as $key) {
+				if (\trim((string) ($row[$key] ?? '')) !== '') {
+					return false;
+				}
+			}
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_saved_slots')) {
+	function cmx_kommunikation_flat_saved_slots(int $post_id): array {
+		$slots = [];
+		$count_raw = \get_post_meta($post_id, cmx_kommunikation_count_meta_key(), true);
+		if ($count_raw !== '' && $count_raw !== null) {
+			$count = \max(0, (int) $count_raw);
+			for ($slot = 1; $slot <= $count; $slot++) {
+				$slots[$slot] = $slot;
+			}
+		}
+
+			$all_meta = \get_post_meta($post_id);
+			if (\is_array($all_meta)) {
+				foreach (\array_keys($all_meta) as $meta_key) {
+					if (\preg_match('/^_cmx_kommunikation_(\d+)_(vorname|nachname|telefon_label|telefon|email_label|email|geburtsdatum|anrede|duzis)$/', (string) $meta_key, $matches)) {
+						$slot = (int) ($matches[1] ?? 0);
+						if ($slot > 0) {
+							$slots[$slot] = $slot;
+					}
+				}
+			}
+		}
+
+		\ksort($slots, \SORT_NUMERIC);
+		return \array_values($slots);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_flat_storage')) {
+	function cmx_kommunikation_has_flat_storage(int $post_id): bool {
+		return \metadata_exists('post', $post_id, cmx_kommunikation_count_meta_key()) || cmx_kommunikation_flat_saved_slots($post_id) !== [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_flat_contacts')) {
+	function cmx_kommunikation_read_flat_contacts(int $post_id): array {
+		$contacts = [];
+		foreach (cmx_kommunikation_flat_saved_slots($post_id) as $slot) {
+			$row = [];
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				$row[$field] = (string) \get_post_meta($post_id, cmx_kommunikation_contact_meta_key((int) $slot, $field), true);
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				$contacts[] = $normalized;
+			}
+		}
+		return $contacts;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+	function cmx_kommunikation_flat_field_meta_keys(string $field, int $max_slots = 10): array {
+		$field = \sanitize_key($field);
+		$max_slots = \max(1, $max_slots);
+		$keys = [];
+		for ($slot = 1; $slot <= $max_slots; $slot++) {
+			$keys[] = cmx_kommunikation_contact_meta_key($slot, $field);
+		}
+		return $keys;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_contact')) {
+	function cmx_kommunikation_primary_contact(int $post_id): array {
+		foreach (cmx_kommunikation_read_contacts($post_id) as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				return $normalized;
+			}
+		}
+
+		return [];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_email')) {
+	function cmx_kommunikation_primary_email(int $post_id): string {
+		$row = cmx_kommunikation_primary_contact($post_id);
+		$email = \sanitize_email((string) ($row['email'] ?? ''));
+		return \is_email($email) ? $email : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_primary_phone')) {
+	function cmx_kommunikation_primary_phone(int $post_id): string {
+		$row = cmx_kommunikation_primary_contact($post_id);
+		return \trim((string) ($row['telefon'] ?? ''));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_collect_emails')) {
+	function cmx_kommunikation_collect_emails(int $post_id): array {
+		$out = [];
+		foreach (cmx_kommunikation_read_contacts($post_id) as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$email = \sanitize_email((string) ($row['email'] ?? ''));
+			if (\is_email($email)) {
+				$out[$email] = $email;
+			}
+		}
+		return \array_values($out);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_direct_meta_keys')) {
+	function cmx_kommunikation_legacy_direct_meta_keys(int $max_slots = 3): array {
+		$max_slots = \max(1, $max_slots);
+		$keys = [];
+		for ($slot = 1; $slot <= $max_slots; $slot++) {
+			$keys[] = "_cmx_telefon_{$slot}";
+			$keys[] = "_cmx_email_{$slot}";
+			$keys[] = "_cmx_telefon_label_{$slot}";
+			$keys[] = "_cmx_email_label_{$slot}";
+		}
+		return $keys;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_value')) {
+	function cmx_kommunikation_legacy_slot_value(int $post_id, array $bundle, string $kind, int $slot): string {
+		$meta_key = $kind === 'email' ? "_cmx_email_{$slot}" : "_cmx_telefon_{$slot}";
+		$value = \get_post_meta($post_id, $meta_key, true);
+		if ($value === '' || $value === null) {
+			$value = $bundle[$kind][$slot]['value'] ?? '';
+		}
+		return \trim((string) $value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_legacy_slot_label')) {
+	function cmx_kommunikation_legacy_slot_label(int $post_id, array $bundle, string $kind, int $slot): string {
+		$meta_key = cmx_kommunikation_label_meta_key($kind, $slot);
+		$value = \get_post_meta($post_id, $meta_key, true);
+		if ($value === '' || $value === null) {
+			$value = $bundle[$kind][$slot]['label'] ?? '';
+		}
+		return \trim((string) $value);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_build_legacy_bundle')) {
+	function cmx_kommunikation_build_legacy_bundle(array $contacts): array {
+		$bundle = [
+			'kontakte' => [],
+			'telefon' => [],
+			'email' => [],
+		];
+
+		foreach (\array_values($contacts) as $index => $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (cmx_kommunikation_contact_row_is_empty($normalized)) {
+				continue;
+			}
+
+			$slot = $index + 1;
+			$phone = (string) ($normalized['telefon'] ?? '');
+			$email = (string) ($normalized['email'] ?? '');
+			$phone_label = (string) ($normalized['telefon_label'] ?? '');
+			$email_label = (string) ($normalized['email_label'] ?? '');
+
+			$bundle['kontakte'][] = $normalized;
+			$bundle['telefon'][$slot] = [
+				'label' => $phone_label,
+				'value' => $phone,
+			];
+			$bundle['email'][$slot] = [
+				'label' => $email_label,
+				'value' => $email,
+				'valid' => \is_email($email) ? '1' : '0',
+			];
+			$bundle['telefon_' . $slot] = $phone;
+			$bundle['email_' . $slot] = $email;
+		}
+
+		return $bundle;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_persist_contacts')) {
+	function cmx_kommunikation_persist_contacts(int $post_id, array $contacts): array {
+		$normalized_contacts = [];
+		foreach ($contacts as $row) {
+			if (!\is_array($row)) {
+				continue;
+			}
+			$normalized = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+				$normalized_contacts[] = $normalized;
+			}
+		}
+
+		$existing_slots = cmx_kommunikation_flat_saved_slots($post_id);
+		$max_existing_slot = $existing_slots !== [] ? (int) \max($existing_slots) : 0;
+		$max_slot = \max($max_existing_slot, \count($normalized_contacts));
+
+		\update_post_meta($post_id, cmx_kommunikation_count_meta_key(), (string) \count($normalized_contacts));
+
+		foreach ($normalized_contacts as $index => $row) {
+			$slot = $index + 1;
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				$meta_key = cmx_kommunikation_contact_meta_key($slot, $field);
+				$value = (string) ($row[$field] ?? '');
+				if ($field === 'duzis') {
+					\update_post_meta($post_id, $meta_key, $value === '1' ? '1' : '0');
+					continue;
+				}
+				if ($value === '') {
+					\delete_post_meta($post_id, $meta_key);
+				} else {
+					\update_post_meta($post_id, $meta_key, $value);
+				}
+			}
+		}
+
+		for ($slot = \count($normalized_contacts) + 1; $slot <= $max_slot; $slot++) {
+			foreach (cmx_kommunikation_row_fields() as $field) {
+				\delete_post_meta($post_id, cmx_kommunikation_contact_meta_key($slot, $field));
+			}
+		}
+
+		foreach (cmx_kommunikation_legacy_direct_meta_keys() as $legacy_meta_key) {
+			\delete_post_meta($post_id, $legacy_meta_key);
+		}
+
+		$first = $normalized_contacts[0] ?? null;
+		if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')) {
+			if ($first && (string) ($first['vorname'] ?? '') !== '') {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, (string) $first['vorname']);
+			} else {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_VORNAME);
+			}
+		}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')) {
+				if ($first && (string) ($first['nachname'] ?? '') !== '') {
+					\update_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, (string) $first['nachname']);
+				} else {
+					\delete_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME);
+				}
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')) {
+				$salutation = $first ? (string) ($first['anrede'] ?? '') : '';
+				if ($salutation !== '') {
+					\update_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, $salutation);
+				} else {
+					\delete_post_meta($post_id, CMX_KONTAKTE_META_ANREDE);
+				}
+			}
+			if (\defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')) {
+				$birthdate = $first ? (string) ($first['geburtsdatum'] ?? '') : '';
+				if ($birthdate !== '') {
+				\update_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, $birthdate);
+			} else {
+				\delete_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM);
+			}
+		}
+
+		foreach (cmx_kommunikation_legacy_bundle_meta_keys() as $legacy_meta_key) {
+			\delete_post_meta($post_id, $legacy_meta_key);
+		}
+
+		return $normalized_contacts;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_legacy_data')) {
+	function cmx_kommunikation_has_legacy_data(int $post_id): bool {
+		if (cmx_kommunikation_read_legacy_bundle($post_id) !== []) {
+			return true;
+		}
+
+		$keys = [
+			'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
+			'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+			cmx_kommunikation_label_meta_key('telefon', 1),
+			cmx_kommunikation_label_meta_key('telefon', 2),
+			cmx_kommunikation_label_meta_key('telefon', 3),
+			cmx_kommunikation_label_meta_key('email', 1),
+			cmx_kommunikation_label_meta_key('email', 2),
+			cmx_kommunikation_label_meta_key('email', 3),
+		];
+
+		foreach ($keys as $key) {
+			$value = \get_post_meta($post_id, (string) $key, true);
+			if (\is_array($value)) {
+				if ($value !== []) {
+					return true;
+				}
+				continue;
+			}
+			if (\trim((string) $value) !== '') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migration_query_args')) {
+	function cmx_kommunikation_migration_query_args(int $posts_per_page = 100): array {
+		$meta_query = [
+			'relation' => 'AND',
+			[
+				'key' => cmx_kommunikation_count_meta_key(),
+				'compare' => 'NOT EXISTS',
+			],
+			[
+				'relation' => 'OR',
+				...array_map(static fn(string $key): array => ['key' => $key, 'compare' => 'EXISTS'], cmx_kommunikation_legacy_bundle_meta_keys()),
+				['key' => '_cmx_telefon_1', 'compare' => 'EXISTS'],
+				['key' => '_cmx_telefon_2', 'compare' => 'EXISTS'],
+				['key' => '_cmx_telefon_3', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_1', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_2', 'compare' => 'EXISTS'],
+				['key' => '_cmx_email_3', 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 1), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 2), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('telefon', 3), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 1), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 2), 'compare' => 'EXISTS'],
+				['key' => cmx_kommunikation_label_meta_key('email', 3), 'compare' => 'EXISTS'],
+			],
+		];
+
+		return [
+			'post_type' => 'kontakte',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'posts_per_page' => \max(1, $posts_per_page),
+			'fields' => 'ids',
+			'orderby' => 'ID',
+			'order' => 'ASC',
+			'no_found_rows' => true,
+			'meta_query' => $meta_query,
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migrate_post')) {
+	function cmx_kommunikation_migrate_post(int $post_id): bool {
+		if ($post_id <= 0 || !cmx_kommunikation_has_legacy_data($post_id)) {
+			return false;
+		}
+		$contacts = cmx_kommunikation_read_contacts($post_id);
+		cmx_kommunikation_persist_contacts($post_id, $contacts);
+		return true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_migrate_batch')) {
+	function cmx_kommunikation_migrate_batch(int $limit = 100): int {
+		$migrated = 0;
+		$query = new \WP_Query(cmx_kommunikation_migration_query_args($limit));
+		foreach ((array) $query->posts as $post_id) {
+			if (cmx_kommunikation_migrate_post((int) $post_id)) {
+				$migrated++;
+			}
+		}
+		return $migrated;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_has_pending_migrations')) {
+	function cmx_kommunikation_has_pending_migrations(): bool {
+		$query = new \WP_Query(cmx_kommunikation_migration_query_args(1));
+		return !empty($query->posts);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_read_contacts')) {
+	function cmx_kommunikation_read_contacts(int $post_id): array {
+		$flat_contacts = cmx_kommunikation_read_flat_contacts($post_id);
+		if ($flat_contacts !== [] || cmx_kommunikation_has_flat_storage($post_id)) {
+			return $flat_contacts !== [] ? $flat_contacts : [cmx_kommunikation_normalize_contact_row([])];
+		}
+
+		$bundle = cmx_kommunikation_read_legacy_bundle($post_id);
+
+		$contacts = [];
+		if (\is_array($bundle['kontakte'] ?? null)) {
+			foreach ((array) $bundle['kontakte'] as $row) {
+				if (!\is_array($row)) {
+					continue;
+				}
+				$normalized = cmx_kommunikation_normalize_contact_row($row);
+				if (!cmx_kommunikation_contact_row_is_empty($normalized)) {
+					$contacts[] = $normalized;
+				}
+			}
+		}
+		if (!empty($contacts)) {
+			return $contacts;
+		}
+
+		$legacy_rows = [];
+		for ($slot = 1; $slot <= 3; $slot++) {
+				$row = [
+					'vorname'      => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_VORNAME')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_VORNAME, true)
+						: '',
+					'nachname'     => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_NACHNAME')
+					? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_NACHNAME, true)
+					: '',
+				'telefon_label'=> cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'telefon', $slot),
+				'telefon'      => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'telefon', $slot),
+					'email_label'  => cmx_kommunikation_legacy_slot_label($post_id, $bundle, 'email', $slot),
+					'email'        => cmx_kommunikation_legacy_slot_value($post_id, $bundle, 'email', $slot),
+					'geburtsdatum' => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_GEBURTSDATUM')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_GEBURTSDATUM, true)
+						: '',
+					'anrede'       => $slot === 1 && \defined(__NAMESPACE__ . '\\CMX_KONTAKTE_META_ANREDE')
+						? (string) \get_post_meta($post_id, CMX_KONTAKTE_META_ANREDE, true)
+						: '',
+					'duzis'        => '0',
+				];
+				$row = cmx_kommunikation_normalize_contact_row($row);
+			if (!cmx_kommunikation_contact_row_is_empty($row)) {
+				$legacy_rows[] = $row;
+			}
+		}
+
+	return !empty($legacy_rows) ? $legacy_rows : [cmx_kommunikation_normalize_contact_row([])];
+	}
+}
+
+\add_action('admin_init', function (): void {
+	if (!\post_type_exists('kontakte') || !\current_user_can('edit_posts')) {
+		return;
+	}
+
+	cmx_kommunikation_ensure_default_label_terms();
+});
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_render_contact_row')) {
+	function cmx_kommunikation_webcam_icon_svg(): string {
+		$svg = \function_exists(__NAMESPACE__ . '\\cmx_icon') ? (string) cmx_icon('webcam') : '';
+		if ($svg === '') {
+			return '<span class="dashicons dashicons-video-alt3" aria-hidden="true"></span>';
+		}
+
+		$svg = (string) \preg_replace(
+			'/<svg\b/',
+			'<svg class="cmx-kommu-webcam-icon" aria-hidden="true" focusable="false"',
+			$svg,
+			1
+		);
+		$svg = (string) \preg_replace('/\swidth="[^"]*"/', ' width="18"', $svg, 1);
+		$svg = (string) \preg_replace('/\sheight="[^"]*"/', ' height="18"', $svg, 1);
+
+		return $svg;
+	}
+
+	function cmx_kommunikation_render_contact_row(array $row, int|string $index, array $phone_terms, array $mail_terms, int $post_id = 0, bool $row_is_saved = false): void {
+		$index_attr = (string) $index;
+		$id_suffix = \preg_replace('/[^A-Za-z0-9_-]/', '_', $index_attr) ?: '0';
+		$field_base = 'cmx_kommunikation[kontakte][' . $index_attr . ']';
+		$email_post_type = \defined(__NAMESPACE__ . '\\CMX_EMAILS_CPT') ? (string) \constant(__NAMESPACE__ . '\\CMX_EMAILS_CPT') : 'emails';
+		$anrede_value = \trim((string) ($row['anrede'] ?? ''));
+		$thank_title = !$row_is_saved
+			? 'Kontakt zuerst speichern'
+			: ($anrede_value !== '' ? 'Danke schön senden' : 'Erst Anrede ausfüllen');
+		$thank_disabled = !$row_is_saved || $anrede_value === '';
+		$saved_index_attr = ($row_is_saved && \is_numeric($index_attr)) ? (string) ((int) $index_attr) : '';
+		$emails_enabled = \post_type_exists($email_post_type);
+		if (
+			$emails_enabled
+			&& \function_exists(__NAMESPACE__ . '\\cmx_system_should_hide_post_type_for_cloudmeister')
+			&& cmx_system_should_hide_post_type_for_cloudmeister($email_post_type)
+		) {
+			$emails_enabled = false;
+		}
+		$internal_email_url = $emails_enabled
+			? \admin_url('post-new.php?post_type=' . \rawurlencode($email_post_type))
+			: '';
+		$phone_pattern = cmx_kommunikation_phone_pattern();
+		$phone_title = cmx_kommunikation_phone_title();
+		$phone_placeholder = cmx_kommunikation_phone_placeholder();
+		?>
+		<div class="cmx-kommu-contact-row" data-row-index="<?php echo \esc_attr($index_attr); ?>" data-row-saved="<?php echo $row_is_saved ? '1' : '0'; ?>" data-saved-index="<?php echo \esc_attr($saved_index_attr); ?>" data-post-id="<?php echo (int) $post_id; ?>">
+			<div class="cmx-kommu-field cmx-kommu-field-handle">
+				<!-- <span class="cmx-kommu-field-title">Reihenfolge</span> -->
+				<span class="cmx-kommu-drag" draggable="true" title="Kontakt verschieben" aria-label="Kontakt verschieben">
+					<span class="dashicons dashicons-menu" aria-hidden="true"></span>
+				</span>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>">Vorname</label>
+				<input id="<?php echo \esc_attr('cmx_komm_vorname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[vorname]'); ?>" value="<?php echo \esc_attr((string) ($row['vorname'] ?? '')); ?>" data-cmx-tab-role="vorname">
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>">Nachname</label>
+				<input id="<?php echo \esc_attr('cmx_komm_nachname_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[nachname]'); ?>" value="<?php echo \esc_attr((string) ($row['nachname'] ?? '')); ?>" data-cmx-tab-role="nachname">
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_PHONE_LABELS, 'Telefon Typ'); ?></label>
+				<select id="<?php echo \esc_attr('cmx_komm_telefon_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[telefon_label]'); ?>" data-cmx-tab-role="telefon_label">
+					<option value="">auswählen</option>
+					<?php foreach ($phone_terms as $term) {
+						$slug = (string) ($term['slug'] ?? '');
+						$name = (string) ($term['name'] ?? $slug);
+						?>
+						<option value="<?php echo \esc_attr($slug); ?>" <?php echo \selected((string) ($row['telefon_label'] ?? ''), $slug, false); ?>><?php echo \esc_html($name); ?></option>
+					<?php } ?>
+				</select>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>" class="cmx-kommu-phone-label">
+					<button
+						type="button"
+						class="button-link cmx-kommu-phone-action"
+						data-phone-target="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+						tabindex="-1"
+					>Telefon</button>
+				</label>
+					<input
+						id="<?php echo \esc_attr('cmx_komm_telefon_' . $id_suffix); ?>"
+						type="tel"
+						name="<?php echo \esc_attr($field_base . '[telefon]'); ?>"
+						value="<?php echo \esc_attr(cmx_kommunikation_format_phone_display((string) ($row['telefon'] ?? ''))); ?>"
+						inputmode="tel"
+						autocomplete="tel-national"
+						placeholder="<?php echo \esc_attr($phone_placeholder); ?>"
+					pattern="<?php echo \esc_attr($phone_pattern); ?>"
+					title="<?php echo \esc_attr($phone_title); ?>"
+					data-cmx-phone="1"
+					data-cmx-tab-role="telefon"
+				>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>"><?php echo cmx_kommunikation_taxonomy_label_html(CMX_TAX_MAIL_LABELS, 'E-Mail Typ'); ?></label>
+				<select id="<?php echo \esc_attr('cmx_komm_email_label_' . $id_suffix); ?>" name="<?php echo \esc_attr($field_base . '[email_label]'); ?>" data-cmx-tab-role="email_label">
+					<option value="">auswählen</option>
+					<?php foreach ($mail_terms as $term) {
+						$slug = (string) ($term['slug'] ?? '');
+						$name = (string) ($term['name'] ?? $slug);
+						?>
+						<option value="<?php echo \esc_attr($slug); ?>" <?php echo \selected((string) ($row['email_label'] ?? ''), $slug, false); ?>><?php echo \esc_html($name); ?></option>
+					<?php } ?>
+				</select>
+			</div>
+			<div class="cmx-kommu-field">
+				<label for="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" class="cmx-kommu-email-label">
+					<?php if ($emails_enabled) : ?>
+						<button
+							type="button"
+							class="button-link cmx-kommu-email-action"
+							data-email-target="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>"
+							data-internal-url="<?php echo \esc_url($internal_email_url); ?>"
+							tabindex="-1"
+						>E-Mail</button>
+					<?php else : ?>
+						<span>E-Mail</span>
+					<?php endif; ?>
+				</label>
+				<input id="<?php echo \esc_attr('cmx_komm_email_' . $id_suffix); ?>" type="email" name="<?php echo \esc_attr($field_base . '[email]'); ?>" value="<?php echo \esc_attr((string) ($row['email'] ?? '')); ?>" data-cmx-tab-role="email">
+			</div>
+				<div class="cmx-kommu-field cmx-kommu-field-date">
+					<label for="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>">Geburtsdatum</label>
+					<input id="<?php echo \esc_attr('cmx_komm_geburtsdatum_' . $id_suffix); ?>" type="date" name="<?php echo \esc_attr($field_base . '[geburtsdatum]'); ?>" value="<?php echo \esc_attr((string) ($row['geburtsdatum'] ?? '')); ?>" data-cmx-tab-role="geburtsdatum">
+				</div>
+				<div class="cmx-kommu-field">
+					<label for="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>">Anrede</label>
+					<input id="<?php echo \esc_attr('cmx_komm_anrede_' . $id_suffix); ?>" type="text" name="<?php echo \esc_attr($field_base . '[anrede]'); ?>" value="<?php echo \esc_attr((string) ($row['anrede'] ?? '')); ?>" data-cmx-tab-role="anrede">
+				</div>
+				<div class="cmx-kommu-field cmx-kommu-field-icon">
+					<button
+						type="button"
+						class="button-link cmx-kommu-thanks<?php echo $thank_disabled ? ' is-disabled' : ''; ?>"
+						title="<?php echo \esc_attr($thank_title); ?>"
+						aria-label="<?php echo \esc_attr($thank_title); ?>"
+						<?php echo $thank_disabled ? 'disabled' : ''; ?>
+					>
+						<span class="dashicons dashicons-buddicons-groups" aria-hidden="true"></span>
+						<span class="screen-reader-text">Danke schön senden</span>
+					</button>
+					<button
+						type="button"
+						class="button-link cmx-kommu-videochat"
+						title="VideoChat öffnen"
+						aria-label="VideoChat öffnen"
+					>
+						<?php echo cmx_kommunikation_webcam_icon_svg(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						<span class="screen-reader-text">VideoChat öffnen</span>
+					</button>
+				</div>
+				<div class="cmx-kommu-field cmx-kommu-field-check">
+					<span class="cmx-kommu-field-title">Duzis</span>
+					<label class="cmx-kommu-toggle" for="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>">
+					<input id="<?php echo \esc_attr('cmx_komm_duzis_' . $id_suffix); ?>" type="checkbox" name="<?php echo \esc_attr($field_base . '[duzis]'); ?>" value="1" <?php echo \checked((string) ($row['duzis'] ?? '0'), '1', false); ?> data-cmx-tab-role="duzis">
+					<span class="cmx-kommu-toggle-ui" aria-hidden="true"></span>
+				</label>
+			</div>
+			<div class="cmx-kommu-field cmx-kommu-field-actions">
+				<button type="button" class="button button-secondary cmx-kommu-remove" aria-label="Kontakt entfernen" title="Kontakt entfernen">
+					<span class="dashicons dashicons-trash" aria-hidden="true"></span>
+					<span class="screen-reader-text">Entfernen</span>
+				</button>
+			</div>
+		</div>
+		<?php
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_nextcloud_call_url')) {
+	function cmx_kommunikation_read_nextcloud_setting(string $option_name, array $fallback_keys = []): string {
+		$value = \trim((string) \get_option($option_name, ''));
+		if ($value !== '') {
+			return $value;
+		}
+
+		$settings = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		$keys = \array_merge([$option_name], $fallback_keys);
+		foreach ($keys as $key) {
+			$fallback_value = \trim((string) ($settings[$key] ?? ''));
+			if ($fallback_value !== '') {
+				return $fallback_value;
+			}
+		}
+
+		return '';
+	}
+
+	function cmx_kommunikation_nextcloud_call_url(): string {
+		return 'https://meet.misbuero.ch/mis-' . \wp_generate_uuid4();
+	}
+}
+
+	\add_action('wp_ajax_cmx_kommunikation_videochat_url', __NAMESPACE__ . '\\cmx_kommunikation_videochat_url_ajax');
+	function cmx_kommunikation_videochat_url_ajax(): void {
+		if (!\current_user_can('edit_posts')) {
+			\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+		}
+
+	\check_ajax_referer('cmx_kommunikation_videochat', 'nonce');
+
+	$url = cmx_kommunikation_nextcloud_call_url();
+	if ($url === '') {
+		\wp_send_json_error([
+			'message' => 'Videomeeting-Link konnte nicht erstellt werden.',
+		], 400);
+	}
+
+	\wp_send_json_success([
+			'url' => $url,
+		]);
+	}
+
+	\add_action('wp_ajax_cmx_kommunikation_send_videochat_mail', __NAMESPACE__ . '\\cmx_kommunikation_send_videochat_mail_ajax');
+	function cmx_kommunikation_send_videochat_mail_ajax(): void {
+		if (!\current_user_can('edit_posts')) {
+			\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+		}
+
+		\check_ajax_referer('cmx_kommunikation_send_videochat_mail', 'nonce');
+
+		$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+		$row_index = isset($_POST['row_index']) ? (int) \wp_unslash($_POST['row_index']) : -1;
+		$url = isset($_POST['url']) ? \esc_url_raw((string) \wp_unslash($_POST['url'])) : '';
+		$email_fallback = isset($_POST['email']) ? \sanitize_email((string) \wp_unslash($_POST['email'])) : '';
+
+		if ($post_id <= 0 || !\current_user_can('edit_post', $post_id)) {
+			\wp_send_json_error(['message' => 'Keine Berechtigung für diesen Kontakt.'], 403);
+		}
+		if ($url === '' || !\preg_match('~^https?://~i', $url)) {
+			\wp_send_json_error(['message' => 'Videomeeting-Link fehlt.'], 400);
+		}
+
+		$rows = \array_values(\array_filter((array) cmx_kommunikation_read_contacts($post_id), static function ($row): bool {
+			return \is_array($row);
+		}));
+		$row = $row_index >= 0 ? (array) ($rows[$row_index] ?? []) : [];
+		$email = \sanitize_email((string) ($row['email'] ?? ''));
+		if (!\is_email($email) && \is_email($email_fallback)) {
+			$email = $email_fallback;
+		}
+		if (!\is_email($email)) {
+			\wp_send_json_error(['message' => 'Für diesen Ansprechpartner ist keine gültige E-Mail gespeichert.'], 400);
+		}
+
+		$title = \trim((string) \get_the_title($post_id));
+		if ($title === '') {
+			$title = 'Kontakt #' . $post_id;
+		}
+
+		$salutation = \trim((string) ($row['anrede'] ?? ''));
+		$body_html = '<p>' . \esc_html($salutation !== '' ? $salutation : 'Guten Tag') . '</p>'
+			. '<p>Hier ist der Link zur Videokonferenz:</p>'
+			. '<p><a href="' . \esc_url($url) . '">' . \esc_html($url) . '</a></p>';
+		$subject = 'Link zur Videokonferenz';
+		$message = \function_exists(__NAMESPACE__ . '\\cmx_passwort_mails_build_html')
+			? (string) cmx_passwort_mails_build_html($subject, $body_html, [
+				'url' => $url,
+				'label' => 'Videokonferenz öffnen',
+			])
+			: $body_html;
+		$headers = \function_exists(__NAMESPACE__ . '\\cmx_passwort_mails_with_html_header')
+			? cmx_passwort_mails_with_html_header([])
+			: ['Content-Type: text/html; charset=UTF-8'];
+
+		$wp_mail_failed_message = '';
+		$wp_mail_failed_listener = static function ($error) use (&$wp_mail_failed_message): void {
+			if ($error instanceof \WP_Error) {
+				$wp_mail_failed_message = (string) $error->get_error_message();
+			}
+		};
+		$had_mail_context = \array_key_exists('cmx_mail_context', $GLOBALS);
+		$previous_mail_context = $had_mail_context ? $GLOBALS['cmx_mail_context'] : null;
+		$GLOBALS['cmx_mail_context'] = 'kontakt_videochat';
+		\add_action('wp_mail_failed', $wp_mail_failed_listener, 10, 1);
+
+		try {
+			$sent = (bool) \wp_mail($email, $subject, $message, $headers);
+		} finally {
+			\remove_action('wp_mail_failed', $wp_mail_failed_listener, 10);
+			if ($had_mail_context) {
+				$GLOBALS['cmx_mail_context'] = $previous_mail_context;
+			} else {
+				unset($GLOBALS['cmx_mail_context']);
+			}
+		}
+
+		if (!$sent) {
+			\wp_send_json_error([
+				'message' => $wp_mail_failed_message !== '' ? $wp_mail_failed_message : 'E-Mail konnte nicht gesendet werden.',
+			], 500);
+		}
+
+		\wp_send_json_success([
+			'message' => 'Videolink an ' . $email . ' versendet.',
+			'email' => $email,
+			'contact' => $title,
+		]);
+	}
+
+	\add_action('wp_ajax_cmx_kommunikation_send_thanks_mail', __NAMESPACE__ . '\\cmx_kommunikation_send_thanks_mail_ajax');
+	function cmx_kommunikation_send_thanks_mail_ajax(): void {
+		if (!\current_user_can('edit_posts')) {
+			\wp_send_json_error(['message' => 'Keine Berechtigung.'], 403);
+	}
+
+	\check_ajax_referer('cmx_kommunikation_send_thanks_mail', 'nonce');
+
+	$post_id = isset($_POST['post_id']) ? (int) \wp_unslash($_POST['post_id']) : 0;
+	$row_index = isset($_POST['row_index']) ? (int) \wp_unslash($_POST['row_index']) : -1;
+	if ($post_id <= 0 || $row_index < 0) {
+		\wp_send_json_error(['message' => 'Kontakt oder Ansprechpartner fehlt.'], 400);
+	}
+	if (!\current_user_can('edit_post', $post_id)) {
+		\wp_send_json_error(['message' => 'Keine Berechtigung für diesen Kontakt.'], 403);
+	}
+	if (!\class_exists(__NAMESPACE__ . '\\CMX_Kontakt_Auto_Mails')) {
+		\wp_send_json_error(['message' => 'Danke-Mail ist derzeit nicht verfügbar.'], 500);
+	}
+
+	$result = CMX_Kontakt_Auto_Mails::send_manual_thank_you_mail($post_id, $row_index);
+	if ($result instanceof \WP_Error) {
+		$message = (string) $result->get_error_message();
+		$data = ['message' => $message];
+		if ($result->get_error_code() === 'mail_disabled') {
+			$settings_url = \admin_url('admin.php?page=cmx-einstellungen&tab=email&sub=kontakt');
+			$data['message_html'] = $message . ' <a href="' . \esc_url($settings_url) . '" target="_blank" rel="noopener noreferrer">Hier ändern</a>';
+		}
+		\wp_send_json_error($data, 400);
+	}
+
+	$email = \sanitize_email((string) ($result['email'] ?? ''));
+	$message = $email !== ''
+		? 'Danke-Mail an ' . $email . ' versendet.'
+		: 'Danke-Mail versendet.';
+
+	\wp_send_json_success([
+		'message' => $message,
+		'email' => $email,
+		'subject' => (string) ($result['subject'] ?? ''),
+	]);
+}
+
+function cmx_kommunikation_box_html($post): void {
+	$rows = cmx_kommunikation_read_contacts((int) $post->ID);
+	$phone_terms = \taxonomy_exists(CMX_TAX_PHONE_LABELS) ? cmx_get_terms_normalized(CMX_TAX_PHONE_LABELS) : [];
+	$mail_terms = \taxonomy_exists(CMX_TAX_MAIL_LABELS) ? cmx_get_terms_normalized(CMX_TAX_MAIL_LABELS) : [];
+		$nextcloud_call_url = cmx_kommunikation_nextcloud_call_url();
+		$videochat_nonce = \wp_create_nonce('cmx_kommunikation_videochat');
+		$videochat_mail_nonce = \wp_create_nonce('cmx_kommunikation_send_videochat_mail');
+		$thanks_nonce = \wp_create_nonce('cmx_kommunikation_send_thanks_mail');
+		$post_is_saved = ((int) ($post->ID ?? 0) > 0) && ((string) ($post->post_status ?? '') !== 'auto-draft');
+		\wp_nonce_field('cmx_kommunikation_save', 'cmx_kommunikation_nonce');
+		?>
+		<style>
+			#cmx_kommunikation_box .cmx-kommu-rows {
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-contact-row {
+				display: grid;
+				grid-template-columns: 40px minmax(98px, 0.95fr) minmax(98px, 0.95fr) minmax(98px, 0.82fr) minmax(138px, 1fr) minmax(98px, 0.82fr) minmax(168px, 1.08fr) 136px minmax(108px, 0.85fr) 72px 72px 34px;
+				gap: 8px;
+				padding: 10px;
+				border: 1px solid #dcdcde;
+			border-radius: 7px;
+			background: #fff;
+			align-items: end;
+			transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-contact-row:nth-child(even) {
+			background: #fcfcfc;
+		}
+		#cmx_kommunikation_box .cmx-kommu-contact-row.is-dragging {
+			opacity: 0.6;
+			border-color: #d63638;
+			box-shadow: 0 0 0 1px rgba(214, 54, 56, 0.18);
+		}
+		#cmx_kommunikation_box .cmx-kommu-field {
+			margin: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-handle {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 0;
+			padding: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-handle .cmx-kommu-field-title {
+			display: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field label {
+			display: block;
+			margin: 0 0 3px;
+			padding-left: 1ch;
+			font-weight: 600;
+			font-size: 12px;
+			line-height: 1.2;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-title {
+			display: block;
+			margin: 0 0 3px;
+			padding-left: 1ch;
+			font-weight: 600;
+			font-size: 12px;
+			line-height: 1.2;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input:not([type="checkbox"]),
+		#cmx_kommunikation_box .cmx-kommu-field select {
+			width: 100%;
+			max-width: none;
+			min-height: 40px;
+			padding: 8px 12px;
+			box-sizing: border-box;
+			border: 1px solid #cfd8e3;
+			border-radius: 8px;
+			background: #fff;
+			color: #2c3338;
+			box-shadow: none;
+			transition: border-color 0.2s ease, box-shadow 0.2s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone] {
+			-webkit-appearance: none;
+			appearance: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input[data-cmx-phone]:invalid {
+			border-color: #cfd8e3;
+			box-shadow: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field input:not([type="checkbox"]):focus,
+		#cmx_kommunikation_box .cmx-kommu-field select:focus {
+			border-color: #2271b1;
+			box-shadow: 0 0 0 1px #2271b1;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field select {
+			height: 40px;
+			padding-top: 0;
+			padding-bottom: 0;
+			line-height: 38px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-label,
+		#cmx_kommunikation_box .cmx-kommu-phone-label {
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-action,
+		#cmx_kommunikation_box .cmx-kommu-phone-action {
+			padding: 0;
+			border: 0;
+			background: transparent;
+			color: inherit;
+			font: inherit;
+			line-height: inherit;
+			text-decoration: none;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-action:hover,
+		#cmx_kommunikation_box .cmx-kommu-email-action:focus,
+		#cmx_kommunikation_box .cmx-kommu-phone-action:hover,
+		#cmx_kommunikation_box .cmx-kommu-phone-action:focus {
+			color: #d63638;
+			text-decoration: underline;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu {
+			position: fixed;
+			z-index: 100000;
+			display: none;
+			min-width: 132px;
+			padding: 6px;
+			border: 1px solid #dcdcde;
+			border-radius: 7px;
+			background: #fff;
+			box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu.is-open,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu.is-open {
+			display: block;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu button,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button {
+			display: block;
+			width: 100%;
+			margin: 0;
+			padding: 7px 9px;
+			border: 0;
+			border-radius: 5px;
+			background: transparent;
+			color: #1d2327;
+			text-align: left;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-email-menu button:hover,
+		#cmx_kommunikation_box .cmx-kommu-email-menu button:focus,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button:hover,
+		#cmx_kommunikation_box .cmx-kommu-phone-menu button:focus {
+			background: #f6f7f7;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-drag {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 28px;
+			height: 28px;
+			margin-top: -60px;
+			border-radius: 5px;
+			cursor: grab;
+			color: #646970;
+			background: #f6f7f7;
+			box-shadow: inset 0 0 0 1px #dcdcde;
+			user-select: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-drag:active {
+			cursor: grabbing;
+		}
+		#cmx_kommunikation_box .cmx-kommu-drag .dashicons {
+			font-size: 15px;
+			width: 15px;
+			height: 15px;
+			line-height: 15px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-check {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: flex-end;
+			gap: 2px;
+			padding-bottom: 1px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-icon {
+			display: flex;
+			align-items: flex-end;
+			justify-content: center;
+			gap: 4px;
+			padding-bottom: 2px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks,
+		#cmx_kommunikation_box .cmx-kommu-videochat {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			padding: 0;
+			color: #646970;
+			line-height: 1;
+			text-decoration: none;
+			border-radius: 6px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks .dashicons,
+		#cmx_kommunikation_box .cmx-kommu-videochat .dashicons,
+		#cmx_kommunikation_box .cmx-kommu-videochat .cmx-kommu-webcam-icon {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-videochat .cmx-kommu-webcam-icon {
+			display: block;
+			stroke: currentColor;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks:hover,
+		#cmx_kommunikation_box .cmx-kommu-thanks:focus,
+		#cmx_kommunikation_box .cmx-kommu-videochat:hover,
+		#cmx_kommunikation_box .cmx-kommu-videochat:focus {
+			color: #d63638;
+			outline: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-disabled,
+		#cmx_kommunikation_box .cmx-kommu-thanks:disabled {
+			color: #c3c4c7;
+			cursor: not-allowed;
+			pointer-events: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-loading {
+			opacity: 0.55;
+			pointer-events: none;
+		}
+		#cmx_kommunikation_box .cmx-kommu-thanks.is-success {
+			color: #2e7d32;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			min-height: 26px;
+			cursor: pointer;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"] {
+			position: absolute;
+			opacity: 0;
+			width: 1px;
+			height: 1px;
+			margin: 0;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle-ui {
+			position: relative;
+			display: inline-block;
+			width: 38px;
+			height: 22px;
+			border-radius: 999px;
+			background: #dcdcde;
+			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+			transition: background-color 0.18s ease, box-shadow 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle-ui::after {
+			content: "";
+			position: absolute;
+			top: 3px;
+			left: 3px;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #fff;
+			box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+			transition: transform 0.18s ease;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:checked + .cmx-kommu-toggle-ui {
+			background: #d63638;
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:checked + .cmx-kommu-toggle-ui::after {
+			transform: translateX(16px);
+		}
+		#cmx_kommunikation_box .cmx-kommu-toggle input[type="checkbox"]:focus-visible + .cmx-kommu-toggle-ui {
+			box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 2px rgba(214, 54, 56, 0.28);
+		}
+		#cmx_kommunikation_box .cmx-kommu-field-actions {
+			display: flex;
+			align-items: flex-end;
+			justify-content: flex-end;
+			padding-bottom: 2px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 30px;
+			padding: 0 8px;
+			line-height: 1;
+			border-radius: 6px;
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove .dashicons {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+			line-height: 18px;
+			color: #d63638;
+			transform: translateY(0);
+		}
+		#cmx_kommunikation_box .cmx-kommu-remove:hover,
+		#cmx_kommunikation_box .cmx-kommu-remove:focus {
+			color: inherit;
+		}
+			#cmx_kommunikation_box .cmx-kommu-toolbar {
+				margin-top: 10px;
+			}
+			#cmx_kommunikation_box #cmx-kommu-add-row {
+				border-radius: 6px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-modal[hidden] {
+				display: none;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-modal {
+				position: fixed;
+				inset: 0;
+				z-index: 100100;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px;
+				background: rgba(30, 41, 59, 0.34);
+				box-sizing: border-box;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog {
+				width: min(560px, 100%);
+				border: 1px solid #cfd8e3;
+				border-radius: 8px;
+				background: #fff;
+				box-shadow: 0 18px 46px rgba(15, 23, 42, 0.24);
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-head,
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-body,
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-actions {
+				padding: 16px 18px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				border-bottom: 1px solid #dcdcde;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-head h3 {
+				margin: 0;
+				font-size: 16px;
+				line-height: 1.3;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-close {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 30px;
+				height: 30px;
+				padding: 0;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				color: #646970;
+				cursor: pointer;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-close:hover,
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-close:focus {
+				color: #d63638;
+				outline: none;
+				box-shadow: 0 0 0 2px rgba(214, 54, 56, 0.22);
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-copy-row {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) 38px;
+				gap: 8px;
+				align-items: center;
+				margin-top: 10px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-copy-row input {
+				width: 100%;
+				min-height: 38px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-copy {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 38px;
+				height: 38px;
+				min-height: 38px;
+				padding: 0;
+				line-height: 1;
+				box-sizing: border-box;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-copy .dashicons {
+				display: block;
+				width: 20px;
+				height: 20px;
+				margin: 0;
+				font-size: 20px;
+				line-height: 20px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-status {
+				min-height: 18px;
+				margin: 10px 0 0;
+				color: #646970;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-status.is-error {
+				color: #b32d2e;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-actions {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: flex-end;
+				gap: 8px;
+				border-top: 1px solid #dcdcde;
+			}
+			#cmx_kommunikation_box .cmx-kommu-video-dialog-actions .button {
+				border-radius: 6px;
+			}
+			@media (max-width: 1280px) {
+				#cmx_kommunikation_box .cmx-kommu-contact-row {
+					grid-template-columns: repeat(3, minmax(0, 1fr));
+					position: relative;
+					padding-left: 56px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-field-handle {
+				position: absolute;
+				left: 10px;
+				top: 50%;
+				transform: translateY(-50%);
+				width: 36px;
+			}
+			#cmx_kommunikation_box .cmx-kommu-field-icon,
+			#cmx_kommunikation_box .cmx-kommu-field-check,
+			#cmx_kommunikation_box .cmx-kommu-field-actions {
+				justify-content: flex-start;
+			}
+		}
+		@media (min-width: 1281px) and (max-width: 1500px) {
+			#post-body.columns-2 #cmx_kommunikation_box .cmx-kommu-contact-row {
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				position: relative;
+				padding-left: 56px;
+			}
+			#post-body.columns-2 #cmx_kommunikation_box .cmx-kommu-field-handle {
+				position: absolute;
+				left: 10px;
+				top: 50%;
+				transform: translateY(-50%);
+				width: 36px;
+			}
+			#post-body.columns-2 #cmx_kommunikation_box .cmx-kommu-field-icon,
+			#post-body.columns-2 #cmx_kommunikation_box .cmx-kommu-field-check,
+			#post-body.columns-2 #cmx_kommunikation_box .cmx-kommu-field-actions {
+				justify-content: flex-start;
+			}
+		}
+		@media (max-width: 782px) {
+			#cmx_kommunikation_box .cmx-kommu-contact-row {
+				grid-template-columns: minmax(0, 1fr);
+				padding-left: 10px;
+				padding-top: 48px;
+			}
+				#cmx_kommunikation_box .cmx-kommu-field-handle {
+					top: 10px;
+					transform: none;
+				}
+				#cmx_kommunikation_box .cmx-kommu-video-dialog-actions {
+					justify-content: stretch;
+				}
+				#cmx_kommunikation_box .cmx-kommu-video-dialog-actions .button {
+					flex: 1 1 100%;
+					text-align: center;
+				}
+			}
+		</style>
+		<div id="cmx_kommunikation_box" data-videochat-url="<?php echo \esc_url($nextcloud_call_url); ?>" data-videochat-nonce="<?php echo \esc_attr($videochat_nonce); ?>" data-videochat-mail-nonce="<?php echo \esc_attr($videochat_mail_nonce); ?>" data-thanks-nonce="<?php echo \esc_attr($thanks_nonce); ?>" data-ajax-url="<?php echo \esc_url(\admin_url('admin-ajax.php')); ?>" data-post-id="<?php echo (int) $post->ID; ?>" data-post-saved="<?php echo $post_is_saved ? '1' : '0'; ?>">
+			<div class="cmx-kommu-rows">
+				<?php foreach ($rows as $index => $row) { cmx_kommunikation_render_contact_row((array) $row, (int) $index, $phone_terms, $mail_terms, (int) $post->ID, !cmx_kommunikation_contact_row_is_empty((array) $row)); } ?>
+			</div>
+		<div class="cmx-kommu-toolbar">
+			<button type="button" class="button button-secondary" id="cmx-kommu-add-row">Kontakt hinzufügen</button>
+		</div>
+		<template id="cmx-kommu-row-template"><?php cmx_kommunikation_render_contact_row(cmx_kommunikation_normalize_contact_row([]), '__INDEX__', $phone_terms, $mail_terms, (int) $post->ID, false); ?></template>
+		<div class="cmx-kommu-email-menu" id="cmx-kommu-email-menu" aria-hidden="true">
+			<button type="button" data-action="internal">Intern</button>
+			<button type="button" data-action="external">Extern</button>
+		</div>
+		<div class="cmx-kommu-phone-menu" id="cmx-kommu-phone-menu" aria-hidden="true">
+			<button type="button" data-action="phone">Telefon</button>
+			<button type="button" data-action="whatsapp">WhatsApp</button>
+			<button type="button" data-action="sms">SMS</button>
+				<button type="button" data-action="signal">Signal</button>
+				<button type="button" data-action="videochat">VideoChat</button>
+			</div>
+			<div class="cmx-kommu-video-modal" id="cmx-kommu-video-modal" hidden aria-hidden="true">
+				<div class="cmx-kommu-video-dialog" role="dialog" aria-modal="true" aria-labelledby="cmx-kommu-video-title">
+					<div class="cmx-kommu-video-dialog-head">
+						<h3 id="cmx-kommu-video-title">Videokonferenz starten</h3>
+						<button type="button" class="cmx-kommu-video-dialog-close" data-action="close-video-dialog" aria-label="Dialog schliessen">
+							<span class="dashicons dashicons-no-alt" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="cmx-kommu-video-dialog-body">
+						<p>Möchtest du dem Kunden den Link per E-Mail senden?</p>
+						<label for="cmx-kommu-video-link">Link zur Konferenz</label>
+						<div class="cmx-kommu-video-copy-row">
+							<input type="text" id="cmx-kommu-video-link" readonly value="">
+							<button type="button" class="button button-secondary cmx-kommu-video-copy" data-action="copy-video-link" title="Link kopieren" aria-label="Link kopieren">
+								<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
+							</button>
+						</div>
+						<p class="cmx-kommu-video-status" id="cmx-kommu-video-status" aria-live="polite"></p>
+					</div>
+					<div class="cmx-kommu-video-dialog-actions">
+						<button type="button" class="button button-primary" data-action="send-video-link">Ja, Mail senden</button>
+						<button type="button" class="button button-secondary" data-action="open-video-link">Nein, OK</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	<script>
+	(function(){
+		var root = document.getElementById("cmx_kommunikation_box");
+		if (!root) return;
+		var rows = root.querySelector(".cmx-kommu-rows");
+		var addButton = document.getElementById("cmx-kommu-add-row");
+		var template = document.getElementById("cmx-kommu-row-template");
+			var emailMenu = document.getElementById("cmx-kommu-email-menu");
+			var phoneMenu = document.getElementById("cmx-kommu-phone-menu");
+			var videoModal = document.getElementById("cmx-kommu-video-modal");
+			var videoLinkInput = document.getElementById("cmx-kommu-video-link");
+			var videoStatus = document.getElementById("cmx-kommu-video-status");
+			if (!rows || !addButton || !template || !emailMenu || !phoneMenu || !videoModal || !videoLinkInput || !videoStatus) return;
+			var draggedRow = null;
+			var emailMenuState = null;
+			var phoneMenuState = null;
+			var videoDialogState = null;
+			var videoChatUrl = <?php echo \wp_json_encode((string) $nextcloud_call_url); ?>;
+			var videoChatNonce = <?php echo \wp_json_encode((string) $videochat_nonce); ?>;
+			var videoChatMailNonce = <?php echo \wp_json_encode((string) $videochat_mail_nonce); ?>;
+			var thanksNonce = <?php echo \wp_json_encode((string) $thanks_nonce); ?>;
+			var ajaxUrl = <?php echo \wp_json_encode(\admin_url('admin-ajax.php')); ?>;
+		if (!ajaxUrl && typeof window.ajaxurl === "string") {
+			ajaxUrl = window.ajaxurl;
+		}
+		var postId = <?php echo (int) $post->ID; ?>;
+			if (!postId || isNaN(postId)) {
+				var postIdField = document.getElementById("post_ID");
+				if (postIdField) {
+					postId = parseInt(postIdField.value || "0", 10);
+				}
+			}
+				var postIsSaved = String(root.getAttribute("data-post-saved") || "") === "1";
+
+		function showAdminNotice(message, type, allowHtml) {
+			var text = String(message || "").trim();
+			if (text === "") {
+				return;
+			}
+
+			document.querySelectorAll(".cmx-kommu-admin-notice").forEach(function(node) {
+				node.remove();
+			});
+
+			var noticeType = type === "error" ? "error" : "success";
+			var notice = document.createElement("div");
+			notice.className = "notice notice-" + noticeType + " is-dismissible cmx-kommu-admin-notice";
+			notice.innerHTML = "<p></p><button type=\"button\" class=\"notice-dismiss\"><span class=\"screen-reader-text\">Dismiss this notice.</span></button>";
+			if (allowHtml) {
+				notice.querySelector("p").innerHTML = text;
+			} else {
+				notice.querySelector("p").textContent = text;
+			}
+			notice.querySelector(".notice-dismiss").addEventListener("click", function() {
+				notice.remove();
+			});
+
+			var target = document.querySelector("#wpbody-content .wrap")
+				|| document.querySelector("#wpbody-content")
+				|| root.parentNode
+				|| document.body;
+			target.insertBefore(notice, target.firstChild);
+
+			window.scrollTo({top: 0, behavior: "smooth"});
+		}
+
+		function closeEmailMenu() {
+			emailMenu.classList.remove("is-open");
+			emailMenu.setAttribute("aria-hidden", "true");
+			emailMenuState = null;
+		}
+
+		function closePhoneMenu() {
+			phoneMenu.classList.remove("is-open");
+			phoneMenu.setAttribute("aria-hidden", "true");
+			phoneMenuState = null;
+		}
+
+		function openEmailMenu(trigger) {
+			if (!trigger) return;
+			closePhoneMenu();
+			var rect = trigger.getBoundingClientRect();
+			emailMenuState = {
+				targetId: trigger.getAttribute("data-email-target") || "",
+				internalUrl: trigger.getAttribute("data-internal-url") || ""
+			};
+			emailMenu.style.top = Math.round(rect.bottom + 6) + "px";
+			emailMenu.style.left = Math.round(rect.left) + "px";
+			emailMenu.classList.add("is-open");
+			emailMenu.setAttribute("aria-hidden", "false");
+		}
+
+		function openPhoneMenu(trigger) {
+			if (!trigger) return;
+			closeEmailMenu();
+			var rect = trigger.getBoundingClientRect();
+			phoneMenuState = {
+				targetId: trigger.getAttribute("data-phone-target") || ""
+			};
+			phoneMenu.style.top = Math.round(rect.bottom + 6) + "px";
+			phoneMenu.style.left = Math.round(rect.left) + "px";
+			phoneMenu.classList.add("is-open");
+			phoneMenu.setAttribute("aria-hidden", "false");
+		}
+
+		function resolveEmailInput() {
+			if (!emailMenuState || !emailMenuState.targetId) return null;
+			return document.getElementById(emailMenuState.targetId);
+		}
+
+		function resolvePhoneInput() {
+			if (!phoneMenuState || !phoneMenuState.targetId) return null;
+			return document.getElementById(phoneMenuState.targetId);
+		}
+
+		function normalizePhoneDigits(value) {
+			return String(value || "").replace(/\D+/g, "");
+		}
+
+		function normalizePhoneUriValue(value) {
+			var normalized = normalizeToE164PhoneValue(value);
+			if (normalized) {
+				return normalized;
+			}
+			var raw = String(value || "").trim();
+			var digits = normalizePhoneDigits(raw);
+			if (!digits) return "";
+			return raw.indexOf("+") === 0 ? "+" + digits : digits;
+		}
+
+		function normalizeToE164PhoneValue(value) {
+			var raw = String(value || "").trim();
+			if (!raw) return "";
+			var compact = raw.replace(/[^\d+]+/g, "");
+			if (compact.indexOf("00") === 0) {
+				compact = "+" + compact.slice(2);
+			}
+			if (/^\+410\d{9}$/.test(compact)) {
+				compact = "+41" + compact.slice(4);
+			}
+			if (/^410\d{9}$/.test(compact)) {
+				compact = "+41" + compact.slice(3);
+			}
+			if (/^\+[1-9]\d{7,14}$/.test(compact)) {
+				return compact;
+			}
+			if (/^41\d{9}$/.test(compact)) {
+				return "+" + compact;
+			}
+			if (/^0\d{9}$/.test(compact)) {
+				return "+41" + compact.slice(1);
+			}
+			if (/^\d{9}$/.test(compact)) {
+				return "+41" + compact;
+			}
+			return raw;
+		}
+
+		function splitE164PhoneValue(normalized) {
+			var compact = String(normalized || "").replace(/[^\d+]+/g, "");
+			var match = compact.match(/^\+(\d{8,15})$/);
+			if (!match) {
+				return {country: "", national: ""};
+			}
+			var digits = match[1] || "";
+			var knownCodes = ["423", "372", "41", "49", "43", "44", "39", "33", "1"];
+			for (var i = 0; i < knownCodes.length; i += 1) {
+				var code = knownCodes[i];
+				if (digits.indexOf(code) === 0 && digits.length > code.length) {
+					return {
+						country: code,
+						national: digits.slice(code.length)
+					};
+				}
+			}
+			var fallbackLen = digits.length > 11 ? 3 : (digits.length > 10 ? 2 : 1);
+			return {
+				country: digits.slice(0, fallbackLen),
+				national: digits.slice(fallbackLen)
+			};
+		}
+
+		function formatSwissPhoneDisplayValue(value) {
+			var normalized = normalizeToE164PhoneValue(value);
+			if (!normalized) return "";
+			var parts = splitE164PhoneValue(normalized);
+			if (!parts.country || !parts.national) {
+				return normalized;
+			}
+			var country = parts.country;
+			var national = parts.national;
+			if (country === "41") {
+				var service = national.match(/^(800|840|842|844|848|860|868|900|901|906)(\d{3})(\d{3})$/);
+				if (service) {
+					return "+41 " + service[1] + " " + service[2] + " " + service[3];
+				}
+
+				var swiss = national.match(/^(\d{2})(\d{3})(\d{2})(\d{2})$/);
+				if (swiss) {
+					return "+41 " + swiss[1] + " " + swiss[2] + " " + swiss[3] + " " + swiss[4];
+				}
+			}
+
+			var nine = national.match(/^(\d{2})(\d{3})(\d{2})(\d{2})$/);
+			if (nine) {
+				return "+" + country + " " + nine[1] + " " + nine[2] + " " + nine[3] + " " + nine[4];
+			}
+			var ten = national.match(/^(\d{3})(\d{3})(\d{2})(\d{2})$/);
+			if (ten) {
+				return "+" + country + " " + ten[1] + " " + ten[2] + " " + ten[3] + " " + ten[4];
+			}
+			var seven = national.match(/^(\d{3})(\d{2})(\d{2})$/);
+			if (seven) {
+				return "+" + country + " " + seven[1] + " " + seven[2] + " " + seven[3];
+			}
+			var eight = national.match(/^(\d{2})(\d{2})(\d{2})(\d{2})$/);
+			if (eight) {
+				return "+" + country + " " + eight[1] + " " + eight[2] + " " + eight[3] + " " + eight[4];
+			}
+			return normalized;
+		}
+
+		function isValidE164PhoneValue(value) {
+			return /^\+[1-9]\d{7,14}$/.test(String(value || "").trim());
+		}
+
+		function updateE164PhoneValidity(input) {
+			if (!input || !input.matches("[data-cmx-phone]")) return;
+			var rawValue = String(input.value || "").trim();
+			if (!rawValue) {
+				input.setCustomValidity("");
+				return;
+			}
+
+			var normalized = normalizeToE164PhoneValue(rawValue);
+			if (isValidE164PhoneValue(normalized)) {
+				input.setCustomValidity("");
+				return;
+			}
+
+			if (input.validity.patternMismatch) {
+				input.setCustomValidity("Bitte eine gültige Telefonnummer eingeben. Beim Verlassen wird sie intern auf E.164 normalisiert und im Feld im Schweizer Format angezeigt, z. B. +41 79 123 45 67.");
+				return;
+			}
+
+			input.setCustomValidity("Bitte eine gültige Telefonnummer eingeben. Schweizer Nummern ohne Ländervorwahl werden automatisch als +41 formatiert.");
+		}
+
+		function normalizePhoneField(input) {
+			if (!input || !input.matches("[data-cmx-phone]")) return;
+			var normalized = normalizeToE164PhoneValue(input.value);
+			input.value = normalized ? formatSwissPhoneDisplayValue(normalized) : String(input.value || "").trim();
+			updateE164PhoneValidity(input);
+		}
+
+		function updateThanksButton(row) {
+			if (!row) return;
+			var button = row.querySelector(".cmx-kommu-thanks");
+			if (!button) return;
+			var anredeInput = row.querySelector('[data-cmx-tab-role="anrede"]');
+			var hasAnrede = !!(anredeInput && String(anredeInput.value || "").trim() !== "");
+			var rowIsSaved = String(row.getAttribute("data-row-saved") || "") === "1";
+			var isLoading = button.classList.contains("is-loading");
+				var enabled = rowIsSaved && hasAnrede && !isLoading;
+					var title = !rowIsSaved
+						? "Kontakt zuerst speichern"
+						: (hasAnrede ? "Danke schön senden" : "Erst Anrede ausfüllen");
+			button.disabled = !enabled;
+			button.classList.toggle("is-disabled", !enabled);
+			button.title = title;
+			button.setAttribute("aria-label", title);
+		}
+
+			function updateThanksButtons(scope) {
+				var context = scope && scope.querySelectorAll ? scope : rows;
+				context.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row) {
+					updateThanksButton(row);
+				});
+			}
+
+			function isProbablyEmail(value) {
+				return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+			}
+
+			function videoStatusText(message, isError) {
+				videoStatus.textContent = String(message || "");
+				videoStatus.classList.toggle("is-error", !!isError);
+			}
+
+			function fallbackCopyToClipboard(text) {
+				var textarea = document.createElement("textarea");
+				textarea.value = String(text || "");
+				textarea.setAttribute("readonly", "readonly");
+				textarea.style.position = "fixed";
+				textarea.style.left = "-9999px";
+				textarea.style.top = "0";
+				document.body.appendChild(textarea);
+				textarea.focus();
+				textarea.select();
+				try {
+					document.execCommand("copy");
+				} catch (error) {}
+				textarea.remove();
+				return Promise.resolve();
+			}
+
+			function copyVideoLink(url, quiet) {
+				var text = String(url || "").trim();
+				if (!text) {
+					return Promise.resolve(false);
+				}
+				var copyPromise = navigator.clipboard && navigator.clipboard.writeText
+					? navigator.clipboard.writeText(text).catch(function() {
+						return fallbackCopyToClipboard(text);
+					})
+					: fallbackCopyToClipboard(text);
+				return copyPromise.then(function() {
+					if (!quiet) {
+						videoStatusText("Link in die Zwischenablage kopiert.", false);
+					}
+					return true;
+				}).catch(function() {
+					if (!quiet) {
+						videoStatusText("Link konnte nicht automatisch kopiert werden.", true);
+					}
+					return false;
+				});
+			}
+
+			function rowVideoContext(trigger) {
+				var row = trigger && trigger.closest ? trigger.closest(".cmx-kommu-contact-row") : null;
+				if (!row && phoneMenuState && phoneMenuState.targetId) {
+					var phoneInput = document.getElementById(phoneMenuState.targetId);
+					row = phoneInput && phoneInput.closest ? phoneInput.closest(".cmx-kommu-contact-row") : null;
+				}
+				if (!row) {
+					row = rows.querySelector(".cmx-kommu-contact-row");
+				}
+
+				var emailInput = row ? row.querySelector('[data-cmx-tab-role="email"]') : null;
+				var rowIndex = row ? parseInt(row.getAttribute("data-saved-index") || row.getAttribute("data-row-index") || "-1", 10) : -1;
+				if (isNaN(rowIndex)) {
+					rowIndex = -1;
+				}
+
+				return {
+					row: row,
+					rowIndex: rowIndex,
+					email: emailInput ? String(emailInput.value || "").trim() : ""
+				};
+			}
+
+			function fetchVideoChatUrl() {
+				if (videoChatUrl) {
+					return Promise.resolve(videoChatUrl);
+				}
+			if (!ajaxUrl || !videoChatNonce) {
+				return Promise.reject(new Error("VideoChat-Link fehlt auf dieser Kontakte-Seite noch. Bitte Seite neu laden."));
+			}
+			var form = new URLSearchParams();
+			form.set("action", "cmx_kommunikation_videochat_url");
+			form.set("nonce", videoChatNonce);
+			return fetch(ajaxUrl, {
+				method: "POST",
+				credentials: "same-origin",
+				headers: {"Content-Type": "application/x-www-form-urlencoded"},
+				body: form.toString()
+			}).then(function(response) {
+				return response.json().catch(function() {
+					return {success: false, data: {message: "Ungültige Serverantwort."}};
+				});
+			}).then(function(payload) {
+				if (!payload || !payload.success || !payload.data || !payload.data.url) {
+					var message = payload && payload.data && payload.data.message ? payload.data.message : "VideoChat-Link fehlt. Bitte Einstellungen > System speichern und die Kontakte-Seite neu laden.";
+					throw new Error(message);
+				}
+				videoChatUrl = String(payload.data.url || "");
+				root.setAttribute("data-videochat-url", videoChatUrl);
+				return videoChatUrl;
+				});
+			}
+
+			function openMeetingUrl(url) {
+				var target = String(url || "").trim();
+				if (!target) {
+					return;
+				}
+				window.open(target, "_blank", "noopener");
+			}
+
+			function updateVideoMailButton() {
+				var sendButton = videoModal.querySelector('[data-action="send-video-link"]');
+				if (!sendButton || !videoDialogState) {
+					return;
+				}
+				var hasEmail = isProbablyEmail(videoDialogState.email);
+				sendButton.disabled = !hasEmail;
+				sendButton.title = hasEmail ? "Videolink per E-Mail senden" : "Keine gültige E-Mail für diesen Ansprechpartner";
+			}
+
+			function closeVideoDialog() {
+				videoModal.hidden = true;
+				videoModal.setAttribute("aria-hidden", "true");
+				videoDialogState = null;
+				videoStatusText("", false);
+			}
+
+			function openVideoMeeting(trigger) {
+				videoDialogState = rowVideoContext(trigger || root);
+				closeEmailMenu();
+				closePhoneMenu();
+				videoStatusText("Videolink wird erstellt ...", false);
+				videoLinkInput.value = "";
+				videoModal.querySelectorAll(".cmx-kommu-video-dialog-actions .button, .cmx-kommu-video-copy, .cmx-kommu-video-dialog-close").forEach(function(button) {
+					button.disabled = false;
+				});
+				videoModal.hidden = false;
+				videoModal.setAttribute("aria-hidden", "false");
+				updateVideoMailButton();
+				return fetchVideoChatUrl().then(function(url) {
+					if (!videoDialogState) {
+						return "";
+					}
+					videoDialogState.url = String(url || "");
+					videoLinkInput.value = videoDialogState.url;
+					videoStatusText("Der Link wird beim Fortfahren automatisch kopiert.", false);
+					copyVideoLink(videoDialogState.url, true);
+					window.setTimeout(function() {
+						videoLinkInput.focus();
+						videoLinkInput.select();
+					}, 0);
+					return videoDialogState.url;
+				});
+			}
+
+			function sendVideoLinkMail(state) {
+				if (!state || !state.url) {
+					return Promise.reject(new Error("Videomeeting-Link fehlt."));
+				}
+				if (!ajaxUrl || !videoChatMailNonce) {
+					return Promise.reject(new Error("AJAX-Verbindung oder Sicherheits-Token fehlt. Bitte Seite neu laden."));
+				}
+				var form = new URLSearchParams();
+				form.set("action", "cmx_kommunikation_send_videochat_mail");
+				form.set("nonce", videoChatMailNonce);
+				form.set("post_id", String(postId || ""));
+				form.set("row_index", String(state.rowIndex));
+				form.set("email", String(state.email || ""));
+				form.set("url", String(state.url || ""));
+				return fetch(ajaxUrl, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {"Content-Type": "application/x-www-form-urlencoded"},
+					body: form.toString()
+				}).then(function(response) {
+					return response.json().catch(function() {
+						return {success: false, data: {message: "Ungültige Serverantwort."}};
+					});
+				}).then(function(payload) {
+					if (!payload || !payload.success) {
+						var message = payload && payload.data && payload.data.message ? payload.data.message : "Videolink-Mail konnte nicht versendet werden.";
+						throw new Error(message);
+					}
+					return payload.data || {};
+				});
+			}
+
+			function proceedVideoMeeting(sendMail) {
+				var state = videoDialogState;
+				if (!state || !state.url) {
+					videoStatusText("Videomeeting-Link fehlt.", true);
+					return;
+				}
+				var actionButtons = videoModal.querySelectorAll(".cmx-kommu-video-dialog-actions .button, .cmx-kommu-video-copy, .cmx-kommu-video-dialog-close");
+				actionButtons.forEach(function(button) {
+					button.disabled = true;
+				});
+				videoStatusText(sendMail ? "Link wird kopiert und Mail wird gesendet ..." : "Link wird kopiert ...", false);
+				copyVideoLink(state.url, true).then(function() {
+					if (!sendMail) {
+						closeVideoDialog();
+						openMeetingUrl(state.url);
+						return null;
+					}
+					return sendVideoLinkMail(state).then(function(payload) {
+						showAdminNotice(payload && payload.message ? payload.message : "Videolink-Mail versendet.", "success");
+						closeVideoDialog();
+						openMeetingUrl(state.url);
+						return payload;
+					});
+				}).catch(function(error) {
+					videoStatusText(error && error.message ? error.message : "Videolink-Mail konnte nicht versendet werden.", true);
+				}).finally(function() {
+					if (videoDialogState) {
+						actionButtons.forEach(function(button) {
+							button.disabled = false;
+						});
+						updateVideoMailButton();
+					}
+				});
+			}
+
+		function renumberRows() {
+			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row, index) {
+				row.setAttribute("data-row-index", String(index));
+
+				row.querySelectorAll("[name]").forEach(function(field) {
+					var name = field.getAttribute("name");
+					if (!name) return;
+					field.setAttribute("name", name.replace(/cmx_kommunikation\[kontakte\]\[[^\]]+\]/, "cmx_kommunikation[kontakte][" + index + "]"));
+				});
+
+				row.querySelectorAll("[id]").forEach(function(field) {
+					var id = field.getAttribute("id");
+					if (!id) return;
+					field.setAttribute("id", id.replace(/_[^_]+$/, "_" + index));
+				});
+
+				row.querySelectorAll("label[for]").forEach(function(label) {
+					var target = label.getAttribute("for");
+					if (!target) return;
+					label.setAttribute("for", target.replace(/_[^_]+$/, "_" + index));
+				});
+
+				row.querySelectorAll("[data-email-target], [data-phone-target]").forEach(function(trigger) {
+					var emailTarget = trigger.getAttribute("data-email-target");
+					if (emailTarget) {
+						trigger.setAttribute("data-email-target", emailTarget.replace(/_[^_]+$/, "_" + index));
+					}
+					var phoneTarget = trigger.getAttribute("data-phone-target");
+					if (phoneTarget) {
+						trigger.setAttribute("data-phone-target", phoneTarget.replace(/_[^_]+$/, "_" + index));
+					}
+				});
+
+				updateThanksButton(row);
+			});
+		}
+
+		function updateRemoveButtons() {
+			var items = rows.querySelectorAll(".cmx-kommu-contact-row");
+			items.forEach(function(row) {
+				var button = row.querySelector(".cmx-kommu-remove");
+				if (button) {
+					button.hidden = items.length <= 1;
+				}
+			});
+		}
+
+			function focusNextTabField(currentField, backwards) {
+				if (!currentField) return false;
+				var row = currentField.closest(".cmx-kommu-contact-row");
+				if (!row) return false;
+				var order = ["vorname", "nachname", "telefon_label", "telefon", "email_label", "email", "geburtsdatum", "anrede", "duzis"];
+				var currentRole = currentField.getAttribute("data-cmx-tab-role") || "";
+				var currentIndex = order.indexOf(currentRole);
+				if (currentIndex === -1) return false;
+			var nextIndex = currentIndex + (backwards ? -1 : 1);
+			if (nextIndex < 0 || nextIndex >= order.length) {
+				return false;
+			}
+			var nextField = row.querySelector('[data-cmx-tab-role="' + order[nextIndex] + '"]');
+			if (!nextField || nextField.disabled || nextField.hidden) {
+				return false;
+			}
+			nextField.focus();
+			if (nextField.select && (nextField.tagName || "").toLowerCase() === "input" && nextField.type !== "checkbox" && nextField.type !== "date") {
+				nextField.select();
+			}
+			return true;
+		}
+
+		function nextIndex() {
+			var max = -1;
+			rows.querySelectorAll(".cmx-kommu-contact-row").forEach(function(row) {
+				var idx = parseInt(row.getAttribute("data-row-index") || "-1", 10);
+				if (!isNaN(idx) && idx > max) {
+					max = idx;
+				}
+			});
+			return max + 1;
+		}
+
+		function addRow() {
+			var html = template.innerHTML.replace(/__INDEX__/g, String(nextIndex()));
+			var wrapper = document.createElement("div");
+			wrapper.innerHTML = html.trim();
+			var row = wrapper.firstElementChild;
+			if (!row) return;
+			rows.appendChild(row);
+			renumberRows();
+			updateRemoveButtons();
+			updateThanksButtons(row.parentNode || rows);
+		}
+
+		addButton.addEventListener("click", function () {
+			addRow();
+		});
+
+			rows.addEventListener("click", function (event) {
+				var phoneTrigger = event.target.closest(".cmx-kommu-phone-action");
+				if (phoneTrigger) {
+					event.preventDefault();
+					event.stopPropagation();
+				if (phoneMenu.classList.contains("is-open") && phoneMenuState && phoneMenuState.targetId === (phoneTrigger.getAttribute("data-phone-target") || "")) {
+					closePhoneMenu();
+				} else {
+					openPhoneMenu(phoneTrigger);
+				}
+				return;
+			}
+
+			var emailTrigger = event.target.closest(".cmx-kommu-email-action");
+			if (emailTrigger) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (emailMenu.classList.contains("is-open") && emailMenuState && emailMenuState.targetId === (emailTrigger.getAttribute("data-email-target") || "")) {
+					closeEmailMenu();
+				} else {
+					openEmailMenu(emailTrigger);
+				}
+				return;
+			}
+
+			var videochatButton = event.target.closest(".cmx-kommu-videochat");
+			if (videochatButton) {
+				event.preventDefault();
+				event.stopPropagation();
+				openVideoMeeting(videochatButton).catch(function(error) {
+					showAdminNotice(error && error.message ? error.message : "VideoChat-Link konnte nicht geladen werden.", "error");
+				});
+				return;
+			}
+
+			var thanksButton = event.target.closest(".cmx-kommu-thanks");
+			if (thanksButton) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (thanksButton.disabled || thanksButton.classList.contains("is-loading")) {
+					return;
+				}
+					if (!postId || isNaN(postId)) {
+						showAdminNotice("Kontakt-ID fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					if (!ajaxUrl) {
+						showAdminNotice("AJAX-Verbindung fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					if (!thanksNonce) {
+						showAdminNotice("Sicherheits-Token fehlt. Bitte Seite neu laden.", "error");
+						return;
+					}
+					var thanksRow = thanksButton.closest(".cmx-kommu-contact-row");
+				if (!thanksRow) {
+					return;
+				}
+					var savedIndex = parseInt(thanksRow.getAttribute("data-saved-index") || "-1", 10);
+					if (savedIndex < 0) {
+						savedIndex = parseInt(thanksRow.getAttribute("data-row-index") || "-1", 10);
+					}
+					if (savedIndex < 0) {
+					showAdminNotice("Bitte Ansprechpartner zuerst speichern.", "error");
+						return;
+					}
+				thanksButton.classList.remove("is-success");
+				thanksButton.classList.add("is-loading");
+				updateThanksButton(thanksRow);
+
+				var requestBody = new URLSearchParams();
+				requestBody.set("action", "cmx_kommunikation_send_thanks_mail");
+				requestBody.set("nonce", thanksNonce);
+				requestBody.set("post_id", String(postId));
+				requestBody.set("row_index", String(savedIndex));
+
+					fetch(ajaxUrl, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {"Content-Type": "application/x-www-form-urlencoded"},
+					body: requestBody.toString()
+				}).then(function(response) {
+					return response.json().catch(function() {
+						return {success: false, data: {message: "Ungültige Serverantwort."}};
+					});
+				}).then(function(payload) {
+					if (!payload || !payload.success) {
+						var errorMessage = payload && payload.data && payload.data.message ? payload.data.message : "Danke-Mail konnte nicht versendet werden.";
+						var error = new Error(errorMessage);
+						error.messageHtml = payload && payload.data && payload.data.message_html ? payload.data.message_html : "";
+						throw error;
+					}
+					thanksButton.classList.add("is-success");
+					window.setTimeout(function() {
+						thanksButton.classList.remove("is-success");
+					}, 3200);
+					showAdminNotice(payload.data && payload.data.message ? payload.data.message : "Danke-Mail versendet.", "success");
+				}).catch(function(error) {
+					showAdminNotice(
+						error && error.messageHtml ? error.messageHtml : (error && error.message ? error.message : "Danke-Mail konnte nicht versendet werden."),
+						"error",
+						Boolean(error && error.messageHtml)
+					);
+				}).finally(function() {
+					thanksButton.classList.remove("is-loading");
+					updateThanksButton(thanksRow);
+				});
+				return;
+			}
+
+			var button = event.target.closest(".cmx-kommu-remove");
+			if (!button) return;
+			var row = button.closest(".cmx-kommu-contact-row");
+			if (!row) return;
+			row.remove();
+			if (!rows.querySelector(".cmx-kommu-contact-row")) {
+				addRow();
+			}
+			renumberRows();
+				updateRemoveButtons();
+			});
+
+			videoModal.addEventListener("click", function(event) {
+				if (event.target === videoModal) {
+					closeVideoDialog();
+					return;
+				}
+				var actionButton = event.target.closest("[data-action]");
+				if (!actionButton) {
+					return;
+				}
+				var action = actionButton.getAttribute("data-action") || "";
+				if (action === "close-video-dialog") {
+					closeVideoDialog();
+					return;
+				}
+				if (action === "copy-video-link") {
+					copyVideoLink(videoLinkInput.value || (videoDialogState && videoDialogState.url) || "", false);
+					return;
+				}
+				if (action === "send-video-link") {
+					proceedVideoMeeting(true);
+					return;
+				}
+				if (action === "open-video-link") {
+					proceedVideoMeeting(false);
+				}
+			});
+
+			rows.addEventListener("keydown", function(event) {
+				if (event.key === "Enter" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+					var enterPhoneField = event.target.closest("[data-cmx-phone]");
+					if (enterPhoneField) {
+					event.preventDefault();
+					normalizePhoneField(enterPhoneField);
+					enterPhoneField.blur();
+					return;
+				}
+			}
+			if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) {
+				return;
+			}
+			var field = event.target.closest("[data-cmx-tab-role]");
+			if (!field) {
+				return;
+			}
+			if (focusNextTabField(field, !!event.shiftKey)) {
+				event.preventDefault();
+			}
+		});
+
+		rows.addEventListener("input", function(event) {
+			var anredeInput = event.target.closest('[data-cmx-tab-role="anrede"]');
+			if (anredeInput) {
+				updateThanksButton(anredeInput.closest(".cmx-kommu-contact-row"));
+			}
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			phoneInput.setCustomValidity("");
+		});
+
+		rows.addEventListener("blur", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			normalizePhoneField(phoneInput);
+		}, true);
+
+		rows.addEventListener("change", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			normalizePhoneField(phoneInput);
+		});
+
+		rows.addEventListener("paste", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			window.setTimeout(function() {
+				normalizePhoneField(phoneInput);
+			}, 0);
+		});
+
+		rows.addEventListener("drop", function(event) {
+			var phoneInput = event.target.closest("[data-cmx-phone]");
+			if (!phoneInput) return;
+			window.setTimeout(function() {
+				normalizePhoneField(phoneInput);
+			}, 0);
+		});
+
+		var form = root.closest("form");
+		if (form) {
+			form.addEventListener("submit", function() {
+				rows.querySelectorAll("[data-cmx-phone]").forEach(function(phoneInput) {
+					normalizePhoneField(phoneInput);
+				});
+			});
+		}
+
+		phoneMenu.addEventListener("click", function(event) {
+			var actionButton = event.target.closest("button[data-action]");
+			if (!actionButton || !phoneMenuState) return;
+			var action = actionButton.getAttribute("data-action") || "";
+			var input = resolvePhoneInput();
+			var rawValue = input ? String(input.value || "").trim() : "";
+			var phoneDigits = normalizePhoneDigits(rawValue);
+			var phoneUriValue = normalizePhoneUriValue(rawValue);
+			if ((action === "phone" || action === "sms" || action === "whatsapp" || action === "signal") && phoneDigits === "") {
+				if (input) {
+					input.focus();
+				}
+				closePhoneMenu();
+				return;
+			}
+			if (action === "phone") {
+				window.location.href = "tel:" + phoneUriValue;
+				closePhoneMenu();
+				return;
+			}
+			if (action === "sms") {
+				window.location.href = "sms:" + phoneUriValue;
+				closePhoneMenu();
+				return;
+			}
+			if (action === "whatsapp") {
+				window.open("https://wa.me/" + phoneDigits, "_blank", "noopener");
+				closePhoneMenu();
+				return;
+			}
+			if (action === "signal") {
+				window.open("https://signal.me/#p/+" + phoneDigits, "_blank", "noopener");
+				closePhoneMenu();
+				return;
+			}
+			if (action === "videochat") {
+				openVideoMeeting(actionButton).catch(function(error) {
+					window.alert(error && error.message ? error.message : "VideoChat-Link konnte nicht geladen werden.");
+				}).finally(function() {
+					closePhoneMenu();
+				});
+				return;
+			}
+		});
+
+		emailMenu.addEventListener("click", function(event) {
+			var actionButton = event.target.closest("button[data-action]");
+			if (!actionButton || !emailMenuState) return;
+			var action = actionButton.getAttribute("data-action") || "";
+			var input = resolveEmailInput();
+			var emailValue = input ? String(input.value || "").trim() : "";
+			if (action === "internal") {
+				if (emailMenuState.internalUrl) {
+					window.location.href = emailMenuState.internalUrl;
+				}
+				closeEmailMenu();
+				return;
+			}
+			if (action === "external") {
+				if (emailValue !== "") {
+					window.location.href = "mailto:" + encodeURIComponent(emailValue);
+				} else if (input) {
+					input.focus();
+				}
+				closeEmailMenu();
+			}
+		});
+
+		document.addEventListener("click", function(event) {
+			if (phoneMenu.classList.contains("is-open")) {
+				if (!event.target.closest("#cmx-kommu-phone-menu") && !event.target.closest(".cmx-kommu-phone-action")) {
+					closePhoneMenu();
+				}
+			}
+			if (!emailMenu.classList.contains("is-open")) return;
+			if (event.target.closest("#cmx-kommu-email-menu")) return;
+			if (event.target.closest(".cmx-kommu-email-action")) return;
+			closeEmailMenu();
+		});
+
+			document.addEventListener("keydown", function(event) {
+				if (event.key === "Escape") {
+					closePhoneMenu();
+					closeEmailMenu();
+					if (!videoModal.hidden) {
+						closeVideoDialog();
+					}
+				}
+			});
+
+		rows.addEventListener("dragstart", function(event) {
+			closePhoneMenu();
+			closeEmailMenu();
+			var handle = event.target.closest(".cmx-kommu-drag");
+			if (!handle) return;
+			draggedRow = handle.closest(".cmx-kommu-contact-row");
+			if (!draggedRow) return;
+			draggedRow.classList.add("is-dragging");
+			if (event.dataTransfer) {
+				event.dataTransfer.effectAllowed = "move";
+				try {
+					event.dataTransfer.setData("text/plain", draggedRow.getAttribute("data-row-index") || "");
+				} catch (error) {}
+			}
+		});
+
+		rows.addEventListener("dragover", function(event) {
+			if (!draggedRow) return;
+			event.preventDefault();
+			var targetRow = event.target.closest(".cmx-kommu-contact-row");
+			if (!targetRow || targetRow === draggedRow) return;
+			var rect = targetRow.getBoundingClientRect();
+			var insertBefore = event.clientY < (rect.top + rect.height / 2);
+			rows.insertBefore(draggedRow, insertBefore ? targetRow : targetRow.nextSibling);
+		});
+
+		rows.addEventListener("drop", function(event) {
+			if (!draggedRow) return;
+			event.preventDefault();
+			renumberRows();
+		});
+
+		rows.addEventListener("dragend", function() {
+			if (!draggedRow) return;
+			draggedRow.classList.remove("is-dragging");
+			draggedRow = null;
+			renumberRows();
+		});
+
+		renumberRows();
+		updateRemoveButtons();
+		updateThanksButtons();
+	})();
+	</script>
+	<?php
+}
+
+\add_action('save_post', function ($post_id) {
+	if (!isset($_POST['cmx_kommunikation_nonce']) || !\wp_verify_nonce($_POST['cmx_kommunikation_nonce'], 'cmx_kommunikation_save')) return;
+	if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+	if (\wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+	if (!isset($_POST['cmx_kommunikation']) || !\is_array($_POST['cmx_kommunikation'])) return;
+
+	if (isset($_POST['_cmx_rechnung_land'])) {
+			$rechnung_land = \sanitize_text_field($_POST['_cmx_rechnung_land']);
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')) {
+				$rechnung_land = (string) cmx_kontakte_resolve_country_option_value($rechnung_land);
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')) {
+				$rechnung_land = (string) cmx_kontakte_normalize_country_meta_value($rechnung_land);
+			}
+			\update_post_meta($post_id, '_cmx_rechnung_land', $rechnung_land);
+	}
+	if (isset($_POST['_cmx_liefer_land'])) {
+			$liefer_land = \sanitize_text_field($_POST['_cmx_liefer_land']);
+			if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_resolve_country_option_value')) {
+				$liefer_land = (string) cmx_kontakte_resolve_country_option_value($liefer_land);
+			} elseif (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')) {
+				$liefer_land = (string) cmx_kontakte_normalize_country_meta_value($liefer_land);
+			}
+			\update_post_meta($post_id, '_cmx_liefer_land', $liefer_land);
+	}
+
+	$in = (array) \wp_unslash($_POST['cmx_kommunikation']);
+	$posted_contacts = $in['kontakte'] ?? [];
+	cmx_kommunikation_persist_contacts($post_id, \is_array($posted_contacts) ? $posted_contacts : []);
+});

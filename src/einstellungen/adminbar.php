@@ -1,0 +1,2114 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+/* --------------------------------------------------------------------------
+ * Admin-Bar (Link auf Support-Tab)
+ * -------------------------------------------------------------------------- */
+
+function cmx65_is_home_request_path(): bool {
+	$request_uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+	$request_path = (string) \parse_url($request_uri, \PHP_URL_PATH);
+	if ($request_path === '') {
+		$request_path = '/';
+	}
+	$request_path = '/' . \ltrim($request_path, '/');
+	$request_path = \rtrim($request_path, '/');
+	if ($request_path === '') {
+		$request_path = '/';
+	}
+
+	$home_path = (string) \parse_url(\home_url('/'), \PHP_URL_PATH);
+	if ($home_path === '') {
+		$home_path = '/';
+	}
+	$home_path = '/' . \ltrim($home_path, '/');
+	$home_path = \rtrim($home_path, '/');
+	if ($home_path === '') {
+		$home_path = '/';
+	}
+
+	return $request_path === $home_path;
+}
+
+add_filter('show_admin_bar', __NAMESPACE__ . '\\cmx65_filter_show_adminbar_on_instance_home', 50);
+function cmx65_filter_show_adminbar_on_instance_home($show): bool {
+	if (!(bool) $show) {
+		return false;
+	}
+	if (\is_admin() || \wp_doing_ajax()) {
+		return (bool) $show;
+	}
+	if (!\is_user_logged_in()) {
+		return (bool) $show;
+	}
+	if (cmx65_is_home_request_path()) {
+		return false;
+	}
+	return (bool) $show;
+}
+
+function cmx65_is_instance_home_request(): bool {
+	if (\is_admin() || \wp_doing_ajax()) {
+		return false;
+	}
+	if (!\is_user_logged_in()) {
+		return false;
+	}
+	return (\is_front_page() || \is_home() || cmx65_is_home_request_path());
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_fallback_avatar_url')) {
+	function cmx65_adminbar_fallback_avatar_url(): string {
+		return (string) \plugins_url('assets/login.png', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_fallback_avatar_markup')) {
+	function cmx65_adminbar_fallback_avatar_markup(int $size, string $fallback_url): string {
+		$size = $size > 0 ? $size : 26;
+		return '<img alt="" src="' . \esc_url($fallback_url) . '" class="avatar avatar-' . $size . ' photo cmx-adminbar-fallback-avatar" height="' . $size . '" width="' . $size . '" decoding="async" loading="lazy" />';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_force_avatar_in_title')) {
+	function cmx65_adminbar_force_avatar_in_title(string $title, int $size, string $fallback_url): string {
+		$fallback_img = cmx65_adminbar_fallback_avatar_markup($size, $fallback_url);
+		if (\preg_match('/<img\b[^>]*>/i', $title)) {
+			return (string) \preg_replace('/<img\b[^>]*>/i', $fallback_img, $title, 1);
+		}
+		return $fallback_img . ' ' . $title;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_pdf_upload_url')) {
+	function cmx65_adminbar_pdf_upload_url(): string {
+		$token = (string) \get_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, '');
+		if ($token === '') {
+			$token = \wp_generate_uuid4();
+			\update_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false);
+		}
+
+		return (string) \home_url('/mis-upload/?token=' . \rawurlencode($token));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_can_create_post_type')) {
+	function cmx65_adminbar_can_create_post_type(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->create_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('edit_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_can_publish_post_type')) {
+	function cmx65_adminbar_can_publish_post_type(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->publish_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('publish_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_kontakt_post_types')) {
+	function cmx65_adminbar_kontakt_post_types(): array {
+		$types = ['kontakte', 'kontakt'];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_cpt')) {
+			$types[] = (string) cmx_kontakte_cpt();
+		}
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $types))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_katalog_focus_url')) {
+	function cmx65_adminbar_katalog_focus_url(): string {
+		$url = \function_exists(__NAMESPACE__ . '\\cmx_artikel_liste_url')
+			? (string) cmx_artikel_liste_url()
+			: (string) \home_url('/katalog/');
+		if ($url === '') {
+			return '';
+		}
+
+		return (string) \add_query_arg('cmx_focus_search', '1', $url);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_quickcreate_enabled')) {
+	function cmx65_adminbar_quickcreate_enabled(): bool {
+		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+		return !empty($options['quick_edit']);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_allowed')) {
+	function cmx65_adminbar_beleg_quickcreate_allowed(): bool {
+		if (!cmx65_adminbar_quickcreate_enabled()) {
+			return false;
+		}
+		if (!\is_admin() || !\is_user_logged_in() || !\is_admin_bar_showing()) {
+			return false;
+		}
+		if (!\current_user_can('edit_posts')) {
+			return false;
+		}
+		if (!\post_type_exists('belege') || !cmx65_adminbar_can_create_post_type('belege')) {
+			return false;
+		}
+		if (!\post_type_exists('artikel')) {
+			return false;
+		}
+		foreach (cmx65_adminbar_kontakt_post_types() as $post_type) {
+			if (\post_type_exists($post_type)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_position_row_from_artikel')) {
+	function cmx65_adminbar_beleg_position_row_from_artikel(int $artikel_id, string $artikel_name = '', $artikel_variant_index = ''): array {
+		$artikel_id = (int) $artikel_id;
+		if ($artikel_id <= 0) {
+			return [];
+		}
+
+		$artikel_name = \sanitize_text_field($artikel_name);
+		if ($artikel_name === '') {
+			$artikel_name = (string) \get_the_title($artikel_id);
+		}
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_decode_label_text')) {
+			$artikel_name = (string) cmx_beleg_decode_label_text($artikel_name);
+		} elseif (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$artikel_name = (string) cmx_normalize_minus_sign($artikel_name);
+		}
+		$artikel_name = \trim($artikel_name);
+		if ($artikel_name === '') {
+			$artikel_name = '#' . $artikel_id;
+		}
+
+		$variant_index = '';
+		if ($artikel_variant_index !== '' && $artikel_variant_index !== null && \is_numeric((string) $artikel_variant_index)) {
+			$variant_index = (int) $artikel_variant_index;
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_variant_vk')) {
+			$vk_raw = (string) cmx_artikel_variant_vk($artikel_id, $variant_index, true);
+		} else {
+			$vk_meta_key = \defined(__NAMESPACE__ . '\\CMX_ARTIKEL_META_VK') ? CMX_ARTIKEL_META_VK : '_cmx_artikel_vk';
+			$vk_raw = (string) \get_post_meta($artikel_id, $vk_meta_key, true);
+		}
+		$vk = 0.0;
+		if ($vk_raw !== '') {
+			if (\function_exists(__NAMESPACE__ . '\\cmx_norm_decimal')) {
+				$vk = (float) cmx_norm_decimal($vk_raw);
+			} else {
+				$vk = (float) \str_replace(',', '.', $vk_raw);
+			}
+		}
+		if (!\is_finite($vk) || $vk < 0) {
+			$vk = 0.0;
+		}
+
+		$einheit_id = 0;
+		$unit = '';
+		if (\function_exists(__NAMESPACE__ . '\\cmx_artikel_default_einheit')) {
+			$default_unit = (array) cmx_artikel_default_einheit($artikel_id);
+			$einheit_id = (int) ($default_unit['id'] ?? 0);
+			$unit = \sanitize_text_field((string) ($default_unit['name'] ?? ''));
+		}
+
+		return [
+			'artikel_id'            => $artikel_id,
+			'artikel_name'          => $artikel_name,
+			'artikel_variant_index' => $variant_index,
+			'menge'                 => 1,
+			'einheit_id'            => $einheit_id > 0 ? $einheit_id : 0,
+			'unit'                  => $unit,
+			'preis'                 => $vk > 0 ? (string) \round($vk, 2) : '',
+			'rabatt'                => '',
+			'beschreibung'          => '',
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_default_dates')) {
+	function cmx65_adminbar_beleg_default_dates(): array {
+		$opts = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+		$timezone = \function_exists('wp_timezone')
+			? \wp_timezone()
+			: new \DateTimeZone('UTC');
+		$invoice_date = (string) \current_time('Y-m-d');
+		$invoice_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $invoice_date, $timezone);
+		if (!$invoice_dt instanceof \DateTimeImmutable) {
+			$invoice_dt = new \DateTimeImmutable('now', $timezone);
+		}
+		$due_date = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_date')
+			? (string) cmx_belege_default_due_date($invoice_dt->format('Y-m-d'), $opts)
+			: '';
+		if ($due_date !== '' && \preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date)) {
+			$due_dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $due_date, $timezone);
+		} else {
+			$due_days = \function_exists(__NAMESPACE__ . '\\cmx_belege_default_due_days')
+				? (int) cmx_belege_default_due_days($opts)
+				: ((isset($opts['belege_faelligkeit_tage']) && $opts['belege_faelligkeit_tage'] !== '') ? (int) $opts['belege_faelligkeit_tage'] : 30);
+			if ($due_days < 0) {
+				$due_days = 0;
+			}
+			if ($due_days > 3650) {
+				$due_days = 3650;
+			}
+			if (!empty($opts['belege_faelligkeit_monatsende'])) {
+				$due_dt = $invoice_dt->modify('last day of this month');
+			} else {
+				$due_dt = $invoice_dt->modify('+' . $due_days . ' days');
+			}
+		}
+		if (!$due_dt instanceof \DateTimeImmutable) {
+			$due_dt = $invoice_dt;
+		}
+
+		return [
+			'invoice' => $invoice_dt->format('Y-m-d'),
+			'due'     => $due_dt->format('Y-m-d'),
+		];
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_type_options')) {
+	function cmx65_adminbar_beleg_type_options(bool $include_booking = false): array {
+		$options = [
+			'rechnung'    => 'Rechnung',
+			'lieferschein'=> 'Lieferschein',
+			'quittung'    => 'Quittung',
+			'gutschrift'  => 'Gutschrift',
+			'offerte'     => 'Offerte',
+		];
+		if ($include_booking) {
+			$options['buchung'] = 'Buchung';
+		}
+
+		return $options;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_markup')) {
+	function cmx65_adminbar_beleg_quickcreate_markup(): string {
+		if (!cmx65_adminbar_beleg_quickcreate_allowed()) {
+			return '';
+		}
+
+		$ajax_url = (string) \admin_url('admin-ajax.php');
+		$action_url = (string) \admin_url('admin-post.php');
+		$kontakt_nonce = (string) \wp_create_nonce('cmx_search_kontakte');
+		$create_nonce = (string) \wp_create_nonce('cmx65_adminbar_create_beleg');
+
+		$html  = '<form id="cmx65-adminbar-beleg-create-form" class="cmx-adminbar-beleg-create-form" method="post" action="' . \esc_url($action_url) . '" data-ajax-url="' . \esc_attr($ajax_url) . '" data-kontakt-nonce="' . \esc_attr($kontakt_nonce) . '">';
+		$html .= '<input type="hidden" name="action" value="cmx65_adminbar_create_beleg">';
+		$html .= '<input type="hidden" name="_wpnonce" value="' . \esc_attr($create_nonce) . '">';
+		$html .= '<input type="hidden" id="cmx65-adminbar-kontakt-id" name="kontakt_id" value="">';
+		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-id" name="artikel_id" value="">';
+		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-name" name="artikel_name" value="">';
+		$html .= '<input type="hidden" id="cmx65-adminbar-artikel-variant-index" name="artikel_variant_index" value="">';
+		$html .= '<button type="button" class="cmx-adminbar-reset-btn" disabled aria-label="Auswahl zurücksetzen" title="Auswahl zurücksetzen"><span aria-hidden="true">&times;</span></button>';
+		$html .= '<label class="screen-reader-text" for="cmx65-adminbar-kontakt-search">Kontakt</label>';
+		$html .= '<div class="cmx-adminbar-pick">';
+		$html .= '<input type="text" id="cmx65-adminbar-kontakt-search" class="cmx-adminbar-search-input" autocomplete="off" spellcheck="false" placeholder="Kontakt suchen...">';
+		$html .= '<ul id="cmx65-adminbar-kontakt-suggest" class="cmx-adminbar-suggest" style="display:none"></ul>';
+		$html .= '</div>';
+		$html .= '<label class="screen-reader-text" for="cmx65-adminbar-artikel-search">Artikel</label>';
+		$html .= '<div class="cmx-adminbar-pick">';
+		$html .= '<input type="text" id="cmx65-adminbar-artikel-search" class="cmx-adminbar-search-input" autocomplete="off" spellcheck="false" placeholder="Artikel suchen...">';
+		$html .= '<ul id="cmx65-adminbar-artikel-suggest" class="cmx-adminbar-suggest" style="display:none"></ul>';
+		$html .= '</div>';
+		$html .= '<div class="cmx-adminbar-create-wrap">';
+		$html .= '<button type="submit" class="cmx-adminbar-create-btn" disabled aria-haspopup="listbox" aria-expanded="false" aria-controls="cmx65-adminbar-beleg-type-list">Beleg erstellen</button>';
+		$html .= '<div id="cmx65-adminbar-beleg-type-picker" class="cmx-adminbar-type-picker" hidden>';
+		$html .= '<div id="cmx65-adminbar-beleg-type-list" class="cmx-adminbar-type-list" role="listbox" aria-label="Belegart auswählen">';
+		foreach (cmx65_adminbar_beleg_type_options(true) as $slug => $label) {
+			$html .= '<button type="submit" class="cmx-adminbar-type-option" role="option" name="beleg_typ" value="' . \esc_attr($slug) . '" data-value="' . \esc_attr($slug) . '">' . \esc_html($label) . '</button>';
+		}
+		$html .= '</div>';
+		$html .= '</div>';
+		$html .= '</div>';
+		$html .= '</form>';
+
+		return $html;
+	}
+}
+
+\add_action('admin_post_cmx65_adminbar_create_beleg', __NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler');
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_create_beleg_handler')) {
+	function cmx65_adminbar_create_beleg_handler(): void {
+		$redirect_url = (string) (\wp_get_referer() ?: \admin_url());
+		if (!cmx65_adminbar_quickcreate_enabled()) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+		if (!\current_user_can('edit_posts')) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+		if (!isset($_POST['_wpnonce']) || !\wp_verify_nonce((string) \wp_unslash($_POST['_wpnonce']), 'cmx65_adminbar_create_beleg')) {
+			\wp_die('Ungültige Anfrage.');
+		}
+
+		$kontakt_id = isset($_POST['kontakt_id']) ? (int) \wp_unslash($_POST['kontakt_id']) : 0;
+		$artikel_id = isset($_POST['artikel_id']) ? (int) \wp_unslash($_POST['artikel_id']) : 0;
+		$artikel_name = isset($_POST['artikel_name']) ? (string) \wp_unslash($_POST['artikel_name']) : '';
+		$artikel_variant_index = isset($_POST['artikel_variant_index']) ? (string) \wp_unslash($_POST['artikel_variant_index']) : '';
+		$beleg_typ_optionen = cmx65_adminbar_beleg_type_options(true);
+		$beleg_typ = isset($_POST['beleg_typ']) ? \sanitize_key((string) \wp_unslash($_POST['beleg_typ'])) : 'rechnung';
+		$allowed_beleg_typen = \array_keys($beleg_typ_optionen);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_beleg_kategorie_allowed_slugs')) {
+			$allowed_beleg_typen = \array_values(\array_filter(\array_map(
+				static function ($slug): string {
+					return \sanitize_key((string) $slug);
+				},
+				(array) cmx_beleg_kategorie_allowed_slugs()
+			), static function (string $slug): bool {
+				return $slug !== '';
+			}));
+			$allowed_beleg_typen[] = 'buchung';
+		}
+		if ($beleg_typ === '' || !\in_array($beleg_typ, $allowed_beleg_typen, true)) {
+			$beleg_typ = 'rechnung';
+		}
+
+		if ($kontakt_id <= 0 || $artikel_id <= 0) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$kontakt_post = \get_post($kontakt_id);
+		$kontakt_types = cmx65_adminbar_kontakt_post_types();
+		$artikel_post = \get_post($artikel_id);
+
+		if (
+			!$kontakt_post instanceof \WP_Post
+			|| !\in_array((string) $kontakt_post->post_type, $kontakt_types, true)
+			|| !\current_user_can('edit_post', $kontakt_id)
+			|| !$artikel_post instanceof \WP_Post
+			|| (string) $artikel_post->post_type !== 'artikel'
+			|| !\current_user_can('edit_post', $artikel_id)
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		if ($beleg_typ === 'buchung') {
+			$buchungen_cpt = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_CPT') ? CMX_BUCHUNGEN_CPT : 'buchungen';
+			if (
+				!\post_type_exists($buchungen_cpt)
+				|| !cmx65_adminbar_can_create_post_type($buchungen_cpt)
+				|| !cmx65_adminbar_can_publish_post_type($buchungen_cpt)
+			) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+
+			$booking_meta = [
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_KONTAKT') ? CMX_BUCHUNGEN_META_KONTAKT : '_cmx_buchung_kontakt_id' => $kontakt_id,
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_ARTIKEL') ? CMX_BUCHUNGEN_META_ARTIKEL : '_cmx_buchung_artikel_id' => $artikel_id,
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_STATUS') ? CMX_BUCHUNGEN_META_STATUS : '_cmx_buchung_status' => 'angefragt',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_DURATION') ? CMX_BUCHUNGEN_META_DURATION : '_cmx_buchung_duration' => '60',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BUFFER_BEFORE') ? CMX_BUCHUNGEN_META_BUFFER_BEFORE : '_cmx_buchung_buffer_before' => '0',
+				\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BUFFER_AFTER') ? CMX_BUCHUNGEN_META_BUFFER_AFTER : '_cmx_buchung_buffer_after' => '0',
+			];
+			if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_token')) {
+				$booking_meta[\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_BOOKING_TOKEN') ? CMX_BUCHUNGEN_META_BOOKING_TOKEN : '_cmx_buchung_online_token'] = (string) cmx_buchungen_token();
+				$booking_meta[\defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_META_CANCEL_TOKEN') ? CMX_BUCHUNGEN_META_CANCEL_TOKEN : '_cmx_buchung_cancel_token'] = (string) cmx_buchungen_token();
+			}
+
+			$booking_id = \wp_insert_post([
+				'post_type'   => $buchungen_cpt,
+				'post_status' => 'publish',
+				'post_title'  => \trim((string) \get_the_title($kontakt_id) . ' - ' . (string) \get_the_title($artikel_id)),
+				'post_author' => (int) \get_current_user_id(),
+				'meta_input'  => $booking_meta,
+			], true);
+			if (\is_wp_error($booking_id) || (int) $booking_id <= 0) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$booking_id = (int) $booking_id;
+			$duration_taxonomy = \defined(__NAMESPACE__ . '\\CMX_BUCHUNGEN_TAX_DAUER') ? CMX_BUCHUNGEN_TAX_DAUER : 'buchungen_dauern';
+			if (\taxonomy_exists($duration_taxonomy)) {
+				$duration_term = \get_term_by('name', '60', $duration_taxonomy);
+				if ($duration_term instanceof \WP_Term) {
+					\wp_set_object_terms($booking_id, [(int) $duration_term->term_id], $duration_taxonomy, false);
+				}
+			}
+			if (\function_exists(__NAMESPACE__ . '\\cmx_buchungen_sync_title')) {
+				cmx_buchungen_sync_title($booking_id);
+			}
+
+			$edit_url = (string) \get_edit_post_link($booking_id, '');
+			if ($edit_url === '') {
+				$edit_url = (string) \admin_url('post.php?post=' . $booking_id . '&action=edit');
+			}
+			\wp_safe_redirect($edit_url);
+			exit;
+		}
+
+		if (
+			!\post_type_exists('belege')
+			|| !cmx65_adminbar_can_create_post_type('belege')
+			|| !cmx65_adminbar_can_publish_post_type('belege')
+		) {
+			\wp_safe_redirect($redirect_url);
+			exit;
+		}
+
+		$kontakt_label = (string) \get_the_title($kontakt_id);
+		if (\function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')) {
+			$kontakt_label = (string) cmx_normalize_minus_sign($kontakt_label);
+		}
+		$kontakt_label = \trim($kontakt_label);
+		$kontakt_addr = \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')
+			? (string) cmx_build_kontakt_postanschrift($kontakt_id)
+			: '';
+
+			$position_row = cmx65_adminbar_beleg_position_row_from_artikel($artikel_id, $artikel_name, $artikel_variant_index);
+			if ($position_row === []) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$default_dates = cmx65_adminbar_beleg_default_dates();
+			$invoice_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RNG_DATUM')
+				? CMX_BELEG_META_RNG_DATUM
+				: '_cmx_beleg_rng_datum';
+			$due_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_FAELLIG')
+				? CMX_BELEG_META_FAELLIG
+				: '_cmx_beleg_faelligkeitsdatum';
+
+				$beleg_id = \wp_insert_post([
+					'post_type'   => 'belege',
+				'post_status' => 'publish',
+				'post_title'  => '',
+				'post_author' => (int) \get_current_user_id(),
+				'meta_input'  => [
+						'_cmx_title_auto'         => 1,
+					'_cmx_beleg_kontakt_id'   => $kontakt_id,
+					'_cmx_beleg_kontakt_label'=> $kontakt_label,
+					'_cmx_beleg_kontakt_addr' => $kontakt_addr,
+					$invoice_meta_key         => (string) ($default_dates['invoice'] ?? ''),
+					$due_meta_key             => (string) ($default_dates['due'] ?? ''),
+					'_cmx_beleg_positionen'   => [$position_row],
+				],
+			], true);
+
+			if (\is_wp_error($beleg_id) || (int) $beleg_id <= 0) {
+				\wp_safe_redirect($redirect_url);
+				exit;
+			}
+			$beleg_id = (int) $beleg_id;
+			if ((string) \get_post_status($beleg_id) !== 'publish') {
+				$publish_result = \wp_update_post([
+					'ID'          => $beleg_id,
+					'post_status' => 'publish',
+				], true);
+				if (\is_wp_error($publish_result)) {
+					\wp_safe_redirect($redirect_url);
+					exit;
+				}
+			}
+			$richtung_meta_key = \defined(__NAMESPACE__ . '\\CMX_BELEG_META_RICHTUNG')
+				? CMX_BELEG_META_RICHTUNG
+				: '_cmx_beleg_richtung';
+			\update_post_meta($beleg_id, $richtung_meta_key, $beleg_typ === 'gutschrift' ? 'eingang' : 'ausgang');
+
+			$beleg_tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax')
+				? cmx_belege_tax()
+				: (\function_exists(__NAMESPACE__ . '\\cmx_belege_kategorie_taxonomy') ? cmx_belege_kategorie_taxonomy() : null);
+			if (\is_string($beleg_tax) && $beleg_tax !== '' && \taxonomy_exists($beleg_tax)) {
+				$term = \get_term_by('slug', $beleg_typ, $beleg_tax);
+				if ((!$term || \is_wp_error($term)) && isset($beleg_typ_optionen[$beleg_typ])) {
+					$inserted_term = \wp_insert_term($beleg_typ_optionen[$beleg_typ], $beleg_tax, ['slug' => $beleg_typ]);
+					if (!\is_wp_error($inserted_term) && !empty($inserted_term['term_id'])) {
+						$term = \get_term((int) $inserted_term['term_id'], $beleg_tax);
+					}
+				}
+				if ($term && !\is_wp_error($term) && !empty($term->term_id)) {
+					\wp_set_post_terms($beleg_id, [(int) $term->term_id], $beleg_tax, false);
+				}
+			}
+
+			$edit_url = (string) \get_edit_post_link($beleg_id, '');
+		if ($edit_url === '') {
+			$edit_url = (string) \admin_url('post.php?post=' . (int) $beleg_id . '&action=edit');
+		}
+		$edit_url = (string) \add_query_arg([
+			'cmx_beleg_typ' => $beleg_typ,
+			'cmx_quickcreate_focus' => 'menge',
+		], $edit_url);
+
+		\wp_safe_redirect($edit_url);
+		exit;
+	}
+}
+
+add_action('admin_head', __NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_styles', 20);
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_styles')) {
+	function cmx65_adminbar_beleg_quickcreate_styles(): void {
+		if (!cmx65_adminbar_beleg_quickcreate_allowed()) {
+			return;
+		}
+		echo '<style id="cmx65-adminbar-beleg-create-styles">'
+			. '#wpadminbar .ab-top-menu>li.cmx-adminbar-beleg-create-node{position:absolute;left:50%;top:0;transform:translateX(-50%);margin:0;overflow:visible;z-index:100001;}'
+			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id>.ab-item{display:flex;align-items:center;height:32px;padding:0;background:transparent !important;box-shadow:none;overflow:visible;}'
+			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id>.ab-item:hover,'
+			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id>.ab-item:focus,'
+			. '#wpadminbar #wp-admin-bar-cmx65_beleg_create_id.hover>.ab-item{background:transparent !important;color:inherit !important;}'
+			. '#wpadminbar .cmx-adminbar-beleg-create-form{display:flex;align-items:center;gap:8px;height:32px;margin:0;}'
+			. '#wpadminbar .cmx-adminbar-create-wrap{position:relative;display:flex;align-items:center;flex-shrink:0;}'
+			. '#wpadminbar .cmx-adminbar-pick{position:relative;display:flex;align-items:center;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;min-height:26px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:4px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.45);font-size:18px;line-height:1;cursor:default;box-shadow:none;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn span{display:block;line-height:1;transform:translateY(-1px);}'
+			. '#wpadminbar .cmx-adminbar-reset-btn:not([disabled]){border-color:#7e1c16;background:#8f211b;color:#fff;cursor:pointer;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn:not([disabled]):hover,#wpadminbar .cmx-adminbar-reset-btn:not([disabled]):focus{background:#771813;color:#ffeb3b;}'
+			. '#wpadminbar .cmx-adminbar-reset-btn[disabled]{opacity:.7;pointer-events:none;}'
+			. '#wpadminbar .cmx-adminbar-search-input{width:180px;height:26px;min-height:26px;margin:0;padding:3px 8px;border:1px solid rgba(255,255,255,.24);border-radius:4px;background:#fff;color:#1d2327;font-size:12px;line-height:1.2;box-shadow:none;outline:none;}'
+			. '#wpadminbar .cmx-adminbar-search-input::placeholder{color:#646970;opacity:1;}'
+			. '#wpadminbar .cmx-adminbar-search-input:focus{border-color:#ffeb3b;box-shadow:0 0 0 1px #ffeb3b;}'
+			. '#wpadminbar .cmx-adminbar-create-btn{height:26px;min-height:26px;padding:0 12px;border:1px solid #7e1c16;border-radius:4px;background:#8f211b;color:#fff;font-size:12px;font-weight:700;line-height:24px;cursor:pointer;}'
+			. '#wpadminbar .cmx-adminbar-create-btn:hover,#wpadminbar .cmx-adminbar-create-btn:focus{background:#771813;color:#ffeb3b;}'
+			. '#wpadminbar .cmx-adminbar-create-btn[disabled]{opacity:.6;cursor:not-allowed;color:#fff;}'
+			. '#wpadminbar .cmx-adminbar-type-picker[hidden]{display:none !important;}'
+			. '#wpadminbar .cmx-adminbar-type-picker{position:absolute;top:calc(100% + 6px);right:0;min-width:180px;padding:6px;background:#fff;border:1px solid #ccd0d4;border-radius:8px;box-shadow:0 16px 30px rgba(0,0,0,.18);z-index:100004;}'
+			. '#wpadminbar .cmx-adminbar-type-list{display:block;margin:0;padding:0;outline:none;}'
+			. '#wpadminbar .cmx-adminbar-type-option{float:none;clear:both;display:block;width:100%;box-sizing:border-box;margin:0;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:#1d2327;font-size:13px;line-height:1.25;cursor:pointer;text-align:left;white-space:nowrap;box-shadow:none;}'
+			. '#wpadminbar .cmx-adminbar-type-option + .cmx-adminbar-type-option{margin-top:2px;}'
+			. '#wpadminbar .cmx-adminbar-type-option:hover,#wpadminbar .cmx-adminbar-type-option:focus,#wpadminbar .cmx-adminbar-type-option.active{background:#f5d6cf;color:#1d2327;outline:none;}'
+			. '#wpadminbar .cmx-adminbar-suggest{position:absolute;top:calc(100% + 4px);left:0;width:100%;min-width:240px;max-height:280px;margin:0;padding:4px 0;list-style:none;background:#fff;border:1px solid #ccd0d4;border-radius:6px;box-shadow:0 14px 28px rgba(0,0,0,.22);overflow:auto;z-index:100003;}'
+			. '#wpadminbar .cmx-adminbar-suggest li{display:block;width:100%;box-sizing:border-box;margin:0;padding:7px 10px;cursor:pointer;color:#1d2327;line-height:1.25;white-space:normal;}'
+			. '#wpadminbar .cmx-adminbar-suggest li:hover,#wpadminbar .cmx-adminbar-suggest li.active{background:#f5d6cf;color:#1d2327;}'
+			. '#wpadminbar .cmx-adminbar-suggest-title{display:block;font-weight:600;color:#1d2327;}'
+			. '#wpadminbar .cmx-adminbar-suggest-meta{display:block;margin-top:2px;font-size:11px;line-height:1.25;color:#646970;white-space:normal;}'
+			. '@media screen and (max-width:1320px){#wpadminbar .ab-top-menu>li.cmx-adminbar-beleg-create-node{display:none !important;}}'
+			. '</style>';
+		if (isset($_GET['page']) && (string) $_GET['page'] === 'cmx-start-dashboard') {
+			echo '<style id="cmx65-start-dashboard-tab-focus">.screen-reader-shortcut{display:none !important;}</style>';
+		}
+	}
+}
+
+add_action('admin_footer', __NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script', 20);
+if (!\function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_script')) {
+	function cmx65_adminbar_beleg_quickcreate_script(): void {
+		if (!cmx65_adminbar_beleg_quickcreate_allowed()) {
+			return;
+		}
+		?>
+		<script>
+		document.addEventListener('DOMContentLoaded', function () {
+			var form = document.getElementById('cmx65-adminbar-beleg-create-form');
+			if (!form) return;
+
+			var ajaxUrl = String(form.getAttribute('data-ajax-url') || '');
+			var kontaktNonce = String(form.getAttribute('data-kontakt-nonce') || '');
+			var kontaktInput = document.getElementById('cmx65-adminbar-kontakt-search');
+			var kontaktIdInput = document.getElementById('cmx65-adminbar-kontakt-id');
+			var kontaktList = document.getElementById('cmx65-adminbar-kontakt-suggest');
+			var artikelInput = document.getElementById('cmx65-adminbar-artikel-search');
+			var artikelIdInput = document.getElementById('cmx65-adminbar-artikel-id');
+			var artikelNameInput = document.getElementById('cmx65-adminbar-artikel-name');
+			var artikelVariantIndexInput = document.getElementById('cmx65-adminbar-artikel-variant-index');
+			var artikelList = document.getElementById('cmx65-adminbar-artikel-suggest');
+			var typePicker = document.getElementById('cmx65-adminbar-beleg-type-picker');
+			var typeList = document.getElementById('cmx65-adminbar-beleg-type-list');
+			var resetBtn = form.querySelector('.cmx-adminbar-reset-btn');
+			var submitBtn = form.querySelector('.cmx-adminbar-create-btn');
+			var kontaktTimer = null;
+			var artikelTimer = null;
+			var typeItems = typeList ? Array.prototype.slice.call(typeList.querySelectorAll('.cmx-adminbar-type-option[data-value]')) : [];
+			var typeActive = 0;
+			var typePickerOpen = false;
+			var lastTypeValue = typeItems.length ? String(typeItems[0].getAttribute('data-value') || 'rechnung') : 'rechnung';
+			var isStartDashboard = /(?:\?|&)page=cmx-start-dashboard(?:&|$)/.test(window.location.search);
+
+			if (!kontaktInput || !kontaktIdInput || !kontaktList || !artikelInput || !artikelIdInput || !artikelNameInput || !artikelVariantIndexInput || !artikelList || !typePicker || !typeList || !typeItems.length || !resetBtn || !submitBtn) {
+				return;
+			}
+
+			['mousedown', 'click'].forEach(function (eventName) {
+				form.addEventListener(eventName, function (event) {
+					event.stopPropagation();
+				});
+			});
+
+			function esc(value) {
+				return String(value || '')
+					.replace(/&/g, '&amp;')
+					.replace(/</g, '&lt;')
+					.replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;');
+			}
+
+			function normalizeInline(value) {
+				return esc(String(value || '').replace(/\s*\n+\s*/g, ' · ').replace(/\s{2,}/g, ' ').trim());
+			}
+
+			function toInt(value) {
+				var parsed = parseInt(String(value || ''), 10);
+				return isNaN(parsed) ? 0 : parsed;
+			}
+
+			function updateSubmit() {
+				var hasKontakt = toInt(kontaktIdInput.value) > 0;
+				var hasArtikel = toInt(artikelIdInput.value) > 0;
+				submitBtn.disabled = !(hasKontakt && hasArtikel);
+				resetBtn.disabled = !(hasKontakt || hasArtikel);
+				if (submitBtn.disabled) {
+					closeTypePicker(false);
+				}
+			}
+
+			function focusArtikelPicker(openList) {
+				window.setTimeout(function () {
+					artikelInput.focus();
+					try { artikelInput.select(); } catch (err) {}
+					if (openList) {
+						fetchArtikel('', artikelNav.render);
+					}
+				}, 0);
+			}
+
+			function focusSubmitButton() {
+				window.setTimeout(function () {
+					submitBtn.focus();
+				}, 0);
+			}
+
+			function focusAndSelect(inputEl) {
+				window.setTimeout(function () {
+					inputEl.focus();
+					try { inputEl.select(); } catch (err) {}
+				}, 0);
+			}
+
+			function isTextInputTarget(target) {
+				if (!target || target === document.body || target === document.documentElement) {
+					return false;
+				}
+				var tag = String(target.tagName || '').toLowerCase();
+				return tag === 'input' || tag === 'textarea' || tag === 'select' || !!target.isContentEditable;
+			}
+
+			function currentTypeIndex() {
+				var current = String(lastTypeValue || 'rechnung');
+				var found = typeItems.findIndex(function (item) {
+					return String(item.getAttribute('data-value') || '') === current;
+				});
+				return found > -1 ? found : 0;
+			}
+
+			function syncTypeActive() {
+				typeItems.forEach(function (item, index) {
+					var active = index === typeActive;
+					item.classList.toggle('active', active);
+					item.setAttribute('aria-selected', active ? 'true' : 'false');
+				});
+				var activeItem = typeItems[typeActive];
+				if (activeItem) {
+					typeList.setAttribute('aria-activedescendant', activeItem.id || '');
+					if (activeItem.scrollIntoView) {
+						activeItem.scrollIntoView({ block: 'nearest' });
+					}
+				}
+			}
+
+			function closeTypePicker(restoreFocus) {
+				typePicker.hidden = true;
+				typePickerOpen = false;
+				submitBtn.setAttribute('aria-expanded', 'false');
+				typeList.removeAttribute('aria-activedescendant');
+				if (restoreFocus) {
+					focusSubmitButton();
+				}
+			}
+
+			function openTypePicker() {
+				if (submitBtn.disabled) {
+					return;
+				}
+				typeActive = currentTypeIndex();
+				syncTypeActive();
+				typePicker.hidden = false;
+				typePickerOpen = true;
+				submitBtn.setAttribute('aria-expanded', 'true');
+				window.setTimeout(function () {
+					var activeItem = typeItems[typeActive];
+					if (activeItem) {
+						activeItem.focus();
+					}
+				}, 0);
+			}
+
+			function setActiveType(index, focusItem) {
+				if (!typeItems.length) {
+					return;
+				}
+				typeActive = (index + typeItems.length) % typeItems.length;
+				syncTypeActive();
+				if (focusItem) {
+					var activeItem = typeItems[typeActive];
+					if (activeItem) {
+						activeItem.focus();
+					}
+				}
+			}
+
+			function moveType(direction, focusItem) {
+				setActiveType(typeActive + direction, focusItem);
+			}
+
+			function chooseTypeByFirstLetter(letter) {
+				letter = String(letter || '').toLowerCase();
+				if (!letter) {
+					return false;
+				}
+				var start = typeActive > -1 ? typeActive + 1 : 0;
+				for (var offset = 0; offset < typeItems.length; offset++) {
+					var index = (start + offset) % typeItems.length;
+					var item = typeItems[index];
+					var label = String(item.textContent || '').trim().toLowerCase();
+					if (label.charAt(0) === letter) {
+						setActiveType(index, true);
+						window.setTimeout(function () {
+							item.click();
+						}, 0);
+						return true;
+					}
+				}
+				return false;
+			}
+
+			function buildUrl(params) {
+				var qs = new URLSearchParams(params);
+				return ajaxUrl + (ajaxUrl.indexOf('?') === -1 ? '?' : '&') + qs.toString();
+			}
+
+			function makeNavigator(inputEl, listEl, chooseCb, renderCb) {
+				var items = [];
+				var active = -1;
+
+				function closeList() {
+					listEl.style.display = 'none';
+					listEl.innerHTML = '';
+					active = -1;
+				}
+
+				function markActive() {
+					Array.prototype.forEach.call(listEl.children, function (li, index) {
+						li.classList.toggle('active', index === active);
+					});
+				}
+
+				function render(arr) {
+					items = Array.isArray(arr) ? arr : [];
+					if (!items.length) {
+						closeList();
+						return;
+					}
+					listEl.innerHTML = items.map(function (item, index) {
+						return '<li data-index="' + index + '">' + renderCb(item) + '</li>';
+					}).join('');
+					listEl.style.display = 'block';
+					active = -1;
+				}
+
+				function move(direction) {
+					if (!items.length) return;
+					active = (active + direction + items.length) % items.length;
+					markActive();
+				}
+
+				function choose(index) {
+					if (index < 0 || index >= items.length) return;
+					chooseCb(items[index]);
+					closeList();
+				}
+
+				listEl.addEventListener('mousedown', function (event) {
+					var li = event.target.closest('li');
+					if (!li) return;
+					event.preventDefault();
+					choose(parseInt(li.getAttribute('data-index') || '-1', 10));
+				});
+
+				inputEl.addEventListener('keydown', function (event) {
+					if (event.key === 'ArrowDown') {
+						event.preventDefault();
+						move(1);
+						return;
+					}
+					if (event.key === 'ArrowUp') {
+						event.preventDefault();
+						move(-1);
+						return;
+					}
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						if (active > -1) {
+							choose(active);
+						}
+						return;
+					}
+					if (event.key === 'Escape') {
+						closeList();
+					}
+				});
+
+				inputEl.addEventListener('blur', function () {
+					window.setTimeout(function () {
+						var activeEl = document.activeElement;
+						if (activeEl === inputEl || listEl.contains(activeEl)) return;
+						closeList();
+					}, 120);
+				});
+
+				document.addEventListener('click', function (event) {
+					if (!listEl.contains(event.target) && event.target !== inputEl) {
+						closeList();
+					}
+				});
+
+				return {
+					render: render,
+					reset: function () {
+						items = [];
+						active = -1;
+						closeList();
+					}
+				};
+			}
+
+			function fetchContacts(query, cb) {
+				fetch(buildUrl({
+					action: 'cmx_search_kontakte',
+					_ajax_nonce: kontaktNonce,
+					q: query || ''
+				}), { credentials: 'same-origin' })
+					.then(function (response) { return response.json(); })
+					.then(function (json) {
+						var items = (json && json.success && json.data && Array.isArray(json.data.items)) ? json.data.items : [];
+						cb(items);
+					})
+					.catch(function () {
+						cb([]);
+					});
+			}
+
+			function fetchArtikel(query, cb) {
+				fetch(buildUrl({
+					action: 'cmx_search_artikel',
+					term: query || ''
+				}), { credentials: 'same-origin' })
+					.then(function (response) { return response.json(); })
+					.then(function (json) {
+						var items = Array.isArray(json) ? json : [];
+						cb(items.map(function (item) {
+							return {
+								id: item.value || 0,
+								title: item.title || '',
+								nr: item.nr || '',
+								label: item.label || ((item.nr ? item.nr + ' – ' : '') + (item.title || '')),
+								variant_index: (item.variant_index ?? '')
+							};
+						}));
+					})
+					.catch(function () {
+						cb([]);
+					});
+			}
+
+			var kontaktNav = makeNavigator(kontaktInput, kontaktList, function (item) {
+				kontaktInput.value = String(item.title || '');
+				kontaktIdInput.value = String(item.id || '');
+				updateSubmit();
+				focusArtikelPicker(true);
+			}, function (item) {
+				var html = '<span class="cmx-adminbar-suggest-title">' + esc(item.title || '') + '</span>';
+				if (item.addr) {
+					html += '<span class="cmx-adminbar-suggest-meta">' + normalizeInline(item.addr) + '</span>';
+				}
+				return html;
+			});
+
+			var artikelNav = makeNavigator(artikelInput, artikelList, function (item) {
+				artikelInput.value = String((item.nr ? item.nr + ' – ' : '') + (item.title || ''));
+				artikelIdInput.value = String(item.id || '');
+				artikelNameInput.value = String(item.title || '');
+				artikelVariantIndexInput.value = String(item.variant_index ?? '');
+				updateSubmit();
+				focusSubmitButton();
+			}, function (item) {
+				return '<span class="cmx-adminbar-suggest-title">' + esc(item.label || '') + '</span>';
+			});
+
+			function resetSelections() {
+				kontaktInput.value = '';
+				kontaktIdInput.value = '';
+				artikelInput.value = '';
+				artikelIdInput.value = '';
+				artikelNameInput.value = '';
+				artikelVariantIndexInput.value = '';
+				lastTypeValue = typeItems.length ? String(typeItems[0].getAttribute('data-value') || 'rechnung') : 'rechnung';
+				kontaktNav.reset();
+				artikelNav.reset();
+				closeTypePicker(false);
+				updateSubmit();
+			}
+
+			function clearArtikelSelection() {
+				if (artikelTimer) window.clearTimeout(artikelTimer);
+				artikelInput.value = '';
+				artikelIdInput.value = '';
+				artikelNameInput.value = '';
+				artikelVariantIndexInput.value = '';
+				artikelNav.reset();
+				closeTypePicker(false);
+				updateSubmit();
+			}
+
+			function clearKontaktSelection() {
+				if (kontaktTimer) window.clearTimeout(kontaktTimer);
+				kontaktInput.value = '';
+				kontaktIdInput.value = '';
+				kontaktNav.reset();
+				closeTypePicker(false);
+				updateSubmit();
+			}
+
+			form.addEventListener('keydown', function (event) {
+				if (event.key !== 'Escape') {
+					return;
+				}
+				var activeEl = document.activeElement;
+				if (activeEl === submitBtn) {
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					closeTypePicker(false);
+					focusAndSelect(artikelInput);
+					return;
+				}
+				if (activeEl === artikelInput) {
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					clearArtikelSelection();
+					focusAndSelect(kontaktInput);
+					return;
+				}
+				if (activeEl === kontaktInput) {
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					clearKontaktSelection();
+					focusAndSelect(kontaktInput);
+				}
+			}, true);
+
+			kontaktInput.addEventListener('input', function () {
+				kontaktIdInput.value = '';
+				updateSubmit();
+				if (kontaktTimer) window.clearTimeout(kontaktTimer);
+				var query = kontaktInput.value.trim();
+				if (query.length === 0) {
+					fetchContacts('', kontaktNav.render);
+					return;
+				}
+				if (query.length < 2) {
+					kontaktNav.reset();
+					return;
+				}
+				kontaktTimer = window.setTimeout(function () {
+					fetchContacts(query, kontaktNav.render);
+				}, 180);
+			});
+
+			artikelInput.addEventListener('input', function () {
+				artikelIdInput.value = '';
+				artikelNameInput.value = '';
+				artikelVariantIndexInput.value = '';
+				updateSubmit();
+				if (artikelTimer) window.clearTimeout(artikelTimer);
+				var query = artikelInput.value.trim();
+				if (query.length === 0) {
+					fetchArtikel('', artikelNav.render);
+					return;
+				}
+				if (query.length < 2) {
+					artikelNav.reset();
+					return;
+				}
+				artikelTimer = window.setTimeout(function () {
+					fetchArtikel(query, artikelNav.render);
+				}, 180);
+			});
+
+			[kontaktInput, artikelInput].forEach(function (inputEl) {
+				inputEl.addEventListener('click', function () {
+					if (inputEl === kontaktInput) {
+						if (kontaktTimer) window.clearTimeout(kontaktTimer);
+						fetchContacts('', kontaktNav.render);
+						return;
+					}
+					if (artikelTimer) window.clearTimeout(artikelTimer);
+					fetchArtikel('', artikelNav.render);
+				});
+				inputEl.addEventListener('focus', function () {
+					if (inputEl === kontaktInput) {
+						if (kontaktTimer) window.clearTimeout(kontaktTimer);
+						fetchContacts(kontaktInput.value.trim().length >= 2 ? kontaktInput.value.trim() : '', kontaktNav.render);
+						return;
+					}
+					if (artikelTimer) window.clearTimeout(artikelTimer);
+					fetchArtikel(artikelInput.value.trim().length >= 2 ? artikelInput.value.trim() : '', artikelNav.render);
+				});
+			});
+
+			resetBtn.addEventListener('click', function (event) {
+				event.preventDefault();
+				if (resetBtn.disabled) {
+					return;
+				}
+				if (kontaktTimer) window.clearTimeout(kontaktTimer);
+				if (artikelTimer) window.clearTimeout(artikelTimer);
+				resetSelections();
+				kontaktInput.focus();
+			});
+
+			typeItems.forEach(function (item, index) {
+				item.id = 'cmx65-adminbar-beleg-type-option-' + index;
+				item.addEventListener('mousedown', function (event) {
+					event.preventDefault();
+				});
+				item.addEventListener('mouseenter', function () {
+					setActiveType(index, false);
+				});
+				item.addEventListener('focus', function () {
+					setActiveType(index, false);
+				});
+				item.addEventListener('click', function (event) {
+					event.stopPropagation();
+					lastTypeValue = String(item.getAttribute('data-value') || 'rechnung');
+				});
+				item.addEventListener('keydown', function (event) {
+					if (!typePickerOpen) {
+						return;
+					}
+					if (event.key === 'ArrowDown') {
+						event.preventDefault();
+						moveType(1, true);
+						return;
+					}
+					if (event.key === 'ArrowUp') {
+						event.preventDefault();
+						moveType(-1, true);
+						return;
+					}
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						closeTypePicker(true);
+						return;
+					}
+					if (event.key && event.key.length === 1 && chooseTypeByFirstLetter(event.key)) {
+						event.preventDefault();
+					}
+				});
+			});
+
+			document.addEventListener('click', function (event) {
+				if (!typePickerOpen) {
+					return;
+				}
+				if (!typePicker.contains(event.target) && event.target !== submitBtn) {
+					closeTypePicker(false);
+				}
+			});
+
+			form.addEventListener('submit', function (event) {
+				var submitter = event.submitter || null;
+				if (toInt(kontaktIdInput.value) > 0 && toInt(artikelIdInput.value) > 0) {
+					if (submitter && submitter.classList && submitter.classList.contains('cmx-adminbar-type-option')) {
+						lastTypeValue = String(submitter.getAttribute('data-value') || 'rechnung');
+						closeTypePicker(false);
+						return;
+					}
+					event.preventDefault();
+					if (typePickerOpen) {
+						var activeItem = typeItems[typeActive] || typeItems[0] || null;
+						if (activeItem) {
+							lastTypeValue = String(activeItem.getAttribute('data-value') || 'rechnung');
+							activeItem.click();
+						}
+						return;
+					}
+					openTypePicker();
+					return;
+				}
+				event.preventDefault();
+				if (toInt(kontaktIdInput.value) <= 0) {
+					closeTypePicker(false);
+					kontaktInput.focus();
+					return;
+				}
+				closeTypePicker(false);
+				artikelInput.focus();
+			});
+
+			updateSubmit();
+
+			document.addEventListener('keydown', function (event) {
+				if (!isStartDashboard || event.key !== 'Tab' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+					return;
+				}
+				if (isTextInputTarget(event.target)) {
+					return;
+				}
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				focusAndSelect(kontaktInput);
+				fetchContacts('', kontaktNav.render);
+			}, true);
+
+			if (new URLSearchParams(window.location.search).get('cmx_quickcreate_focus') === 'menge') {
+				window.setTimeout(function () {
+					var qty = document.querySelector('#cmx-positionen-table input[name*="[menge]"]');
+					if (qty) {
+						qty.focus();
+						try { qty.select(); } catch (err) {}
+					}
+				}, 250);
+			}
+		});
+		</script>
+		<?php
+	}
+}
+
+add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar_my_account_avatar_fallback', 99999);
+function cmx65_adminbar_my_account_avatar_fallback(\WP_Admin_Bar $wp_admin_bar): void {
+	if (!\is_user_logged_in() || !\is_admin_bar_showing()) {
+		return;
+	}
+
+	$fallback_url = \esc_url(cmx65_adminbar_fallback_avatar_url());
+	if ($fallback_url === '') {
+		return;
+	}
+
+	$current_user = \wp_get_current_user();
+	$user_id = ($current_user instanceof \WP_User && $current_user->exists()) ? (int) $current_user->ID : 0;
+	$should_force_fallback = false;
+	if ($user_id > 0 && \function_exists('\\get_avatar_data')) {
+		$avatar_data = (array) \get_avatar_data($user_id, ['size' => 64]);
+		$should_force_fallback = empty($avatar_data['found_avatar']);
+	}
+
+	$targets = [
+		'my-account' => ['size' => 26],
+		'user-info'  => ['size' => 64],
+	];
+
+	foreach ($targets as $node_id => $config) {
+		$node = $wp_admin_bar->get_node($node_id);
+		if (!$node) {
+			continue;
+		}
+
+		$title = (string) ($node->title ?? '');
+		if ($title === '') {
+			continue;
+		}
+
+		$size = (int) ($config['size'] ?? 26);
+		if ($should_force_fallback || \stripos($title, '<img') === false) {
+			$node->title = cmx65_adminbar_force_avatar_in_title($title, $size, $fallback_url);
+			$wp_admin_bar->add_node((array) $node);
+		}
+	}
+}
+
+add_action('admin_footer', __NAMESPACE__ . '\\cmx65_adminbar_avatar_fallback_script', 20);
+add_action('wp_footer', __NAMESPACE__ . '\\cmx65_adminbar_avatar_fallback_script', 20);
+function cmx65_adminbar_avatar_fallback_script(): void {
+	if (!\is_user_logged_in() || !\is_admin_bar_showing()) {
+		return;
+	}
+
+	$fallback_url = (string) cmx65_adminbar_fallback_avatar_url();
+	if ($fallback_url === '') {
+		return;
+	}
+	?>
+	<script>
+	(function(){
+		var fallbackUrl = <?php echo \wp_json_encode($fallback_url); ?>;
+		if (!fallbackUrl) return;
+
+		function applyFallback(img) {
+			if (!img) return;
+			img.setAttribute('src', fallbackUrl);
+			img.removeAttribute('srcset');
+			img.classList.add('cmx-adminbar-fallback-avatar');
+		}
+
+		function isDefaultAvatar(img) {
+			if (!img) return false;
+			if (img.classList.contains('avatar-default')) return true;
+			var src = String(img.getAttribute('src') || '');
+			return /[?&]d=/.test(src) || /gravatar\.com\/avatar/i.test(src);
+		}
+
+		function ensureAvatar(selector, size) {
+			var item = document.querySelector(selector);
+			if (!item) return;
+
+			var img = item.querySelector('img.avatar');
+			if (!img) {
+				img = document.createElement('img');
+				img.alt = '';
+				img.width = size;
+				img.height = size;
+				img.decoding = 'async';
+				img.loading = 'lazy';
+				img.className = 'avatar avatar-' + String(size) + ' photo cmx-adminbar-fallback-avatar';
+				item.insertBefore(img, item.firstChild);
+				applyFallback(img);
+				return;
+			}
+
+			img.addEventListener('error', function handleError() {
+				applyFallback(img);
+			}, { once: true });
+
+			if (!img.getAttribute('src') || isDefaultAvatar(img)) {
+				applyFallback(img);
+			}
+		}
+
+		function ensureAvatars() {
+			ensureAvatar('#wp-admin-bar-my-account > .ab-item', 26);
+			ensureAvatar('#wp-admin-bar-user-info > .ab-item', 64);
+		}
+
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', ensureAvatars, { once: true });
+		} else {
+			ensureAvatars();
+		}
+	})();
+	</script>
+	<?php
+}
+
+add_action('wp_head', __NAMESPACE__ . '\\cmx65_render_front_quicklinks_css', 20);
+function cmx65_render_front_quicklinks_css(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+		echo '<style id="cmx-front-quicklinks-css">'
+			. '.cmx-front-quicklinks{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#a42c24;color:#fff;font-size:13px;line-height:1.3;}'
+			. '.cmx-front-quicklinks-main{display:flex;flex-wrap:wrap;align-items:center;gap:10px;}'
+			. '.cmx-front-quicklinks a{color:#fff;text-decoration:none;font-weight:700;}'
+			. '.cmx-front-quicklinks a.cmx-front-home-link{color:#ffeb3b;}'
+			. '.cmx-front-quicklinks a:hover,.cmx-front-quicklinks a:focus{text-decoration:underline;color:#fff;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown{position:relative;display:inline-flex;align-items:center;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;list-style:none;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-toggle::-webkit-details-marker{display:none;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-toggle::after{content:"▾";font-size:11px;opacity:.85;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-menu{position:absolute;top:calc(100% + 8px);left:0;min-width:180px;padding:8px 0;border-radius:12px;background:#8f211b;box-shadow:0 18px 38px rgba(0,0,0,.24);display:flex;flex-direction:column;z-index:1000;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-menu a{padding:8px 14px;white-space:nowrap;}'
+			. '.cmx-front-quicklinks .cmx-front-dropdown-menu a:hover,.cmx-front-quicklinks .cmx-front-dropdown-menu a:focus{background:rgba(255,255,255,.08);text-decoration:none;}'
+			. '.cmx-front-quicklinks .cmx-front-sep{opacity:.55;}'
+			. '.cmx-front-quicklinks-logout{margin-left:auto;white-space:nowrap;}'
+		. 'html{margin-top:0 !important;}* html body{margin-top:0 !important;}'
+		. '@media (max-width: 900px){.cmx-front-quicklinks{flex-wrap:wrap;}.cmx-front-quicklinks-logout{margin-left:0;}}'
+		. '@media screen and (max-width:782px){html{margin-top:0 !important;}}'
+		. '</style>';
+}
+
+add_action('wp_body_open', __NAMESPACE__ . '\\cmx65_render_front_quicklinks', 5);
+function cmx65_render_front_quicklinks(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+
+	$support_url = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')
+		? \add_query_arg(
+			[
+				'page' => CMX_SETTINGS_SLUG,
+				'tab'  => 'support',
+			],
+			\admin_url('admin.php')
+		)
+		: \admin_url('admin.php?page=cmx-einstellungen&tab=support');
+
+	$links = [
+		['label' => 'Home', 'href' => \home_url('/wp-admin/')],
+		['label' => 'Mis Büro'],
+		['label' => 'Archiv', 'href' => \home_url('/archiv/')],
+		['label' => 'Scanner', 'href' => \home_url('/scanner/')],
+	];
+
+	$company_links = [
+		['label' => 'Website', 'href' => 'https://misbuero.ch/', 'target' => '_blank'],
+		['label' => 'FAQ', 'href' => 'https://misbuero.ch/faq/', 'target' => '_blank'],
+		['label' => 'Aktuelles', 'href' => 'https://misbuero.ch/aktuelles/', 'target' => '_blank'],
+		['label' => 'YouTube', 'href' => 'https://www.youtube.com/@MisBuero', 'target' => '_blank'],
+	];
+
+	$pages_links = [
+		['label' => 'Katalog', 'href' => cmx65_adminbar_katalog_focus_url(), 'target' => '_blank'],
+		['label' => 'Onlineshop', 'href' => \function_exists(__NAMESPACE__ . '\\cmx_online_shop_url') ? cmx_online_shop_url() : \home_url('/onlineshop/'), 'target' => '_blank'],
+		['label' => 'Telefonbuch', 'href' => \home_url('/telefonbuch/'), 'target' => '_blank'],
+		['label' => 'Buchungen', 'href' => \home_url('/buchungen/'), 'target' => '_blank'],
+	];
+	$pages_links = (array) \apply_filters('cmx65_front_pages_links', $pages_links);
+
+	$apps_links = [];
+
+	if (\current_user_can('manage_options')) {
+		$token = \get_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN);
+		if (empty($token)) {
+			$token = \wp_generate_uuid4();
+			\update_option(MIS_BUERO_BELEG_UPLOAD::OPTION_TOKEN, $token, false);
+		}
+		$apps_links[] = ['label' => 'PDF Upload', 'href' => \home_url('/mis-upload/?token=' . $token), 'target' => '_blank'];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_url')) {
+			$stopwatch_url = (string) cmx_ext_time_stopwatch_url();
+			if ($stopwatch_url !== '') {
+				$apps_links[] = ['label' => 'Stoppuhr', 'href' => $stopwatch_url, 'target' => '_blank'];
+			}
+		}
+		$apps_links[] = ['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'];
+	} else {
+		$links[] = ['label' => 'Monitoring', 'href' => 'https://anyboard.io/', 'target' => '_blank'];
+	}
+
+	$links[] = ['label' => 'Support-Ticket', 'href' => $support_url];
+
+	echo '<nav class="cmx-front-quicklinks" aria-label="Schnellnavigation">';
+	echo '<div class="cmx-front-quicklinks-main">';
+	$first = true;
+	foreach ($links as $link) {
+		if (!$first) {
+			echo '<span class="cmx-front-sep">|</span>';
+		}
+		$first = false;
+			$href = (string) ($link['href'] ?? '');
+			$label = (string) ($link['label'] ?? '');
+			$target = (string) ($link['target'] ?? '');
+			$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+			$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+			$class_attr = ($label === 'Home') ? ' class="cmx-front-home-link"' : '';
+			if ($label === 'Mis Büro' && !empty($company_links)) {
+				echo '<details class="cmx-front-dropdown">';
+				echo '<summary class="cmx-front-dropdown-toggle">Mis Büro</summary>';
+				echo '<div class="cmx-front-dropdown-menu">';
+				foreach ($company_links as $company_link) {
+					$company_href = (string) ($company_link['href'] ?? '');
+					$company_label = (string) ($company_link['label'] ?? '');
+					$company_target = (string) ($company_link['target'] ?? '');
+					$company_rel = ($company_target === '_blank') ? ' rel="noopener noreferrer"' : '';
+					$company_target_attr = ($company_target !== '') ? ' target="' . \esc_attr($company_target) . '"' : '';
+					echo '<a href="' . \esc_url($company_href) . '"' . $company_target_attr . $company_rel . '>' . \esc_html($company_label) . '</a>';
+				}
+				echo '</div>';
+				echo '</details>';
+				continue;
+			}
+			echo '<a href="' . \esc_url($href) . '"' . $class_attr . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+		}
+	if (!empty($pages_links)) {
+		if (!$first) {
+			echo '<span class="cmx-front-sep">|</span>';
+		}
+		$first = false;
+		echo '<details class="cmx-front-dropdown">';
+		echo '<summary class="cmx-front-dropdown-toggle">Seiten</summary>';
+		echo '<div class="cmx-front-dropdown-menu">';
+		foreach ($pages_links as $link) {
+			$href = (string) ($link['href'] ?? '');
+			$label = (string) ($link['label'] ?? '');
+			$target = (string) ($link['target'] ?? '');
+			$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+			$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+			echo '<a href="' . \esc_url($href) . '"' . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+		}
+		echo '</div>';
+		echo '</details>';
+	}
+	if (!empty($apps_links)) {
+		if (!$first) {
+			echo '<span class="cmx-front-sep">|</span>';
+		}
+		$first = false;
+		echo '<details class="cmx-front-dropdown">';
+		echo '<summary class="cmx-front-dropdown-toggle">Apps</summary>';
+		echo '<div class="cmx-front-dropdown-menu">';
+		foreach ($apps_links as $link) {
+			$href = (string) ($link['href'] ?? '');
+			$label = (string) ($link['label'] ?? '');
+			$target = (string) ($link['target'] ?? '');
+			$rel = ($target === '_blank') ? ' rel="noopener noreferrer"' : '';
+			$target_attr = ($target !== '') ? ' target="' . \esc_attr($target) . '"' : '';
+			echo '<a href="' . \esc_url($href) . '"' . $target_attr . $rel . '>' . \esc_html($label) . '</a>';
+		}
+		echo '</div>';
+		echo '</details>';
+	}
+	echo '</div>';
+	echo '<div class="cmx-front-quicklinks-logout"><a href="' . \esc_url(\wp_logout_url(\home_url('/'))) . '">Abmelden</a></div>';
+	echo '</nav>';
+}
+
+add_action('wp_footer', __NAMESPACE__ . '\\cmx65_render_front_quicklinks_script', 20);
+function cmx65_render_front_quicklinks_script(): void {
+	if (!cmx65_is_instance_home_request()) {
+		return;
+	}
+	?>
+	<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		var nav = document.querySelector('.cmx-front-quicklinks');
+		if (!nav) {
+			return;
+		}
+
+		var dropdowns = Array.prototype.slice.call(nav.querySelectorAll('.cmx-front-dropdown'));
+		if (!dropdowns.length) {
+			return;
+		}
+
+		var closeDropdown = function (dropdown) {
+			if (dropdown) {
+				dropdown.removeAttribute('open');
+			}
+		};
+
+		var closeAllDropdowns = function (except) {
+			dropdowns.forEach(function (dropdown) {
+				if (dropdown !== except) {
+					closeDropdown(dropdown);
+				}
+			});
+		};
+
+		dropdowns.forEach(function (dropdown) {
+			var summary = dropdown.querySelector('.cmx-front-dropdown-toggle');
+			if (summary) {
+				summary.addEventListener('click', function () {
+					if (!dropdown.hasAttribute('open')) {
+						closeAllDropdowns(dropdown);
+					}
+				});
+			}
+
+			dropdown.addEventListener('toggle', function () {
+				if (dropdown.open) {
+					closeAllDropdowns(dropdown);
+				}
+			});
+
+			dropdown.querySelectorAll('.cmx-front-dropdown-menu a').forEach(function (link) {
+				link.addEventListener('click', function () {
+					closeAllDropdowns();
+				});
+			});
+		});
+
+		document.addEventListener('click', function (event) {
+			if (!nav.contains(event.target)) {
+				closeAllDropdowns();
+			}
+		});
+
+		document.addEventListener('focusin', function (event) {
+			if (!nav.contains(event.target)) {
+				closeAllDropdowns();
+			}
+		});
+
+		document.addEventListener('keydown', function (event) {
+			if (event.key === 'Escape') {
+				closeAllDropdowns();
+			}
+		});
+	});
+	</script>
+	<?php
+}
+
+add_action('admin_bar_menu', __NAMESPACE__ . '\\cmx65_adminbar', 999);
+function cmx65_adminbar($wp_admin_bar) {
+
+	$wp_admin_bar->remove_node('wp-logo');
+	$wp_admin_bar->remove_node('new-content');
+	$wp_admin_bar->remove_node('comments');
+	$wp_admin_bar->remove_node('search');
+	$wp_admin_bar->remove_node('command-palette');
+
+	$current_user = \wp_get_current_user();
+	if ($current_user instanceof \WP_User && $current_user->exists() && \strtolower((string) $current_user->user_login) !== 'cloudmeister') {
+		$home_url_label = (string) \preg_replace('~^https?://~i', '', (string) \home_url('/'));
+		$home_url_label = \rtrim($home_url_label, '/');
+		$wp_admin_bar->remove_node('site-name');
+		$wp_admin_bar->remove_node('view-site');
+		$wp_admin_bar->add_menu([
+			'id'    => 'cmx65_view_site_direct',
+			'title' => '<span class="ab-icon dashicons dashicons-admin-home" aria-hidden="true"></span><span class="ab-label">' . \esc_html($home_url_label) . '</span>',
+			'href'  => \home_url('/'),
+			'meta'  => [
+				'title' => __('Website aufrufen', 'textdomain'),
+			],
+		]);
+	}
+
+	$hufe_pdf_url = \plugins_url('assets/Alanis_Hufe.pdf', \dirname(__DIR__, 2) . '/cmx-misbuero.php');
+	$hufe_icon_path = \dirname(__DIR__, 2) . '/assets/icons/smile.svg';
+	$hufe_icon = '<span class="dashicons dashicons-pdf" aria-hidden="true"></span>';
+	if (\is_readable($hufe_icon_path)) {
+		$hufe_svg = (string) \file_get_contents($hufe_icon_path);
+		$hufe_svg = (string) \preg_replace('/<svg\b/', '<svg class="cmx-adminbar-hufe-icon" aria-hidden="true" focusable="false"', $hufe_svg, 1);
+		if ($hufe_svg !== '') {
+			$hufe_icon = $hufe_svg;
+		}
+	}
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_hufe_pdf_id',
+		'title' => $hufe_icon . '<span class="screen-reader-text">Hufe PDF</span>',
+		'href'  => \esc_url($hufe_pdf_url),
+		'meta'  => [
+			'title'  => 'Hufe Tastatur-Spickzettel öffnen',
+			'target' => '_blank',
+			'rel'    => 'noopener noreferrer',
+			'class'  => 'cmx-adminbar-hufe-pdf',
+		],
+	]);
+
+	if (\is_admin() && \function_exists(__NAMESPACE__ . '\\cmx65_adminbar_beleg_quickcreate_allowed') && cmx65_adminbar_beleg_quickcreate_allowed()) {
+		$quickcreate_markup = (string) cmx65_adminbar_beleg_quickcreate_markup();
+		if ($quickcreate_markup !== '') {
+			$wp_admin_bar->add_menu([
+				'id'    => 'cmx65_beleg_create_id',
+				'title' => $quickcreate_markup,
+				'href'  => false,
+				'meta'  => [
+					'title' => 'Beleg Schnell-Erfassung',
+					'class' => 'cmx-adminbar-beleg-create-node',
+				],
+			]);
+		}
+	}
+
+	if (\is_admin()) {
+		$adminbar_red = \function_exists(__NAMESPACE__ . '\\cmx_admin_global_color')
+			? cmx_admin_global_color('rot', '#a42c24')
+			: '#a42c24';
+		$adminbar_hover_green = \function_exists(__NAMESPACE__ . '\\cmx_admin_global_color')
+			? cmx_admin_global_color('gruen', '#a6c73f')
+			: '#a6c73f';
+			echo '
+			<style>
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"]:hover > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"].hover > .ab-item {
+            background: ' . \esc_html($adminbar_red) . ' !important;
+            color: #fff !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:hover,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] > .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"]:hover > .ab-item,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"].hover > .ab-item {
+            background: ' . \esc_html($adminbar_red) . ' !important;
+            color: #ffeb3b !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-submenu,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-submenu .ab-item {
+            background: ' . \esc_html($adminbar_red) . ' !important;
+            color: #fff !important;
+        }
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:hover,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:focus,
+        #wpadminbar [id^="wp-admin-bar-cmx65_"] .ab-sub-wrapper .ab-item:active {
+            background: ' . \esc_html($adminbar_hover_green) . ' !important;
+            color: #fff !important;
+        }
+        #wpadminbar .cmx-nohover > .ab-item {
+            cursor: default !important;
+            pointer-events: none !important;
+            background: ' . \esc_html($adminbar_red) . ' !important;
+            color: #fff !important;
+        }
+        #wpadminbar .cmx-nohover > .ab-item:hover {
+            background: ' . \esc_html($adminbar_red) . ' !important;
+            color: #ffeb3b !important;
+        }
+        #wpadminbar #wp-admin-bar-cmx65_monitoring_id > .ab-item {
+            cursor: copy !important;
+        }
+        #wpadminbar #wp-admin-bar-cmx65_hufe_pdf_id > .ab-item {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 34px !important;
+            min-width: 34px !important;
+            padding: 0 !important;
+        }
+        #wpadminbar #wp-admin-bar-cmx65_hufe_pdf_id .dashicons {
+            width: 18px !important;
+            height: 18px !important;
+            font-size: 18px !important;
+            line-height: 18px !important;
+            margin: 0 !important;
+        }
+        #wpadminbar #wp-admin-bar-cmx65_hufe_pdf_id .cmx-adminbar-hufe-icon {
+            display: block !important;
+            width: 18px !important;
+            height: 18px !important;
+            margin: 0 !important;
+            color: currentColor !important;
+            stroke: currentColor !important;
+        }
+    </style>';
+	}
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_name_id',
+	// 	'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
+	// 	'href'  => false,
+	// 	'meta'  => [
+	// 		'title'  => '',
+	// 		'class' => 'cmx-nohover',
+	// 	],
+	// ]);
+
+
+	// fixme rju 2026-02-15: Evtl. spöter zur eignen homePage springen?
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_name_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none;">Mis Büro</span>',
+		'href'  => 'https://misbuero.ch/',
+		'meta'  => [
+			'title'  => __('Zur Mis Büro Homepage', 'textdomain'),
+			'target' => '_blank',
+			'rel'    => 'noopener',
+		],
+	]);
+
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menu1_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		$wp_admin_bar->add_menu([
+			'id'    => 'cmx65_monitoring_id',
+			'title' => 'Monitoring',
+			'href'  => 'https://anyboard.io/',
+			'meta'  => [
+				'title'  => __('Monitoring für Apple TV', 'textdomain'),
+				'target' => '_blank',
+				'rel'    => 'noopener',
+			],
+		]);
+	}
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_pages_id',
+		'title' => 'Seiten',
+		'href'  => false,
+		'meta'  => [
+			'title' => 'Seiten',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_katalog_id',
+		'parent' => 'cmx65_pages_id',
+		'title' => 'Katalog',
+		'href'  => cmx65_adminbar_katalog_focus_url(),
+		'meta'  => [
+			'title'  => __('Dein Online Katalog', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_onlineshop_id',
+		'parent' => 'cmx65_pages_id',
+		'title' => 'Onlineshop',
+		'href'  => \function_exists(__NAMESPACE__ . '\\cmx_online_shop_url') ? cmx_online_shop_url() : \home_url('/onlineshop/'),
+		'meta'  => [
+			'title'  => __('Dein Onlineshop', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_telefon_id',
+		'parent' => 'cmx65_pages_id',
+		'title' => 'Telefonbuch',
+		'href'  => \home_url('/telefonbuch/'),
+		'meta'  => [
+			'title'  => __('Dein Telefonbuch', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_buchungen_id',
+		'parent' => 'cmx65_pages_id',
+		'title' => 'Buchungen',
+		'href'  => \home_url('/buchungen/'),
+		'meta'  => [
+			'title'  => __('Deine Online Buchungen', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+	\do_action('cmx65_adminbar_pages_menu', $wp_admin_bar);
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_archiv_id',
+	// 	'title' => 'Archiv',
+	// 	'href'  => '/archiv/',
+	// 	'meta'  => [
+	// 		'title'  => __('Dein Archiv', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_scanner_id',
+	// 	'title' => 'Scanner',
+	// 	'href'  => '/scanner/',
+	// 	'meta'  => [
+	// 		'title'  => __('Deine digitale Post', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
+
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_menu2_id',
+	// 	'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+	// 	'href'  => false,
+	// 	'meta'  => [
+	// 		'title'  => '',
+	// 		'class' => 'cmx-nohover',
+	// 	],
+	// ]);
+
+	if ( current_user_can( 'manage_options' ) ) {
+		$url = cmx65_adminbar_pdf_upload_url();
+		$stopwatch_url = \function_exists(__NAMESPACE__ . '\\cmx_ext_time_stopwatch_url')
+			? (string) cmx_ext_time_stopwatch_url()
+			: '';
+
+		$wp_admin_bar->add_menu( [
+			'id'    => 'cmx65_apps_id',
+			'title' => 'Apps',
+			'href'  => false,
+			'meta'  => [
+				'title' => 'Apps',
+			],
+		] );
+
+		$wp_admin_bar->add_menu( [
+			'id'     => 'cmx65_apps_pdf_upload_id',
+			'parent' => 'cmx65_apps_id',
+			'title'  => 'PDF Upload',
+			'href'   => esc_url( $url ),
+			'meta'   => [
+				'title'  => 'PDF Upload',
+				'target' => '_blank',
+				'rel'    => 'noopener noreferrer',
+			],
+		] );
+
+		if ( $stopwatch_url !== '' ) {
+			$wp_admin_bar->add_menu( [
+				'id'     => 'cmx65_apps_stopwatch_id',
+				'parent' => 'cmx65_apps_id',
+				'title'  => 'Stoppuhr',
+				'href'   => esc_url( $stopwatch_url ),
+				'meta'   => [
+					'title'  => 'Stoppuhr',
+					'target' => '_blank',
+					'rel'    => 'noopener noreferrer',
+				],
+			] );
+		}
+
+		$wp_admin_bar->add_menu( [
+			'id'     => 'cmx65_monitoring_id',
+			'parent' => 'cmx65_apps_id',
+			'title'  => 'Monitoring',
+			'href'   => 'https://anyboard.io/',
+			'meta'   => [
+				'title'  => __('Monitoring für Apple TV', 'textdomain'),
+				'target' => '_blank',
+				'rel'    => 'noopener',
+			],
+		] );
+	}
+
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_menu23_id',
+		'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+		'href'  => false,
+		'meta'  => [
+			'title'  => '',
+			'class' => 'cmx-nohover',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_faq_id',
+		'parent' => 'cmx65_name_id',
+		'title' => 'FAQ',
+		'href'  => 'https://misbuero.ch/faq/',
+		'meta'  => [
+			'title'  => __('Du hast allgemeines Fragen?', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_aktuelles_id',
+		'parent' => 'cmx65_name_id',
+		'title' => 'Aktuelles',
+		'href'  => 'https://misbuero.ch/aktuelles/',
+		'meta'  => [
+			'title'  => __('Aktuelles für Dich Online', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_videos_id',
+		'parent' => 'cmx65_name_id',
+		'title' => 'YouTube',
+		'href'  => 'https://www.youtube.com/@MisBuero',
+		'meta'  => [
+			'title'  => __('Mehr über Mis Büro erfahren...', 'textdomain'),
+			'target' => '_blank',
+		],
+	]);
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_roadmap',
+	// 	'title' => 'Roadmap',
+	// 	'href'  => 'https://misbuero.ch/roadmap/',
+	// 	'meta'  => [
+	// 		'title'  => __('Wie geht es weiter mit Mis Büro?', 'textdomain'),
+	// 		'target' => '_blank',
+	// 	],
+	// ]);
+
+	// $wp_admin_bar->add_menu([
+	// 	'id'    => 'cmx65_menux_id',
+	// 	'title' => '<span class="ab-label" style="cursor:default; pointer-events:none; color:yellow;">–</span>',
+	// 	'href'  => false,
+	// 	'meta'  => [
+	// 		'title'  => '',
+	// 		'class' => 'cmx-nohover',
+	// 	],
+	// ]);
+
+	// Support-URL: wenn Konstante vorhanden, nutze sie, sonst Fallback
+	if (defined(__NAMESPACE__ . '\\CMX_SETTINGS_SLUG')) {
+		$support_url = add_query_arg(
+			[
+				'page' => CMX_SETTINGS_SLUG,
+				'tab'  => 'support',
+			],
+			admin_url('admin.php')
+		);
+	} else {
+		$support_url = admin_url('admin.php?page=cmx-einstellungen&tab=support');
+	}
+
+	$wp_admin_bar->add_menu([
+		'id'    => 'cmx65_support_id',
+		'title' => 'Support-Ticket',
+		'href'  => esc_url($support_url),
+		'meta'  => [
+			'title' => __('Hier kannst ein Support Ticket erstellen', 'textdomain'),
+		],
+	]);
+
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_anyboard_copy_script');
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_katalog_copy_script');
+	add_action('admin_footer', __NAMESPACE__ . '\\cmx65_apps_pdf_upload_script');
+	add_action('wp_footer', __NAMESPACE__ . '\\cmx65_apps_pdf_upload_script');
+}
+
+function cmx65_anyboard_copy_script(): void
+{
+	$current_user = wp_get_current_user();
+	$user = $current_user && $current_user->exists() ? $current_user->user_login : '';
+	$pw = $current_user && $current_user->exists()
+		? (string) get_user_meta($current_user->ID, 'cmx_anyboard_pw', true)
+		: '';
+
+	$args = [
+		'user' => $user,
+		'pw' => '{DeinPassword}',
+	];
+
+	$anyboard_url = add_query_arg($args, home_url('/wp-json/cmx-misbuero/v1/anyboard'));
+
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-cmx65_monitoring_id > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var url = ' . json_encode($anyboard_url) . ';
+                var openAnyboard = function () {
+                    window.open("https://anyboard.io/", "_blank", "noopener");
+                };
+                if (!url) {
+                    openAnyboard();
+                    return;
+                }
+                var done = function () {
+                    alert("URL für Anyboard wurde in die Zeischenablage kopiert.");
+                    openAnyboard();
+                };
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                        done();
+                    } catch (e) {
+                        window.prompt("URL kopieren:", url);
+                        openAnyboard();
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(done, fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
+}
+
+function cmx65_apps_pdf_upload_script(): void
+{
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-cmx65_apps_pdf_upload_id > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function (event) {
+                var url = link.getAttribute("href");
+                if (!url) return;
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                    } catch (e) {
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
+}
+
+function cmx65_katalog_copy_script(): void
+{
+	echo '
+		<script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var link = document.querySelector("#wp-admin-bar-cmx65_katalog_id > .ab-item");
+            if (!link) return;
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var url = link.getAttribute("href");
+                if (!url) return;
+                var target = link.getAttribute("target") || "";
+                var openLink = function () {
+                    if (target === "_blank") {
+                        window.open(url, "_blank", "noopener");
+                        return;
+                    }
+                    window.location.href = url;
+                };
+                var fallbackCopy = function () {
+                    var textarea = document.createElement("textarea");
+                    textarea.value = url;
+                    textarea.setAttribute("readonly", "");
+                    textarea.style.position = "fixed";
+                    textarea.style.top = "-1000px";
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand("copy");
+                        openLink();
+                    } catch (e) {
+                        openLink();
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(openLink, fallbackCopy);
+                } else {
+                    fallbackCopy();
+                }
+            });
+        });
+        </script>';
+}

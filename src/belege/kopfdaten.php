@@ -1,0 +1,2234 @@
+<?php namespace CLOUDMEISTER\CMX\Buero;
+defined('ABSPATH') || die('Oxytocin!');
+
+/* =========================================================
+ * Meta Keys (Defensive Definition)
+ * ========================================================= */
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF'))        \define(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF', '_cmx_beleg_betreff');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG'))   \define(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG', '_cmx_beleg_beschreibung');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) \define(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL', '_cmx_beleg_betreff_manual');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) \define(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL', '_cmx_beleg_beschreibung_manual');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID'))     \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID', '_cmx_beleg_kontakt_id');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR'))   \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR', '_cmx_beleg_kontakt_addr');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL'))  \define(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL', '_cmx_beleg_projekt_label');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL'))  \define(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL', '_cmx_beleg_kontakt_label');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID'))     \define(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID', '_cmx_beleg_projekt_id');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG'))       \define(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG', '_cmx_beleg_richtung');
+if (!\defined(__NAMESPACE__.'\\CMX_BELEG_META_STATUS'))         \define(__NAMESPACE__.'\\CMX_BELEG_META_STATUS', '_cmx_beleg_status');
+
+/* =========================================================
+ * Helpers
+ * ========================================================= */
+if (!\function_exists(__NAMESPACE__.'\\cmx_belege_tax')) {
+	function cmx_belege_tax(): ?string {
+		foreach (['belege_kategorien','belege_kategorie','beleg_kategorien','beleg_kategorie','belege_categories','belege_typ','belege_themen'] as $tax) {
+			if (\taxonomy_exists($tax)) return $tax;
+		}
+		return null;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kategorie_allowed_slugs')) {
+	function cmx_beleg_kategorie_allowed_slugs(): array {
+		return ['rechnung', 'gutschrift', 'quittung', 'offerte', 'lieferschein'];
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_requested_type_slug')) {
+	function cmx_beleg_requested_type_slug(): string {
+		$requested = isset($_GET['cmx_beleg_typ']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_typ'])) : '';
+		if ($requested === '') {
+			return '';
+		}
+		$allowed = cmx_beleg_kategorie_allowed_slugs();
+		return \in_array($requested, $allowed, true) ? $requested : '';
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_richtung_options')) {
+	function cmx_beleg_richtung_options(): array {
+		return [
+			'ausgang' => 'Ausgang',
+			'eingang' => 'Eingang',
+		];
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_strip_url_protocol')) {
+	function cmx_strip_url_protocol(string $url): string {
+		$url = \trim($url);
+		if ($url === '') {
+			return '';
+		}
+		$clean = \preg_replace('~^[a-z][a-z0-9+\-.]*://~i', '', $url);
+		if (\is_string($clean)) {
+			$url = $clean;
+		}
+		if (\strncmp($url, '//', 2) === 0) {
+			$url = (string) \substr($url, 2);
+		}
+		$url = (string) \preg_replace('~/+$~', '', $url);
+		return \trim($url);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_normalize_minus_sign')) {
+	function cmx_normalize_minus_sign(string $value): string {
+		$value = \str_replace(['&#8211;', '&#8212;', '&ndash;', '&mdash;'], '-', $value);
+		$decoded = \html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		if (\is_string($decoded) && $decoded !== '') {
+			$value = $decoded;
+		}
+		return \str_replace(["\u{00A0}", '–', '—', '−'], [' ', '-', '-', '-'], $value);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_url_value')) {
+	function cmx_get_projekt_url_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+		$url = (string) (
+			\get_post_meta($projekt_id, '_cmx_projekt_url', true) ?:
+			\get_post_meta($projekt_id, 'projekt_url', true) ?:
+			\get_post_meta($projekt_id, '_cmx_url', true)
+		);
+		return cmx_strip_url_protocol($url);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_kategorien_value')) {
+	function cmx_get_projekt_kategorien_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+
+		$tax = '';
+		$detect_fn = __NAMESPACE__ . '\\cmx_projekte_detect_taxonomy';
+		if (\is_callable($detect_fn)) {
+			$detected = (string) \call_user_func($detect_fn);
+			if ($detected !== '' && \taxonomy_exists($detected) && \is_object_in_taxonomy('projekte', $detected)) {
+				$tax = $detected;
+			}
+		}
+		if ($tax === '') {
+			foreach (['projekt_kategorie', 'projekte_kategorie', 'projekt_kategorien', 'projekte_kategorien'] as $candidate) {
+				if (\taxonomy_exists($candidate) && \is_object_in_taxonomy('projekte', $candidate)) {
+					$tax = $candidate;
+					break;
+				}
+			}
+		}
+		if ($tax === '') {
+			return '';
+		}
+
+		$names = \wp_get_post_terms($projekt_id, $tax, ['fields' => 'names']);
+		if (\is_wp_error($names) || empty($names)) {
+			return '';
+		}
+		$clean = [];
+		foreach ((array) $names as $name) {
+			$name = \trim((string) $name);
+			if ($name !== '' && !\in_array($name, $clean, true)) {
+				$clean[] = $name;
+			}
+		}
+		return \implode(', ', $clean);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_beschreibung_value')) {
+	function cmx_get_projekt_beschreibung_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+		$post = \get_post($projekt_id);
+		if (!$post || $post->post_type !== 'projekte') {
+			return '';
+		}
+
+		$raw = '';
+		$candidates = [
+			(string) \get_post_meta($projekt_id, '_cmx_projekt_beschreibung', true),
+			(string) \get_post_meta($projekt_id, 'projekt_beschreibung', true),
+			(string) $post->post_excerpt,
+			(string) $post->post_content,
+		];
+		foreach ($candidates as $candidate) {
+			if (\trim($candidate) !== '') {
+				$raw = $candidate;
+				break;
+			}
+		}
+		if ($raw === '') {
+			return '';
+		}
+
+		$raw_no_comments = \preg_replace('/<!--[\s\S]*?-->/', '', $raw);
+		if (\is_string($raw_no_comments)) {
+			$raw = $raw_no_comments;
+		}
+		$raw = (string) \strip_shortcodes($raw);
+
+		return \trim((string) \wp_strip_all_tags($raw));
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_get_projekt_betreff_value')) {
+	function cmx_get_projekt_betreff_value(int $projekt_id): string {
+		if ($projekt_id <= 0) {
+			return '';
+		}
+
+		$url = cmx_get_projekt_url_value($projekt_id);
+		$kategorien = cmx_get_projekt_kategorien_value($projekt_id);
+
+		$parts = [];
+		if ($url !== '') {
+			$parts[] = $url;
+		}
+		if ($kategorien !== '') {
+			$parts[] = $kategorien;
+		}
+
+		if (empty($parts)) {
+			return 'Projekt:';
+		}
+
+		return 'Projekt: ' . \implode(' | ', $parts);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_sync_beleg_duplicate')) {
+	function cmx_sync_beleg_duplicate(int $source_id, int $target_id): void {
+		$orig = \get_post($source_id);
+		$target = \get_post($target_id);
+		if (!$orig || !$target) return;
+		if ($orig->post_type !== 'belege' || $target->post_type !== 'belege') return;
+
+		\wp_update_post([
+			'ID'             => $target_id,
+			'post_content'   => $orig->post_content,
+			'post_excerpt'   => $orig->post_excerpt,
+			'comment_status' => $orig->comment_status,
+			'ping_status'    => $orig->ping_status,
+			'menu_order'     => $orig->menu_order,
+		]);
+
+		$taxes = \get_object_taxonomies('belege');
+		foreach ($taxes as $tax) {
+			$terms = \wp_get_object_terms($source_id, $tax, ['fields' => 'ids']);
+			if (!\is_wp_error($terms) && !empty($terms)) {
+				\wp_set_object_terms($target_id, $terms, $tax, false);
+			}
+		}
+
+		$blacklist = \function_exists(__NAMESPACE__ . '\\cmx_dup_meta_blacklist')
+			? cmx_dup_meta_blacklist()
+			: [];
+		$blacklist[] = '_cmx_beleg_copied_from';
+		$blacklist[] = '_cmx_beleg_copied_to';
+		$blacklist[] = '_cmx_beleg_pdf_type';
+		$blacklist[] = '_cmx_title_auto';
+		$blacklist[] = '_cmx_rechnungsnummer';
+		$blacklist[] = '_cmx_beleg_qrr';
+		$blacklist = array_unique($blacklist);
+
+		// Für Sync-Duplikate volatile Werte immer verwerfen, damit sie neu entstehen.
+		foreach (['_cmx_rechnungsnummer', '_cmx_beleg_qrr', '_cmx_beleg_pdf_type', '_cmx_title_auto'] as $volatile_key) {
+			\delete_post_meta($target_id, $volatile_key);
+		}
+
+		$all_meta = \get_post_meta($source_id);
+		foreach ($all_meta as $key => $values) {
+			if (\in_array($key, $blacklist, true)) continue;
+			\delete_post_meta($target_id, $key);
+			foreach ((array) $values as $val) {
+				\add_post_meta($target_id, $key, \maybe_unserialize($val));
+			}
+		}
+		\delete_post_meta($target_id, '_cmx_beleg_pdf_type');
+
+		$thumb_id = \get_post_thumbnail_id($source_id);
+		if ($thumb_id) {
+			\set_post_thumbnail($target_id, $thumb_id);
+		}
+
+		$ensure_fn = __NAMESPACE__ . '\\cmx_ensure_rechnungsnummer';
+		if (\is_callable($ensure_fn)) {
+			$no = $ensure_fn($target_id);
+			if ($no !== '') {
+				\update_post_meta($target_id, '_cmx_title_auto', 1);
+				\wp_update_post([
+					'ID'         => $target_id,
+					'post_title' => $no,
+					'post_name'  => \sanitize_title($no),
+				]);
+			}
+		}
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_positionen_meta_array')) {
+	function cmx_beleg_positionen_meta_array(int $post_id): array {
+		$raw = \get_post_meta($post_id, '_cmx_beleg_positionen', true);
+		if (\is_array($raw)) {
+			return $raw;
+		}
+		if (\is_string($raw) && $raw !== '') {
+			$tmp = \json_decode($raw, true);
+			if (\json_last_error() === JSON_ERROR_NONE && \is_array($tmp)) {
+				return $tmp;
+			}
+			$tmp = @\maybe_unserialize($raw);
+			if (\is_array($tmp)) {
+				return $tmp;
+			}
+		}
+		return [];
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_is_abschnitt')) {
+	function cmx_beleg_row_is_abschnitt($row): bool {
+		if (!\is_array($row)) {
+			return false;
+		}
+		$typ = \sanitize_key((string)($row['typ'] ?? $row['row_type'] ?? ''));
+		return $typ === 'abschnitt';
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_is_position')) {
+	function cmx_beleg_row_is_position($row): bool {
+		if (!\is_array($row)) {
+			return false;
+		}
+		if (cmx_beleg_row_is_abschnitt($row)) {
+			return false;
+		}
+		if (isset($row['artikel_id']) && (int)$row['artikel_id'] > 0) {
+			return true;
+		}
+		return isset($row['menge']) || isset($row['preis']) || isset($row['rabatt']) || isset($row['beschreibung']);
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_row_signature')) {
+	function cmx_beleg_row_signature(array $row): string {
+		$payload = [
+			'artikel_id' => (int)($row['artikel_id'] ?? 0),
+			'menge' => (float) \CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($row['menge'] ?? 0)),
+			'preis' => (float) \CLOUDMEISTER\CMX\Buero\cmx_norm_decimal((string)($row['preis'] ?? 0)),
+			'rabatt' => \trim((string)($row['rabatt'] ?? '')),
+			'beschreibung' => \trim((string)($row['beschreibung'] ?? '')),
+			'task_uid' => \trim((string)($row['task_uid'] ?? '')),
+			'task_idx' => isset($row['task_idx']) && \is_numeric($row['task_idx']) ? (int)$row['task_idx'] : null,
+			'task_projekt_id' => isset($row['task_projekt_id']) && \is_numeric($row['task_projekt_id']) ? (int)$row['task_projekt_id'] : null,
+		];
+		return \md5((string)\wp_json_encode($payload));
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_lieferschein_duplicate_ids')) {
+	function cmx_beleg_lieferschein_duplicate_ids(int $source_id, int $exclude_id = 0): array {
+		$args = [
+			'post_type' => 'belege',
+			'post_status' => ['publish', 'private', 'draft', 'pending', 'future'],
+			'fields' => 'ids',
+			'posts_per_page' => -1,
+			'no_found_rows' => true,
+			'suppress_filters' => true,
+			'meta_query' => [
+				[
+					'key' => '_cmx_beleg_copied_from',
+					'value' => (int)$source_id,
+					'compare' => '=',
+				],
+			],
+		];
+		if ($exclude_id > 0) {
+			$args['post__not_in'] = [(int)$exclude_id];
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if (\is_string($tax) && $tax !== '') {
+			$args['tax_query'] = [[
+				'taxonomy' => $tax,
+				'field' => 'slug',
+				'terms' => ['lieferschein', 'lieferscheine'],
+			]];
+		}
+		$ids = \get_posts($args);
+		if (!\is_array($ids)) {
+			return [];
+		}
+		return \array_values(\array_filter(\array_map('intval', $ids), static function (int $id) use ($source_id, $exclude_id): bool {
+			if ($id <= 0) return false;
+			if ($id === $source_id) return false;
+			if ($exclude_id > 0 && $id === $exclude_id) return false;
+			return true;
+		}));
+	}
+}
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_prepare_lieferschein_duplicate_positions')) {
+	function cmx_beleg_prepare_lieferschein_duplicate_positions(int $source_id, int $target_id): void {
+		$source_rows = cmx_beleg_positionen_meta_array($source_id);
+		if (empty($source_rows) || !\is_array($source_rows)) {
+			\update_post_meta($target_id, '_cmx_beleg_positionen', []);
+			return;
+		}
+
+		$source_counts = [];
+		$source_sigs = [];
+		$total_source_positions = 0;
+		foreach ($source_rows as $idx => $row) {
+			if (!cmx_beleg_row_is_position($row)) {
+				continue;
+			}
+			$sig = cmx_beleg_row_signature((array)$row);
+			$source_sigs[(int)$idx] = $sig;
+			$source_counts[$sig] = (int)($source_counts[$sig] ?? 0) + 1;
+			$total_source_positions++;
+		}
+		if ($total_source_positions <= 0) {
+			\update_post_meta($target_id, '_cmx_beleg_positionen', []);
+			return;
+		}
+
+		$used_counts = [];
+		$existing_ids = cmx_beleg_lieferschein_duplicate_ids($source_id, $target_id);
+		foreach ($existing_ids as $lieferschein_id) {
+			$rows = cmx_beleg_positionen_meta_array((int)$lieferschein_id);
+			foreach ($rows as $row) {
+				if (!cmx_beleg_row_is_position($row)) {
+					continue;
+				}
+				$sig = cmx_beleg_row_signature((array)$row);
+				$used_counts[$sig] = (int)($used_counts[$sig] ?? 0) + 1;
+			}
+		}
+
+		$selected_counts = [];
+		$include_mask = [];
+		$included_positions = 0;
+		foreach ($source_rows as $idx => $row) {
+			if (!isset($source_sigs[(int)$idx])) {
+				continue;
+			}
+			$sig = $source_sigs[(int)$idx];
+			$remaining = (int)($source_counts[$sig] ?? 0)
+				- (int)($used_counts[$sig] ?? 0)
+				- (int)($selected_counts[$sig] ?? 0);
+			if ($remaining > 0) {
+				$include_mask[(int)$idx] = true;
+				$selected_counts[$sig] = (int)($selected_counts[$sig] ?? 0) + 1;
+				$included_positions++;
+			}
+		}
+
+		// Erster Lieferschein: unverändert alle Zeilen aus der Quelle übernehmen.
+		if ($included_positions >= $total_source_positions) {
+			return;
+		}
+
+		$filtered_rows = [];
+		$pending_abschnitt = null;
+		foreach ($source_rows as $idx => $row) {
+			if (cmx_beleg_row_is_abschnitt($row)) {
+				$pending_abschnitt = $row;
+				continue;
+			}
+			if (isset($include_mask[(int)$idx])) {
+				if ($pending_abschnitt !== null) {
+					$filtered_rows[] = $pending_abschnitt;
+					$pending_abschnitt = null;
+				}
+				$filtered_rows[] = $row;
+			}
+		}
+
+		\update_post_meta($target_id, '_cmx_beleg_positionen', $filtered_rows);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_kontakte_cpt')) {
+	function cmx_kontakte_cpt(): string {
+		if (\post_type_exists('kontakte')) return 'kontakte';
+		if (\post_type_exists('kontakt'))  return 'kontakt';
+		return 'kontakte';
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_current_user_can_create_post_type')) {
+	function cmx_current_user_can_create_post_type(string $post_type): bool {
+		$obj = \get_post_type_object($post_type);
+		if (!$obj) {
+			return false;
+		}
+		$cap = (string) ($obj->cap->create_posts ?? '');
+		if ($cap === '') {
+			return \current_user_can('edit_posts');
+		}
+		return \current_user_can($cap);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kontakt_search_normalize_text')) {
+	function cmx_beleg_kontakt_search_normalize_text(string $value): string {
+		$value = cmx_normalize_minus_sign($value);
+		$value = \html_entity_decode($value, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+		$value = \strtr($value, [
+			'Ä' => 'Ae',
+			'Ö' => 'Oe',
+			'Ü' => 'Ue',
+			'ä' => 'ae',
+			'ö' => 'oe',
+			'ü' => 'ue',
+			'ß' => 'ss',
+		]);
+		$value = \function_exists('mb_strtolower')
+			? (string) \mb_strtolower($value, 'UTF-8')
+			: (string) \strtolower($value);
+		$value = (string) \preg_replace('~[^a-z0-9]+~', ' ', $value);
+		$value = (string) \preg_replace('~\s+~', ' ', $value);
+		return \trim($value);
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_kontakt_search_tokens')) {
+	function cmx_beleg_kontakt_search_tokens(string $value): array {
+		$value = cmx_beleg_kontakt_search_normalize_text($value);
+		if ($value === '') {
+			return [];
+		}
+		return \array_values(\array_filter(\explode(' ', $value), static function ($token): bool {
+			return \is_string($token) && $token !== '';
+		}));
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_score_kontakt_candidate')) {
+	function cmx_beleg_score_kontakt_candidate(string $needle, string $title, string $person_name): int {
+		$needle_norm = cmx_beleg_kontakt_search_normalize_text($needle);
+		if ($needle_norm === '') {
+			return 0;
+		}
+
+		$fields = [];
+		foreach ([$title, $person_name, \trim($title . ' ' . $person_name)] as $field) {
+			$field_norm = cmx_beleg_kontakt_search_normalize_text((string) $field);
+			if ($field_norm !== '' && !\in_array($field_norm, $fields, true)) {
+				$fields[] = $field_norm;
+			}
+		}
+		if ($fields === []) {
+			return 0;
+		}
+
+		$best = 0;
+		foreach ($fields as $field) {
+			if ($field === $needle_norm) {
+				return 300;
+			}
+			if (\str_contains($field, $needle_norm)) {
+				$best = \max($best, 220);
+			}
+		}
+
+		$tokens = cmx_beleg_kontakt_search_tokens($needle_norm);
+		if ($tokens === []) {
+			return $best;
+		}
+
+		foreach ($fields as $field) {
+			$matched = 0;
+			$score = 0;
+			foreach ($tokens as $token) {
+				if ($token === '') {
+					continue;
+				}
+				if (\str_contains($field, $token)) {
+					$matched++;
+					$score += 40 + \min(\strlen($token), 12);
+				}
+			}
+			if ($matched === \count($tokens)) {
+				$score += 120;
+			}
+			$best = \max($best, $score);
+		}
+
+		return $best;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_find_existing_kontakt_id_from_label')) {
+	function cmx_beleg_find_existing_kontakt_id_from_label(string $raw_label): int {
+		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field(cmx_normalize_minus_sign($raw_label))));
+		if ($title === '') {
+			return 0;
+		}
+
+		$cpt = cmx_kontakte_cpt();
+		if (!\post_type_exists($cpt)) {
+			return 0;
+		}
+
+		$lookup_args = [
+			'post_type'        => $cpt,
+			'post_status'      => 'any',
+			'posts_per_page'   => 120,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+		];
+
+		$candidate_ids = (array) \get_posts(\array_merge($lookup_args, [
+			's' => $title,
+		]));
+
+		$tokens = cmx_beleg_kontakt_search_tokens($title);
+		foreach (\array_slice($tokens, 0, 4) as $token) {
+			if (\strlen($token) < 2) {
+				continue;
+			}
+			$candidate_ids = \array_merge($candidate_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $token,
+			])));
+			$candidate_ids = \array_merge($candidate_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's'          => '',
+				'meta_query' => [
+					'relation' => 'OR',
+					[
+						'key'     => '_cmx_kontakte_vorname',
+						'value'   => $token,
+						'compare' => 'LIKE',
+					],
+					[
+						'key'     => '_cmx_kontakte_nachname',
+						'value'   => $token,
+						'compare' => 'LIKE',
+					],
+				],
+			])));
+		}
+
+		$candidate_ids = \array_values(\array_unique(\array_filter(\array_map('intval', $candidate_ids))));
+		if ($candidate_ids === []) {
+			return 0;
+		}
+
+		$best_id = 0;
+		$best_score = 0;
+		foreach ($candidate_ids as $kontakt_id) {
+			if ($kontakt_id <= 0) {
+				continue;
+			}
+			$contact_title = \trim((string) \get_the_title($kontakt_id));
+			$person_name = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true) . ' ' . (string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+			$score = cmx_beleg_score_kontakt_candidate($title, $contact_title, $person_name);
+			if ($score > $best_score) {
+				$best_score = $score;
+				$best_id = $kontakt_id;
+			}
+		}
+
+		return $best_score >= 140 ? $best_id : 0;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_create_kontakt_from_label')) {
+	function cmx_beleg_create_kontakt_from_label(string $raw_label): int {
+		$raw_label = cmx_normalize_minus_sign($raw_label);
+		$title = \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field($raw_label)));
+		if ($title === '') {
+			return 0;
+		}
+
+		$existing_id = cmx_beleg_find_existing_kontakt_id_from_label($title);
+		if ($existing_id > 0) {
+			return $existing_id;
+		}
+
+		$cpt = cmx_kontakte_cpt();
+		if (!\post_type_exists($cpt) || !cmx_current_user_can_create_post_type($cpt)) {
+			return 0;
+		}
+
+		$inserted = \wp_insert_post([
+			'post_type'   => $cpt,
+			'post_title'  => $title,
+			'post_status' => 'publish',
+		], true);
+
+		if (\is_wp_error($inserted) || (int) $inserted <= 0) {
+			return 0;
+		}
+
+		return (int) $inserted;
+	}
+}
+if (!\function_exists(__NAMESPACE__.'\\cmx_iso2_from_land')) {
+	function cmx_iso2_from_land(int $kontakt_id, string $meta_key = '_cmx_rechnung_land'): string {
+		$raw = \trim((string) \get_post_meta($kontakt_id, $meta_key, true));
+		if ($raw === '') {
+			return '';
+		}
+
+		$normalized = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_normalize_country_meta_value')
+			? (string) cmx_kontakte_normalize_country_meta_value($raw)
+			: $raw;
+		$key = \function_exists('remove_accents') ? \remove_accents($normalized) : $normalized;
+		$key = \strtolower(\trim($key));
+		$key = \preg_replace('/[^a-z]+/', '', $key) ?: $key;
+
+		$map = [
+			'ch' => 'CH', 'che' => 'CH', 'schweiz' => 'CH', 'switzerland' => 'CH', 'suisse' => 'CH', 'svizzera' => 'CH',
+			'de' => 'DE', 'deu' => 'DE', 'deutschland' => 'DE', 'germany' => 'DE',
+			'at' => 'AT', 'aut' => 'AT', 'osterreich' => 'AT', 'oesterreich' => 'AT', 'austria' => 'AT',
+			'us' => 'US', 'usa' => 'US', 'amerika' => 'US', 'unitedstates' => 'US',
+			'gb' => 'GB', 'uk' => 'GB', 'unitedkingdom' => 'GB', 'grossbritannien' => 'GB',
+			'it' => 'IT', 'ita' => 'IT', 'italien' => 'IT', 'italy' => 'IT',
+			'fr' => 'FR', 'fra' => 'FR', 'frankreich' => 'FR', 'france' => 'FR',
+			'li' => 'LI', 'liechtenstein' => 'LI',
+			'ee' => 'EE', 'estland' => 'EE', 'estonia' => 'EE',
+		];
+		if (isset($map[$key])) {
+			return $map[$key];
+		}
+
+		$upper = \strtoupper($raw);
+		return \preg_match('/^[A-Z]{2}$/', $upper) ? $upper : '';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_contact_address_include_person')) {
+	function cmx_beleg_contact_address_include_person(): bool {
+		$opts = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		return \array_key_exists('belege_kontakt_ansprechpartner_uebernehmen', $opts)
+			? !empty($opts['belege_kontakt_ansprechpartner_uebernehmen'])
+			: true;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_contact_country_prefix_mode')) {
+	function cmx_beleg_contact_country_prefix_mode(): string {
+		$opts = (array) \get_option(\defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN') ? CMX_SETTINGS_MAIN : 'cmx_einstellungen', []);
+		$mode = isset($opts['belege_kontakt_land_kennung']) ? \sanitize_key((string) $opts['belege_kontakt_land_kennung']) : 'immer';
+		return \in_array($mode, ['immer', 'ausland', 'nie'], true) ? $mode : 'immer';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_beleg_contact_city_line')) {
+	function cmx_beleg_contact_city_line(string $plz, string $ort, string $iso2): string {
+		$city = \trim($plz . ' ' . $ort);
+		if ($city === '') {
+			return '';
+		}
+
+		$mode = cmx_beleg_contact_country_prefix_mode();
+		$prefix = '';
+		if ($iso2 !== '' && ($mode === 'immer' || ($mode === 'ausland' && \strtoupper($iso2) !== 'CH'))) {
+			$prefix = \strtoupper($iso2) . '-';
+		}
+
+		return $prefix . $city;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_postanschrift')) {
+	function cmx_build_kontakt_postanschrift(int $kontakt_id): string {
+		if ($kontakt_id <= 0) return '';
+
+		$firma = \trim((string) cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)));
+		$firma_lc = \function_exists('mb_strtolower') ? \mb_strtolower($firma) : \strtolower($firma);
+		if ($firma_lc === 'firmenname fehlt') {
+			$firma = '';
+		}
+
+		$vorname  = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+		$nachname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		$full_name = \trim(\preg_replace('/\s+/', ' ', $vorname . ' ' . $nachname));
+		$is_privat = !empty(\get_post_meta($kontakt_id, '_cmx_kontakte_privat', true));
+
+		$norm = static function (string $value): string {
+			$value = \trim((string) \preg_replace('/\s+/', ' ', $value));
+			return \function_exists('mb_strtolower') ? \mb_strtolower($value) : \strtolower($value);
+		};
+
+		$lines = [];
+		$firma_norm = $norm($firma);
+		$name_norm  = $norm($full_name);
+		$include_person = cmx_beleg_contact_address_include_person();
+
+		// Firmenname zuerst, ausser es ist ein Privatkontakt mit identischem Namen.
+		if ($firma !== '' && (!$is_privat || $firma_norm !== $name_norm)) {
+			$lines[] = $firma;
+		}
+
+		// Danach Vorname + Nachname (falls vorhanden) als eigene Zeile.
+		if ($full_name !== '' && ($include_person || $lines === [])) {
+			$already_present = false;
+			foreach ($lines as $line) {
+				if ($norm($line) === $name_norm) {
+					$already_present = true;
+					break;
+				}
+			}
+			if (!$already_present) {
+				$lines[] = $full_name;
+			}
+		}
+
+		$str  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_strasse', true));
+		$plz  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_plz', true));
+		$ort  = \trim((string) \get_post_meta($kontakt_id, '_cmx_rechnung_ort', true));
+		$iso2 = cmx_iso2_from_land($kontakt_id, '_cmx_rechnung_land');
+
+		if ($str !== '') {
+			$lines[] = $str;
+		}
+
+		$city = \trim($plz . ' ' . $ort);
+		if ($city !== '') {
+			$lines[] = cmx_beleg_contact_city_line($plz, $ort, $iso2);
+		}
+
+		$lines = \array_values(\array_filter(\array_map('trim', $lines), static function ($line) {
+			return $line !== '';
+		}));
+
+		return \implode("\n", $lines);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__.'\\cmx_build_kontakt_lieferanschrift')) {
+	function cmx_build_kontakt_lieferanschrift(int $kontakt_id): string {
+		if ($kontakt_id <= 0) return '';
+
+		$firma = \trim((string) cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)));
+		$firma_lc = \function_exists('mb_strtolower') ? \mb_strtolower($firma) : \strtolower($firma);
+		if ($firma_lc === 'firmenname fehlt') {
+			$firma = '';
+		}
+
+		$vorname  = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_vorname', true));
+		$nachname = \trim((string) \get_post_meta($kontakt_id, '_cmx_kontakte_nachname', true));
+		$full_name = \trim(\preg_replace('/\s+/', ' ', $vorname . ' ' . $nachname));
+		$is_privat = !empty(\get_post_meta($kontakt_id, '_cmx_kontakte_privat', true));
+
+		$norm = static function (string $value): string {
+			$value = \trim((string) \preg_replace('/\s+/', ' ', $value));
+			return \function_exists('mb_strtolower') ? \mb_strtolower($value) : \strtolower($value);
+		};
+
+		$lines = [];
+		$firma_norm = $norm($firma);
+		$name_norm  = $norm($full_name);
+		$include_person = cmx_beleg_contact_address_include_person();
+
+		if ($firma !== '' && (!$is_privat || $firma_norm !== $name_norm)) {
+			$lines[] = $firma;
+		}
+
+		if ($full_name !== '' && ($include_person || $lines === [])) {
+			$already_present = false;
+			foreach ($lines as $line) {
+				if ($norm($line) === $name_norm) {
+					$already_present = true;
+					break;
+				}
+			}
+			if (!$already_present) {
+				$lines[] = $full_name;
+			}
+		}
+
+		$str  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_strasse', true));
+		$plz  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_plz', true));
+		$ort  = \trim((string) \get_post_meta($kontakt_id, '_cmx_liefer_ort', true));
+		$iso2 = cmx_iso2_from_land($kontakt_id, '_cmx_liefer_land');
+
+		if ($str !== '') {
+			$lines[] = $str;
+		}
+
+		$city = \trim($plz . ' ' . $ort);
+		if ($city !== '') {
+			$lines[] = cmx_beleg_contact_city_line($plz, $ort, $iso2);
+		}
+
+		return \trim(\implode("\n", \array_filter($lines, static fn($v) => \trim((string) $v) !== '')));
+	}
+}
+
+/** Rechnungsnummer (Format aus INI, externe Helperfunktion vorausgesetzt) */
+if (!\function_exists(__NAMESPACE__ . '\\cmx_generate_rechnungsnummer')) {
+	function cmx_generate_rechnungsnummer(): string {
+		$format = cmx_ini_get_value('Belege','Format');
+		return \wp_date($format);
+	}
+}
+
+/** Sicherstellen, dass _cmx_rechnungsnummer vorhanden ist */
+if (!\function_exists(__NAMESPACE__.'\\cmx_ensure_rechnungsnummer')) {
+	function cmx_ensure_rechnungsnummer(int $post_id): string {
+		$no = (string)\get_post_meta($post_id, '_cmx_rechnungsnummer', true);
+		if ($no === '') {
+			$no = cmx_generate_rechnungsnummer();
+			\update_post_meta($post_id, '_cmx_rechnungsnummer', $no);
+		}
+		return $no;
+	}
+}
+
+/* =========================================================
+ * Metabox registrieren
+ * ========================================================= */
+\add_action('add_meta_boxes', function () {
+	if (!\post_type_exists('belege')) return;
+	\add_meta_box('cmx_beleg_details', 'Beleg', __NAMESPACE__.'\\cmx_render_beleg_metabox', 'belege', 'normal', 'high');
+});
+
+/* =========================================================
+ * AJAX: Projekte & Kontakte suchen
+ * - Projekte liefern zusätzlich: kontakt_id, kontakt_title, kontakt_addr, url (falls vorhanden)
+ *   Erweiterung: leere Suche → Liste anzeigen; Projekte zuerst nach zuletzt genutzten (aus letzten Belegen des Users)
+ * ========================================================= */
+\add_action('wp_ajax_cmx_search_projekte', __NAMESPACE__.'\\cmx_ajax_search_projekte');
+function cmx_ajax_search_projekte(): void {
+	if (!\current_user_can('edit_posts')) \wp_send_json_error(['message'=>'forbidden'], 403);
+	$nonce = isset($_GET['_ajax_nonce']) ? (string)$_GET['_ajax_nonce'] : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_search_projekte')) \wp_send_json_error(['message'=>'bad_nonce'], 403);
+
+	$q = isset($_GET['q']) ? \sanitize_text_field(\wp_unslash($_GET['q'])) : '';
+
+	$proj_ids = [];
+	if ($q === '') {
+		// 1) IDs aus zuletzt bearbeiteten Belegen (Autor = aktueller User) priorisieren
+		$user_id = \get_current_user_id();
+		$recent_belege = \get_posts([
+			'post_type'      => 'belege',
+			'post_status'    => 'any',
+			'author'         => $user_id ?: 0,
+			'posts_per_page' => 40,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'fields'         => 'ids',
+		]);
+		$recent_proj = [];
+		foreach ($recent_belege as $bid) {
+			$pid = (int)\get_post_meta($bid, CMX_BELEG_META_PROJEKT_ID, true);
+			if ($pid > 0 && \get_post_status($pid)) {
+				$recent_proj[] = $pid;
+			}
+		}
+		// eindeutige Reihenfolge beibehalten
+		$recent_proj = \array_values(\array_unique($recent_proj));
+		$proj_ids    = \array_slice($recent_proj, 0, 20);
+
+		// 2) Auffüllen mit weiteren Projekten (zuletzt geändert), die noch nicht enthalten sind
+		if (\count($proj_ids) < 20) {
+			$more = \get_posts([
+				'post_type'      => 'projekte',
+				'post_status'    => 'any',
+				'posts_per_page' => 20 - \count($proj_ids),
+				'orderby'        => 'modified',
+				'order'          => 'DESC',
+				'fields'         => 'ids',
+				'exclude'        => $proj_ids,
+			]);
+			$proj_ids = \array_merge($proj_ids, $more);
+		}
+	} else {
+		// Normale Textsuche
+		$proj_ids = \get_posts([
+			'post_type'      => 'projekte',
+			'post_status'    => 'any',
+			's'              => $q,
+			'posts_per_page' => 20,
+			'fields'         => 'ids',
+		]);
+	}
+
+	$out = [];
+	foreach ($proj_ids as $id) {
+		$title = cmx_normalize_minus_sign((string) \get_the_title($id));
+
+		$kontakt_id = (int) (
+			\get_post_meta($id, '_cmx_projekt_kontakt_id', true) ?:
+			\get_post_meta($id, '_cmx_kontakt_id', true) ?:
+			\get_post_meta($id, 'kontakt_id', true)
+		);
+		$kontakt_title = $kontakt_id ? cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)) : '';
+		$kontakt_addr  = '';
+		if ($kontakt_id) {
+			$kontakt_addr = cmx_build_kontakt_postanschrift($kontakt_id);
+		}
+
+		$url = cmx_get_projekt_url_value((int) $id);
+		$description = cmx_get_projekt_beschreibung_value((int) $id);
+		$subject = cmx_get_projekt_betreff_value((int) $id);
+
+		$out[] = [
+			'id'            => (int)$id,
+			'title'         => $title,
+			'link'          => \get_edit_post_link($id, ''),
+			'kontakt_id'    => $kontakt_id,
+			'kontakt_title' => $kontakt_title,
+			'kontakt_addr'  => $kontakt_addr,
+			'url'           => $url,
+			'description'   => $description,
+			'subject'       => $subject,
+		];
+	}
+	\wp_send_json_success(['items'=>$out]);
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_terms')) {
+	function cmx_ajax_kontakte_search_terms(string $search_term): array {
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_search_terms')) {
+			return (array) cmx_kontakte_search_terms($search_term);
+		}
+
+		$search_term = \trim($search_term);
+		if ($search_term === '') {
+			return [];
+		}
+
+		$terms = [$search_term];
+		$umlaut_variant = \strtr($search_term, [
+			'Ä' => 'Ae',
+			'Ö' => 'Oe',
+			'Ü' => 'Ue',
+			'ä' => 'ae',
+			'ö' => 'oe',
+			'ü' => 'ue',
+			'ß' => 'ss',
+		]);
+		if ($umlaut_variant !== $search_term) {
+			$terms[] = $umlaut_variant;
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $terms))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_search_meta_keys')) {
+	function cmx_ajax_kontakte_search_meta_keys(bool $include_liefer = false): array {
+		$email_keys = [
+			'_cmx_email_1', '_cmx_email_2', '_cmx_email_3',
+		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+			$email_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('email', 10), $email_keys);
+		}
+
+		$address_keys = [
+			'_cmx_rechnung_strasse',
+			'_cmx_rechnung_zusatz',
+			'_cmx_rechnung_plz',
+			'_cmx_rechnung_ort',
+			'_cmx_rechnung_land',
+		];
+		if ($include_liefer) {
+			$address_keys = \array_merge($address_keys, [
+				'_cmx_liefer_strasse',
+				'_cmx_liefer_zusatz',
+				'_cmx_liefer_plz',
+				'_cmx_liefer_ort',
+				'_cmx_liefer_land',
+			]);
+		}
+
+		$phone_keys = [
+			'_cmx_telefon_1', '_cmx_telefon_2', '_cmx_telefon_3',
+		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kommunikation_flat_field_meta_keys')) {
+			$phone_keys = \array_merge((array) cmx_kommunikation_flat_field_meta_keys('telefon', 10), $phone_keys);
+		}
+
+		$general_keys = [
+			'_cmx_kontakte_vorname', '_cmx_kontakte_nachname', '_cmx_kontakte_anrede',
+			'_cmx_kontakte_kunden_nr', '_cmx_kontakte_hr_uid',
+		];
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', \array_merge(
+			$email_keys,
+			$address_keys,
+			$phone_keys,
+			$general_keys
+		)))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakte_searchable_values')) {
+	/**
+	 * @return array<int,string>
+	 */
+	function cmx_ajax_kontakte_searchable_values(int $kontakt_id, bool $include_liefer = false): array {
+		$values = [];
+
+		$title = (string) \get_the_title($kontakt_id);
+		if ($title !== '') {
+			$values[] = \function_exists(__NAMESPACE__ . '\\cmx_normalize_minus_sign')
+				? (string) cmx_normalize_minus_sign($title)
+				: $title;
+		}
+
+		foreach (cmx_ajax_kontakte_search_meta_keys($include_liefer) as $meta_key) {
+			$raw = \get_post_meta($kontakt_id, (string) $meta_key, true);
+			if (\is_array($raw)) {
+				$raw = \wp_json_encode($raw, JSON_UNESCAPED_UNICODE);
+			}
+			$value = \trim((string) $raw);
+			if ($value !== '') {
+				$values[] = $value;
+			}
+		}
+
+		if (\function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_postanschrift')) {
+			$addr = \trim((string) cmx_build_kontakt_postanschrift($kontakt_id));
+			if ($addr !== '') {
+				$values[] = $addr;
+			}
+		}
+		if ($include_liefer && \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_lieferanschrift')) {
+			$delivery_addr = \trim((string) cmx_build_kontakt_lieferanschrift($kontakt_id));
+			if ($delivery_addr !== '') {
+				$values[] = $delivery_addr;
+			}
+		}
+
+		return \array_values(\array_unique(\array_filter(\array_map('strval', $values))));
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_ajax_kontakt_matches_search')) {
+	function cmx_ajax_kontakt_matches_search(int $kontakt_id, array $search_terms, bool $include_liefer = false): bool {
+		if ($kontakt_id <= 0) {
+			return false;
+		}
+		if ($search_terms === []) {
+			return true;
+		}
+
+		$terms = \array_values(\array_unique(\array_filter(\array_map(static function ($term): string {
+			$term = \trim((string) $term);
+			if ($term === '') {
+				return '';
+			}
+			return \function_exists('mb_strtolower') ? (string) \mb_strtolower($term, 'UTF-8') : \strtolower($term);
+		}, $search_terms))));
+		if ($terms === []) {
+			return true;
+		}
+
+		foreach (cmx_ajax_kontakte_searchable_values($kontakt_id, $include_liefer) as $value) {
+			$haystack = \function_exists('mb_strtolower') ? (string) \mb_strtolower($value, 'UTF-8') : \strtolower($value);
+			foreach ($terms as $term) {
+				$match = \function_exists('mb_stripos')
+					? (\mb_stripos($haystack, $term, 0, 'UTF-8') !== false)
+					: (\stripos($haystack, $term) !== false);
+				if ($term !== '' && $match) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+}
+
+\add_action('wp_ajax_cmx_search_kontakte', __NAMESPACE__.'\\cmx_ajax_search_kontakte');
+function cmx_ajax_search_kontakte(): void {
+	if (!\current_user_can('edit_posts')) \wp_send_json_error(['message'=>'forbidden'], 403);
+	$nonce = isset($_GET['_ajax_nonce']) ? (string)$_GET['_ajax_nonce'] : '';
+	if (!\wp_verify_nonce($nonce, 'cmx_search_kontakte')) \wp_send_json_error(['message'=>'bad_nonce'], 403);
+
+	$q   = isset($_GET['q']) ? \sanitize_text_field(\wp_unslash($_GET['q'])) : '';
+	$cpt = cmx_kontakte_cpt();
+	$include_liefer = !empty($_GET['include_liefer']);
+	$allow_inactive = !empty($_GET['allow_inactive']);
+
+	if ($q === '') {
+		// Leere Suche: einfach die zuletzt geänderten Kontakte anzeigen
+		$args = [
+			'post_type'      => $cpt,
+			'post_status'    => 'any',
+			'posts_per_page' => 20,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'fields'         => 'ids',
+		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_apply_selection_query_args')) {
+			$args = cmx_kontakte_apply_selection_query_args($args, $allow_inactive);
+		}
+		$ids = \get_posts($args);
+	} else {
+		$search_terms = cmx_ajax_kontakte_search_terms($q);
+		$lookup_args = [
+			'post_type'      => $cpt,
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+		];
+		if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_apply_selection_query_args')) {
+			$lookup_args = cmx_kontakte_apply_selection_query_args($lookup_args, $allow_inactive);
+		}
+
+		$default_match_ids = [];
+		foreach ($search_terms as $lookup_term) {
+			$default_match_ids = \array_merge($default_match_ids, (array) \get_posts(\array_merge($lookup_args, [
+				's' => $lookup_term,
+			])));
+		}
+
+		$meta_match_ids = [];
+			if ($search_terms !== []) {
+				$meta_query = ['relation' => 'OR'];
+				foreach ($search_terms as $lookup_term) {
+					foreach (cmx_ajax_kontakte_search_meta_keys($include_liefer) as $meta_key) {
+						$meta_query[] = [
+							'key'     => $meta_key,
+						'value'   => $lookup_term,
+						'compare' => 'LIKE',
+					];
+				}
+			}
+
+			$meta_match_ids = (array) \get_posts(\array_merge($lookup_args, [
+				's'          => '',
+				'meta_query' => $meta_query,
+			]));
+		}
+
+			$ids = \array_values(\array_filter(\array_values(\array_unique(\array_map('intval', \array_merge(
+				(array) $default_match_ids,
+				(array) $meta_match_ids
+			)))), static function (int $id) use ($search_terms, $include_liefer): bool {
+				return cmx_ajax_kontakt_matches_search((int) $id, $search_terms, $include_liefer);
+			}));
+			$ids = \array_slice($ids, 0, 20);
+	}
+	if (\function_exists(__NAMESPACE__ . '\\cmx_kontakte_filter_selectable_ids')) {
+		$ids = cmx_kontakte_filter_selectable_ids((array) $ids, $allow_inactive);
+	}
+
+	$out = [];
+	foreach ($ids as $id) {
+		$title = cmx_normalize_minus_sign((string) \get_the_title($id));
+		$addr  = cmx_build_kontakt_postanschrift((int) $id);
+		$out[] = [
+			'id'    => (int)$id,
+			'title' => $title,
+			'addr'  => $addr,
+			'delivery_addr' => $include_liefer && \function_exists(__NAMESPACE__ . '\\cmx_build_kontakt_lieferanschrift')
+				? (string) cmx_build_kontakt_lieferanschrift((int) $id)
+				: '',
+			'link'  => \get_edit_post_link($id, ''),
+		];
+	}
+	\wp_send_json_success(['items'=>$out]);
+}
+
+/* =========================================================
+ * Metabox: Status (SIDE)
+ * ========================================================= */
+
+/* =========================================================
+ * Render-Funktion Metabox
+ * ========================================================= */
+function cmx_render_beleg_metabox(\WP_Post $post): void {
+	$tax            = cmx_belege_tax();
+	$betreff        = (string)\get_post_meta($post->ID, CMX_BELEG_META_BETREFF, true);
+	$beschreibung   = (string)\get_post_meta($post->ID, CMX_BELEG_META_BESCHREIBUNG, true);
+	$kontakt_id     = (int)\get_post_meta($post->ID, CMX_BELEG_META_KONTAKT_ID, true);
+	$addr_text      = (string)\get_post_meta($post->ID, CMX_BELEG_META_KONTAKT_ADDR, true);
+	$projekt_label  = (string)\get_post_meta($post->ID, CMX_BELEG_META_PROJEKT_LABEL, true);
+	$kontakt_label  = (string)\get_post_meta($post->ID, CMX_BELEG_META_KONTAKT_LABEL, true);
+	$projekt_id     = (int)\get_post_meta($post->ID, CMX_BELEG_META_PROJEKT_ID, true);
+	$richtung       = (string)\get_post_meta($post->ID, CMX_BELEG_META_RICHTUNG, true);
+	$betreff_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL') && (int)\get_post_meta($post->ID, CMX_BELEG_META_BETREFF_MANUAL, true) === 1 ? 1 : 0;
+	$beschreibung_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL') && (int)\get_post_meta($post->ID, CMX_BELEG_META_BESCHREIBUNG_MANUAL, true) === 1 ? 1 : 0;
+
+	\wp_nonce_field('cmx_beleg_details_save', 'cmx_beleg_details_nonce');
+
+	$ajax_nonce_proj = \wp_create_nonce('cmx_search_projekte');
+	$ajax_nonce_kont = \wp_create_nonce('cmx_search_kontakte');
+
+	echo '<style>
+		.cmx-grid{display:flex;gap:16px;flex-wrap:wrap}
+		.cmx-col{flex:1 1 420px;min-width:320px}
+		.cmx-col input[type=text],.cmx-col textarea{width:100%}
+		.cmx-radio-inline label{display:inline-block;margin-right:12px}
+		.cmx-addr{white-space:pre-wrap;height:105px;min-height:105px}
+		.cmx-suggest{position:relative}
+		.cmx-input-row{display:flex;align-items:center;gap:6px}
+		.cmx-input-row input[type=text]{flex:1 1 auto;min-width:0}
+		.cmx-suggest ul{position:absolute;z-index:1000;left:0;right:0;max-height:240px;overflow:auto;margin:2px 0 0;padding:0;border:1px solid #ccd0d4;background:#fff;list-style:none}
+		.cmx-suggest li{margin:0;padding:6px 8px;cursor:pointer}
+		.cmx-suggest li.active{background:#e5f3ff}
+		.cmx-suggest li:hover{background:#f3f4f5}
+	</style>';
+
+	echo '<div class="cmx-grid">';
+
+	/* --- linke Spalte --- */
+	echo '<div class="cmx-col">';
+	if ($tax) {
+		$current_terms = \wp_get_post_terms($post->ID, $tax, ['fields'=>'ids']);
+		$current_id = $current_terms[0] ?? 0;
+		$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
+		$allowed_slugs = cmx_beleg_kategorie_allowed_slugs();
+		if (!empty($allowed_slugs)) {
+			$terms = array_values(array_filter($terms, function($term) use ($allowed_slugs) {
+				return in_array($term->slug, $allowed_slugs, true);
+			}));
+		}
+		$allowed_ids = array_map(function($term) { return (int) $term->term_id; }, $terms);
+		if (!in_array($current_id, $allowed_ids, true)) {
+			$default_term = null;
+			$requested_slug = cmx_beleg_requested_type_slug();
+			if ($requested_slug !== '') {
+				foreach ($terms as $term) {
+					if ((string) $term->slug === $requested_slug) {
+						$default_term = $term;
+						break;
+					}
+				}
+			}
+			foreach ($terms as $term) {
+				if ($default_term !== null) { break; }
+				if ($term->slug === 'rechnung') { $default_term = $term; break; }
+			}
+			if ($default_term === null) {
+				$default_term = $terms[0] ?? null;
+			}
+			$current_id = $default_term ? (int) $default_term->term_id : 0;
+		}
+		// echo '<p><strong>Kategorie</strong><br><div class="cmx-radio-inline">';
+		echo '<div class="cmx-radio-inline">';
+		foreach ($terms as $term) {
+			echo '<label><input type="radio" name="cmx_beleg_kategorie" data-slug="'.\esc_attr($term->slug).'" value="'.\esc_attr($term->term_id).'" '.\checked($current_id,$term->term_id,false).'> '.\esc_html($term->name).'</label>';
+		}
+		echo '</div></p>';
+	}
+
+	$richtung_opts = cmx_beleg_richtung_options();
+	if (!isset($richtung_opts[$richtung])) {
+		$richtung = array_key_first($richtung_opts);
+	}
+	// echo '<p><strong>Richtung</strong><br><div class="cmx-radio-inline">';
+	echo '<div class="cmx-radio-inline">';
+	foreach ($richtung_opts as $val => $label) {
+		$help_key = $val === 'ausgang' ? 'beleg_richtung_ausgang' : 'beleg_richtung_eingang';
+		echo '<label data-cmx-help-key="'.\esc_attr($help_key).'"><input type="radio" name="cmx_beleg_richtung" data-cmx-help-key="'.\esc_attr($help_key).'" value="'.\esc_attr($val).'" '.\checked($richtung,$val,false).'> <span class="cmx-richtung-label" data-cmx-help-key="'.\esc_attr($help_key).'" data-value="'.\esc_attr($val).'">'.\esc_html($label).'</span></label>';
+	}
+	echo '</div></p>';
+	$known_map = [
+		'rechnung' => [
+			'ausgang' => 'Einnahme',
+			'eingang' => 'Ausgabe',
+		],
+		'rechnungen' => [
+			'ausgang' => 'Einnahme',
+			'eingang' => 'Ausgabe',
+		],
+		'gutschrift' => [
+			'ausgang' => 'Ausgabe',
+			'eingang' => 'Einnahme',
+		],
+		'gutschriften' => [
+			'ausgang' => 'Ausgabe',
+			'eingang' => 'Einnahme',
+		],
+		'quittung' => [
+			'ausgang' => 'Einnahme',
+			'eingang' => 'Ausgabe',
+		],
+		'quittungen' => [
+			'ausgang' => 'Einnahme',
+			'eingang' => 'Ausgabe',
+		],
+		'offerte' => [
+			'ausgang' => 'Ausgang',
+			'eingang' => 'Eingang',
+		],
+		'offerten' => [
+			'ausgang' => 'Ausgang',
+			'eingang' => 'Eingang',
+		],
+		'lieferschein' => [
+			'ausgang' => 'Ausgang',
+			'eingang' => 'Eingang',
+		],
+		'lieferscheine' => [
+			'ausgang' => 'Ausgang',
+			'eingang' => 'Eingang',
+		],
+	];
+	$known_tooltips = [
+		'gutschrift' => ['ausgang' => 'Gutschrift an Kunde', 'eingang' => 'Gutschrift vom Lieferanten'],
+		'gutschriften' => ['ausgang' => 'Gutschrift an Kunde', 'eingang' => 'Gutschrift vom Lieferanten'],
+		'lieferschein' => ['ausgang' => 'Lieferschein an Kunde', 'eingang' => 'Lieferschein vom Lieferanten'],
+		'lieferscheine' => ['ausgang' => 'Lieferschein an Kunde', 'eingang' => 'Lieferschein vom Lieferanten'],
+		'offerte' => ['ausgang' => 'Offerte an Kunde', 'eingang' => 'Offerte vom Lieferanten'],
+		'offerten' => ['ausgang' => 'Offerte an Kunde', 'eingang' => 'Offerte vom Lieferanten'],
+		'quittung' => ['ausgang' => 'Quittung an Kunde', 'eingang' => 'Quittung vom Lieferanten'],
+		'quittungen' => ['ausgang' => 'Quittung an Kunde', 'eingang' => 'Quittung vom Lieferanten'],
+		'rechnung' => ['ausgang' => 'Rechnung an Kunde', 'eingang' => 'Rechnung vom Lieferanten'],
+		'rechnungen' => ['ausgang' => 'Rechnung an Kunde', 'eingang' => 'Rechnung vom Lieferanten'],
+	];
+	$ini_kategorien = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+		? (array) cmx_ini_get_value('Belege', 'Kategorien')
+		: [];
+	$richtung_label_map = [];
+	foreach ($ini_kategorien as $cat_name) {
+		$slug = \sanitize_title((string) $cat_name);
+		$ini_labels = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+			? cmx_ini_get_value('BelegeRichtungLabels', (string) $cat_name)
+			: null;
+		if ($ini_labels === null || $ini_labels === '') {
+			$ini_labels = \function_exists(__NAMESPACE__ . '\\cmx_ini_get_value')
+				? cmx_ini_get_value('BelegeRichtungLabels', (string) $slug)
+				: null;
+		}
+		if (\is_array($ini_labels) && \count($ini_labels) >= 2) {
+			$richtung_label_map[$slug] = [
+				'ausgang' => (string) $ini_labels[0],
+				'eingang' => (string) $ini_labels[1],
+			];
+			continue;
+		}
+		if (isset($known_map[$slug])) {
+			$richtung_label_map[$slug] = $known_map[$slug];
+		}
+	}
+	if (empty($richtung_label_map)) {
+		$richtung_label_map = $known_map;
+	}
+	echo '<script>(function(){var map='.\wp_json_encode($richtung_label_map).';var tips='.\wp_json_encode($known_tooltips).';var defaults='.\wp_json_encode($richtung_opts).';var defaultDir={rechnung:"ausgang",rechnungen:"ausgang",quittung:"ausgang",quittungen:"ausgang",lieferschein:"ausgang",lieferscheine:"ausgang",offerte:"ausgang",offerten:"ausgang",gutschrift:"eingang",gutschriften:"eingang"};var isAutoDraft=' . (($post->post_status ?? '') === 'auto-draft' ? 'true' : 'false') . ';function slug(){var el=document.querySelector("input[name=cmx_beleg_kategorie]:checked");return el?(el.getAttribute("data-slug")||""):"";}function setDefaultDir(){if(!isAutoDraft) return;var s=slug();var dir=defaultDir[s];if(!dir) return;var r=document.querySelector("input[name=cmx_beleg_richtung][value=\\""+dir+"\\"]");if(r){r.checked=true;r.dispatchEvent(new Event("change",{bubbles:true}));}}function sync(){var s=slug();var labels=(s&&map[s])?map[s]:defaults;var tooltips=(s&&tips[s])?tips[s]:{};document.querySelectorAll(".cmx-richtung-label").forEach(function(node){var val=node.getAttribute("data-value");if(labels&&labels[val]){node.textContent=labels[val];}var tip=tooltips&&tooltips[val]?tooltips[val]:"";node.title=tip;var label=node.closest("label");if(label){label.title=tip;}var input=label?label.querySelector("input[name=cmx_beleg_richtung]"):null;if(input){input.title=tip;}});setDefaultDir();}document.addEventListener("change",function(e){if(e.target&&e.target.name==="cmx_beleg_kategorie"){sync();}});document.addEventListener("DOMContentLoaded",sync);setTimeout(sync,0);})();</script>';
+
+	// echo '<p><label><strong>Betreff</strong> / Zusätzliche Informationen (auf dem QR-Code)</label><br>';
+	echo '<p><label><strong>Betreff</strong></label><br>';
+	echo '<input type="text" id="cmx_beleg_betreff" name="cmx_beleg_betreff" value="'.\esc_attr($betreff).'">';
+	echo '<input type="hidden" id="cmx_beleg_betreff_manual" name="cmx_beleg_betreff_manual" value="'.\esc_attr((string)$betreff_manual).'"></p>';
+
+	echo '<p><label><strong>Beschreibung</strong></label><br>';
+	echo '<textarea id="cmx_beleg_beschreibung" name="cmx_beleg_beschreibung" rows="7">'.\esc_textarea($beschreibung).'</textarea>';
+	echo '<input type="hidden" id="cmx_beleg_beschreibung_manual" name="cmx_beleg_beschreibung_manual" value="'.\esc_attr((string)$beschreibung_manual).'"></p>';
+	echo '</div>';
+
+	/* --- rechte Spalte --- */
+	echo '<div class="cmx-col">';
+
+	/* Projektsuche */
+	$current_proj_title = $projekt_id ? cmx_normalize_minus_sign((string) \get_the_title($projekt_id)) : '';
+	$display_proj = cmx_normalize_minus_sign($projekt_label !== '' ? $projekt_label : $current_proj_title);
+
+	$proj_edit_link = $projekt_id ? \get_edit_post_link($projekt_id, '') : '';
+	$proj_list_link = \admin_url('edit.php?post_type=projekte');
+
+echo '<p><label id="cmx_label_projekt" data-edit="'.\esc_attr($proj_edit_link).'" data-list="'.\esc_attr($proj_list_link).'" style="cursor:pointer;color:#2271b1;text-decoration:none; position:relative; top:10px;" title="Zum Projekt-Modul springen oder Eintrag editieren"><strong>Projekt</strong></label><br>';
+	echo '<div class="cmx-suggest">';
+	echo '  <div class="cmx-input-row">';
+	echo '    <input type="text" id="cmx_projekt_search" name="cmx_projekt_search" autocomplete="off" value="'.\esc_attr($display_proj).'" placeholder="Projekt suchen...">';
+	echo '    <input type="hidden" id="cmx_projekt_id" name="cmx_projekt_id" value="'.\esc_attr((string)$projekt_id).'">';
+	echo '    <input type="hidden" id="cmx_projekt_selected" name="cmx_projekt_selected" value="0">';
+	echo '    <input type="hidden" id="cmx_tasks_prefilled_js" name="cmx_tasks_prefilled_js" value="0">';
+	echo '    <input type="hidden" id="cmx_tasks_prefill_source_type" name="cmx_tasks_prefill_source_type" value="">';
+	echo '    <input type="hidden" id="cmx_tasks_prefill_source_id" name="cmx_tasks_prefill_source_id" value="0">';
+	echo '    <button type="button" class="button button-small" id="cmx_projekt_clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
+	echo '  </div>';
+	echo '  <ul id="cmx_projekt_suggest" style="display:none"></ul>';
+	echo '</div>';
+	echo '</p>';
+
+	/* Kontaktsuche */
+	$kontakte_title = $kontakt_id ? cmx_normalize_minus_sign((string) \get_the_title($kontakt_id)) : '';
+	$display_kontakt = cmx_normalize_minus_sign($kontakt_label !== '' ? $kontakt_label : $kontakte_title);
+
+	$cpt = cmx_kontakte_cpt();
+	$kontakt_edit_link = $kontakt_id ? \get_edit_post_link($kontakt_id, '') : '';
+	$kontakt_list_link = \admin_url('edit.php?post_type='.$cpt);
+
+echo '<p><label id="cmx_label_kontakt" data-edit="'.\esc_attr($kontakt_edit_link).'" data-list="'.\esc_attr($kontakt_list_link).'" style="cursor:pointer;color:#2271b1;text-decoration:none; position:relative; top:10px;" title="Zum Kontakte-Modul springen oder Eintrag editieren"><strong>Kontakt</strong></label><br>';
+	echo '<div class="cmx-suggest">';
+	echo '  <div class="cmx-input-row">';
+	echo '    <input type="text" id="cmx_kontakt_search" name="cmx_kontakt_search" autocomplete="off" value="'.\esc_attr($display_kontakt).'" placeholder="Kontakt suchen...">';
+	echo '    <input type="hidden" id="cmx_kontakt_id" name="cmx_kontakt_id" value="'.\esc_attr((string)$kontakt_id).'">';
+	echo '    <input type="hidden" id="cmx_kontakt_selected" name="cmx_kontakt_selected" value="0">';
+	echo '    <button type="button" class="button button-small" id="cmx_kontakt_clear" title="Auswahl löschen"><span class="dashicons dashicons-trash" style="color:#d63638;"></span></button>';
+	echo '  </div>';
+	echo '  <ul id="cmx_kontakt_suggest" style="display:none"></ul>';
+	echo '</div>';
+
+	/* Adresse */
+	if ($addr_text === '' && $kontakt_id) {
+		$addr_text = cmx_build_kontakt_postanschrift($kontakt_id);
+	}
+	echo '<p><label id="cmx_label_postanschrift" style="cursor:pointer;color:#2271b1;text-decoration:none;" title="Diese Adresse in Google Maps im neuen Tab öffnen"><strong>Postanschrift</strong></label><br>';
+	echo '<textarea id="cmx_kontakt_addr" name="cmx_kontakt_addr" class="cmx-addr" rows="5">'.\esc_textarea($addr_text).'</textarea></p>';
+
+	/* Inline JS */
+	$ajax_url = \admin_url('admin-ajax.php');
+	$edit_post_prefix = \admin_url('post.php?post=');
+	$should_autofocus_kontakt = isset($_GET['cmx_focus_contact']) && (string) $_GET['cmx_focus_contact'] === '1';
+	$should_clear_artikel_cart = isset($_GET['cmx_clear_artikel_cart']) && (string) $_GET['cmx_clear_artikel_cart'] === '1';
+	echo '<script>
+		(function(){
+			function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+			function makeNavigator(inputEl, listEl, chooseCb){
+				let active=-1, items=[];
+				function closeList(){ listEl.style.display="none"; listEl.innerHTML=""; active=-1; }
+				function render(arr){
+					items=arr||[];
+					if(!items.length){ closeList(); return; }
+					listEl.innerHTML = items.map((it,i)=>`<li data-index="${i}">${esc(it.title)}</li>`).join("");
+					listEl.style.display="block"; active=-1;
+				}
+				function move(d){ if(!items.length) return; active=(active+d+items.length)%items.length; [...listEl.children].forEach((li,i)=>li.classList.toggle("active",i===active)); }
+				function choose(i){ if(i<0||i>=items.length) return; chooseCb(items[i]); closeList(); }
+				listEl.addEventListener("mousedown",(e)=>{ const li=e.target.closest("li"); if(!li) return; e.preventDefault(); choose(parseInt(li.dataset.index,10)); });
+				inputEl.addEventListener("keydown",(e)=>{
+					if(listEl.style.display!=="block"&&(e.key==="ArrowDown"||e.key==="ArrowUp")) return;
+					if(e.key==="ArrowDown"){e.preventDefault();move(1);} else if(e.key==="ArrowUp"){e.preventDefault();move(-1);}
+					else if(e.key==="Enter"){ if(active>-1){e.preventDefault();choose(active);} }
+					else if(e.key==="Escape"){ closeList(); }
+				});
+				inputEl.addEventListener("blur",()=>{
+					window.setTimeout(()=>{
+						const ae = document.activeElement;
+						if(ae===inputEl || listEl.contains(ae)) return;
+						closeList();
+					}, 120);
+				});
+				document.addEventListener("click",(e)=>{ if(!listEl.contains(e.target)&&e.target!==inputEl){ closeList(); }});
+				return {render, reset:()=>{items=[];active=-1;}};
+			}
+
+				/* === Labels klickbar: editieren ODER zur Liste springen === */
+				function openInNewTab(url){
+					if(!url || url==="#") return;
+					const w = window.open(url, "_blank", "noopener,noreferrer");
+					if(w){ w.opener = null; }
+				}
+				function wireLabel(lblId, hiddenId, listUrl, editPrefix){
+					const lbl=document.getElementById(lblId);
+					if(!lbl) return;
+					lbl.addEventListener("click", function(e){
+						e.preventDefault();
+						const h=document.getElementById(hiddenId);
+						const rawId=(h&&h.value)?h.value:"0";
+						const id=parseInt(rawId,10);
+						if(!isNaN(id) && id>0){
+							if(editPrefix){ openInNewTab(editPrefix + id + "&action=edit"); return; }
+							const edit=this.getAttribute("data-edit")||"";
+							if(edit){ openInNewTab(edit); return; }
+						}
+						openInNewTab(this.getAttribute("data-list") || listUrl || "#");
+					});
+				}
+				function wireMapsLabel(lblId, textareaId){
+					const lbl=document.getElementById(lblId);
+					const field=document.getElementById(textareaId);
+					if(!lbl || !field) return;
+					lbl.addEventListener("click", function(e){
+						e.preventDefault();
+						const query=(field.value||"")
+							.replace(/\s*\n+\s*/g, ", ")
+							.replace(/\s{2,}/g, " ")
+							.trim();
+						if(!query){
+							field.focus();
+							return;
+						}
+						openInNewTab("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query));
+					});
+				}
+			var editPrefix=' . \wp_json_encode($edit_post_prefix) . ';
+			wireLabel("cmx_label_projekt","cmx_projekt_id","edit.php?post_type=projekte", editPrefix);
+			wireLabel("cmx_label_kontakt","cmx_kontakt_id","edit.php?post_type=kontakte", editPrefix);
+			wireMapsLabel("cmx_label_postanschrift","cmx_kontakt_addr");
+
+				const betInput=document.getElementById("cmx_beleg_betreff");
+				const beschInput=document.getElementById("cmx_beleg_beschreibung");
+				const betManualInput=document.getElementById("cmx_beleg_betreff_manual");
+				const beschManualInput=document.getElementById("cmx_beleg_beschreibung_manual");
+
+				/* --- Projekte --- */
+			const pI=document.getElementById("cmx_projekt_search");
+			const pH=document.getElementById("cmx_projekt_id");
+			const pS=document.getElementById("cmx_projekt_selected");
+				const pL=document.getElementById("cmx_projekt_suggest");
+				const pC=document.getElementById("cmx_projekt_clear");
+				let pT=null;
+				const projNav=makeNavigator(pI,pL,chooseProject);
+				function isManual(el){ return !!el && String(el.value||"0")==="1"; }
+				function isEmpty(val){ return !val || String(val).trim()===""; }
+				function resetTaskPrefillState(){
+					const jsFlag=document.getElementById("cmx_tasks_prefilled_js");
+					const srcType=document.getElementById("cmx_tasks_prefill_source_type");
+					const srcId=document.getElementById("cmx_tasks_prefill_source_id");
+					if(jsFlag){ jsFlag.value="0"; }
+					if(srcType){ srcType.value=""; }
+					if(srcId){ srcId.value="0"; }
+				}
+
+				function chooseProject(it){
+					resetTaskPrefillState();
+					pI.value=it.title||""; pH.value=it.id||""; pI.focus();
+					if(pS){ pS.value="1"; }
+					try {
+						document.dispatchEvent(new CustomEvent("cmx:task-source-change", {
+							detail: { sourceType: "projekte", sourceId: parseInt(it.id || 0, 10) || 0 }
+						}));
+					} catch(err) {}
+					if(it.kontakt_id){
+					const kI=document.getElementById("cmx_kontakt_search");
+					const kH=document.getElementById("cmx_kontakt_id");
+					const kA=document.getElementById("cmx_kontakt_addr");
+						if(kI&&kH){ kI.value=it.kontakt_title||""; kH.value=it.kontakt_id||""; }
+						if(kA){ kA.value=it.kontakt_addr||""; }
+					}
+					const bothEmpty = (!betInput || isEmpty(betInput.value)) && (!beschInput || isEmpty(beschInput.value));
+					if (bothEmpty) {
+						if(betInput){ betInput.value=(it.subject||"").trim(); }
+						if(beschInput){ beschInput.value=(it.description||"").trim(); }
+						if(betManualInput){ betManualInput.value="0"; }
+						if(beschManualInput){ beschManualInput.value="0"; }
+						return;
+					}
+					if(betInput && !isManual(betManualInput)){
+						betInput.value=(it.subject||"").trim();
+						if(betManualInput){ betManualInput.value="0"; }
+					}
+					if(beschInput && !isManual(beschManualInput)){
+						beschInput.value=(it.description||"").trim();
+						if(beschManualInput){ beschManualInput.value="0"; }
+					}
+				}
+				if(betInput && betManualInput){
+					betInput.addEventListener("input", function(){ betManualInput.value="1"; });
+				}
+				if(beschInput && beschManualInput){
+					beschInput.addEventListener("input", function(){ beschManualInput.value="1"; });
+				}
+				function pSearch(q){
+					const url="'.\esc_js($ajax_url).'?action=cmx_search_projekte&_ajax_nonce='.\esc_js($ajax_nonce_proj).'&q="+encodeURIComponent(q);
+					fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(j=>{
+					if(!j||!j.success){pL.style.display="none"; pL.innerHTML=""; projNav.reset(); return;}
+					projNav.render(j.data.items||[]);
+				}).catch(()=>{pL.style.display="none"; pL.innerHTML=""; projNav.reset();});
+			}
+			if(pI&&pH&&pL){
+				// Eingabe → Suche
+				pI.addEventListener("input",()=>{
+					pH.value=""; if(pT) clearTimeout(pT);
+					const q=pI.value.trim();
+					if(q.length===0){ pSearch(""); return; }
+					if(q.length<2){ pL.style.display="none"; pL.innerHTML=""; projNav.reset(); return; }
+					pT=setTimeout(()=>pSearch(q),200);
+				});
+				// Focus/Click → komplette Liste mit "zuletzt genutzt zuerst"
+				pI.addEventListener("focus", ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
+				pI.addEventListener("click",  ()=>{ if(pT) clearTimeout(pT); pSearch(""); });
+			}
+			if(pC){ pC.addEventListener("click",()=>{ resetTaskPrefillState(); pI.value=""; pH.value=""; if(pS){ pS.value="1"; } pL.style.display="none"; pL.innerHTML=""; projNav.reset(); pI.focus(); }); }
+
+			/* --- Kontakte --- */
+			const kI=document.getElementById("cmx_kontakt_search");
+			const kH=document.getElementById("cmx_kontakt_id");
+				const kS=document.getElementById("cmx_kontakt_selected");
+				const kL=document.getElementById("cmx_kontakt_suggest");
+				const kC=document.getElementById("cmx_kontakt_clear");
+				const kA=document.getElementById("cmx_kontakt_addr");
+				const SHOULD_AUTOFOCUS_KONTAKT=' . ($should_autofocus_kontakt ? 'true' : 'false') . ';
+				const SHOULD_CLEAR_ARTIKEL_CART=' . ($should_clear_artikel_cart ? 'true' : 'false') . ';
+				const ARTIKEL_CART_STORAGE_KEY="cmxArtikelKatalogCart";
+				let kT=null;
+				const kontNav=makeNavigator(kI,kL,chooseKontakt);
+
+			function chooseKontakt(it){
+				const projektRaw = pH && pH.value ? pH.value : "";
+				const projektId = parseInt(projektRaw, 10);
+				const hasProjektSource = !isNaN(projektId) && projektId > 0;
+				if(!hasProjektSource){
+					resetTaskPrefillState();
+				}
+				if(kS){ kS.value="1"; }
+				kI.value=it.title||""; kH.value=it.id||""; if(kA){kA.value=it.addr||"";} kI.focus();
+				if(hasProjektSource){
+					return;
+				}
+				try {
+					document.dispatchEvent(new CustomEvent("cmx:task-source-change", {
+						detail: { sourceType: "kontakte", sourceId: parseInt(it.id || 0, 10) || 0 }
+					}));
+				} catch(err) {}
+			}
+			function kSearch(q){
+				const url="'.\esc_js($ajax_url).'?action=cmx_search_kontakte&_ajax_nonce='.\esc_js($ajax_nonce_kont).'&q="+encodeURIComponent(q);
+				fetch(url,{credentials:"same-origin"}).then(r=>r.json()).then(j=>{
+					if(!j||!j.success){kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); return;}
+					kontNav.render(j.data.items||[]);
+				}).catch(()=>{kL.style.display="none"; kL.innerHTML=""; kontNav.reset();});
+			}
+			if(kI&&kH&&kL){
+				kI.addEventListener("input",()=>{
+					kH.value=""; if(kT) clearTimeout(kT);
+					const q=kI.value.trim();
+					if(q.length===0){ kSearch(""); return; }
+					if(q.length<2){ kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); return; }
+					kT=setTimeout(()=>kSearch(q),200);
+				});
+				// Focus/Click → komplette Kontaktliste (zuletzt geändert)
+				kI.addEventListener("focus", ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
+				kI.addEventListener("click",  ()=>{ if(kT) clearTimeout(kT); kSearch(""); });
+			}
+				if(kC){ kC.addEventListener("click",()=>{
+					const projektRaw = pH && pH.value ? pH.value : "";
+					const projektId = parseInt(projektRaw, 10);
+					if(isNaN(projektId) || projektId <= 0){
+						resetTaskPrefillState();
+					}
+					kI.value=""; kH.value=""; if(kS){ kS.value="1"; } if(kA) kA.value=""; kL.style.display="none"; kL.innerHTML=""; kontNav.reset(); kI.focus();
+				}); }
+				if(SHOULD_CLEAR_ARTIKEL_CART){
+					try {
+						if(window.localStorage){
+							window.localStorage.removeItem(ARTIKEL_CART_STORAGE_KEY);
+						}
+					} catch(err) {}
+				}
+				if(SHOULD_AUTOFOCUS_KONTAKT && kI){
+					window.setTimeout(function(){
+						kI.focus();
+						try { kI.select(); } catch(err) {}
+					}, 140);
+				}
+			})();
+		</script>';
+
+	echo '</div></div>';
+}
+
+/* =========================================================
+ * Speichern (inkl. Titel = nur Rechnungsnummer)
+ * ========================================================= */
+\add_action('save_post_belege', function (int $post_id, \WP_Post $post, bool $update) {
+	if ($post->post_type !== 'belege') return;
+	if (\wp_is_post_autosave($post_id) || \wp_is_post_revision($post_id)) return;
+	if (!\current_user_can('edit_post', $post_id)) return;
+	if (!empty($GLOBALS['cmx_belege_title_updating'])) return;
+	if (!isset($GLOBALS['cmx_belege_dup_guard'])) {
+		$GLOBALS['cmx_belege_dup_guard'] = [];
+	}
+
+	$inv_no = cmx_ensure_rechnungsnummer($post_id);
+	$is_debug_title_editable = \function_exists(__NAMESPACE__ . '\\cmx_system_is_debug_mode_enabled')
+		&& cmx_system_is_debug_mode_enabled();
+	$posted_title = isset($_POST['post_title'])
+		? \trim((string) \preg_replace('/\s+/', ' ', \sanitize_text_field((string) \wp_unslash($_POST['post_title']))))
+		: '';
+	$manual_debug_title = $is_debug_title_editable && $posted_title !== '' && $posted_title !== $inv_no;
+	if ($manual_debug_title) {
+		\update_post_meta($post_id, '_cmx_rechnungsnummer', $posted_title);
+		$inv_no = $posted_title;
+		\delete_post_meta($post_id, '_cmx_title_auto');
+	}
+
+	$has_nonce = isset($_POST['cmx_beleg_details_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_details_nonce'], 'cmx_beleg_details_save');
+	$has_save_as_nonce = isset($_POST['cmx_beleg_save_as_nonce']) && \wp_verify_nonce($_POST['cmx_beleg_save_as_nonce'], 'cmx_beleg_save_as');
+	$current_kategorie_slug = '';
+
+	if ($has_nonce) {
+		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if ($tax && isset($_POST['cmx_beleg_kategorie'])) {
+			$term_id = (int) $_POST['cmx_beleg_kategorie'];
+			$allowed_ids = [];
+			$allowed_slugs = cmx_beleg_kategorie_allowed_slugs();
+			$terms = \get_terms(['taxonomy'=>$tax,'hide_empty'=>false]);
+			foreach ($terms as $term) {
+				if (in_array($term->slug, $allowed_slugs, true)) {
+					$allowed_ids[] = (int) $term->term_id;
+				}
+			}
+			if ($term_id > 0 && in_array($term_id, $allowed_ids, true)) {
+				\wp_set_post_terms($post_id, [$term_id], $tax, false);
+				$term_obj = \get_term($term_id, $tax);
+				if ($term_obj && !\is_wp_error($term_obj)) {
+					$current_kategorie_slug = (string) $term_obj->slug;
+				}
+			}
+		}
+
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_RICHTUNG') && isset($_POST['cmx_beleg_richtung'])) {
+			$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_richtung']));
+			$opts = cmx_beleg_richtung_options();
+			if (!isset($opts[$val])) {
+				$val = array_key_first($opts);
+			}
+			\update_post_meta($post_id, CMX_BELEG_META_RICHTUNG, $val);
+		}
+
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && isset($_POST['cmx_beleg_betreff'])) {
+			\update_post_meta($post_id, CMX_BELEG_META_BETREFF, \sanitize_text_field(\wp_unslash($_POST['cmx_beleg_betreff'])));
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG') && isset($_POST['cmx_beleg_beschreibung'])) {
+			\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, \wp_kses_post(\wp_unslash($_POST['cmx_beleg_beschreibung'])));
+		}
+
+		$betreff_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')
+			? ((isset($_POST['cmx_beleg_betreff_manual']) ? (int)\wp_unslash($_POST['cmx_beleg_betreff_manual']) : (int)\get_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL, true)) === 1)
+			: false;
+		$beschreibung_manual = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')
+			? ((isset($_POST['cmx_beleg_beschreibung_manual']) ? (int)\wp_unslash($_POST['cmx_beleg_beschreibung_manual']) : (int)\get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL, true)) === 1)
+			: false;
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) {
+			if ($betreff_manual) {
+				\update_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL, 1);
+			} else {
+				\delete_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL);
+			}
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) {
+			if ($beschreibung_manual) {
+				\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL, 1);
+			} else {
+				\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL);
+			}
+		}
+
+		$k_label = '';
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL') && isset($_POST['cmx_kontakt_search'])) {
+			$k_label = \sanitize_text_field(\wp_unslash($_POST['cmx_kontakt_search']));
+			$k_label = cmx_normalize_minus_sign($k_label);
+			if ($k_label !== '') \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, $k_label);
+			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL);
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ID') && isset($_POST['cmx_kontakt_id'])) {
+			$kid = (int) $_POST['cmx_kontakt_id'];
+			if ($kid <= 0 && $k_label !== '') {
+				$new_kid = cmx_beleg_create_kontakt_from_label($k_label);
+				if ($new_kid > 0) {
+					$kid = $new_kid;
+					if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_LABEL')) {
+						\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_LABEL, cmx_normalize_minus_sign((string) \get_the_title($new_kid)));
+					}
+				}
+			}
+			if ($kid > 0) \update_post_meta($post_id, CMX_BELEG_META_KONTAKT_ID, $kid);
+			else \delete_post_meta($post_id, CMX_BELEG_META_KONTAKT_ID);
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_KONTAKT_ADDR') && isset($_POST['cmx_kontakt_addr'])) {
+			\update_post_meta($post_id, CMX_BELEG_META_KONTAKT_ADDR, \wp_kses_post(\wp_unslash($_POST['cmx_kontakt_addr'])));
+		}
+
+		$previous_projekt_id = \defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID')
+			? (int) \get_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID, true)
+			: 0;
+		$projekt_selection_changed = isset($_POST['cmx_projekt_selected']) && (int) \wp_unslash($_POST['cmx_projekt_selected']) === 1;
+
+		$selected_projekt_id = 0;
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_ID') && isset($_POST['cmx_projekt_id'])) {
+			$pid = (int) $_POST['cmx_projekt_id'];
+			$selected_projekt_id = $pid;
+			if ($pid > 0) \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID, $pid);
+			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_ID);
+		}
+		if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_PROJEKT_LABEL') && isset($_POST['cmx_projekt_search'])) {
+			$proj_label = \sanitize_text_field(\wp_unslash($_POST['cmx_projekt_search']));
+			$proj_label = cmx_normalize_minus_sign($proj_label);
+			if ($proj_label !== '') \update_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL, $proj_label);
+			else \delete_post_meta($post_id, CMX_BELEG_META_PROJEKT_LABEL);
+		}
+		if ($selected_projekt_id > 0) {
+			$current_betreff = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')
+				? (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true)
+				: '';
+			$current_beschreibung = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')
+				? (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true)
+				: '';
+			$both_empty = \trim($current_betreff) === '' && \trim(\wp_strip_all_tags($current_beschreibung)) === '';
+
+			if ($projekt_selection_changed && $both_empty) {
+				$projekt_betreff = cmx_get_projekt_betreff_value($selected_projekt_id);
+				$projekt_beschreibung = cmx_get_projekt_beschreibung_value($selected_projekt_id);
+
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && $projekt_betreff !== '') {
+					\update_post_meta($post_id, CMX_BELEG_META_BETREFF, $projekt_betreff);
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG') && $projekt_beschreibung !== '') {
+					\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, $projekt_beschreibung);
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF_MANUAL')) {
+					\delete_post_meta($post_id, CMX_BELEG_META_BETREFF_MANUAL);
+					$betreff_manual = false;
+				}
+				if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG_MANUAL')) {
+					\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG_MANUAL);
+					$beschreibung_manual = false;
+				}
+
+				$current_betreff = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')
+					? (string) \get_post_meta($post_id, CMX_BELEG_META_BETREFF, true)
+					: $current_betreff;
+				$current_beschreibung = \defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')
+					? (string) \get_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, true)
+					: $current_beschreibung;
+			}
+
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF')) {
+				if (!$betreff_manual && \trim($current_betreff) === '') {
+					$projekt_betreff = cmx_get_projekt_betreff_value($selected_projekt_id);
+					if ($projekt_betreff !== '') {
+						\update_post_meta($post_id, CMX_BELEG_META_BETREFF, $projekt_betreff);
+					}
+				}
+			}
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG')) {
+				if (!$beschreibung_manual && \trim(\wp_strip_all_tags($current_beschreibung)) === '') {
+					$projekt_beschreibung = cmx_get_projekt_beschreibung_value($selected_projekt_id);
+					if ($projekt_beschreibung !== '') {
+						\update_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG, $projekt_beschreibung);
+					}
+				}
+			}
+		}
+		if ($selected_projekt_id <= 0 && ($previous_projekt_id > 0 || $projekt_selection_changed)) {
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BETREFF') && !$betreff_manual) {
+				\delete_post_meta($post_id, CMX_BELEG_META_BETREFF);
+			}
+			if (\defined(__NAMESPACE__.'\\CMX_BELEG_META_BESCHREIBUNG') && !$beschreibung_manual) {
+				\delete_post_meta($post_id, CMX_BELEG_META_BESCHREIBUNG);
+			}
+		}
+		}
+
+	if ($current_kategorie_slug === '') {
+		$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if ($tax) {
+			$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+			if (!\is_wp_error($slugs) && !empty($slugs)) {
+				$current_kategorie_slug = (string) $slugs[0];
+			}
+		}
+	}
+
+	if ($has_save_as_nonce && isset($_POST['cmx_beleg_save_as'])) {
+		$val = \sanitize_key(\wp_unslash($_POST['cmx_beleg_save_as']));
+		$copy_map = [
+			'rechnung' => 'lieferschein',
+			'rechnungen' => 'lieferschein',
+			'offerte'  => 'rechnung',
+			'offerten' => 'rechnung',
+		];
+		$normalized_val = $val;
+		if ($val === 'rechnung_kopie') {
+			$normalized_val = 'rechnung';
+		}
+		if (!empty($GLOBALS['cmx_belege_duplication_in_progress'])) {
+			return;
+		}
+		if (!empty($GLOBALS['cmx_belege_dup_guard'][$post_id])) {
+			return;
+		}
+		if (isset($copy_map[$current_kategorie_slug]) && $copy_map[$current_kategorie_slug] === $normalized_val) {
+			$is_rechnung_to_lieferschein = \in_array($current_kategorie_slug, ['rechnung', 'rechnungen'], true)
+				&& \in_array($normalized_val, ['lieferschein', 'lieferscheine'], true);
+			$GLOBALS['cmx_belege_dup_guard'][$post_id] = true;
+			$GLOBALS['cmx_belege_duplication_in_progress'] = true;
+			$dup_fn = __NAMESPACE__ . '\\cmx_duplicate_do';
+			$existing_id = 0;
+			if (!$is_rechnung_to_lieferschein) {
+				$existing_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+				if ($existing_id > 0) {
+					$existing_post = \get_post($existing_id);
+					if (!$existing_post || $existing_post->post_type !== 'belege' || $existing_post->post_status === 'trash') {
+						$existing_id = 0;
+					}
+				}
+			}
+			if ($existing_id > 0) {
+				$new_id = $existing_id;
+				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
+				cmx_sync_beleg_duplicate($post_id, $new_id);
+				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
+			} elseif (\is_callable($dup_fn)) {
+				$GLOBALS['cmx_skip_beleg_pdf_generation'] = true;
+				$new_id = $dup_fn($post_id);
+				unset($GLOBALS['cmx_skip_beleg_pdf_generation']);
+			} else {
+				$new_id = 0;
+			}
+			if (!\is_wp_error($new_id) && $new_id > 0) {
+					$tax = \function_exists(__NAMESPACE__.'\\cmx_belege_tax') ? cmx_belege_tax() : '';
+					if ($tax) {
+						$term = \get_term_by('slug', $normalized_val, $tax);
+						if (!$term) {
+							$term = \get_term_by('name', ucfirst($normalized_val), $tax);
+						}
+						if ($term && !\is_wp_error($term)) {
+							\wp_set_post_terms($new_id, [(int) $term->term_id], $tax, false);
+						}
+					}
+					\delete_post_meta($new_id, '_cmx_beleg_pdf_type');
+					if ($is_rechnung_to_lieferschein) {
+						$prep_fn = __NAMESPACE__ . '\\cmx_beleg_prepare_lieferschein_duplicate_positions';
+						if (\is_callable($prep_fn)) {
+							$prep_fn((int)$post_id, (int)$new_id);
+						}
+					}
+					\update_post_meta($new_id, '_cmx_beleg_copied_from', (int) $post_id);
+					\update_post_meta($post_id, '_cmx_beleg_copied_to', (int) $new_id);
+					$gen_fn = __NAMESPACE__ . '\\cmxbu_generate_document_on_save';
+					if (\is_callable($gen_fn)) {
+						$new_post = \get_post($new_id);
+						if ($new_post) {
+							$gen_fn($new_id, $new_post, true);
+						}
+					}
+					$GLOBALS['cmx_belege_dup_redirect_id'] = (int) $new_id;
+			}
+			unset($GLOBALS['cmx_belege_duplication_in_progress']);
+			unset($GLOBALS['cmx_belege_dup_guard'][$post_id]);
+		}
+	}
+
+	$current = \get_post($post_id);
+	$should_set_title = !$manual_debug_title
+		&& (empty($current->post_title) || ((int)\get_post_meta($post_id, '_cmx_title_auto', true) === 1));
+
+	if ($should_set_title) {
+		$new_title = $inv_no;
+		$GLOBALS['cmx_belege_title_updating'] = true;
+
+		\wp_update_post(['ID' => $post_id,'post_title' => $new_title,'post_name' => \sanitize_title($new_title),]);
+		unset($GLOBALS['cmx_belege_title_updating']);
+		\update_post_meta($post_id, '_cmx_title_auto', 1);
+	} else {
+		\delete_post_meta($post_id, '_cmx_title_auto');
+	}
+// Später ausführen, damit alle anderen Beleg-Metaboxen ihre Werte bereits gespeichert haben,
+// bevor "Save as"/Duplizieren den Datensatz kopiert.
+}, 200, 3);
+
+add_filter('redirect_post_location', function (string $location, int $post_id): string {
+	if (!isset($GLOBALS['cmx_belege_dup_redirect_id'])) {
+		return $location;
+	}
+	$new_id = (int) $GLOBALS['cmx_belege_dup_redirect_id'];
+	unset($GLOBALS['cmx_belege_dup_redirect_id']);
+	if ($new_id <= 0) {
+		return $location;
+	}
+	$edit_link = \get_edit_post_link($new_id, '');
+	return $edit_link ? $edit_link : $location;
+}, 10, 2);
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_has_tax_slug')) {
+	function cmx_beleg_has_tax_slug(int $post_id, array $allowed_slugs): bool {
+		$post = \get_post($post_id);
+		if (!$post || $post->post_type !== 'belege') {
+			return false;
+		}
+		$tax = \function_exists(__NAMESPACE__ . '\\cmx_belege_tax') ? cmx_belege_tax() : '';
+		if ($tax === '') {
+			return false;
+		}
+		$slugs = \wp_get_post_terms($post_id, $tax, ['fields' => 'slugs']);
+		if (\is_wp_error($slugs) || empty($slugs)) {
+			return false;
+		}
+		foreach ((array) $slugs as $slug) {
+			if (\in_array((string) $slug, $allowed_slugs, true)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_get_delete_redirect_rechnung_id')) {
+	function cmx_beleg_get_delete_redirect_rechnung_id(int $post_id): int {
+		$post = \get_post($post_id);
+		if (!$post || $post->post_type !== 'belege') {
+			return 0;
+		}
+		// Redirect nur, wenn ein Lieferschein gelöscht wird.
+		if (!cmx_beleg_has_tax_slug($post_id, ['lieferschein', 'lieferscheine'])) {
+			return 0;
+		}
+		$rechnung_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+		if ($rechnung_id <= 0) {
+			return 0;
+		}
+		$rechnung_post = \get_post($rechnung_id);
+		if (!$rechnung_post || $rechnung_post->post_type !== 'belege' || $rechnung_post->post_status === 'trash') {
+			return 0;
+		}
+		// Falls Kategorie nicht sauber gesetzt ist, trotzdem auf den verknüpften Beleg gehen.
+		return $rechnung_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_capture_delete_redirect_target')) {
+	function cmx_beleg_capture_delete_redirect_target(int $post_id): void {
+		if (!\is_admin()) {
+			return;
+		}
+		$rechnung_id = cmx_beleg_get_delete_redirect_rechnung_id($post_id);
+		if ($rechnung_id <= 0) {
+			return;
+		}
+		if (!\current_user_can('edit_post', $rechnung_id)) {
+			return;
+		}
+		$GLOBALS['cmx_belege_delete_redirect_id'] = $rechnung_id;
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_is_camt_delete_locked')) {
+	function cmx_beleg_is_camt_delete_locked(int $post_id): bool {
+		if ($post_id <= 0 || (string) \get_post_type($post_id) !== 'belege') {
+			return false;
+		}
+
+		$camt_check = __NAMESPACE__ . '\\cmx_camt_beleg_is_assigned';
+		if (\function_exists($camt_check)) {
+			return (bool) \call_user_func($camt_check, $post_id);
+		}
+
+		$signatures = \get_post_meta($post_id, '_cmx_camt_signatures', true);
+		if (\is_array($signatures)) {
+			return !empty(\array_filter(\array_map('strval', $signatures)));
+		}
+
+		return \is_string($signatures) ? \trim($signatures) !== '' : !empty($signatures);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_camt_delete_notice_url')) {
+	function cmx_beleg_camt_delete_notice_url(int $post_id): string {
+		$fallback = \admin_url('edit.php?post_type=belege');
+		if ($post_id > 0 && \current_user_can('edit_post', $post_id)) {
+			$fallback = \get_edit_post_link($post_id, '') ?: $fallback;
+		}
+
+		$location = \wp_get_referer();
+		if (!\is_string($location) || $location === '') {
+			$location = $fallback;
+		}
+
+		$location = (string) \remove_query_arg([
+			'_wpnonce',
+			'action',
+			'action2',
+			'deleted',
+			'ids',
+			'post',
+			'trashed',
+			'untrashed',
+			'cmx_beleg_delete_notice',
+		], $location);
+
+		return (string) \add_query_arg('cmx_beleg_delete_notice', 'camt_assigned', $location);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_beleg_maybe_redirect_blocked_camt_delete_request')) {
+	function cmx_beleg_maybe_redirect_blocked_camt_delete_request(): void {
+		if (!\is_admin()) {
+			return;
+		}
+
+		$action = isset($_REQUEST['action']) ? \sanitize_key((string) \wp_unslash($_REQUEST['action'])) : '';
+		if (!\in_array($action, ['trash', 'delete'], true)) {
+			return;
+		}
+
+		$post_id = isset($_REQUEST['post']) ? (int) \wp_unslash($_REQUEST['post']) : 0;
+		if ($post_id <= 0 || !cmx_beleg_is_camt_delete_locked($post_id)) {
+			return;
+		}
+
+		if (!\current_user_can('delete_post', $post_id)) {
+			return;
+		}
+
+		\wp_safe_redirect(cmx_beleg_camt_delete_notice_url($post_id));
+		exit;
+	}
+}
+
+\add_action('load-post.php', __NAMESPACE__ . '\\cmx_beleg_maybe_redirect_blocked_camt_delete_request');
+
+\add_filter('pre_trash_post', function ($trash, \WP_Post $post, string $previous_status) {
+	if (cmx_beleg_is_camt_delete_locked((int) $post->ID)) {
+		return false;
+	}
+
+	return $trash;
+}, 10, 3);
+
+\add_filter('pre_delete_post', function ($delete, \WP_Post $post, bool $force_delete) {
+	if (cmx_beleg_is_camt_delete_locked((int) $post->ID)) {
+		return false;
+	}
+
+	return $delete;
+}, 10, 3);
+
+\add_action('all_admin_notices', function (): void {
+	$notice = isset($_GET['cmx_beleg_delete_notice']) ? \sanitize_key((string) \wp_unslash($_GET['cmx_beleg_delete_notice'])) : '';
+	if ($notice !== 'camt_assigned') {
+		return;
+	}
+
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if ($screen && (string) ($screen->post_type ?? '') !== 'belege') {
+		return;
+	}
+
+	echo '<div class="notice notice-error is-dismissible"><p>Dieser Beleg kann nicht gelöscht werden, weil er über CAMT zugeordnet ist.</p></div>';
+});
+
+// Nach dem Löschen/Trash eines verknüpften Lieferscheins direkt zur Rechnung springen.
+\add_filter('wp_redirect', function (string $location, int $status): string {
+	if (empty($GLOBALS['cmx_belege_delete_redirect_id'])) {
+		return $location;
+	}
+	$request_uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+	$path = (string) \parse_url($request_uri, PHP_URL_PATH);
+	if (\basename($path) !== 'post.php') {
+		return $location;
+	}
+	$action = isset($_REQUEST['action']) ? \sanitize_key((string) \wp_unslash($_REQUEST['action'])) : '';
+	if (!\in_array($action, ['trash', 'delete'], true)) {
+		return $location;
+	}
+	$rechnung_id = (int) $GLOBALS['cmx_belege_delete_redirect_id'];
+	unset($GLOBALS['cmx_belege_delete_redirect_id']);
+	if ($rechnung_id <= 0) {
+		return $location;
+	}
+	$edit_link = \get_edit_post_link($rechnung_id, '');
+	return $edit_link ?: $location;
+}, 10, 2);
+
+add_action('before_delete_post', function (int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+	cmx_beleg_capture_delete_redirect_target($post_id);
+
+	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+	if ($from_id > 0) {
+		\delete_post_meta($from_id, '_cmx_beleg_copied_to');
+	}
+
+	$to_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+	if ($to_id > 0) {
+		\delete_post_meta($to_id, '_cmx_beleg_copied_from');
+	}
+});
+
+add_action('trashed_post', function (int $post_id) {
+	$post = \get_post($post_id);
+	if (!$post || $post->post_type !== 'belege') {
+		return;
+	}
+	cmx_beleg_capture_delete_redirect_target($post_id);
+
+	$from_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_from', true);
+	if ($from_id > 0) {
+		\delete_post_meta($from_id, '_cmx_beleg_copied_to');
+	}
+
+	$to_id = (int) \get_post_meta($post_id, '_cmx_beleg_copied_to', true);
+	if ($to_id > 0) {
+		\delete_post_meta($to_id, '_cmx_beleg_copied_from');
+	}
+});
