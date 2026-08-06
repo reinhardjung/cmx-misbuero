@@ -1,0 +1,771 @@
+# Copyright (C) 2026 Mis Büro
+# This file is distributed under the GPLv2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Mis Büro 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/mis-buero\n"
+"POT-Creation-Date: 2026-05-11 05:16+0200\n"
+"Last-Translator: Mis Büro <info@misbuero.ch>\n"
+"Language-Team: Deutsch <info@misbuero.ch>\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: mis-buero\n"
+
+#: packages/mis-buero/src/articles/articles.php:11
+msgid "Article"
+msgstr "Artikel"
+
+#: packages/mis-buero/src/articles/articles.php:11
+#: packages/mis-buero/src/settings/settings.php:17
+msgid "Articles"
+msgstr "Artikel"
+
+#: packages/mis-buero/src/articles/articles.php:13
+#, fuzzy
+msgid "Article category"
+msgstr "Kontaktkategorie"
+
+#: packages/mis-buero/src/articles/articles.php:13
+#, fuzzy
+msgid "Article categories"
+msgstr "Kontaktkategorien"
+
+#: packages/mis-buero/src/articles/articles.php:14
+#, fuzzy
+msgid "Article type"
+msgstr "Artikel"
+
+#: packages/mis-buero/src/articles/articles.php:14
+#, fuzzy
+msgid "Article types"
+msgstr "Artikel"
+
+#: packages/mis-buero/src/articles/articles.php:15
+msgid "Brand"
+msgstr "Marke"
+
+#: packages/mis-buero/src/articles/articles.php:15
+msgid "Brands"
+msgstr "Marken"
+
+#: packages/mis-buero/src/articles/articles.php:16
+#: packages/mis-buero/src/articles/articles.php:25
+msgid "Unit"
+msgstr "Einheit"
+
+#: packages/mis-buero/src/articles/articles.php:16
+msgid "Units"
+msgstr "Einheiten"
+
+#: packages/mis-buero/src/articles/articles.php:17
+msgid "Color"
+msgstr "Farbe"
+
+#: packages/mis-buero/src/articles/articles.php:17
+msgid "Colors"
+msgstr "Farben"
+
+#: packages/mis-buero/src/articles/articles.php:18
+msgid "Size"
+msgstr "Grösse"
+
+#: packages/mis-buero/src/articles/articles.php:18
+msgid "Sizes"
+msgstr "Grössen"
+
+#: packages/mis-buero/src/articles/articles.php:19
+msgid "Variant"
+msgstr "Ausführung"
+
+#: packages/mis-buero/src/articles/articles.php:19
+msgid "Variants"
+msgstr "Ausführungen"
+
+#: packages/mis-buero/src/articles/articles.php:20
+msgid "Material"
+msgstr "Material"
+
+#: packages/mis-buero/src/articles/articles.php:20
+msgid "Materials"
+msgstr "Materialien"
+
+#: packages/mis-buero/src/articles/articles.php:23
+#: packages/mis-buero/src/customers/customers.php:22
+msgid "Master data"
+msgstr "Stammdaten"
+
+#: packages/mis-buero/src/articles/articles.php:24
+msgid "SKU"
+msgstr "SKU"
+
+#: packages/mis-buero/src/articles/articles.php:26
+msgid "Weight"
+msgstr "Gewicht"
+
+#: packages/mis-buero/src/articles/articles.php:27
+msgid "Barcode"
+msgstr "Barcode"
+
+#: packages/mis-buero/src/articles/articles.php:28
+msgid "Stock"
+msgstr "Lagerbestand"
+
+#: packages/mis-buero/src/articles/articles.php:29
+msgid "Active"
+msgstr "Aktiv"
+
+#: packages/mis-buero/src/articles/articles.php:32
+#: packages/mis-buero/src/invoices/invoices.php:31
+msgid "Conditions"
+msgstr "Konditionen"
+
+#: packages/mis-buero/src/articles/articles.php:33
+msgid "Purchase price"
+msgstr "Einkaufspreis"
+
+#: packages/mis-buero/src/articles/articles.php:34
+msgid "Sales price"
+msgstr "Verkaufspreis"
+
+#: packages/mis-buero/src/articles/articles.php:35
+#: packages/mis-buero/src/budget/budget.php:19
+#: packages/mis-buero/src/invoices/invoices.php:15
+#: packages/mis-buero/src/invoices/invoices.php:35
+msgid "Currency"
+msgstr "Währung"
+
+#: packages/mis-buero/src/articles/articles.php:36
+msgid "VAT rate"
+msgstr "MwSt-Satz"
+
+#: packages/mis-buero/src/articles/articles.php:37
+msgid "Discount"
+msgstr "Rabatt"
+
+#: packages/mis-buero/src/articles/articles.php:40
+#: packages/mis-buero/src/articles/articles.php:41
+msgid "Supplier"
+msgstr "Lieferant"
+
+#: packages/mis-buero/src/articles/articles.php:42
+msgid "Supplier SKU"
+msgstr "Lieferanten-SKU"
+
+#: packages/mis-buero/src/articles/articles.php:43
+msgid "Delivery time"
+msgstr "Lieferzeit"
+
+#: packages/mis-buero/src/articles/articles.php:44
+msgid "Source URL"
+msgstr "Bezugsquelle URL"
+
+#: packages/mis-buero/src/articles/articles.php:47
+#: packages/mis-buero/src/articles/articles.php:48
+#, fuzzy
+msgid "Invoice text"
+msgstr "Beleg"
+
+#: packages/mis-buero/src/budget/budget.php:11
+#: packages/mis-buero/src/projects/projects.php:23
+#: packages/mis-buero/src/settings/settings.php:33
+msgid "Budget"
+msgstr "Budget"
+
+#: packages/mis-buero/src/budget/budget.php:13
+#, fuzzy
+msgid "Budget category"
+msgstr "Kontaktkategorie"
+
+#: packages/mis-buero/src/budget/budget.php:13
+#, fuzzy
+msgid "Budget categories"
+msgstr "Kontaktkategorien"
+
+#: packages/mis-buero/src/budget/budget.php:16
+#, fuzzy
+msgid "Budget data"
+msgstr "Budget"
+
+#: packages/mis-buero/src/budget/budget.php:17
+msgid "Type"
+msgstr "Typ"
+
+#: packages/mis-buero/src/budget/budget.php:17
+#: packages/mis-buero/src/invoices/invoices.php:24
+msgid "Income"
+msgstr "Einnahme"
+
+#: packages/mis-buero/src/budget/budget.php:17
+#: packages/mis-buero/src/invoices/invoices.php:24
+msgid "Expense"
+msgstr "Ausgabe"
+
+#: packages/mis-buero/src/budget/budget.php:18
+msgid "Amount"
+msgstr "Betrag"
+
+#: packages/mis-buero/src/budget/budget.php:20
+msgid "Interval"
+msgstr "Intervall"
+
+#: packages/mis-buero/src/budget/budget.php:20
+msgid "Once"
+msgstr "Einmalig"
+
+#: packages/mis-buero/src/budget/budget.php:20
+msgid "Monthly"
+msgstr "Monatlich"
+
+#: packages/mis-buero/src/budget/budget.php:20
+msgid "Yearly"
+msgstr "Jährlich"
+
+#: packages/mis-buero/src/budget/budget.php:21
+#: packages/mis-buero/src/projects/projects.php:21
+msgid "Start date"
+msgstr "Startdatum"
+
+#: packages/mis-buero/src/budget/budget.php:22
+#: packages/mis-buero/src/projects/projects.php:22
+msgid "End date"
+msgstr "Enddatum"
+
+#: packages/mis-buero/src/budget/budget.php:25
+#: packages/mis-buero/src/budget/budget.php:26
+#: packages/mis-buero/src/customers/customers.php:11
+#: packages/mis-buero/src/invoices/invoices.php:26
+#: packages/mis-buero/src/projects/projects.php:20
+msgid "Contact"
+msgstr "Kontakt"
+
+#: packages/mis-buero/src/budget/budget.php:27
+#: packages/mis-buero/src/documents/documents.php:19
+msgid "Notes"
+msgstr "Notizen"
+
+#: packages/mis-buero/src/customers/customers.php:11
+#: packages/mis-buero/src/settings/settings.php:13
+msgid "Contacts"
+msgstr "Kontakte"
+
+#: packages/mis-buero/src/customers/customers.php:13
+msgid "Contact category"
+msgstr "Kontaktkategorie"
+
+#: packages/mis-buero/src/customers/customers.php:13
+msgid "Contact categories"
+msgstr "Kontaktkategorien"
+
+#: packages/mis-buero/src/customers/customers.php:14
+#: packages/mis-buero/src/customers/customers.php:47
+msgid "Phone type"
+msgstr "Telefontyp"
+
+#: packages/mis-buero/src/customers/customers.php:14
+msgid "Phone types"
+msgstr "Telefontypen"
+
+#: packages/mis-buero/src/customers/customers.php:15
+#: packages/mis-buero/src/customers/customers.php:45
+msgid "Email type"
+msgstr "E-Mail-Typ"
+
+#: packages/mis-buero/src/customers/customers.php:15
+msgid "Email types"
+msgstr "E-Mail-Typen"
+
+#: packages/mis-buero/src/customers/customers.php:16
+#, fuzzy
+msgid "Contact level"
+msgstr "Kontakt"
+
+#: packages/mis-buero/src/customers/customers.php:16
+#, fuzzy
+msgid "Contact levels"
+msgstr "Kontakte"
+
+#: packages/mis-buero/src/customers/customers.php:17
+msgid "Country"
+msgstr "Land"
+
+#: packages/mis-buero/src/customers/customers.php:17
+#, fuzzy
+msgid "Countries"
+msgstr "Kategorien"
+
+#: packages/mis-buero/src/customers/customers.php:18
+msgid "Relationship"
+msgstr "Beziehung"
+
+#: packages/mis-buero/src/customers/customers.php:18
+msgid "Relationships"
+msgstr "Beziehungen"
+
+#: packages/mis-buero/src/customers/customers.php:19
+msgid "Business form"
+msgstr "Geschäftsform"
+
+#: packages/mis-buero/src/customers/customers.php:19
+msgid "Business forms"
+msgstr "Geschäftsformen"
+
+#: packages/mis-buero/src/customers/customers.php:23
+msgid "Company"
+msgstr "Firma"
+
+#: packages/mis-buero/src/customers/customers.php:24
+msgid "First name"
+msgstr "Vorname"
+
+#: packages/mis-buero/src/customers/customers.php:25
+msgid "Last name"
+msgstr "Nachname"
+
+#: packages/mis-buero/src/customers/customers.php:26
+msgid "Customer number"
+msgstr "Kundennummer"
+
+#: packages/mis-buero/src/customers/customers.php:27
+msgid "Company UID"
+msgstr "Unternehmens-ID"
+
+#: packages/mis-buero/src/customers/customers.php:28
+msgid "Website"
+msgstr "Website"
+
+#: packages/mis-buero/src/customers/customers.php:29
+#, fuzzy
+msgid "Private contact"
+msgstr "Eigenen Kontakt anlegen"
+
+#: packages/mis-buero/src/customers/customers.php:32
+msgid "Addresses"
+msgstr "Adressen"
+
+#: packages/mis-buero/src/customers/customers.php:33
+msgid "Billing street"
+msgstr "Rechnungsstrasse"
+
+#: packages/mis-buero/src/customers/customers.php:34
+msgid "Billing ZIP"
+msgstr "Rechnungs-PLZ"
+
+#: packages/mis-buero/src/customers/customers.php:35
+msgid "Billing city"
+msgstr "Rechnungsort"
+
+#: packages/mis-buero/src/customers/customers.php:36
+msgid "Billing country"
+msgstr "Rechnungsland"
+
+#: packages/mis-buero/src/customers/customers.php:37
+msgid "Shipping street"
+msgstr "Lieferstrasse"
+
+#: packages/mis-buero/src/customers/customers.php:38
+msgid "Shipping ZIP"
+msgstr "Liefer-PLZ"
+
+#: packages/mis-buero/src/customers/customers.php:39
+msgid "Shipping city"
+msgstr "Lieferort"
+
+#: packages/mis-buero/src/customers/customers.php:40
+msgid "Shipping country"
+msgstr "Lieferland"
+
+#: packages/mis-buero/src/customers/customers.php:43
+msgid "Communication"
+msgstr "Kommunikation"
+
+#: packages/mis-buero/src/customers/customers.php:44
+msgid "Email"
+msgstr "E-Mail"
+
+#: packages/mis-buero/src/customers/customers.php:46
+msgid "Phone"
+msgstr "Telefon"
+
+#: packages/mis-buero/src/customers/customers.php:48
+msgid "Mobile"
+msgstr "Mobil"
+
+#: packages/mis-buero/src/documents/documents.php:11
+#: packages/mis-buero/src/documents/documents.php:16
+msgid "Document"
+msgstr "Dokument"
+
+#: packages/mis-buero/src/documents/documents.php:11
+#: packages/mis-buero/src/settings/settings.php:25
+msgid "Documents"
+msgstr "Dokumente"
+
+#: packages/mis-buero/src/documents/documents.php:13
+#: packages/mis-buero/src/invoices/invoices.php:13
+#, fuzzy
+msgid "Document category"
+msgstr "Kontaktkategorie"
+
+#: packages/mis-buero/src/documents/documents.php:13
+#: packages/mis-buero/src/invoices/invoices.php:13
+#, fuzzy
+msgid "Document categories"
+msgstr "Kontaktkategorien"
+
+#: packages/mis-buero/src/documents/documents.php:17
+msgid "File URL"
+msgstr "Datei-URL"
+
+#: packages/mis-buero/src/documents/documents.php:18
+msgid "External reference"
+msgstr "Externe Referenz"
+
+#: packages/mis-buero/src/documents/documents.php:22
+msgid "Validity"
+msgstr "Gültigkeit"
+
+#: packages/mis-buero/src/documents/documents.php:23
+msgid "Valid from"
+msgstr "Gültig ab"
+
+#: packages/mis-buero/src/documents/documents.php:24
+msgid "Valid until"
+msgstr "Gültig bis"
+
+#: packages/mis-buero/src/documents/documents.php:25
+msgid "Reminder date"
+msgstr "Erinnerungsdatum"
+
+#: packages/mis-buero/src/invoices/invoices.php:11
+msgid "Invoice"
+msgstr "Beleg"
+
+#: packages/mis-buero/src/invoices/invoices.php:11
+#: packages/mis-buero/src/settings/settings.php:21
+msgid "Invoices"
+msgstr "Belege"
+
+#: packages/mis-buero/src/invoices/invoices.php:14
+msgid "VAT"
+msgstr "MwSt"
+
+#: packages/mis-buero/src/invoices/invoices.php:14
+msgid "VAT rates"
+msgstr "MwSt-Sätze"
+
+#: packages/mis-buero/src/invoices/invoices.php:15
+msgid "Currencies"
+msgstr "Währungen"
+
+#: packages/mis-buero/src/invoices/invoices.php:16
+#: packages/mis-buero/src/invoices/invoices.php:37
+msgid "Payment reason"
+msgstr "Zahlungsgrund"
+
+#: packages/mis-buero/src/invoices/invoices.php:16
+msgid "Payment reasons"
+msgstr "Zahlungsgründe"
+
+#: packages/mis-buero/src/invoices/invoices.php:17
+#: packages/mis-buero/src/invoices/invoices.php:36
+msgid "Payment method"
+msgstr "Zahlungsart"
+
+#: packages/mis-buero/src/invoices/invoices.php:17
+msgid "Payment methods"
+msgstr "Zahlungsarten"
+
+#: packages/mis-buero/src/invoices/invoices.php:18
+msgid "Booking type"
+msgstr "Buchungsart"
+
+#: packages/mis-buero/src/invoices/invoices.php:18
+msgid "Booking types"
+msgstr "Buchungsarten"
+
+#: packages/mis-buero/src/invoices/invoices.php:19
+msgid "Text module"
+msgstr "Textbaustein"
+
+#: packages/mis-buero/src/invoices/invoices.php:19
+msgid "Text modules"
+msgstr "Textbausteine"
+
+#: packages/mis-buero/src/invoices/invoices.php:22
+#, fuzzy
+msgid "Document data"
+msgstr "Dokument"
+
+#: packages/mis-buero/src/invoices/invoices.php:23
+#, fuzzy
+msgid "Document type"
+msgstr "Dokument"
+
+#: packages/mis-buero/src/invoices/invoices.php:24
+msgid "Direction"
+msgstr "Richtung"
+
+#: packages/mis-buero/src/invoices/invoices.php:25
+msgid "Subject"
+msgstr "Betreff"
+
+#: packages/mis-buero/src/invoices/invoices.php:27
+#: packages/mis-buero/src/projects/projects.php:11
+msgid "Project"
+msgstr "Projekt"
+
+#: packages/mis-buero/src/invoices/invoices.php:28
+msgid "Postal address"
+msgstr "Postanschrift"
+
+#: packages/mis-buero/src/invoices/invoices.php:32
+#, fuzzy
+msgid "Document date"
+msgstr "Dokument"
+
+#: packages/mis-buero/src/invoices/invoices.php:33
+msgid "Due date"
+msgstr "Fällig am"
+
+#: packages/mis-buero/src/invoices/invoices.php:34
+msgid "Service period"
+msgstr "Leistungszeitraum"
+
+#: packages/mis-buero/src/invoices/invoices.php:40
+msgid "Totals"
+msgstr "Summen"
+
+#: packages/mis-buero/src/invoices/invoices.php:41
+msgid "Subtotal"
+msgstr "Zwischensumme"
+
+#: packages/mis-buero/src/invoices/invoices.php:42
+msgid "VAT total"
+msgstr "MwSt gesamt"
+
+#: packages/mis-buero/src/invoices/invoices.php:43
+msgid "Total"
+msgstr "Total"
+
+#: packages/mis-buero/src/invoices/invoices.php:44
+msgid "Paid"
+msgstr "Bezahlt"
+
+#: packages/mis-buero/src/projects/projects.php:11
+#: packages/mis-buero/src/settings/settings.php:29
+msgid "Projects"
+msgstr "Projekte"
+
+#: packages/mis-buero/src/projects/projects.php:13
+#, fuzzy
+msgid "Project category"
+msgstr "Kontaktkategorie"
+
+#: packages/mis-buero/src/projects/projects.php:13
+#, fuzzy
+msgid "Project categories"
+msgstr "Kontaktkategorien"
+
+#: packages/mis-buero/src/projects/projects.php:14
+#, fuzzy
+msgid "Project status"
+msgstr "Projekte"
+
+#: packages/mis-buero/src/projects/projects.php:14
+#, fuzzy
+msgid "Project statuses"
+msgstr "Projekte"
+
+#: packages/mis-buero/src/projects/projects.php:15
+msgid "Task type"
+msgstr "Aufgabentyp"
+
+#: packages/mis-buero/src/projects/projects.php:15
+msgid "Task types"
+msgstr "Aufgabentypen"
+
+#: packages/mis-buero/src/projects/projects.php:18
+#, fuzzy
+msgid "Project data"
+msgstr "Projekt"
+
+#: packages/mis-buero/src/projects/projects.php:19
+#, fuzzy
+msgid "Project number"
+msgstr "Projekt"
+
+#: packages/mis-buero/src/projects/projects.php:26
+#: packages/mis-buero/src/projects/projects.php:27
+msgid "Tasks"
+msgstr "Aufgaben"
+
+#: packages/mis-buero/src/projects/projects.php:28
+msgid "Next step"
+msgstr "Nächster Schritt"
+
+#: packages/mis-buero/src/settings/settings.php:54
+msgid "German"
+msgstr "Deutsch"
+
+#: packages/mis-buero/src/settings/settings.php:55
+msgid "English"
+msgstr "Englisch"
+
+#: packages/mis-buero/src/settings/settings.php:83
+#, fuzzy
+msgid "Mis Büro language"
+msgstr "Mis Büro Einstellungen"
+
+#: packages/mis-buero/src/settings/settings.php:92
+msgid "Controls the language used by Mis Büro. German is the default."
+msgstr "Steuert die Sprache von Mis Büro. Deutsch ist die Vorgabe."
+
+#: packages/mis-buero/src/settings/settings.php:101
+#: packages/mis-buero/src/settings/settings.php:102
+#: packages/mis-buero/src/settings/settings.php:243
+msgid "Mis Büro"
+msgstr "Mis Büro"
+
+#: packages/mis-buero/src/settings/settings.php:112
+#: packages/mis-buero/src/settings/settings.php:113
+msgid "Overview"
+msgstr "Übersicht"
+
+#: packages/mis-buero/src/settings/settings.php:121
+#: packages/mis-buero/src/settings/settings.php:122
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: packages/mis-buero/src/settings/settings.php:196
+#: packages/mis-buero/src/settings/settings.php:235
+#: packages/mis-buero/src/settings/settings.php:293
+msgid "You are not allowed to access this page."
+msgstr "Du bist nicht berechtigt, auf diese Seite zuzugreifen."
+
+#: packages/mis-buero/src/settings/settings.php:212
+msgid "Das bin ich"
+msgstr "Das bin ich"
+
+#: packages/mis-buero/src/settings/settings.php:247
+#: packages/mis-buero/src/settings/settings.php:308
+msgid "Edit self contact"
+msgstr "Eigenen Kontakt bearbeiten"
+
+#: packages/mis-buero/src/settings/settings.php:264
+msgid "Published entries"
+msgstr "Veröffentlichte Einträge"
+
+#: packages/mis-buero/src/settings/settings.php:271
+#, php-format
+msgid "%d draft"
+msgid_plural "%d drafts"
+msgstr[0] "%d Entwurf"
+msgstr[1] "%d Entwürfe"
+
+#: packages/mis-buero/src/settings/settings.php:279
+msgid "Add new"
+msgstr "Neu hinzufügen"
+
+#: packages/mis-buero/src/settings/settings.php:280
+msgid "Open list"
+msgstr "Liste öffnen"
+
+#: packages/mis-buero/src/settings/settings.php:302
+msgid "Mis Büro Settings"
+msgstr "Mis Büro Einstellungen"
+
+#: packages/mis-buero/src/settings/settings.php:303
+msgid "Self contact"
+msgstr "Eigener Kontakt"
+
+#: packages/mis-buero/src/settings/settings.php:304
+msgid ""
+"Mis Büro uses the contact assigned to the category \"Das bin ich\" as your "
+"own company profile."
+msgstr ""
+"Mis Büro verwendet den Kontakt mit der Kategorie „Das bin ich“ als eigenes "
+"Firmenprofil."
+
+#: packages/mis-buero/src/settings/settings.php:311
+msgid "Manage contact categories"
+msgstr "Kontaktkategorien verwalten"
+
+#: packages/mis-buero/src/settings/settings.php:316
+msgid "No contact with the category \"Das bin ich\" exists yet."
+msgstr "Es gibt noch keinen Kontakt mit der Kategorie „Das bin ich“."
+
+#: packages/mis-buero/src/settings/settings.php:320
+msgid "Create self contact"
+msgstr "Eigenen Kontakt anlegen"
+
+#: packages/mis-buero/src/shared/meta-boxes.php:52
+msgid "Select"
+msgstr "Auswählen"
+
+#: packages/mis-buero/src/shared/post-types.php:17
+#: packages/mis-buero/src/shared/taxonomies.php:74
+#, php-format
+msgid "Add %s"
+msgstr "%s hinzufügen"
+
+#: packages/mis-buero/src/shared/post-types.php:19
+#: packages/mis-buero/src/shared/taxonomies.php:70
+#, php-format
+msgid "Edit %s"
+msgstr "%s bearbeiten"
+
+#: packages/mis-buero/src/shared/post-types.php:21
+#: packages/mis-buero/src/shared/taxonomies.php:76
+#, php-format
+msgid "New %s"
+msgstr "Neuer Eintrag: %s"
+
+#: packages/mis-buero/src/shared/post-types.php:23
+#, php-format
+msgid "View %s"
+msgstr "%s ansehen"
+
+#: packages/mis-buero/src/shared/post-types.php:25
+#: packages/mis-buero/src/shared/taxonomies.php:66
+#, php-format
+msgid "Search %s"
+msgstr "%s suchen"
+
+#: packages/mis-buero/src/shared/post-types.php:27
+#, php-format
+msgid "No %s found."
+msgstr "Keine %s gefunden."
+
+#: packages/mis-buero/src/shared/taxonomies.php:68
+#, php-format
+msgid "All %s"
+msgstr "Alle %s"
+
+#: packages/mis-buero/src/shared/taxonomies.php:72
+#, php-format
+msgid "Update %s"
+msgstr "%s aktualisieren"
+
+#~ msgid "Office workflows, invoices, contacts and documents for WordPress."
+#~ msgstr "Büroabläufe, Rechnungen, Kontakte und Dokumente für WordPress."
+
+#~ msgid "Search contact categories"
+#~ msgstr "Kontaktkategorien suchen"
+
+#~ msgid "All contact categories"
+#~ msgstr "Alle Kontaktkategorien"
+
+#~ msgid "Edit contact category"
+#~ msgstr "Kontaktkategorie bearbeiten"
+
+#~ msgid "Update contact category"
+#~ msgstr "Kontaktkategorie aktualisieren"
+
+#~ msgid "Add contact category"
+#~ msgstr "Kontaktkategorie hinzufügen"
+
+#~ msgid "New contact category"
+#~ msgstr "Neue Kontaktkategorie"

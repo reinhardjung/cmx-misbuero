@@ -1,0 +1,1331 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+/**
+ * Tab: Allgemein
+ */
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_mwst_exempt_default_note_html')) {
+	function cmx_mwst_exempt_default_note_html(): string {
+		return 'Nicht mehrwertsteuerpflichtig gemäss <a href="https://www.fedlex.admin.ch/eli/cc/2009/615/de#art_10" style="color:black;" target="_blank" rel="noopener noreferrer">Art. 10 Abs. 2 lit. a MWSTG</a>';
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_preserve_backup_setting_when_missing')) {
+	function cmx_preserve_backup_setting_when_missing($value, string $option = '', $original_value = null) {
+		if ($original_value !== null) {
+			return $value;
+		}
+
+		return match ($option) {
+			'misbuero_backup_download_url' => (string) \get_option($option, ''),
+			'misbuero_backup_created_at'   => (string) \get_option($option, ''),
+			'misbuero_backup_file'         => (string) \get_option($option, ''),
+			'misbuero_backup_size_bytes'   => (int) \get_option($option, 0),
+			default                        => $value,
+		};
+	}
+}
+
+foreach ([
+	'misbuero_backup_download_url',
+	'misbuero_backup_created_at',
+	'misbuero_backup_file',
+	'misbuero_backup_size_bytes',
+] as $cmx_backup_option) {
+	\add_filter('sanitize_option_' . $cmx_backup_option, __NAMESPACE__ . '\\cmx_preserve_backup_setting_when_missing', 1, 3);
+}
+
+\add_action('admin_init', __NAMESPACE__ . '\\cmx_register_general_tab');
+function cmx_register_general_tab(): void {
+
+	\add_settings_section(
+		'cmx_sec_general',
+		__('Allgemein', 'default'),
+		'__return_false',
+		'cmx_tab_general'
+	);
+
+	\add_settings_field(
+		'kontakte_sync',
+		'Kontakte Sync',
+		function () {
+			$account_url = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_carddav_account_url')
+				? (string) cmx_kontakte_carddav_account_url()
+				: (string) \home_url('/cmx-carddav/');
+			$server = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_carddav_host')
+				? (string) cmx_kontakte_carddav_host()
+				: (string) \wp_parse_url($account_url, \PHP_URL_HOST);
+			$username = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_carddav_username')
+				? (string) cmx_kontakte_carddav_username()
+				: 'kontakte';
+			$password = \function_exists(__NAMESPACE__ . '\\cmx_kontakte_carddav_token')
+				? (string) cmx_kontakte_carddav_token()
+				: '';
+			echo '<style>
+				.cmx-carddav-rows{display:grid;gap:8px;max-width:720px}
+				.cmx-carddav-row{display:grid;grid-template-columns:160px minmax(0,1fr) 36px;align-items:center;gap:8px}
+				.cmx-carddav-row label{font-weight:600;color:#1d2327}
+				.cmx-carddav-row input{width:100%;min-height:36px;margin:0}
+				.cmx-carddav-client-notes{margin:4px 0 0;color:#646970}
+				.cmx-carddav-client-notes code{font-size:12px}
+				.cmx-carddav-copy{width:36px;height:36px;min-width:36px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#1d4ed8;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+				.cmx-carddav-copy:hover,.cmx-carddav-copy:focus{border-color:#2271b1;color:#135e96;background:#f6f9ff;box-shadow:0 0 0 1px rgba(34,113,177,.08);outline:none}
+				.cmx-carddav-copy svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+				.cmx-carddav-copy .cmx-carddav-check{display:none}
+				.cmx-carddav-copy.is-copied{border-color:#16a34a;color:#15803d;background:#f0fdf4}
+				.cmx-carddav-copy.is-copied .cmx-carddav-copy-icon{display:none}
+				.cmx-carddav-copy.is-copied .cmx-carddav-check{display:block}
+			</style>';
+			echo '<div class="cmx-carddav-rows" aria-label="CardDAV Kontaktdaten">';
+			foreach ([
+				'url' => ['label' => 'CardDAV URL', 'value' => $account_url],
+				'server' => ['label' => 'iPhone Server', 'value' => $server],
+				'username' => ['label' => 'Benutzername', 'value' => $username],
+				'password' => ['label' => 'Passwort', 'value' => $password],
+			] as $key => $row) {
+				$field_id = 'cmx_kontakte_carddav_' . $key;
+				echo '<div class="cmx-carddav-row">';
+				echo '<label for="' . \esc_attr($field_id) . '">' . \esc_html((string) $row['label']) . '</label>';
+				echo '<input type="text" class="regular-text code" id="' . \esc_attr($field_id) . '" value="' . \esc_attr((string) $row['value']) . '" readonly>';
+				echo '<button type="button" class="cmx-carddav-copy" data-copy-target="' . \esc_attr($field_id) . '" title="' . \esc_attr((string) $row['label']) . ' kopieren" aria-label="' . \esc_attr((string) $row['label']) . ' kopieren">';
+				echo '<svg class="cmx-carddav-copy-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+				echo '<svg class="cmx-carddav-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+				echo '</button>';
+				echo '</div>';
+			}
+			echo '</div>';
+			echo '<p class="description cmx-carddav-client-notes">Thunderbird: <code>CardDAV URL</code>, Benutzername und Passwort verwenden. iPhone: Server, Benutzername und Passwort verwenden. Nextcloud kann externe CardDAV-Adressbücher je nach App/Version meist nur importieren oder über Zusatz-Apps einbinden.</p>';
+			echo '<script>
+			document.addEventListener("click",function(event){
+				var button=event.target.closest(".cmx-carddav-copy");
+				if(!button)return;
+				var input=document.getElementById(button.getAttribute("data-copy-target"));
+				if(!input)return;
+				input.focus();
+				input.select();
+				var done=function(){
+					button.classList.add("is-copied");
+					setTimeout(function(){button.classList.remove("is-copied");},1200);
+				};
+				if(navigator.clipboard&&navigator.clipboard.writeText){
+					navigator.clipboard.writeText(input.value).then(done).catch(function(){document.execCommand("copy");done();});
+				}else{
+					document.execCommand("copy");
+					done();
+				}
+			});
+			</script>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'cmx_user_email',
+		'Hinterlegte E-Mail',
+		function () {
+			$current_user = \wp_get_current_user();
+			$user_email = ($current_user instanceof \WP_User && $current_user->exists())
+				? (string) $current_user->user_email
+				: '';
+			$user_login = ($current_user instanceof \WP_User && $current_user->exists())
+				? (string) $current_user->user_login
+				: '';
+
+			echo '<input type="email" class="regular-text" id="cmx_user_email" name="cmx_user_email" value="' . \esc_attr($user_email) . '" autocomplete="email">';
+			if ($user_login !== '') {
+				echo '<p class="description">E-Mail-Adresse für den Benutzer <code>' . \esc_html($user_login) . '</code>.</p>';
+			}
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'quick_edit',
+		'Quick Edit',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'quick_edit',
+				'label' => 'Beleg Schnell-Erfassung in der roten Menüleiste anzeigen',
+			]);
+			echo '<p class="description">Blendet zentriert die beiden Auswahllisten für Kontakt und Artikel zum direkten Erstellen eines Belegs ein.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'quick_search',
+		'Quick Search',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'quick_search',
+				'label' => 'LIVE Suche in den Übersichten',
+			]);
+			echo '<p class="description">Zeigt Treffer schon während der Eingabe, statt erst nach Klick auf den Suchen Button.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'quick_pay',
+		'Quick Pay',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'quick_pay',
+				'label' => 'von anderen Misbüro Kunden gefunden werden.',
+			]);
+			echo '<p class="description">Zum einfachen Austauschen von Rechnungen und Lieferscheinen um schneller bezahlt zu werden.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	\add_settings_field(
+		'support_user_switch',
+		'Support',
+		function () {
+			\CLOUDMEISTER\CMX\Buero\cmx_field_checkbox([
+				'key'   => 'support_user_switch',
+				'label' => 'Benutzerwechsel erlauben',
+			]);
+			echo '<p class="description">Bei aktivierter Funktion darf der Support temporär in Deine Benutzerrollen wechseln, um Probleme zu analysieren.</p>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	$backup_download_url = (string) \get_option('misbuero_backup_download_url', '');
+	$backup_download_url = \esc_url_raw($backup_download_url);
+	$backup_file = \sanitize_file_name((string) \get_option('misbuero_backup_file', ''));
+	$backup_created_raw = \trim((string) \get_option('misbuero_backup_created_at', ''));
+	$backup_size_bytes = (int) \get_option('misbuero_backup_size_bytes', 0);
+	$backup_path_option = \wp_normalize_path((string) \get_option('misbuero_backup_path', ''));
+	$backup_exists = false;
+	$backup_found_path = '';
+	$backup_dir = \defined('WP_CONTENT_DIR')
+		? \wp_normalize_path((string) \constant('WP_CONTENT_DIR') . '/uploads/misbuero-backups')
+		: '';
+
+	if ($backup_file === '' && $backup_path_option !== '') {
+		$backup_file = \sanitize_file_name(\wp_basename($backup_path_option));
+	}
+
+	if ($backup_file === '' && $backup_download_url !== '') {
+		if (\preg_match('#/misbuero-backups/([^/?#]+\.(?:zip|tar\.gz))\b#i', $backup_download_url, $m_file)) {
+			$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+		} elseif (\preg_match('/[?&]file=([^&]+)/i', $backup_download_url, $m_file)) {
+			$backup_file = \sanitize_file_name(\rawurldecode((string) $m_file[1]));
+		}
+	}
+
+	$backup_paths = [];
+	if ($backup_path_option !== '') {
+		$backup_paths[] = $backup_path_option;
+	}
+	if ($backup_file !== '') {
+		if ($backup_dir !== '') {
+			$backup_paths[] = \wp_normalize_path(\rtrim($backup_dir, '/\\') . '/' . $backup_file);
+		}
+		if (\defined(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) {
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant(__NAMESPACE__ . '\\CMX_UPLOADS_MISBUERO')) . 'backups/' . $backup_file);
+		}
+		if (\defined('WP_CONTENT_DIR')) {
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/' . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/misbuero/' . $backup_file);
+			$backup_paths[] = \wp_normalize_path(\trailingslashit((string) \constant('WP_CONTENT_DIR')) . 'uploads/misbuero/backups/' . $backup_file);
+		}
+	}
+	$backup_paths = \array_values(\array_unique(\array_filter($backup_paths, static function ($path): bool {
+		return \is_string($path) && $path !== '';
+	})));
+
+	foreach ($backup_paths as $backup_path) {
+		if (\is_file($backup_path)) {
+			$backup_exists = true;
+			$backup_found_path = $backup_path;
+			break;
+		}
+	}
+
+	if (!$backup_exists && $backup_dir !== '' && \is_dir($backup_dir)) {
+		$domain_hint = \strtolower((string) \wp_parse_url(\home_url('/'), PHP_URL_HOST));
+		$domain_prefix = ($domain_hint !== '') ? 'backup-' . $domain_hint . '-' : '';
+		$best_any = '';
+		$best_any_mtime = 0;
+		$best_domain = '';
+		$best_domain_mtime = 0;
+		$files = \glob(\rtrim($backup_dir, '/\\') . '/backup-*');
+		if (!\is_array($files)) {
+			$files = [];
+		}
+		foreach ($files as $file_path) {
+			$file_path = \wp_normalize_path((string) $file_path);
+			if (!\is_file($file_path)) {
+				continue;
+			}
+			$basename = \basename($file_path);
+			if (!\preg_match('/^backup-[a-z0-9.-]+\-\d{8}\-\d{6}\-[a-z0-9]+\.(?:zip|tar\.gz)$/i', $basename)) {
+				continue;
+			}
+			$mtime = \filemtime($file_path);
+			$mtime = ($mtime !== false) ? (int) $mtime : 0;
+			if ($mtime >= $best_any_mtime) {
+				$best_any_mtime = $mtime;
+				$best_any = $basename;
+			}
+			if ($domain_prefix !== '' && \strpos(\strtolower($basename), $domain_prefix) === 0 && $mtime >= $best_domain_mtime) {
+				$best_domain_mtime = $mtime;
+				$best_domain = $basename;
+			}
+		}
+		$fallback_file = ($best_domain !== '') ? $best_domain : $best_any;
+		if ($fallback_file !== '') {
+			$backup_file = \sanitize_file_name((string) $fallback_file);
+			$backup_found_path = \wp_normalize_path(\rtrim($backup_dir, '/\\') . '/' . $backup_file);
+			$backup_exists = \is_file($backup_found_path);
+		}
+	}
+
+	if ($backup_exists && $backup_size_bytes <= 0 && $backup_found_path !== '') {
+		$detected_size = \filesize($backup_found_path);
+		if (\is_int($detected_size) && $detected_size > 0) {
+			$backup_size_bytes = $detected_size;
+		}
+	}
+
+	if ($backup_exists && $backup_file !== '' && \defined('ABSPATH')) {
+		$local_endpoint_path = \wp_normalize_path(\rtrim((string) \constant('ABSPATH'), '/\\') . '/misbuero-backup-download.php');
+		if (\is_file($local_endpoint_path)) {
+			$backup_download_url = \add_query_arg(['file' => $backup_file], \home_url('/misbuero-backup-download.php'));
+		}
+	}
+
+	if ($backup_download_url !== '' && $backup_exists) {
+		\add_settings_field(
+			'misbuero_instance_backup_link',
+			'Backup',
+			function () use ($backup_download_url, $backup_created_raw, $backup_size_bytes) {
+				$size_human = '';
+				if ($backup_size_bytes > 0) {
+					$units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+					$idx = 0;
+					$size = (float) $backup_size_bytes;
+					while ($size >= 1024 && $idx < \count($units) - 1) {
+						$size /= 1024;
+						$idx++;
+					}
+					$dec = ($size >= 100 || $idx === 0) ? 0 : 1;
+					$size_human = \number_format($size, $dec, '.', '') . ' ' . $units[$idx];
+				}
+
+				$meta = [];
+				if ($backup_created_raw !== '') {
+					$created_ts = \strtotime($backup_created_raw);
+					if ($created_ts !== false) {
+						$meta[] = 'erstellt am ' . \date_i18n('d.m.Y H:i', $created_ts);
+					} else {
+						$meta[] = 'erstellt am ' . $backup_created_raw;
+					}
+				}
+				if ($size_human !== '') {
+					$meta[] = $size_human;
+				}
+
+				echo '<p class="description"><a href="' . \esc_url($backup_download_url) . '" target="_blank" rel="noopener">Backup herunterladen</a>';
+				if (!empty($meta)) {
+					echo ' (' . \esc_html(\implode(' | ', $meta)) . ')';
+				}
+				echo '</p>';
+			},
+			'cmx_tab_general',
+			'cmx_sec_general'
+		);
+	}
+
+	\add_settings_field(
+		'help_sync_button',
+		'Hilfe-Texte',
+		function () {
+			if (!\function_exists('\\CLOUDMEISTER\\CMX\\Buero\\cmx_help_is_cloud_meister') || !\CLOUDMEISTER\CMX\Buero\cmx_help_is_cloud_meister()) {
+				echo '<em>Nur für Admin (CLOUD Meister)</em>';
+				return;
+			}
+			$host = (string) \wp_parse_url(\home_url(), PHP_URL_HOST);
+			if ($host === 'vorlage.misbuero.ch') {
+				return;
+			}
+			$nonce  = \wp_create_nonce('cmx_help_sync');
+			echo '<button type="button" class="button" id="cmx-help-sync-btn">Neue Hilfetexte laden</button>';
+			echo '<span class="spinner" id="cmx-help-sync-spinner" style="float:none;margin-left:8px;"></span>';
+			echo '<div id="cmx-help-sync-status" style="margin-top:8px;min-height:20px;"></div>';
+			echo '<script>
+			(function(){
+				const btn = document.getElementById("cmx-help-sync-btn");
+				const spinner = document.getElementById("cmx-help-sync-spinner");
+				const status = document.getElementById("cmx-help-sync-status");
+				if (!btn || !spinner || !status) return;
+				function setStatus(text){ status.textContent = text || ""; }
+				btn.addEventListener("click", function(){
+					setStatus("Lese Hilfetexte...");
+					spinner.classList.add("is-active");
+					btn.disabled = true;
+					const form = new URLSearchParams();
+					form.append("action","cmx_help_sync");
+					form.append("nonce","'.\esc_js($nonce).'");
+					fetch(ajaxurl, {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:form.toString()})
+						.then(r => r.json())
+						.then(data => {
+							const keys = data && data.data && Array.isArray(data.data.keys) ? data.data.keys : [];
+							let i = 0;
+							function step(){
+								if (i < keys.length) {
+									setStatus("Lese: " + keys[i]);
+									i++;
+									setTimeout(step, 40);
+								} else {
+									setStatus("Alle Texte geladen.");
+									spinner.classList.remove("is-active");
+									btn.disabled = false;
+								}
+							}
+							step();
+						})
+						.catch(() => {
+							setStatus("Hilfetexte konnten nicht geladen werden.");
+							spinner.classList.remove("is-active");
+							btn.disabled = false;
+						});
+				});
+			})();
+			</script>';
+		},
+		'cmx_tab_general',
+		'cmx_sec_general'
+	);
+
+	// QR-Referenz wird pro Bank im Tab "Banken" gepflegt.
+
+	// Wenn nötig: register_setting() ebenfalls hier setzen
+	// \register_setting('cmx_einstellungen','cmx_einstellungen');
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_general_save_current_user_email')) {
+	function cmx_general_save_current_user_email($new, $old) {
+		if (!\is_admin() || !isset($_POST['cmx_user_email'])) {
+			return $new;
+		}
+
+		$option_page = isset($_POST['option_page'])
+			? \sanitize_key((string) \wp_unslash($_POST['option_page']))
+			: '';
+		if ($option_page !== CMX_SETTINGS_MAIN) {
+			return $new;
+		}
+
+		$current_user = \wp_get_current_user();
+		if (!$current_user instanceof \WP_User || !$current_user->exists()) {
+			return $new;
+		}
+
+		$email = \sanitize_email((string) \wp_unslash($_POST['cmx_user_email']));
+		if ($email === (string) $current_user->user_email) {
+			return $new;
+		}
+
+		if ($email === '' || !\is_email($email)) {
+			\add_settings_error(
+				CMX_SETTINGS_MAIN,
+				'cmx_user_email_invalid',
+				'Bitte gib eine gültige hinterlegte E-Mail ein.',
+				'error'
+			);
+			return $new;
+		}
+
+		$existing_user_id = \email_exists($email);
+		if ($existing_user_id && (int) $existing_user_id !== (int) $current_user->ID) {
+			\add_settings_error(
+				CMX_SETTINGS_MAIN,
+				'cmx_user_email_exists',
+				'Diese E-Mail-Adresse ist bereits bei einem anderen Benutzer hinterlegt.',
+				'error'
+			);
+			return $new;
+		}
+
+		$result = \wp_update_user([
+			'ID' => (int) $current_user->ID,
+			'user_email' => $email,
+		]);
+		if (\is_wp_error($result)) {
+			\add_settings_error(
+				CMX_SETTINGS_MAIN,
+				'cmx_user_email_update_failed',
+				'E-Mail-Adresse konnte nicht gespeichert werden: ' . $result->get_error_message(),
+				'error'
+			);
+			return $new;
+		}
+
+		\clean_user_cache((int) $current_user->ID);
+
+		return $new;
+	}
+}
+
+\add_filter('pre_update_option_' . CMX_SETTINGS_MAIN, __NAMESPACE__ . '\\cmx_general_save_current_user_email', 5, 2);
+
+
+
+// QR-Referenz wird pro Bank verarbeitet (siehe Tab "Banken").
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_admin_quick_search_enabled')) {
+	function cmx_admin_quick_search_enabled(): bool {
+		$options = \defined(__NAMESPACE__ . '\\CMX_SETTINGS_MAIN')
+			? (array) \get_option(CMX_SETTINGS_MAIN, [])
+			: [];
+
+		return !empty($options['quick_search']);
+	}
+}
+
+\add_action('admin_footer-edit.php', function (): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen || (string) ($screen->base ?? '') !== 'edit') {
+		return;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '' || !\post_type_exists($post_type)) {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin)) {
+		return;
+	}
+
+	$label = \trim(\wp_strip_all_tags((string) ($post_type_object->labels->name ?? $post_type_object->label ?? $post_type)));
+	if ($label === '') {
+		$label = $post_type;
+	}
+
+	$button_label = $label . ' suchen';
+	$enabled = cmx_admin_quick_search_enabled();
+	?>
+	<style>
+		#posts-filter.cmx-admin-quick-search-busy{
+			opacity:.72;
+			transition:opacity .16s ease;
+		}
+		#the-list tr.cmx-admin-quick-search-active-row > th,
+		#the-list tr.cmx-admin-quick-search-active-row > td{
+			background:#edf5ff !important;
+		}
+		#the-list tr.cmx-admin-quick-search-active-row > th:first-child,
+		#the-list tr.cmx-admin-quick-search-active-row > td:first-child{
+			box-shadow:inset 2px 0 0 #2271b1;
+		}
+	</style>
+	<script>
+	(function(){
+		var runtime = window.cmxAdminQuickSearchRuntime = window.cmxAdminQuickSearchRuntime || {
+			bound: false,
+			enabled: false,
+			buttonLabel: "",
+			postType: "",
+			timer: 0,
+			controller: null,
+			requestId: 0,
+			activeResultIndex: -1,
+			lastEscapeAt: 0
+		};
+		runtime.enabled = <?php echo \wp_json_encode($enabled); ?>;
+		runtime.buttonLabel = <?php echo \wp_json_encode($button_label); ?>;
+		runtime.postType = <?php echo \wp_json_encode($post_type); ?>;
+
+		function getPostsFilter(){
+			return document.getElementById("posts-filter");
+		}
+
+		function getSearchInput(root){
+			var scope = root && root.querySelector ? root : document;
+			return scope.querySelector('#posts-filter input[name="s"]');
+		}
+
+		function getSearchButton(root){
+			var scope = root && root.querySelector ? root : document;
+			return scope.querySelector("#search-submit");
+		}
+
+		function getResultLink(row){
+			if (!(row instanceof HTMLTableRowElement)) {
+				return null;
+			}
+			return row.querySelector("a.row-title")
+				|| row.querySelector("td.title strong a")
+				|| row.querySelector("strong a");
+		}
+
+		function getResultRows(){
+			return Array.prototype.filter.call(document.querySelectorAll("#the-list tr"), function(row){
+				return row instanceof HTMLTableRowElement
+					&& !row.classList.contains("no-items")
+					&& !row.classList.contains("inline-editor")
+					&& !!getResultLink(row);
+			});
+		}
+
+		function clearActiveResult(){
+			runtime.activeResultIndex = -1;
+			document.querySelectorAll("#the-list tr.cmx-admin-quick-search-active-row").forEach(function(row){
+				row.classList.remove("cmx-admin-quick-search-active-row");
+				row.removeAttribute("aria-selected");
+			});
+		}
+
+		function setActiveResult(index){
+			var rows = getResultRows();
+			if (!rows.length) {
+				clearActiveResult();
+				return null;
+			}
+
+			if (index < 0) {
+				index = 0;
+			}
+			if (index >= rows.length) {
+				index = rows.length - 1;
+			}
+
+			clearActiveResult();
+			runtime.activeResultIndex = index;
+
+			var row = rows[index];
+			row.classList.add("cmx-admin-quick-search-active-row");
+			row.setAttribute("aria-selected", "true");
+			if (typeof row.scrollIntoView === "function") {
+				row.scrollIntoView({ block: "nearest", inline: "nearest" });
+			}
+
+			return row;
+		}
+
+		function moveActiveResult(step){
+			var rows = getResultRows();
+			if (!rows.length) {
+				clearActiveResult();
+				return null;
+			}
+
+			var nextIndex = runtime.activeResultIndex;
+			if (nextIndex < 0 || nextIndex >= rows.length) {
+				nextIndex = step > 0 ? 0 : rows.length - 1;
+			} else {
+				nextIndex += step;
+			}
+
+			if (nextIndex < 0) {
+				nextIndex = 0;
+			}
+			if (nextIndex >= rows.length) {
+				nextIndex = rows.length - 1;
+			}
+
+			return setActiveResult(nextIndex);
+		}
+
+		function getActiveResultLink(){
+			var rows = getResultRows();
+			if (!rows.length || runtime.activeResultIndex < 0 || runtime.activeResultIndex >= rows.length) {
+				return null;
+			}
+			return getResultLink(rows[runtime.activeResultIndex]);
+		}
+
+		function focusAndSelectSearchInput(input){
+			if (!(input instanceof HTMLInputElement)) {
+				input = getSearchInput(document);
+			}
+			if (!(input instanceof HTMLInputElement)) {
+				return;
+			}
+			if (typeof input.focus === "function") {
+				input.focus({ preventScroll: true });
+			}
+			if (typeof input.select === "function") {
+				input.select();
+				return;
+			}
+			if (typeof input.setSelectionRange === "function") {
+				input.setSelectionRange(0, input.value.length);
+			}
+		}
+
+		function updateSearchButtonLabel(root){
+			var button = getSearchButton(root);
+			if (!button) return;
+			button.value = runtime.buttonLabel;
+			button.setAttribute("aria-label", runtime.buttonLabel);
+			button.setAttribute("title", runtime.buttonLabel);
+		}
+
+		function replaceRefreshFragments(nextDoc){
+			document.querySelectorAll("[data-cmx-admin-refresh-fragment][id]").forEach(function(currentEl){
+				var id = currentEl.getAttribute("id") || "";
+				if (!id) return;
+				var nextEl = nextDoc.getElementById(id);
+				if (nextEl && nextEl.getAttribute("data-cmx-admin-refresh-fragment") !== null) {
+					currentEl.outerHTML = nextEl.outerHTML;
+					return;
+				}
+				currentEl.remove();
+			});
+		}
+
+		function buildSearchUrl(rawQuery){
+			var form = getPostsFilter();
+			if (!form) {
+				return window.location.href;
+			}
+
+			var params = new URLSearchParams(new FormData(form));
+			var query = String(rawQuery || "");
+
+			params.delete("_wp_http_referer");
+			if (query.trim() === "") {
+				params.delete("s");
+			} else {
+				params.set("s", query);
+			}
+			params.set("paged", "1");
+			if (!params.get("post_type")) {
+				params.set("post_type", runtime.postType);
+			}
+
+			var qs = params.toString();
+			return window.location.pathname + (qs ? "?" + qs : "");
+		}
+
+		function setBusy(isBusy){
+			var form = getPostsFilter();
+			if (form) {
+				form.classList.toggle("cmx-admin-quick-search-busy", !!isBusy);
+			}
+			var button = getSearchButton();
+			if (!button) return;
+			button.disabled = !!isBusy;
+			button.classList.toggle("disabled", !!isBusy);
+			button.value = !!isBusy ? (runtime.buttonLabel + " ...") : runtime.buttonLabel;
+		}
+
+		function afterRefresh(expectedValue, url){
+			clearActiveResult();
+			updateSearchButtonLabel(document);
+			document.dispatchEvent(new CustomEvent("cmx:admin-list-refreshed", {
+				detail: { postType: runtime.postType, url: url || "" }
+			}));
+			window.setTimeout(function(){
+				var input = getSearchInput(document);
+				if (!input) return;
+				input.value = String(expectedValue || "");
+				if (typeof input.focus === "function") {
+					input.focus({ preventScroll: true });
+				}
+				if (typeof input.setSelectionRange === "function") {
+					var pos = input.value.length;
+					input.setSelectionRange(pos, pos);
+				}
+			}, 0);
+		}
+
+		function applyResponse(html, expectedValue, url){
+			var parser = new DOMParser();
+			var nextDoc = parser.parseFromString(String(html || ""), "text/html");
+			var nextForm = nextDoc.getElementById("posts-filter");
+			var currentForm = getPostsFilter();
+			if (!nextForm || !currentForm) {
+				window.location.assign(url);
+				return;
+			}
+
+			currentForm.innerHTML = nextForm.innerHTML;
+			replaceRefreshFragments(nextDoc);
+			if (window.history && typeof window.history.replaceState === "function") {
+				window.history.replaceState({ cmxQuickSearch: true }, "", url);
+			}
+			afterRefresh(expectedValue, url);
+		}
+
+		function loadSearchResults(query){
+			if (!runtime.enabled) return;
+
+			var url = buildSearchUrl(query);
+			runtime.requestId += 1;
+			var requestId = runtime.requestId;
+
+			if (runtime.controller && typeof runtime.controller.abort === "function") {
+				runtime.controller.abort();
+			}
+			runtime.controller = ("AbortController" in window) ? new AbortController() : null;
+			setBusy(true);
+
+			fetch(url, {
+				credentials: "same-origin",
+				headers: { "X-Requested-With": "XMLHttpRequest" },
+				signal: runtime.controller ? runtime.controller.signal : undefined
+			})
+				.then(function(response){
+					if (!response.ok) {
+						throw new Error("request_failed");
+					}
+					return response.text();
+				})
+				.then(function(html){
+					if (requestId !== runtime.requestId) return;
+					applyResponse(html, query, url);
+				})
+				.catch(function(error){
+					if (error && error.name === "AbortError") return;
+					window.location.assign(url);
+				})
+				.finally(function(){
+					if (requestId === runtime.requestId) {
+						setBusy(false);
+					}
+				});
+		}
+
+		function scheduleSearch(query){
+			if (!runtime.enabled) return;
+			window.clearTimeout(runtime.timer);
+			runtime.timer = window.setTimeout(function(){
+				loadSearchResults(query);
+			}, 220);
+		}
+
+		function clearSearchFilter(input){
+			var field = (input instanceof HTMLInputElement) ? input : getSearchInput(document);
+			var currentValue = field ? String(field.value || "") : "";
+			var hadSearchParam = false;
+
+			try {
+				hadSearchParam = new URLSearchParams(window.location.search).has("s");
+			} catch (error) {
+				hadSearchParam = false;
+			}
+
+			clearActiveResult();
+			updateSearchButtonLabel(document);
+
+			if (field) {
+				field.value = "";
+			}
+
+			if (currentValue.trim() === "" && !hadSearchParam) {
+				focusAndSelectSearchInput(field);
+				return;
+			}
+
+			window.clearTimeout(runtime.timer);
+
+			if (runtime.enabled) {
+				loadSearchResults("");
+				return;
+			}
+
+			window.location.assign(buildSearchUrl(""));
+		}
+
+		if (runtime.bound) {
+			updateSearchButtonLabel(document);
+			return;
+		}
+
+		runtime.bound = true;
+
+		document.addEventListener("input", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			var form = target.closest("#posts-filter");
+			if (!form) {
+				return;
+			}
+			clearActiveResult();
+			updateSearchButtonLabel(document);
+			scheduleSearch(target.value || "");
+		});
+
+		document.addEventListener("keydown", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			if (!target.closest("#posts-filter")) {
+				return;
+			}
+
+			if (event.key === "ArrowDown" || event.key === "Down") {
+				if (!runtime.enabled || !getResultRows().length) {
+					return;
+				}
+				event.preventDefault();
+				moveActiveResult(1);
+				return;
+			}
+
+			if (event.key === "ArrowUp" || event.key === "Up") {
+				if (!runtime.enabled || !getResultRows().length) {
+					return;
+				}
+				event.preventDefault();
+				moveActiveResult(-1);
+				return;
+			}
+
+			if (event.key === "Escape" || event.key === "Esc") {
+				if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
+					return;
+				}
+
+				event.preventDefault();
+				var now = Date.now();
+				var elapsed = now - (runtime.lastEscapeAt || 0);
+				runtime.lastEscapeAt = now;
+
+				if (elapsed > 0 && elapsed <= 1000) {
+					clearSearchFilter(target);
+					return;
+				}
+
+				clearActiveResult();
+				focusAndSelectSearchInput(target);
+				return;
+			}
+
+			if (event.key !== "Enter" || !runtime.enabled) {
+				return;
+			}
+
+			var activeLink = getActiveResultLink();
+			if (activeLink && activeLink.href) {
+				event.preventDefault();
+				window.location.assign(activeLink.href);
+				return;
+			}
+
+			event.preventDefault();
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(target.value || "");
+		});
+
+		document.addEventListener("focusin", function(event){
+			var target = event.target;
+			if (!(target instanceof HTMLInputElement) || target.name !== "s") {
+				return;
+			}
+			if (!target.closest("#posts-filter")) {
+				return;
+			}
+			updateSearchButtonLabel(document);
+		});
+
+		document.addEventListener("click", function(event){
+			var button = event.target instanceof Element ? event.target.closest("#search-submit") : null;
+			if (!button) {
+				var titleLink = event.target instanceof Element ? event.target.closest("#the-list tr a.row-title, #the-list tr td.title strong a, #the-list tr strong a") : null;
+				if (!titleLink) {
+					return;
+				}
+				var row = titleLink.closest("tr");
+				if (!(row instanceof HTMLTableRowElement)) {
+					return;
+				}
+				var rows = getResultRows();
+				var index = rows.indexOf(row);
+				if (index !== -1) {
+					setActiveResult(index);
+				}
+				return;
+			}
+			updateSearchButtonLabel(document);
+			if (!runtime.enabled) {
+				return;
+			}
+			event.preventDefault();
+			var input = getSearchInput(document);
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(input ? (input.value || "") : "");
+		});
+
+		document.addEventListener("submit", function(event){
+			var form = event.target instanceof HTMLFormElement ? event.target : null;
+			if (!form || form.id !== "posts-filter") {
+				return;
+			}
+			updateSearchButtonLabel(document);
+			if (!runtime.enabled) {
+				return;
+			}
+			var submitter = event.submitter || null;
+			var searchInput = form.querySelector('input[name="s"]');
+			var triggerSearch = !!(submitter && submitter.id === "search-submit");
+			if (!triggerSearch && document.activeElement === searchInput) {
+				triggerSearch = true;
+			}
+			if (!triggerSearch) {
+				return;
+			}
+			event.preventDefault();
+			window.clearTimeout(runtime.timer);
+			loadSearchResults(searchInput ? (searchInput.value || "") : "");
+		});
+
+		updateSearchButtonLabel(document);
+	})();
+	</script>
+	<?php
+}, 999);
+
+\add_action('admin_footer-post.php', __NAMESPACE__ . '\\cmx_print_cpt_double_escape_back_to_list');
+\add_action('admin_footer-post-new.php', __NAMESPACE__ . '\\cmx_print_cpt_double_escape_back_to_list');
+
+function cmx_print_cpt_double_escape_back_to_list(): void {
+	$screen = \function_exists('get_current_screen') ? \get_current_screen() : null;
+	if (!$screen) {
+		return;
+	}
+
+	$post_type = (string) ($screen->post_type ?? '');
+	if ($post_type === '' || !\post_type_exists($post_type)) {
+		return;
+	}
+
+	$post_type_object = \get_post_type_object($post_type);
+	if (!$post_type_object || !empty($post_type_object->_builtin) || empty($post_type_object->show_ui)) {
+		return;
+	}
+
+	$list_url = (string) \admin_url('edit.php?post_type=' . \rawurlencode($post_type));
+	?>
+	<script>
+	(function(){
+		var targetUrl = <?php echo \wp_json_encode($list_url); ?>;
+		if (!targetUrl) {
+			return;
+		}
+
+		var runtime = window.cmxAdminDoubleEscapeToList = window.cmxAdminDoubleEscapeToList || {
+			bound: false,
+			lastEscapeAt: 0,
+			boundDocs: [],
+			tinyMceHooked: false
+		};
+
+		if (runtime.bound) {
+			return;
+		}
+		runtime.bound = true;
+
+		function getSaveButton(){
+			return document.querySelector(
+				'#submitdiv #publish:not([disabled]), #submitdiv #save-post:not([disabled]), #publishing-action #publish:not([disabled]), #publishing-action #save-post:not([disabled]), #publish:not([disabled]), #save-post:not([disabled])'
+			);
+		}
+
+		function isTextareaTarget(target){
+			return !!(target && target.nodeType === 1 && String(target.nodeName || "").toLowerCase() === "textarea");
+		}
+
+		function isWithinContentEditable(target){
+			var current = target && target.nodeType === 3 ? target.parentNode : target;
+			while (current && current.nodeType === 1) {
+				if (current.isContentEditable) {
+					return true;
+				}
+				current = current.parentNode;
+			}
+			return false;
+		}
+
+		function toElement(target){
+			if (!target) {
+				return null;
+			}
+			return target.nodeType === 3 ? target.parentNode : target;
+		}
+
+		function hasValue(value){
+			return String(value || "").trim() !== "";
+		}
+
+		function getSelectionFieldState(target){
+			var el = toElement(target);
+			if (!el || el.nodeType !== 1) {
+				return null;
+			}
+
+			var selector = [
+				'#cmx_projekt_search',
+				'#cmx_kontakt_search',
+				'#cmx_projekt_kontakt_search',
+				'#cmx_carent_kontakt_search',
+				'input[id^="cmx_carent_fahrzeug_search_"]',
+				'.cmx-artikel-autocomplete'
+			].join(',');
+
+			var input = el.matches(selector) ? el : (el.closest ? el.closest(selector) : null);
+			if (!(input instanceof HTMLInputElement)) {
+				return null;
+			}
+
+			if (input.classList.contains('cmx-artikel-autocomplete')) {
+				var articleScope = input.closest('.cmx-task-article-picker') || input.closest('tr') || input.parentNode;
+				var articleIdInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-id') : null;
+				var articleNameInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-name') : null;
+				var articleVariantInput = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-variant-index') : null;
+				var articleEditLink = articleScope && articleScope.querySelector ? articleScope.querySelector('.cmx-artikel-edit') : null;
+
+				return {
+					type: 'artikel',
+					input: input,
+					hiddenId: articleIdInput,
+					hiddenName: articleNameInput,
+					hiddenVariant: articleVariantInput,
+					editLink: articleEditLink,
+					isFilled: function(){
+						return hasValue(input.value)
+							|| (articleIdInput && hasValue(articleIdInput.value))
+							|| (articleNameInput && hasValue(articleNameInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_projekt_search') {
+				var projektIdInput = document.getElementById('cmx_projekt_id');
+				return {
+					type: 'projekt',
+					input: input,
+					clearButton: document.getElementById('cmx_projekt_clear'),
+					hiddenId: projektIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (projektIdInput && hasValue(projektIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_kontakt_search') {
+				var kontaktIdInput = document.getElementById('cmx_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					clearButton: document.getElementById('cmx_kontakt_clear'),
+					hiddenId: kontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (kontaktIdInput && hasValue(kontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_projekt_kontakt_search') {
+				var projektKontaktIdInput = document.getElementById('cmx_projekt_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					hiddenId: projektKontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (projektKontaktIdInput && hasValue(projektKontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id === 'cmx_carent_kontakt_search') {
+				var carentKontaktIdInput = document.getElementById('cmx_carent_kontakt_id');
+				return {
+					type: 'kontakt',
+					input: input,
+					hiddenId: carentKontaktIdInput,
+					isFilled: function(){
+						return hasValue(input.value) || (carentKontaktIdInput && hasValue(carentKontaktIdInput.value));
+					}
+				};
+			}
+
+			if (input.id.indexOf('cmx_carent_fahrzeug_search_') === 0) {
+				var fahrzeugScope = input.closest('.cmx-carent-fahrzeug-box') || input.parentNode;
+				var fahrzeugIdInput = fahrzeugScope && fahrzeugScope.querySelector ? fahrzeugScope.querySelector('input[name="cmx_carent_fahrzeug_id"]') : null;
+				return {
+					type: 'artikel',
+					input: input,
+					hiddenId: fahrzeugIdInput,
+					scope: fahrzeugScope,
+					isFilled: function(){
+						return hasValue(input.value) || (fahrzeugIdInput && hasValue(fahrzeugIdInput.value));
+					}
+				};
+			}
+
+			return null;
+		}
+
+		function clearSelectionField(state){
+			if (!state || !state.input) {
+				return;
+			}
+
+			if (state.clearButton && typeof state.clearButton.click === 'function') {
+				state.clearButton.click();
+			} else {
+				state.input.value = '';
+				if (state.hiddenId) {
+					state.hiddenId.value = '';
+				}
+				if (state.hiddenName) {
+					state.hiddenName.value = '';
+				}
+				if (state.hiddenVariant) {
+					state.hiddenVariant.value = '';
+				}
+				if (state.editLink) {
+					state.editLink.removeAttribute('href');
+					state.editLink.style.pointerEvents = 'none';
+					state.editLink.style.opacity = '0.35';
+				}
+				if (state.scope && state.scope.querySelectorAll) {
+					var details = state.scope.querySelector('.cmx-carent-fahrzeug-details');
+					if (details) {
+						details.classList.add('is-hidden');
+					}
+					state.scope.querySelectorAll('.cmx-carent-fahrzeug-details input').forEach(function(field){
+						if (field instanceof HTMLInputElement) {
+							field.value = '';
+						}
+					});
+				}
+				state.input.dispatchEvent(new Event('input', { bubbles: true }));
+				state.input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+
+			if (typeof state.input.focus === 'function') {
+				state.input.focus({ preventScroll: true });
+			}
+			if (typeof state.input.select === 'function') {
+				state.input.select();
+			}
+		}
+
+		function handleKeydown(event){
+			var target = event.target || null;
+
+			if (
+				(isTextareaTarget(target) || isWithinContentEditable(target))
+				&& (event.ctrlKey || event.metaKey)
+				&& !event.altKey
+				&& !event.shiftKey
+				&& !event.repeat
+				&& !event.isComposing
+				&& (event.key === "Enter" || event.key === "NumpadEnter")
+			) {
+				var saveButton = getSaveButton();
+				if (saveButton) {
+					event.preventDefault();
+					event.stopPropagation();
+					saveButton.click();
+				}
+				return;
+			}
+
+			if (!event || (event.key !== "Escape" && event.key !== "Esc")) {
+				return;
+			}
+			if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
+				return;
+			}
+
+			var now = Date.now();
+			var elapsed = now - (runtime.lastEscapeAt || 0);
+			runtime.lastEscapeAt = now;
+
+			if (elapsed > 0 && elapsed <= 1000) {
+				var selectionField = getSelectionFieldState(target);
+				if (selectionField && typeof selectionField.isFilled === 'function' && selectionField.isFilled()) {
+					event.preventDefault();
+					event.stopPropagation();
+					clearSelectionField(selectionField);
+					runtime.lastEscapeAt = 0;
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				window.location.assign(targetUrl);
+			}
+		}
+
+		function bindKeydownDocument(doc){
+			if (!doc || typeof doc.addEventListener !== "function") {
+				return;
+			}
+			if (runtime.boundDocs.indexOf(doc) !== -1) {
+				return;
+			}
+			runtime.boundDocs.push(doc);
+			doc.addEventListener("keydown", handleKeydown, true);
+		}
+
+		function bindTinyMceEditor(editor){
+			if (!editor) {
+				return;
+			}
+
+			function tryBindEditorDoc(){
+				var editorDoc = null;
+				try {
+					editorDoc = typeof editor.getDoc === "function" ? editor.getDoc() : null;
+				} catch (error) {
+					editorDoc = null;
+				}
+				if (editorDoc) {
+					bindKeydownDocument(editorDoc);
+				}
+			}
+
+			if (typeof editor.on === "function") {
+				editor.on("init", tryBindEditorDoc);
+				editor.on("focus", tryBindEditorDoc);
+			}
+			tryBindEditorDoc();
+		}
+
+		function initTinyMceBindings(){
+			if (runtime.tinyMceHooked || !window.tinymce) {
+				return;
+			}
+			runtime.tinyMceHooked = true;
+
+			if (Array.isArray(window.tinymce.editors)) {
+				window.tinymce.editors.forEach(bindTinyMceEditor);
+			}
+
+			if (typeof window.tinymce.on === "function") {
+				window.tinymce.on("AddEditor", function(event){
+					if (event && event.editor) {
+						bindTinyMceEditor(event.editor);
+					}
+				});
+			}
+		}
+
+		bindKeydownDocument(document);
+		initTinyMceBindings();
+		window.addEventListener("load", initTinyMceBindings, { once: true });
+		window.setTimeout(initTinyMceBindings, 250);
+	})();
+	</script>
+	<?php
+}

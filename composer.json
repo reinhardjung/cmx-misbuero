@@ -1,0 +1,38 @@
+{
+  "name": "reinhardjung/cmx-misbuero",
+ 	"description": "CMX – Mis Büro",
+  "type": "wordpress-plugin",
+ 	"config": {
+		"optimize-autoloader": true
+	},
+  "autoload": {
+	"psr-4": {
+		 "CLOUDMEISTER\\CMX\\Buero\\": "src/",
+		 "CLOUDMEISTER\\MisBuero\\Core\\": "packages/core/src/",
+		 "CLOUDMEISTER\\MisBuero\\Standard\\": "packages/mis-buero/src/",
+		 "CLOUDMEISTER\\MisBuero\\Trial\\": "packages/mis-buero-trial/src/",
+		 "CLOUDMEISTER\\MisBuero\\Business\\": "packages/mis-buero-business/src/",
+		 "CLOUDMEISTER\\MisBuero\\Modules\\": "packages/mis-buero-modules/src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Reinhard Jung",
+			"email": "github@reinhard.jung.name"
+		}
+	],
+  "require": {
+    "php": ">=8.1",
+    "endroid/qr-code": "^5",
+    "sabre/dav": "^4.7",
+    "sabre/uri": "^2.2",
+    "dompdf/dompdf": "^3.1",
+    "mikuspetr/charts-php": "^1.0",
+    "horstoeko/zugferd": "^1.0",
+    "symfony/validator": "^6.4",
+    "symfony/finder": "^6.4",
+    "symfony/process": "^6.4",
+    "symfony/yaml": "^6.4",
+    "tecnickcom/tcpdf": "^6.7"
+  }
+}

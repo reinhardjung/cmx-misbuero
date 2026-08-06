@@ -1,0 +1,133 @@
+#cloud-config
+
+hostname: "{{ HOSTNAME }}"
+fqdn: "{{ FQDN }}"
+manage_etc_hosts: true
+timezone: Europe/Zurich
+
+users:
+  - name: cloudmeister
+    gecos: CLOUD Meister
+    groups:
+      - sudo
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+{{ ADMIN_PUBLIC_KEYS }}
+
+disable_root: true
+ssh_pwauth: false
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ansible
+  - ca-certificates
+  - git
+
+write_files:
+  - path: /run/cloudmeister/ansible-vars.yml
+    owner: root:root
+    permissions: "0600"
+    content: |
+      ---
+      cmx_admin_username: |-
+        {{ ADMIN_USERNAME }}
+      cmx_admin_email: |-
+        {{ ADMIN_EMAIL }}
+      cmx_admin_password: |-
+        {{ ADMIN_PASSWORD }}
+
+      platform_domain: |-
+        {{ FQDN }}
+
+      wordpress_site_title: |-
+        {{ FQDN }}
+      wordpress_tagline: powered by hosttech
+      wordpress_admin_user: |-
+        {{ ADMIN_USERNAME }}
+      wordpress_admin_email: |-
+        {{ ADMIN_EMAIL }}
+      wordpress_admin_password: |-
+        {{ ADMIN_PASSWORD }}
+
+      mariadb_wordpress_database: wordpress
+      mariadb_wordpress_user: |-
+        {{ ADMIN_USERNAME }}
+      mariadb_wordpress_password: |-
+        {{ ADMIN_PASSWORD }}
+
+  - path: /usr/local/sbin/cloudmeister-bootstrap
+    owner: root:root
+    permissions: "0700"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      readonly repository_url='https://gitlab.com/cloud-meister/cloudmeister-systems.git'
+      readonly repository_dir='/opt/cloudmeister/cloudmeister-systems'
+      readonly repository_version='{{ VERSION }}'
+      readonly playbook_name='{{ PLAYBOOK }}'
+      readonly ansible_vars='/run/cloudmeister/ansible-vars.yml'
+
+      cleanup() {
+        rm -f "$ansible_vars"
+      }
+      trap cleanup EXIT
+
+      case "$repository_version" in
+        ''|*'{{'*|*'}}'*)
+          echo 'VERSION fehlt oder wurde nicht gerendert.' >&2
+          exit 2
+          ;;
+      esac
+
+      if [[ ! "$playbook_name" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+        echo 'PLAYBOOK enthält einen ungültigen Wert.' >&2
+        exit 2
+      fi
+
+      if [[ "$playbook_name" == 'wordpress' ]]; then
+        echo 'Bitte wordpress-empty oder wordpress-standard als PLAYBOOK verwenden.' >&2
+        exit 2
+      fi
+
+      for required_file in "$ansible_vars"; do
+        if [[ ! -s "$required_file" ]]; then
+          echo "Erforderliche Bootstrap-Datei fehlt oder ist leer: $required_file" >&2
+          exit 2
+        fi
+      done
+
+      install -d -o root -g root -m 0755 /opt/cloudmeister
+
+      if [[ ! -d "$repository_dir/.git" ]]; then
+        git clone "$repository_url" "$repository_dir"
+      else
+        git -C "$repository_dir" remote set-url origin "$repository_url"
+        git -C "$repository_dir" fetch --prune --tags origin
+      fi
+
+      if git -C "$repository_dir" show-ref --verify --quiet "refs/remotes/origin/$repository_version"; then
+        git -C "$repository_dir" checkout --detach --force "origin/$repository_version"
+      else
+        git -C "$repository_dir" checkout --detach --force "$repository_version"
+      fi
+
+      readonly playbook_path="$repository_dir/playbooks/$playbook_name.yml"
+      if [[ ! -f "$playbook_path" ]]; then
+        echo "Playbook nicht gefunden: $playbook_path" >&2
+        exit 2
+      fi
+
+      cd "$repository_dir"
+      ansible-playbook \
+        --connection=local \
+        --inventory localhost, \
+        --extra-vars "@$ansible_vars" \
+        "$playbook_path"
+
+runcmd:
+  - [bash, /usr/local/sbin/cloudmeister-bootstrap]

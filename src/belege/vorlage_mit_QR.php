@@ -1,0 +1,1378 @@
+<?php namespace CLOUDMEISTER\CMX\Buero; defined('ABSPATH') || die('Oxytocin!');
+
+/*
+ * Schweizer Rechnungs-Layout
+ * Erwartet $tpl und ggf. $cmx_beleg_adress.
+ */
+
+$__cmx_pdf_text = static function($value): string {
+	if (\is_array($value)) {
+		foreach (['url', 'href', 'value', 'label', 'text', 'name'] as $key) {
+			if (isset($value[$key]) && !\is_array($value[$key]) && !\is_object($value[$key])) {
+				return \trim((string)$value[$key]);
+			}
+		}
+
+		$parts = [];
+		foreach ($value as $item) {
+			if (!\is_array($item) && !\is_object($item)) {
+				$item = \trim((string)$item);
+				if ($item !== '') {
+					$parts[] = $item;
+				}
+			}
+		}
+		return \trim(\implode(' ', $parts));
+	}
+
+	if (\is_object($value)) {
+		return '';
+	}
+
+	return \trim((string)$value);
+};
+
+$__fmt_dec  = $__cmx_pdf_text($tpl['format']['decimal'] ?? '.');
+$__fmt_tho  = $__cmx_pdf_text($tpl['format']['thousands'] ?? "'");
+$__fmt_dec  = ($__fmt_dec !== '') ? $__fmt_dec : '.';
+$__fmt_tho  = ($__fmt_tho !== '') ? $__fmt_tho : "'";
+$__fmt_prec = (int)   ($tpl['format']['decimals']  ?? 2);
+$__fmt_cur  = $__cmx_pdf_text($tpl['document']['currency'] ?? ($tpl['format']['currency'] ?? 'CHF'));
+
+$__fmt_num = function(float $v) use ($__fmt_prec, $__fmt_dec, $__fmt_tho): string {
+	return number_format($v, $__fmt_prec, $__fmt_dec, $__fmt_tho);
+};
+
+$positions = (array)($tpl['positions'] ?? []);
+$pdf_attachments = [];
+foreach ((array)($tpl['attachments'] ?? []) as $attachment) {
+	if (!\is_array($attachment)) {
+		continue;
+	}
+	$title = $__cmx_pdf_text($attachment['title'] ?? '');
+	$url = $__cmx_pdf_text($attachment['url'] ?? '');
+	if ($title === '' || $url === '') {
+		continue;
+	}
+	$pdf_attachments[] = ['title' => $title, 'url' => $url];
+}
+$__render_pdf_attachments = static function () use ($pdf_attachments): void {
+	if (empty($pdf_attachments)) {
+		return;
+	}
+	$links = [];
+	foreach ($pdf_attachments as $attachment) {
+		$links[] = '<a href="' . htmlspecialchars($attachment['url'], ENT_QUOTES, 'UTF-8') . '">'
+			. htmlspecialchars($attachment['title'], ENT_QUOTES, 'UTF-8')
+			. '</a>';
+	}
+	$label = \count($pdf_attachments) === 1 ? 'Anhang:' : 'Anhänge:';
+	echo '<div class="cmx-pdf-attachments"><strong>' . $label . '</strong> '
+		. \implode(', ', $links)
+		. '</div>';
+};
+$has_positions = false;
+$has_section_rows = false;
+$position_row_count = 0;
+foreach ($positions as $row) {
+	$row_type = (string)($row['row_type'] ?? 'position');
+	if ($row_type === 'abschnitt') {
+		$section_title = trim((string)($row['section_title'] ?? ''));
+		$section_text = trim((string)($row['section_text'] ?? ''));
+		if ($section_title !== '' || $section_text !== '') {
+			$has_section_rows = true;
+		}
+		continue;
+	}
+	$position_row_count++;
+	$item = trim((string)($row['item'] ?? ''));
+	$qty = (float)($row['qty'] ?? 0);
+	$unit_price = (float)($row['unit_price'] ?? 0);
+	$line_total = (float)($row['line_total'] ?? 0);
+	if ($item !== '' || $qty > 0 || $unit_price > 0 || $line_total > 0) {
+		$has_positions = true;
+	}
+}
+$show_position_index = ($position_row_count > 1);
+$show_sku = false;
+$show_discount = false;
+$show_unit_column = false;
+$discount_sum = 0.0;
+$positions_sum = 0.0;
+foreach ($positions as $row) {
+	if ((string)($row['row_type'] ?? 'position') === 'abschnitt') continue;
+	$sku_val = trim((string)($row['article_number'] ?? ''));
+	if ($sku_val !== '') $show_sku = true;
+	$unit_val = trim((string)($row['unit'] ?? ''));
+	if ($unit_val !== '') $show_unit_column = true;
+	$qty = (float)($row['qty'] ?? 0);
+	$unit_price = (float)($row['unit_price'] ?? 0);
+	$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+	$positions_sum += $line_total;
+	$line_subtotal = $qty * $unit_price;
+	$line_discount = $line_subtotal - $line_total;
+	if ($line_discount > 0.0001) {
+		$show_discount = true;
+		$discount_sum += $line_discount;
+	}
+}
+$opts_general      = (array) get_option('cmx_einstellungen', []);
+$is_mwst_pflichtig = \function_exists(__NAMESPACE__ . '\\cmx_belege_is_mwst_pflichtig')
+	? cmx_belege_is_mwst_pflichtig($opts_general)
+	: !empty($opts_general['mwst_pflichtig']);
+$mwst_exempt_note_html = \function_exists(__NAMESPACE__ . '\\cmx_belege_get_mwst_exempt_note_html')
+	? cmx_belege_get_mwst_exempt_note_html($opts_general)
+	: trim((string)($opts_general['mwst_exempt_note_html'] ?? ''));
+$beleg_subject = $__cmx_pdf_text($tpl['document']['subject'] ?? '');
+$beleg_description = $__cmx_pdf_text($tpl['document']['description'] ?? '');
+$opts_belege = (array) get_option('cmx_belege', []);
+$beleg_type = strtolower($__cmx_pdf_text($tpl['document']['type'] ?? 'rechnung'));
+$richtung = strtolower($__cmx_pdf_text($tpl['document']['richtung'] ?? ''));
+$is_ausgang = ($richtung === 'ausgang');
+$is_eingang = ($richtung === 'eingang');
+$is_lieferschein = ($beleg_type === 'lieferschein');
+$is_lieferantenrechnung = ($beleg_type === 'lieferantenrechnung');
+$is_gutschrift = ($beleg_type === 'gutschrift');
+$is_offerte = ($beleg_type === 'offerte');
+
+if ($is_lieferschein) {
+	$show_discount = false;
+}
+$show_unit_price = !$is_lieferschein;
+$show_line_total = !$is_lieferschein;
+
+$col_count = ($show_position_index ? 1 : 0)
+	+ ($show_sku ? 1 : 0)
+	+ 1
+	+ 1
+	+ ($show_unit_column ? 1 : 0)
+	+ ($show_unit_price ? 1 : 0)
+	+ ($show_discount ? 1 : 0)
+	+ ($show_line_total ? 1 : 0);
+
+$tpl_totals = (array)($tpl['totals'] ?? []);
+if (!array_key_exists('subtotal', $tpl_totals) && array_key_exists('net', $tpl_totals)) {
+	$tpl_totals['subtotal'] = $tpl_totals['net'];
+}
+if (!array_key_exists('tax_amount', $tpl_totals) && array_key_exists('tax', $tpl_totals)) {
+	$tpl_totals['tax_amount'] = $tpl_totals['tax'];
+}
+if (!array_key_exists('total', $tpl_totals) && array_key_exists('gross', $tpl_totals)) {
+	$tpl_totals['total'] = $tpl_totals['gross'];
+}
+$totals = array_replace([
+	'subtotal' => 0.0,
+	'tax_rate' => 0.0,
+	'tax_amount' => 0.0,
+	'total' => 0.0,
+], $tpl_totals);
+
+if ($totals['total'] == 0.0 && !empty($positions)) {
+	foreach ($positions as $row) {
+		if ((string)($row['row_type'] ?? 'position') === 'abschnitt') continue;
+		$qty = (float)($row['qty'] ?? 0);
+		$unit_price = (float)($row['unit_price'] ?? 0);
+		$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+		$totals['subtotal'] += $line_total;
+	}
+	$totals['total'] = $totals['subtotal'] + (float)$totals['tax_amount'];
+}
+
+$footer_key = 'belegfuss_' . $beleg_type;
+$footer_block = function_exists(__NAMESPACE__ . '\\cmx_get_belegfuss')
+	? (string) cmx_get_belegfuss($beleg_type)
+	: (string)($opts_belege[$footer_key] ?? '');
+$footer_block = str_replace(["\r\n", "\r"], "\n", $footer_block);
+$footer_has_br = stripos($footer_block, '<br') !== false;
+$footer_has_tags = $footer_block !== wp_strip_all_tags($footer_block);
+$footer_allowed_html = function_exists(__NAMESPACE__ . '\\cmxbu_kses_allow')
+	? (array) cmxbu_kses_allow()
+	: [
+		'a' => ['href' => [], 'title' => [], 'target' => [], 'rel' => []],
+		'br' => [], 'em' => [], 'i' => [], 'strong' => [], 'b' => [], 'u' => [],
+		'p' => ['style' => []], 'ul' => [], 'ol' => [], 'li' => [], 'code' => [], 'pre' => [],
+		'span' => ['style' => []],
+	];
+$footer_html = '';
+if ($footer_block !== '') {
+	if ($footer_has_tags) {
+		$footer_html = wp_kses($footer_block, $footer_allowed_html);
+		$has_explicit_breaks = (
+			stripos($footer_html, '<br') !== false
+			|| stripos($footer_html, '<p') !== false
+			|| stripos($footer_html, '<li') !== false
+		);
+		if (!$has_explicit_breaks && strpos($footer_html, "\n") !== false) {
+			$footer_html = nl2br($footer_html);
+		}
+	} else {
+		$footer_html = nl2br(esc_html($footer_block));
+	}
+}
+$agb_belege_html = '';
+if (
+	function_exists(__NAMESPACE__ . '\\cmx_email_agb_belege_enabled')
+	&& cmx_email_agb_belege_enabled()
+	&& function_exists(__NAMESPACE__ . '\\cmx_email_agb_footer_html')
+) {
+	$agb_belege_html = (string) cmx_email_agb_footer_html('text-decoration:underline;');
+}
+$mwst_note_html = '';
+if (!$is_lieferantenrechnung) {
+	if ($is_mwst_pflichtig) {
+		$mwst_nr = trim((string)($opts_general['mwst_nummer'] ?? ''));
+		if ($mwst_nr !== '') {
+			$mwst_note_html = 'MWST-Nr: ' . htmlspecialchars($mwst_nr, ENT_QUOTES, 'UTF-8');
+		}
+	} elseif ($mwst_exempt_note_html !== '') {
+		$mwst_note_html = $mwst_exempt_note_html;
+	}
+}
+$show_mwst_footer_group = ($mwst_note_html !== '' && $footer_html !== '');
+$position_numbers = [];
+$position_row_classes = [];
+$position_row_indices = [];
+$position_display_no = 0;
+$zebra_block_pos = 0;
+$closing_start_index = -1;
+$closing_group_min_rows = 6;
+foreach ($positions as $idx => $row) {
+	$row_type = (string)($row['row_type'] ?? 'position');
+	if ($row_type === 'abschnitt') {
+		$zebra_block_pos = 0;
+		continue;
+	}
+	$position_display_no++;
+	$zebra_block_pos++;
+	$position_numbers[$idx] = $position_display_no;
+	$position_row_classes[$idx] = ($zebra_block_pos % 2 === 0) ? 'cmx-pdf-pos-even' : '';
+	$position_row_indices[] = $idx;
+}
+$position_row_count = count($position_row_indices);
+if ($position_row_count > 0) {
+	$closing_start_index = $position_row_indices[$position_row_count - 1];
+	while ($closing_start_index > 0) {
+		$prev_index = $closing_start_index - 1;
+		$prev_row_type = (string)(($positions[$prev_index]['row_type'] ?? 'position'));
+		if ($prev_row_type !== 'abschnitt') {
+			break;
+		}
+		$closing_start_index = $prev_index;
+	}
+}
+$use_closing_group = ($show_mwst_footer_group && !$is_lieferschein && $closing_start_index >= 0 && $position_row_count >= $closing_group_min_rows);
+$render_primary_positions_table = (!$use_closing_group || $closing_start_index > 0);
+
+$sender_country_code = strtoupper(trim((string)($tpl['me']['land_code'] ?? '')));
+if ($sender_country_code === '') $sender_country_code = 'CH';
+$sender_plz = trim((string)($tpl['me']['plz'] ?? ''));
+$sender_ort = trim((string)($tpl['me']['ort'] ?? ''));
+$sender_person_name = trim(
+	trim((string)($tpl['me']['vorname'] ?? '')) . ' ' .
+	trim((string)($tpl['me']['nachname'] ?? ''))
+);
+$sender_city_line = trim($sender_country_code . '-' . $sender_plz . ' ' . $sender_ort);
+$sender_block = trim(
+	($tpl['me']['company'] ?? '') . "\n" .
+	($sender_person_name !== '' ? $sender_person_name . "\n" : '') .
+	($tpl['me']['strasse'] ?? '') . "\n" .
+	$sender_city_line
+);
+$sender_line_parts = array_values(array_filter([
+	trim((string)($tpl['me']['company'] ?? '')),
+	trim((string)$sender_person_name),
+	trim((string)($tpl['me']['strasse'] ?? '')),
+	trim((string)$sender_city_line),
+], static function (string $v): bool {
+	return $v !== '';
+}));
+$sender_line = implode(' • ', $sender_line_parts);
+
+$recipient_block = trim((string)($cmx_beleg_adress ?? ''));
+if ($recipient_block === '') {
+	$recipient_block = trim(
+		($tpl['recipient']['name'] ?? '') . "\n" .
+		($tpl['recipient']['street'] ?? '') . "\n" .
+		(trim(($tpl['recipient']['zip'] ?? '') . ' ' . ($tpl['recipient']['city'] ?? '')))
+	);
+}
+if ($is_eingang) {
+	$sender_as_recipient = (string) $sender_block;
+	$sender_from_recipient = trim((string) $recipient_block);
+	$sender_plain = (string) preg_replace('~<br\s*/?>~i', "\n", $sender_from_recipient);
+	$sender_plain = str_replace(["\r\n", "\r"], "\n", wp_strip_all_tags($sender_plain));
+	$sender_lines = array_values(array_filter(array_map('trim', explode("\n", $sender_plain)), static function (string $v): bool {
+		return $v !== '';
+	}));
+	$sender_block = implode("\n", $sender_lines);
+	$sender_line_parts = $sender_lines;
+	$sender_line = implode(' • ', $sender_lines);
+	$recipient_block = $sender_as_recipient;
+}
+$recipient_block = str_replace(["\r\n", "\r"], "\n", $recipient_block);
+$recipient_has_br = (stripos($recipient_block, '<br') !== false);
+$recipient_html = $recipient_has_br
+	? wp_kses($recipient_block, ['br' => []])
+	: nl2br(esc_html($recipient_block));
+$layout = (array)($tpl['layout'] ?? []);
+$layout_profile = strtolower((string)($layout['profile'] ?? 'dl'));
+$fmt_mm = static function($value): string {
+	$mm = (float)$value;
+	return rtrim(rtrim(number_format($mm, 2, '.', ''), '0'), '.') . 'mm';
+};
+$logo_x_css = $fmt_mm((float)($layout['logo_x_mm'] ?? 150.0));
+$logo_y_css = $fmt_mm((float)($layout['logo_y_mm'] ?? 20.0));
+$logo_w_mm = (float)($layout['logo_width_mm'] ?? 56.0);
+if ($logo_w_mm <= 0) {
+	$logo_w_mm = 56.0;
+}
+$logo_h_mm = $logo_w_mm * 9 / 16;
+$logo_w_css = $fmt_mm($logo_w_mm);
+$logo_h_css = $fmt_mm($logo_h_mm);
+$logo_pull_up_css = $fmt_mm(6.35);
+$recipient_x_mm = (float)($layout['recipient_x_mm'] ?? 20.0);
+$recipient_x_shift_mm = 13.23; // 50px
+$recipient_x_char_offset_mm = 8.0; // sichtbar nach rechts verschieben
+$recipient_x_css = $fmt_mm($recipient_x_mm - $recipient_x_shift_mm + $recipient_x_char_offset_mm);
+$recipient_y_css = $fmt_mm((float)($layout['recipient_y_mm'] ?? 45.0));
+$recipient_w_css = $fmt_mm((float)($layout['recipient_width_mm'] ?? 85.0));
+$recipient_h_css = $fmt_mm((float)($layout['recipient_height_mm'] ?? 40.0));
+$header_h_css = $fmt_mm((float)($layout['header_height_mm'] ?? 98.0));
+$meta_top_css = $fmt_mm((float)($layout['meta_top_mm'] ?? 38.0));
+$show_recipient_label = !empty($layout['show_recipient_label']);
+$recipient_label_display = $show_recipient_label ? 'block' : 'none';
+$brand_logo = $__cmx_pdf_text($tpl['branding']['logo'] ?? '');
+$brand_url = $__cmx_pdf_text($tpl['branding']['website'] ?? '');
+if ($brand_url === '') {
+	$brand_url = $__cmx_pdf_text($tpl['me']['website'] ?? '');
+}
+if ($brand_url !== '' && !preg_match('~^https?://~i', $brand_url)) {
+	$brand_url = 'https://' . $brand_url;
+}
+$document_due = $__cmx_pdf_text($tpl['document']['due'] ?? '');
+$show_due_line = (($beleg_type === 'rechnung') || $is_offerte) && ($document_due !== '');
+$due_label = $is_offerte ? 'Gültig bis' : $__cmx_pdf_text($tpl['labels']['due'] ?? 'Fällig bis');
+$qr_will_print = !empty($tpl['qr']['will_print']);
+$payrexx_enabled = !empty($tpl['document']['payrexx_enabled']);
+$payrexx_vpos_url = $__cmx_pdf_text($tpl['document']['payrexx_vpos_url'] ?? '');
+$payrexx_qr_data_uri = $__cmx_pdf_text($tpl['document']['payrexx_qr_data_uri'] ?? '');
+$show_payrexx_vpos_link = $payrexx_enabled && ($beleg_type === 'rechnung') && $is_ausgang && ($payrexx_vpos_url !== '');
+if (!$show_payrexx_vpos_link) {
+	$payrexx_qr_data_uri = '';
+}
+$offerte_accept_url = $__cmx_pdf_text($tpl['document']['offerte_accept_url'] ?? '');
+$offerte_reject_url = $__cmx_pdf_text($tpl['document']['offerte_reject_url'] ?? '');
+$show_offerte_accept_link = $is_offerte && $is_ausgang && ($offerte_accept_url !== '');
+$show_offerte_reject_link = $is_offerte && $is_ausgang && ($offerte_reject_url !== '');
+$show_action_box = $show_payrexx_vpos_link || $show_offerte_accept_link || $show_offerte_reject_link;
+?>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></title>
+<style>
+	body { font-family: Arial, sans-serif; font-size: 12px; color: #000; }
+	.container { width: 100%; }
+	.header {
+		position: relative;
+		min-height: <?= htmlspecialchars($header_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+		margin-bottom: 2mm;
+	}
+	.sender-address {
+		width: 100%;
+		float: none;
+		padding-right: 0;
+		box-sizing: border-box;
+	}
+	.sender-row {
+		width: 100%;
+		border-collapse: collapse;
+		table-layout: fixed;
+	}
+	.sender-row td {
+		border: 0;
+		padding: 0;
+		vertical-align: top;
+	}
+		.sender-left { width: 29%; }
+		.sender-center {
+			width: 42%;
+			text-align: center;
+			height: <?= htmlspecialchars($logo_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+			line-height: 0;
+		}
+		.sender-right {
+			width: 29%;
+			text-align: right;
+			white-space: nowrap;
+		}
+		.sender-right a { color: inherit; text-decoration: none; }
+			.sender-logo {
+				width: <?= htmlspecialchars($logo_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+				max-width: 100%;
+				height: auto;
+				max-height: <?= htmlspecialchars($logo_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+				display: block;
+				margin: 0 auto;
+				border: 0;
+				position: relative;
+				top: -<?= htmlspecialchars($logo_pull_up_css, ENT_QUOTES, 'UTF-8'); ?>;
+			}
+	.invoice-meta {
+		width: 40mm;
+		position: absolute;
+		right: 0;
+		top: <?= htmlspecialchars($meta_top_css, ENT_QUOTES, 'UTF-8'); ?>;
+		text-align: right;
+	}
+	.invoice-meta table { border: 0 !important; border-spacing: 0 !important; table-layout: auto; }
+	.invoice-meta td,
+	.invoice-meta tr { border: 0 !important; }
+	.invoice-meta td { width: 1%; white-space: nowrap; padding: 0; line-height: 1.1; }
+	.invoice-meta .cmx-payrexx-spacer td { height: 11mm; line-height: 0; font-size: 0; }
+	.invoice-meta .cmx-payrexx-row td { white-space: normal; padding-top: 0; }
+	.invoice-meta .cmx-payrexx-box {
+		display: inline-block;
+		width: 59mm;
+		text-align: right;
+	}
+	.invoice-meta .cmx-payrexx-layout {
+		width: 59mm;
+		border-collapse: collapse;
+		border-spacing: 0;
+		table-layout: fixed;
+		margin-top: 0;
+	}
+	.invoice-meta .cmx-payrexx-layout td {
+		border: 0;
+		padding: 0;
+		vertical-align: middle;
+	}
+	.invoice-meta .cmx-payrexx-actions {
+		width: 34mm;
+		padding-right: 2.4mm;
+		text-align: center;
+	}
+	.invoice-meta .cmx-payrexx-buttons {
+		display: inline-block;
+		white-space: nowrap;
+	}
+	.invoice-meta .cmx-payrexx-code {
+		width: 22.6mm;
+		text-align: right;
+	}
+	.invoice-meta .cmx-payrexx-qr {
+		width: 22.6mm;
+		height: 22.6mm;
+		margin: 0 0 0 auto;
+	}
+	.invoice-meta .cmx-payrexx-qr img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+	.invoice-meta .cmx-payrexx-row a {
+		background: #1858a8;
+		border: 1px solid #134781;
+		border-radius: 4px;
+		color: #fff;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+		padding: 2.2mm 2.8mm;
+		box-sizing: border-box;
+		display: inline-block;
+		text-align: center;
+		line-height: 1.25;
+		font-size: 10px;
+		text-decoration: none;
+		white-space: nowrap;
+		width: auto;
+	}
+	.invoice-meta .cmx-payrexx-row a.cmx-offerte-reject {
+		background: #fff;
+		color: #b32d2e;
+		border-color: #b32d2e;
+		margin-left: 1.2mm;
+	}
+	.invoice-meta .cmx-payrexx-note {
+		font-size: 9px;
+		line-height: 1.25;
+		margin-top: 1mm;
+		color: #4b5563;
+		display: inline-block;
+		width: auto;
+		margin-left: -3px;
+		text-align: left;
+		white-space: nowrap;
+	}
+	.recipient-window {
+		position: absolute;
+		left: <?= htmlspecialchars($recipient_x_css, ENT_QUOTES, 'UTF-8'); ?>;
+		top: <?= htmlspecialchars($recipient_y_css, ENT_QUOTES, 'UTF-8'); ?>;
+		width: <?= htmlspecialchars($recipient_w_css, ENT_QUOTES, 'UTF-8'); ?>;
+		min-height: <?= htmlspecialchars($recipient_h_css, ENT_QUOTES, 'UTF-8'); ?>;
+		float: none;
+		font-size: 14px;
+	}
+	.recipient-window .recipient-label { display: <?= htmlspecialchars($recipient_label_display, ENT_QUOTES, 'UTF-8'); ?>; margin-bottom: 2mm; }
+	.recipient-window .recipient-sender-line {
+		font-size: 10px;
+		line-height: 1.2;
+		white-space: nowrap;
+		margin-bottom: 1.5mm;
+	}
+	.recipient-window .recipient-lines { line-height: 1.3; }
+	h1 { margin-top: 0; font-size: 20px; }
+		.beleg-content > h1 { margin-top: <?= $show_action_box ? '12mm' : '0'; ?>; }
+	table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+	th, td { border: none; padding: 6px 8px; }
+	.beleg-content {
+		margin-top: -68px;
+		position: relative;
+	}
+	.beleg-content .fold-mark-left {
+		position: absolute;
+		left: 0;
+		top: 22px;
+		display: block;
+		width: 3mm;
+		height: 0;
+		border-top: 1px solid #999;
+	}
+		.positions-table thead th { border-bottom: 1px solid #000; text-align: left; }
+		.positions-table.cmx-pdf-closing-table {
+			margin-top: 0;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.positions-table tbody tr { border-bottom: 1px solid #777; }
+.positions-table tbody tr:last-child { border-bottom: 1px solid #777; }
+		.positions-table tbody tr.cmx-pdf-pos-even { background: #f3f3f3; }
+		.positions-table tbody tr.cmx-pdf-pos-even td.col-qty,
+		.positions-table tbody tr.cmx-pdf-pos-even td.col-unit { background: #f3f3f3; }
+		.positions-table tbody td { vertical-align: top; }
+		.positions-table tbody.cmx-pdf-closing-group,
+		.positions-table tbody.cmx-pdf-closing-group tr,
+		.positions-table tbody.cmx-pdf-closing-group td {
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.positions-table tbody.cmx-pdf-closing-group tr.cmx-pdf-closing-summary-row {
+			border-bottom: 0 !important;
+		}
+		.positions-table tbody.cmx-pdf-closing-group td.cmx-pdf-closing-summary-cell {
+			padding: 10px 0 0 0;
+			border: 0 !important;
+		}
+		.positions-table tbody tr.cmx-pdf-abschnitt-row { background: #fff !important; }
+	.positions-table tbody tr.cmx-pdf-abschnitt-row td {
+		font-weight: 600;
+		border-top: 1px solid #999;
+		border-bottom: 1px solid #999;
+}
+.positions-table .cmx-pdf-abschnitt-text {
+	display: block;
+	margin-top: 4px;
+	font-weight: 400;
+}
+.positions-table th.col-pos,
+.positions-table td.col-pos {
+	width: 8px;
+	min-width: 8px;
+	white-space: nowrap;
+}
+.positions-table th.col-sku,
+.positions-table td.col-sku {
+	width: 66px;
+	min-width: 66px;
+	white-space: nowrap;
+}
+.positions-table th.col-qty,
+.positions-table td.col-qty {
+	width: 1%;
+	min-width: 1%;
+	white-space: nowrap;
+}
+.positions-table th.col-unit,
+.positions-table td.col-unit {
+	width: 1%;
+	min-width: 1%;
+	white-space: nowrap;
+}
+.positions-table .cmx-pdf-shift-qty,
+.positions-table .cmx-pdf-shift-unit {
+	display: inline-block;
+	position: relative;
+	left: 0;
+	white-space: nowrap;
+}
+.positions-table .cmx-pdf-pos-details { margin-top: 1.2mm; }
+.positions-table .cmx-pdf-article-belegtext { margin: 0; }
+.positions-table .cmx-pdf-article-variants { margin-top: 0.8mm; }
+.positions-table .cmx-pdf-article-variant-line { display: inline-block; margin: 0 4mm 0 0; white-space: nowrap; }
+.positions-table .cmx-pdf-article-variant-label { font-weight: bold; }
+.positions-table .cmx-pdf-line-desc { margin-top: 0.8mm; }
+.positions-table th.col-unit-price,
+.positions-table td.col-unit-price {
+	width: 1%;
+	min-width: 1%;
+	white-space: nowrap;
+}
+.positions-table th.col-line-total,
+.positions-table td.col-line-total {
+	width: 1%;
+	min-width: 1%;
+	white-space: nowrap;
+}
+.positions-table th.col-num { text-align: right; padding-right: 8px; }
+	.totals-table,
+	.totals-table tr,
+	.totals-table td { border: 0 !important; }
+	.totals-table tr { line-height: 1.1; }
+	.totals-table td { padding: 2px 8px; }
+			.totals-table .total-row td { padding-top: 8px; }
+			.beleg-subject { margin-top: 6px; font-size: 13px; }
+			.beleg-desc { margin-top: 2px; }
+			.beleg-pre-positions-spacer { height: 4.5mm; line-height: 0; font-size: 0; }
+			.beleg-booking-note { margin-top: -2px; font-size: 11px; color: #c00; }
+		.mwst-note { margin-top: 8px; font-size: 11px; }
+		.cmx-pdf-attachments {
+			clear: both;
+			margin-top: 12px;
+			font-size: 11px;
+		}
+		.cmx-pdf-attachments a {
+			color: #000;
+			text-decoration: underline;
+		}
+		.totals { width: 40%; float: right; margin-top: 16px; }
+	.footer {
+		<?php if ($qr_will_print): ?>
+			margin-top: 20px;
+		<?php else: ?>
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 20px;
+		<?php endif; ?>
+		font-size: 11px;
+	}
+	.mwst-footer-group {
+		width: 100%;
+		border-collapse: collapse;
+		border-spacing: 0;
+		margin-top: 20px;
+		page-break-inside: avoid;
+		break-inside: avoid;
+	}
+		.mwst-footer-group tr,
+		.mwst-footer-group td {
+			border: 0 !important;
+			padding: 0;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+	.mwst-footer-group .mwst-note {
+		margin-top: 0;
+	}
+		.footer-inline {
+			<?php if (!$qr_will_print): ?>
+			position: static;
+			left: auto;
+			right: auto;
+			bottom: auto;
+			<?php endif; ?>
+			margin-top: 20px;
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.cmx-pdf-agb-footer {
+			margin-top: 8px;
+		}
+		.cmx-pdf-closing-summary {
+			page-break-inside: avoid;
+			break-inside: avoid;
+		}
+		.clear { clear: both; }
+	.text-right { text-align: right; }
+	.logo-link { display: inline-block; line-height: 0; text-decoration: none; }
+	.qr-reserve {
+		height: <?= $qr_will_print ? '105mm' : '0'; ?>;
+		line-height: 0;
+		font-size: 0;
+	}
+</style>
+</head>
+<body>
+<div class="container">
+	<div class="header header-layout-<?= htmlspecialchars($layout_profile, ENT_QUOTES, 'UTF-8'); ?>">
+			<div class="sender-address">
+				<?php
+				$contact_source = $is_eingang ? (array)($tpl['counterparty_contact'] ?? []) : (array)($tpl['me'] ?? []);
+				$me_phone = trim((string)($contact_source['phone'] ?? ''));
+				$me_email = trim((string)($contact_source['email'] ?? ''));
+				$me_web = trim((string)($contact_source['website'] ?? ''));
+				$has_contact = ($me_phone !== '' || $me_email !== '' || $me_web !== '');
+				$format_ch_phone = static function(string $raw): string {
+				$digits = preg_replace('/\D+/', '', $raw);
+				if (strpos($digits, '0041') === 0) {
+					$digits = '41' . substr($digits, 4);
+				}
+				if (strpos($digits, '41') === 0 && strlen($digits) === 11) {
+					$rest = substr($digits, 2);
+					return '+41 ' . substr($rest, 0, 2) . ' ' . substr($rest, 2, 3) . ' ' . substr($rest, 5, 2) . ' ' . substr($rest, 7, 2);
+				}
+				if (strlen($digits) === 10 && $digits[0] === '0') {
+					return substr($digits, 0, 3) . ' ' . substr($digits, 3, 3) . ' ' . substr($digits, 6, 2) . ' ' . substr($digits, 8, 2);
+				}
+				return $raw;
+			};
+			$me_phone_label = $me_phone !== '' ? $format_ch_phone($me_phone) : '';
+			$me_phone_href = preg_replace('/[^0-9+]/', '', $me_phone);
+			$me_web_href = $me_web;
+			$me_web_label = $me_web;
+			if ($me_web_label !== '') {
+				$me_web_label = preg_replace('~^https?://~i', '', $me_web_label);
+				$me_web_label = preg_replace('~^www\\.~i', '', $me_web_label);
+				$me_web_label = 'www.' . $me_web_label;
+			}
+			if ($me_web_href !== '' && !preg_match('~^https?://~i', $me_web_href)) {
+				$me_web_href = 'https://' . $me_web_href;
+			}
+			?>
+			<table class="sender-row">
+				<tr>
+					<td class="sender-left"><?= nl2br(htmlspecialchars($sender_block, ENT_QUOTES, 'UTF-8')); ?></td>
+					<td class="sender-center">
+						<?php if ($brand_logo !== ''): ?>
+							<?php if ($brand_url !== ''): ?>
+								<a href="<?= htmlspecialchars($brand_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="logo-link">
+									<img class="sender-logo" src="<?= htmlspecialchars($brand_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+								</a>
+							<?php else: ?>
+								<img class="sender-logo" src="<?= htmlspecialchars($brand_logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+							<?php endif; ?>
+						<?php endif; ?>
+					</td>
+					<td class="sender-right">
+						<?php if ($has_contact): ?>
+							<?php if ($me_phone !== ''): ?>
+								<div><a href="tel:<?= htmlspecialchars($me_phone_href, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($me_phone_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
+							<?php endif; ?>
+							<?php if ($me_email !== ''): ?>
+								<div><?= htmlspecialchars($me_email, ENT_QUOTES, 'UTF-8'); ?></div>
+							<?php endif; ?>
+							<?php if ($me_web !== ''): ?>
+								<div><a href="<?= htmlspecialchars($me_web_href, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($me_web_label, ENT_QUOTES, 'UTF-8'); ?></a></div>
+							<?php endif; ?>
+						<?php endif; ?>
+					</td>
+				</tr>
+			</table>
+		</div>
+
+		<?php $document_date = trim((string)($tpl['document']['date'] ?? '')); ?>
+		<div class="invoice-meta">
+			<table style="width:100%; border-collapse:collapse; border:0;">
+				<?php if ($document_date !== ''): ?>
+					<tr>
+						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['date'] ?? 'Rechnungsdatum', ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($document_date, ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endif; ?>
+					<?php if ($show_due_line): ?>
+						<tr>
+							<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($due_label, ENT_QUOTES, 'UTF-8'); ?></td>
+							<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($document_due, ENT_QUOTES, 'UTF-8'); ?></td>
+						</tr>
+					<?php endif; ?>
+				<?php $period_value = trim((string)($tpl['document']['period'] ?? '')); ?>
+				<?php if ($period_value !== ''): ?>
+					<tr>
+						<td style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($tpl['labels']['period'] ?? 'Leistung für', ENT_QUOTES, 'UTF-8'); ?></td>
+						<td class="text-right" style="border:0; padding:0; width:1%; white-space:nowrap;"><?= htmlspecialchars($period_value, ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endif; ?>
+					<?php if ($show_action_box): ?>
+						<tr class="cmx-payrexx-spacer">
+							<td colspan="2">&nbsp;</td>
+						</tr>
+					<tr class="cmx-payrexx-row">
+						<td colspan="2" class="text-right" style="border:0; padding:0;">
+							<div class="cmx-payrexx-box">
+									<table class="cmx-payrexx-layout" role="presentation">
+										<tr>
+											<td class="cmx-payrexx-actions">
+												<?php if ($show_payrexx_vpos_link): ?>
+													<a href="<?= htmlspecialchars($payrexx_vpos_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Jetzt online bezahlen</a>
+													<div class="cmx-payrexx-note">TWINT, Visa, Apple Pay etc.</div>
+												<?php else: ?>
+													<div class="cmx-payrexx-buttons">
+														<?php if ($show_offerte_accept_link): ?>
+															<a href="<?= htmlspecialchars($offerte_accept_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">akzeptieren</a>
+														<?php endif; ?>
+														<?php if ($show_offerte_reject_link): ?>
+															<a class="cmx-offerte-reject" href="<?= htmlspecialchars($offerte_reject_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">ablehnen</a>
+														<?php endif; ?>
+													</div>
+												<?php endif; ?>
+											</td>
+											<?php if ($show_payrexx_vpos_link && $payrexx_qr_data_uri !== ''): ?>
+												<td class="cmx-payrexx-code">
+													<div class="cmx-payrexx-qr"><img src="<?= htmlspecialchars($payrexx_qr_data_uri, ENT_QUOTES, 'UTF-8'); ?>" alt=""></div>
+												</td>
+										<?php endif; ?>
+									</tr>
+								</table>
+							</div>
+						</td>
+					</tr>
+				<?php endif; ?>
+			</table>
+		</div>
+		<div class="recipient-window">
+			<?php if ($sender_line !== ''): ?>
+				<div class="recipient-sender-line"><?= htmlspecialchars($sender_line, ENT_QUOTES, 'UTF-8'); ?></div>
+			<?php endif; ?>
+			<div class="recipient-label"><strong><?= htmlspecialchars($tpl['labels']['recipient'] ?? 'Rechnung an', ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<div class="recipient-lines"><strong><?= $recipient_html; ?></strong></div>
+		</div>
+		<div class="clear"></div>
+	</div>
+
+		<div class="beleg-content">
+			<span class="fold-mark-left"></span>
+			<h1 class="text-right"><?= htmlspecialchars($tpl['document']['title'] ?? 'Rechnung', ENT_QUOTES, 'UTF-8'); ?></h1>
+			<?php if ($is_eingang): ?>
+				<div class="beleg-booking-note text-right">Buchungsbeleg (Org. im Anhang)</div>
+			<?php endif; ?>
+			<?php if ($beleg_subject !== ''): ?>
+				<div class="beleg-subject"><strong><?= htmlspecialchars($beleg_subject, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+			<?php endif; ?>
+			<?php if ($beleg_description !== ''): ?>
+				<div class="beleg-desc"><?= nl2br(htmlspecialchars($beleg_description, ENT_QUOTES, 'UTF-8')); ?></div>
+			<?php endif; ?>
+
+			<?php if (($beleg_subject !== '' || $beleg_description !== '') && ($has_positions || $has_section_rows)): ?>
+				<div class="beleg-pre-positions-spacer"></div>
+			<?php endif; ?>
+
+			<?php if ($has_positions || $has_section_rows): ?>
+			<?php if ($render_primary_positions_table): ?>
+				<table class="positions-table">
+			<thead>
+				<tr>
+				<?php if ($show_position_index): ?>
+					<th class="col-pos">Pos.</th>
+				<?php endif; ?>
+				<?php if ($show_sku): ?>
+					<th class="col-sku">SKU</th>
+				<?php endif; ?>
+				<th style="width:100%">Artikel</th>
+				<th class="col-num col-qty">
+					<?php if ($show_unit_column): ?>
+						<span class="cmx-pdf-shift-qty">Menge</span>
+					<?php else: ?>
+						Menge
+					<?php endif; ?>
+				</th>
+				<?php if ($show_unit_column): ?>
+					<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
+				<?php endif; ?>
+				<?php if ($show_unit_price): ?>
+					<th class="col-num col-unit-price">Einzelpreis</th>
+				<?php endif; ?>
+				<?php if ($show_discount): ?>
+					<th class="col-num">Rabatt</th>
+				<?php endif; ?>
+				<?php if ($show_line_total): ?>
+					<th class="col-num col-line-total">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+				<?php endif; ?>
+			</tr>
+		</thead>
+			<tbody>
+			<?php if (empty($positions)): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>">—</td>
+				</tr>
+			<?php else: ?>
+				<?php foreach ($positions as $i => $row): ?>
+					<?php
+					if ($use_closing_group && $i >= $closing_start_index) {
+						continue;
+					}
+					$row_type = (string)($row['row_type'] ?? 'position');
+					if ($row_type === 'abschnitt') {
+						$section_title = (string)($row['section_title'] ?? '');
+						$section_text = (string)($row['section_text'] ?? '');
+						$section_text_html = (string)($row['section_text_html'] ?? '');
+						?>
+						<tr class="cmx-pdf-abschnitt-row">
+							<td colspan="<?= $col_count; ?>"><br>
+								<?= htmlspecialchars($section_title, ENT_QUOTES, 'UTF-8'); ?>
+								<?php if ($section_text_html !== ''): ?>
+									<span class="cmx-pdf-abschnitt-text"><?= $section_text_html; ?></span>
+								<?php elseif ($section_text !== ''): ?>
+									<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
+								<?php endif; ?>
+							</td>
+						</tr>
+						<?php continue; ?>
+					<?php }
+					$pos_no = (int)($position_numbers[$i] ?? 0);
+					$qty = (float)($row['qty'] ?? 0);
+					$unit = (string)($row['unit'] ?? '');
+					$unit_price = (float)($row['unit_price'] ?? 0);
+					$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+					$line_subtotal = $qty * $unit_price;
+					$line_discount = $line_subtotal - $line_total;
+					$item = (string)($row['item'] ?? '');
+					$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+					$desc_html = (string)($row['desc_html'] ?? '');
+					$article_belegtext_html = (string)($row['article_belegtext_html'] ?? '');
+					$article_variant_html = (string)($row['article_variant_html'] ?? '');
+					$sku = (string)($row['article_number'] ?? '');
+					$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
+					$row_class_name = (string)($position_row_classes[$i] ?? '');
+					$row_class = $row_class_name !== '' ? ' class="' . $row_class_name . '"' : '';
+					?>
+					<tr<?= $row_class; ?>>
+						<?php if ($show_position_index): ?>
+							<td class="col-pos"><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_sku): ?>
+							<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<td>
+							<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong>
+							<?php if ($article_belegtext_html !== '' || $article_variant_html !== '' || $desc_html !== '' || $desc !== ''): ?>
+								<div class="cmx-pdf-pos-details">
+									<?php if ($article_belegtext_html !== ''): ?>
+										<div class="cmx-pdf-article-belegtext"><?= $article_belegtext_html; ?></div>
+									<?php endif; ?>
+									<?php if ($article_variant_html !== ''): ?>
+										<div class="cmx-pdf-article-variants"><?= $article_variant_html; ?></div>
+									<?php endif; ?>
+									<?php if ($desc_html !== ''): ?>
+										<div class="cmx-pdf-line-desc"><?= $desc_html; ?></div>
+									<?php elseif ($desc !== ''): ?>
+										<div class="cmx-pdf-line-desc"><?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?></div>
+									<?php endif; ?>
+								</div>
+							<?php endif; ?>
+						</td>
+						<td class="text-right col-qty">
+							<?php if ($show_unit_column): ?>
+								<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
+							<?php else: ?>
+								<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+							<?php endif; ?>
+						</td>
+						<?php if ($show_unit_column): ?>
+							<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
+						<?php endif; ?>
+						<?php if ($show_unit_price): ?>
+							<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_discount): ?>
+							<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+						<?php if ($show_line_total): ?>
+							<td class="text-right col-line-total"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+						<?php endif; ?>
+					</tr>
+				<?php endforeach; ?>
+				<?php endif; ?>
+				</tbody>
+			</table>
+			<?php endif; ?>
+			<?php if ($use_closing_group): ?>
+			<table class="positions-table cmx-pdf-closing-table">
+				<thead>
+					<tr>
+						<?php if ($show_position_index): ?>
+							<th class="col-pos">Pos.</th>
+						<?php endif; ?>
+						<?php if ($show_sku): ?>
+							<th class="col-sku">SKU</th>
+						<?php endif; ?>
+						<th style="width:100%">Artikel</th>
+						<th class="col-num col-qty">
+							<?php if ($show_unit_column): ?>
+								<span class="cmx-pdf-shift-qty">Menge</span>
+							<?php else: ?>
+								Menge
+							<?php endif; ?>
+						</th>
+						<?php if ($show_unit_column): ?>
+							<th class="col-unit"><span class="cmx-pdf-shift-unit">Einheit</span></th>
+						<?php endif; ?>
+						<?php if ($show_unit_price): ?>
+							<th class="col-num col-unit-price">Einzelpreis</th>
+						<?php endif; ?>
+						<?php if ($show_discount): ?>
+							<th class="col-num">Rabatt</th>
+						<?php endif; ?>
+						<?php if ($show_line_total): ?>
+							<th class="col-num col-line-total">Summe <?= htmlspecialchars($__fmt_cur, ENT_QUOTES, 'UTF-8'); ?></th>
+						<?php endif; ?>
+					</tr>
+				</thead>
+				<tbody class="cmx-pdf-closing-group">
+					<?php for ($i = $closing_start_index; $i < count($positions); $i++): ?>
+						<?php
+						$row = (array)$positions[$i];
+						$row_type = (string)($row['row_type'] ?? 'position');
+						if ($row_type === 'abschnitt') {
+							$section_title = (string)($row['section_title'] ?? '');
+							$section_text = (string)($row['section_text'] ?? '');
+							$section_text_html = (string)($row['section_text_html'] ?? '');
+							?>
+							<tr class="cmx-pdf-abschnitt-row">
+								<td colspan="<?= $col_count; ?>"><br>
+									<?= htmlspecialchars($section_title, ENT_QUOTES, 'UTF-8'); ?>
+									<?php if ($section_text_html !== ''): ?>
+										<span class="cmx-pdf-abschnitt-text"><?= $section_text_html; ?></span>
+									<?php elseif ($section_text !== ''): ?>
+										<span class="cmx-pdf-abschnitt-text"><?= nl2br(htmlspecialchars($section_text, ENT_QUOTES, 'UTF-8')); ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<?php continue; ?>
+						<?php }
+						$pos_no = (int)($position_numbers[$i] ?? 0);
+						$qty = (float)($row['qty'] ?? 0);
+						$unit = (string)($row['unit'] ?? '');
+						$unit_price = (float)($row['unit_price'] ?? 0);
+						$line_total = (float)($row['line_total'] ?? ($qty * $unit_price));
+						$line_subtotal = $qty * $unit_price;
+						$line_discount = $line_subtotal - $line_total;
+						$item = (string)($row['item'] ?? '');
+						$desc = (string)($row['desc_text'] ?? $row['desc_raw'] ?? '');
+						$desc_html = (string)($row['desc_html'] ?? '');
+						$article_belegtext_html = (string)($row['article_belegtext_html'] ?? '');
+						$article_variant_html = (string)($row['article_variant_html'] ?? '');
+						$sku = (string)($row['article_number'] ?? '');
+						$discount_display = $line_discount > 0.0001 ? $__fmt_num($line_discount) : '';
+						$row_class_name = (string)($position_row_classes[$i] ?? '');
+						$row_class = $row_class_name !== '' ? ' class="' . $row_class_name . '"' : '';
+						?>
+						<tr<?= $row_class; ?>>
+							<?php if ($show_position_index): ?>
+								<td class="col-pos"><?= htmlspecialchars((string)$pos_no, ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+							<?php if ($show_sku): ?>
+								<td class="col-sku"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+							<td>
+								<strong><?= htmlspecialchars($item, ENT_QUOTES, 'UTF-8'); ?></strong>
+								<?php if ($article_belegtext_html !== '' || $article_variant_html !== '' || $desc_html !== '' || $desc !== ''): ?>
+									<div class="cmx-pdf-pos-details">
+										<?php if ($article_belegtext_html !== ''): ?>
+											<div class="cmx-pdf-article-belegtext"><?= $article_belegtext_html; ?></div>
+										<?php endif; ?>
+										<?php if ($article_variant_html !== ''): ?>
+											<div class="cmx-pdf-article-variants"><?= $article_variant_html; ?></div>
+										<?php endif; ?>
+										<?php if ($desc_html !== ''): ?>
+											<div class="cmx-pdf-line-desc"><?= $desc_html; ?></div>
+										<?php elseif ($desc !== ''): ?>
+											<div class="cmx-pdf-line-desc"><?= nl2br(htmlspecialchars($desc, ENT_QUOTES, 'UTF-8')); ?></div>
+										<?php endif; ?>
+									</div>
+								<?php endif; ?>
+							</td>
+							<td class="text-right col-qty">
+								<?php if ($show_unit_column): ?>
+									<span class="cmx-pdf-shift-qty"><?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?></span>
+								<?php else: ?>
+									<?= htmlspecialchars($__fmt_num($qty), ENT_QUOTES, 'UTF-8'); ?>
+								<?php endif; ?>
+							</td>
+							<?php if ($show_unit_column): ?>
+								<td class="col-unit"><span class="cmx-pdf-shift-unit"><?= htmlspecialchars($unit, ENT_QUOTES, 'UTF-8'); ?></span></td>
+							<?php endif; ?>
+							<?php if ($show_unit_price): ?>
+								<td class="text-right col-unit-price"><?= htmlspecialchars($__fmt_num($unit_price), ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+							<?php if ($show_discount): ?>
+								<td class="text-right"><?= htmlspecialchars($discount_display, ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+							<?php if ($show_line_total): ?>
+								<td class="text-right col-line-total"><?= htmlspecialchars($__fmt_num($line_total), ENT_QUOTES, 'UTF-8'); ?></td>
+							<?php endif; ?>
+						</tr>
+					<?php endfor; ?>
+					<tr class="cmx-pdf-closing-summary-row">
+						<td colspan="<?= $col_count; ?>" class="cmx-pdf-closing-summary-cell">
+							<div class="cmx-pdf-closing-summary">
+								<table class="totals-table" border="0">
+									<?php
+									$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+									$show_mwst_row = ($mwst_rate > 0.0);
+									if ($show_mwst_row) {
+										$round_5rp = static function(float $amount): float {
+											if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
+											return round($amount * 20) / 20;
+										};
+										$totals['total'] = $round_5rp((float)($totals['total'] ?? 0.0));
+									}
+									$mwst_amount = round((float)($totals['tax_amount'] ?? 0), 2);
+									$mwst_rate_pct = $mwst_rate * 100;
+									$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+									$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
+										&& $tpl['document']['manual_total'] !== null
+										&& $tpl['document']['manual_total'] !== '';
+									if (!$has_positions && $manual_total_defined && (float)($totals['total'] ?? 0) == 0.0) {
+										$totals['total'] = (float)$tpl['document']['manual_total'];
+										if ((float)($totals['subtotal'] ?? 0) == 0.0) {
+											$totals['subtotal'] = (float)$tpl['document']['manual_total'];
+										}
+									}
+									if (!isset($subtotal_value)) {
+										$subtotal_value = $has_positions
+											? (float)$positions_sum
+											: ($manual_total_defined
+												? (float)$tpl['document']['manual_total']
+												: (float)($totals['subtotal'] ?? 0));
+									}
+									$show_subtotal_row = $show_mwst_row;
+									?>
+									<?php if ($show_subtotal_row): ?>
+										<tr>
+											<td colspan="<?= $col_count; ?>" class="text-right">
+												Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?>
+											</td>
+										</tr>
+									<?php endif; ?>
+									<?php if ($show_mwst_row): ?>
+										<tr>
+											<td colspan="<?= $col_count; ?>" class="text-right">
+												<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
+												<?= $mwst_label; ?>
+												<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
+											</td>
+										</tr>
+									<?php endif; ?>
+									<tr class="total-row">
+										<td colspan="<?= $col_count; ?>" class="text-right">
+											<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
+										</td>
+									</tr>
+								</table>
+								<?php if (!$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+									<?php
+									$document_meta = (array)($tpl['document'] ?? []);
+									$anzahlungen_sum = array_key_exists('paid_amount', $document_meta)
+										? (float)$document_meta['paid_amount']
+										: 0.0;
+									$offen_betrag = array_key_exists('open_amount', $document_meta)
+										? (float)$document_meta['open_amount']
+										: (float)($totals['total'] ?? 0);
+									if (!array_key_exists('paid_amount', $document_meta) || !array_key_exists('open_amount', $document_meta)) {
+										$anz_base_total = (float)($totals['total'] ?? 0);
+										$anzahlungen_sum = 0.0;
+										foreach ($tpl['anzahlungen'] as $row) {
+											$anz_amount_raw = (string)($row['betrag'] ?? 0);
+											$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+											$anzahlungen_sum += $anz_amount;
+										}
+										$offen_betrag = $anz_base_total - $anzahlungen_sum;
+									}
+									?>
+									<div style="margin-top:16px;text-align:right;">
+										<em>Bereits erhaltene Zahlungen</em>
+										<table style="width:200px; border-collapse:collapse; margin-top:4px; margin-left:auto;">
+											<?php foreach ($tpl['anzahlungen'] as $row): ?>
+												<?php
+												$anz_date = trim((string)($row['datum'] ?? ''));
+												$anz_amount_raw = (string)($row['betrag'] ?? 0);
+												$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+												if ($anz_date === '') continue;
+												$anz_date_fmt = date('d.m.Y', strtotime($anz_date));
+												?>
+												<tr>
+													<td style="padding:0 0 2px 0; text-align:right;"><?= htmlspecialchars($anz_date_fmt, ENT_QUOTES, 'UTF-8'); ?></td>
+													<td style="padding:0 0 2px 12px; text-align:right;"><?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></td>
+												</tr>
+											<?php endforeach; ?>
+										</table>
+										<div>- <?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
+										<?php
+										$offen_fmt = $__fmt_num($offen_betrag);
+										if (str_starts_with($offen_fmt, '-')) {
+											$offen_fmt = '- ' . ltrim($offen_fmt, '-');
+										}
+										?>
+										<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($offen_fmt, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+									</div>
+								<?php endif; ?>
+								<?php $__render_pdf_attachments(); ?>
+								<table class="mwst-footer-group" role="presentation">
+									<tr>
+										<td>
+											<div class="mwst-note"><?= $mwst_note_html; ?></div>
+											<div class="footer footer-inline">
+												<?= $footer_html; ?>
+											</div>
+											<?php if ($agb_belege_html !== ''): ?>
+												<div class="footer footer-inline cmx-pdf-agb-footer">
+													<?= $agb_belege_html; ?>
+												</div>
+											<?php endif; ?>
+										</td>
+									</tr>
+								</table>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			<?php endif; ?>
+		<?php endif; ?>
+	</div>
+
+		<?php if (!$use_closing_group && !$is_lieferschein): ?>
+			<table class="totals-table" border="0">
+				<?php
+				$mwst_rate = (float)($tpl['totals']['tax_rate'] ?? 0);
+				$show_mwst_row = ($mwst_rate > 0.0);
+				if ($show_mwst_row) {
+					$round_5rp = static function(float $amount): float {
+						if (function_exists(__NAMESPACE__ . '\\cmx_round_5rp')) return (float) cmx_round_5rp($amount);
+						return round($amount * 20) / 20;
+					};
+					$totals['total'] = $round_5rp((float)($totals['total'] ?? 0.0));
+				}
+				$mwst_amount = round((float)($totals['tax_amount'] ?? 0), 2);
+				$mwst_rate_pct = $mwst_rate * 100;
+				$mwst_rate_str = rtrim(rtrim(number_format($mwst_rate_pct, 1, '.', ''), '0'), '.');
+				$manual_total_defined = array_key_exists('manual_total', (array)($tpl['document'] ?? []))
+					&& $tpl['document']['manual_total'] !== null
+					&& $tpl['document']['manual_total'] !== '';
+				if (!$has_positions && $manual_total_defined && (float)($totals['total'] ?? 0) == 0.0) {
+					$totals['total'] = (float)$tpl['document']['manual_total'];
+					if ((float)($totals['subtotal'] ?? 0) == 0.0) {
+						$totals['subtotal'] = (float)$tpl['document']['manual_total'];
+					}
+				}
+				if (!isset($subtotal_value)) {
+					$subtotal_value = $has_positions
+						? (float)$positions_sum
+						: ($manual_total_defined
+							? (float)$tpl['document']['manual_total']
+							: (float)($totals['subtotal'] ?? 0));
+				}
+				$show_subtotal_row = $show_mwst_row;
+			?>
+			<?php if ($show_subtotal_row): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>" class="text-right">
+						Zwischensumme <?= htmlspecialchars($__fmt_num($subtotal_value), ENT_QUOTES, 'UTF-8'); ?>
+					</td>
+				</tr>
+			<?php endif; ?>
+			<?php if ($show_mwst_row): ?>
+				<tr>
+					<td colspan="<?= $col_count; ?>" class="text-right">
+					<?php $mwst_label = !empty($tpl['totals']['is_brutto']) ? 'davon' : 'zzgl.'; ?>
+					<?= $mwst_label; ?>
+					<?= htmlspecialchars($mwst_rate_str, ENT_QUOTES, 'UTF-8'); ?>% MwSt. <?= htmlspecialchars($__fmt_num($mwst_amount), ENT_QUOTES, 'UTF-8'); ?>
+				</td>
+			</tr>
+		<?php endif; ?>
+		<tr class="total-row">
+			<td colspan="<?= $col_count; ?>" class="text-right">
+				<strong>Total <?= htmlspecialchars($__fmt_num((float)$totals['total']), ENT_QUOTES, 'UTF-8'); ?></strong>
+			</td>
+		</tr>
+	</table>
+	<?php if (!$show_mwst_footer_group && $mwst_note_html !== ''): ?>
+		<div class="mwst-note"><?= $mwst_note_html; ?></div>
+	<?php endif; ?>
+
+	<?php endif; ?>
+
+	<?php if (!$use_closing_group && !$is_lieferschein && !$is_gutschrift && !empty($tpl['anzahlungen']) && is_array($tpl['anzahlungen'])): ?>
+		<?php
+		$document_meta = (array)($tpl['document'] ?? []);
+		$anzahlungen_sum = array_key_exists('paid_amount', $document_meta)
+			? (float)$document_meta['paid_amount']
+			: 0.0;
+		$offen_betrag = array_key_exists('open_amount', $document_meta)
+			? (float)$document_meta['open_amount']
+			: (float)($totals['total'] ?? 0);
+		if (!array_key_exists('paid_amount', $document_meta) || !array_key_exists('open_amount', $document_meta)) {
+			$anz_base_total = (float)($totals['total'] ?? 0);
+			$anzahlungen_sum = 0.0;
+			foreach ($tpl['anzahlungen'] as $row) {
+				$anz_amount_raw = (string)($row['betrag'] ?? 0);
+				$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+				$anzahlungen_sum += $anz_amount;
+			}
+			$offen_betrag = $anz_base_total - $anzahlungen_sum;
+		}
+		?>
+		<div style="margin-top:16px;text-align:right;">
+			<em>Bereits erhaltene Zahlungen</em>
+			<table style="width:200px; border-collapse:collapse; margin-top:4px; margin-left:auto;">
+				<?php foreach ($tpl['anzahlungen'] as $row): ?>
+					<?php
+					$anz_date = trim((string)($row['datum'] ?? ''));
+					$anz_amount_raw = (string)($row['betrag'] ?? 0);
+					$anz_amount = (float)cmx_norm_decimal($anz_amount_raw);
+					if ($anz_date === '') continue;
+					$anz_date_fmt = date('d.m.Y', strtotime($anz_date));
+					?>
+					<tr>
+						<td style="padding:0 0 2px 0; text-align:right;"><?= htmlspecialchars($anz_date_fmt, ENT_QUOTES, 'UTF-8'); ?></td>
+						<td style="padding:0 0 2px 12px; text-align:right;"><?= htmlspecialchars($__fmt_num($anz_amount), ENT_QUOTES, 'UTF-8'); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</table>
+			<div>- <?= htmlspecialchars($__fmt_num($anzahlungen_sum), ENT_QUOTES, 'UTF-8'); ?></div>
+			<?php
+				$offen_fmt = $__fmt_num($offen_betrag);
+				if (str_starts_with($offen_fmt, '-')) {
+					$offen_fmt = '- ' . ltrim($offen_fmt, '-');
+				}
+			?>
+			<div style="margin-top:8px;"><strong>Offener Betrag: <?= htmlspecialchars($offen_fmt, ENT_QUOTES, 'UTF-8'); ?></strong></div>
+		</div>
+	<?php endif; ?>
+
+	<?php if (!$use_closing_group) $__render_pdf_attachments(); ?>
+	<div class="clear"></div>
+
+	<?php if (!$use_closing_group && $show_mwst_footer_group): ?>
+		<table class="mwst-footer-group" role="presentation">
+			<tr>
+				<td>
+					<div class="mwst-note"><?= $mwst_note_html; ?></div>
+					<div class="footer footer-inline">
+						<?= $footer_html; ?>
+					</div>
+					<?php if ($agb_belege_html !== ''): ?>
+						<div class="footer footer-inline cmx-pdf-agb-footer">
+							<?= $agb_belege_html; ?>
+						</div>
+					<?php endif; ?>
+				</td>
+			</tr>
+		</table>
+	<?php elseif (!$use_closing_group && ($footer_html !== '' || $agb_belege_html !== '')): ?>
+		<div class="footer">
+			<?= $footer_html; ?>
+			<?php if ($agb_belege_html !== ''): ?>
+				<div class="cmx-pdf-agb-footer">
+					<?= $agb_belege_html; ?>
+				</div>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+
+	<div class="qr-reserve"></div>
+</div>
+</body>
+</html>

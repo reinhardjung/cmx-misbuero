@@ -1,0 +1,132 @@
+{
+    "format": 1,
+    "exported_at": "2026-05-11T07:57:59+02:00",
+    "site_url": "https://misbuero.ddev.site/",
+    "blog_id": 1,
+    "blog_prefix": "wp_",
+    "user": {
+        "id": 2,
+        "login": "misbuero",
+        "display_name": "Reiny Maus"
+    },
+    "layout": {
+        "closedpostboxes_artikel": [],
+        "closedpostboxes_ausgaben": [],
+        "closedpostboxes_belege": [],
+        "closedpostboxes_buchungen": [],
+        "closedpostboxes_carent": [],
+        "closedpostboxes_dashboard": [],
+        "closedpostboxes_dokumente": [],
+        "closedpostboxes_emails": [],
+        "closedpostboxes_kontakte": [],
+        "closedpostboxes_projekte": [],
+        "closedpostboxes_scanner": [
+            "cmx_scanner_rel_artikel"
+        ],
+        "meta-box-order_artikel": {
+            "side": "cmx_savebox,cmx_dokumente_box,cmx_artikel_waehrung_side,artikel_kategoriendiv,artikel_typendiv,cmx_artikel_marke_side,cmx_li_box_artikel,cmx_artikel_qr_box,cmx_zu_projekt",
+            "normal": "cmx_artikel_waehrung_preise,cmx_artikel_carent,cmx_artikel_lieferanten,cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_ausgaben": {
+            "side": "cmx_savebox,cmx_save_metabox_layout,ausgaben_kategoriendiv,cmx_dokumente_box",
+            "normal": "",
+            "advanced": ""
+        },
+        "meta-box-order_belege": {
+            "side": "cmx_savebox,cmx_uploads_box,cmx_beleg_offerte,cmx_beleg_summe_box,cmx_beleg_waehrung,cmx_beleg_anzahlungen,cmx_belege_mwst_box,cmx_zu_projekt,cmx_dokumente_box,cmx_beleg_anhaenge_box,cmx-beleg-abo",
+            "normal": "cmx_beleg_details,cmx_beleg_positionen,cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_buchungen": {
+            "side": "cmx_dokumente_box,submitdiv,cmx_buchungen_status,buchungen_standortdiv,buchungen_buchungstypdiv,buchungen_leistungskategoriediv,cmx_buchungen_mitarbeiter,cmx_buchungen_tokens",
+            "normal": "cmx_buchungen_details,slugdiv",
+            "advanced": ""
+        },
+        "meta-box-order_budget": {
+            "side": "cmx_dokumente_box,cmx_savebox,cmx_budget_kosten_side,budget_kategoriendiv",
+            "normal": "",
+            "advanced": ""
+        },
+        "meta-box-order_carent": {
+            "side": "cmx_dokumente_box,cmx_savebox,cmx_carent_status_side,cmx_carent_kontakt_box,cmx_carent_fahrzeug_box,cmx_carent_fuehrerausweis_box,cmx_carent_identitaetskarte_box,carent_fotosdiv",
+            "normal": "cmx_carent_uebernahme_box,cmx_carent_schadenprotokoll_box,cmx_carent_rueckgabe_box,cmx_carent_abrechnung_box",
+            "advanced": ""
+        },
+        "meta-box-order_dashboard": {
+            "normal": "cmx_cpt_counts_widget,cmx_kontakt_wichtige_daten",
+            "side": "cmx_umsatz_widget,cmx_lieferanten_widget,cmx_quittungen_widget,cmx_gutschriften_widget,cmx_angebote_widget",
+            "column3": "cmx_overview_revenue_widget,cmx_rechnungen_faellig_widget,cmx_online_shop_widget,cmx_stoppuhr_notizen_widget,cmx_stoppuhr_taetigkeiten_widget",
+            "column4": "cmx_kuchen_ein_aus,cmx_kuchen_ein_aus_nok,cmx_projekte_widget"
+        },
+        "meta-box-order_dokumente": {
+            "side": "cmx_savebox,cmx_dokumente_box,dokumente_kategoriendiv,cmx_dokumente_validity,cmx_dok_zuordnung,cmx_dok_rel_belege,cmx_dok_rel_artikel,cmx_dok_rel_kontakte,cmx_dok_rel_projekte,cmx_dokumente_status",
+            "normal": "cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_emails": {
+            "side": "cmx_email_details,submitdiv,emails_kategoriendiv,cmx_email_assignment",
+            "normal": "cmx_email_reader,slugdiv",
+            "advanced": ""
+        },
+        "meta-box-order_kontakte": {
+            "side": "cmx_savebox,cmx_dokumente_box,kontakte_kategoriendiv,cmx_kontakte_stufe_side,cmx_kontakte_zu_kontakt_box,cmx_zu_projekt,cmx_kl_box_kontakte,cmx_kontakt_belege_umsatz",
+            "normal": "cmx_kontakte_stammdaten,cmx_kommunikation_box,cmx_adressen_metabox,cmx_projekt_tasks,cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_projekte": {
+            "side": "cmx_savebox,cmx_dokumente_box,cmx_projekt_stammdaten,cmx_projekte_status_side,projekte_kategoriendiv,projekte_aufgabendiv,cmx_projekt_kontakt_box,cmx_projekt_umsatz,cmx_system_assigned_user",
+            "normal": "cmx_projekt_zuordnungen,cmx_projekt_tasks,cmx_internenotizen_central",
+            "advanced": ""
+        },
+        "meta-box-order_scanner": {
+            "side": "cmx_savebox,cmx_dokumente_box,cmx_scanner_zuordnung,cmx_scanner_rel_kontakte,cmx_scanner_rel_artikel,cmx_scanner_rel_dokumente,cmx_scanner_rel_projekte,cmx_scanner_rel_belege",
+            "normal": "",
+            "advanced": ""
+        },
+        "metaboxhidden_artikel": [],
+        "metaboxhidden_ausgaben": [],
+        "metaboxhidden_belege": [
+            "cmx_beleg_offerte",
+            "cmx_beleg_anzahlungen",
+            "cmx_belege_mwst_box"
+        ],
+        "metaboxhidden_buchungen": [
+            "slugdiv"
+        ],
+        "metaboxhidden_carent": [
+            "carent_fotosdiv"
+        ],
+        "metaboxhidden_dashboard": [
+            "dashboard_site_health",
+            "dashboard_right_now",
+            "dashboard_activity",
+            "dashboard_quick_press",
+            "dashboard_primary"
+        ],
+        "metaboxhidden_dokumente": [],
+        "metaboxhidden_emails": [
+            "slugdiv"
+        ],
+        "metaboxhidden_kontakte": [],
+        "metaboxhidden_projekte": [],
+        "metaboxhidden_scanner": [
+            "cmx_scanner_rel_kontakte",
+            "cmx_scanner_rel_dokumente",
+            "cmx_scanner_rel_projekte",
+            "cmx_scanner_rel_belege",
+            "slugdiv"
+        ],
+        "screen_layout_artikel": "2",
+        "screen_layout_ausgaben": "2",
+        "screen_layout_belege": "2",
+        "screen_layout_buchungen": "2",
+        "screen_layout_budget": "2",
+        "screen_layout_carent": "2",
+        "screen_layout_dokumente": "2",
+        "screen_layout_emails": "2",
+        "screen_layout_kontakte": "2",
+        "screen_layout_projekte": "2",
+        "screen_layout_scanner": "2"
+    }
+}
