@@ -1,0 +1,121 @@
+stages:
+  - mirror
+  - release
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_COMMIT_TAG'
+    - when: never
+
+variables:
+  GIT_STRATEGY: clone
+  GITHUB_REPOSITORY: reinhardjung/cmx-misbuero
+
+# GitLab-Release -> GitHub spiegeln
+mirror_to_github:
+  stage: mirror
+  image: alpine:latest
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    - apk add --no-cache curl git jq
+    - git config --global user.email "ci@cloudmeister.ch"
+    - git config --global user.name "GitLab CI"
+    - |
+      resolve_release_tag() {
+      if [ -n "$TRIGGER_PAYLOAD" ]; then
+        test "$(jq -r '.object_kind // empty' "$TRIGGER_PAYLOAD")" = "release" || { echo "Trigger-Payload ist kein Release Hook."; exit 1; }
+        test "$(jq -r '.object_attributes.action // .action // empty' "$TRIGGER_PAYLOAD")" = "create" || { echo "Release wurde nicht erstellt; GitHub-Mirror wird übersprungen."; exit 0; }
+        RELEASE_TAG="$(jq -r '.tag // .object_attributes.tag // empty' "$TRIGGER_PAYLOAD")"
+      else
+        RELEASE_TAG="$CI_COMMIT_TAG"
+      fi
+      test -n "$RELEASE_TAG" || { echo "Release Hook enthält keinen Tag."; exit 1; }
+      export RELEASE_TAG
+      }
+    - |
+      wait_for_gitlab_release() {
+      release_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${RELEASE_TAG}"
+      for i in $(seq 1 30); do
+        code="$(curl -sS -o /tmp/gitlab-release.json -w "%{http_code}" --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$release_url")"
+        if [ "$code" = "200" ]; then
+          echo "GitLab-Release ${RELEASE_TAG} gefunden."
+          break
+        fi
+        echo "GitLab-Release ${RELEASE_TAG} noch nicht gefunden (${code}); warte ..."
+        sleep 10
+      done
+      test "$code" = "200" || { echo "Kein GitLab-Release fuer ${RELEASE_TAG}; GitHub-Mirror wird uebersprungen."; exit 0; }
+      }
+  script:
+    - resolve_release_tag
+    - wait_for_gitlab_release
+    - 'test -n "$GITHUB_TOKEN" || { echo "GITHUB_TOKEN ist in diesem GitLab-Job nicht verfügbar. In GitLab CI/CD Variablen prüfen: gesetzt, nicht falsch geschützt, oder Tag-Muster schützen."; exit 1; }'
+    - 'git remote add github "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"'
+    - 'git fetch origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"'
+    - 'git checkout "$RELEASE_TAG"'
+    - git checkout --orphan github-mirror
+    - git rm -r --cached . || true
+    - rm -rf .ddev
+    - rm -f .gitignore
+    - rm -f .gitlab-ci.yml
+    - git add -A
+    - 'git commit -m "Mirror release ${RELEASE_TAG}"'
+    - git push --force github "HEAD:refs/heads/main"
+    - 'git tag -f "$RELEASE_TAG"'
+    - 'git push --force github "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"'
+
+# ZIP erstellen (für Releases / Plesk)
+build_zip:
+  stage: release
+  image: alpine:latest
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    - apk add --no-cache curl git jq zip unzip
+    - |
+      resolve_release_tag() {
+      if [ -n "$TRIGGER_PAYLOAD" ]; then
+        test "$(jq -r '.object_kind // empty' "$TRIGGER_PAYLOAD")" = "release" || { echo "Trigger-Payload ist kein Release Hook."; exit 1; }
+        test "$(jq -r '.object_attributes.action // .action // empty' "$TRIGGER_PAYLOAD")" = "create" || { echo "Release wurde nicht erstellt; ZIP wird übersprungen."; exit 0; }
+        RELEASE_TAG="$(jq -r '.tag // .object_attributes.tag // empty' "$TRIGGER_PAYLOAD")"
+      else
+        RELEASE_TAG="$CI_COMMIT_TAG"
+      fi
+      test -n "$RELEASE_TAG" || { echo "Release Hook enthält keinen Tag."; exit 1; }
+      export RELEASE_TAG
+      }
+    - |
+      wait_for_gitlab_release() {
+      release_url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${RELEASE_TAG}"
+      for i in $(seq 1 30); do
+        code="$(curl -sS -o /tmp/gitlab-release.json -w "%{http_code}" --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$release_url")"
+        if [ "$code" = "200" ]; then
+          echo "GitLab-Release ${RELEASE_TAG} gefunden."
+          break
+        fi
+        echo "GitLab-Release ${RELEASE_TAG} noch nicht gefunden (${code}); warte ..."
+        sleep 10
+      done
+      test "$code" = "200" || { echo "Kein GitLab-Release fuer ${RELEASE_TAG}; ZIP wird uebersprungen."; exit 0; }
+      }
+  script:
+    - resolve_release_tag
+    - wait_for_gitlab_release
+    - 'git fetch origin "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"'
+    - 'git checkout "$RELEASE_TAG"'
+    - mkdir -p build/package/cmx-misbuero
+    - 'git archive "${RELEASE_TAG}" | tar -x -C build/package/cmx-misbuero'
+    - rm -rf build/package/cmx-misbuero/.ddev
+    - rm -f build/package/cmx-misbuero/.gitignore build/package/cmx-misbuero/.gitlab-ci.yml
+    - '(cd build/package && zip -q -X -r "../../cmx-misbuero-${RELEASE_TAG}.zip" cmx-misbuero -x "*/.DS_Store")'
+    - 'test "$(unzip -Z1 "build/cmx-misbuero-${RELEASE_TAG}.zip" | sed -n "1p")" = "cmx-misbuero/"'
+    - 'unzip -Z1 "build/cmx-misbuero-${RELEASE_TAG}.zip" | grep -qx "cmx-misbuero/cmx-misbuero.php"'
+    - 'test "$(unzip -Z1 "build/cmx-misbuero-${RELEASE_TAG}.zip" | grep -Ev "^cmx-misbuero(/|$)" | wc -l | tr -d " ")" = "0"'
+  artifacts:
+    paths:
+      - build/*.zip
+    expire_in: 7 days

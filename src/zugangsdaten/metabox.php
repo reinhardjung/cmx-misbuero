@@ -161,6 +161,7 @@ function cmx_zugangsdaten_field_groups(): array {
 		],
 		'passwoerter' => [
 			'username' => ['label' => 'Benutzername', 'type' => 'text'],
+			'email'    => ['label' => 'E-Mail', 'type' => 'email'],
 			'password' => ['label' => 'Passwort', 'type' => 'password', 'sensitive' => true],
 			'website'  => ['label' => 'Website', 'type' => 'text'],
 		],
@@ -1214,7 +1215,7 @@ function cmx_zugangsdaten_render_metabox(\WP_Post $post): void {
 		.cmx-zugangsdaten-category-fields[data-category="ssh-keys"]{grid-template-columns:repeat(6,minmax(0,1fr))}
 		.cmx-zugangsdaten-category-fields[data-category="wlan"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 		.cmx-zugangsdaten-category-fields[data-category="api-keys"]{grid-template-columns:repeat(4,minmax(0,1fr))}
-		.cmx-zugangsdaten-category-fields[data-category="passwoerter"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+		.cmx-zugangsdaten-category-fields[data-category="passwoerter"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 		.cmx-zugangsdaten-category-fields[data-category="kreditkarten"]{grid-template-columns:repeat(6,minmax(0,1fr))}
 		.cmx-zugangsdaten-category-fields[data-category="bash"]{grid-template-columns:minmax(0,1fr)}
 		.cmx-zugangsdaten-category-fields[data-category="server"] .cmx-zugangsdaten-field-server-cpu{grid-column:span 2}

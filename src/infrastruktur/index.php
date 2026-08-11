@@ -26,6 +26,10 @@ const CMX_INFRASTRUKTUR_SERVER_FIREWALL_META = '_cmx_infrastruktur_server_firewa
 const CMX_INFRASTRUKTUR_SERVER_NETWORK_META = '_cmx_infrastruktur_server_network';
 const CMX_INFRASTRUKTUR_SERVER_BACKUPS_META = '_cmx_infrastruktur_server_backups';
 const CMX_INFRASTRUKTUR_SERVER_SSH_KEY_META = '_cmx_infrastruktur_server_ssh_key';
+const CMX_INFRASTRUKTUR_ASSIGNED_META = '_cmx_infrastruktur_assigned_ids';
+const CMX_INFRASTRUKTUR_INSTANCE_SOURCE_META = '_cmx_infrastruktur_instance_source_id';
+
+require_once __DIR__ . '/instances.php';
 
 if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_server_types')) {
 	function cmx_infrastruktur_server_types(): array {
@@ -1510,6 +1514,306 @@ if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_render_kontakt_metabo
 
 	\delete_post_meta($post_id, CMX_INFRASTRUKTUR_KONTAKT_META);
 }, 10);
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_assigned_ids')) {
+	function cmx_infrastruktur_assigned_ids(int $post_id): array {
+		$raw_ids = \get_post_meta($post_id, CMX_INFRASTRUKTUR_ASSIGNED_META, true);
+		$ids = [];
+		foreach ((array) $raw_ids as $raw_id) {
+			$id = (int) $raw_id;
+			if ($id <= 0 || $id === $post_id || \get_post_type($id) !== 'infrastruktur') {
+				continue;
+			}
+			$ids[$id] = $id;
+		}
+
+		return \array_values($ids);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_store_assigned_ids')) {
+	function cmx_infrastruktur_store_assigned_ids(int $post_id, array $ids): void {
+		$clean = [];
+		foreach ($ids as $raw_id) {
+			$id = (int) $raw_id;
+			if ($id <= 0 || $id === $post_id || \get_post_type($id) !== 'infrastruktur') {
+				continue;
+			}
+			$clean[$id] = $id;
+		}
+		$clean = \array_values($clean);
+		\sort($clean, \SORT_NUMERIC);
+
+		if ($clean === []) {
+			\delete_post_meta($post_id, CMX_INFRASTRUKTUR_ASSIGNED_META);
+			return;
+		}
+		\update_post_meta($post_id, CMX_INFRASTRUKTUR_ASSIGNED_META, $clean);
+	}
+}
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_sync_assignments')) {
+	function cmx_infrastruktur_sync_assignments(int $post_id, array $new_ids): void {
+		$old_ids = cmx_infrastruktur_assigned_ids($post_id);
+		$clean_new_ids = [];
+		foreach ($new_ids as $raw_id) {
+			$id = (int) $raw_id;
+			if ($id > 0 && $id !== $post_id && \get_post_type($id) === 'infrastruktur') {
+				$clean_new_ids[$id] = $id;
+			}
+		}
+		$clean_new_ids = \array_values($clean_new_ids);
+
+		foreach (\array_diff($old_ids, $clean_new_ids) as $removed_id) {
+			$reverse_ids = \array_values(\array_diff(cmx_infrastruktur_assigned_ids((int) $removed_id), [$post_id]));
+			cmx_infrastruktur_store_assigned_ids((int) $removed_id, $reverse_ids);
+		}
+		foreach (\array_diff($clean_new_ids, $old_ids) as $added_id) {
+			$reverse_ids = cmx_infrastruktur_assigned_ids((int) $added_id);
+			$reverse_ids[] = $post_id;
+			cmx_infrastruktur_store_assigned_ids((int) $added_id, $reverse_ids);
+		}
+
+		cmx_infrastruktur_store_assigned_ids($post_id, $clean_new_ids);
+	}
+}
+
+\add_filter('cmx_duplicate_meta_blacklist', function (array $meta_keys): array {
+	$meta_keys[] = CMX_INFRASTRUKTUR_ASSIGNED_META;
+	$meta_keys[] = CMX_INFRASTRUKTUR_INSTANCE_SOURCE_META;
+	return \array_values(\array_unique($meta_keys));
+});
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_duplicate_for_instance')) {
+	/**
+	 * Erstellt nach einer bestaetigten externen create-Aktion den lokalen Instanz-CPT.
+	 * Der Aufrufer muss Berechtigung, Nonce und den Erfolg der externen API pruefen.
+	 *
+	 * @return int|\WP_Error
+	 */
+	function cmx_infrastruktur_duplicate_for_instance(int $source_id, string $domain, string $email = '') {
+		$source = \get_post($source_id);
+		if (!$source instanceof \WP_Post || $source->post_type !== 'infrastruktur') {
+			return new \WP_Error('cmx_instance_source_invalid', __('Der Ausgangsserver wurde nicht gefunden.', 'cmx-misbuero'));
+		}
+
+		$domain = \strtolower(\trim(\sanitize_text_field($domain)));
+		$domain = (string) \preg_replace('~^https?://~i', '', $domain);
+		$domain = \rtrim((string) \strtok($domain, '/?#'), '.');
+		if (
+			$domain === ''
+			|| \strlen($domain) > 253
+			|| !\preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/', $domain)
+		) {
+			return new \WP_Error('cmx_instance_domain_invalid', __('Die Instanz-Domain ist ungültig.', 'cmx-misbuero'));
+		}
+
+		$existing = \get_posts([
+			'post_type'      => 'infrastruktur',
+			'post_status'    => ['publish', 'draft', 'private', 'pending'],
+			'posts_per_page' => 1,
+			'fields'         => 'ids',
+			'exclude'        => [$source_id],
+			'meta_query'     => [
+				'relation' => 'AND',
+				[
+					'key'   => CMX_INFRASTRUKTUR_INSTANCE_SOURCE_META,
+					'value' => $source_id,
+					'type'  => 'NUMERIC',
+				],
+				[
+					'key'   => CMX_INFRASTRUKTUR_FQDN_META,
+					'value' => $domain,
+				],
+			],
+		]);
+		if ($existing !== []) {
+			$existing_id = (int) $existing[0];
+			$source_ids = cmx_infrastruktur_assigned_ids($source_id);
+			$source_ids[] = $existing_id;
+			cmx_infrastruktur_sync_assignments($source_id, $source_ids);
+			return $existing_id;
+		}
+
+		if (!\function_exists(__NAMESPACE__ . '\\cmx_duplicate_do')) {
+			return new \WP_Error('cmx_instance_duplicate_unavailable', __('Die Duplizierfunktion ist nicht verfügbar.', 'cmx-misbuero'));
+		}
+		$new_id = cmx_duplicate_do($source_id);
+		if (\is_wp_error($new_id)) {
+			return $new_id;
+		}
+		$new_id = (int) $new_id;
+		$hostname = (string) \strtok($domain, '.');
+
+		$updated = \wp_update_post([
+			'ID'         => $new_id,
+			'post_title' => $domain,
+			'post_name'  => \sanitize_title($domain),
+		], true);
+		if (\is_wp_error($updated)) {
+			\wp_delete_post($new_id, true);
+			return $updated;
+		}
+
+		\update_post_meta($new_id, CMX_INFRASTRUKTUR_INSTANCE_SOURCE_META, $source_id);
+		\update_post_meta($new_id, CMX_INFRASTRUKTUR_FQDN_META, $domain);
+		\update_post_meta($new_id, CMX_INFRASTRUKTUR_HOSTNAME_META, $hostname);
+		$email = \sanitize_email($email);
+		if ($email !== '' && \is_email($email)) {
+			\update_post_meta($new_id, CMX_INFRASTRUKTUR_ADMIN_EMAIL_META, $email);
+		}
+
+		$source_ids = cmx_infrastruktur_assigned_ids($source_id);
+		$source_ids[] = $new_id;
+		cmx_infrastruktur_sync_assignments($source_id, $source_ids);
+		\do_action('cmx_infrastruktur_instance_cpt_created', $new_id, $source_id, $domain);
+
+		return $new_id;
+	}
+}
+
+/**
+ * Die spaetere API-Anbindung feuert diesen Hook ausschliesslich nach einem
+ * erfolgreich bestaetigten create. Update, pause und delete duplizieren nichts.
+ */
+\add_action('cmx_infrastruktur_instance_created', function (int $source_id, string $domain, string $email = ''): void {
+	cmx_infrastruktur_duplicate_for_instance($source_id, $domain, $email);
+}, 10, 3);
+
+\add_action('add_meta_boxes_infrastruktur', function (): void {
+	\add_meta_box(
+		'cmx_infrastruktur_assigned_box',
+		__('Zugeordnet', 'cmx-misbuero'),
+		__NAMESPACE__ . '\\cmx_infrastruktur_render_assigned_metabox',
+		'infrastruktur',
+		'side',
+		'default'
+	);
+}, 101);
+
+\add_action('wp_ajax_cmx_search_infrastrukturen', function (): void {
+	if (!\current_user_can('edit_posts')) {
+		\wp_send_json_error(['message' => __('Keine Berechtigung.', 'cmx-misbuero')], 403);
+	}
+	if (!\check_ajax_referer('cmx_search_infrastrukturen', '_ajax_nonce', false)) {
+		\wp_send_json_error(['message' => __('Sicherheitsprüfung fehlgeschlagen.', 'cmx-misbuero')], 403);
+	}
+
+	$query = isset($_GET['q']) ? \sanitize_text_field(\wp_unslash($_GET['q'])) : '';
+	$exclude_id = isset($_GET['exclude']) ? (int) $_GET['exclude'] : 0;
+	$args = [
+		'post_type'              => 'infrastruktur',
+		'post_status'            => ['publish', 'draft', 'private', 'pending', 'future'],
+		'posts_per_page'         => 30,
+		'orderby'                => 'title',
+		'order'                  => 'ASC',
+		'fields'                 => 'ids',
+		'no_found_rows'          => true,
+		'update_post_meta_cache' => false,
+		'update_post_term_cache' => false,
+	];
+	if ($query !== '') {
+		$args['s'] = $query;
+	}
+	if ($exclude_id > 0) {
+		$args['post__not_in'] = [$exclude_id];
+	}
+
+	$items = [];
+	foreach ((array) \get_posts($args) as $post_id) {
+		$post_id = (int) $post_id;
+		if ($post_id <= 0 || !\current_user_can('edit_post', $post_id)) {
+			continue;
+		}
+		$title = cmx_normalize_minus_sign((string) \get_the_title($post_id));
+		$items[] = [
+			'id'    => $post_id,
+			'title' => $title !== '' ? $title : ('#' . $post_id),
+		];
+	}
+
+	\wp_send_json_success(['items' => $items]);
+});
+
+if (!\function_exists(__NAMESPACE__ . '\\cmx_infrastruktur_render_assigned_metabox')) {
+	function cmx_infrastruktur_render_assigned_metabox(\WP_Post $post): void {
+		$selected_ids = cmx_infrastruktur_assigned_ids((int) $post->ID);
+		$option_ids = $selected_ids;
+		$box_id = 'cmx-infrastruktur-assigned-' . (int) $post->ID;
+		\wp_nonce_field('cmx_infrastruktur_assigned_save', 'cmx_infrastruktur_assigned_nonce');
+		?>
+		<style>
+			#cmx_infrastruktur_assigned_box,#cmx_infrastruktur_assigned_box .inside,#<?php echo \esc_attr($box_id); ?>{position:relative;overflow:visible}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-search{width:100%;min-height:38px;margin:0;padding:0 12px;border:1px solid #c3c4c7;border-radius:8px;background:#fff;box-shadow:none}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-search:focus{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1;outline:0}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-results{position:absolute;z-index:100002;right:0;left:0;max-height:240px;overflow:auto;margin:4px 0 0;padding:4px 0;border:1px solid #c3c4c7;border-radius:8px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.12);list-style:none}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-results li{margin:0;padding:8px 12px;cursor:pointer}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-results li:hover,#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-results li.is-active{background:#e5f3ff}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-results li.is-empty{color:#646970;cursor:default}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-selected{display:grid;gap:6px;margin:10px 0 0;padding:0;list-style:none}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-selected li{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 8px;border:1px solid #dcdcde;border-radius:7px;background:#f6f7f7}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-selected a{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-remove{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;background:transparent;color:#d63638;cursor:pointer}
+			#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-remove:hover,#<?php echo \esc_attr($box_id); ?> .cmx-infrastruktur-assigned-remove:focus{color:#b32d2e}
+		</style>
+		<div id="<?php echo \esc_attr($box_id); ?>">
+			<input type="search" class="cmx-infrastruktur-assigned-search" autocomplete="off" placeholder="<?php echo \esc_attr__('Infrastruktur suchen …', 'cmx-misbuero'); ?>" aria-label="<?php echo \esc_attr__('Infrastruktur suchen', 'cmx-misbuero'); ?>">
+			<ul class="cmx-infrastruktur-assigned-results" hidden></ul>
+			<select name="cmx_infrastruktur_assigned_ids[]" class="cmx-infrastruktur-assigned-select" multiple hidden>
+				<?php foreach ($option_ids as $option_id) :
+					$option_id = (int) $option_id;
+					$title = cmx_normalize_minus_sign((string) \get_the_title($option_id));
+					if ($title === '') {
+						$title = '#' . $option_id;
+					}
+				?>
+					<option value="<?php echo \esc_attr((string) $option_id); ?>"<?php \selected(\in_array($option_id, $selected_ids, true)); ?>><?php echo \esc_html($title); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<ul class="cmx-infrastruktur-assigned-selected"></ul>
+		</div>
+		<script>
+		(function(){
+			var root=document.getElementById(<?php echo \wp_json_encode($box_id); ?>);if(!root||root.dataset.cmxBound==="1")return;root.dataset.cmxBound="1";
+			var input=root.querySelector(".cmx-infrastruktur-assigned-search"),results=root.querySelector(".cmx-infrastruktur-assigned-results"),select=root.querySelector(".cmx-infrastruktur-assigned-select"),selected=root.querySelector(".cmx-infrastruktur-assigned-selected");
+			var editPrefix=<?php echo \wp_json_encode((string) \admin_url('post.php?action=edit&post=')); ?>,ajaxUrl=<?php echo \wp_json_encode((string) \admin_url('admin-ajax.php')); ?>,ajaxNonce=<?php echo \wp_json_encode((string) \wp_create_nonce('cmx_search_infrastrukturen')); ?>,excludeId=<?php echo (int) $post->ID; ?>,items=[],active=-1,timer=null,requestNumber=0;
+			if(!input||!results||!select||!selected)return;
+			function esc(value){return String(value||"").replace(/[&<>\"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;","'":"&#039;"}[c];});}
+			function options(onlyAvailable,term){var q=String(term||"").toLowerCase().trim(),found=[];Array.prototype.forEach.call(select.options,function(option){if(onlyAvailable&&option.selected)return;var label=String(option.textContent||"");if(q&&label.toLowerCase().indexOf(q)===-1)return;found.push({id:String(option.value||""),label:label});});return found;}
+			function close(){results.hidden=true;results.innerHTML="";items=[];active=-1;}
+			function renderSelected(){var chosen=options(false,"").filter(function(item){var option=Array.prototype.find.call(select.options,function(candidate){return candidate.value===item.id;});return option&&option.selected;});selected.innerHTML=chosen.map(function(item){return '<li><a href="'+esc(editPrefix+encodeURIComponent(item.id))+'" target="_blank" rel="noopener noreferrer">'+esc(item.label)+'</a><button type="button" class="cmx-infrastruktur-assigned-remove" data-id="'+esc(item.id)+'" title="Zuordnung entfernen" aria-label="Zuordnung entfernen"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></li>';}).join("");}
+			function activate(index){var rows=results.querySelectorAll("li[data-index]");if(!rows.length){active=-1;return;}if(index<0)index=rows.length-1;if(index>=rows.length)index=0;active=index;Array.prototype.forEach.call(rows,function(row,i){row.classList.toggle("is-active",i===active);});}
+			function render(found){var selectedIds={};Array.prototype.forEach.call(select.options,function(option){if(option.selected)selectedIds[String(option.value||"")]=true;});items=(Array.isArray(found)?found:[]).map(function(item){return{id:String(item.id||""),label:String(item.title||"")};}).filter(function(item){return item.id&&!selectedIds[item.id];});active=-1;if(!items.length){results.innerHTML='<li class="is-empty">Keine Treffer.</li>';results.hidden=false;return;}results.innerHTML=items.map(function(item,index){return '<li data-index="'+index+'">'+esc(item.label)+'</li>';}).join("");results.hidden=false;activate(0);}
+			function search(){var currentRequest=++requestNumber,url=ajaxUrl+"?action=cmx_search_infrastrukturen&_ajax_nonce="+encodeURIComponent(ajaxNonce)+"&exclude="+encodeURIComponent(String(excludeId))+"&q="+encodeURIComponent(input.value.trim());fetch(url,{credentials:"same-origin"}).then(function(response){return response.json();}).then(function(response){if(currentRequest!==requestNumber)return;if(!response||response.success!==true||!response.data||!Array.isArray(response.data.items)){render([]);return;}render(response.data.items);}).catch(function(){if(currentRequest===requestNumber)render([]);});}
+			function choose(index){if(!items[index])return;var item=items[index],option=Array.prototype.find.call(select.options,function(candidate){return candidate.value===item.id;});if(!option){option=document.createElement("option");option.value=item.id;option.textContent=item.label;select.appendChild(option);}option.selected=true;input.value="";renderSelected();close();input.focus();}
+			input.addEventListener("input",function(){window.clearTimeout(timer);timer=window.setTimeout(search,150);});input.addEventListener("focus",search);input.addEventListener("click",search);input.addEventListener("keydown",function(event){if(event.key==="ArrowDown"){event.preventDefault();activate(active+1);}else if(event.key==="ArrowUp"){event.preventDefault();activate(active-1);}else if(event.key==="Enter"&&active>=0){event.preventDefault();choose(active);}else if(event.key==="Escape"){close();}});
+			results.addEventListener("mousedown",function(event){var row=event.target.closest("li[data-index]");if(!row)return;event.preventDefault();choose(parseInt(row.dataset.index||"-1",10));});
+			results.addEventListener("mousemove",function(event){var row=event.target.closest("li[data-index]");if(row)activate(parseInt(row.dataset.index||"-1",10));});
+			selected.addEventListener("click",function(event){var button=event.target.closest(".cmx-infrastruktur-assigned-remove");if(!button)return;var id=button.getAttribute("data-id")||"";Array.prototype.forEach.call(select.options,function(option){if(option.value===id)option.selected=false;});renderSelected();input.focus();});
+			document.addEventListener("mousedown",function(event){if(!root.contains(event.target))close();});renderSelected();
+		})();
+		</script>
+		<?php
+	}
+}
+
+\add_action('save_post_infrastruktur', function (int $post_id): void {
+	if (
+		!isset($_POST['cmx_infrastruktur_assigned_nonce'])
+		|| !\wp_verify_nonce(\sanitize_text_field(\wp_unslash($_POST['cmx_infrastruktur_assigned_nonce'])), 'cmx_infrastruktur_assigned_save')
+		|| (\defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
+		|| \wp_is_post_revision($post_id)
+		|| \wp_is_post_autosave($post_id)
+		|| !\current_user_can('edit_post', $post_id)
+	) {
+		return;
+	}
+
+	$ids = isset($_POST['cmx_infrastruktur_assigned_ids'])
+		? (array) \wp_unslash($_POST['cmx_infrastruktur_assigned_ids'])
+		: [];
+	cmx_infrastruktur_sync_assignments($post_id, $ids);
+}, 20);
 
 \add_action('add_meta_boxes_infrastruktur', function (): void {
 	\add_meta_box(

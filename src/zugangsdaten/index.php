@@ -403,6 +403,7 @@ function cmx_zugangsdaten_password_csv_fields(array $row, string $category): arr
 	}
 	return [
 		'username' => $username,
+		'email' => cmx_zugangsdaten_password_csv_value($row, ['email', 'e-mail', 'email_address']),
 		'password' => $password,
 		'website' => $url,
 	];

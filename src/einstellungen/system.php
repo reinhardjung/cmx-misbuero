@@ -1911,6 +1911,25 @@ function cmx_register_system_tab(): void {
 		]
 	);
 
+	\register_setting('cmx_einstellungen', 'mis_buero_provisioning_api_url', [
+		'type' => 'string',
+		'default' => 'https://misbuero.cloudmeister.services/api/v1',
+		'sanitize_callback' => static function ($value): string {
+			$value = \untrailingslashit(\esc_url_raw(\trim((string) $value)));
+			return $value !== '' ? $value : 'https://misbuero.cloudmeister.services/api/v1';
+		},
+	]);
+	\register_setting('cmx_einstellungen', 'mis_buero_provisioning_api_key', [
+		'type' => 'string',
+		'default' => '',
+		'sanitize_callback' => static fn($value): string => \trim(\sanitize_text_field((string) $value)),
+	]);
+	\register_setting('cmx_einstellungen', 'mis_buero_woocommerce_api_key', [
+		'type' => 'string',
+		'default' => '',
+		'sanitize_callback' => static fn($value): string => \trim(\sanitize_text_field((string) $value)),
+	]);
+
 	\add_settings_field(
 		'mis_buero_services_url',
 		'Services URL',
@@ -1934,6 +1953,24 @@ function cmx_register_system_tab(): void {
 		$general_page,
 		'cmx_sec_system'
 	);
+
+	\add_settings_field('mis_buero_provisioning_api_url', 'Provisionierungs-API URL', function (): void {
+		$value = (string) \get_option('mis_buero_provisioning_api_url', 'https://misbuero.cloudmeister.services/api/v1');
+		echo '<input type="url" name="mis_buero_provisioning_api_url" class="regular-text" value="' . \esc_attr($value) . '">';
+		echo '<p class="description">Zentrale Host-API auf dem Mis-Büro-Server.</p>';
+	}, $general_page, 'cmx_sec_system');
+
+	\add_settings_field('mis_buero_provisioning_api_key', 'Provisionierungs-API Token', function (): void {
+		$value = (string) \get_option('mis_buero_provisioning_api_key', '');
+		echo '<input type="password" name="mis_buero_provisioning_api_key" class="regular-text" value="' . \esc_attr($value) . '" autocomplete="new-password">';
+		echo '<p class="description">Bearer-Token für die Host-API. Alternativ per CMX_MISBUERO_PROVISIONING_API_KEY.</p>';
+	}, $general_page, 'cmx_sec_system');
+
+	\add_settings_field('mis_buero_woocommerce_api_key', 'WooCommerce API Token', function (): void {
+		$value = (string) \get_option('mis_buero_woocommerce_api_key', '');
+		echo '<input type="password" name="mis_buero_woocommerce_api_key" class="regular-text" value="' . \esc_attr($value) . '" autocomplete="new-password">';
+		echo '<p class="description">Separater Bearer-Token für Aufrufe von misbuero.ch. Nicht den Provisionierungs-Token verwenden.</p>';
+	}, $general_page, 'cmx_sec_system');
 
 	\add_settings_field(
 		'cmx_system_debug_mode',

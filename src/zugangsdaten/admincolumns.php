@@ -41,6 +41,7 @@ function cmx_zugangsdaten_admin_detail_rows(int $post_id): array {
 		],
 		'passwoerter' => [
 			'username' => 'Benutzername',
+			'email'    => 'E-Mail',
 			'website'  => 'Website',
 		],
 		'kreditkarten' => [
